@@ -1,11 +1,20 @@
 {
   "trip_window": {
-    "min_weeks": 3,
-    "max_weeks": 5,
-    "months": ["September", "October"]
+    "earliest_start": "2025-09-01",
+    "latest_end": "2025-10-31",
+    "min_days": 21,
+    "max_days": 35
   },
-  "must_see": ["Plitvice", "Lauterbrunnen"],
-  "nature_ratio": 0.7,
-  "complexity_tolerance": "medium",
-  "cost_sensitivity": 0.0
+  "nature_vs_culture": 0.7,
+  "must_see": [
+    "Plitvice Jezera",
+    "Jungfrau Region"
+  ],
+  "complexity_tolerance": "Medium",
+  "cost_sensitivity": 0,
+  "route_passions": {
+    "train": 4,
+    "boat": 0,
+    "road": 0
+  }
 }
