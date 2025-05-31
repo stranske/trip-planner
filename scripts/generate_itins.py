@@ -3,7 +3,7 @@ itineraries_compact.json and itineraries_extended.json.
 Replace placeholder logic with full implementation later."""
 
 import json
-from calc_penalty import calcPenalty
+from scripts.calc_penalty import calcPenalty
 
 COMPACT_DAYS = 21
 EXTENDED_DAYS = 35
