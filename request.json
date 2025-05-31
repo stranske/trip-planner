@@ -1,0 +1,11 @@
+{
+  "trip_window": {
+    "min_weeks": 3,
+    "max_weeks": 5,
+    "months": ["September", "October"]
+  },
+  "must_see": ["Plitvice", "Lauterbrunnen"],
+  "nature_ratio": 0.7,
+  "complexity_tolerance": "medium",
+  "cost_sensitivity": 0.0
+}
