@@ -20,12 +20,12 @@ def load_itins():
 # --- NEW render function ---
 def render(template_name: str, context: dict, out_path: Path):
     env  = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
-    tmpl = env.get_template(template_name)           # e.g. "analytical/index.html"
+    tmpl = env.get_template(template_name)  # e.g. "analytical/index.html"
     html = tmpl.render(context)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
     print(f"✓ Wrote {out_path}")
-    
+
 def main():
     itins = load_itins()
     ctx   = {"itins": itins}
@@ -33,5 +33,3 @@ def main():
     render("experiential/index.html", ctx, OUT_EXPERIENTIAL)
 
 if __name__ == "__main__":
-    main()
-    
