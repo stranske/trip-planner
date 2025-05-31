@@ -25,7 +25,7 @@ def render(template_name: str, context: dict, out_path: Path):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
     print(f"✓ Wrote {out_path}")
-
+    
 def main():
     itins = load_itins()
     ctx   = {"itins": itins}
