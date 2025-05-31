@@ -6,3 +6,9 @@
     {"id":"D","name":"Wildcard Wonders (Extended)","days":35,"adds":"Engadine extra nights, Paklenica NP, Provence rail detour, buffer days"}
   ]
 }
+    {
+      "days": 35,
+      "segments": []
+    }
+  ]
+}

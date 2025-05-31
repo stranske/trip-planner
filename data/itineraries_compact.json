@@ -1,40 +1,8 @@
 {
   "itineraries": [
     {
-      "id": "A",
-      "name": "Alps to Adriatic Classic (Compact)",
       "days": 21,
-      "bases": ["Gimmelwald", "St. Moritz", "Val Gardena", "Lake Bohinj", "Ljubljana", "Rovinj", "Plitvice", "Zagreb"],
-      "must_include": ["Lauterbrunnen Valley", "Plitvice Lakes"],
-      "train_segments": ["GoldenPass", "Glacier Express"],
-      "summary": "Gimmelwald & Swiss rails, Dolomites hikes, Slovenia lakes, Istrian coast, Plitvice finale."
-    },
-    {
-      "id": "B",
-      "name": "Swiss Scenic Rails & Northern Balkans (Compact)",
-      "days": 21,
-      "bases": ["Lauterbrunnen", "Zermatt", "Chur", "Appenzell", "Engadine", "Kamnik-Savinja", "Lake Bled", "Logar Valley", "Zagreb", "Plitvice", "Rovinj"],
-      "must_include": ["Lauterbrunnen Valley", "Plitvice Lakes"],
-      "train_segments": ["Glacier Express", "Bernina Express"],
-      "summary": "Swiss rail odyssey, Engadine larch forests, Slovenian Alps, Plitvice waterfalls, Istrian coast." 
-    },
-    {
-      "id": "C",
-      "name": "Adriatic Blue & Alpine Green (Compact)",
-      "days": 21,
-      "bases": ["Lauterbrunnen", "Val Gardena", "Lake Bohinj", "Plitvice", "Zadar (boat)", "Dubrovnik", "Kotor"],
-      "must_include": ["Lauterbrunnen Valley", "Plitvice Lakes", "5-day small boat cruise"],
-      "train_segments": ["Bernina Express"],
-      "summary": "Alpine start, Dolomites, Slovenian lakes, Plitvice, 5‑day Dalmatian boat cruise, Montenegro fjords." 
-    },
-    {
-      "id": "D",
-      "name": "Wildcard Wonders (Compact)",
-      "days": 21,
-      "bases": ["Lauterbrunnen", "Lugano", "Alpe di Siusi", "Cividale", "Karst Region", "Lake Bled", "Plitvice", "Split", "Engadine"],
-      "must_include": ["Lauterbrunnen Valley", "Plitvice Lakes"],
-      "train_segments": ["Gotthard Panorama", "Bernina Loop"],
-      "summary": "Swiss valleys to Ticino, Dolomites meadows, Slovenian caves, Croatian coast, Engadine finale." 
+      "segments": []
     }
   ]
 }
