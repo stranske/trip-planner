@@ -1,0 +1,8 @@
+{
+  "itineraries": [
+    {"id":"A","name":"Alps to Adriatic Classic (Extended)","days":35,"adds":"Zermatt, Istrian hill towns, Split/Hvar, flex days"},
+    {"id":"B","name":"Swiss Scenic Rails & Northern Balkans (Extended)","days":35,"adds":"Bernina loop, Grossglockner alt replaced by extra Engadine & Kamnik days, Mostar, rest days"},
+    {"id":"C","name":"Adriatic Blue & Alpine Green (Extended)","days":35,"adds":"Istrian hill-town walks, Durmitor NP, extra cruise day, flex days"},
+    {"id":"D","name":"Wildcard Wonders (Extended)","days":35,"adds":"Engadine extra nights, Paklenica NP, Provence rail detour, buffer days"}
+  ]
+}
