@@ -3,9 +3,9 @@
     "earliest_start": "2025-09-01",
     "latest_end": "2025-10-31",
     "min_days": 21,
-    "max_days": 35
+    "max_da,ys": 35
         "min_weeks": 3,
-    "max_weeks": 5,
+    "max_week": 5,
   },
     "nature_ratio": 0.7,
   
