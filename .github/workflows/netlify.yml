@@ -1,32 +1,36 @@
 name: CI + Netlify Deploy
 on: [push]
+
 jobs:
   test-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+
       - name: Install deps
-    
         run: pip install -r requirements.txt
 
-      -  name: Validate request
+      - name: Validate request
         run: python scripts/validate_request.py
 
-  - name: Run unit tests
+      - name: Run unit tests
         run: pytest tests
 
-  - name: Generate itineraries
-      run: python scripts/generate_itins.py
-  - name: Build HTML
-      run: python scripts/build_html.py
-       - - name: Deploy to Netlify
-          uses: nwtgck/actions-netlify@v2
-         with:
-              publish-dir: ./bundle
-              production-deploy: true
-              NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
-              NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      - name: Generate itineraries
+        run: python scripts/generate_itins.py
+
+      - name: Build HTML
+        run: python scripts/build_html.py
+
+      - name: Deploy to Netlify
+        uses: nwtgck/actions-netlify@v2
+        with:
+          publish-dir: ./bundle
+          production-deploy: true
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
