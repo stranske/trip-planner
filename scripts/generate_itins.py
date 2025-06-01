@@ -45,6 +45,5 @@ def main():
         json.dump({"itineraries": [compact]}, f, indent=2)
     with open("data/itineraries_extended.json", "w", encoding="utf-8") as f:
         json.dump({"itineraries": [extended]}, f, indent=2)
-
-if __nae__ == "__main__":
+if __name__ == "__main__":
     main()
