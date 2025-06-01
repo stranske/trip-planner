@@ -1,5 +1,6 @@
 import math
-
+import sys, pathlib
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 def rescale_complexity(raw):
     """Raw 0–20 → rescaled 1–5 (divide by 4)."""
     return round(raw / 4, 2)
