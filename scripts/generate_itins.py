@@ -44,4 +44,5 @@ def main():
     with open("data/itineraries_extended.json", "w", encoding="utf-8") as f:
         json.dump({"itineraries": [extended]}, f, indent=2)
 
-if __name__ == "__main__":
+if __name_
+    main()
