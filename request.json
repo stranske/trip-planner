@@ -5,6 +5,7 @@
     "min_days": 21,
     "max_days": 35
   },
+    "nature_ratio": 0.7,
   "nature_vs_culture": 0.7,
   "must_see": [
     "Plitvice Jezera",
