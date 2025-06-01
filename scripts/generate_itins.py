@@ -4,8 +4,10 @@ Replace placeholder logic with full implementation later.
 """
 
 import json
-from scripts.calc_penalty import calcPenalty   # fixed import
 
+import sys, pathlib
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
+from scripts.calc_penalty import calcPenalty  # fixed import
 COMPACT_DAYS  = 21
 EXTENDED_DAYS = 35
 
