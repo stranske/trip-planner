@@ -4,11 +4,12 @@
     "latest_end": "2025-10-31",
     "min_days": 21,
     "max_days": 35
+        "min_weeks": 3,
+    "max_weeks": 5,
   },
     "nature_ratio": 0.7,
   
-      "min_weeks": 3,
-    "max_weeks": 5,
+  
   "must_see": [
     "Plitvice Jezera",
     "Jungfrau Region"
