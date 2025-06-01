@@ -1,3 +1,148 @@
 {
-  "segments": []
+  "segments": [
+    {
+      "id": "plitvice",
+      "name": "Plitvice Jezera",
+      "natural": 5,
+      "cultural": 2,
+      "global_significance": 4,
+      "experience_bundle": 3,
+      "segment_cost": 2
+    },
+    {
+      "id": "jungfrau",
+      "name": "Jungfrau Region",
+      "natural": 5,
+      "cultural": 1,
+      "global_significance": 4,
+      "experience_bundle": 4,
+      "segment_cost": 3
+    },
+    {
+      "id": "zagreb",
+      "name": "Zagreb",
+      "natural": 2,
+      "cultural": 4,
+      "global_significance": 3,
+      "experience_bundle": 3,
+      "segment_cost": 1
+    },
+    {
+      "id": "lucerne",
+      "name": "Lucerne",
+      "natural": 3,
+      "cultural": 4,
+      "global_significance": 3,
+      "experience_bundle": 3,
+      "segment_cost": 2
+    },
+    {
+      "id": "vienna",
+      "name": "Vienna",
+      "natural": 2,
+      "cultural": 5,
+      "global_significance": 5,
+      "experience_bundle": 4,
+      "segment_cost": 2
+    },
+    {
+      "id": "salzburg",
+      "name": "Salzburg",
+      "natural": 3,
+      "cultural": 5,
+      "global_significance": 4,
+      "experience_bundle": 4,
+      "segment_cost": 2
+    },
+    {
+      "id": "hallstatt",
+      "name": "Hallstatt",
+      "natural": 4,
+      "cultural": 3,
+      "global_significance": 4,
+      "experience_bundle": 4,
+      "segment_cost": 2
+    },
+    {
+      "id": "munich",
+      "name": "Munich",
+      "natural": 2,
+      "cultural": 4,
+      "global_significance": 4,
+      "experience_bundle": 3,
+      "segment_cost": 2
+    },
+    {
+      "id": "neuschwanstein",
+      "name": "Neuschwanstein Castle",
+      "natural": 3,
+      "cultural": 5,
+      "global_significance": 4,
+      "experience_bundle": 4,
+      "segment_cost": 3
+    },
+    {
+      "id": "interlaken",
+      "name": "Interlaken",
+      "natural": 5,
+      "cultural": 2,
+      "global_significance": 3,
+      "experience_bundle": 4,
+      "segment_cost": 3
+    },
+    {
+      "id": "geneva",
+      "name": "Geneva",
+      "natural": 2,
+      "cultural": 4,
+      "global_significance": 3,
+      "experience_bundle": 3,
+      "segment_cost": 3
+    },
+    {
+      "id": "ljubljana",
+      "name": "Ljubljana",
+      "natural": 3,
+      "cultural": 4,
+      "global_significance": 3,
+      "experience_bundle": 3,
+      "segment_cost": 1
+    },
+    {
+      "id": "lake_bled",
+      "name": "Lake Bled",
+      "natural": 5,
+      "cultural": 2,
+      "global_significance": 4,
+      "experience_bundle": 4,
+      "segment_cost": 2
+    },
+    {
+      "id": "matterhorn",
+      "name": "Matterhorn",
+      "natural": 5,
+      "cultural": 1,
+      "global_significance": 5,
+      "experience_bundle": 4,
+      "segment_cost": 3
+    },
+    {
+      "id": "grindelwald",
+      "name": "Grindelwald",
+      "natural": 5,
+      "cultural": 1,
+      "global_significance": 3,
+      "experience_bundle": 4,
+      "segment_cost": 3
+    },
+    {
+      "id": "innsbruck",
+      "name": "Innsbruck",
+      "natural": 4,
+      "cultural": 3,
+      "global_significance": 3,
+      "experience_bundle": 3,
+      "segment_cost": 2
+    }
+  ]
 }
