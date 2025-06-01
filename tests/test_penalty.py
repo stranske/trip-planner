@@ -1,4 +1,6 @@
 import math
+import sys, pathlib
+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 from scripts.calc_penalty import calcPenalty
 
 def test_world_class_no_penalty():
