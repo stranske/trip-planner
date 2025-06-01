@@ -6,7 +6,9 @@
     "max_days": 35
   },
     "nature_ratio": 0.7,
-  "nature_vs_culture": 0.7,
+  "nature_vs_culture
+      "min_weeks": 3,
+    "max_weeks": 5,
   "must_see": [
     "Plitvice Jezera",
     "Jungfrau Region"
