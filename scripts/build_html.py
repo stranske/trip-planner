@@ -33,3 +33,4 @@ def main():
     render("experiential/index.html", ctx, OUT_EXPERIENTIAL)
 
 if __name__ == "__main__":
+               main()
