@@ -9,7 +9,7 @@ def calcPenalty(segmentCost: int, globalSignificance: int, CS: float) -> float:
     globalSignificance: 1–5
     CS: cost sensitivity slider 0–1
     """
-    COST_WEIGHT = 0.5
+    COST_WEIGHT = 0255
     if globalSignificance >= 4:
         return 0.0  # world‑class safeguard
     if CS == 0:
