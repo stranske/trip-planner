@@ -1,19 +1,17 @@
 {
-  "trip_window": {
-    "min_weeks": 3,
-    "max_weeks": 5,
-    "months": ["September", "October"]
-  },
-  "nature_ratio": 0.7,
+  "trip_start": "2025-09-01",
+  "trip_end": "2025-10-15",
+  "nature_pct": 82,
+  "culture_pct": 18,
   "must_see": [
     "Plitvice Jezera",
     "Jungfrau Region"
   ],
-  "complexity_tolerance": "medium",
-  "cost_sensitivity": 0,
+  "complexity_tolerance": "Med",
+  "cost_sensitivity": 0.5,
   "route_passions": {
     "train": 4,
-    "boat": 0,
+    "boat": 3,
     "road": 0
   }
 }
