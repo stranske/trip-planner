@@ -9,6 +9,7 @@
   input, select, textarea { width: 100%; padding: 0.4rem; margin-top: 0.3rem; }
   .slider-value { font-weight: bold; margin-left: 0.5rem; }
   button { margin-top: 2rem; padding: 0.6rem 1.2rem; font-size: 1rem; }
+  #output { display: none; }
   pre { background:#f4f4f4; padding:1rem; overflow:auto; }
 </style>
 </head>
@@ -59,7 +60,7 @@
     <label>Road <input type="range" id="roadPassion" min="0" max="5" value="4"><span class="slider-value" id="roadValue">4</span></label>
   </fieldset>
 
-  <button type="submit">Generate request.json</button>
+  <button type="submit">Generate Plan My Trip!</button>
 </form>
 
 <h2>Generated JSON</h2>
@@ -69,6 +70,8 @@
 const natureSlider = document.getElementById('natureSlider');
 const natureValue  = document.getElementById('natureValue');
 const costSlider   = document.getElementById('costSlider');
+  natureSlider.addEventListener('input', () => natureValue.textContent = natureSlider.value);
+
 const costValue    = document.getElementById('costValue');
 const trainSlider  = document.getElementById('trainPassion');
 const boatSlider   = document.getElementById('boatPassion');
@@ -105,7 +108,7 @@ document.getElementById('tripForm').addEventListener('submit', e => {
   };
 
   const jsonStr = JSON.stringify(data, null, 2);
-  document.getElementById('output').textContent = jsonStr;
+r;
 
   // Trigger download
   const blob = new Blob([jsonStr], {type: 'application/json'});
