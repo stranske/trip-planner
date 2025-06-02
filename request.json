@@ -12,7 +12,7 @@
     "Plitvice Jezera",
     "Jungfrau Region"
   ],
-c  "complexity_tolerance": "medium",
+  "complexity_tolerance": "medium",
   "cost_sensitivity": 0.5,
   "route_passions": {
     "train": 4,
