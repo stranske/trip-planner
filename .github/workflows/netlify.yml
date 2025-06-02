@@ -1,7 +1,7 @@
 name: CI + Netlify Deploy
 on: 
   push:
-    branches: [ main ]
+        branches: [ main ]
 jobs:
     test-and-deploy:
     runs-on: ubuntu-latest
