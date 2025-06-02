@@ -4,6 +4,7 @@ Replace placeholder logic with full implementation later.
 """
 
 import json
+from pathlib import Path
 
 import sys, pathlib
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
@@ -15,7 +16,22 @@ def load_request(path="request.json"):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def load_segments(path="data/segments_master.json"):
+def load_segments():
+    """Load canonical + AI-generated segments and merge by id."""
+    with open("data/segments_master.json", "r", encoding="utf-8") as f:
+        master = json.load(f)["segments"]
+
+    generated_path = Path("data/segments_generated.json")
+    if generated_path.exists():
+        with generated_path.open("r", encoding="utf-8") as f:
+            generated = json.load(f)["segments"]
+    else:
+        generated = []
+
+    merged = {seg["id"]: seg for seg in generated + master}
+    return list(merged.values())
+
+def load__oldsegments(path="data/segments_master.json"):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)["segments"]
 
