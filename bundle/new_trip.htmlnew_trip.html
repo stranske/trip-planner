@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>New Trip – Trip Planner 2.0</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 2rem; }
+  label { display: block; margin-top: 1rem; }
+  input, select, textarea { width: 100%; padding: 0.4rem; margin-top: 0.3rem; }
+  .slider-value { font-weight: bold; margin-left: 0.5rem; }
+  button { margin-top: 2rem; padding: 0.6rem 1.2rem; font-size: 1rem; }
+  pre { background:#f4f4f4; padding:1rem; overflow:auto; }
+</style>
+</head>
+<body>
+<h1>Create a New Trip Request</h1>
+
+<form id="tripForm">
+  <label>
+    Trip Start Date
+    <input type="date" id="startDate" required>
+  </label>
+
+  <label>
+    Trip End Date
+    <input type="date" id="endDate" required>
+  </label>
+
+  <label>
+    Nature vs. Culture Preference
+    <input type="range" id="natureSlider" min="0" max="100" value="50">
+    <span class="slider-value" id="natureValue">50</span>% Nature
+  </label>
+
+  <label>
+    Must‑See List (comma‑separated)
+    <textarea id="mustSee" rows="3" placeholder="E.g., Grand Canyon, Louvre, Machu Picchu"></textarea>
+  </label>
+
+  <label>
+    Complexity Tolerance
+    <select id="complexity">
+      <option>Low</option>
+      <option selected>Med</option>
+      <option>High</option>
+    </select>
+  </label>
+
+  <label>
+    Cost Sensitivity
+    <input type="range" id="costSlider" min="0" max="1" step="0.1" value="0.5">
+    <span class="slider-value" id="costValue">0.5</span>
+  </label>
+
+  <fieldset style="margin-top:1rem;">
+    <legend>Route Passions (0‑5)</legend>
+    <label>Train <input type="range" id="trainPassion" min="0" max="5" value="3"><span class="slider-value" id="trainValue">3</span></label>
+    <label>Boat <input type="range" id="boatPassion" min="0" max="5" value="2"><span class="slider-value" id="boatValue">2</span></label>
+    <label>Road <input type="range" id="roadPassion" min="0" max="5" value="4"><span class="slider-value" id="roadValue">4</span></label>
+  </fieldset>
+
+  <button type="submit">Generate request.json</button>
+</form>
+
+<h2>Generated JSON</h2>
+<pre id="output">(fill the form and click the button)</pre>
+
+<script>
+const natureSlider = document.getElementById('natureSlider');
+const natureValue  = document.getElementById('natureValue');
+const costSlider   = document.getElementById('costSlider');
+const costValue    = document.getElementById('costValue');
+const trainSlider  = document.getElementById('trainPassion');
+const boatSlider   = document.getElementById('boatPassion');
+const roadSlider   = document.getElementById('roadPassion');
+
+function sync(slider, label) {
+  label.textContent = slider.value;
+}
+[natureSlider, costSlider, trainSlider, boatSlider, roadSlider].forEach(sl => {
+  const lbl = document.getElementById(sl.id.replace('Passion','Value')) || document.getElementById(sl.id.replace('Slider','Value'));
+  sync(sl, lbl);
+  sl.addEventListener('input', () => sync(sl, lbl));
+});
+
+document.getElementById('tripForm').addEventListener('submit', e => {
+  e.preventDefault();
+
+  const natPct = parseInt(natureSlider.value, 10);
+  const culPct = 100 - natPct;
+
+  const data = {
+    trip_start: document.getElementById('startDate').value,
+    trip_end:   document.getElementById('endDate').value,
+    nature_pct: natPct,
+    culture_pct: culPct,
+    must_see: document.getElementById('mustSee').value.split(',').map(s => s.trim()).filter(Boolean),
+    complexity_tolerance: document.getElementById('complexity').value,
+    cost_sensitivity: parseFloat(costSlider.value),
+    route_passions: {
+      train: parseInt(trainSlider.value, 10),
+      boat:  parseInt(boatSlider.value, 10),
+      road:  parseInt(roadSlider.value, 10)
+    }
+  };
+
+  const jsonStr = JSON.stringify(data, null, 2);
+  document.getElementById('output').textContent = jsonStr;
+
+  // Trigger download
+  const blob = new Blob([jsonStr], {type: 'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = 'request.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
