@@ -10,6 +10,7 @@
   .slider-value { font-weight: bold; margin-left: 0.5rem; }
   button { margin-top: 2rem; padding: 0.6rem 1.2rem; font-size: 1rem; }
   pre { background:#f4f4f4; padding:1rem; overflow:auto; }
+  #output { display: none; }
 </style>
 </head>
 <body>
@@ -59,7 +60,7 @@
     <label>Road <input type="range" id="roadPassion" min="0" max="5" value="4"><span class="slider-value" id="roadValue">4</span></label>
   </fieldset>
 
-  <button type="submit">Generate request.json</button>
+  <button type="submit">Plan My Trip!
 </form>
 
 <h2>Generated JSON</h2>
@@ -105,7 +106,7 @@ document.getElementById('tripForm').addEventListener('submit', e => {
   };
 
   const jsonStr = JSON.stringify(data, null, 2);
-  document.getElementById('output').textContent = jsonStr;
+
 
   // Trigger download
   const blob = new Blob([jsonStr], {type: 'application/json'});
