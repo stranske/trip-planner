@@ -114,6 +114,69 @@ document.getElementById('tripForm').addEventListener('submit', e => {
   a.href = url;
   a.download = 'request.json';
   a.click();
+    // --- Add Access Token field and Submit Trip button dynamically ---
+  const form = document.getElementById('tripForm');
+
+  const tokenLabel = document.createElement('label');
+  tokenLabel.textContent = 'Access Token';
+  const tokenInput = document.createElement('input');
+  tokenInput.type = 'password';
+  tokenInput.id = 'accessToken';
+  tokenInput.placeholder = 'Personal Access Token';
+  tokenLabel.appendChild(tokenInput);
+  form.appendChild(tokenLabel);
+
+  const submitBtn = document.createElement('button');
+  submitBtn.type = 'button';
+  submitBtn.id = 'submitTrip';
+  submitBtn.textContent = 'Submit Trip';
+  form.appendChild(submitBtn);
+
+  submitBtn.addEventListener('click', async () => {
+    const token = tokenInput.value.trim();
+    if (!token) {
+      alert('Access token required');
+      return;
+    }
+
+    const repo = 'stranske/trip-planner';
+    const path = 'request.json';
+    const message = 'Add request.json via web form';
+    const content = btoa(document.getElementById('output').textContent);
+    const url = `https://api.github.com/repos/${repo}/contents/${path}`;
+
+    // Check if the file already exists to include its SHA
+    let sha = null;
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `token ${token}` }
+      });
+      if (res.ok) {
+        const existing = await res.json();
+        sha = existing.sha;
+      }
+    } catch (_) {}
+
+    const body = { message, content };
+    if (sha) body.sha = sha;
+
+    const resp = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: `token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (resp.ok) {
+      alert('Trip submitted successfully!');
+    } else {
+      const err = await resp.json();
+      alert('Error: ' + (err.message || resp.statusText));
+    }
+  });
+
   URL.revokeObjectURL(url);
 });
 </script>
