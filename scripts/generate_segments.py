@@ -84,5 +84,13 @@ def main() -> None:
     out_path.write_text(json.dumps({"segments": segments}, indent=2))
     print(f"Wrote {len(segments)} AI‑generated segments to {out_path}.")
 
+def main(output_path: str = "data/segments_master.json"):
+    # ... existing generation logic ...
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(segments_data, f, indent=2)
+
+if __name__ == "__main__":
+    main()
 if __name__ == "__main__":
     main()
