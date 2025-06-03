@@ -19,7 +19,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Generate AI segments
-        continue-on-error: true   # skip or ignore failures while quota is exhausted
+        continue-on-error: false   # skip or ignore failures while quota is exhausted
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
