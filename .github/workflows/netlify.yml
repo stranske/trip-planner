@@ -1,19 +1,23 @@
 name: CI + Netlify Deploy
+
 on:
   push:
     branches: [ main ]
+
 jobs:
-    test-and-deploy:
+  test-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
       - name: Set up Python
-              uses: actions/setup-python@v4
-           with:           
-                 python-version: '3.11'
-         - name: Install deps
-               run: pip install -r requirements.txt
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
       - name: Generate AI segments
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -21,26 +25,25 @@ jobs:
           pip install openai
           python scripts/generate_segments.py
 
-         - name: Validate request
-              run: python scripts/validate_request.py
-    
-         - name: Run unit tests
-              run: pytest tests
-    
-            - name: Generate itineraries
-              run: python scripts/generate_itins.py
-    
-         - name: Build HTML
-              run: python scripts/build_html.py
+      - name: Validate request
+        run: python scripts/validate_request.py
 
-               - name: Deploy to Netlify
-              uses: nwtgck/actions-netlify@v2
-              with:
-                  publish-dir: ./bundle
-                  production-branch: main
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  deploy-message: "Automated deployment from GitHub Actions"
-              env:
-                  NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_A
-                 UTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}                NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      - name: Run unit tests
+        run: pytest tests
+
+      - name: Generate itineraries
+        run: python scripts/generate_itins.py
+
+      - name: Build HTML
+        run: python scripts/build_html.py
+
+      - name: Deploy to Netlify
+        uses: nwtgck/actions-netlify@v2
+        with:
+          publish-dir: ./bundle
+          production-branch: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: "Automated deployment from GitHub Actions"
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
