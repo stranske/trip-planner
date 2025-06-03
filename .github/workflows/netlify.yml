@@ -12,7 +12,6 @@ jobs:
         uses: actions/setup-python@v4
       - name: Install deps
         run: pip install -r requirements.txt
-
       - name: Generate AI segments
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -35,10 +34,11 @@ jobs:
                - name: Deploy to Netlify
               uses: nwtgck/actions-netlify@v2
               with:
-                publish-dir: ./bundle
-                production-branch: main
-                github-token: ${{ secrets.GITHUB_TOKEN }}
-                deploy-message: "Automated deployment from GitHub Actions"
+                  publish-dir: ./bundle
+                  production-branch: main
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  deploy-message: "Automated deployment from GitHub Actions"
               env:
-                NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-                NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+                  NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_A
+                 UTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}                NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
