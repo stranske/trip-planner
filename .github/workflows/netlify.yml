@@ -19,10 +19,10 @@ jobs:
         run: pip install -r requirements.txt
 
          - name: Generate AI segments
-        if: false   # disables the step entirely
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
+              if: false   # disables the step entirely
+              env:
+                OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+              run: |
           pip install "openai<1.0.0"
           python scripts/generate_segments.py
         run: python scripts/validate_request.py
