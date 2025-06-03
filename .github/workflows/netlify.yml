@@ -15,7 +15,7 @@ jobs:
 
       - name: Install deps
         run: pip install -r requirements.txt
-            - name: Generate AI segments
+          - name: Generate AI segments
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: |
