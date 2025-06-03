@@ -18,13 +18,13 @@ jobs:
       - name: Install deps
         run: pip install -r requirements.txt
 
-- name: Generate AI segments
+      - name: Generate AI segments
         if: false   # <-- disables the step entirely
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          pip install "openai<1.0.0"
-          python scripts/generate_segments.py
+          env:
+            OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          run: |
+            pip install "openai<1.0.0"
+            python scripts/generate_segments.py
 
       - name: Validate request
         run: python scripts/validate_request.py
