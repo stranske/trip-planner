@@ -1,47 +1,40 @@
+---
 name: CI + Netlify Deploy
-
 on:
   push:
-    branches: [ main ]
-
+    branches:
+      - main
 jobs:
   test-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
-
+          python-version: "3.11"
       - name: Install deps
         run: pip install -r requirements.txt
-
       - name: Generate AI segments
-          continue-on-error: true   # ← lets the workflow keep going even if this step fails
-          env:
-            OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          run: |
-            pip install "openai<1.0.0"
-            python scripts/generate_segments.py
-
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          pip install "openai<1.0.0"
+          python scripts/generate_segments.py
       - name: Run unit tests
         run: pytest tests
-
       - name: Generate itineraries
         run: python scripts/generate_itins.py
-
       - name: Build HTML
         run: python scripts/build_html.py
-
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v2
         with:
           publish-dir: ./bundle
           production-branch: main
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          deploy-message: "Automated deployment from GitHub Actions"
+          deploy-message: Automated deployment from GitHub Actions
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
