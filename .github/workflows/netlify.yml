@@ -22,7 +22,8 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          pip install openai
+          # Pin to a pre‑1.0 release so the old ChatCompletion API still works
+          pip install "openai<1.0.0"
           python scripts/generate_segments.py
 
       - name: Validate request
