@@ -1,0 +1,34 @@
+# Thin caller for Agents Verifier - delegates to Workflows repo reusable workflow
+# Runs post-merge to verify acceptance criteria were met and opens follow-up issues
+#
+# Triggers:
+# - PR merged (pull_request_target closed with merged=true)
+#
+# Required secrets (via secrets: inherit):
+# - CODEX_AUTH_JSON: Authentication for Codex API
+# - Ensure repository/org secrets are configured for verification to work
+#
+# Note: Uses pull_request_target instead of pull_request to ensure secrets
+# are available for PRs from forks after merge.
+name: Agents Verifier
+
+on:
+  pull_request_target:
+    types:
+      - closed
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+  actions: read
+
+jobs:
+  verifier:
+    # Only run on merged PRs
+    if: github.event.pull_request.merged == true
+    uses: stranske/Workflows/.github/workflows/reusable-agents-verifier.yml@main
+    with:
+      # CI workflows to wait for before running verifier
+      ci_workflows: '["ci.yml", "pr-00-gate.yml"]'
+    secrets: inherit
