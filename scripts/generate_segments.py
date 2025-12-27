@@ -36,7 +36,7 @@ Return JSON in this schema:
 def slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
-def main() -> None:
+def main(output_path: str = "data/segments_generated.json") -> None:
     req_path = Path("request.json")
     if not req_path.exists():
         sys.exit("request.json not found; cannot generate segments.")
@@ -80,17 +80,10 @@ def main() -> None:
     for seg in segments:
         seg.setdefault("id", slugify(seg.get("name", "")))
 
-    out_path = Path("data/segments_generated.json")
+    out_path = Path(output_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps({"segments": segments}, indent=2))
     print(f"Wrote {len(segments)} AI‑generated segments to {out_path}.")
 
-def main(output_path: str = "data/segments_master.json"):
-    # ... existing generation logic ...
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
-        json.dump(segments_data, f, indent=2)
-
-if __name__ == "__main__":
-    main()
 if __name__ == "__main__":
     main()
