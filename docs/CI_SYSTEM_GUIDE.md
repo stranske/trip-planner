@@ -186,7 +186,7 @@ unexpected behavior:
 | `.github/ISSUE_TEMPLATE/` | Issue templates including Agent Task |
 | `.github/codex/` | Agent configuration |
 | `docs/LABELS.md` | Label definitions and triggers |
-| `docs/AGENT_ISSUE_FORMAT.md` | How to format issues for agents |
+| [docs/AGENT_ISSUE_FORMAT.md](AGENT_ISSUE_FORMAT.md) | How to format issues for agents |
 
 ### Key Labels
 
