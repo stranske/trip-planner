@@ -151,7 +151,7 @@ This document describes all labels that trigger automated workflows or affect CI
 | Existing Label | New Label Added | Result |
 |---------------|-----------------|--------|
 | (none) | `autofix` | Triggers autofix |
-| `autofix` | `autofix:clean` | May trigger clean mode |
+| `autofix` | `autofix:clean` | Triggers clean-mode autofix |
 | (none) | `agent:codex` | Triggers agent assignment |
 | `agent:codex` | `agent:codex-invite` | Sends agent invitation |
 | `agent:codex` | `status:ready` | Agent begins processing |
