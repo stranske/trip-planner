@@ -19,8 +19,6 @@ Brief description of the changes.
 ## Labels
 
 Add appropriate labels:
-- Size: `XS`, `S`, `M`, `L`, `XL`
-- Type: `bug`, `feature`, `docs`, `refactor`
 - If code fixes needed: add `autofix` label after PR is created
 
 ## Related Issues
