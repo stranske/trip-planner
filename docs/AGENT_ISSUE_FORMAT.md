@@ -145,7 +145,7 @@ Use existing validation utility pattern from `src/utils/validation.ts`.
 
 ---
 
-## Tips for LLMs Creating Issues
+## Tips for AI Agents Creating Issues
 
 1. **Be specific about file paths** — Include exact paths in Implementation Notes
 2. **Keep tasks atomic** — One checkbox = one discrete change
