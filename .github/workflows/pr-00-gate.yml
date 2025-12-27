@@ -1,0 +1,84 @@
+# -----------------------------------------------------------------------------
+# Gate Workflow — trip-planner
+# -----------------------------------------------------------------------------
+# Simple CI gate for PRs - runs tests and reports status for keepalive automation.
+# -----------------------------------------------------------------------------
+
+name: Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+  workflow_dispatch:
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.ref_name }}-gate
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install deps
+        run: pip install -r requirements.txt openai
+
+      - name: Run unit tests
+        run: pytest tests -v
+
+  summary:
+    name: gate-summary
+    needs: [test]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Report Gate commit status
+        uses: actions/github-script@v7
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        with:
+          script: |
+            const testResult = process.env.TEST_RESULT || 'skipped';
+            let state = 'success';
+            let description = 'All checks passed';
+
+            if (testResult === 'failure') {
+              state = 'failure';
+              description = 'Tests failed';
+            } else if (testResult === 'cancelled') {
+              state = 'error';
+              description = 'Tests cancelled';
+            }
+
+            const sha = context.payload.pull_request?.head?.sha ?? context.sha;
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha,
+              state,
+              context: 'Gate / gate',
+              description,
+              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            });
+            console.log(`Gate status: ${state} - ${description}`);
+
+      - name: Enforce Gate success
+        if: ${{ needs.test.result == 'failure' }}
+        run: exit 1
