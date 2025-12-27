@@ -195,7 +195,7 @@ Valid agent assignees are configured per-repository. Contact your repository adm
 
 To add new label-triggered functionality:
 1. Update the relevant workflow file
-2. Add the label to this documentation
+2. Document the label in the Quick Reference table and relevant sections of this file, including its trigger conditions and effects
 3. Sync documentation to consumer repositories
 
 ---
