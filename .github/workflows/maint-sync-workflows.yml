@@ -54,12 +54,21 @@ jobs:
             fi
 
             # Try to fetch from main workflows first, then templates
+            download_failed=false
             if curl -sfL "https://raw.githubusercontent.com/stranske/Workflows/main/.github/workflows/${remote_file}" \
                 -o "/tmp/workflows-latest/${local_file}" 2>/dev/null; then
               :
+            elif curl -sfL "https://raw.githubusercontent.com/stranske/Workflows/main/templates/consumer-repo/.github/workflows/${remote_file}" \
+                -o "/tmp/workflows-latest/${local_file}" 2>/dev/null; then
+              :
             else
-              curl -sfL "https://raw.githubusercontent.com/stranske/Workflows/main/templates/consumer-repo/.github/workflows/${remote_file}" \
-                -o "/tmp/workflows-latest/${local_file}" 2>/dev/null || continue
+              download_failed=true
+            fi
+
+            # Verify download succeeded and file exists with content
+            if [ "$download_failed" = "true" ] || [ ! -s "/tmp/workflows-latest/${local_file}" ]; then
+              CHANGES="$CHANGES workflows/$local_file(download_failed)"
+              continue
             fi
 
             if [ -f ".github/workflows/$local_file" ]; then
@@ -86,8 +95,11 @@ jobs:
 
           # Fetch and compare script files
           for script in "${SYNC_SCRIPTS[@]}"; do
-            curl -sfL "https://raw.githubusercontent.com/stranske/Workflows/main/.github/scripts/${script}" \
-              -o "/tmp/scripts-latest/${script}" 2>/dev/null || continue
+            if ! curl -sfL "https://raw.githubusercontent.com/stranske/Workflows/main/.github/scripts/${script}" \
+                -o "/tmp/scripts-latest/${script}" 2>/dev/null || [ ! -s "/tmp/scripts-latest/${script}" ]; then
+              CHANGES="$CHANGES scripts/$script(download_failed)"
+              continue
+            fi
 
             if [ -f ".github/scripts/$script" ]; then
               if ! diff -q "/tmp/scripts-latest/$script" ".github/scripts/$script" > /dev/null 2>&1; then

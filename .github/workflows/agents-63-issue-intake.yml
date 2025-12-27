@@ -1079,7 +1079,7 @@ jobs:
   bridge_preflight:
     needs: normalize_inputs
     if: needs.normalize_inputs.outputs.intake_mode == 'agent_bridge'
-    name: Validate Codex issue labels
+    name: Validate agent issue labels
     runs-on: ubuntu-latest
     permissions:
       issues: read
