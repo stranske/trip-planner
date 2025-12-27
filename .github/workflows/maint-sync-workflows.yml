@@ -1,0 +1,120 @@
+# Periodically checks if workflow files are out of sync with stranske/Workflows
+# and creates a PR to update them if needed
+#
+# Note: Most scripts are now fetched via dual checkout in reusable workflows,
+# but some workflows (agents-63-issue-intake) still need local scripts.
+name: Sync Workflows Check
+
+on:
+  schedule:
+    # Run weekly on Mondays at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch latest from Workflows repo
+        id: fetch
+        run: |
+          mkdir -p /tmp/workflows-latest /tmp/scripts-latest
+
+          # Workflow files to sync
+          SYNC_WORKFLOWS=(
+            "agents-63-issue-intake.yml"
+            "agents-70-orchestrator.yml:agents-orchestrator.yml"
+            "agents-pr-meta.yml"
+            "autofix.yml"
+          )
+
+          # Scripts used by agents-63-issue-intake.yml
+          SYNC_SCRIPTS=(
+            "decode_raw_input.py"
+            "parse_chatgpt_topics.py"
+            "fallback_split.py"
+          )
+
+          CHANGES=""
+
+          # Fetch and compare workflow files
+          for mapping in "${SYNC_WORKFLOWS[@]}"; do
+            local_file="${mapping%%:*}"
+            # If mapping has :, use second part as remote name, else same as local
+            if [[ "$mapping" == *":"* ]]; then
+              remote_file="${mapping##*:}"
+            else
+              remote_file="$local_file"
+            fi
+
+            # Try to fetch from main workflows first, then templates
+            if curl -sfL "https://raw.githubusercontent.com/stranske/Workflows/main/.github/workflows/${remote_file}" \
+                -o "/tmp/workflows-latest/${local_file}" 2>/dev/null; then
+              :
+            else
+              curl -sfL "https://raw.githubusercontent.com/stranske/Workflows/main/templates/consumer-repo/.github/workflows/${remote_file}" \
+                -o "/tmp/workflows-latest/${local_file}" 2>/dev/null || continue
+            fi
+
+            if [ -f ".github/workflows/$local_file" ]; then
+              # Get line counts to handle short files
+              remote_lines=$(wc -l < "/tmp/workflows-latest/$local_file")
+              local_lines=$(wc -l < ".github/workflows/$local_file")
+
+              # Skip header comparison if files are too short
+              if [ "$remote_lines" -lt 15 ] || [ "$local_lines" -lt 15 ]; then
+                # Compare entire files for short files
+                if ! diff -q "/tmp/workflows-latest/$local_file" ".github/workflows/$local_file" > /dev/null 2>&1; then
+                  CHANGES="$CHANGES workflows/$local_file"
+                fi
+              else
+                # Compare ignoring first 10 lines (repo-specific headers)
+                if ! diff -q <(tail -n +10 "/tmp/workflows-latest/$local_file") <(tail -n +10 ".github/workflows/$local_file") > /dev/null 2>&1; then
+                  CHANGES="$CHANGES workflows/$local_file"
+                fi
+              fi
+            else
+              CHANGES="$CHANGES workflows/$local_file(missing)"
+            fi
+          done
+
+          # Fetch and compare script files
+          for script in "${SYNC_SCRIPTS[@]}"; do
+            curl -sfL "https://raw.githubusercontent.com/stranske/Workflows/main/.github/scripts/${script}" \
+              -o "/tmp/scripts-latest/${script}" 2>/dev/null || continue
+
+            if [ -f ".github/scripts/$script" ]; then
+              if ! diff -q "/tmp/scripts-latest/$script" ".github/scripts/$script" > /dev/null 2>&1; then
+                CHANGES="$CHANGES scripts/$script"
+              fi
+            else
+              CHANGES="$CHANGES scripts/$script(missing)"
+            fi
+          done
+
+          if [ -n "$CHANGES" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "changed_files=$CHANGES" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Workflow Sync Check" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.fetch.outputs.has_changes }}" = "true" ]; then
+            echo "⚠️ Changes detected:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "${{ steps.fetch.outputs.changed_files }}" | tr ' ' '\n' | grep -v '^$' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Run [Maint 68 Sync Consumer Repos](https://github.com/stranske/Workflows/actions/workflows/maint-68-sync-consumer-repos.yml) to update." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ All workflows and scripts in sync with stranske/Workflows" >> "$GITHUB_STEP_SUMMARY"
+          fi
