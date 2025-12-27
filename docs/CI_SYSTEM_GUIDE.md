@@ -112,7 +112,7 @@ To add a domain-specific job:
 
 ### Using Agent Labels
 
-See [docs/LABELS.md](LABELS.md) for the complete label reference.
+See [LABELS.md](LABELS.md) for the complete label reference.
 
 Quick start:
 
