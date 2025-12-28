@@ -85,7 +85,7 @@ def _split_numbered_items(text: str) -> list[dict[str, str | list[str] | bool]]:
         if m:
             token = m.group("enum")
             title = m.group("title").strip()
-            # Clean simple markdown emphasis and stray trailing punctuation that harms GUID stability
+            # Clean markdown emphasis and trailing punctuation for GUID stability
             title = re.sub(r"^[*_`]+|[*_`]+$", "", title).strip()
             title = title.rstrip(". ")
             if current:
@@ -213,7 +213,7 @@ def parse_text(
         else:
             raw_lines = []
         labels, sections, extras = _parse_sections(raw_lines)
-        data = {
+        data: dict[str, object] = {
             "title": str(item.get("title", "")).strip(),
             "labels": labels,
             "sections": {key: _join_section(value) for key, value in sections.items()},
@@ -221,7 +221,7 @@ def parse_text(
             "enumerator": item.get("enumerator"),
             "continuity_break": bool(item.get("continuity_break", False)),
         }
-        normalized_title = re.sub(r"\s+", " ", data["title"].strip().lower())
+        normalized_title = re.sub(r"\s+", " ", str(data["title"]).strip().lower())
         data["guid"] = str(uuid.uuid5(uuid.NAMESPACE_DNS, normalized_title))
         parsed.append(data)
     return parsed
