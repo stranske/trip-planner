@@ -1079,7 +1079,7 @@ jobs:
   bridge_preflight:
     needs: normalize_inputs
     if: needs.normalize_inputs.outputs.intake_mode == 'agent_bridge'
-    name: Validate agent issue labels
+    name: Validate Codex issue labels
     runs-on: ubuntu-latest
     permissions:
       issues: read
@@ -1168,7 +1168,7 @@ jobs:
           github.run_id
         }}
       cancel-in-progress: true
-    uses: stranske/Workflows/.github/workflows/reusable-agents-issue-bridge.yml@main
+    uses: ./.github/workflows/reusable-agents-issue-bridge.yml
     with:
       agent: ${{ needs.normalize_inputs.outputs.bridge_agent || needs.bridge_preflight.outputs.agent_key }}
       issue_number: ${{ needs.normalize_inputs.outputs.issue_number || needs.bridge_preflight.outputs.issue_number || '' }}

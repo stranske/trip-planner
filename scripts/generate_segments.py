@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """Generate additional destination segments with OpenAI and save to data/segments_generated.json."""
-import os, json, re, sys
+import json
+import os
+import re
+import sys
 from pathlib import Path
 
 try:
     import openai  # type: ignore
 except ImportError:
-    sys.exit("openai package not installed. Add 'openai' to requirements.txt or pip install openai in CI.")
+    sys.exit(
+        "openai package not installed. Add 'openai' to requirements.txt or pip install openai in CI."
+    )
 
 
 PROMPT_TEMPLATE = """
@@ -33,8 +38,10 @@ Return JSON in this schema:
 ]
 """
 
+
 def slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
 
 def main(output_path: str = "data/segments_generated.json") -> None:
     req_path = Path("request.json")
@@ -51,7 +58,7 @@ def main(output_path: str = "data/segments_generated.json") -> None:
         nature_ratio=nature_ratio,
         culture_ratio=culture_ratio,
         must_see=must_see or "(none)",
-        months=months or "(any)"
+        months=months or "(any)",
     )
 
     api_key = os.getenv("OPENAI_API_KEY")
@@ -84,6 +91,7 @@ def main(output_path: str = "data/segments_generated.json") -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps({"segments": segments}, indent=2))
     print(f"Wrote {len(segments)} AI‑generated segments to {out_path}.")
+
 
 if __name__ == "__main__":
     main()

@@ -151,7 +151,7 @@ This document describes all labels that trigger automated workflows or affect CI
 | Existing Label | New Label Added | Result |
 |---------------|-----------------|--------|
 | (none) | `autofix` | Triggers autofix |
-| `autofix` | `autofix:clean` | Triggers clean-mode autofix |
+| `autofix` | `autofix:clean` | May trigger clean mode |
 | (none) | `agent:codex` | Triggers agent assignment |
 | `agent:codex` | `agent:codex-invite` | Sends agent invitation |
 | `agent:codex` | `status:ready` | Agent begins processing |
@@ -195,7 +195,7 @@ Valid agent assignees are configured per-repository. Contact your repository adm
 
 To add new label-triggered functionality:
 1. Update the relevant workflow file
-2. Document the label in the Quick Reference table and relevant sections of this file, including its trigger conditions and effects
+2. Add the label to this documentation
 3. Sync documentation to consumer repositories
 
 ---
