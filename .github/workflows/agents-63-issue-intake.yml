@@ -1168,7 +1168,7 @@ jobs:
           github.run_id
         }}
       cancel-in-progress: true
-    uses: stranske/Workflows/.github/workflows/reusable-agents-issue-bridge.yml@main
+    uses: ./.github/workflows/reusable-agents-issue-bridge.yml
     with:
       agent: ${{ needs.normalize_inputs.outputs.bridge_agent || needs.bridge_preflight.outputs.agent_key }}
       issue_number: ${{ needs.normalize_inputs.outputs.issue_number || needs.bridge_preflight.outputs.issue_number || '' }}
@@ -1176,5 +1176,5 @@ jobs:
       post_agent_comment: ${{ needs.normalize_inputs.outputs.post_codex_comment }}
       agent_pr_draft: ${{ needs.normalize_inputs.outputs.bridge_draft_pr }}
     secrets:
-      service_bot_pat: ${{ secrets.SERVICE_BOT_PAT }}
-      owner_pr_pat: ${{ secrets.OWNER_PR_PAT }}
+      service_bot_pat: ${{ secrets.service_bot_pat }}
+      owner_pr_pat: ${{ secrets.owner_pr_pat }}
