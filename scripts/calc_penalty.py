@@ -1,7 +1,7 @@
-
 """
 Soft Cost Penalty helper (Python version).
 """
+
 
 def calcPenalty(segmentCost: int, globalSignificance: int, CS: float) -> float:
     """

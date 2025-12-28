@@ -2,7 +2,8 @@
 
 import json
 import sys
-from jsonschema import validate, ValidationError
+
+from jsonschema import ValidationError, validate
 
 SCHEMA = {
     "type": "object",
@@ -14,15 +15,16 @@ SCHEMA = {
             "properties": {
                 "min_weeks": {"type": "number", "minimum": 1},
                 "max_weeks": {"type": "number", "maximum": 12},
-                "months": {"type": "array", "items": {"type": "string"}}
-            }
+                "months": {"type": "array", "items": {"type": "string"}},
+            },
         },
         "must_see": {"type": "array", "items": {"type": "string"}},
         "nature_ratio": {"type": "number", "minimum": 0, "maximum": 1},
         "complexity_tolerance": {"type": "string", "enum": ["low", "medium", "high"]},
-        "cost_sensitivity": {"type": "number", "minimum": 0, "maximum": 1}
-    }
+        "cost_sensitivity": {"type": "number", "minimum": 0, "maximum": 1},
+    },
 }
+
 
 def main(path: str = "request.json") -> None:
     try:
@@ -38,6 +40,6 @@ def main(path: str = "request.json") -> None:
         print("  →", e.message)
         sys.exit(1)
 
+
 if __name__ == "__main__":
     main()
-
