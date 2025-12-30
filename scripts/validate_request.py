@@ -28,7 +28,7 @@ SCHEMA = {
 
 def main(path: str = "request.json") -> None:
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         validate(instance=data, schema=SCHEMA)
         print("✓ request.json is valid.")

@@ -16,13 +16,13 @@ EXTENDED_DAYS = 35
 
 
 def load_request(path="request.json"):
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
 def load_segments():
     """Load canonical + AI-generated segments and merge by id."""
-    with open("data/segments_master.json", "r", encoding="utf-8") as f:
+    with open("data/segments_master.json", encoding="utf-8") as f:
         master = json.load(f)["segments"]
 
     generated_path = Path("data/segments_generated.json")
@@ -37,7 +37,7 @@ def load_segments():
 
 
 def load__oldsegments(path="data/segments_master.json"):
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)["segments"]
 
 
