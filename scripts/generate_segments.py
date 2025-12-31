@@ -66,7 +66,7 @@ def main(output_path: str = "data/segments_generated.json") -> None:
         sys.exit("OPENAI_API_KEY environment variable not set.")
     openai.api_key = api_key
 
-    response = openai.ChatCompletion.create(
+    response = openai.ChatCompletion.create(  # type: ignore[attr-defined]
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
