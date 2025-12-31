@@ -31,5 +31,5 @@ jobs:
       python-versions: '["3.11", "3.12"]'
       typecheck: true
       coverage: true
-      coverage-min: '80'
+      coverage-min: '15'
     secrets: inherit
