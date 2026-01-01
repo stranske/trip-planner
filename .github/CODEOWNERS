@@ -1,0 +1,18 @@
+# Code Ownership - Requires maintainer review for critical paths
+#
+# This file is synced from stranske/Workflows. Changes here will be
+# overwritten on the next sync. To customize, modify the source:
+# https://github.com/stranske/Workflows/blob/main/templates/consumer-repo/.github/CODEOWNERS
+#
+# GitHub CODEOWNERS documentation:
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Automation guardrails: changes to workflow and script assets require maintainer review.
+.github/workflows/** @stranske
+.github/scripts/** @stranske
+
+# Codex prompts and agent configuration
+.github/codex/** @stranske
+
+# Documentation review is helpful but not blocking.
+docs/** @stranske
