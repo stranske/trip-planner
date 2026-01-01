@@ -23,3 +23,19 @@ norecursedirs = ["1. tests"]
 
 [tool.mypy]
 exclude = ["1\\. tests"]
+
+[tool.coverage.run]
+omit = [
+    # Synced from Workflows repo - tested there
+    "scripts/ci_*.py",
+    "scripts/sync_*.py",
+    "scripts/coverage_history_append.py",
+    "tools/*.py",
+    ".github/scripts/*.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+]

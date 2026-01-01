@@ -1,1 +1,1 @@
-{"changed": true, "classification": {"total": 0, "new": 0, "allowed": 0}, "timestamp": "2026-01-01T07:40:26Z", "files": [".github/scripts/decode_raw_input.py", ".github/scripts/parse_chatgpt_topics.py", "scripts/ci_coverage_delta.py", "scripts/ci_history.py", "scripts/ci_metrics.py", "scripts/sync_test_dependencies.py", "tools/coverage_trend.py"]}
+{"changed": true, "classification": {"total": 0, "new": 0, "allowed": 0}, "timestamp": "2026-01-01T17:28:47Z", "files": ["scripts/sync_dev_dependencies.py"]}
