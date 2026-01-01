@@ -79,7 +79,9 @@ def find_dev_dependencies_section(content: str) -> tuple[int, int, str] | None:
     # Handle both inline and multi-line formats
 
     # Pattern for multi-line dev dependencies
-    pattern = re.compile(r"^dev\s*=\s*\[\s*(?:\r?\n)(.*?)(?:\r?\n)\s*\]", re.MULTILINE | re.DOTALL)
+    pattern = re.compile(
+        r"^dev\s*=\s*\[\s*(?:\r?\n)(.*?)(?:\r?\n)\s*\]", re.MULTILINE | re.DOTALL
+    )
 
     match = pattern.search(content)
     if match:
