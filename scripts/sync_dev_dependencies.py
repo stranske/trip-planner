@@ -89,7 +89,9 @@ def extract_dependencies(section: str) -> list[tuple[str, str, str]]:
     """
     deps = []
     # Match patterns like "package>=1.0.0" or "package==1.0.0" or just "package"
-    pattern = re.compile(r'"([a-zA-Z0-9_-]+)(?:(>=|==|~=|>|<|<=|!=)([^"]+))?(?:\[.*?\])?"')
+    pattern = re.compile(
+        r'"([a-zA-Z0-9_-]+)(?:(>=|==|~=|>|<|<=|!=)([^"]+))?(?:\[.*?\])?"'
+    )
 
     for match in pattern.finditer(section):
         package = match.group(1)
@@ -110,7 +112,8 @@ def update_dependency_version(
     # Pattern to match the package with any version specifier
     # Handles: "package>=1.0", "package==1.0", "package~=1.0", or just "package"
     pattern = re.compile(
-        rf'"({re.escape(package)})(>=|==|~=|>|<|<=|!=)?([^"\[\]]*)?(\[.*?\])?"', re.IGNORECASE
+        rf'"({re.escape(package)})(>=|==|~=|>|<|<=|!=)?([^"\[\]]*)?(\[.*?\])?"',
+        re.IGNORECASE,
     )
 
     def replacer(m: re.Match) -> str:
