@@ -2,6 +2,14 @@
 name = "trip-planner"
 version = "0.1.0"
 
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.14.10",
+    "mypy>=1.19.1",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+]
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
