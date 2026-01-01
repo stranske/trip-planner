@@ -12,12 +12,14 @@ import argparse
 import ast
 import re
 import sys
-import tomllib
 from pathlib import Path
 from typing import Any, cast
 
+import tomllib
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_PATH = REPO_ROOT / "src"
+LOCAL_MODULES_FILE = REPO_ROOT / ".project_modules.txt"
 if SRC_PATH.exists():
     sys.path.insert(0, str(SRC_PATH))
 
@@ -176,9 +178,43 @@ def _detect_local_project_modules() -> set[str]:
     return detected
 
 
+def _read_local_modules() -> set[str]:
+    """Read repo-specific module names from .project_modules.txt if it exists.
+
+    This allows consumer repos to specify additional first-party modules
+    (like standalone .py files in root) without modifying this script.
+    One module name per line, comments start with #.
+    """
+    if not LOCAL_MODULES_FILE.exists():
+        return set()
+    modules: set[str] = set()
+    try:
+        content = LOCAL_MODULES_FILE.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(
+            f"Warning: could not read {LOCAL_MODULES_FILE}: {exc}",
+            file=sys.stderr,
+        )
+        return set()
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if not line.isidentifier():
+            print(
+                f"Warning: ignoring invalid module name in {LOCAL_MODULES_FILE}: {line!r}",
+                file=sys.stderr,
+            )
+            continue
+        modules.add(line)
+    return modules
+
+
 def get_project_modules() -> set[str]:
-    """Return the full set of project modules (static + dynamically detected)."""
-    return _BASE_PROJECT_MODULES | _detect_local_project_modules()
+    """Return the full set of project modules (static + dynamically detected + local)."""
+    return (
+        _BASE_PROJECT_MODULES | _detect_local_project_modules() | _read_local_modules()
+    )
 
 
 # For backward compatibility - will be populated on first use
@@ -331,7 +367,9 @@ def add_dependencies_to_pyproject(missing: set[str], fix: bool = False) -> bool:
         dev_group.multiline(True)
         optional[DEV_EXTRA] = dev_group
 
-    existing_normalised = {_normalise_package_name(str(item).split("[")[0]) for item in dev_group}
+    existing_normalised = {
+        _normalise_package_name(str(item).split("[")[0]) for item in dev_group
+    }
 
     added = False
     for package in sorted(missing):
@@ -350,7 +388,9 @@ def add_dependencies_to_pyproject(missing: set[str], fix: bool = False) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Sync test dependencies to pyproject.toml")
+    parser = argparse.ArgumentParser(
+        description="Sync test dependencies to pyproject.toml"
+    )
     parser.add_argument(
         "--fix",
         action="store_true",
