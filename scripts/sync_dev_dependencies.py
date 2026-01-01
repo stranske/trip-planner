@@ -133,7 +133,9 @@ def find_project_section_end(content: str) -> int | None:
     return len(content)
 
 
-def create_dev_dependencies_section(pins: dict[str, str], use_exact_pins: bool = True) -> str:
+def create_dev_dependencies_section(
+    pins: dict[str, str], use_exact_pins: bool = True
+) -> str:
     """Create a new dev dependencies section with core tools."""
     op = "==" if use_exact_pins else ">="
     deps = []
@@ -158,7 +160,9 @@ def extract_dependencies(section: str) -> list[tuple[str, str, str]]:
     deps = []
     # Match patterns like "package>=1.0.0" or "package==1.0.0" or just "package"
     # Be precise: package name followed by optional version specifier
-    pattern = re.compile(r'"([a-zA-Z0-9_-]+)(?:(>=|==|~=|>|<|<=|!=)([^"\[\]]+))?(?:\[.*?\])?"')
+    pattern = re.compile(
+        r'"([a-zA-Z0-9_-]+)(?:(>=|==|~=|>|<|<=|!=)([^"\[\]]+))?(?:\[.*?\])?"'
+    )
 
     for match in pattern.finditer(section):
         package = match.group(1)
@@ -238,12 +242,20 @@ def sync_pyproject(
         opt_deps_pos = find_optional_dependencies_section(content)
         if opt_deps_pos is not None:
             # Add after [project.optional-dependencies] header
-            content = content[:opt_deps_pos] + "\n" + new_section + "\n" + content[opt_deps_pos:]
+            content = (
+                content[:opt_deps_pos]
+                + "\n"
+                + new_section
+                + "\n"
+                + content[opt_deps_pos:]
+            )
         else:
             # Need to add [project.optional-dependencies] section
             insert_pos = find_project_section_end(content)
             if insert_pos is None:
-                return [], ["Could not find [project] section to add optional-dependencies"]
+                return [], [
+                    "Could not find [project] section to add optional-dependencies"
+                ]
 
             section_to_add = "\n[project.optional-dependencies]\n" + new_section + "\n"
             content = content[:insert_pos] + section_to_add + content[insert_pos:]
