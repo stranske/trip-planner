@@ -36,10 +36,13 @@ jobs:
       - name: Check if lock file needs update
         id: check
         run: |
-          # uv pip compile pyproject.toml --extra dev --universal --output-file requirements.check 2>&1 | tee compile.log || { will be replaced per repo
-          uv pip compile pyproject.toml --extra dev --universal --output-file requirements.check 2>&1 | tee compile.log || {
+          uv pip compile 2>&1 | tee compile.log || {
+            echo "❌ Compilation failed:"
+            cat compile.log
+            exit 1
+          }
           
-          if git diff --exit-code requirements.lock > /dev/null 2>&1; then
+          if git diff --exit-code requirements.lock requirements.check > /dev/null 2>&1; then
             echo "needs_update=false" >> $GITHUB_OUTPUT
             echo "✓ Lock file is already up to date"
           else

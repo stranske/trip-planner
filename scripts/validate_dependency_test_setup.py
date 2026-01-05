@@ -11,7 +11,7 @@ Run this script to verify:
 import re
 import sys
 from pathlib import Path
-from typing import Set, Dict, List, Tuple
+from typing import List, Tuple
 
 
 def check_lock_file_completeness() -> Tuple[bool, List[str]]:
@@ -40,7 +40,7 @@ def check_lock_file_completeness() -> Tuple[bool, List[str]]:
                 issues.append(f"dependabot-auto-lock.yml missing --extra {group}")
         
         if not issues:
-            print(f"✓ dependabot-auto-lock.yml includes all extras")
+            print("✓ dependabot-auto-lock.yml includes all extras")
     else:
         issues.append("dependabot-auto-lock.yml not found")
     
@@ -176,11 +176,11 @@ def main():
         if not passed:
             all_passed = False
             all_issues.extend(issues)
-            print(f"✗ FAILED")
+            print("✗ FAILED")
             for issue in issues:
                 print(f"  {issue}")
         else:
-            print(f"✓ PASSED")
+            print("✓ PASSED")
     
     print()
     print("=" * 60)
