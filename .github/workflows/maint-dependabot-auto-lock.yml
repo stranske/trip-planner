@@ -43,10 +43,10 @@ jobs:
           }
           
           if git diff --exit-code requirements.lock requirements.check > /dev/null 2>&1; then
-            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
             echo "✓ Lock file is already up to date"
           else
-            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
             echo "⚠ Lock file needs regeneration"
           fi
       
