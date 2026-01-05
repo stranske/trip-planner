@@ -94,6 +94,8 @@ def _load_prompt() -> str:
 def _get_llm_client() -> tuple[object, str] | None:
     try:
         from langchain_openai import ChatOpenAI
+
+        from tools.llm_provider import DEFAULT_MODEL, GITHUB_MODELS_BASE_URL
     except ImportError:
         return None
 
@@ -101,8 +103,6 @@ def _get_llm_client() -> tuple[object, str] | None:
     openai_token = os.environ.get("OPENAI_API_KEY")
     if not github_token and not openai_token:
         return None
-
-    from tools.llm_provider import DEFAULT_MODEL, GITHUB_MODELS_BASE_URL
 
     if github_token:
         return (
@@ -286,6 +286,29 @@ def _formatted_output_valid(text: str) -> bool:
     return all(section in text for section in required)
 
 
+def _select_code_fence(text: str) -> str:
+    runs = [len(match.group(0)) for match in re.finditer(r"`+", text)]
+    fence_len = max(3, max(runs, default=0) + 1)
+    return "`" * fence_len
+
+
+def _append_raw_issue_section(formatted: str, issue_body: str) -> str:
+    raw = issue_body.strip()
+    if not raw:
+        return formatted
+    marker = "<summary>Original Issue</summary>"
+    if marker in formatted:
+        return formatted
+    fence = _select_code_fence(raw)
+    details = (
+        "\n\n<details>\n"
+        "<summary>Original Issue</summary>\n\n"
+        f"{fence}text\n{raw}\n{fence}\n"
+        "</details>"
+    )
+    return f"{formatted.rstrip()}{details}\n"
+
+
 def format_issue_body(issue_body: str, *, use_llm: bool = True) -> dict[str, Any]:
     if not issue_body:
         issue_body = ""
@@ -306,13 +329,14 @@ def format_issue_body(issue_body: str, *, use_llm: bool = True) -> dict[str, Any
                 content = getattr(response, "content", None) or str(response)
                 formatted = content.strip()
                 if _formatted_output_valid(formatted):
+                    formatted = _append_raw_issue_section(formatted, issue_body)
                     return {
                         "formatted_body": formatted,
                         "provider_used": provider,
                         "used_llm": True,
                     }
 
-    formatted = _format_issue_fallback(issue_body)
+    formatted = _append_raw_issue_section(_format_issue_fallback(issue_body), issue_body)
     return {
         "formatted_body": formatted,
         "provider_used": None,
