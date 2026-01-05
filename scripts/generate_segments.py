@@ -5,9 +5,10 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 # Defer openai import to runtime to avoid pytest collection failures
-openai = None
+openai: Any = None
 
 
 PROMPT_TEMPLATE = """
