@@ -6,12 +6,8 @@ import re
 import sys
 from pathlib import Path
 
-try:
-    import openai  # type: ignore
-except ImportError:
-    sys.exit(
-        "openai package not installed. Add 'openai' to requirements.txt or pip install openai in CI."
-    )
+# Defer openai import to runtime to avoid pytest collection failures
+openai = None
 
 
 PROMPT_TEMPLATE = """
@@ -44,6 +40,14 @@ def slugify(name: str) -> str:
 
 
 def main(output_path: str = "data/segments_generated.json") -> None:
+    global openai
+    try:
+        import openai  # type: ignore # noqa: PLC0415
+    except ImportError:
+        sys.exit(
+            "openai package not installed. Add 'openai' to requirements.txt or pip install openai in CI."
+        )
+    
     req_path = Path("request.json")
     if not req_path.exists():
         sys.exit("request.json not found; cannot generate segments.")
