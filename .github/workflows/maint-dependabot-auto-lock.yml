@@ -36,7 +36,7 @@ jobs:
       - name: Check if lock file needs update
         id: check
         run: |
-          uv pip compile 2>&1 | tee compile.log || {
+          uv pip compile pyproject.toml --extra dev --universal --output-file requirements.check 2>&1 | tee compile.log || {
             echo "❌ Compilation failed:"
             cat compile.log
             exit 1
@@ -53,7 +53,6 @@ jobs:
       - name: Regenerate lock file
         if: steps.check.outputs.needs_update == 'true'
         run: |
-          # uv pip compile pyproject.toml --extra dev --universal --output-file requirements.lock will be replaced per repo
           uv pip compile pyproject.toml --extra dev --universal --output-file requirements.lock
           echo "✓ Generated new lock file"
       
