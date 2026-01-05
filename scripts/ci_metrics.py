@@ -205,7 +205,10 @@ def build_metrics(
 
     payload: dict[str, Any] = {
         "generated_at": (
-            _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            _dt.datetime.now(_dt.UTC)
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
         ),
         "junit_path": str(junit_path),
         "summary": summary,
@@ -223,7 +226,9 @@ def main() -> int:
     junit_path = Path(os.environ.get("JUNIT_PATH", _DEFAULT_JUNIT))
     output_path = Path(os.environ.get("OUTPUT_PATH", _DEFAULT_OUTPUT))
     top_n = _parse_int(os.environ.get("TOP_N"), "TOP_N", _DEFAULT_TOP_N)
-    min_seconds = _parse_float(os.environ.get("MIN_SECONDS"), "MIN_SECONDS", _DEFAULT_MIN_SECONDS)
+    min_seconds = _parse_float(
+        os.environ.get("MIN_SECONDS"), "MIN_SECONDS", _DEFAULT_MIN_SECONDS
+    )
 
     try:
         payload = build_metrics(junit_path, top_n=top_n, min_seconds=min_seconds)
@@ -231,7 +236,9 @@ def main() -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    output_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    output_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     print(f"Metrics written to {output_path}")
     return 0
 
