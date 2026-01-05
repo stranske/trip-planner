@@ -22,7 +22,7 @@ testpaths = ["tests"]
 norecursedirs = ["1. tests"]
 
 [tool.mypy]
-exclude = ["1\. tests", "tools/"]
+exclude = ["1\\. tests", "tools/"]
 
 [tool.coverage.run]
 omit = [
