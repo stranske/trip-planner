@@ -47,7 +47,7 @@ def main(output_path: str = "data/segments_generated.json") -> None:
         sys.exit(
             "openai package not installed. Add 'openai' to requirements.txt or pip install openai in CI."
         )
-    
+
     req_path = Path("request.json")
     if not req_path.exists():
         sys.exit("request.json not found; cannot generate segments.")
