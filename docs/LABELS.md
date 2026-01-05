@@ -200,5 +200,5 @@ To add new label-triggered functionality:
 
 ---
 
-*Last updated: December 25, 2025*
+*Last updated: January 5, 2026*
 *Source of truth: Workflows repository*
