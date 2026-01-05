@@ -41,7 +41,9 @@ Raw issue body:
 """.strip()
 
 PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "format_issue.md"
-FEEDBACK_PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "format_issue_feedback.md"
+FEEDBACK_PROMPT_PATH = (
+    Path(__file__).resolve().parent / "prompts" / "format_issue_feedback.md"
+)
 
 SECTION_ALIASES = {
     "why": ["why", "motivation", "summary", "goals"],
@@ -335,11 +337,15 @@ def _load_input(args: argparse.Namespace) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Format issues into AGENT_ISSUE_TEMPLATE.")
+    parser = argparse.ArgumentParser(
+        description="Format issues into AGENT_ISSUE_TEMPLATE."
+    )
     parser.add_argument("--input-file", help="Path to raw issue text.")
     parser.add_argument("--input-text", help="Raw issue text (inline).")
     parser.add_argument("--output-file", help="Path to write formatted output.")
-    parser.add_argument("--json", action="store_true", help="Emit JSON payload to stdout.")
+    parser.add_argument(
+        "--json", action="store_true", help="Emit JSON payload to stdout."
+    )
     parser.add_argument("--no-llm", action="store_true", help="Disable LLM usage.")
     args = parser.parse_args()
 
