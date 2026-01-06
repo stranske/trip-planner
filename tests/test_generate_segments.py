@@ -1,6 +1,12 @@
 import json
 import os
+import sys
 from unittest.mock import MagicMock, patch
+
+import pytest
+
+# Skip entire module if openai not available
+openai = pytest.importorskip("openai", reason="openai not installed")
 
 import scripts.generate_segments as gs
 
