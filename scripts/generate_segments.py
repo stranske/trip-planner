@@ -93,5 +93,7 @@ def main(output_path: str = "data/segments_generated.json") -> None:
 
 if __name__ == "__main__":
     if openai is None:
-        sys.exit("openai package not installed. Add 'openai' to requirements.txt or pip install openai.")
+        sys.exit(
+            "openai package not installed. Add 'openai' to requirements.txt or pip install openai."
+        )
     main()
