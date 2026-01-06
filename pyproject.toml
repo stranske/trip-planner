@@ -19,7 +19,7 @@ include = ["scripts*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-norecursedirs = ["1. tests"]
+norecursedirs = ["1. tests", "scripts"]
 
 [tool.mypy]
 exclude = ["1\\. tests"]
