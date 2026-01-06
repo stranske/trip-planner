@@ -53,6 +53,11 @@ on:
         required: false
         type: boolean
         default: false
+      source_url:
+        description: "[chatgpt_sync] URL to raw text file with topics to import"
+        required: false
+        type: string
+        default: ""
       topic_files:
         description: "[chatgpt_sync] Topic files to sync (e.g., topics.json, agents/*.md)"
         required: false
@@ -69,6 +74,10 @@ permissions:
   issues: write
   pull-requests: write
 
+concurrency:
+  group: issue-intake-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   # Determine which mode to run
   route:
@@ -81,15 +90,13 @@ jobs:
       - name: Determine mode
         id: determine
         run: |
-          echo "DEBUG: event_name=${{ github.event_name }}"
-          echo "DEBUG: inputs.mode=${{ inputs.mode }}"
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             mode="${{ inputs.mode || 'agent_bridge' }}"
           else
             # Issue events always use agent_bridge mode
             mode="agent_bridge"
           fi
-          echo "DEBUG: final mode=${mode}"
+
           echo "mode=${mode}" >> $GITHUB_OUTPUT
 
           if [[ "${mode}" == "agent_bridge" ]]; then
@@ -183,5 +190,6 @@ jobs:
     with:
       intake_mode: "chatgpt_sync"
       source: ${{ inputs.topic_files }}
+      source_url: ${{ inputs.source_url }}
       apply_langchain_formatting: ${{ inputs.apply_langchain_formatting && 'true' || 'false' }}
     secrets: inherit
