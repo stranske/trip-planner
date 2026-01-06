@@ -1,0 +1,4 @@
+[tool.mypy]
+exclude = ["1\\. tests"]
+explicit_package_bases = true
+namespace_packages = true
