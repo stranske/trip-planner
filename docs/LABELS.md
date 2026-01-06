@@ -11,6 +11,8 @@ This document describes all labels that trigger automated workflows or affect CI
 | `agent:codex` | Issue labeled | Triggers Codex agent assignment |
 | `agent:codex-invite` | Issue labeled | Invites Codex agent to participate |
 | `agent:needs-attention` | Auto-applied | Indicates agent needs human intervention |
+| `agents:format` | Issue labeled | Formats raw issue into AGENT_ISSUE_TEMPLATE |
+| `agents:formatted` | Auto-applied | Issue has been formatted by LangChain |
 | `status:ready` | Issue labeled | Marks issue as ready for agent processing |
 
 ---
@@ -101,6 +103,77 @@ This document describes all labels that trigger automated workflows or affect CI
 
 ---
 
+### `agents:format`
+
+**Applies to:** Issues
+
+**Trigger:** When applied to an issue with unstructured content
+
+**Effect:**
+1. Triggers the LangChain Issue Formatter workflow (`agents-issue-optimizer.yml`)
+2. Parses the raw issue body using LLM (with regex fallback)
+3. Rewrites the issue into the structured AGENT_ISSUE_TEMPLATE format:
+   - **Why** - Purpose/motivation
+   - **Scope** - Boundaries of work
+   - **Non-Goals** - Explicitly out of scope
+   - **Tasks** - Actionable checkboxes
+   - **Acceptance Criteria** - Testable success conditions
+   - **Implementation Notes** - Technical hints (if any)
+4. Preserves the original issue body in a collapsed `<details>` block
+5. Removes `agents:format` and applies `agents:formatted` on success
+
+**Prerequisites:**
+- Issue must have non-empty body text
+- Repository must have `OPENAI_API_KEY` secret for LLM mode (optional)
+
+**Workflow:** `agents-issue-optimizer.yml` (LangChain Issue Optimizer)
+
+**Example:**
+
+Before (raw issue):
+```
+The TripPlan contract in models.py is confusing - it has different shapes in
+different places. Let's pick one canonical form and update all the converters.
+```
+
+After (formatted):
+```markdown
+## Why
+To establish a single canonical TripPlan contract and eliminate inconsistencies...
+
+## Scope
+- Review all TripPlan definitions in models.py
+- Choose canonical form
+- Update converters
+
+## Non-Goals
+- Changing the underlying data model
+- Modifying external API contracts
+
+## Tasks
+- [ ] Audit all TripPlan shapes in codebase
+- [ ] Select canonical form
+- [ ] Update converters to use canonical form
+...
+```
+
+---
+
+### `agents:formatted`
+
+**Applies to:** Issues
+
+**Trigger:** Automatically applied by `agents-issue-optimizer.yml`
+
+**Effect:**
+1. Indicates the issue has been processed by the LangChain formatter
+2. Replaces the `agents:format` label
+3. No additional workflow triggers (safe terminal state)
+
+**Note:** This is a status label, not a trigger label. Do not apply manually.
+
+---
+
 ### `agent:needs-attention`
 
 **Applies to:** Issues and Pull Requests
@@ -156,6 +229,9 @@ This document describes all labels that trigger automated workflows or affect CI
 | `agent:codex` | `agent:codex-invite` | Sends agent invitation |
 | `agent:codex` | `status:ready` | Agent begins processing |
 | `agent:needs-attention` | (removed) | Agent resumes processing |
+| (none) | `agents:format` | Triggers LangChain formatter |
+| `agents:format` | (auto-removed) | Label replaced by `agents:formatted` |
+| `agents:formatted` | `agent:codex` | Ready for agent assignment |
 
 ---
 
