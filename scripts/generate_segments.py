@@ -9,9 +9,7 @@ from pathlib import Path
 try:
     import openai  # type: ignore
 except ImportError:
-    sys.exit(
-        "openai package not installed. Add 'openai' to requirements.txt or pip install openai in CI."
-    )
+    openai = None  # Will check before use
 
 
 PROMPT_TEMPLATE = """
@@ -94,4 +92,6 @@ def main(output_path: str = "data/segments_generated.json") -> None:
 
 
 if __name__ == "__main__":
+    if openai is None:
+        sys.exit("openai package not installed. Add 'openai' to requirements.txt or pip install openai.")
     main()
