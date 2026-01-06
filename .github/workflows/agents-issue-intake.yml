@@ -153,7 +153,9 @@ jobs:
   # Agent bridge mode: Call the Workflows repo reusable issue bridge
   bridge:
     needs: [route, check_labels]
-    if: needs.route.outputs.should_run_bridge == 'true' && needs.check_labels.outputs.should_run == 'true'
+    if: |
+      needs.route.outputs.should_run_bridge == 'true' &&
+      needs.check_labels.outputs.should_run == 'true'
     uses: stranske/Workflows/.github/workflows/reusable-agents-issue-bridge.yml@main
     with:
       agent: ${{ needs.check_labels.outputs.agent }}
@@ -169,11 +171,6 @@ jobs:
   sync:
     needs: route
     if: needs.route.outputs.should_run_sync == 'true'
-    permissions:
-      contents: read
-      issues: write
-      id-token: write
-      models: read
     uses: stranske/Workflows/.github/workflows/agents-63-issue-intake.yml@main
     with:
       intake_mode: "chatgpt_sync"
