@@ -2,6 +2,7 @@
 
 const { detectKeepalive } = require('./agents_pr_meta_keepalive.js');
 const { loadKeepaliveState } = require('./keepalive_state.js');
+const { resolveRateLimitClient } = require('./api-helpers.js');
 
 function normalise(value) {
   return String(value ?? '').trim();
@@ -232,12 +233,13 @@ async function evaluateKeepaliveWorkerGate({ core, github, context, env = proces
     throw new Error('Repository context missing owner or repo.');
   }
 
+  const { github: apiClient } = await resolveRateLimitClient({ github, core, env });
   const branch = normalise(env.BRANCH || env.WORKER_BRANCH || env.HEAD_BRANCH);
   let prNumber = parsePositiveInteger(env.PR_NUMBER || env.PR || env.PR_NUMBER_HINT);
 
-  if (!Number.isFinite(prNumber) && branch && github?.rest?.pulls?.list) {
+  if (!Number.isFinite(prNumber) && branch && apiClient?.rest?.pulls?.list) {
     try {
-      const { data } = await github.rest.pulls.list({
+      const { data } = await apiClient.rest.pulls.list({
         owner,
         repo,
         head: `${owner}:${branch}`,
@@ -270,7 +272,7 @@ async function evaluateKeepaliveWorkerGate({ core, github, context, env = proces
 
   let headSha = '';
   try {
-    const { data } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+    const { data } = await apiClient.rest.pulls.get({ owner, repo, pull_number: prNumber });
     headSha = normalise(data?.head?.sha);
   } catch (error) {
     core?.warning?.(
@@ -288,8 +290,8 @@ async function evaluateKeepaliveWorkerGate({ core, github, context, env = proces
     };
   }
 
-  const latestInstruction = await findLatestInstruction({ github, context, owner, repo, prNumber, env });
-  const stateInfo = await loadKeepaliveState({ github, context, prNumber });
+  const latestInstruction = await findLatestInstruction({ github: apiClient, context, owner, repo, prNumber, env });
+  const stateInfo = await loadKeepaliveState({ github: apiClient, context, prNumber });
   const lastProcessed = extractLastProcessedState(stateInfo?.state);
 
   let action = 'execute';

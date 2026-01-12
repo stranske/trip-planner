@@ -6,6 +6,7 @@ const {
   analyseSkipComments,
   isGateReason,
 } = require('./keepalive_guard_utils.js');
+const { resolveRateLimitClient } = require('./api-helpers.js');
 const { evaluateKeepaliveGate } = require('./keepalive_gate.js');
 
 /**
@@ -70,9 +71,11 @@ async function runKeepaliveGate({ core, github, context, env }) {
     return;
   }
 
+  const { github: apiClient } = await resolveRateLimitClient({ github, core, env });
+
   let pr;
   try {
-    const response = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+    const response = await apiClient.rest.pulls.get({ owner, repo, pull_number: prNumber });
     pr = response.data;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -83,7 +86,7 @@ async function runKeepaliveGate({ core, github, context, env }) {
 
   const preGate = await evaluateKeepaliveGate({
     core,
-    github,
+    github: apiClient,
     context,
     options: {
       prNumber,
@@ -191,7 +194,7 @@ async function runKeepaliveGate({ core, github, context, env }) {
     } else {
       if (headSha) {
         try {
-          const { data: combined } = await github.rest.repos.getCombinedStatusForRef({
+          const { data: combined } = await apiClient.rest.repos.getCombinedStatusForRef({
             owner,
             repo,
             ref: headSha,
