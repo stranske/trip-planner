@@ -352,12 +352,16 @@ function resolveAppCredentialStatus(env = process.env, keys = DEFAULT_APP_ENV_KE
   };
 }
 
-function resolvePreferredAppPool(status) {
+function resolvePreferredAppPool(status, options = {}) {
+  const { includeLegacy = false } = options;
   if (status?.keepalive) {
     return 'keepalive';
   }
   if (status?.gh) {
     return 'gh';
+  }
+  if (includeLegacy && status?.workflowsLegacy) {
+    return 'workflows-legacy';
   }
   return '';
 }
