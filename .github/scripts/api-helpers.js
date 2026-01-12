@@ -13,6 +13,12 @@ const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_BASE_DELAY_MS = 1000;
 const DEFAULT_MAX_DELAY_MS = 30000;
 const RATE_LIMIT_THRESHOLD = 500;
+const DEFAULT_FALLBACK_PAT_ENV_KEYS = Object.freeze([
+  'KEEPALIVE_PAT',
+  'AGENTS_AUTOMATION_PAT',
+  'ACTIONS_BOT_PAT',
+  'SERVICE_BOT_PAT',
+]);
 
 /**
  * Check if an error is a rate limit error (HTTP 403 with rate limit message)
@@ -310,6 +316,55 @@ function createRateLimitAwareClient(github, options = {}) {
   };
 }
 
+function resolveFallbackToken(env, keys = DEFAULT_FALLBACK_PAT_ENV_KEYS) {
+  const sourceEnv = typeof env === 'object' && env ? env : {};
+  for (const key of keys) {
+    const value = sourceEnv[key];
+    if (typeof value === 'string' && value.trim()) {
+      return { token: value.trim(), source: key };
+    }
+  }
+  return { token: '', source: '' };
+}
+
+async function resolveRateLimitClient({
+  github,
+  core = null,
+  env = process.env,
+  threshold = RATE_LIMIT_THRESHOLD,
+  fallbackToken,
+  fallbackEnvKeys,
+} = {}) {
+  const status = await checkRateLimitStatus(github, { threshold, core });
+  if (status.safe) {
+    return { github, status, fallbackUsed: false };
+  }
+
+  const fallback =
+    typeof fallbackToken === 'string' && fallbackToken.trim()
+      ? { token: fallbackToken.trim(), source: 'explicit' }
+      : resolveFallbackToken(env, fallbackEnvKeys);
+  if (!fallback.token) {
+    log(core, 'warning', 'Rate limit low and no fallback PAT available; continuing with primary token.');
+    return { github, status, fallbackUsed: false, fallbackReason: 'missing-token' };
+  }
+
+  const FallbackOctokit = github?.constructor;
+  if (!FallbackOctokit) {
+    log(core, 'warning', 'Rate limit low but unable to construct fallback Octokit client.');
+    return { github, status, fallbackUsed: false, fallbackReason: 'missing-constructor' };
+  }
+
+  log(core, 'warning', `Rate limit low; switching to fallback PAT from ${fallback.source || 'env'} for this run.`);
+  const fallbackClient = new FallbackOctokit({ auth: fallback.token });
+  return {
+    github: fallbackClient,
+    status,
+    fallbackUsed: true,
+    fallbackSource: fallback.source,
+  };
+}
+
 module.exports = {
   // Core functions
   isRateLimitError,
@@ -323,10 +378,13 @@ module.exports = {
   withBackoff,
   checkRateLimitStatus,
   createRateLimitAwareClient,
+  resolveFallbackToken,
+  resolveRateLimitClient,
 
   // Constants
   DEFAULT_MAX_RETRIES,
   DEFAULT_BASE_DELAY_MS,
   DEFAULT_MAX_DELAY_MS,
   RATE_LIMIT_THRESHOLD,
+  DEFAULT_FALLBACK_PAT_ENV_KEYS,
 };

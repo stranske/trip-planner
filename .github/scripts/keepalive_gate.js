@@ -1,6 +1,6 @@
 'use strict';
 
-const { paginateWithBackoff, withBackoff } = require('./api-helpers.js');
+const { paginateWithBackoff, withBackoff, resolveRateLimitClient } = require('./api-helpers.js');
 
 const KEEPALIVE_LABEL = 'agents:keepalive';
 const AGENT_LABEL_PREFIX = 'agent:';
@@ -845,6 +845,8 @@ async function evaluateKeepaliveGate({ core, github, context, options = {} }) {
     throw new Error('Repository context missing owner or repo.');
   }
 
+  const { github: apiClient } = await resolveRateLimitClient({ github, core, env: process.env });
+
   const {
     prNumber: rawPrNumber,
     headSha: inputHeadSha,
@@ -894,7 +896,7 @@ async function evaluateKeepaliveGate({ core, github, context, options = {} }) {
   if (!pr) {
     try {
       const response = await withBackoff(
-        () => github.rest.pulls.get({ owner, repo, pull_number: prNumber }),
+        () => apiClient.rest.pulls.get({ owner, repo, pull_number: prNumber }),
         { core, maxRetries: RATE_LIMIT_MAX_RETRIES, baseDelay: RATE_LIMIT_BASE_DELAY_MS }
       );
       pr = response.data;
@@ -946,7 +948,7 @@ async function evaluateKeepaliveGate({ core, github, context, options = {} }) {
     try {
       activationComment = await detectHumanActivation({
         core,
-        github,
+        github: apiClient,
         owner,
         repo,
         prNumber,
@@ -962,7 +964,7 @@ async function evaluateKeepaliveGate({ core, github, context, options = {} }) {
   }
 
   const gateStatus = await fetchGateStatus({
-    github,
+    github: apiClient,
     owner,
     repo,
     headSha,
@@ -982,7 +984,7 @@ async function evaluateKeepaliveGate({ core, github, context, options = {} }) {
     : false;
   const allowPendingGateResolved = allowPendingGate || (automationCommentDetected && allowPendingGateForAutomation);
   const { active: activeRuns, breakdown: activeBreakdown, error: runError } = await countActive({
-    github,
+    github: apiClient,
     owner,
     repo,
     prNumber,
