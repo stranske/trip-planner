@@ -263,13 +263,16 @@ jobs:
             - Conflicting requirements
             - External dependencies
 
-            **To resume:** Remove \`agents:auto-pilot-failed\` and \`needs-human\` labels, then re-add \`agents:auto-pilot\`.`
+              **To resume:** Remove \`agents:auto-pilot-failed\` and \`needs-human\` labels,
+              then re-add \`agents:auto-pilot\`.`
             });
 
             core.setFailed('Auto-pilot exceeded max cycles');
 
       - name: Determine next step
-        if: steps.context.outputs.should_continue == 'true' && steps.cycles.outputs.exceeded != 'true'
+        if: |
+          steps.context.outputs.should_continue == 'true' &&
+          steps.cycles.outputs.exceeded != 'true'
         id: next
         env:
           FORCE_STEP: ${{ inputs.force_step }}
@@ -413,6 +416,69 @@ jobs:
               issue_number: issueNumber,
               labels: ['agents:optimize']
             });
+
+      - name: Guard - Require optimizer output before apply
+        if: steps.next.outputs.next_step == 'apply'
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
+        with:
+          script: |
+            // Guard: Verify optimizer produced suggestions before applying
+            // This prevents silent failures when optimizer runs but produces no output
+            const issueNumber = parseInt(process.env.ISSUE_NUMBER);
+
+            // Fetch all comments on the issue
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              per_page: 100
+            });
+
+            // Look for optimizer suggestions marker
+            // The optimizer workflow posts a comment containing "Issue Optimization Suggestions"
+            // or the hidden marker "ISSUE_OPTIMIZER_SUGGESTIONS"
+            const hasOptimizerOutput = comments.data.some(comment => {
+              const body = comment.body || '';
+              return body.includes('Issue Optimization Suggestions') ||
+                     body.includes('ISSUE_OPTIMIZER_SUGGESTIONS') ||
+                     body.includes('## 📋 Optimization Suggestions');
+            });
+
+            if (!hasOptimizerOutput) {
+              // No optimizer output found - this is a bug in the pipeline
+              core.warning('⚠️ Optimizer was supposed to run but produced no suggestions comment');
+
+              // Post warning comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `⚠️ **Auto-pilot warning**: Optimizer step completed but no suggestions found.
+
+            This usually means the optimizer workflow was triggered but failed silently.
+
+            **Next steps:**
+            1. Check the \`agents-issue-optimizer.yml\` workflow runs
+            2. Look for error messages in workflow logs
+            3. Remove \`agents:auto-pilot-pause\` and \`needs-human\` labels to retry
+
+            **For maintainers:** Issue paused pending investigation of optimizer failure.`
+              });
+
+              // Add pause and needs-human labels
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: ['agents:auto-pilot-pause', 'needs-human']
+              });
+
+              core.setFailed('Optimizer produced no output - pausing for investigation');
+            } else {
+              core.info('✅ Optimizer output found - proceeding with apply step');
+            }
 
       - name: Execute step - Apply suggestions
         if: steps.next.outputs.next_step == 'apply'
@@ -822,8 +888,13 @@ jobs:
         if: |
           steps.context.outputs.should_continue == 'true' &&
           steps.cycles.outputs.exceeded != 'true' &&
-          contains(fromJSON('["format","optimize","apply","capability-check","monitor-pr","check-completion"]'),
-          steps.next.outputs.next_step)
+            (
+              steps.next.outputs.next_step == 'format' ||
+              steps.next.outputs.next_step == 'optimize' ||
+              steps.next.outputs.next_step == 'apply' ||
+              steps.next.outputs.next_step == 'capability-check' ||
+              steps.next.outputs.next_step == 'monitor-pr'
+            )
         uses: actions/github-script@v7
         env:
           ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
