@@ -1,11 +1,16 @@
 # Thin caller for issue intake - delegates to Workflows repo reusable workflow
-# Assigns agents (Codex, Copilot) to issues when labeled with agent:* labels
+#
+# Two modes:
+# 1. Label-based (agent_bridge): Assigns agents to issues when labeled
+#    with agent:* labels
+# 2. ChatGPT sync (chatgpt_sync): Bulk creates issues from topic files
+#    with optional LangChain formatting
 #
 # Triggers:
-# - Issue opened/reopened/labeled with agent:codex, agent:copilot, etc.
-# - Manual dispatch for testing
+# - Issue opened/reopened/labeled with agent:* labels
+# - Manual dispatch for both modes
 #
-# This file: .github/workflows/agents-63-issue-intake.yml
+# Copy this file to: .github/workflows/agents-issue-intake.yml
 #
 # Required secrets:
 # - SERVICE_BOT_PAT: PAT for service bot account (comments, labels)
@@ -21,22 +26,40 @@ on:
       - unlabeled
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Mode: agent_bridge (label-based) or chatgpt_sync (bulk creation)"
+        required: false
+        type: choice
+        options:
+          - agent_bridge
+          - chatgpt_sync
+        default: agent_bridge
       issue_number:
-        description: "Issue number to process (optional for manual trigger)"
+        description: "[agent_bridge] Issue number to process"
         required: false
         type: string
       bridge_agent:
-        description: "Agent to use (codex, copilot, etc.)"
+        description: "[agent_bridge] Agent to use (codex, copilot)"
         required: false
         type: string
         default: "codex"
       post_codex_comment:
-        description: "Auto-post activation comment"
+        description: "[agent_bridge] Auto-post activation comment"
         required: false
         type: boolean
         default: true
       bridge_draft_pr:
-        description: "Open bootstrap PRs as draft"
+        description: "[agent_bridge] Open bootstrap PRs as draft"
+        required: false
+        type: boolean
+        default: false
+      topic_files:
+        description: "[chatgpt_sync] Topic files to sync (e.g., topics.json, agents/*.md)"
+        required: false
+        type: string
+        default: ""
+      apply_langchain_formatting:
+        description: "[chatgpt_sync] Apply LangChain formatting to created issues"
         required: false
         type: boolean
         default: false
@@ -46,17 +69,51 @@ permissions:
   issues: write
   pull-requests: write
 
-concurrency:
-  group: issue-intake-${{ github.event.issue.number || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
-  # Gate: only proceed if issue has agent:* or agents:* label (or workflow_dispatch)
+  # Determine which mode to run
+  route:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.determine.outputs.mode }}
+      should_run_bridge: ${{ steps.determine.outputs.should_run_bridge }}
+      should_run_sync: ${{ steps.determine.outputs.should_run_sync }}
+    steps:
+      - name: Determine mode
+        id: determine
+        run: |
+          echo "DEBUG: event_name=${{ github.event_name }}"
+          echo "DEBUG: inputs.mode=${{ inputs.mode }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            mode="${{ inputs.mode || 'agent_bridge' }}"
+          else
+            # Issue events always use agent_bridge mode
+            mode="agent_bridge"
+          fi
+          echo "DEBUG: final mode=${mode}"
+          echo "mode=${mode}" >> $GITHUB_OUTPUT
+
+          if [[ "${mode}" == "agent_bridge" ]]; then
+            echo "should_run_bridge=true" >> $GITHUB_OUTPUT
+            echo "should_run_sync=false" >> $GITHUB_OUTPUT
+          elif [[ "${mode}" == "chatgpt_sync" ]]; then
+            echo "should_run_bridge=false" >> $GITHUB_OUTPUT
+            echo "should_run_sync=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run_bridge=false" >> $GITHUB_OUTPUT
+            echo "should_run_sync=false" >> $GITHUB_OUTPUT
+          fi
+
+  # Gate for agent_bridge mode: only proceed if issue has agent:* or agents:* label
+  # Skip when agents:auto-pilot is present - auto-pilot handles the full pipeline
+  # Use exact array match (not substring) to avoid matching agents:auto-pilot-failed/pause
   check_labels:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      contains(toJson(github.event.issue.labels.*.name), 'agent:') ||
-      contains(toJson(github.event.issue.labels.*.name), 'agents:')
+    needs: route
+    if: |
+      needs.route.outputs.should_run_bridge == 'true' &&
+      (github.event_name != 'issues' ||
+       contains(toJson(github.event.issue.labels.*.name), 'agent:') ||
+       contains(toJson(github.event.issue.labels.*.name), 'agents:')) &&
+      !contains(github.event.issue.labels.*.name, 'agents:auto-pilot')
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
@@ -72,19 +129,36 @@ jobs:
             let issueNumber = '${{ inputs.issue_number }}' || '';
             let agent = '${{ inputs.bridge_agent }}' || 'codex';
 
+            // Metadata labels that aren't actual agent assignments
+            const metadataLabels = new Set([
+              'keepalive', 'formatted', 'optimize', 'allow-change',
+              'apply-suggestions', 'debug', 'format', 'sync-failed', 'sync-required'
+            ]);
+
             if (eventName === 'issues') {
               const issue = context.payload.issue;
               issueNumber = String(issue.number);
 
               // Extract agent from labels (agent:codex, agents:codex, etc.)
+              // Skip metadata labels that aren't actual agent assignments
               const labels = issue.labels.map(l => l.name);
-              const agentLabel = labels.find(l => /^agents?:[a-z]+$/i.test(l) && !l.includes('keepalive'));
+              const agentLabel = labels.find(l => {
+                const match = l.match(/^agents?:([a-z-]+)$/i);
+                if (!match) return false;
+                const suffix = match[1].toLowerCase();
+                return !metadataLabels.has(suffix);
+              });
               if (agentLabel) {
                 agent = agentLabel.replace(/^agents?:/, '').toLowerCase();
               }
 
-              // Check if any agent label exists
-              const hasAgentLabel = labels.some(l => /^agents?:/.test(l));
+              // Check if any actual agent assignment label exists (not metadata)
+              const hasAgentLabel = labels.some(l => {
+                const match = l.match(/^agents?:([a-z-]+)$/i);
+                if (!match) return false;
+                const suffix = match[1].toLowerCase();
+                return !metadataLabels.has(suffix);
+              });
               if (!hasAgentLabel) {
                 core.setOutput('should_run', 'false');
                 return;
@@ -96,17 +170,47 @@ jobs:
             core.setOutput('agent', agent);
             console.log(`Processing issue #${issueNumber} with agent: ${agent}`);
 
-  # Call the Workflows repo reusable issue bridge
+  # Agent bridge mode: Call the Workflows repo reusable issue bridge
   bridge:
-    needs: check_labels
-    if: needs.check_labels.outputs.should_run == 'true'
+    needs: [route, check_labels]
+    if: |
+      needs.route.outputs.should_run_bridge == 'true' &&
+      needs.check_labels.outputs.should_run == 'true'
     uses: stranske/Workflows/.github/workflows/reusable-agents-issue-bridge.yml@main
     with:
       agent: ${{ needs.check_labels.outputs.agent }}
       issue_number: ${{ needs.check_labels.outputs.issue_number }}
-      mode: "invite"
-      post_agent_comment: ${{ inputs.post_codex_comment == true && 'true' || 'false' }}
-      agent_pr_draft: ${{ inputs.bridge_draft_pr == true && 'true' || 'false' }}
+      mode: "create"
+      force_mode: true
+      # Skip post_agent_comment for codex - CLI keepalive loop handles it,
+      # posting @codex would trigger UI agent alongside CLI causing conflicts
+      post_agent_comment: >-
+        ${{ github.event_name == 'workflow_dispatch'
+            && (inputs.post_codex_comment && 'true' || 'false')
+            || (needs.check_labels.outputs.agent != 'codex' && 'true' || 'false') }}
+      agent_pr_draft: ${{ inputs.bridge_draft_pr && 'true' || 'false' }}
     secrets:
       service_bot_pat: ${{ secrets.SERVICE_BOT_PAT }}
       owner_pr_pat: ${{ secrets.OWNER_PR_PAT }}
+      # Rate limit redistribution: Map repo's GH_APP secrets to the reusable
+      # workflow's WORKFLOWS_APP_* parameters. This gives issue-intake its own
+      # 5000/hr rate limit pool, separate from keepalive and autofix-loop.
+      WORKFLOWS_APP_ID: ${{ secrets.GH_APP_ID }}
+      WORKFLOWS_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
+  # ChatGPT sync mode: Call the Workflows repo reusable workflow with sync capability
+  sync:
+    needs: route
+    if: needs.route.outputs.should_run_sync == 'true'
+    permissions:
+      contents: write
+      issues: write
+      id-token: write
+      models: read
+      pull-requests: write
+    uses: stranske/Workflows/.github/workflows/agents-63-issue-intake.yml@main
+    with:
+      intake_mode: "chatgpt_sync"
+      source: ${{ inputs.topic_files }}
+      apply_langchain_formatting: ${{ inputs.apply_langchain_formatting && 'true' || 'false' }}
+    secrets: inherit
