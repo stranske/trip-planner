@@ -33,6 +33,13 @@ concurrency:
       github.run_id }}
   cancel-in-progress: false
 
+# Rate limit resilience: PAT fallback when GitHub App is exhausted
+# SERVICE_BOT_PAT has separate rate limit pool from WORKFLOWS_APP
+env:
+  FALLBACK_TOKEN: >-
+    ${{ secrets.SERVICE_BOT_PAT ||
+        secrets.GITHUB_TOKEN }}
+
 jobs:
   evaluate:
     name: Evaluate keepalive loop
@@ -68,11 +75,44 @@ jobs:
       - name: Capture timestamps
         id: timestamps
         run: echo "start_ts=$(date -u +%s)" >> "$GITHUB_OUTPUT"
+
+      # Generate GitHub App token using official action (handles installation ID automatically)
+      - name: Generate KEEPALIVE_APP token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        continue-on-error: true
+        with:
+          app-id: ${{ secrets.KEEPALIVE_APP_ID }}
+          private-key: ${{ secrets.KEEPALIVE_APP_PRIVATE_KEY }}
+
+      # Select token: prefer App token, fall back to SERVICE_BOT_PAT, then GITHUB_TOKEN
+      - name: Select API token (with fallback chain)
+        id: api-token
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          SERVICE_BOT_PAT: ${{ secrets.SERVICE_BOT_PAT }}
+          GITHUB_TOKEN_FALLBACK: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fallback chain: KEEPALIVE_APP -> SERVICE_BOT_PAT -> GITHUB_TOKEN
+          if [ -n "$APP_TOKEN" ]; then
+            echo "Using KEEPALIVE_APP token"
+            echo "token=$APP_TOKEN" >> "$GITHUB_OUTPUT"
+            echo "source=KEEPALIVE_APP" >> "$GITHUB_OUTPUT"
+          elif [ -n "$SERVICE_BOT_PAT" ]; then
+            echo "::warning::KEEPALIVE_APP unavailable, using SERVICE_BOT_PAT fallback"
+            echo "token=$SERVICE_BOT_PAT" >> "$GITHUB_OUTPUT"
+            echo "source=SERVICE_BOT_PAT" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No PAT available, using GITHUB_TOKEN (limited rate)"
+            echo "token=$GITHUB_TOKEN_FALLBACK" >> "$GITHUB_OUTPUT"
+            echo "source=GITHUB_TOKEN" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Security gate - prompt injection guard
         id: security_gate
         uses: actions/github-script@v8
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ steps.api-token.outputs.token }}
           script: |
             const { evaluatePromptInjectionGuard } = require(
               './.github/scripts/prompt_injection_guard.js'
@@ -128,7 +168,7 @@ jobs:
           INPUT_PR_NUMBER: ${{ github.event.inputs.pr_number || '' }}
           INPUT_FORCE_RETRY: ${{ github.event.inputs.force_retry || 'false' }}
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ steps.api-token.outputs.token }}
           script: |
             const { evaluateKeepaliveLoop } = require('./.github/scripts/keepalive_loop.js');
             const options = { github, context, core };

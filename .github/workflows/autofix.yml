@@ -112,5 +112,8 @@ jobs:
       caller_actor: ${{ needs.resolve.outputs.caller_actor }}
     secrets:
       service_bot_pat: ${{ secrets.SERVICE_BOT_PAT }}
-      WORKFLOWS_APP_ID: ${{ secrets.WORKFLOWS_APP_ID }}
-      WORKFLOWS_APP_PRIVATE_KEY: ${{ secrets.WORKFLOWS_APP_PRIVATE_KEY }}
+      # Rate limit redistribution: Map repo's GH_APP secrets to the reusable
+      # workflow's WORKFLOWS_APP_* parameters. This gives autofix its own
+      # 5000/hr rate limit pool, separate from keepalive and autofix-loop.
+      WORKFLOWS_APP_ID: ${{ secrets.GH_APP_ID }}
+      WORKFLOWS_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
