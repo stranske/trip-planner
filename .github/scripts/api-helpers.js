@@ -352,6 +352,19 @@ function resolveAppCredentialStatus(env = process.env, keys = DEFAULT_APP_ENV_KE
   };
 }
 
+function resolvePreferredAppPool(status) {
+  if (status?.keepalive) {
+    return 'keepalive';
+  }
+  if (status?.gh) {
+    return 'gh';
+  }
+  if (status?.workflows) {
+    return 'workflows';
+  }
+  return '';
+}
+
 async function resolveRateLimitClient({
   github,
   core = null,
@@ -404,6 +417,7 @@ module.exports = {
   checkRateLimitStatus,
   createRateLimitAwareClient,
   resolveAppCredentialStatus,
+  resolvePreferredAppPool,
   resolveFallbackToken,
   resolveRateLimitClient,
 
