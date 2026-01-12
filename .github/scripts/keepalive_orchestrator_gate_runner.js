@@ -6,7 +6,7 @@ const {
   analyseSkipComments,
   isGateReason,
 } = require('./keepalive_guard_utils.js');
-const { resolveRateLimitClient } = require('./api-helpers.js');
+const { resolveAppCredentialStatus, resolveRateLimitClient } = require('./api-helpers.js');
 const { evaluateKeepaliveGate } = require('./keepalive_gate.js');
 
 /**
@@ -23,6 +23,19 @@ async function runKeepaliveGate({ core, github, context, env }) {
   const prRaw = normalise(env.KEEPALIVE_PR);
   const summary = core.summary;
   summary.addHeading('Keepalive gate evaluation');
+  const appStatus = resolveAppCredentialStatus(env);
+  summary
+    .addRaw(
+      `App auth env present: keepalive=${appStatus.keepalive ? 'yes' : 'no'}, workflows=${
+        appStatus.workflows ? 'yes' : 'no'
+      }, gh=${appStatus.gh ? 'yes' : 'no'}`
+    )
+    .addEOL();
+  if (!appStatus.keepalive && appStatus.workflows) {
+    summary
+      .addRaw('Keepalive app credentials not detected; switch workflows to KEEPALIVE_APP_* for the dedicated pool.')
+      .addEOL();
+  }
 
   const renderLine = (reason) => {
     const labelRound = round || '?';

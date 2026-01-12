@@ -19,6 +19,11 @@ const DEFAULT_FALLBACK_PAT_ENV_KEYS = Object.freeze([
   'ACTIONS_BOT_PAT',
   'SERVICE_BOT_PAT',
 ]);
+const DEFAULT_APP_ENV_KEYS = Object.freeze({
+  keepalive: { id: 'KEEPALIVE_APP_ID', key: 'KEEPALIVE_APP_PRIVATE_KEY' },
+  workflows: { id: 'WORKFLOWS_APP_ID', key: 'WORKFLOWS_APP_PRIVATE_KEY' },
+  gh: { id: 'GH_APP_ID', key: 'GH_APP_PRIVATE_KEY' },
+});
 
 /**
  * Check if an error is a rate limit error (HTTP 403 with rate limit message)
@@ -327,6 +332,26 @@ function resolveFallbackToken(env, keys = DEFAULT_FALLBACK_PAT_ENV_KEYS) {
   return { token: '', source: '' };
 }
 
+function hasAppCredentials(env, { id, key }) {
+  const sourceEnv = typeof env === 'object' && env ? env : {};
+  const idValue = sourceEnv[id];
+  const keyValue = sourceEnv[key];
+  return Boolean(
+    typeof idValue === 'string' &&
+      idValue.trim() &&
+      typeof keyValue === 'string' &&
+      keyValue.trim()
+  );
+}
+
+function resolveAppCredentialStatus(env = process.env, keys = DEFAULT_APP_ENV_KEYS) {
+  return {
+    keepalive: hasAppCredentials(env, keys.keepalive),
+    workflows: hasAppCredentials(env, keys.workflows),
+    gh: hasAppCredentials(env, keys.gh),
+  };
+}
+
 async function resolveRateLimitClient({
   github,
   core = null,
@@ -378,6 +403,7 @@ module.exports = {
   withBackoff,
   checkRateLimitStatus,
   createRateLimitAwareClient,
+  resolveAppCredentialStatus,
   resolveFallbackToken,
   resolveRateLimitClient,
 
@@ -387,4 +413,5 @@ module.exports = {
   DEFAULT_MAX_DELAY_MS,
   RATE_LIMIT_THRESHOLD,
   DEFAULT_FALLBACK_PAT_ENV_KEYS,
+  DEFAULT_APP_ENV_KEYS,
 };
