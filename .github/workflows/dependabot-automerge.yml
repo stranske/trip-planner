@@ -1,0 +1,170 @@
+name: Dependabot Auto-merge
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    runs-on: ubuntu-latest
+    # Security: pull_request_target requires extra validation
+    # Verify this is genuinely from dependabot before proceeding
+    if: |
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]'
+    steps:
+      - name: Get PR metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for checks
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            console.log(`Waiting for checks on PR #${pr.number}`);
+
+            // These checks are excluded because they are internal/non-blocking
+            // and should not prevent Dependabot PRs from being auto-merged.
+            const EXCLUDED_CHECK_NAMES = [
+              'Detect keepalive',
+              'pr_meta',
+              'resolve_pr',
+              'Cleanup',
+              'Dependabot Auto-merge',
+            ];
+
+            // Wait up to 10 minutes for checks to complete
+            const maxWaitTime = 10 * 60 * 1000; // 10 minutes
+            const startTime = Date.now();
+            const pollInterval = 30000; // 30 seconds
+
+            while (Date.now() - startTime < maxWaitTime) {
+              const { data: checkRuns } = await github.rest.checks.listForRef({
+                owner,
+                repo,
+                ref: pr.head.sha
+              });
+
+              const allChecks = checkRuns.check_runs || [];
+              const requiredChecks = allChecks.filter(c => {
+                const isExcludedByName = EXCLUDED_CHECK_NAMES.some(
+                  name => c.name.includes(name)
+                );
+                const isNonBlockingConclusion =
+                  c.conclusion === 'skipped' || c.conclusion === 'neutral';
+                return !isExcludedByName && !isNonBlockingConclusion;
+              });
+
+              const pendingChecks = requiredChecks.filter(c =>
+                c.status !== 'completed'
+              );
+              const failedChecks = requiredChecks.filter(c =>
+                c.conclusion !== 'success' && c.conclusion !== null
+              );
+
+              console.log(
+                `Checks: ${requiredChecks.length} total, ` +
+                `${pendingChecks.length} pending, ` +
+                `${failedChecks.length} failed`
+              );
+
+              // Fail fast if any checks have failed
+              if (failedChecks.length > 0) {
+                console.log('Some checks failed:');
+                failedChecks.forEach(c => {
+                  console.log(`  - ${c.name}: ${c.conclusion}`);
+                });
+                core.setFailed(
+                  `${failedChecks.length} check(s) failed - ` +
+                  'will not auto-merge'
+                );
+                return;
+              }
+
+              // All checks passed - success!
+              if (pendingChecks.length === 0 && requiredChecks.length > 0) {
+                console.log(
+                  'All required checks have completed successfully.'
+                );
+                return;
+              }
+
+              // Still waiting for checks
+              console.log(
+                `Waiting ${pollInterval/1000}s for pending checks...`
+              );
+              await new Promise(resolve => setTimeout(resolve, pollInterval));
+            }
+
+            core.setFailed('Timeout waiting for checks to complete');
+
+      - name: Enable auto-merge
+        if: success()
+        uses: actions/github-script@v7
+        env:
+          CODESPACES_WORKFLOWS_PAT: ${{ secrets.CODESPACES_WORKFLOWS }}
+        with:
+          github-token: ${{ secrets.CODESPACES_WORKFLOWS || secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            const hasCrossRepoToken = !!process.env.CODESPACES_WORKFLOWS_PAT;
+
+            if (!hasCrossRepoToken) {
+              core.warning(
+                'CODESPACES_WORKFLOWS secret is not configured; ' +
+                'falling back to GITHUB_TOKEN. Cross-repo auto-merge ' +
+                'may fail due to insufficient permissions.'
+              );
+            }
+
+            try {
+              await github.graphql(`
+                mutation {
+                  enablePullRequestAutoMerge(input: {
+                    pullRequestId: "${pr.node_id}",
+                    mergeMethod: MERGE
+                  }) {
+                    pullRequest {
+                      number
+                      autoMergeRequest {
+                        enabledAt
+                      }
+                    }
+                  }
+                }
+              `);
+
+              console.log(`✓ Auto-merge enabled for PR #${pr.number}`);
+
+              // Add a comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body:
+                  '🤖 Auto-merge enabled - this PR will be ' +
+                  'automatically merged when all checks pass.'
+              });
+            } catch (error) {
+              console.error('Failed to enable auto-merge:', error);
+              // Do not attempt direct merge - rely on branch protections
+              // and auto-merge only. This ensures branch protection rules
+              // are not bypassed. A maintainer can merge manually if needed.
+              core.setFailed(
+                'Failed to enable auto-merge. Branch protections or ' +
+                'permissions may prevent automatic merging.'
+              );
+            }
