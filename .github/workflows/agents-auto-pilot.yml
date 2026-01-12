@@ -1,23 +1,20 @@
 # See docs/ci/AGENTS_POLICY.md for guardrails and override process.
 name: Agents Auto-Pilot
 
-# End-to-end automation: Issue → Optimize → Agent → Keepalive → Merge
+# End-to-end automation: Issue → Format → Optimize → Apply → Agent → Keepalive → Merge
 # Triggered by:
 # 1. agents:auto-pilot label (initial trigger)
-# 2. workflow_run when child workflows complete (eliminates race conditions)
-# 3. Issue/PR closed events
-# 4. Manual dispatch
+# 2. Issue/PR closed events (for verification)
+# 3. Manual dispatch (for testing/recovery)
 
 on:
   issues:
     types: [labeled, closed]
   pull_request:
     types: [labeled, closed]
-  # Continue when child workflows complete - eliminates race conditions
-  workflow_run:
-    workflows:
-      - "Agents Issue Optimizer"  # Continues after optimize/apply/format phases
-    types: [completed]
+  # Note: Optimizer now runs inline in auto-pilot, not as separate workflow
+  # workflow_run trigger removed to eliminate race conditions
+  # If needed for other child workflows, add them here specifically
   workflow_dispatch:
     inputs:
       issue_number:
@@ -53,15 +50,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 240  # 4 hours = MAX_WALL_TIME_HOURS
     # Trigger on:
-    # 1. agents:auto-pilot label added (initial trigger only)
-    # 2. workflow_run when child workflows complete (continue after format/optimize/apply)
-    # 3. Issue/PR closed (verification trigger)
-    # 4. workflow_dispatch (manual trigger)
-    # NOTE: We do NOT trigger on agents:format/optimize/apply-suggestions labels
-    # because those trigger child workflows - we wait for workflow_run instead
+    # 1. agents:auto-pilot label added (starts the automation)
+    # 2. Issue/PR closed (verification trigger)
+    # 3. workflow_dispatch (manual trigger)
+    # NOTE: Optimizer and formatter now run INLINE, not as separate workflows
+    # This eliminates race conditions and workflow_run complexity
     if: |
       github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'workflow_run' ||
       (github.event.action == 'labeled' && (
         github.event.label.name == 'agents:auto-pilot' ||
         github.event.label.name == 'agent:codex'
@@ -78,41 +73,6 @@ jobs:
             // Handle different event types
             if (context.eventName === 'workflow_dispatch') {
               core.setOutput('enabled', 'true');
-              core.setOutput('issue_from_workflow_run', '');
-              return;
-            }
-
-            // For workflow_run events, extract issue number from triggering workflow
-            if (context.eventName === 'workflow_run') {
-              const workflowRun = context.payload.workflow_run;
-              // Only continue if the child workflow succeeded
-              if (workflowRun.conclusion !== 'success') {
-                const name = workflowRun.name;
-                core.info(`Child workflow ${name} did not succeed, skipping`);
-                core.setOutput('enabled', 'false');
-                return;
-              }
-
-              // Extract issue number from the triggering workflow's title
-              // Titles include issue references like "[Title] #123"
-              const titleMatch = workflowRun.display_title?.match(/#(\d+)/);
-              if (titleMatch) {
-                core.setOutput('enabled', 'true');
-                core.setOutput('issue_from_workflow_run', titleMatch[1]);
-                core.info(`Continuing for issue #${titleMatch[1]}`);
-                return;
-              }
-
-              // Try to get issue from the head commit message
-              const commitMatch = workflowRun.head_commit?.message?.match(/#(\d+)/);
-              if (commitMatch) {
-                core.setOutput('enabled', 'true');
-                core.setOutput('issue_from_workflow_run', commitMatch[1]);
-                return;
-              }
-
-              core.info(`Could not extract issue number from workflow_run, skipping`);
-              core.setOutput('enabled', 'false');
               return;
             }
 
@@ -135,29 +95,40 @@ jobs:
             }
 
             core.setOutput('enabled', 'true');
-            core.setOutput('issue_from_workflow_run', '');
 
       - name: Checkout repository
         if: steps.check_enabled.outputs.enabled == 'true'
         uses: actions/checkout@v6
 
+      - name: Set up Python
+        if: steps.check_enabled.outputs.enabled == 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        if: steps.check_enabled.outputs.enabled == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # Install langchain dependencies for inline optimizer
+          pip install langchain langchain-core langchain-openai langchain-community
+
       - name: Determine context
         if: steps.check_enabled.outputs.enabled == 'true'
         id: context
-        env:
-          ISSUE_FROM_WORKFLOW_RUN: ${{ steps.check_enabled.outputs.issue_from_workflow_run }}
         uses: actions/github-script@v8
         with:
           script: |
+            const { withRetry, paginateWithRetry } = require(
+              './.github/scripts/github-api-with-retry.js'
+            );
+
             let issueNumber, issue, pr;
 
             // Get issue number from various sources (in priority order)
             if (context.eventName === 'workflow_dispatch') {
               issueNumber = parseInt('${{ inputs.issue_number }}');
-            } else if (process.env.ISSUE_FROM_WORKFLOW_RUN) {
-              // workflow_run event - issue extracted from child workflow
-              issueNumber = parseInt(process.env.ISSUE_FROM_WORKFLOW_RUN);
-              core.info(`Got issue #${issueNumber} from workflow_run event`);
             } else if (context.payload.issue) {
               issueNumber = context.payload.issue.number;
               issue = context.payload.issue;
@@ -173,13 +144,15 @@ jobs:
               return;
             }
 
-            // Fetch issue if not in payload
+            // Fetch issue if not in payload (with retry)
             if (!issue) {
-              const { data } = await github.rest.issues.get({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber
-              });
+              const { data } = await withRetry(() =>
+                github.rest.issues.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber
+                })
+              );
               issue = data;
             }
 
@@ -211,9 +184,10 @@ jobs:
             const hasVerify = labels.includes('verify:evaluate');
 
             // Check for actual optimizer output (not just label)
-            // This is critical to avoid race conditions - we need to verify
+            // Since we run optimizer inline now, this should always exist after optimize step
             // the optimizer workflow actually completed its work
-            const comments = await github.paginate(
+            const comments = await paginateWithRetry(
+              github,
               github.rest.issues.listComments,
               {
                 owner: context.repo.owner,
@@ -231,7 +205,8 @@ jobs:
             });
 
             // Check for linked PR (with pagination and multiple event types)
-            const timelineEvents = await github.paginate(
+            const timelineEvents = await paginateWithRetry(
+              github,
               github.rest.issues.listEventsForTimeline,
               {
                 owner: context.repo.owner,
@@ -278,10 +253,12 @@ jobs:
           ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
         with:
           script: |
+            const { paginateWithRetry } = require('./.github/scripts/github-api-with-retry.js');
             const issueNumber = parseInt(process.env.ISSUE_NUMBER);
 
-            // Get all comments to count auto-pilot steps (with pagination)
-            const allComments = await github.paginate(
+            // Get all comments to count auto-pilot steps (with pagination and retry)
+            const allComments = await paginateWithRetry(
+              github,
               github.rest.issues.listComments,
               {
                 owner: context.repo.owner,
@@ -337,8 +314,8 @@ jobs:
             - Conflicting requirements
             - External dependencies
 
-              **To resume:** Remove \`agents:auto-pilot-failed\` and \`needs-human\` labels,
-              then re-add \`agents:auto-pilot\`.`
+            **To resume:** Remove \`agents:auto-pilot-failed\` and
+            \`needs-human\` labels, then re-add \`agents:auto-pilot\`.`
             });
 
             core.setFailed('Auto-pilot exceeded max cycles');
@@ -394,14 +371,10 @@ jobs:
             if [[ "$HAS_FORMAT" != "true" ]]; then
               echo "next_step=format" >> "$GITHUB_OUTPUT"
               echo "Step 1: Format issue"
-            elif [[ "$HAS_OPTIMIZE" != "true" ]]; then
-              echo "next_step=optimize" >> "$GITHUB_OUTPUT"
-              echo "Step 2: Trigger optimizer"
             elif [[ "$HAS_OPTIMIZER_OUTPUT" != "true" ]]; then
-              # Optimize label exists but no output yet - optimizer is still running
-              # We'll be re-triggered via workflow_run when it completes
-              echo "next_step=wait-for-optimizer" >> "$GITHUB_OUTPUT"
-              echo "Step 2b: Waiting for optimizer to complete (will continue via workflow_run)"
+              # Run optimizer inline (not via label)
+              echo "next_step=optimize" >> "$GITHUB_OUTPUT"
+              echo "Step 2: Run optimizer (inline)"
             elif [[ "$HAS_APPLY" != "true" ]]; then
               echo "next_step=apply" >> "$GITHUB_OUTPUT"
               echo "Step 3: Apply suggestions"
@@ -442,69 +415,120 @@ jobs:
           fi
           exit 0
 
-      - name: Execute step - Format
+      - name: Execute step - Format (inline)
         if: steps.next.outputs.next_step == 'format'
-        uses: actions/github-script@v8
         env:
           ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
           STEP_COUNT: ${{ steps.cycles.outputs.count }}
-        with:
-          script: |
-            const issueNumber = parseInt(process.env.ISSUE_NUMBER);
-            const stepCount = parseInt(process.env.STEP_COUNT || '0') + 1;
-
-            // Add progress comment
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              body: `🤖 **Auto-pilot step ${stepCount}**: Starting issue formatting...
-
-            Adding \`agents:format\` label to trigger LangChain formatting.`
-            });
-
-            // Add format label to trigger the formatter
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              labels: ['agents:format']
-            });
-
-      - name: Execute step - Optimize
-        if: steps.next.outputs.next_step == 'optimize'
-        uses: actions/github-script@v8
-        env:
-          ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
-          STEP_COUNT: ${{ steps.cycles.outputs.count }}
-        with:
-          script: |
-            const issueNumber = parseInt(process.env.ISSUE_NUMBER);
-            const stepCount = parseInt(process.env.STEP_COUNT || '0') + 1;
-
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              body: `🤖 **Auto-pilot step ${stepCount}**: Analyzing issue for improvements...
-
-            Adding \`agents:optimize\` label to trigger analysis.
-
-            ⏳ Auto-pilot will continue automatically when optimizer completes.`
-            });
-
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              labels: ['agents:optimize']
-            });
-
-      - name: Wait for optimizer
-        if: steps.next.outputs.next_step == 'wait-for-optimizer'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PYTHONPATH: ${{ github.workspace }}
         run: |
-          echo "✅ Optimizer running. Auto-pilot will continue via workflow_run."
-          echo "This run ends; a new run starts when optimizer completes."
+          ISSUE_NUMBER="$ISSUE_NUMBER"
+          STEP_COUNT="$STEP_COUNT"
+
+          # Post progress comment
+          gh issue comment "${ISSUE_NUMBER}" --body \
+            "🤖 **Auto-pilot step $((STEP_COUNT + 1))**: Starting issue formatting...
+
+          Running formatter inline (not via label trigger)."
+
+          # Get issue body
+          gh api "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}" > /tmp/issue.json
+          jq -r '.body' /tmp/issue.json > /tmp/issue_body.md
+
+          # Format the issue
+          echo "Formatting issue into AGENT_ISSUE_TEMPLATE structure..."
+          python scripts/langchain/issue_formatter.py \
+            --input-file /tmp/issue_body.md \
+            --json > /tmp/format_result.json
+
+          # Extract and apply formatted body
+          python -c "
+          import json
+          with open('/tmp/format_result.json') as f:
+              result = json.load(f)
+          formatted = result.get('formatted_body', '')
+          if not formatted:
+              print('ERROR: No formatted body returned')
+              import sys
+              sys.exit(1)
+          with open('/tmp/formatted_body.md', 'w') as f:
+              f.write(formatted)
+          print('Issue formatted successfully')
+          " || exit 1
+
+          # Update issue body
+          gh issue edit "${ISSUE_NUMBER}" --body-file /tmp/formatted_body.md
+
+          # Add marker label (but don't trigger workflow)
+          gh issue edit "${ISSUE_NUMBER}" --add-label "agents:formatted" || true
+
+          echo "✅ Formatting complete - continuing to next step"
+
+      - name: Execute step - Optimize (inline)
+        if: steps.next.outputs.next_step == 'optimize'
+        env:
+          ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
+          STEP_COUNT: ${{ steps.cycles.outputs.count }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          ISSUE_NUMBER="$ISSUE_NUMBER"
+          STEP_COUNT="$STEP_COUNT"
+
+          # Post progress comment
+          gh issue comment "${ISSUE_NUMBER}" --body \
+            "🤖 **Auto-pilot step $((STEP_COUNT + 1))**: Analyzing issue for improvements...
+
+          Running optimizer inline (not via label trigger)."
+
+          # Get issue body
+          gh api "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}" > /tmp/issue.json
+          jq -r '.body' /tmp/issue.json > /tmp/issue_body.md
+
+          # Run optimizer analysis
+          echo "Running optimization analysis..."
+          python scripts/langchain/issue_optimizer.py \
+            --input-file /tmp/issue_body.md \
+            --json > /tmp/suggestions.json
+
+          # Format and post comment
+          python -c "
+          import json
+          import sys
+          sys.path.insert(0, 'scripts/langchain')
+          from issue_optimizer import IssueOptimizationResult, format_suggestions_comment
+
+          with open('/tmp/suggestions.json') as f:
+              data = json.load(f)
+
+          result = IssueOptimizationResult(
+              task_splitting=data.get('task_splitting', []),
+              blocked_tasks=data.get('blocked_tasks', []),
+              objective_criteria=data.get('objective_criteria', []),
+              missing_sections=data.get('missing_sections', []),
+              formatting_issues=data.get('formatting_issues', []),
+              overall_notes=data.get('overall_notes', ''),
+              provider_used=data.get('provider_used')
+          )
+
+          comment = format_suggestions_comment(result)
+          with open('/tmp/comment.md', 'w') as f:
+              f.write(comment)
+          " || {
+            echo "Failed to format comment, using raw JSON"
+            cat /tmp/suggestions.json > /tmp/comment.md
+          }
+
+          # Post suggestions comment
+          gh issue comment "${ISSUE_NUMBER}" --body-file /tmp/comment.md
+
+          # Add marker label (but don't trigger workflow)
+          gh issue edit "${ISSUE_NUMBER}" --add-label "agents:formatted" || true
+
+          echo "✅ Optimization complete - continuing to next step"
 
       - name: Guard - Require optimizer output before apply
         if: steps.next.outputs.next_step == 'apply'
@@ -569,32 +593,71 @@ jobs:
               core.info('✅ Optimizer output found - proceeding with apply step');
             }
 
-      - name: Execute step - Apply suggestions
+      - name: Execute step - Apply suggestions (inline)
         if: steps.next.outputs.next_step == 'apply'
-        uses: actions/github-script@v8
         env:
           ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
           STEP_COUNT: ${{ steps.cycles.outputs.count }}
-        with:
-          script: |
-            const issueNumber = parseInt(process.env.ISSUE_NUMBER);
-            const stepCount = parseInt(process.env.STEP_COUNT || '0') + 1;
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          ISSUE_NUMBER="$ISSUE_NUMBER"
+          STEP_COUNT="$STEP_COUNT"
 
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              body: `🤖 **Auto-pilot step ${stepCount}**: Applying optimization suggestions...
+          # Post progress comment
+          gh issue comment "${ISSUE_NUMBER}" --body \
+            "🤖 **Auto-pilot step $((STEP_COUNT + 1))**: Applying optimization suggestions...
 
-            Adding \`agents:apply-suggestions\` label.`
-            });
+          Running apply inline (not via label trigger)."
 
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              labels: ['agents:apply-suggestions']
-            });
+          # Get issue body and comments
+          gh api "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}" > /tmp/issue.json
+          jq -r '.body' /tmp/issue.json > /tmp/issue_body.md
+          gh api "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments" \
+            --paginate > /tmp/comments.json
+
+          # Extract and apply suggestions
+          python -c "
+          import json
+          import sys
+          import re
+          sys.path.insert(0, 'scripts/langchain')
+          from issue_optimizer import _extract_suggestions_json, apply_suggestions
+
+          with open('/tmp/comments.json') as f:
+              comments = json.load(f)
+
+          suggestions = None
+          for comment in comments:
+              body = comment.get('body', '')
+              extracted = _extract_suggestions_json(body)
+              if extracted:
+                  suggestions = extracted
+                  break
+
+          if not suggestions:
+              print('ERROR: No suggestions JSON found in comments')
+              sys.exit(1)
+
+          # Read current issue body
+          with open('/tmp/issue_body.md') as f:
+              issue_body = f.read()
+
+          # Apply suggestions
+          result = apply_suggestions(issue_body, suggestions, use_llm=False)
+
+          with open('/tmp/updated_body.md', 'w') as f:
+              f.write(result['formatted_body'])
+
+          print('Suggestions applied successfully')
+          " || exit 1
+
+          # Update issue body
+          gh issue edit "${ISSUE_NUMBER}" --body-file /tmp/updated_body.md
+
+          # Add marker label (but don't trigger workflow)
+          gh issue edit "${ISSUE_NUMBER}" --add-label "agents:formatted" || true
+
+          echo "✅ Apply complete - continuing to next step"
 
       - name: Execute step - Capability check & Agent
         if: steps.next.outputs.next_step == 'capability-check'
@@ -880,7 +943,6 @@ jobs:
           ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
           PR_NUMBER: ${{ steps.context.outputs.linked_pr }}
           STEP_COUNT: ${{ steps.cycles.outputs.count }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
             const issueNumber = parseInt(process.env.ISSUE_NUMBER);
@@ -921,7 +983,6 @@ jobs:
               const pendingChecks = checks.check_runs.filter(check =>
                 check.status !== 'completed'
               );
-
               const failedChecks = checks.check_runs.filter(check =>
                 check.status === 'completed' && check.conclusion !== 'success' &&
                 check.conclusion !== 'neutral' && check.conclusion !== 'skipped'
@@ -977,13 +1038,8 @@ jobs:
         if: |
           steps.context.outputs.should_continue == 'true' &&
           steps.cycles.outputs.exceeded != 'true' &&
-            (
-              steps.next.outputs.next_step == 'format' ||
-              steps.next.outputs.next_step == 'optimize' ||
-              steps.next.outputs.next_step == 'apply' ||
-              steps.next.outputs.next_step == 'capability-check' ||
-              steps.next.outputs.next_step == 'monitor-pr'
-            )
+          contains(fromJSON('["format","optimize","apply","capability-check","monitor-pr"]'),
+          steps.next.outputs.next_step)
         uses: actions/github-script@v8
         env:
           ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
