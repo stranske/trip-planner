@@ -33,16 +33,16 @@ async function runKeepaliveGate({ core, github, context, env }) {
     .addRaw(
       `App auth env present: keepalive=${appStatus.keepalive ? 'yes' : 'no'}, gh=${
         appStatus.gh ? 'yes' : 'no'
-      }, workflows(legacy)=${appStatus.workflows ? 'yes' : 'no'}`
+      }, workflows(legacy)=${appStatus.workflowsLegacy ? 'yes' : 'no'}`
     )
     .addEOL();
   if (preferredPool) {
     summary.addRaw(`Preferred app pool: ${preferredPool}`).addEOL();
   }
-  if (!appStatus.keepalive && appStatus.workflows) {
+  if (!appStatus.keepalive && appStatus.workflowsLegacy) {
     summary
       .addRaw(
-        'Legacy WORKFLOWS_APP_* credentials detected; switch keepalive workflows to KEEPALIVE_APP_* for the dedicated pool.'
+        'Legacy WORKFLOWS_APP_* credentials detected; prefer KEEPALIVE_APP_* (or GH_APP_* fallback) for keepalive runs.'
       )
       .addEOL();
   }

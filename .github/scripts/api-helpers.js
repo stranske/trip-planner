@@ -21,8 +21,8 @@ const DEFAULT_FALLBACK_PAT_ENV_KEYS = Object.freeze([
 ]);
 const DEFAULT_APP_ENV_KEYS = Object.freeze({
   keepalive: { id: 'KEEPALIVE_APP_ID', key: 'KEEPALIVE_APP_PRIVATE_KEY' },
-  workflows: { id: 'WORKFLOWS_APP_ID', key: 'WORKFLOWS_APP_PRIVATE_KEY' },
   gh: { id: 'GH_APP_ID', key: 'GH_APP_PRIVATE_KEY' },
+  workflowsLegacy: { id: 'WORKFLOWS_APP_ID', key: 'WORKFLOWS_APP_PRIVATE_KEY' },
 });
 
 /**
@@ -347,8 +347,8 @@ function hasAppCredentials(env, { id, key }) {
 function resolveAppCredentialStatus(env = process.env, keys = DEFAULT_APP_ENV_KEYS) {
   return {
     keepalive: hasAppCredentials(env, keys.keepalive),
-    workflows: hasAppCredentials(env, keys.workflows),
     gh: hasAppCredentials(env, keys.gh),
+    workflowsLegacy: hasAppCredentials(env, keys.workflowsLegacy),
   };
 }
 
@@ -358,9 +358,6 @@ function resolvePreferredAppPool(status) {
   }
   if (status?.gh) {
     return 'gh';
-  }
-  if (status?.workflows) {
-    return 'workflows';
   }
   return '';
 }
