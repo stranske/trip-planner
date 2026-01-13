@@ -74,7 +74,13 @@ def _load_prompt() -> str:
     return CONTEXT_EXTRACTOR_PROMPT
 
 
-def _get_llm_client() -> tuple[object, str] | None:
+def _get_llm_client(force_openai: bool = False) -> tuple[object, str] | None:
+    """Get LLM client, trying GitHub Models first (cheaper), then OpenAI.
+
+    Args:
+        force_openai: If True, skip GitHub Models and use OpenAI directly.
+                      Use this for retry after GitHub Models 401 error.
+    """
     try:
         from langchain_openai import ChatOpenAI
     except ImportError:
@@ -87,7 +93,8 @@ def _get_llm_client() -> tuple[object, str] | None:
 
     from tools.llm_provider import DEFAULT_MODEL, GITHUB_MODELS_BASE_URL
 
-    if github_token:
+    # Try GitHub Models first (cheaper) unless forced to use OpenAI
+    if github_token and not force_openai:
         return (
             ChatOpenAI(
                 model=DEFAULT_MODEL,
@@ -97,14 +104,16 @@ def _get_llm_client() -> tuple[object, str] | None:
             ),
             "github-models",
         )
-    return (
-        ChatOpenAI(
-            model=DEFAULT_MODEL,
-            api_key=openai_token,
-            temperature=0.1,
-        ),
-        "openai",
-    )
+    if openai_token:
+        return (
+            ChatOpenAI(
+                model=DEFAULT_MODEL,
+                api_key=openai_token,
+                temperature=0.1,
+            ),
+            "openai",
+        )
+    return None
 
 
 def _strip_code_fences(lines: Iterable[str]) -> list[str]:
@@ -219,6 +228,12 @@ def _fallback_extract(issue_body: str, comments: list[str] | None) -> str:
     )
 
 
+def _is_github_models_auth_error(exc: Exception) -> bool:
+    """Check if exception is a GitHub Models authentication error (401)."""
+    exc_str = str(exc).lower()
+    return "401" in exc_str and "models" in exc_str
+
+
 def extract_context(
     issue_body: str,
     comments: list[str] | None = None,
@@ -242,12 +257,30 @@ def extract_context(
                 prompt = _load_prompt()
                 template = ChatPromptTemplate.from_template(prompt)
                 chain = template | client
-                response = chain.invoke(
-                    {
-                        "issue_body": issue_body,
-                        "comments": "\n\n".join(comments) if comments else "_None._",
-                    }
-                )
+                try:
+                    response = chain.invoke(
+                        {
+                            "issue_body": issue_body,
+                            "comments": "\n\n".join(comments) if comments else "_None._",
+                        }
+                    )
+                except Exception as e:
+                    # If GitHub Models fails with 401, retry with OpenAI
+                    if provider == "github-models" and _is_github_models_auth_error(e):
+                        fallback_info = _get_llm_client(force_openai=True)
+                        if fallback_info:
+                            client, provider = fallback_info
+                            chain = template | client
+                            response = chain.invoke(
+                                {
+                                    "issue_body": issue_body,
+                                    "comments": "\n\n".join(comments) if comments else "_None._",
+                                }
+                            )
+                        else:
+                            raise
+                    else:
+                        raise
                 content = (getattr(response, "content", None) or str(response)).strip()
                 return {
                     "context_section": content,
