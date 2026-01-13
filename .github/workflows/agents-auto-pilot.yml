@@ -1050,15 +1050,32 @@ jobs:
             const issueNumber = parseInt(process.env.ISSUE_NUMBER);
             const currentStep = process.env.CURRENT_STEP;
 
-            // Wait for the workflow to process
-            // Format/Optimize/Apply workflows complete in 30-60 seconds
-            // Monitor-pr checks need longer for keepalive to run
-            const waitTime = currentStep === 'monitor-pr' ? 120000 : 45000;
-            core.info(`Waiting ${waitTime/1000}s for ${currentStep} to complete...`);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
+            // Determine next step explicitly to avoid label race conditions
+            // Don't rely on 'auto' detection which has API cache timing issues
+            const nextStepMap = {
+              'format': 'optimize',
+              'optimize': 'apply',
+              'apply': 'capability-check',
+              'capability-check': 'auto',  // Let it detect agent/PR state
+              'monitor-pr': 'auto'  // Let it check PR completion
+            };
+            const nextStep = nextStepMap[currentStep] || 'auto';
 
-            // Re-dispatch workflow_dispatch to continue
-            core.info('Re-dispatching auto-pilot to continue pipeline...');
+            // For monitor-pr, add delay to avoid tight polling loop
+            // Keepalive updates arrive slowly while CI runs; without delay
+            // we'd spam Actions with rapid re-dispatches
+            if (currentStep === 'monitor-pr') {
+              const waitTime = 120000;  // 2 minutes between monitor checks
+              core.info(`Waiting ${waitTime/1000}s for keepalive update...`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
+            // Other steps dispatch immediately - explicit force_step
+            // eliminates label dependency, no wait needed
+
+            core.info(
+              `Re-dispatching auto-pilot: issue #${issueNumber}, ` +
+              `next_step=${nextStep}`
+            );
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -1066,11 +1083,14 @@ jobs:
               ref: 'main',
               inputs: {
                 issue_number: issueNumber.toString(),
-                force_step: 'auto'
+                force_step: nextStep
               }
             });
 
-            core.info(`Re-dispatched for issue #${issueNumber} after ${currentStep} step`);
+            core.info(
+              `Re-dispatched for issue #${issueNumber} after ` +
+              `${currentStep} step (next: ${nextStep})`
+            );
 
       - name: Report - Done
         if: steps.next.outputs.next_step == 'done'
