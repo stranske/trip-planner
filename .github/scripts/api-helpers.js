@@ -22,7 +22,6 @@ const DEFAULT_FALLBACK_PAT_ENV_KEYS = Object.freeze([
 const DEFAULT_APP_ENV_KEYS = Object.freeze({
   keepalive: { id: 'KEEPALIVE_APP_ID', key: 'KEEPALIVE_APP_PRIVATE_KEY' },
   gh: { id: 'GH_APP_ID', key: 'GH_APP_PRIVATE_KEY' },
-  workflowsLegacy: { id: 'WORKFLOWS_APP_ID', key: 'WORKFLOWS_APP_PRIVATE_KEY' },
 });
 
 /**
@@ -348,7 +347,7 @@ function resolveAppCredentialStatus(env = process.env, keys = DEFAULT_APP_ENV_KE
   return {
     keepalive: hasAppCredentials(env, keys.keepalive),
     gh: hasAppCredentials(env, keys.gh),
-    workflowsLegacy: hasAppCredentials(env, keys.workflowsLegacy),
+    workflowsLegacy: keys.workflowsLegacy ? hasAppCredentials(env, keys.workflowsLegacy) : false,
   };
 }
 
