@@ -387,8 +387,26 @@ def _is_github_models_auth_error(exc: Exception) -> bool:
 
 
 def format_issue_body(issue_body: str, *, use_llm: bool = True) -> dict[str, Any]:
+    # Maximum issue body size to prevent OpenAI rate limit errors (30k TPM limit)
+    # ~4 chars per token, so 50k chars ≈ 12.5k tokens, leaving headroom for prompt + output
+    MAX_ISSUE_BODY_SIZE = 50000
+
     if not issue_body:
         issue_body = ""
+
+    # Check size before processing to avoid rate limit errors
+    if len(issue_body) > MAX_ISSUE_BODY_SIZE:
+        err_msg = (
+            f"Issue body too large ({len(issue_body):,} chars). "
+            f"Max is {MAX_ISSUE_BODY_SIZE:,}. "
+            "Recursive task decomposition spam suspected; needs manual cleanup."
+        )
+        return {
+            "error": err_msg,
+            "formatted_body": None,
+            "provider_used": None,
+            "used_llm": False,
+        }
 
     if use_llm:
         client_info = _get_llm_client()
