@@ -28,30 +28,17 @@ async function runKeepaliveGate({ core, github, context, env }) {
   const prRaw = normalise(env.KEEPALIVE_PR);
   const summary = core.summary;
   summary.addHeading('Keepalive gate evaluation');
-  const appEnvKeys = {
-    ...DEFAULT_APP_ENV_KEYS,
-    workflowsLegacy: { id: 'WORKFLOWS_APP_ID', key: 'WORKFLOWS_APP_PRIVATE_KEY' },
-  };
-  const appStatus = resolveAppCredentialStatus(env, appEnvKeys);
-  const preferredPool = resolvePreferredAppPool(appStatus, { includeLegacy: true });
+  const appStatus = resolveAppCredentialStatus(env, DEFAULT_APP_ENV_KEYS);
+  const preferredPool = resolvePreferredAppPool(appStatus);
   summary
     .addRaw(
       `App auth env present: keepalive=${appStatus.keepalive ? 'yes' : 'no'}, gh=${
         appStatus.gh ? 'yes' : 'no'
-      }${appStatus.workflowsLegacy ? ', workflows(legacy)=yes' : ''}`
+      }`
     )
     .addEOL();
   if (preferredPool) {
-    const preferredLabel = preferredPool === 'workflows-legacy' ? 'workflows (legacy)' : preferredPool;
-    summary.addRaw(`Preferred app pool: ${preferredLabel}`).addEOL();
-  }
-  if (preferredPool === 'workflows-legacy') {
-    const legacyMessage =
-      'Legacy WORKFLOWS_APP_* credentials detected; prefer KEEPALIVE_APP_* (or GH_APP_* fallback) for keepalive runs.';
-    summary.addRaw(legacyMessage).addEOL();
-    if (typeof core?.warning === 'function') {
-      core.warning(legacyMessage);
-    }
+    summary.addRaw(`Preferred app pool: ${preferredPool}`).addEOL();
   }
 
   const renderLine = (reason) => {

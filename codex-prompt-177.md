@@ -140,19 +140,11 @@ A coverage task is NOT complete just because you added tests. It is complete ONL
 ---
 ## PR Tasks and Acceptance Criteria
 
-**Progress:** 1/3 tasks complete, 2 remaining
+**Progress:** 2/3 tasks complete, 1 remaining
 
-### ⚠️ IMPORTANT: Task Reconciliation Required
+### Task Reconciliation Complete
 
-The previous iteration changed **5 file(s)** but did not update task checkboxes.
-
-**Before continuing, you MUST:**
-1. Review the recent commits to understand what was changed
-2. Determine which task checkboxes should be marked complete
-3. Update the PR body to check off completed tasks
-4. Then continue with remaining tasks
-
-_Failure to update checkboxes means progress is not being tracked properly._
+Reconciliation complete; task checkboxes match the latest changes.
 
 ### Tasks
 Complete these in order. Mark checkbox done ONLY after implementation is verified:
@@ -169,9 +161,6 @@ The PR is complete when ALL of these are satisfied:
 Avoid repeating these unless a task needs explicit follow-up:
 
 - - Add PAT fallback when app rate limit is low
-- - Switch from `WORKFLOWS_APP` to `KEEPALIVE_APP` (dedicated rate limit pool)
-
-### Suggested Next Task
 - - Switch from `WORKFLOWS_APP` to `KEEPALIVE_APP` (dedicated rate limit pool)
 
 ---
