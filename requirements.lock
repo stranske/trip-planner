@@ -28,7 +28,7 @@ pytest==9.0.2
     #   pytest-cov
 pytest-cov==7.0.0
     # via trip-planner (pyproject.toml)
-ruff==0.14.11
+ruff==0.14.12
     # via trip-planner (pyproject.toml)
 typing-extensions==4.15.0
     # via mypy
