@@ -462,8 +462,9 @@ jobs:
           # Update issue body
           gh issue edit "${ISSUE_NUMBER}" --body-file /tmp/formatted_body.md
 
-          # Add marker label (but don't trigger workflow)
+          # Add marker labels (but don't trigger workflow)
           gh issue edit "${ISSUE_NUMBER}" --add-label "agents:formatted" || true
+          gh issue edit "${ISSUE_NUMBER}" --add-label "agents:apply-suggestions" || true
 
           echo "✅ Formatting complete - continuing to next step"
 
@@ -526,8 +527,9 @@ jobs:
           # Post suggestions comment
           gh issue comment "${ISSUE_NUMBER}" --body-file /tmp/comment.md
 
-          # Add marker label (but don't trigger workflow)
+          # Add marker labels (but don't trigger workflow)
           gh issue edit "${ISSUE_NUMBER}" --add-label "agents:formatted" || true
+          gh issue edit "${ISSUE_NUMBER}" --add-label "agents:apply-suggestions" || true
 
           echo "✅ Optimization complete - continuing to next step"
 
@@ -695,6 +697,23 @@ jobs:
               issue_number: issueNumber,
               labels: ['agent:codex']
             });
+
+            // Force-dispatch Codex belt dispatcher to create the branch
+            try {
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'agents-71-codex-belt-dispatcher.yml',
+                ref: 'main',
+                inputs: {
+                  force_issue: issueNumber.toString(),
+                  dry_run: 'false'
+                }
+              });
+              core.info(`Dispatched codex belt dispatcher for issue #${issueNumber}`);
+            } catch (dispatchError) {
+              core.warning(`Could not dispatch codex belt dispatcher: ${dispatchError?.message}`);
+            }
 
       - name: Execute step - Verify
         if: steps.next.outputs.next_step == 'verify'
@@ -885,6 +904,24 @@ jobs:
                 ? '✅ Added labels: `agent:codex`, `agents:keepalive`, `autofix`'
                 : '⚠️ Could not add labels (add manually)';
 
+              // Dispatch PR meta workflow to build Automated Status Summary
+              // (GITHUB_TOKEN actions do not trigger workflow runs automatically)
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: 'agents-pr-meta-v4.yml',
+                  ref: 'main',
+                  inputs: {
+                    pr_number: pr.number.toString(),
+                    debug: 'false'
+                  }
+                });
+                core.info(`Dispatched PR meta update for PR #${pr.number}`);
+              } catch (dispatchError) {
+                core.warning(`Could not dispatch PR meta update: ${dispatchError?.message}`);
+              }
+
               // Dispatch keepalive workflow since GITHUB_TOKEN labels don't trigger it
               try {
                 await github.rest.actions.createWorkflowDispatch({
@@ -1045,8 +1082,10 @@ jobs:
         if: |
           steps.context.outputs.should_continue == 'true' &&
           steps.cycles.outputs.exceeded != 'true' &&
-          contains(fromJSON('["format","optimize","apply","capability-check","monitor-pr"]'),
-          steps.next.outputs.next_step)
+          contains(
+            fromJSON('["format","optimize","apply","capability-check","create-pr","monitor-pr"]'),
+            steps.next.outputs.next_step
+          )
         uses: actions/github-script@v8
         env:
           ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
@@ -1063,16 +1102,17 @@ jobs:
               'optimize': 'apply',
               'apply': 'capability-check',
               'capability-check': 'auto',  // Let it detect agent/PR state
+              'create-pr': 'auto',  // Re-evaluate after branch/PR creation
               'monitor-pr': 'auto'  // Let it check PR completion
             };
             const nextStep = nextStepMap[currentStep] || 'auto';
 
-            // For monitor-pr, add delay to avoid tight polling loop
-            // Keepalive updates arrive slowly while CI runs; without delay
+            // For monitor-pr or create-pr, add delay to avoid tight polling loops
+            // Keepalive updates and branch creation can take time; without delay
             // we'd spam Actions with rapid re-dispatches
-            if (currentStep === 'monitor-pr') {
-              const waitTime = 120000;  // 2 minutes between monitor checks
-              core.info(`Waiting ${waitTime/1000}s for keepalive update...`);
+            if (currentStep === 'monitor-pr' || currentStep === 'create-pr') {
+              const waitTime = currentStep === 'monitor-pr' ? 120000 : 60000;
+              core.info(`Waiting ${waitTime/1000}s before re-dispatch...`);
               await new Promise(resolve => setTimeout(resolve, waitTime));
             }
             // Other steps dispatch immediately - explicit force_step
