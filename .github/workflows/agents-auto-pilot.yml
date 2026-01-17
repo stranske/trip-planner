@@ -875,7 +875,7 @@ jobs:
                   await github.rest.actions.createWorkflowDispatch({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
-                    workflow_id: 'agents-72-codex-belt-worker-dispatch.yml',
+                    workflow_id: 'agents-72-codex-belt-worker.yml',
                     ref: 'main',
                     inputs: {
                       issue: issueNumber.toString(),
