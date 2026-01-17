@@ -35,8 +35,8 @@ on:
       max_parallel:
         description: 'Maximum concurrent worker runs permitted'
         required: false
-        default: 1
-        type: number
+        default: '1'
+        type: string
       keepalive:
         description: 'True when invocation originates from a keepalive sweep'
         required: false
@@ -52,10 +52,17 @@ permissions:
 jobs:
   run-worker:
     name: Run Codex belt worker
-    runs-on: ubuntu-latest
-    steps:
-      - name: Fail because Codex belt worker workflow is missing
-        run: |
-          echo "Error: The reusable workflow '.github/workflows/agents-72-codex-belt-worker.yml' is not present in this repository."
-          echo "This dispatch wrapper is disabled until the reusable workflow is added or the reference is updated."
-          exit 1
+    uses: ./.github/workflows/agents-72-codex-belt-worker.yml
+    with:
+      issue: ${{ inputs.issue }}
+      branch: ${{ inputs.branch }}
+      base: ${{ inputs.base }}
+      source: ${{ inputs.source }}
+      dry_run: ${{ inputs.dry_run }}
+      use_step_branch: ${{ inputs.use_step_branch }}
+      max_parallel: ${{ fromJSON(inputs.max_parallel) }}
+      keepalive: ${{ inputs.keepalive }}
+    secrets:
+      WORKFLOWS_APP_ID: ${{ secrets.WORKFLOWS_APP_ID }}
+      WORKFLOWS_APP_PRIVATE_KEY: ${{ secrets.WORKFLOWS_APP_PRIVATE_KEY }}
+      ACTIONS_BOT_PAT: ${{ secrets.ACTIONS_BOT_PAT }}
