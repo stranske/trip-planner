@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Generate additional destination segments with OpenAI and save to data/segments_generated.json."""
+
 import json
 import os
 import re
