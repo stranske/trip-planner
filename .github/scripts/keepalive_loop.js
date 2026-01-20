@@ -1321,6 +1321,7 @@ async function evaluateKeepaliveLoop({ github, context, core, payload: overrideP
   const iteration = configHasExplicitIteration ? config.iteration : toNumber(state.iteration, 0);
   const maxIterations = toNumber(config.max_iterations ?? state.max_iterations, 5);
   const failureThreshold = toNumber(config.failure_threshold ?? state.failure_threshold, 3);
+  const progressReviewThreshold = toNumber(config.progress_review_threshold ?? state.progress_review_threshold, 4);
 
   // Evidence-based productivity tracking
   // Uses multiple signals to determine if work is being done:
@@ -1335,6 +1336,19 @@ async function evaluateKeepaliveLoop({ github, context, core, payload: overrideP
   const previousTasks = state.tasks || {};
   const prevUnchecked = toNumber(previousTasks.unchecked, checkboxCounts.unchecked);
   const tasksCompletedSinceLastRound = prevUnchecked - checkboxCounts.unchecked;
+  
+  // Track consecutive rounds without task completion (for progress review trigger)
+  const prevRoundsWithoutCompletion = toNumber(state.rounds_without_task_completion, 0);
+  const roundsWithoutTaskCompletion = tasksCompletedSinceLastRound > 0 
+    ? 0 
+    : prevRoundsWithoutCompletion + (iteration > 0 ? 1 : 0);
+  
+  // Progress review threshold: trigger after N rounds of activity without task completion
+  // This catches "productive but unfocused" patterns where agent makes changes but doesn't advance criteria
+  // Default is 4 rounds - enough leeway for prep work but early enough for course correction
+  const needsProgressReview = roundsWithoutTaskCompletion >= progressReviewThreshold 
+    && lastFilesChanged > 0  // Only review if there's actual activity
+    && !allComplete;         // Don't review if all tasks are done
   
   // Calculate productivity score (0-100)
   // This is evidence-based: higher score = more confidence work is happening
@@ -1455,6 +1469,11 @@ async function evaluateKeepaliveLoop({ github, context, core, payload: overrideP
   } else if (shouldStopForMaxIterations) {
     action = 'stop';
     reason = isProductive ? 'max-iterations' : 'max-iterations-unproductive';
+  } else if (needsProgressReview) {
+    // Trigger LLM-based progress review when agent is active but not completing tasks
+    // This allows legitimate prep work while catching scope drift early
+    action = 'review';
+    reason = `progress-review-${roundsWithoutTaskCompletion}`;
   } else if (tasksRemaining) {
     action = 'run';
     reason = iteration >= maxIterations ? 'ready-extended' : 'ready';
@@ -1496,6 +1515,9 @@ async function evaluateKeepaliveLoop({ github, context, core, payload: overrideP
     hasConflict: conflictResult.hasConflict,
     conflictSource: conflictResult.primarySource || null,
     conflictFiles: conflictResult.files || [],
+    // Progress review data for LLM-based alignment check
+    needsProgressReview,
+    roundsWithoutTaskCompletion,
   };
 }
 
@@ -1519,6 +1541,10 @@ async function updateKeepaliveLoopSummary({ github, context, core, inputs }) {
   const failureThreshold = Math.max(1, toNumber(inputs.failureThreshold ?? inputs.failure_threshold, 3));
   const runResult = normalise(inputs.runResult || inputs.run_result);
   const stateTrace = normalise(inputs.trace || inputs.keepalive_trace || '');
+  const roundsWithoutTaskCompletion = toNumber(
+    inputs.roundsWithoutTaskCompletion ?? inputs.rounds_without_task_completion,
+    0,
+  );
 
   // Agent output details (agent-agnostic, with fallback to old codex_ names)
   const agentExitCode = normalise(inputs.agent_exit_code ?? inputs.agentExitCode ?? inputs.codex_exit_code ?? inputs.codexExitCode);
@@ -2058,6 +2084,8 @@ async function updateKeepaliveLoopSummary({ github, context, core, inputs }) {
     // Productivity tracking for evidence-based decisions
     last_files_changed: agentFilesChanged,
     prev_files_changed: toNumber(previousState?.last_files_changed, 0),
+    // Track consecutive rounds without task completion for progress review
+    rounds_without_task_completion: roundsWithoutTaskCompletion,
     // Quality metrics for analysis validation
     last_effort_score: sessionEffortScore,
     last_data_quality: sessionDataQuality,
