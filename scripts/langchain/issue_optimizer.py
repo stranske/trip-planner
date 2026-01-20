@@ -87,11 +87,11 @@ SECTION_TITLES = {
     "implementation": "Implementation Notes",
 }
 
-LIST_ITEM_REGEX = re.compile(r"^\s*[-*+]\s+(.*)$")
+LIST_ITEM_REGEX = re.compile(r"^\s*([-*+]|\d+[.)]|[A-Za-z][.)])\s+(.*)$")
 CHECKBOX_REGEX = re.compile(r"^\[[ xX]\]\s*(.*)$")
 
 SUBJECTIVE_CRITERIA = ("clean", "nice", "good", "fast", "better", "intuitive", "polished")
-SUGGESTIONS_MARKER_PREFIX = "Updated WORKFLOW_OUTPUTS.md suggestions-json:"
+SUGGESTIONS_MARKER_PREFIX = "suggestions-json:"
 
 
 @dataclass
@@ -291,13 +291,25 @@ def _resolve_section(label: str) -> str | None:
 def _parse_sections(body: str) -> dict[str, list[str]]:
     sections: dict[str, list[str]] = {key: [] for key in SECTION_TITLES}
     current: str | None = None
+    in_code_block = False
     for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_code_block = not in_code_block
+        if in_code_block:
+            if current:
+                sections[current].append(line)
+            continue
         heading_match = re.match(r"^\s*#{1,6}\s+(.*)$", line)
         if heading_match:
             section_key = _resolve_section(heading_match.group(1))
             if section_key:
                 current = section_key
                 continue
+        section_key = _resolve_section(stripped)
+        if section_key and stripped:
+            current = section_key
+            continue
         if current:
             sections[current].append(line)
     return sections
@@ -308,7 +320,7 @@ def _strip_checkbox(line: str) -> str:
     match = LIST_ITEM_REGEX.match(stripped)
     if not match:
         return stripped
-    content = match.group(1).strip()
+    content = match.group(match.lastindex).strip()
     checkbox = CHECKBOX_REGEX.match(content)
     if checkbox:
         return checkbox.group(1).strip()
@@ -317,10 +329,17 @@ def _strip_checkbox(line: str) -> str:
 
 def _parse_checklist(lines: list[str]) -> list[str]:
     items: list[str] = []
+    in_code_block = False
     for line in lines:
-        if not line.strip():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_code_block = not in_code_block
             continue
-        if LIST_ITEM_REGEX.match(line.strip()):
+        if in_code_block:
+            continue
+        if not stripped:
+            continue
+        if LIST_ITEM_REGEX.match(stripped):
             value = _strip_checkbox(line)
             if value:
                 items.append(value)
@@ -420,7 +439,7 @@ def _extract_json_payload(text: str) -> str | None:
 def _extract_suggestions_json(comment_body: str) -> dict[str, Any] | None:
     if not comment_body:
         return None
-    marker = "suggestions-json:"
+    marker = SUGGESTIONS_MARKER_PREFIX
     start = comment_body.find(marker)
     if start == -1:
         return None
@@ -442,7 +461,7 @@ def _formatted_output_valid(text: str) -> bool:
 
 
 def _strip_task_marker(text: str) -> str:
-    cleaned = re.sub(r"^\s*[-*+]\s*", "", text)
+    cleaned = re.sub(r"^\s*([-*+]|\d+[.)]|[A-Za-z][.)])\s*", "", text)
     cleaned = re.sub(r"^\s*\[[ xX]\]\s*", "", cleaned)
     return cleaned.strip()
 
