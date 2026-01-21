@@ -759,6 +759,33 @@ function classifyFailureDetails({ action, runResult, summaryReason, agentExitCod
   };
 }
 
+const SOURCE_CONTEXT_HEADINGS = new Set(['context for agent']);
+
+function isCodeFenceLine(line) {
+  return /^(`{3,}|~{3,})/.test(String(line || '').trim());
+}
+
+function parseHeading(line) {
+  const match = String(line || '').match(/^\s*(#{1,6})\s+(.*)$/);
+  if (!match) {
+    return null;
+  }
+  const level = match[1].length;
+  const title = match[2].replace(/\s*:\s*$/, '').trim();
+  if (!title) {
+    return null;
+  }
+  return { level, title };
+}
+
+function isSourceHeading(title) {
+  return /^source\b/i.test(title);
+}
+
+function isSourceContinuationHeading(title) {
+  return SOURCE_CONTEXT_HEADINGS.has(String(title || '').toLowerCase());
+}
+
 /**
  * Extract Source section from PR/issue body that contains links to parent issues/PRs.
  * @param {string} body - PR or issue body text
@@ -766,14 +793,58 @@ function classifyFailureDetails({ action, runResult, summaryReason, agentExitCod
  */
 function extractSourceSection(body) {
   const text = String(body || '');
-  // Match "## Source" or "### Source" section
-  const match = text.match(/##?\s*Source\s*\n([\s\S]*?)(?=\n##|\n---|\n\n\n|$)/i);
-  if (match && match[1]) {
-    const content = match[1].trim();
-    // Only return if it has meaningful content (links to issues/PRs)
-    if (/#\d+|github\.com/.test(content)) {
-      return content;
+  if (!text.trim()) {
+    return null;
+  }
+
+  const lines = text.split('\n');
+  let insideCodeBlock = false;
+  let startIndex = -1;
+  let sourceLevel = null;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (isCodeFenceLine(line)) {
+      insideCodeBlock = !insideCodeBlock;
+      continue;
     }
+    if (insideCodeBlock) {
+      continue;
+    }
+    const heading = parseHeading(line);
+    if (heading && isSourceHeading(heading.title)) {
+      startIndex = i + 1;
+      sourceLevel = heading.level;
+      break;
+    }
+  }
+
+  if (startIndex < 0 || sourceLevel === null) {
+    return null;
+  }
+
+  const captured = [];
+  insideCodeBlock = false;
+
+  for (let i = startIndex; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (isCodeFenceLine(line)) {
+      insideCodeBlock = !insideCodeBlock;
+      captured.push(line);
+      continue;
+    }
+    if (!insideCodeBlock) {
+      const heading = parseHeading(line);
+      if (heading && heading.level <= sourceLevel && !isSourceContinuationHeading(heading.title)) {
+        break;
+      }
+    }
+    captured.push(line);
+  }
+
+  const content = captured.join('\n').trim();
+  if (content && /#\d+|github\.com/i.test(content)) {
+    return content;
   }
   return null;
 }
@@ -1322,6 +1393,7 @@ async function detectRateLimitCancellation({ github, context, runId, core }) {
 async function evaluateKeepaliveLoop({ github, context, core, payload: overridePayload, overridePrNumber, forceRetry }) {
   const payload = overridePayload || context.payload || {};
   const cache = getGithubApiCache({ github, core });
+  let prNumber = overridePrNumber || 0;
   if (cache?.invalidateForWebhook) {
     cache.invalidateForWebhook({
       eventName: context?.eventName,
@@ -1331,7 +1403,7 @@ async function evaluateKeepaliveLoop({ github, context, core, payload: overrideP
     });
   }
   try {
-  let prNumber = overridePrNumber || await resolvePrNumber({ github, context, core, payload });
+  prNumber = overridePrNumber || await resolvePrNumber({ github, context, core, payload });
   if (!prNumber) {
     return {
       prNumber: 0,
@@ -1582,6 +1654,44 @@ async function evaluateKeepaliveLoop({ github, context, core, payload: overrideP
     needsProgressReview,
     roundsWithoutTaskCompletion,
   };
+  } catch (error) {
+    const rateLimitMessage = [error?.message, error?.response?.data?.message]
+      .filter(Boolean)
+      .join(' ');
+    const rateLimitRemaining = toNumber(error?.response?.headers?.['x-ratelimit-remaining'], NaN);
+    const rateLimitHit = hasRateLimitSignal(rateLimitMessage)
+      || (error?.status === 403 && rateLimitRemaining === 0);
+    if (rateLimitHit) {
+      if (core) core.warning('Keepalive loop hit GitHub API rate limit; deferring.');
+      return {
+        prNumber,
+        prRef: '',
+        headSha: '',
+        action: 'defer',
+        reason: 'api-rate-limit',
+        promptMode: 'normal',
+        promptFile: '.github/codex/prompts/keepalive_next_task.md',
+        gateConclusion: '',
+        config: {},
+        iteration: 0,
+        maxIterations: 0,
+        failureThreshold: 0,
+        checkboxCounts: { total: 0, unchecked: 0 },
+        hasAgentLabel: false,
+        agentType: '',
+        taskAppendix: '',
+        keepaliveEnabled: false,
+        stateCommentId: 0,
+        state: {},
+        forceRetry: Boolean(forceRetry),
+        hasConflict: false,
+        conflictSource: null,
+        conflictFiles: [],
+        needsProgressReview: false,
+        roundsWithoutTaskCompletion: 0,
+      };
+    }
+    throw error;
   } finally {
     cache?.emitMetrics?.();
   }
@@ -2393,7 +2503,7 @@ async function markAgentRunning({ github, context, core, inputs }) {
  * @param {object} [params.core] - Optional core for logging
  * @returns {Promise<{matches: Array<{task: string, reason: string, confidence: string}>, summary: string}>}
  */
-async function analyzeTaskCompletion({ github, context, prNumber, baseSha, headSha, taskText, core }) {
+async function analyzeTaskCompletion({ github, context, prNumber, baseSha, headSha, taskText, core, pr }) {
   const matches = [];
   const log = (msg) => core?.info?.(msg) || console.log(msg);
 
@@ -2433,9 +2543,8 @@ async function analyzeTaskCompletion({ github, context, prNumber, baseSha, headS
 
   // Parse tasks into individual items
   const taskLines = taskText.split('\n')
-    .filter(line => /^\s*[-*+]\s*\[\s*\]/.test(line))
     .map(line => {
-      const match = line.match(/^\s*[-*+]\s*\[\s*\]\s*(.+)$/);
+      const match = line.match(/^\s*(?:[-*+]|\d+[.)])\s*\[\s*\]\s*(.+)$/);
       return match ? match[1].trim() : null;
     })
     .filter(Boolean);
@@ -2518,11 +2627,43 @@ async function analyzeTaskCompletion({ github, context, prNumber, baseSha, headS
     }
   });
 
+  function extractIssueNumber(task) {
+    const match = task.match(/#(\d+)|issues\/(\d+)|pull\/(\d+)/i);
+    return match ? (match[1] || match[2] || match[3]) : null;
+  }
+
+  const issuePatternCache = new Map();
+  const buildIssuePattern = (issueNumber) => {
+    if (!issueNumber) {
+      return null;
+    }
+    if (!issuePatternCache.has(issueNumber)) {
+      issuePatternCache.set(issueNumber, new RegExp(`(^|\\D)${issueNumber}(\\D|$)`));
+    }
+    return issuePatternCache.get(issueNumber);
+  };
+
+  const issueMatchesText = (pattern, value) => {
+    if (!pattern) {
+      return false;
+    }
+    return pattern.test(String(value || ''));
+  };
+
   // Match tasks to commits/files
   for (const task of taskLines) {
     const taskLower = task.toLowerCase();
     const taskWords = taskLower.match(/\b[a-z_-]{3,}\b/g) || [];
     const isTestTask = /\b(test|tests|unit\s*test|coverage)\b/i.test(task);
+    const issueNumber = extractIssueNumber(task);
+    const issuePattern = buildIssuePattern(issueNumber);
+    const strippedIssueTask = task
+      .replace(/\[[^\]]*\]\(([^)]+)\)/g, '$1')
+      .replace(/https?:\/\/\S+/gi, '')
+      .replace(/[#\d]/g, '')
+      .replace(/[\[\]().]/g, '')
+      .trim();
+    const isIssueOnlyTask = Boolean(issuePattern) && strippedIssueTask === '';
     
     // Calculate overlap score using expanded keywords (with synonyms)
     const matchingWords = taskWords.filter(w => expandedKeywords.has(w));
@@ -2575,6 +2716,29 @@ async function analyzeTaskCompletion({ github, context, prNumber, baseSha, headS
     let reason = '';
 
     // Exact file match is very high confidence
+    if (isIssueOnlyTask) {
+      const prTitle = pr?.title;
+      const prRef = pr?.head?.ref;
+      const prMatch = issueMatchesText(issuePattern, prTitle) || issueMatchesText(issuePattern, prRef);
+      const commitIssueMatch = commits.some(c => issueMatchesText(issuePattern, c.commit?.message));
+      const fileIssueMatch = filesChanged.some(f => issueMatchesText(issuePattern, f));
+      if (prMatch || commitIssueMatch || fileIssueMatch) {
+        const reasonParts = [];
+        if (prMatch) {
+          reasonParts.push('PR title/branch');
+        }
+        if (commitIssueMatch) {
+          reasonParts.push('commit message');
+        }
+        if (fileIssueMatch) {
+          reasonParts.push('file path');
+        }
+        reason = `Issue ${issueNumber} matched ${reasonParts.join(', ')}`;
+        matches.push({ task, reason, confidence: 'high' });
+        continue;
+      }
+    }
+
     if (exactFileMatch) {
       confidence = 'high';
       const matchedFile = cleanFileRefs.find(ref => filesChanged.some(f => f.toLowerCase().includes(ref)));
@@ -2675,7 +2839,7 @@ async function autoReconcileTasks({ github, context, prNumber, baseSha, headSha,
 
   // Source 2: Commit/file analysis (fallback or supplementary)
   const analysis = await analyzeTaskCompletion({
-    github, context, prNumber, baseSha, headSha, taskText, core
+    github, context, prNumber, baseSha, headSha, taskText, core, pr,
   });
 
   // Add commit-based matches that aren't already covered by LLM
@@ -2709,10 +2873,10 @@ async function autoReconcileTasks({ github, context, prNumber, baseSha, headSha,
   for (const match of highConfidence) {
     // Escape special regex characters in task text
     const escaped = match.task.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`([-*+]\\s*)\\[\\s*\\](\\s*${escaped})`, 'i');
+    const pattern = new RegExp(`(^|\\n)(\\s*(?:[-*+]|\\d+[.)])\\s*)\\[\\s*\\](\\s*${escaped})`, 'i');
     
     if (pattern.test(updatedBody)) {
-      updatedBody = updatedBody.replace(pattern, '$1[x]$2');
+      updatedBody = updatedBody.replace(pattern, '$1$2[x]$3');
       checkedCount++;
       log(`Auto-checked task: ${match.task.slice(0, 50)}... (${match.reason})`);
     }
