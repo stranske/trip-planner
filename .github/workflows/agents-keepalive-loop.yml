@@ -68,6 +68,71 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Handle agent:retry label
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.action == 'labeled' &&
+          github.event.label.name == 'agent:retry'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const { github: retryGithub, withRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'keepalive-loop',
+              capabilities: ['issues:write'],
+            });
+            const prNumber = context.payload.pull_request.number;
+            core.info(`agent:retry label detected on PR #${prNumber} - cleaning up labels`);
+
+            // Remove agent:retry label (so it can be used again later)
+            try {
+              await withRetry((client) =>
+                client.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: 'agent:retry',
+                })
+              );
+              core.info('Removed agent:retry label');
+            } catch (error) {
+              if (error.message.includes('rate limit') || error.status === 403) {
+                core.warning(
+                  `⚠️ Rate limited - could not remove agent:retry label: ${error.message}`
+                );
+              } else if (!error.message.includes('Label does not exist')) {
+                core.warning(`Could not remove agent:retry: ${error.message}`);
+              }
+            }
+
+            // Remove agent:rate-limited label if present
+            try {
+              await withRetry((client) =>
+                client.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: 'agent:rate-limited',
+                })
+              );
+              core.info('Removed agent:rate-limited label');
+            } catch (error) {
+              if (error.message.includes('rate limit') || error.status === 403) {
+                core.warning(
+                  `⚠️ Rate limited - could not remove agent:rate-limited label: ${error.message}`
+                );
+              } else if (!error.message.includes('Label does not exist')) {
+                // Only warn if it's not just "label doesn't exist"
+                core.warning(`Could not remove agent:rate-limited: ${error.message}`);
+              }
+            }
+
+            core.info('Label cleanup complete - proceeding with keepalive evaluation');
+
       - name: Capture timestamps
         id: timestamps
         run: echo "start_ts=$(date -u +%s)" >> "$GITHUB_OUTPUT"
