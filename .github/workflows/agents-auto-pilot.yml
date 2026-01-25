@@ -39,6 +39,7 @@ permissions:
   issues: write
   pull-requests: write  # Needed to create PRs automatically
   actions: write  # Needed for workflow re-dispatch
+  models: read
 
 env:
   # Safety limits
