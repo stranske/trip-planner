@@ -72,7 +72,11 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event.action == 'labeled' && (
         github.event.label.name == 'agents:auto-pilot' ||
-        github.event.label.name == 'agent:codex'
+        github.event.label.name == 'agent:codex' ||
+        contains(github.event.issue.labels.*.name, 'agents:auto-pilot') ||
+        contains(github.event.issue.labels.*.name, 'agent:codex') ||
+        contains(github.event.pull_request.labels.*.name, 'agents:auto-pilot') ||
+        contains(github.event.pull_request.labels.*.name, 'agent:codex')
       )) ||
       (github.event.action == 'closed' &&
        contains(github.event.issue.labels.*.name, 'agents:auto-pilot'))
@@ -100,8 +104,9 @@ jobs:
               labels = context.payload.pull_request.labels.map(l => l.name);
             }
 
-            const hasAutoPilot = labels.includes('agents:auto-pilot');
-            if (!hasAutoPilot && labelName !== 'agents:auto-pilot') {
+            const hasAutoPilot = labels.includes('agents:auto-pilot') || labels.includes('agent:codex');
+            const isAutoPilotTrigger = labelName === 'agents:auto-pilot' || labelName === 'agent:codex';
+            if (!hasAutoPilot && !isAutoPilotTrigger) {
               core.info(`Skipping: auto-pilot not enabled (trigger: ${labelName})`);
               core.setOutput('enabled', 'false');
               return;
