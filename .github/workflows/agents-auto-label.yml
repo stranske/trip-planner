@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
   issues: write
+  models: read
 
 env:
   # Threshold for auto-applying labels (very high confidence)
