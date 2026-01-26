@@ -120,6 +120,10 @@ function buildAttemptEntry({
   gateConclusion,
   errorCategory,
   errorType,
+  tasksTotal,
+  tasksUnchecked,
+  tasksCompletedDelta,
+  allComplete,
 }) {
   const actionValue = normalise(action) || 'unknown';
   const reasonValue = normalise(reason) || actionValue;
@@ -146,6 +150,18 @@ function buildAttemptEntry({
   }
   if (errorType) {
     entry.error_type = normalise(errorType);
+  }
+  if (Number.isFinite(tasksTotal)) {
+    entry.tasks_total = Math.max(0, Math.floor(tasksTotal));
+  }
+  if (Number.isFinite(tasksUnchecked)) {
+    entry.tasks_unchecked = Math.max(0, Math.floor(tasksUnchecked));
+  }
+  if (Number.isFinite(tasksCompletedDelta)) {
+    entry.tasks_completed_delta = Math.max(0, Math.floor(tasksCompletedDelta));
+  }
+  if (typeof allComplete === 'boolean') {
+    entry.all_complete = allComplete;
   }
 
   return entry;
@@ -1763,6 +1779,10 @@ async function evaluateKeepaliveLoop({ github, context, core, payload: overrideP
     const maxIterations = toNumber(config.max_iterations ?? state.max_iterations, 5);
     const failureThreshold = toNumber(config.failure_threshold ?? state.failure_threshold, 3);
     const progressReviewThreshold = toNumber(config.progress_review_threshold ?? state.progress_review_threshold, 4);
+    const completeGateFailureMax = Math.max(
+      1,
+      toNumber(config.complete_gate_failure_rounds ?? state.complete_gate_failure_rounds_max, 2),
+    );
 
     // Evidence-based productivity tracking
     // Uses multiple signals to determine if work is being done:
@@ -1789,11 +1809,16 @@ async function evaluateKeepaliveLoop({ github, context, core, payload: overrideP
       ? 0
       : prevRoundsWithoutCompletion + (iteration > 0 ? 1 : 0);
 
+    const prevCompleteGateFailureRounds = toNumber(state.complete_gate_failure_rounds, 0);
+    const completeGateFailureRounds = allComplete && gateNormalized !== 'success'
+      ? prevCompleteGateFailureRounds + 1
+      : 0;
+
     // Progress review threshold: trigger after N rounds of activity without task completion
     // This catches "productive but unfocused" patterns where agent makes changes but doesn't advance criteria
     // Default is 4 rounds - enough leeway for prep work but early enough for course correction
     const needsProgressReview = roundsWithoutTaskCompletion >= progressReviewThreshold
-      && !allComplete;         // Don't review if all tasks are done
+      && (!allComplete || gateNormalized !== 'success');
 
     // Calculate productivity score (0-100)
     // This is evidence-based: higher score = more confidence work is happening
@@ -1854,7 +1879,10 @@ async function evaluateKeepaliveLoop({ github, context, core, payload: overrideP
       action = 'stop';
       reason = 'no-checklists';
     } else if (gateNormalized !== 'success') {
-      if (gateNormalized === 'cancelled') {
+      if (allComplete && completeGateFailureRounds >= completeGateFailureMax) {
+        action = 'stop';
+        reason = 'complete-gate-failure-max';
+      } else if (gateNormalized === 'cancelled') {
         gateRateLimit = await detectRateLimitCancellation({
           github,
           context,
@@ -2023,20 +2051,73 @@ async function updateKeepaliveLoopSummary({ github, context, core, inputs }) {
     const gateConclusion = normalise(inputs.gateConclusion || inputs.gate_conclusion);
     const action = normalise(inputs.action);
     const reason = normalise(inputs.reason);
-    const tasksTotal = toNumber(inputs.tasksTotal ?? inputs.tasks_total, 0);
-    const tasksUnchecked = toNumber(inputs.tasksUnchecked ?? inputs.tasks_unchecked, 0);
-    const keepaliveEnabled = toBool(inputs.keepaliveEnabled ?? inputs.keepalive_enabled, false);
-    const autofixEnabled = toBool(inputs.autofixEnabled ?? inputs.autofix_enabled, false);
+    const tasksTotalInput = inputs.tasksTotal ?? inputs.tasks_total;
+    const tasksUncheckedInput = inputs.tasksUnchecked ?? inputs.tasks_unchecked;
+    const keepaliveEnabledInput = inputs.keepaliveEnabled ?? inputs.keepalive_enabled;
+    const autofixEnabledInput = inputs.autofixEnabled ?? inputs.autofix_enabled;
+    const iterationInput = inputs.iteration;
+    const maxIterationsInput = inputs.maxIterations ?? inputs.max_iterations;
+    const failureThresholdInput = inputs.failureThreshold ?? inputs.failure_threshold;
+    const roundsWithoutTaskCompletionInput =
+      inputs.roundsWithoutTaskCompletion ?? inputs.rounds_without_task_completion;
     const agentType = normalise(inputs.agent_type ?? inputs.agentType) || 'codex';
-    const iteration = toNumber(inputs.iteration, 0);
-    const maxIterations = toNumber(inputs.maxIterations ?? inputs.max_iterations, 0);
-    const failureThreshold = Math.max(1, toNumber(inputs.failureThreshold ?? inputs.failure_threshold, 3));
     const runResult = normalise(inputs.runResult || inputs.run_result);
     const stateTrace = normalise(inputs.trace || inputs.keepalive_trace || '');
-    const roundsWithoutTaskCompletion = toNumber(
-      inputs.roundsWithoutTaskCompletion ?? inputs.rounds_without_task_completion,
-      0,
+
+    const { state: previousState, commentId } = await loadKeepaliveState({
+      github,
+      context,
+      prNumber,
+      trace: stateTrace,
+    });
+
+    const hasTasksTotalInput = tasksTotalInput !== undefined && tasksTotalInput !== '';
+    const hasTasksUncheckedInput = tasksUncheckedInput !== undefined && tasksUncheckedInput !== '';
+    const hasIterationInput = iterationInput !== undefined && iterationInput !== '';
+    const hasMaxIterationsInput = maxIterationsInput !== undefined && maxIterationsInput !== '';
+    const hasFailureThresholdInput = failureThresholdInput !== undefined && failureThresholdInput !== '';
+    const hasRoundsWithoutTaskCompletionInput =
+      roundsWithoutTaskCompletionInput !== undefined && roundsWithoutTaskCompletionInput !== '';
+    const hasKeepaliveEnabledInput = keepaliveEnabledInput !== undefined && keepaliveEnabledInput !== '';
+    const hasAutofixEnabledInput = autofixEnabledInput !== undefined && autofixEnabledInput !== '';
+
+    const tasksTotal = hasTasksTotalInput
+      ? toNumber(tasksTotalInput, 0)
+      : toNumber(previousState?.tasks?.total, 0);
+    const tasksUnchecked = hasTasksUncheckedInput
+      ? toNumber(tasksUncheckedInput, 0)
+      : toNumber(previousState?.tasks?.unchecked, 0);
+    const keepaliveEnabledFallback = toBool(
+      previousState?.keepalive_enabled ??
+        previousState?.keepaliveEnabled ??
+        previousState?.keepalive,
+      Boolean(previousState?.running),
     );
+    const keepaliveEnabled = hasKeepaliveEnabledInput
+      ? toBool(keepaliveEnabledInput, keepaliveEnabledFallback)
+      : keepaliveEnabledFallback;
+    const autofixEnabledFallback = toBool(
+      previousState?.autofix_enabled ?? previousState?.autofixEnabled ?? previousState?.autofix,
+      false,
+    );
+    const autofixEnabled = hasAutofixEnabledInput
+      ? toBool(autofixEnabledInput, autofixEnabledFallback)
+      : autofixEnabledFallback;
+    const iteration = hasIterationInput
+      ? toNumber(iterationInput, 0)
+      : toNumber(previousState?.iteration, 0);
+    const maxIterations = hasMaxIterationsInput
+      ? toNumber(maxIterationsInput, 0)
+      : toNumber(previousState?.max_iterations, 0);
+    const failureThreshold = Math.max(
+      1,
+      hasFailureThresholdInput
+        ? toNumber(failureThresholdInput, 3)
+        : toNumber(previousState?.failure_threshold, 3),
+    );
+    const roundsWithoutTaskCompletion = hasRoundsWithoutTaskCompletionInput
+      ? toNumber(roundsWithoutTaskCompletionInput, 0)
+      : toNumber(previousState?.rounds_without_task_completion, 0);
 
     // Agent output details (agent-agnostic, with fallback to old codex_ names)
     const agentExitCode = normalise(inputs.agent_exit_code ?? inputs.agentExitCode ?? inputs.codex_exit_code ?? inputs.codexExitCode);
@@ -2096,12 +2177,6 @@ async function updateKeepaliveLoopSummary({ github, context, core, inputs }) {
       ...timeoutWarningConfig,
     });
 
-    const { state: previousState, commentId } = await loadKeepaliveState({
-      github,
-      context,
-      prNumber,
-      trace: stateTrace,
-    });
     const previousFailure = previousState?.failure || {};
     const prBody = await fetchPrBody({ github, context, prNumber, core });
     const focusSections = prBody ? normaliseChecklistSections(parseScopeTasksAcceptanceSections(prBody)) : {};
@@ -2238,6 +2313,20 @@ async function updateKeepaliveLoopSummary({ github, context, core, inputs }) {
     const errorRecovery = failureDetails.recovery;
     const tasksComplete = Math.max(0, tasksTotal - tasksUnchecked);
     const allTasksComplete = tasksUnchecked === 0 && tasksTotal > 0;
+    const previousCompleteGateFailureRounds = toNumber(previousState?.complete_gate_failure_rounds, 0);
+    const completeGateFailureMax = Math.max(
+      1,
+      toNumber(
+        inputs.completeGateFailureRoundsMax ??
+          inputs.complete_gate_failure_rounds_max ??
+          previousState?.complete_gate_failure_rounds_max,
+        2,
+      ),
+    );
+    const completeGateFailureRounds =
+      allTasksComplete && gateConclusion && gateConclusion !== 'success'
+        ? previousCompleteGateFailureRounds + 1
+        : 0;
     const metricsIteration = action === 'run' ? currentIteration + 1 : currentIteration;
     const durationMs = resolveDurationMs({
       durationMs: toOptionalNumber(inputs.duration_ms ?? inputs.durationMs),
@@ -2565,8 +2654,11 @@ async function updateKeepaliveLoopSummary({ github, context, core, inputs }) {
     const focusTask = currentFocus || fallbackFocus;
     const shouldRecordAttempt = action === 'run' && reason !== 'verify-acceptance';
     let attemptedTasks = normaliseAttemptedTasks(previousState?.attempted_tasks);
-    if (shouldRecordAttempt && focusTask) {
-      attemptedTasks = updateAttemptedTasks(attemptedTasks, focusTask, metricsIteration);
+    if (shouldRecordAttempt) {
+      const attemptLabel = focusTask || (tasksCompletedThisRound > 0 ? 'checkbox-progress' : 'no-focus');
+      if (attemptLabel) {
+        attemptedTasks = updateAttemptedTasks(attemptedTasks, attemptLabel, metricsIteration);
+      }
     }
 
     let verification = previousState?.verification && typeof previousState.verification === 'object'
@@ -2605,12 +2697,16 @@ async function updateKeepaliveLoopSummary({ github, context, core, inputs }) {
       prev_files_changed: toNumber(previousState?.last_files_changed, 0),
       // Track consecutive rounds without task completion for progress review
       rounds_without_task_completion: roundsWithoutTaskCompletion,
+      complete_gate_failure_rounds: completeGateFailureRounds,
+      complete_gate_failure_rounds_max: completeGateFailureMax,
       // Quality metrics for analysis validation
       last_effort_score: sessionEffortScore,
       last_data_quality: sessionDataQuality,
       attempted_tasks: attemptedTasks,
       last_focus: focusTask || '',
       verification,
+      keepalive_enabled: keepaliveEnabled,
+      autofix_enabled: autofixEnabled,
       timeout: {
         resolved_minutes: timeoutStatus.resolvedMinutes,
         default_minutes: timeoutStatus.defaultMinutes,
@@ -2634,6 +2730,10 @@ async function updateKeepaliveLoopSummary({ github, context, core, inputs }) {
       gateConclusion,
       errorCategory,
       errorType,
+      tasksTotal,
+      tasksUnchecked,
+      tasksCompletedDelta: tasksCompletedThisRound,
+      allComplete: allTasksComplete,
     });
     newState.attempts = updateAttemptHistory(previousState?.attempts, attemptEntry);
 
