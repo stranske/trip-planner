@@ -284,11 +284,30 @@ jobs:
               ])
               .write();
 
+      - name: Resolve Workflows default branch
+        id: workflows_ref
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const { withRetry } = await createTokenAwareRetry({ github, core });
+            const { data } = await withRetry((client) =>
+              client.rest.repos.get({
+                owner: 'stranske',
+                repo: 'Workflows'
+              })
+            );
+            if (!data?.default_branch) {
+              core.setFailed('Could not determine Workflows default branch');
+              return;
+            }
+            core.setOutput('ref', data.default_branch);
+
       - name: Checkout Workflows scripts
         uses: actions/checkout@v6
         with:
           repository: stranske/Workflows
-          ref: main
+          ref: ${{ steps.workflows_ref.outputs.ref }}
           sparse-checkout: |
             .github/scripts
           sparse-checkout-cone-mode: false
@@ -316,7 +335,11 @@ jobs:
             }
             const { owner, repo } = context.repo;
             const { data } = await withRetry(() => github.rest.repos.get({ owner, repo }));
-            core.setOutput('branch', data.default_branch || 'main');
+            if (!data.default_branch) {
+              core.setFailed('Repository default branch not available');
+              return;
+            }
+            core.setOutput('branch', data.default_branch);
 
       - name: Check parallel allowance
         id: parallel

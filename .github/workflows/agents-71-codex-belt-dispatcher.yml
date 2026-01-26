@@ -152,11 +152,30 @@ jobs:
         run: |
           echo "dry_run=${{ inputs.dry_run }}" >>"$GITHUB_OUTPUT"
 
+      - name: Resolve Workflows default branch
+        id: workflows_ref
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const { withRetry } = await createTokenAwareRetry({ github, core });
+            const { data } = await withRetry((client) =>
+              client.rest.repos.get({
+                owner: 'stranske',
+                repo: 'Workflows'
+              })
+            );
+            if (!data?.default_branch) {
+              core.setFailed('Could not determine Workflows default branch');
+              return;
+            }
+            core.setOutput('ref', data.default_branch);
+
       - name: Checkout (for retry helpers)
         uses: actions/checkout@v6
         with:
           repository: stranske/Workflows
-          ref: main
+          ref: ${{ steps.workflows_ref.outputs.ref }}
           sparse-checkout: |
             .github/scripts/github-api-with-retry.js
           sparse-checkout-cone-mode: false
@@ -218,7 +237,11 @@ jobs:
             ]);
 
             const { data: repoInfo } = await withRetry(() => github.rest.repos.get({ owner, repo }));
-            const base = repoInfo.default_branch || 'main';
+            const base = repoInfo.default_branch;
+            if (!base) {
+              core.setFailed('Repository default branch not available');
+              return;
+            }
             const branch = `codex/issue-${issueNumber}`;
 
             core.setOutput('issue', String(issueNumber));
