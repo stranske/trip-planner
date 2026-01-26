@@ -26,7 +26,7 @@ on:
       pr_number:
         description: 'PR number to verify (must be merged)'
         required: true
-        type: number
+        type: string
       mode:
         description: 'Verification mode'
         required: true

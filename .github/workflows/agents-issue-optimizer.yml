@@ -8,7 +8,7 @@ on:
       issue_number:
         description: "Issue number to optimize"
         required: true
-        type: number
+        type: string
       phase:
         description: "Phase to run (analyze, apply, or format)"
         required: true
