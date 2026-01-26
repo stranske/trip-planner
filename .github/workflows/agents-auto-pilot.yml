@@ -20,7 +20,7 @@ on:
       issue_number:
         description: "Issue number to auto-pilot"
         required: true
-        type: number
+        type: string
       force_step:
         description: "Force a specific step (optional, leave as 'auto' for normal flow)"
         required: false

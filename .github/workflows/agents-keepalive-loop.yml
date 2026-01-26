@@ -12,7 +12,7 @@ on:
       pr_number:
         description: 'PR number to force retry'
         required: true
-        type: number
+        type: string
       force_retry:
         description: 'Force retry even if gate is cancelled/deferred'
         required: false
