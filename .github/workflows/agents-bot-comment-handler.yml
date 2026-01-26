@@ -93,9 +93,23 @@ jobs:
               // Only run if Gate succeeded and PR has agent:* label
               const workflowRun = context.payload.workflow_run;
 
-              // Skip main branch
-              if (workflowRun.head_branch === 'main') {
-                console.log('Skipping main branch');
+              let defaultBranch = context.payload.repository?.default_branch;
+              if (!defaultBranch) {
+                const repoResponse = await github.rest.repos.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo
+                });
+                defaultBranch = repoResponse.data?.default_branch;
+              }
+              if (!defaultBranch) {
+                console.log('Could not determine default branch; skipping.');
+                core.setOutput('should_run', 'false');
+                return;
+              }
+
+              // Skip default branch
+              if (workflowRun.head_branch === defaultBranch) {
+                console.log(`Skipping default branch ${defaultBranch}`);
                 core.setOutput('should_run', 'false');
                 return;
               }
@@ -153,7 +167,7 @@ jobs:
     name: Handle bot comments
     needs: resolve
     if: vars.USE_CONSOLIDATED_WORKFLOWS != 'true' && needs.resolve.outputs.should_run == 'true'
-    uses: stranske/Workflows/.github/workflows/reusable-bot-comment-handler.yml@main
+    uses: stranske/Workflows/.github/workflows/reusable-bot-comment-handler.yml@v1
     with:
       pr_number: ${{ needs.resolve.outputs.pr_number }}
       dry_run: ${{ inputs.dry_run == true }}

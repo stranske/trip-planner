@@ -353,7 +353,7 @@ jobs:
       - mark-running
     # Only run for agent:codex label
     if: needs.evaluate.outputs.agent_type == 'codex'
-    uses: stranske/Workflows/.github/workflows/reusable-codex-run.yml@main
+    uses: stranske/Workflows/.github/workflows/reusable-codex-run.yml@v1
     secrets:
       CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
       # Use KEEPALIVE_APP for isolated rate limit pool (5000/hr)
@@ -385,7 +385,7 @@ jobs:
   #     - evaluate
   #     - preflight
   #   if: needs.evaluate.outputs.agent_type == 'claude'
-  #   uses: stranske/Workflows/.github/workflows/reusable-claude-run.yml@main
+  #   uses: stranske/Workflows/.github/workflows/reusable-claude-run.yml@v1
   #   ...
 
   # Progress review: LLM-based check when agent is active but not completing tasks

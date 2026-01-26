@@ -311,6 +311,17 @@ jobs:
         with:
           github-token: ${{ steps.select-token.outputs.token }}
           script: |
+            const fs = require('fs');
+            const retryHelperPath = './.github/scripts/github-api-with-retry.js';
+            const retryHelpers = fs.existsSync(retryHelperPath)
+              ? require(retryHelperPath)
+              : {
+                  withRetry: (fn) => fn(),
+                  paginateWithRetry: (githubInstance, method, params) =>
+                    githubInstance.paginate(method, params),
+                };
+            const { withRetry } = retryHelpers;
+
             const title = process.env.ISSUE_TITLE;
             const body = process.env.ISSUE_BODY;
 
@@ -319,13 +330,13 @@ jobs:
               return;
             }
 
-            const issue = await github.rest.issues.create({
+            const issue = await withRetry(() => github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: title,
               body: body,
               labels: ['follow-up', 'agents:optimize']
-            });
+            }));
 
             core.info(`Created issue #${issue.data.number}`);
             core.setOutput('issue_number', issue.data.number);
@@ -340,6 +351,17 @@ jobs:
         with:
           github-token: ${{ steps.select-token.outputs.token }}
           script: |
+            const fs = require('fs');
+            const retryHelperPath = './.github/scripts/github-api-with-retry.js';
+            const retryHelpers = fs.existsSync(retryHelperPath)
+              ? require(retryHelperPath)
+              : {
+                  withRetry: (fn) => fn(),
+                  paginateWithRetry: (githubInstance, method, params) =>
+                    githubInstance.paginate(method, params),
+                };
+            const { withRetry } = retryHelpers;
+
             const issueNumber = process.env.ISSUE_NUMBER;
             const issueUrl = process.env.ISSUE_URL;
 
@@ -356,12 +378,12 @@ jobs:
               '> Or work on it manually - the choice is yours!'
             ].join('\n');
 
-            await github.rest.issues.createComment({
+            await withRetry(() => github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
               body: body
-            });
+            }));
 
       - name: Remove trigger label
         if: steps.check-merged.outputs.merged == 'true'
@@ -370,13 +392,24 @@ jobs:
         with:
           github-token: ${{ steps.select-token.outputs.token }}
           script: |
+            const fs = require('fs');
+            const retryHelperPath = './.github/scripts/github-api-with-retry.js';
+            const retryHelpers = fs.existsSync(retryHelperPath)
+              ? require(retryHelperPath)
+              : {
+                  withRetry: (fn) => fn(),
+                  paginateWithRetry: (githubInstance, method, params) =>
+                    githubInstance.paginate(method, params),
+                };
+            const { withRetry } = retryHelpers;
+
             try {
-              await github.rest.issues.removeLabel({
+              await withRetry(() => github.rest.issues.removeLabel({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.payload.pull_request.number,
                 name: 'verify:create-issue'
-              });
+              }));
               core.info('Removed verify:create-issue label');
             } catch (error) {
               core.warning('Could not remove label: ' + error.message);
