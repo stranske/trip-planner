@@ -1,0 +1,83 @@
+name: Keepalive Loop Reporter
+
+on:
+  workflow_run:
+    workflows: ["Agents Keepalive Loop"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: >-
+    keepalive-loop-reporter-${{ github.event.workflow_run.pull_requests[0].number ||
+    github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Report keepalive completion
+    if: vars.USE_CONSOLIDATED_WORKFLOWS != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout keepalive scripts
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            .github/scripts
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+
+      - name: Update summary for cancelled/failed runs
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const run = context.payload?.workflow_run || {};
+            const prNumber = Number(run.pull_requests?.[0]?.number || 0);
+            if (!prNumber) {
+              core.info('No PR context found; skipping keepalive post summary.');
+              return;
+            }
+
+            const conclusion = String(run.conclusion || run.status || '').toLowerCase();
+            if (!conclusion || conclusion === 'success') {
+              core.info(
+                `Keepalive run conclusion=${conclusion || 'unknown'}; ` +
+                'no post summary needed.'
+              );
+              return;
+            }
+
+            const { loadKeepaliveState } = require('./.github/scripts/keepalive_state.js');
+            const { updateKeepaliveLoopSummary } = require('./.github/scripts/keepalive_loop.js');
+
+            const { state } = await loadKeepaliveState({ github, context, prNumber, trace: '' });
+            if (!state || state.running !== true) {
+              core.info('Keepalive state not marked as running; skipping post summary.');
+              return;
+            }
+
+            const inputs = {
+              pr_number: prNumber,
+              action: 'run',
+              reason: '',
+              gate_conclusion: state.gate_conclusion || '',
+              iteration: state.iteration || 0,
+              max_iterations: state.max_iterations || 0,
+              failure_threshold: state.failure_threshold || 3,
+              tasks_total: state.tasks?.total ?? 0,
+              tasks_unchecked: state.tasks?.unchecked ?? 0,
+              keepalive_enabled: state.keepalive_enabled ?? 'true',
+              autofix_enabled: state.autofix_enabled ?? '',
+              agent_type: state.agent_type || 'codex',
+              trace: state.trace || '',
+              run_result: conclusion,
+              run_url: run.html_url || '',
+              rounds_without_task_completion: state.rounds_without_task_completion || 0,
+            };
+
+            await updateKeepaliveLoopSummary({ github, context, core, inputs });
