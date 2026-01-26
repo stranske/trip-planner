@@ -284,6 +284,12 @@ jobs:
               ])
               .write();
 
+      - name: Checkout repo (for retry helpers)
+        uses: actions/checkout@v6
+        with:
+          token: ${{ env.GH_BELT_TOKEN }}
+          fetch-depth: 1
+
       - name: Resolve Workflows default branch
         id: workflows_ref
         uses: actions/github-script@v8
