@@ -17,6 +17,9 @@ env:
   # 0.92 = very high similarity required, reduces false positives from
   # issues in the same domain/feature area that share vocabulary
   SIMILARITY_THRESHOLD: "0.92"
+  LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+  LANGCHAIN_TRACING_V2: "true"
+  LANGCHAIN_PROJECT: workflows-agents
 
 jobs:
   dedup:
