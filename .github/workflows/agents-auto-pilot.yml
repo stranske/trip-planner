@@ -47,6 +47,9 @@ env:
   MAX_WALL_TIME_HOURS: 4
   AUTOPILOT_METRICS_LOG_PATH: .agents/autopilot-metrics.ndjson
   AUTOPILOT_METRICS_SUMMARY_PATH: .agents/autopilot-metrics-summary.ndjson
+  LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+  LANGCHAIN_TRACING_V2: "true"
+  LANGCHAIN_PROJECT: workflows-agents
 
 concurrency:
   group: >-

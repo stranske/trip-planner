@@ -12,6 +12,11 @@ permissions:
   issues: write
   models: read
 
+env:
+  LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+  LANGCHAIN_TRACING_V2: "true"
+  LANGCHAIN_PROJECT: workflows-agents
+
 jobs:
   capability-check:
     runs-on: ubuntu-latest
