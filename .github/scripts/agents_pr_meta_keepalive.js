@@ -211,9 +211,15 @@ function extractIssueNumberFromPull(pull) {
   }
 
   for (const match of bodyText.matchAll(/#([0-9]+)/g)) {
-    if (match[1]) {
-      candidates.push(match[1]);
+    if (!match[1]) {
+      continue;
     }
+    const before = bodyText.slice(Math.max(0, match.index - 200), match.index);
+    const token = before.split(/\s/).pop() || '';
+    if (token.includes('/')) {
+      continue;
+    }
+    candidates.push(match[1]);
   }
 
   for (const value of candidates) {
