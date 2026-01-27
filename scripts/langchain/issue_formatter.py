@@ -185,10 +185,10 @@ def _normalize_checklist_lines(lines: list[str]) -> list[str]:
         stripped = raw.strip()
         if stripped.startswith("```"):
             in_fence = not in_fence
-            cleaned.append(raw)
             continue
         if in_fence:
-            cleaned.append(raw)
+            continue
+        if stripped in {"---", "<details>", "</details>"}:
             continue
         if not stripped:
             continue
