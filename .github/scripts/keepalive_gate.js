@@ -2,6 +2,7 @@
 
 const { paginateWithBackoff, withBackoff } = require('./api-helpers.js');
 const { createGithubApiCache } = require('./github-api-cache-client');
+const { ensureRateLimitWrapped } = require('./github-rate-limited-wrapper.js');
 
 const KEEPALIVE_LABEL = 'agents:keepalive';
 const AGENT_LABEL_PREFIX = 'agent:';
@@ -1130,7 +1131,16 @@ async function evaluateKeepaliveGate({ core, github, context, options = {} }) {
 }
 
 module.exports = {
-  evaluateKeepaliveGate,
-  countActive,
-  evaluateRunCapForPr,
+  evaluateKeepaliveGate: async function ({ core, github: rawGithub, context, options = {} }) {
+    const github = await ensureRateLimitWrapped({ github: rawGithub, core, env: process.env });
+    return evaluateKeepaliveGate({ core, github, context, options });
+  },
+  countActive: async function ({ github: rawGithub, core, ...rest }) {
+    const github = await ensureRateLimitWrapped({ github: rawGithub, core, env: process.env });
+    return countActive({ github, core, ...rest });
+  },
+  evaluateRunCapForPr: async function ({ github: rawGithub, core, ...rest }) {
+    const github = await ensureRateLimitWrapped({ github: rawGithub, core, env: process.env });
+    return evaluateRunCapForPr({ github, core, ...rest });
+  },
 };
