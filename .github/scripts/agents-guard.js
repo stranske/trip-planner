@@ -18,6 +18,8 @@ const ALLOW_REMOVED_PATHS = new Set(
     // Issue intake now serves as the sole public entry point; the
     // ChatGPT wrapper was intentionally removed.
     '.github/workflows/agents-63-chatgpt-issue-sync.yml',
+    // Redundant issue intake workflow removed in favor of the primary entrypoint.
+    '.github/workflows/agents-63-issue-intake.yml',
     // Clean up retired agent workflows from .github/workflows to reduce noise.
     '.github/workflows/agents-64-pr-comment-commands.yml',
     '.github/workflows/agents-74-pr-body-writer.yml',

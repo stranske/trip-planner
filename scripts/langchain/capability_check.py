@@ -279,32 +279,50 @@ def _fallback_classify(
     )
 
 
-def classify_capabilities(tasks: list[str], acceptance: str) -> CapabilityCheckResult:
+def _normalize_tasks_input(tasks: list[str] | str | None) -> list[str]:
+    if tasks is None:
+        return []
+    if isinstance(tasks, list):
+        return [str(item).strip() for item in tasks if str(item).strip()]
+    if isinstance(tasks, str):
+        parsed = _parse_tasks_from_text(tasks)
+        if parsed:
+            return parsed
+        return [tasks.strip()] if tasks.strip() else []
+    return []
+
+
+def classify_capabilities(tasks: list[str] | str, acceptance: str) -> CapabilityCheckResult:
+    normalized_tasks = _normalize_tasks_input(tasks)
     client_info = _get_llm_client()
     if not client_info:
-        return _fallback_classify(tasks, acceptance, "LLM provider unavailable")
+        return _fallback_classify(normalized_tasks, acceptance, "LLM provider unavailable")
 
     client, provider_name = client_info
     try:
         from langchain_core.prompts import ChatPromptTemplate
     except ImportError:
-        result = _fallback_classify(tasks, acceptance, "langchain-core not installed")
+        result = _fallback_classify(
+            normalized_tasks, acceptance, "langchain-core not installed"
+        )
         result.provider_used = provider_name
         return result
 
     template = ChatPromptTemplate.from_template(AGENT_CAPABILITY_CHECK_PROMPT)
     chain = template | client
-    response = chain.invoke(_prepare_prompt_values(tasks, acceptance))
+    response = chain.invoke(_prepare_prompt_values(normalized_tasks, acceptance))
     content = getattr(response, "content", None) or str(response)
     payload = _extract_json_payload(content)
     if not payload:
-        result = _fallback_classify(tasks, acceptance, "LLM response missing JSON payload")
+        result = _fallback_classify(
+            normalized_tasks, acceptance, "LLM response missing JSON payload"
+        )
         result.provider_used = provider_name
         return result
     try:
         data = json.loads(payload)
     except json.JSONDecodeError:
-        result = _fallback_classify(tasks, acceptance, "LLM response JSON parse failed")
+        result = _fallback_classify(normalized_tasks, acceptance, "LLM response JSON parse failed")
         result.provider_used = provider_name
         return result
 
