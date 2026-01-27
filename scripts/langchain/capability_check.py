@@ -302,9 +302,7 @@ def classify_capabilities(tasks: list[str] | str, acceptance: str) -> Capability
     try:
         from langchain_core.prompts import ChatPromptTemplate
     except ImportError:
-        result = _fallback_classify(
-            normalized_tasks, acceptance, "langchain-core not installed"
-        )
+        result = _fallback_classify(normalized_tasks, acceptance, "langchain-core not installed")
         result.provider_used = provider_name
         return result
 
