@@ -32,13 +32,9 @@ def get_mypy_python_version() -> str | None:
         content = pyproject_path.read_text()
         data = tomlkit.parse(content)
         tool_raw = data.get("tool")
-        tool: Mapping[str, object] = (
-            tool_raw if isinstance(tool_raw, Mapping) else {}
-        )
+        tool: Mapping[str, object] = tool_raw if isinstance(tool_raw, Mapping) else {}
         mypy_raw = tool.get("mypy")
-        mypy: Mapping[str, object] = (
-            mypy_raw if isinstance(mypy_raw, Mapping) else {}
-        )
+        mypy: Mapping[str, object] = mypy_raw if isinstance(mypy_raw, Mapping) else {}
         version = mypy.get("python_version")
         # Validate type before conversion - TOML can parse various types
         if isinstance(version, (str, int, float)):

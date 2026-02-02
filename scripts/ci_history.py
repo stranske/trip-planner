@@ -61,7 +61,12 @@ def _build_history_record(
     metrics_path: Path,
     metrics_from_file: bool,
 ) -> dict[str, Any]:
-    timestamp = _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    timestamp = (
+        _dt.datetime.now(_dt.UTC)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
     summary = metrics.get("summary", {})
     failures = metrics.get("failures", [])
 
@@ -87,7 +92,12 @@ def _build_history_record(
 
 
 def _build_classification_payload(metrics: dict[str, Any]) -> dict[str, Any]:
-    timestamp = _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    timestamp = (
+        _dt.datetime.now(_dt.UTC)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
     failures = metrics.get("failures", []) or []
     counts = Counter(entry.get("status", "unknown") for entry in failures)
     payload: dict[str, Any] = {
@@ -116,14 +126,19 @@ def main() -> int:
     if classification_env is None:
         classification_env = os.environ.get("ENABLE_CLASSIFICATION_FLAG")
     classification_flag = _truthy(classification_env)
-    classification_out = Path(os.environ.get("CLASSIFICATION_OUT", _DEFAULT_CLASSIFICATION))
+    classification_out = Path(
+        os.environ.get("CLASSIFICATION_OUT", _DEFAULT_CLASSIFICATION)
+    )
 
     try:
         metrics, from_file = _load_metrics(junit_path, metrics_path)
     except FileNotFoundError as exc:
         print(str(exc), file=sys.stderr)
         if _running_in_ci():
-            print("Skipping CI history append; no JUnit/metrics report found.", file=sys.stderr)
+            print(
+                "Skipping CI history append; no JUnit/metrics report found.",
+                file=sys.stderr,
+            )
             return 0
         return 1
 

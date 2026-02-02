@@ -252,7 +252,11 @@ class ComparisonRunner:
 
     @classmethod
     def from_environment(
-        cls, context: str, diff: str | None, model1: str | None = None, model2: str | None = None
+        cls,
+        context: str,
+        diff: str | None,
+        model1: str | None = None,
+        model2: str | None = None,
     ) -> ComparisonRunner:
         return cls(
             context=context,
@@ -278,7 +282,9 @@ class ComparisonRunner:
 def _prepare_prompt(context: str, diff: str | None) -> str:
     prompt = _load_prompt()
     diff_block = diff.strip() if diff and diff.strip() else "(diff unavailable)"
-    context_block = context.strip() if context and context.strip() else "(context unavailable)"
+    context_block = (
+        context.strip() if context and context.strip() else "(context unavailable)"
+    )
     return prompt.format(context=context_block, diff=diff_block)
 
 
@@ -379,7 +385,9 @@ def _create_followup_issue(
     if pr_number:
         title = f"LLM evaluation concerns for PR #{pr_number}"
 
-    payload = json.dumps({"title": title, "body": body, "labels": labels}).encode("utf-8")
+    payload = json.dumps({"title": title, "body": body, "labels": labels}).encode(
+        "utf-8"
+    )
     request = urllib.request.Request(
         f"https://api.github.com/repos/{repo}/issues",
         data=payload,
@@ -470,7 +478,14 @@ def _is_auth_error(exc: Exception) -> bool:
     """Check if an exception is an authentication/authorization error."""
     exc_str = str(exc).lower()
     # Common auth error patterns from various LLM APIs
-    auth_patterns = ["401", "unauthorized", "forbidden", "403", "permission", "authentication"]
+    auth_patterns = [
+        "401",
+        "unauthorized",
+        "forbidden",
+        "403",
+        "permission",
+        "authentication",
+    ]
     return any(pattern in exc_str for pattern in auth_patterns)
 
 
@@ -495,7 +510,9 @@ def evaluate_pr(
     """
     resolved = _get_llm_client(model=model, provider=provider)
     if resolved is None:
-        return _fallback_evaluation("LLM client unavailable (missing credentials or dependency).")
+        return _fallback_evaluation(
+            "LLM client unavailable (missing credentials or dependency)."
+        )
 
     client, provider_name = resolved
     prompt = _prepare_prompt(context, diff)
@@ -504,7 +521,9 @@ def evaluate_pr(
     except Exception as exc:  # pragma: no cover - exercised in integration
         # If auth error and not explicitly requesting a provider, try fallback
         if _is_auth_error(exc) and provider is None:
-            fallback_provider = "openai" if "github-models" in provider_name else "github-models"
+            fallback_provider = (
+                "openai" if "github-models" in provider_name else "github-models"
+            )
             fallback_resolved = _get_llm_client(model=model, provider=fallback_provider)
             if fallback_resolved is not None:
                 fallback_client, fallback_provider_name = fallback_resolved
@@ -538,11 +557,18 @@ def evaluate_pr(
 
 
 def evaluate_pr_multiple(
-    context: str, diff: str | None = None, model1: str | None = None, model2: str | None = None
+    context: str,
+    diff: str | None = None,
+    model1: str | None = None,
+    model2: str | None = None,
 ) -> list[EvaluationResult]:
     runner = ComparisonRunner.from_environment(context, diff, model1, model2)
     if not runner.clients:
-        return [_fallback_evaluation("LLM client unavailable (missing credentials or dependency).")]
+        return [
+            _fallback_evaluation(
+                "LLM client unavailable (missing credentials or dependency)."
+            )
+        ]
     results: list[EvaluationResult] = []
     for client, provider, model in runner.clients:
         results.append(runner.run_single(client, provider, model))
@@ -627,7 +653,9 @@ def format_comparison_report(results: list[EvaluationResult]) -> str:
         summary = _compact_text(summary_source, limit=200) if summary_source else "N/A"
         model_name = result.model or "N/A"
         conf = _format_confidence(result.confidence)
-        lines.append(f"| {labels[index]} | {model_name} | {result.verdict} | {conf} | {summary} |")
+        lines.append(
+            f"| {labels[index]} | {model_name} | {result.verdict} | {conf} | {summary} |"
+        )
     lines.append("")
 
     # Add expandable full details for each provider
@@ -667,7 +695,11 @@ def format_comparison_report(results: list[EvaluationResult]) -> str:
         agreements.append(f"- Verdict: {verdict} (all providers)")
 
     for key in SCORE_KEYS:
-        scores = [getattr(result.scores, key) for result in results if result.scores is not None]
+        scores = [
+            getattr(result.scores, key)
+            for result in results
+            if result.scores is not None
+        ]
         if len(scores) != len(results):
             continue
         min_score = min(scores)
@@ -695,7 +727,8 @@ def format_comparison_report(results: list[EvaluationResult]) -> str:
 
     for key in SCORE_KEYS:
         scores = [
-            getattr(result.scores, key) if result.scores is not None else None for result in results
+            getattr(result.scores, key) if result.scores is not None else None
+            for result in results
         ]
         available = [score for score in scores if score is not None]
         if len(available) < 2:
@@ -703,7 +736,9 @@ def format_comparison_report(results: list[EvaluationResult]) -> str:
         min_score = min(available)
         max_score = max(available)
         if max_score - min_score > 1:
-            rendered = [f"{score:.1f}/10" if score is not None else "N/A" for score in scores]
+            rendered = [
+                f"{score:.1f}/10" if score is not None else "N/A" for score in scores
+            ]
             rows.append((key.capitalize(), rendered))
 
     if rows:
@@ -712,7 +747,9 @@ def format_comparison_report(results: list[EvaluationResult]) -> str:
         lines.append(header)
         lines.append(separator)
         for dimension, values in rows:
-            lines.append("| {dim} | {vals} |".format(dim=dimension, vals=" | ".join(values)))
+            lines.append(
+                "| {dim} | {vals} |".format(dim=dimension, vals=" | ".join(values))
+            )
     else:
         lines.append("No major disagreements detected.")
     lines.append("")
@@ -740,7 +777,9 @@ def _load_text(path: str | None) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate PRs against acceptance criteria.")
+    parser = argparse.ArgumentParser(
+        description="Evaluate PRs against acceptance criteria."
+    )
     parser.add_argument("--context-file", help="Path to verifier context markdown.")
     parser.add_argument("--diff-file", help="Path to PR diff or summary.")
     parser.add_argument("--output-file", help="Path to write evaluation output.")
@@ -776,13 +815,17 @@ def main() -> None:
         action="store_true",
         help="Run evaluations across multiple providers and output a comparison report.",
     )
-    parser.add_argument("--json", action="store_true", help="Emit JSON payload to stdout.")
+    parser.add_argument(
+        "--json", action="store_true", help="Emit JSON payload to stdout."
+    )
     args = parser.parse_args()
 
     context = _load_text(args.context_file)
     diff = _load_text(args.diff_file) if args.diff_file else None
     if args.compare:
-        results = evaluate_pr_multiple(context, diff=diff, model1=args.model, model2=args.model2)
+        results = evaluate_pr_multiple(
+            context, diff=diff, model1=args.model, model2=args.model2
+        )
         report = format_comparison_report(results)
         if args.output_file:
             Path(args.output_file).write_text(report, encoding="utf-8")

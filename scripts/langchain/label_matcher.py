@@ -260,9 +260,14 @@ def build_label_vector_store(
         else:
             if isinstance(item, Mapping):
                 raise ValueError(f"Label entry at index {index} is missing a name.")
-            if getattr(item, "name", None) is not None or getattr(item, "label", None) is not None:
+            if (
+                getattr(item, "name", None) is not None
+                or getattr(item, "label", None) is not None
+            ):
                 raise ValueError(f"Label entry at index {index} has an empty name.")
-            raise ValueError(f"Unsupported label entry at index {index}: {type(item).__name__}.")
+            raise ValueError(
+                f"Unsupported label entry at index {index}: {type(item).__name__}."
+            )
 
     if not label_records:
         return None
@@ -277,7 +282,10 @@ def build_label_vector_store(
         return None
 
     texts = [_label_text(label) for label in label_records]
-    metadatas = [{"name": label.name, "description": label.description} for label in label_records]
+    metadatas = [
+        {"name": label.name, "description": label.description}
+        for label in label_records
+    ]
     store = FAISS.from_texts(texts, resolved.client, metadatas=metadatas)
     return LabelVectorStore(
         store=store,
@@ -311,7 +319,9 @@ def _similarity_from_score(score: float, score_type: str) -> float:
     return score
 
 
-def _label_from_metadata(metadata: Mapping[str, Any], fallback_name: str | None) -> LabelRecord:
+def _label_from_metadata(
+    metadata: Mapping[str, Any], fallback_name: str | None
+) -> LabelRecord:
     name = str(metadata.get("name") or fallback_name or "").strip()
     description = metadata.get("description")
     return LabelRecord(
@@ -320,7 +330,9 @@ def _label_from_metadata(metadata: Mapping[str, Any], fallback_name: str | None)
     )
 
 
-def _exact_short_label_match(label_store: LabelVectorStore, query: str) -> LabelMatch | None:
+def _exact_short_label_match(
+    label_store: LabelVectorStore, query: str
+) -> LabelMatch | None:
     normalized = _normalize_label(query)
     if not normalized or len(normalized) > SHORT_LABEL_LENGTH:
         return None
@@ -362,10 +374,14 @@ def _keyword_match_score(label: LabelRecord, query: str) -> float | None:
     score = 0.0
 
     if "bug" in label_name_normalized and any(
-        _token_matches_keyword(token, keyword) for token in tokens for keyword in _BUG_KEYWORDS
+        _token_matches_keyword(token, keyword)
+        for token in tokens
+        for keyword in _BUG_KEYWORDS
     ):
         score = max(score, KEYWORD_BUG_SCORE)
-    if any(tag in label_name_normalized for tag in ("feature", "enhancement", "request")) and (
+    if any(
+        tag in label_name_normalized for tag in ("feature", "enhancement", "request")
+    ) and (
         any(
             _token_matches_keyword(token, keyword)
             for token in tokens
@@ -375,7 +391,9 @@ def _keyword_match_score(label: LabelRecord, query: str) -> float | None:
     ):
         score = max(score, KEYWORD_FEATURE_SCORE)
     if "doc" in label_name_normalized and any(
-        _token_matches_keyword(token, keyword) for token in tokens for keyword in _DOCS_KEYWORDS
+        _token_matches_keyword(token, keyword)
+        for token in tokens
+        for keyword in _DOCS_KEYWORDS
     ):
         score = max(score, KEYWORD_DOCS_SCORE)
 

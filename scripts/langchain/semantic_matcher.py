@@ -39,7 +39,9 @@ def get_embedding_client(model: str | None = None) -> EmbeddingClientInfo | None
 
     github_token = os.environ.get("GITHUB_TOKEN")
     openai_token = os.environ.get("OPENAI_API_KEY")
-    embedding_model = model or os.environ.get("EMBEDDING_MODEL") or DEFAULT_EMBEDDING_MODEL
+    embedding_model = (
+        model or os.environ.get("EMBEDDING_MODEL") or DEFAULT_EMBEDDING_MODEL
+    )
 
     # Prefer OpenAI for embeddings - GitHub Models doesn't support the embeddings endpoint
     if openai_token:
@@ -75,14 +77,18 @@ def generate_embeddings(
 ) -> EmbeddingResult | None:
     items = [text.strip() for text in texts if text and text.strip()]
     if not items:
-        return EmbeddingResult(vectors=[], provider="none", model=model or DEFAULT_EMBEDDING_MODEL)
+        return EmbeddingResult(
+            vectors=[], provider="none", model=model or DEFAULT_EMBEDDING_MODEL
+        )
 
     resolved = client_info or get_embedding_client(model=model)
     if resolved is None:
         return None
 
     vectors = resolved.client.embed_documents(items)
-    return EmbeddingResult(vectors=vectors, provider=resolved.provider, model=resolved.model)
+    return EmbeddingResult(
+        vectors=vectors, provider=resolved.provider, model=resolved.model
+    )
 
 
 def cosine_similarity(left: list[float], right: list[float]) -> float:

@@ -16,7 +16,9 @@ def fake_chat_completion(*args, **kwargs):
     fake_resp.choices = [
         MagicMock(
             message=MagicMock(
-                content=json.dumps([{"id": "SEG1", "Nat": 3, "Cult": 2, "GS": 4, "EB": 3}])
+                content=json.dumps(
+                    [{"id": "SEG1", "Nat": 3, "Cult": 2, "GS": 4, "EB": 3}]
+                )
             )
         )
     ]

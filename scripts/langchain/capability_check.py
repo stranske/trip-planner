@@ -126,7 +126,9 @@ def _extract_json_payload(text: str) -> str | None:
 def _coerce_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
-    return [str(item).strip() for item in value if isinstance(item, str) and item.strip()]
+    return [
+        str(item).strip() for item in value if isinstance(item, str) and item.strip()
+    ]
 
 
 def _coerce_dict_list(value: Any, required_keys: set[str]) -> list[dict[str, str]]:
@@ -146,13 +148,17 @@ def _coerce_dict_list(value: Any, required_keys: set[str]) -> list[dict[str, str
     return normalized
 
 
-def _normalize_result(payload: dict[str, Any], provider_used: str | None) -> CapabilityCheckResult:
+def _normalize_result(
+    payload: dict[str, Any], provider_used: str | None
+) -> CapabilityCheckResult:
     actionable = _coerce_list(payload.get("actionable_tasks"))
     partial = _coerce_dict_list(payload.get("partial_tasks"), {"task", "limitation"})
     blocked = _coerce_dict_list(
         payload.get("blocked_tasks"), {"task", "reason", "suggested_action"}
     )
-    recommendation = str(payload.get("recommendation") or "REVIEW_NEEDED").strip().upper()
+    recommendation = (
+        str(payload.get("recommendation") or "REVIEW_NEEDED").strip().upper()
+    )
     if recommendation not in {"PROCEED", "REVIEW_NEEDED", "BLOCKED"}:
         recommendation = "REVIEW_NEEDED"
     human_actions = _coerce_list(payload.get("human_actions_needed"))
@@ -292,17 +298,23 @@ def _normalize_tasks_input(tasks: list[str] | str | None) -> list[str]:
     return []
 
 
-def classify_capabilities(tasks: list[str] | str, acceptance: str) -> CapabilityCheckResult:
+def classify_capabilities(
+    tasks: list[str] | str, acceptance: str
+) -> CapabilityCheckResult:
     normalized_tasks = _normalize_tasks_input(tasks)
     client_info = _get_llm_client()
     if not client_info:
-        return _fallback_classify(normalized_tasks, acceptance, "LLM provider unavailable")
+        return _fallback_classify(
+            normalized_tasks, acceptance, "LLM provider unavailable"
+        )
 
     client, provider_name = client_info
     try:
         from langchain_core.prompts import ChatPromptTemplate
     except ImportError:
-        result = _fallback_classify(normalized_tasks, acceptance, "langchain-core not installed")
+        result = _fallback_classify(
+            normalized_tasks, acceptance, "langchain-core not installed"
+        )
         result.provider_used = provider_name
         return result
 
@@ -320,7 +332,9 @@ def classify_capabilities(tasks: list[str] | str, acceptance: str) -> Capability
     try:
         data = json.loads(payload)
     except json.JSONDecodeError:
-        result = _fallback_classify(normalized_tasks, acceptance, "LLM response JSON parse failed")
+        result = _fallback_classify(
+            normalized_tasks, acceptance, "LLM response JSON parse failed"
+        )
         result.provider_used = provider_name
         return result
 
@@ -355,7 +369,9 @@ def _load_text(path: str | None) -> str:
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Classify agent capability for tasks.")
     parser.add_argument("--tasks-file", help="Path to tasks markdown/text file.")
-    parser.add_argument("--acceptance-file", help="Path to acceptance criteria text file.")
+    parser.add_argument(
+        "--acceptance-file", help="Path to acceptance criteria text file."
+    )
     parser.add_argument("--tasks-json", help="JSON array of task strings.")
     parser.add_argument("--acceptance", help="Acceptance criteria text.")
     return parser.parse_args()

@@ -157,7 +157,9 @@ def _unique(items: Iterable[str]) -> list[str]:
     return ordered
 
 
-def _extract_keyword_lines(lines: Iterable[str], keywords: tuple[str, ...]) -> list[str]:
+def _extract_keyword_lines(
+    lines: Iterable[str], keywords: tuple[str, ...]
+) -> list[str]:
     results: list[str] = []
     for line in lines:
         normalized = _normalize_line(line)
@@ -261,7 +263,9 @@ def extract_context(
                     response = chain.invoke(
                         {
                             "issue_body": issue_body,
-                            "comments": "\n\n".join(comments) if comments else "_None._",
+                            "comments": "\n\n".join(comments)
+                            if comments
+                            else "_None._",
                         }
                     )
                 except Exception as e:
@@ -274,7 +278,9 @@ def extract_context(
                             response = chain.invoke(
                                 {
                                     "issue_body": issue_body,
-                                    "comments": "\n\n".join(comments) if comments else "_None._",
+                                    "comments": "\n\n".join(comments)
+                                    if comments
+                                    else "_None._",
                                 }
                             )
                         else:
@@ -312,7 +318,9 @@ def _load_comments(args: argparse.Namespace) -> list[str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Extract contextual notes for agent PRs.")
+    parser = argparse.ArgumentParser(
+        description="Extract contextual notes for agent PRs."
+    )
     parser.add_argument("--input-file", help="Path to raw issue text.")
     parser.add_argument("--input-text", help="Raw issue text (inline).")
     parser.add_argument(
@@ -320,7 +328,9 @@ def main() -> None:
         help="Path to JSON array of comments to enrich context extraction.",
     )
     parser.add_argument("--comments-text", help="Inline comment text.")
-    parser.add_argument("--json", action="store_true", help="Emit JSON payload to stdout.")
+    parser.add_argument(
+        "--json", action="store_true", help="Emit JSON payload to stdout."
+    )
     parser.add_argument("--no-llm", action="store_true", help="Disable LLM usage.")
     args = parser.parse_args()
 

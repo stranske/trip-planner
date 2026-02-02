@@ -37,7 +37,9 @@ DEPENDENCY_PHRASE_REGEX = re.compile(
     r"(?:after|once|when)\b[^,]*\bmerge\b|requires\b[^.]*\bmerge\b)\b",
     re.IGNORECASE,
 )
-LEADING_DEPENDENCY_CLAUSE_REGEX = re.compile(r"^(?:after|once|when)\b[^,]+,\s*(.+)$", re.IGNORECASE)
+LEADING_DEPENDENCY_CLAUSE_REGEX = re.compile(
+    r"^(?:after|once|when)\b[^,]+,\s*(.+)$", re.IGNORECASE
+)
 LARGE_TASK_KEYWORDS = (
     "end-to-end",
     "end to end",
@@ -189,7 +191,9 @@ def _split_task_parts(task: str) -> list[str]:
             base, suffix = task.split(marker, 1)
             base = base.strip()
             items = [
-                item.strip() for item in re.split(r"\s*,\s*|\s+and\s+", suffix) if item.strip()
+                item.strip()
+                for item in re.split(r"\s*,\s*|\s+and\s+", suffix)
+                if item.strip()
             ]
             if base and len(items) > 1:
                 keyword = marker.strip()
@@ -285,7 +289,9 @@ def _normalize_subtasks(sub_tasks: list[str]) -> list[str]:
                 continue
             if _contains_dependency_phrase(cleaned):
                 cleaned = _rewrite_dependency_task(cleaned)
-            if _is_large_task(cleaned) and not cleaned.lower().startswith("document dependency"):
+            if _is_large_task(cleaned) and not cleaned.lower().startswith(
+                "document dependency"
+            ):
                 for scoped_task in _expand_large_task(cleaned):
                     normalized.append(_ensure_verification(scoped_task))
                 continue
@@ -400,7 +406,9 @@ def build_child_issues(
     preserved_milestone = _coerce_milestone_value(milestone)
     for task in normalized:
         title = (
-            _truncate_title(f"{parent_title}: {task}") if parent_title else _truncate_title(task)
+            _truncate_title(f"{parent_title}: {task}")
+            if parent_title
+            else _truncate_title(task)
         )
         body_lines = [
             f"Parent issue: {parent_ref}",
@@ -452,7 +460,9 @@ def _format_child_reference(child_issue: dict[str, Any]) -> str | None:
     return f"{ref} - {title}" if title else ref
 
 
-def build_parent_issue_update(parent_body: str, child_issues: list[dict[str, Any]]) -> str:
+def build_parent_issue_update(
+    parent_body: str, child_issues: list[dict[str, Any]]
+) -> str:
     child_refs: list[str] = []
     seen: set[str] = set()
     for child in child_issues:
@@ -560,9 +570,13 @@ def decompose_task(task: str, *, use_llm: bool = True) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Decompose a large task into sub-tasks.")
+    parser = argparse.ArgumentParser(
+        description="Decompose a large task into sub-tasks."
+    )
     parser.add_argument("--task", help="Task text to decompose.")
-    parser.add_argument("--json", action="store_true", help="Emit JSON payload to stdout.")
+    parser.add_argument(
+        "--json", action="store_true", help="Emit JSON payload to stdout."
+    )
     parser.add_argument("--no-llm", action="store_true", help="Disable LLM usage.")
     args = parser.parse_args()
 

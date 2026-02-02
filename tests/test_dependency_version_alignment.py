@@ -54,4 +54,6 @@ def test_all_pyproject_dependencies_are_in_lock() -> None:
         if dependency not in lock_versions and normalised not in lock_versions:
             missing.append(dependency)
 
-    assert not missing, "requirements.lock is missing pinned versions for: " + ", ".join(missing)
+    assert not missing, (
+        "requirements.lock is missing pinned versions for: " + ", ".join(missing)
+    )

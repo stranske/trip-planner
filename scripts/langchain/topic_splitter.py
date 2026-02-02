@@ -108,7 +108,9 @@ def split_topics_with_llm(input_text: str) -> list[dict[str, Any]]:
     """
     client_info = _get_llm_client()
     if not client_info:
-        raise RuntimeError("No LLM client available. Set GITHUB_TOKEN or OPENAI_API_KEY.")
+        raise RuntimeError(
+            "No LLM client available. Set GITHUB_TOKEN or OPENAI_API_KEY."
+        )
 
     llm, provider = client_info
     print(f"Using LLM provider: {provider}", file=sys.stderr)
