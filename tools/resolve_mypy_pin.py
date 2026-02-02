@@ -37,9 +37,11 @@ def get_mypy_python_version() -> str | None:
         mypy_raw = tool.get("mypy")
         mypy: dict[str, object] = dict(mypy_raw) if isinstance(mypy_raw, Mapping) else {}
         version = mypy.get("python_version")
-        # Validate type before conversion - TOML can parse various types
+        # TOML parsing can yield scalars or tomlkit item wrappers.
         if isinstance(version, (str, int, float)):
             return str(version)
+        if version is not None and hasattr(version, "value"):
+            return str(getattr(version, "value"))
         return None
     except ImportError:
         pass
