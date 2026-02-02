@@ -21,8 +21,14 @@ def _utc_now_iso() -> str:
 
 def default_key(event: str, fmt: str) -> str:
     if fmt == "epoch-ms":
-        return "AUTOPILOT_STEP_STARTED_AT_MS" if event == "start" else "AUTOPILOT_STEP_ENDED_AT_MS"
-    return "AUTOPILOT_STEP_STARTED_AT" if event == "start" else "AUTOPILOT_STEP_ENDED_AT"
+        return (
+            "AUTOPILOT_STEP_STARTED_AT_MS"
+            if event == "start"
+            else "AUTOPILOT_STEP_ENDED_AT_MS"
+        )
+    return (
+        "AUTOPILOT_STEP_STARTED_AT" if event == "start" else "AUTOPILOT_STEP_ENDED_AT"
+    )
 
 
 def timestamp_value(fmt: str) -> str:
@@ -62,7 +68,9 @@ def _summary_env_details() -> dict[str, str]:
     return details
 
 
-def _write_failure_summary(*, error: BaseException, exit_code: int, step_name: str | None) -> None:
+def _write_failure_summary(
+    *, error: BaseException, exit_code: int, step_name: str | None
+) -> None:
     summary_path = os.environ.get("AUTOPILOT_METRICS_SUMMARY_PATH")
     if not summary_path:
         return
@@ -90,7 +98,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--event", choices=["start", "end"], required=True)
     parser.add_argument("--format", choices=["epoch-ms", "iso"], default="epoch-ms")
     destination = parser.add_mutually_exclusive_group()
-    destination.add_argument("--env-path", help="Write KEY=VALUE to env file instead of stdout")
+    destination.add_argument(
+        "--env-path", help="Write KEY=VALUE to env file instead of stdout"
+    )
     destination.add_argument(
         "--output-path", help="Write KEY=VALUE to output file instead of stdout"
     )
