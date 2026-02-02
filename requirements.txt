@@ -1,4 +1,3 @@
 jinja2
-pytest
 jsonschema
-openai
+openai<1.0.0
