@@ -5,8 +5,8 @@ Provides-Extra: app
 Provides-Extra: llm
 Provides-Extra: notebooks
 Provides-Extra: dev
-Requires-Dist: black==24.4.2; extra == "dev"
-Requires-Dist: ruff==0.4.8; extra == "dev"
-Requires-Dist: mypy==1.10.0; extra == "dev"
-Requires-Dist: pytest==8.2.2; extra == "dev"
-Requires-Dist: pytest-cov==5.0.0; extra == "dev"
+Requires-Dist: black==26.1.0; extra == "dev"
+Requires-Dist: ruff==0.14.14; extra == "dev"
+Requires-Dist: mypy==1.19.1; extra == "dev"
+Requires-Dist: pytest==9.0.2; extra == "dev"
+Requires-Dist: pytest-cov==7.0.0; extra == "dev"
