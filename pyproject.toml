@@ -4,6 +4,9 @@ version = "0.1.0"
 
 
 [project.optional-dependencies]
+app = []
+llm = []
+notebooks = []
 dev = [
     "black==26.1.0",
     "ruff==0.14.14",
