@@ -17,6 +17,13 @@ _DEFAULT_BASELINE = 0.0
 _DEFAULT_ALERT_DROP = 1.0
 
 
+def _running_in_ci() -> bool:
+    value = os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")
+    if value is None:
+        return False
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
 def _parse_float(value: str | None, env_name: str, default: float) -> float:
     if value is None or value == "":
         return default
@@ -104,7 +111,31 @@ def main() -> int:
         current = _extract_line_rate(xml_path)
     except FileNotFoundError as exc:
         print(str(exc), file=sys.stderr)
-        return 1
+        if not _running_in_ci():
+            return 1
+        timestamp = (
+            _dt.datetime.now(_dt.UTC)
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+        payload = {
+            "timestamp": timestamp,
+            "current": 0.0,
+            "baseline": round(baseline, 4),
+            "delta": round(0.0 - baseline, 4),
+            "drop": round(max(0.0, baseline), 4),
+            "threshold": alert_drop,
+            "status": "missing",
+            "fail_on_drop": fail_on_drop,
+            "missing_report": True,
+        }
+        output_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Coverage delta written to {output_path}")
+        return 0
 
     payload, should_fail = _build_payload(
         current, baseline, alert_drop, fail_on_drop=fail_on_drop

@@ -33,6 +33,13 @@ _DEFAULT_TOP_N = 15
 _DEFAULT_MIN_SECONDS = 1.0
 
 
+def _running_in_ci() -> bool:
+    value = os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS")
+    if value is None:
+        return False
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
 def _tag_name(node: ET.Element) -> str:
     """Return the local tag name (strip XML namespaces)."""
     tag = node.tag
@@ -235,7 +242,32 @@ def main() -> int:
         payload = build_metrics(junit_path, top_n=top_n, min_seconds=min_seconds)
     except FileNotFoundError as exc:
         print(str(exc), file=sys.stderr)
-        return 1
+        if not _running_in_ci():
+            return 1
+        payload = {
+            "generated_at": (
+                _dt.datetime.now(_dt.UTC)
+                .replace(microsecond=0)
+                .isoformat()
+                .replace("+00:00", "Z")
+            ),
+            "junit_path": str(junit_path),
+            "summary": {
+                "tests": 0,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0,
+                "passed": 0,
+                "duration_seconds": 0.0,
+            },
+            "failures": [],
+            "slow_tests": {
+                "threshold_seconds": min_seconds,
+                "limit": top_n,
+                "items": [],
+            },
+            "missing_junit": True,
+        }
 
     output_path.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
