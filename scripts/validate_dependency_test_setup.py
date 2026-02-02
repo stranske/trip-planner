@@ -33,18 +33,20 @@ def check_lock_file_completeness() -> Tuple[bool, List[str]]:
     optional_groups = re.findall(r"^(\w+)\s*=", optional_section.group(1), re.MULTILINE)
     print(f"✓ Found optional dependency groups: {', '.join(optional_groups)}")
 
-    # Check dependabot-auto-lock.yml includes all extras
-    workflow_path = Path(".github/workflows/dependabot-auto-lock.yml")
+    # Check dependabot auto-lock workflow includes all extras
+    workflow_path = Path(".github/workflows/maint-dependabot-auto-lock.yml")
     if workflow_path.exists():
         workflow = workflow_path.read_text()
         for group in optional_groups:
             if f"--extra {group}" not in workflow:
-                issues.append(f"dependabot-auto-lock.yml missing --extra {group}")
+                issues.append(
+                    f"maint-dependabot-auto-lock.yml missing --extra {group}"
+                )
 
         if not issues:
-            print("✓ dependabot-auto-lock.yml includes all extras")
+            print("✓ maint-dependabot-auto-lock.yml includes all extras")
     else:
-        issues.append("dependabot-auto-lock.yml not found")
+        issues.append("maint-dependabot-auto-lock.yml not found")
 
     return len(issues) == 0, issues
 
