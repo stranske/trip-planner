@@ -6,7 +6,9 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
+openai: Any | None
 try:
     import openai  # type: ignore
 except ImportError:
@@ -63,6 +65,8 @@ def main(output_path: str = "data/segments_generated.json") -> None:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         sys.exit("OPENAI_API_KEY environment variable not set.")
+    if openai is None:
+        raise RuntimeError("openai package not installed.")
     openai.api_key = api_key
 
     response = openai.ChatCompletion.create(  # type: ignore[attr-defined]
