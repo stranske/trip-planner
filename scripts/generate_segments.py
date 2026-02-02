@@ -6,11 +6,16 @@ import os
 import re
 import sys
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
+openai_module: ModuleType | None
 try:
-    import openai  # type: ignore
+    import openai as openai_module  # type: ignore[import-not-found]
 except ImportError:
-    openai = None  # Will check before use
+    openai_module = None  # Will check before use
+
+openai: Any = openai_module
 
 
 PROMPT_TEMPLATE = """
