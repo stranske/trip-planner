@@ -34,6 +34,10 @@ def _truthy(value: str | None) -> bool:
     return value.lower() in {"1", "true", "yes", "on"}
 
 
+def _running_in_ci() -> bool:
+    return _truthy(os.environ.get("CI")) or _truthy(os.environ.get("GITHUB_ACTIONS"))
+
+
 def _load_metrics(junit_path: Path, metrics_path: Path) -> tuple[dict[str, Any], bool]:
     if metrics_path.is_file():
         try:
@@ -43,6 +47,8 @@ def _load_metrics(junit_path: Path, metrics_path: Path) -> tuple[dict[str, Any],
                 return data, True
         except json.JSONDecodeError:
             pass  # fall back to regenerating
+    if not junit_path.is_file():
+        raise FileNotFoundError(f"JUnit report not found: {junit_path}")
     # Rebuild metrics from JUnit directly
     data = ci_metrics.build_metrics(junit_path)
     return data, False
@@ -112,14 +118,13 @@ def main() -> int:
     classification_flag = _truthy(classification_env)
     classification_out = Path(os.environ.get("CLASSIFICATION_OUT", _DEFAULT_CLASSIFICATION))
 
-    if not junit_path.is_file():
-        print(f"JUnit report not found: {junit_path}", file=sys.stderr)
-        return 1
-
     try:
         metrics, from_file = _load_metrics(junit_path, metrics_path)
     except FileNotFoundError as exc:
         print(str(exc), file=sys.stderr)
+        if _running_in_ci():
+            print("Skipping CI history append; no JUnit/metrics report found.", file=sys.stderr)
+            return 0
         return 1
 
     record = _build_history_record(
