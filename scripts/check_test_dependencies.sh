@@ -35,13 +35,7 @@ echo "Checking required Python packages..."
 required_packages=(
     "pytest"
     "coverage"
-    "hypothesis"
-    "pandas"
-    "numpy"
-    "pydantic"
-    "yaml:PyYAML"
-    "requests"
-    "jsonschema"
+    "jinja2"
 )
 
 for pkg_spec in "${required_packages[@]}"; do
@@ -71,6 +65,7 @@ optional_packages=(
     "mypy"
     "streamlit"
     "fastapi"
+    "openai"
 )
 
 for pkg in "${optional_packages[@]}"; do
