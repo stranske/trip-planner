@@ -47,6 +47,33 @@ def slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
+def _create_chat_completion(prompt: str, api_key: str) -> str:
+    if openai is None:
+        sys.exit(
+            "openai package not installed. Add 'openai' to requirements.txt or pip install openai."
+        )
+
+    if hasattr(openai, "OpenAI"):
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+        return response.choices[0].message.content
+
+    if hasattr(openai, "ChatCompletion"):
+        openai.api_key = api_key
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+        return response.choices[0].message.content
+
+    sys.exit("Unsupported openai package version; missing chat completion API.")
+
+
 def main(output_path: str = "data/segments_generated.json") -> None:
     req_path = Path("request.json")
     if not req_path.exists():
@@ -68,15 +95,7 @@ def main(output_path: str = "data/segments_generated.json") -> None:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         sys.exit("OPENAI_API_KEY environment variable not set.")
-    openai.api_key = api_key
-
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
-    )
-
-    content = response.choices[0].message.content
+    content = _create_chat_completion(prompt, api_key)
     start = content.find("[")
     end = content.rfind("]") + 1
     if start == -1 or end == -1:
