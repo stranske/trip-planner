@@ -11,7 +11,7 @@ from typing import Any
 
 openai_module: ModuleType | None
 try:
-    import openai as openai_module  # type: ignore[import-not-found]
+    import openai as openai_module
 except ImportError:
     openai_module = None  # Will check before use
 
@@ -70,7 +70,7 @@ def main(output_path: str = "data/segments_generated.json") -> None:
         sys.exit("OPENAI_API_KEY environment variable not set.")
     openai.api_key = api_key
 
-    response = openai.ChatCompletion.create(  # type: ignore[attr-defined]
+    response = openai.ChatCompletion.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,

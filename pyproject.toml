@@ -45,5 +45,5 @@ exclude_lines = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["jsonschema", "jinja2", "langchain_openai", "langchain_core.*"]
+module = ["jsonschema", "jinja2", "langchain_openai", "langchain_core.*", "openai"]
 ignore_missing_imports = true
