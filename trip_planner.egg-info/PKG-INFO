@@ -3,7 +3,7 @@ Name: trip-planner
 Version: 0.1.0
 Requires-Dist: jinja2>=3.1.6
 Requires-Dist: jsonschema>=4.26.0
-Requires-Dist: openai>=2.16.0
+Requires-Dist: openai==2.16.0
 Provides-Extra: app
 Provides-Extra: llm
 Provides-Extra: notebooks
