@@ -43,10 +43,10 @@ def append_env(path: Path, key: str, value: str) -> None:
         handle.write(f"{key}={value}\n")
 
 
-def env_path(var_name: str) -> Path:
+def env_path(var_name: str) -> Path | None:
     value = os.environ.get(var_name)
     if not value:
-        raise ValueError(f"{var_name} is not set")
+        return None
     return Path(value)
 
 
@@ -133,9 +133,25 @@ def main(argv: list[str]) -> int:
         value = timestamp_value(args.format)
         key = args.key or default_key(args.event, args.format)
         if args.github_env:
-            append_env(env_path("GITHUB_ENV"), key, value)
+            path = env_path("GITHUB_ENV")
+            if path is None:
+                print(
+                    "GITHUB_ENV is not set; writing to stdout instead.",
+                    file=sys.stderr,
+                )
+                print(f"{key}={value}")
+            else:
+                append_env(path, key, value)
         elif args.github_output:
-            append_env(env_path("GITHUB_OUTPUT"), key, value)
+            path = env_path("GITHUB_OUTPUT")
+            if path is None:
+                print(
+                    "GITHUB_OUTPUT is not set; writing to stdout instead.",
+                    file=sys.stderr,
+                )
+                print(f"{key}={value}")
+            else:
+                append_env(path, key, value)
         elif args.env_path:
             append_env(Path(args.env_path), key, value)
         elif args.output_path:
