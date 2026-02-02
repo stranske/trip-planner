@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 
@@ -31,15 +32,13 @@ def get_mypy_python_version() -> str | None:
         content = pyproject_path.read_text()
         data = tomlkit.parse(content)
         tool_raw = data.get("tool")
-        # Use dict() to normalize tomlkit types and satisfy mypy
-        # tomlkit returns Table objects that act like dicts but mypy doesn't know this
-        tool: dict[str, object] = (
-            dict(tool_raw) if hasattr(tool_raw, "get") else {}
-        )  # type: ignore[arg-type,call-overload]
+        tool: Mapping[str, object] = (
+            tool_raw if isinstance(tool_raw, Mapping) else {}
+        )
         mypy_raw = tool.get("mypy")
-        mypy: dict[str, object] = (
-            dict(mypy_raw) if hasattr(mypy_raw, "get") else {}
-        )  # type: ignore[arg-type,call-overload]
+        mypy: Mapping[str, object] = (
+            mypy_raw if isinstance(mypy_raw, Mapping) else {}
+        )
         version = mypy.get("python_version")
         # Validate type before conversion - TOML can parse various types
         if isinstance(version, (str, int, float)):
