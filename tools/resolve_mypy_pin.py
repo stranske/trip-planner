@@ -42,8 +42,10 @@ def get_mypy_python_version() -> str | None:
             return str(version)
         if version is not None and hasattr(version, "value"):
             return str(getattr(version, "value"))
-        return None
     except ImportError:
+        pass
+    except Exception:
+        # Fall back to regex parsing if tomlkit fails unexpectedly.
         pass
 
     # Fallback: simple regex-based extraction
