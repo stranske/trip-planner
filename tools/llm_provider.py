@@ -370,9 +370,9 @@ Be conservative - if unsure, don't mark as completed."""
                 confidence=adjusted_confidence,
                 reasoning=reasoning,
                 provider_used=self.name,
-                raw_confidence=raw_confidence
-                if adjusted_confidence != raw_confidence
-                else None,
+                raw_confidence=(
+                    raw_confidence if adjusted_confidence != raw_confidence else None
+                ),
                 confidence_adjusted=adjusted_confidence != raw_confidence,
                 quality_warnings=warnings if warnings else None,
             )
