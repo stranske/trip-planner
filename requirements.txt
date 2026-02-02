@@ -1,4 +1,4 @@
 jinja2
 pytest
 jsonschema
-openai
+openai==2.16.0
