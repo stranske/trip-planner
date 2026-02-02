@@ -203,7 +203,8 @@ def _read_local_modules() -> set[str]:
             continue
         if not line.isidentifier():
             print(
-                f"Warning: ignoring invalid module name in {LOCAL_MODULES_FILE}: {line!r}",
+                "Warning: ignoring invalid module name in "
+                f"{LOCAL_MODULES_FILE}: {line!r}",
                 file=sys.stderr,
             )
             continue
@@ -212,8 +213,13 @@ def _read_local_modules() -> set[str]:
 
 
 def get_project_modules() -> set[str]:
-    """Return the full set of project modules (static + dynamically detected + local)."""
-    return _BASE_PROJECT_MODULES | _detect_local_project_modules() | _read_local_modules()
+    """Return the full set of project modules.
+
+    Includes static, dynamically detected, and repo-specific entries.
+    """
+    return (
+        _BASE_PROJECT_MODULES | _detect_local_project_modules() | _read_local_modules()
+    )
 
 
 # For backward compatibility - will be populated on first use
@@ -366,7 +372,9 @@ def add_dependencies_to_pyproject(missing: set[str], fix: bool = False) -> bool:
         dev_group.multiline(True)
         optional[DEV_EXTRA] = dev_group
 
-    existing_normalised = {_normalise_package_name(str(item).split("[")[0]) for item in dev_group}
+    existing_normalised = {
+        _normalise_package_name(str(item).split("[")[0]) for item in dev_group
+    }
 
     added = False
     for package in sorted(missing):
@@ -385,7 +393,9 @@ def add_dependencies_to_pyproject(missing: set[str], fix: bool = False) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Sync test dependencies to pyproject.toml")
+    parser = argparse.ArgumentParser(
+        description="Sync test dependencies to pyproject.toml"
+    )
     parser.add_argument(
         "--fix",
         action="store_true",
