@@ -6,11 +6,15 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
+openai: Any | None
 try:
-    import openai  # type: ignore
+    import openai as openai_module  # type: ignore
 except ImportError:
     openai = None  # Will check before use
+else:
+    openai = openai_module
 
 
 PROMPT_TEMPLATE = """
@@ -43,6 +47,8 @@ def slugify(name: str) -> str:
 
 
 def main(output_path: str = "data/segments_generated.json") -> None:
+    if openai is None:
+        raise RuntimeError("openai package not installed.")
     req_path = Path("request.json")
     if not req_path.exists():
         sys.exit("request.json not found; cannot generate segments.")
