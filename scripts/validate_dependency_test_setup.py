@@ -14,37 +14,42 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
+import tomllib
+
 
 def check_lock_file_completeness() -> Tuple[bool, List[str]]:
     """Verify lock file includes all optional dependencies."""
     issues = []
 
     # Read pyproject.toml to get all optional groups
-    pyproject = Path("pyproject.toml").read_text()
-
-    # Extract optional dependency groups
-    optional_section = re.search(
-        r"\[project\.optional-dependencies\](.*?)(?=\n\[|\Z)", pyproject, re.DOTALL
-    )
-    if not optional_section:
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    optional_groups = pyproject.get("project", {}).get("optional-dependencies", {})
+    if not optional_groups:
         issues.append("No [project.optional-dependencies] section found")
         return False, issues
 
-    optional_groups = re.findall(r"^(\w+)\s*=", optional_section.group(1), re.MULTILINE)
-    print(f"✓ Found optional dependency groups: {', '.join(optional_groups)}")
+    group_names = sorted(optional_groups.keys())
+    print(f"✓ Found optional dependency groups: {', '.join(group_names)}")
 
-    # Check dependabot-auto-lock.yml includes all extras
-    workflow_path = Path(".github/workflows/dependabot-auto-lock.yml")
-    if workflow_path.exists():
+    # Check dependabot-auto-lock workflow includes all extras.
+    # Some repos use a maint- prefixed workflow name.
+    workflow_candidates = [
+        Path(".github/workflows/dependabot-auto-lock.yml"),
+        Path(".github/workflows/maint-dependabot-auto-lock.yml"),
+    ]
+    workflow_path = next((path for path in workflow_candidates if path.exists()), None)
+    if workflow_path is not None:
         workflow = workflow_path.read_text()
-        for group in optional_groups:
+        for group, deps in optional_groups.items():
+            if not deps:
+                continue
             if f"--extra {group}" not in workflow:
-                issues.append(f"dependabot-auto-lock.yml missing --extra {group}")
+                issues.append(f"{workflow_path.name} missing --extra {group}")
 
         if not issues:
-            print("✓ dependabot-auto-lock.yml includes all extras")
+            print(f"✓ {workflow_path.name} includes all extras")
     else:
-        issues.append("dependabot-auto-lock.yml not found")
+        issues.append("dependabot auto-lock workflow not found")
 
     return len(issues) == 0, issues
 
