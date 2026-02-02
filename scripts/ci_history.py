@@ -104,6 +104,7 @@ def _build_classification_payload(metrics: dict[str, Any]) -> dict[str, Any]:
 
 def main() -> int:
     junit_path = Path(os.environ.get("JUNIT_PATH", _DEFAULT_JUNIT))
+    junit_path = ci_metrics.resolve_junit_path(junit_path)
     metrics_path = Path(os.environ.get("METRICS_PATH", _DEFAULT_METRICS))
     history_path = Path(os.environ.get("HISTORY_PATH", _DEFAULT_HISTORY))
     classification_env = os.environ.get("ENABLE_CLASSIFICATION")
@@ -113,7 +114,12 @@ def main() -> int:
     classification_out = Path(os.environ.get("CLASSIFICATION_OUT", _DEFAULT_CLASSIFICATION))
 
     if not junit_path.is_file():
-        print(f"JUnit report not found: {junit_path}", file=sys.stderr)
+        xml_files = sorted(Path(".").glob("*.xml"))
+        xml_list = ", ".join(str(path) for path in xml_files) or "(none)"
+        print(
+            f"JUnit report not found: {junit_path}. XML files present: {xml_list}",
+            file=sys.stderr,
+        )
         return 1
 
     try:

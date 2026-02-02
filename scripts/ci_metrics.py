@@ -31,6 +31,14 @@ _DEFAULT_JUNIT = "pytest-junit.xml"
 _DEFAULT_OUTPUT = "ci-metrics.json"
 _DEFAULT_TOP_N = 15
 _DEFAULT_MIN_SECONDS = 1.0
+_FALLBACK_JUNIT_NAMES = (
+    _DEFAULT_JUNIT,
+    "pytest.xml",
+    "pytest-results.xml",
+    "junit.xml",
+    "junit-report.xml",
+    "test-results.xml",
+)
 
 
 def _tag_name(node: ET.Element) -> str:
@@ -39,6 +47,25 @@ def _tag_name(node: ET.Element) -> str:
     if "}" in tag:
         return tag.split("}", 1)[1]
     return tag
+
+
+def resolve_junit_path(junit_path: Path) -> Path:
+    """Resolve a usable JUnit XML path, falling back to common filenames."""
+    if junit_path.is_file():
+        return junit_path
+
+    base_dir = junit_path.parent if junit_path.parent != Path(".") else Path(".")
+    candidates = [base_dir / name for name in _FALLBACK_JUNIT_NAMES]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+
+    for candidate in sorted(base_dir.glob("*.xml")):
+        lower = candidate.name.lower()
+        if "junit" in lower or "pytest" in lower:
+            return candidate
+
+    return junit_path
 
 
 def _parse_int(value: str | None, env_name: str, default: int) -> int:
@@ -191,6 +218,7 @@ def build_metrics(
     top_n: int = _DEFAULT_TOP_N,
     min_seconds: float = _DEFAULT_MIN_SECONDS,
 ) -> dict[str, Any]:
+    junit_path = resolve_junit_path(junit_path)
     if not junit_path.is_file():
         raise FileNotFoundError(f"JUnit report not found: {junit_path}")
 
