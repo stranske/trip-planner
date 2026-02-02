@@ -52,6 +52,13 @@ omit = [
     "scripts/ci_*.py",
     "scripts/sync_*.py",
     "scripts/coverage_history_append.py",
+    # CLI-only helpers exercised in integration workflows
+    "scripts/autopilot_metrics_collector.py",
+    "scripts/autopilot_step_timer.py",
+    "scripts/build_html.py",
+    "scripts/generate_itins.py",
+    "scripts/validate_dependency_test_setup.py",
+    "scripts/validate_request.py",
     "tools/*.py",
     ".github/scripts/*.py",
 ]
