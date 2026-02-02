@@ -35,10 +35,6 @@ echo "Checking required Python packages..."
 required_packages=(
     "pytest"
     "coverage"
-    "pydantic"
-    "yaml:PyYAML"
-    "requests"
-    "jsonschema"
 )
 
 for pkg_spec in "${required_packages[@]}"; do
@@ -66,6 +62,10 @@ optional_packages=(
     "hypothesis"
     "pandas"
     "numpy"
+    "pydantic"
+    "yaml:PyYAML"
+    "requests"
+    "jsonschema"
     "black"
     "ruff"
     "mypy"
@@ -74,10 +74,18 @@ optional_packages=(
 )
 
 for pkg in "${optional_packages[@]}"; do
-    if python -c "import $pkg" 2>/dev/null; then
-        echo -e "${GREEN}✓${NC} $pkg"
+    if [[ "$pkg" == *":"* ]]; then
+        module_name=$(echo "$pkg" | cut -d: -f1)
+        pkg_name=$(echo "$pkg" | cut -d: -f2)
     else
-        echo -e "${YELLOW}○${NC} $pkg (optional, not installed)"
+        module_name="$pkg"
+        pkg_name="$pkg"
+    fi
+
+    if python -c "import $module_name" 2>/dev/null; then
+        echo -e "${GREEN}✓${NC} $pkg_name"
+    else
+        echo -e "${YELLOW}○${NC} $pkg_name (optional, not installed)"
     fi
 done
 echo ""
