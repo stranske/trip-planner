@@ -204,6 +204,7 @@ jobs:
             const { withRetry, paginateWithRetry } = await createTokenAwareRetry({
               github,
               core,
+              env: process.env,
               task: 'auto-pilot-determine-context',
             });
 
