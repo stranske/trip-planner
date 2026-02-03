@@ -6,11 +6,15 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
+openai: Any | None
 try:
-    import openai  # type: ignore
+    import openai as openai_module  # type: ignore
 except ImportError:
     openai = None  # Will check before use
+else:
+    openai = openai_module
 
 
 PROMPT_TEMPLATE = """
@@ -46,6 +50,8 @@ def main(output_path: str = "data/segments_generated.json") -> None:
     req_path = Path("request.json")
     if not req_path.exists():
         sys.exit("request.json not found; cannot generate segments.")
+    if openai is None:
+        raise RuntimeError("openai package not installed.")
 
     req = json.loads(req_path.read_text())
     nature_ratio = float(req.get("nature_ratio", 0.5))
