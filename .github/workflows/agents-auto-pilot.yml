@@ -272,7 +272,6 @@ jobs:
             // Since we run optimizer inline now, this should always exist after optimize step
             // the optimizer workflow actually completed its work
             const comments = await paginateWithRetry(
-              github,
               github.rest.issues.listComments,
               {
                 owner: context.repo.owner,
@@ -291,7 +290,6 @@ jobs:
 
             // Check for linked PR (with pagination and multiple event types)
             const timelineEvents = await paginateWithRetry(
-              github,
               github.rest.issues.listEventsForTimeline,
               {
                 owner: context.repo.owner,

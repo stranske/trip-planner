@@ -1,12 +1,12 @@
 name: Setup API Client
 description: |
   Unified setup action for API client dependencies and token load balancer.
-  
+
   This action:
   1. Installs @octokit/* dependencies at pinned versions
   2. Exports all available tokens to environment variables
   3. Ensures consistent API client setup across ALL workflow jobs
-  
+
   USAGE: Include this action in EVERY job that makes GitHub API calls:
     - uses: ./.github/actions/setup-api-client
       with:
@@ -77,14 +77,14 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        
+
         # Use dedicated scripts dir, create if needed
         INSTALL_DIR="${GITHUB_WORKSPACE}/.github/scripts"
         mkdir -p "$INSTALL_DIR"
-        
+
         echo "📦 Installing @octokit dependencies in $INSTALL_DIR..."
         cd "$INSTALL_DIR"
-        
+
         # Check if already installed
         if [ -d "node_modules/@octokit/rest" ]; then
           echo "✅ @octokit/rest already installed"
@@ -151,10 +151,10 @@ runs:
         INPUT_VERBOSE: ${{ inputs.verbose }}
       run: |
         set -euo pipefail
-        
+
         token_count=0
         available_tokens=""
-        
+
         # Export a variable to GITHUB_ENV
         # Note: Empty values are intentionally not counted as available tokens
         export_var() {
@@ -163,7 +163,7 @@ runs:
           if [ -z "${value}" ]; then
             return 0
           fi
-          
+
           # Handle multiline values (like private keys)
           if [[ "${value}" == *$'\n'* ]]; then
             {
@@ -174,21 +174,21 @@ runs:
           else
             printf '%s=%s\n' "${name}" "${value}" >>"${GITHUB_ENV}"
           fi
-          
+
           token_count=$((token_count + 1))
           if [ -n "$available_tokens" ]; then
             available_tokens="${available_tokens},${name}"
           else
             available_tokens="${name}"
           fi
-          
+
           if [ "${INPUT_VERBOSE}" = "true" ]; then
             echo "  ✅ ${name} exported"
           fi
         }
-        
+
         echo "🔐 Exporting tokens to environment..."
-        
+
         # Try to extract from JSON secrets first (requires jq)
         if [ -n "${INPUT_SECRETS:-}" ] && [ "${INPUT_SECRETS}" != "null" ]; then
           if ! command -v jq >/dev/null 2>&1; then
@@ -215,7 +215,7 @@ runs:
               local key="$1"
               echo "${INPUT_SECRETS}" | jq -r ".${key} // empty" 2>/dev/null || echo ""
             }
-            
+
             SERVICE_BOT_PAT=$(extract_secret "SERVICE_BOT_PAT")
             ACTIONS_BOT_PAT=$(extract_secret "ACTIONS_BOT_PAT")
             CODESPACES_WORKFLOWS=$(extract_secret "CODESPACES_WORKFLOWS")
@@ -250,21 +250,21 @@ runs:
           APP_2_ID="${INPUT_APP_2_ID:-}"
           APP_2_PRIVATE_KEY="${INPUT_APP_2_PRIVATE_KEY:-}"
         fi
-        
+
         # Export GITHUB_TOKEN (GH_TOKEN is the same value, only count once)
         if [ -n "${INPUT_GITHUB_TOKEN:-}" ]; then
           export_var "GITHUB_TOKEN" "${INPUT_GITHUB_TOKEN}"
           # GH_TOKEN is exported but not double-counted
           printf '%s=%s\n' "GH_TOKEN" "${INPUT_GITHUB_TOKEN}" >>"${GITHUB_ENV}"
         fi
-        
+
         # Export PATs
         export_var "SERVICE_BOT_PAT" "${SERVICE_BOT_PAT:-}"
         export_var "ACTIONS_BOT_PAT" "${ACTIONS_BOT_PAT:-}"
         export_var "CODESPACES_WORKFLOWS" "${CODESPACES_WORKFLOWS:-}"
         export_var "OWNER_PR_PAT" "${OWNER_PR_PAT:-}"
         export_var "AGENTS_AUTOMATION_PAT" "${AGENTS_AUTOMATION_PAT:-}"
-        
+
         # Export App credentials
         export_var "WORKFLOWS_APP_ID" "${WORKFLOWS_APP_ID:-}"
         export_var "WORKFLOWS_APP_PRIVATE_KEY" "${WORKFLOWS_APP_PRIVATE_KEY:-}"
@@ -276,18 +276,18 @@ runs:
         export_var "APP_1_PRIVATE_KEY" "${APP_1_PRIVATE_KEY:-}"
         export_var "APP_2_ID" "${APP_2_ID:-}"
         export_var "APP_2_PRIVATE_KEY" "${APP_2_PRIVATE_KEY:-}"
-        
+
         # Output summary
         echo "token_count=${token_count}" >> "$GITHUB_OUTPUT"
         echo "available_tokens=${available_tokens}" >> "$GITHUB_OUTPUT"
-        
+
         echo ""
         echo "📊 Token Setup Summary:"
         echo "  Total tokens exported: ${token_count}"
         if [ "${INPUT_VERBOSE}" = "true" ]; then
           echo "  Available: ${available_tokens}"
         fi
-        
+
         # Warn if no tokens were exported
         if [ "${token_count}" -eq 0 ]; then
           echo "::warning::No tokens were exported! API calls may fail."
