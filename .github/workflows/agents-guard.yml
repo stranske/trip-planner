@@ -31,14 +31,51 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Mint GitHub App token early to use for API calls (avoids rate limits)
+      - name: Mint GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v2
+        continue-on-error: true
+        with:
+          app-id: ${{ secrets.WORKFLOWS_APP_ID || '0' }}
+          private-key: ${{ secrets.WORKFLOWS_APP_PRIVATE_KEY || 'dummy' }}
+          owner: ${{ github.repository_owner }}
+
       - name: Checkout base ref for safety validation
         if: github.event_name == 'pull_request_target'
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           sparse-checkout: |
+            .github/actions/setup-api-client
             .github/scripts/agents-guard.js
+            .github/scripts/github-api-with-retry.js
+            .github/scripts/token_load_balancer.js
             .github/workflows/agents-guard.yml
+
+      - name: Check API client action (base)
+        if: github.event_name == 'pull_request_target'
+        id: api_client_base
+        run: |
+          if [ -f .github/actions/setup-api-client/action.yml ] || [ -f .github/actions/setup-api-client/action.yaml ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup API client
+        if: github.event_name == 'pull_request_target' && steps.api_client_base.outputs.available == 'true'
+        uses: ./.github/actions/setup-api-client
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          github_token: ${{ github.token }}
+
+      - name: Setup API client (Workflows fallback)
+        if: github.event_name == 'pull_request_target' && steps.api_client_base.outputs.available != 'true'
+        uses: stranske/Workflows/.github/actions/setup-api-client@1ab8f39a2fb5f18b15237a38c4f9e440872d262d
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          github_token: ${{ github.token }}
 
       - name: Verify pull_request_target safety invariants
         if: github.event_name == 'pull_request_target'
@@ -61,9 +98,34 @@ jobs:
         uses: actions/checkout@v6
         with:
           sparse-checkout: |
+            .github/actions/setup-api-client
             .github/scripts/agents-guard.js
+            .github/scripts/github-api-with-retry.js
+            .github/scripts/token_load_balancer.js
             .github/workflows/agents-guard.yml
+      - name: Check API client action (head)
+        if: github.event_name == 'pull_request'
+        id: api_client_head
+        run: |
+          if [ -f .github/actions/setup-api-client/action.yml ] || [ -f .github/actions/setup-api-client/action.yaml ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
 
+      - name: Setup API client
+        if: github.event_name == 'pull_request' && steps.api_client_head.outputs.available == 'true'
+        uses: ./.github/actions/setup-api-client
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          github_token: ${{ github.token }}
+
+      - name: Setup API client (Workflows fallback)
+        if: github.event_name == 'pull_request' && steps.api_client_head.outputs.available != 'true'
+        uses: stranske/Workflows/.github/actions/setup-api-client@1ab8f39a2fb5f18b15237a38c4f9e440872d262d
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          github_token: ${{ github.token }}
       - name: Evaluate protected file changes
         id: evaluate
         uses: actions/github-script@v8
@@ -71,13 +133,28 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
+            const retryHelperPath = path.resolve(process.env.GITHUB_WORKSPACE || process.cwd(), '.github/scripts/github-api-with-retry.js');
+            const retryHelpers = fs.existsSync(retryHelperPath)
+              ? require(retryHelperPath)
+              : {
+                  withRetry: (fn) => fn(),
+                  paginateWithRetry: (githubInstance, method, params) =>
+                    githubInstance.paginate(method, params),
+                };
+            const { withRetry, paginateWithRetry } = retryHelpers;
             const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
             const guardRelativePath = '.github/scripts/agents-guard.js';
             const guardPath = path.resolve(workspace, guardRelativePath);
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const { withRetry, paginateWithRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'agents-guard',
+              capabilities: ['contents:read', 'issues:read', 'pull-requests:read'],
+            });
             const prNumber = context.payload.pull_request.number;
-              const authorLogin =
-                context.payload.pull_request.user &&
-                context.payload.pull_request.user.login;
+            const authorLogin = context.payload.pull_request.user && context.payload.pull_request.user.login;
             const { owner, repo } = context.repo;
             const baseRef = context.payload.pull_request.base.sha;
             const labelName = 'agents:allow-change';
@@ -85,37 +162,27 @@ jobs:
               '.github/workflows/agents-*.yml',
             ];
             const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-              async function withApiRetry(
-                fn,
-                { label = 'operation', maxAttempts = 5, baseDelay = 1000 } = {},
-              ) {
+            async function withApiRetry(fn, { label = 'operation', maxAttempts = 5, baseDelay = 1000 } = {}) {
               for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
                 try {
-                  return await fn();
+                  return await withRetry(() => fn());
                 } catch (error) {
                   const status = error?.status || error?.response?.status;
                   const headers = error?.response?.headers || {};
-                    const remainingRaw =
-                      headers['x-ratelimit-remaining'] ?? headers['X-RateLimit-Remaining'];
-                    const resetRaw =
-                      headers['x-ratelimit-reset'] ?? headers['X-RateLimit-Reset'];
+                  const remainingRaw = headers['x-ratelimit-remaining'] ?? headers['X-RateLimit-Remaining'];
+                  const resetRaw = headers['x-ratelimit-reset'] ?? headers['X-RateLimit-Reset'];
                   const remaining = Number(remainingRaw);
                   const reset = Number(resetRaw);
                   const hasRemainingValue = Number.isFinite(remaining);
                   const hasResetValue = Number.isFinite(reset);
                   const isRateLimit = status === 403 && hasRemainingValue && remaining <= 0;
-                    const retryable =
-                      isRateLimit ||
-                      status === 429 ||
-                      !status ||
-                      (status >= 500 && status < 600);
+                  const retryable = isRateLimit || status === 429 || !status || (status >= 500 && status < 600);
                   if (!retryable || attempt === maxAttempts) {
                     core.error(`Failed ${label}: ${error.message}`);
                     throw error;
                   }
                   let delay = baseDelay * attempt;
-                  const retryAfterRaw =
-                    headers['retry-after'] ?? headers['Retry-After'];
+                  const retryAfterRaw = headers['retry-after'] ?? headers['Retry-After'];
                   const retryAfterSeconds = Number(retryAfterRaw);
                   if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
                     delay = Math.max(delay, retryAfterSeconds * 1000);
@@ -130,10 +197,7 @@ jobs:
                   const humanDelay = delay >= 60000
                     ? `${(delay / 60000).toFixed(2)}m`
                     : `${Math.round(delay)}ms`;
-                  core.warning(
-                    `Retrying ${label} after ${humanDelay} ` +
-                      `(attempt ${attempt + 1}/${maxAttempts}).`
-                  );
+                  core.warning(`Retrying ${label} after ${humanDelay} (attempt ${attempt + 1}/${maxAttempts}).`);
                   await sleep(delay);
                 }
               }
@@ -150,9 +214,7 @@ jobs:
                 return true;
               }
               if (status === 403) {
-                const message = String(
-                  error.message || error?.response?.data?.message || ''
-                ).toLowerCase();
+                const message = String(error.message || error?.response?.data?.message || '').toLowerCase();
                 return message.includes('rate limit');
               }
               return false;
@@ -169,18 +231,16 @@ jobs:
                 return require(guardPath);
               }
 
-                core.info(
-                  `Guard script missing locally; fetching ${guardRelativePath} at ${baseRef}`,
-                );
+              core.info(`Guard script missing locally; fetching ${guardRelativePath} at ${baseRef}`);
               try {
                 const response = await withApiRetry(
-                  () => github.rest.repos.getContent({
-                  owner,
-                  repo,
-                  path: guardRelativePath,
-                  ref: baseRef,
-                }),
-                { label: `load ${guardRelativePath}` },
+                  (client) => client.rest.repos.getContent({
+                    owner,
+                    repo,
+                    path: guardRelativePath,
+                    ref: baseRef,
+                  }),
+                  { label: `load ${guardRelativePath}` },
                 );
 
                 if (Array.isArray(response.data) || response.data.type !== 'file') {
@@ -195,10 +255,7 @@ jobs:
                 return require(guardPath);
               } catch (error) {
                 if (isRateLimitError(error)) {
-                    warnRateLimit(
-                      'loading the guard script from the default branch',
-                      'using the checkout copy instead',
-                    );
+                  warnRateLimit('loading the guard script from the default branch', 'using the checkout copy instead');
                   if (fs.existsSync(guardPath)) {
                     return require(guardPath);
                   }
@@ -214,7 +271,7 @@ jobs:
             async function safePaginate(label, fn, params) {
               try {
                 return await withApiRetry(
-                  () => github.paginate(fn, params),
+                  () => paginateWithRetry(github, fn, params),
                   { label },
                 );
               } catch (error) {
@@ -226,43 +283,31 @@ jobs:
               }
             }
 
-              const files = await safePaginate(
-                'listing pull request files',
-                github.rest.pulls.listFiles,
-                {
-                  owner,
-                  repo,
-                  pull_number: prNumber,
-                  per_page: 100,
-                },
-              );
+            const files = await safePaginate('listing pull request files', github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: prNumber,
+              per_page: 100,
+            });
 
-              const labels = await safePaginate(
-                'enumerating labels on the pull request',
-                github.rest.issues.listLabelsOnIssue,
-                {
-                  owner,
-                  repo,
-                  issue_number: prNumber,
-                  per_page: 100,
-                },
-              );
+            const labels = await safePaginate('enumerating labels on the pull request', github.rest.issues.listLabelsOnIssue, {
+              owner,
+              repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
 
-              const reviews = await safePaginate(
-                'enumerating reviews',
-                github.rest.pulls.listReviews,
-                {
-                  owner,
-                  repo,
-                  pull_number: prNumber,
-                  per_page: 100,
-                },
-              );
+            const reviews = await safePaginate('enumerating reviews', github.rest.pulls.listReviews, {
+              owner,
+              repo,
+              pull_number: prNumber,
+              per_page: 100,
+            });
 
             let codeownersContent = '';
             try {
               const response = await withApiRetry(
-                () => github.rest.repos.getContent({
+                (client) => client.rest.repos.getContent({
                   owner,
                   repo,
                   path: '.github/CODEOWNERS',
@@ -299,19 +344,14 @@ jobs:
             let summary = result.summary;
             if (rateLimitNotes.length) {
               const noteBlock = `\n\nRate limit notices:\n${rateLimitNotes.join('\n')}`;
-                if (summary) {
-                  summary = `${summary}${noteBlock}`;
-                } else {
-                  summary = `Rate limit notices:\n${rateLimitNotes.join('\n')}`;
-                }
+              summary = summary ? `${summary}${noteBlock}` : `Rate limit notices:\n${rateLimitNotes.join('\n')}`;
             }
 
             core.setOutput('summary', summary);
             core.setOutput('marker', marker);
 
             if (result.commentBody) {
-                const commentBodyB64 = Buffer.from(result.commentBody).toString('base64');
-                core.setOutput('comment_body_b64', commentBodyB64);
+              core.setOutput('comment_body_b64', Buffer.from(result.commentBody).toString('base64'));
             }
 
             for (const warning of result.warnings || []) {
@@ -329,15 +369,19 @@ jobs:
             const path = require('path');
             const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
             const guardPath = path.resolve(workspace, '.github/scripts/agents-guard.js');
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const { withRetry, paginateWithRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'agents-guard',
+              capabilities: ['issues:read', 'issues:write'],
+            });
 
             let defaultMarker = '<!-- agents-guard-marker -->';
             try {
               const loaded = require(guardPath);
-                if (
-                  loaded &&
-                  typeof loaded.DEFAULT_MARKER === 'string' &&
-                  loaded.DEFAULT_MARKER.trim()
-                ) {
+              if (loaded && typeof loaded.DEFAULT_MARKER === 'string' && loaded.DEFAULT_MARKER.trim()) {
                 defaultMarker = loaded.DEFAULT_MARKER.trim();
               }
             } catch (error) {
@@ -345,36 +389,25 @@ jobs:
             }
 
             const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-              async function withApiRetry(
-                fn,
-                { label = 'operation', maxAttempts = 5, baseDelay = 1000 } = {},
-              ) {
+            async function withApiRetry(fn, { label = 'operation', maxAttempts = 5, baseDelay = 1000 } = {}) {
               for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
                 try {
-                  return await fn();
+                  return await withRetry(fn);
                 } catch (error) {
                   const status = error?.status || error?.response?.status;
                   const headers = error?.response?.headers || {};
-                    const remainingRaw =
-                      headers['x-ratelimit-remaining'] ?? headers['X-RateLimit-Remaining'];
-                    const resetRaw =
-                      headers['x-ratelimit-reset'] ?? headers['X-RateLimit-Reset'];
+                  const remainingRaw = headers['x-ratelimit-remaining'] ?? headers['X-RateLimit-Remaining'];
+                  const resetRaw = headers['x-ratelimit-reset'] ?? headers['X-RateLimit-Reset'];
                   const remaining = Number(remainingRaw);
                   const reset = Number(resetRaw);
-                    const isRateLimit =
-                      status === 403 && Number.isFinite(remaining) && remaining <= 0;
-                    const retryable =
-                      isRateLimit ||
-                      status === 429 ||
-                      !status ||
-                      (status >= 500 && status < 600);
+                  const isRateLimit = status === 403 && Number.isFinite(remaining) && remaining <= 0;
+                  const retryable = isRateLimit || status === 429 || !status || (status >= 500 && status < 600);
                   if (!retryable || attempt === maxAttempts) {
                     core.error(`Failed ${label}: ${error.message}`);
                     throw error;
                   }
                   let delay = baseDelay * attempt;
-                  const retryAfterRaw =
-                    headers['retry-after'] ?? headers['Retry-After'];
+                  const retryAfterRaw = headers['retry-after'] ?? headers['Retry-After'];
                   const retryAfterSeconds = Number(retryAfterRaw);
                   if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
                     delay = Math.max(delay, retryAfterSeconds * 1000);
@@ -389,10 +422,7 @@ jobs:
                   const humanDelay = delay >= 60000
                     ? `${(delay / 60000).toFixed(2)}m`
                     : `${Math.round(delay)}ms`;
-                  core.warning(
-                    `Retrying ${label} after ${humanDelay} ` +
-                      `(attempt ${attempt + 1}/${maxAttempts}).`
-                  );
+                  core.warning(`Retrying ${label} after ${humanDelay} (attempt ${attempt + 1}/${maxAttempts}).`);
                   await sleep(delay);
                 }
               }
@@ -403,10 +433,7 @@ jobs:
             if (!marker) {
               core.warning('Resolved guard marker is empty; comment updates may duplicate.');
             }
-            const body = Buffer.from(
-              process.env.COMMENT_BODY_B64 || '',
-              'base64'
-            ).toString('utf-8');
+            const body = Buffer.from(process.env.COMMENT_BODY_B64 || '', 'base64').toString('utf-8');
             if (!body) {
               core.warning('No comment body was provided.');
               return;
@@ -420,12 +447,15 @@ jobs:
             const { owner, repo } = context.repo;
 
             const existingComments = await withApiRetry(
-              () => github.paginate(github.rest.issues.listComments, {
-                owner,
-                repo,
-                issue_number: prNumber,
-                per_page: 100,
-              }),
+              () => paginateWithRetry(
+                github.rest.issues.listComments,
+                {
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  per_page: 100,
+                }
+              ),
               { label: 'list guard comments' },
             );
 
@@ -435,7 +465,7 @@ jobs:
             if (alreadyPosted) {
               if (alreadyPosted.body !== markedBody) {
                 await withApiRetry(
-                  () => github.rest.issues.updateComment({
+                  (client) => client.rest.issues.updateComment({
                     owner,
                     repo,
                     comment_id: alreadyPosted.id,
@@ -448,7 +478,7 @@ jobs:
             }
 
             await withApiRetry(
-              () => github.rest.issues.createComment({
+              (client) => client.rest.issues.createComment({
                 owner,
                 repo,
                 issue_number: prNumber,
@@ -463,10 +493,17 @@ jobs:
         env:
           BLOCKED: ${{ steps.evaluate.outputs.blocked || 'false' }}
           SUMMARY: ${{ steps.evaluate.outputs.summary }}
-          TARGET_URL: >-
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const { withRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'agents-guard',
+              capabilities: ['statuses:write'],
+            });
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const pullRequest = context.payload.pull_request;
@@ -488,34 +525,22 @@ jobs:
               description = `${description.slice(0, 137)}...`;
             }
 
-            const targetUrl =
-              process.env.TARGET_URL ||
-              `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const targetUrl = process.env.TARGET_URL || `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
 
             const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-              async function withApiRetry(
-                fn,
-                { label = 'operation', maxAttempts = 5, baseDelay = 1000 } = {},
-              ) {
+            async function withApiRetry(fn, { label = 'operation', maxAttempts = 5, baseDelay = 1000 } = {}) {
               for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
                 try {
-                  return await fn();
+                  return await withRetry(fn);
                 } catch (error) {
                   const status = error?.status || error?.response?.status;
                   const headers = error?.response?.headers || {};
-                    const remainingRaw =
-                      headers['x-ratelimit-remaining'] ?? headers['X-RateLimit-Remaining'];
-                    const resetRaw =
-                      headers['x-ratelimit-reset'] ?? headers['X-RateLimit-Reset'];
+                  const remainingRaw = headers['x-ratelimit-remaining'] ?? headers['X-RateLimit-Remaining'];
+                  const resetRaw = headers['x-ratelimit-reset'] ?? headers['X-RateLimit-Reset'];
                   const remaining = Number(remainingRaw);
                   const reset = Number(resetRaw);
-                    const isRateLimit =
-                      status === 403 && Number.isFinite(remaining) && remaining <= 0;
-                    const retryable =
-                      isRateLimit ||
-                      status === 429 ||
-                      !status ||
-                      (status >= 500 && status < 600);
+                  const isRateLimit = status === 403 && Number.isFinite(remaining) && remaining <= 0;
+                  const retryable = isRateLimit || status === 429 || !status || (status >= 500 && status < 600);
                   if (!retryable || attempt === maxAttempts) {
                     core.error(`Failed ${label}: ${error.message}`);
                     throw error;
@@ -536,27 +561,21 @@ jobs:
                   const humanDelay = delay >= 60000
                     ? `${(delay / 60000).toFixed(2)}m`
                     : `${Math.round(delay)}ms`;
-                  core.warning(
-                    `Retrying ${label} after ${humanDelay} ` +
-                      `(attempt ${attempt + 1}/${maxAttempts}).`
-                  );
+                  core.warning(`Retrying ${label} after ${humanDelay} (attempt ${attempt + 1}/${maxAttempts}).`);
                   await sleep(delay);
                 }
               }
               throw new Error(`Failed ${label} after ${maxAttempts} attempts.`);
             }
 
-            const statusContext =
-              'Health 45 Agents Guard / Enforce agents workflow protections';
-
             try {
               await withApiRetry(
-                () => github.rest.repos.createCommitStatus({
+                (client) => client.rest.repos.createCommitStatus({
                   owner,
                   repo,
                   sha,
                   state,
-                  context: statusContext,
+                  context: 'Health 45 Agents Guard / Enforce agents workflow protections',
                   description,
                   target_url: targetUrl,
                 }),
@@ -564,9 +583,7 @@ jobs:
               );
               core.info(`Updated Health 45 Agents Guard commit status to ${state}.`);
             } catch (error) {
-                core.warning(
-                  `Failed to update Health 45 Agents Guard commit status: ${error.message}`,
-                );
+              core.warning(`Failed to update Health 45 Agents Guard commit status: ${error.message}`);
             }
 
       - name: Fail when guard blocks the pull request
