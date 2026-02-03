@@ -111,6 +111,40 @@ const TOKEN_SPECIALIZATIONS = {
   },
 };
 
+const CAPABILITY_ALIASES = {
+  'issues:read': ['read-repo'],
+  'issues:write': ['write-repo', 'comments', 'labels'],
+  'pull-requests:read': ['read-repo'],
+  'pulls:read': ['read-repo'],
+  'pull-requests:write': ['pr-update'],
+  'contents:read': ['read-repo'],
+  'contents:write': ['write-repo'],
+  'actions:read': ['read-repo'],
+  'actions:write': ['workflow-dispatch'],
+  'rate_limit:read': ['read-repo'],
+  'deployments:write': ['write-repo'],
+};
+
+function normalizeCapabilities(capabilities = []) {
+  if (!Array.isArray(capabilities) || capabilities.length === 0) {
+    return [];
+  }
+
+  const normalized = [];
+  for (const capability of capabilities) {
+    const mapped = CAPABILITY_ALIASES[capability];
+    if (Array.isArray(mapped)) {
+      normalized.push(...mapped);
+    } else if (mapped) {
+      normalized.push(mapped);
+    } else if (capability) {
+      normalized.push(capability);
+    }
+  }
+
+  return Array.from(new Set(normalized));
+}
+
 function parseTokenRotationEnvKeys(value) {
   if (!value || typeof value !== 'string') {
     return [];
@@ -528,11 +562,12 @@ async function getOptimalToken({ github, core, capabilities = [], preferredType 
   }
   
   // Filter tokens by capability
+  const normalizedCapabilities = normalizeCapabilities(capabilities);
   const candidates = [];
   
   for (const [id, tokenInfo] of tokenRegistry.tokens) {
     // Check capabilities
-    const hasCapabilities = capabilities.every(cap => 
+    const hasCapabilities = normalizedCapabilities.every(cap => 
       tokenInfo.capabilities.includes(cap)
     );
     

@@ -195,9 +195,14 @@ jobs:
         with:
           script: |
             const scriptsPath = process.env.WORKFLOWS_SCRIPTS_PATH || process.env.GITHUB_WORKSPACE;
-            const { withRetry, paginateWithRetry } = require(
+            const { createTokenAwareRetry } = require(
               `${scriptsPath}/.github/scripts/github-api-with-retry.js`
             );
+            const { withRetry, paginateWithRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              task: 'auto-pilot-determine-context',
+            });
 
             let issueNumber, issue, pr;
 
