@@ -360,12 +360,11 @@ def build_record_from_args(args: argparse.Namespace) -> dict[str, Any]:
                     "duration_ms is required unless started_at or started_at_ms is set"
                 )
             if started_at_ms is not None:
-                ended_at_ms_value: str | int | None = ended_at_ms
-                if ended_at_ms_value is None:
-                    ended_at_ms_value = _utc_now_epoch_ms()
+                if ended_at_ms is None:
+                    ended_at_ms = str(_utc_now_epoch_ms())
                 duration_ms = _duration_ms_from_epoch_bounds(
                     _coerce_int(started_at_ms, "started_at_ms"),
-                    _coerce_int(ended_at_ms_value, "ended_at_ms"),
+                    _coerce_int(ended_at_ms, "ended_at_ms"),
                 )
             else:
                 ended_at = ended_at or _utc_now_iso()
