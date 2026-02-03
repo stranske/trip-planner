@@ -23,7 +23,7 @@ norecursedirs = ["1. tests", "scripts"]
 addopts = ["--ignore=tests/test_build_html.py"]
 
 [tool.mypy]
-exclude = ["1\\. tests", "scripts/langchain", "scripts/validate_request.py", "scripts/build_html.py"]
+exclude = "(^1\\. tests|^scripts/langchain|^scripts/validate_request\\.py|^scripts/build_html\\.py)"
 explicit_package_bases = true
 namespace_packages = true
 
