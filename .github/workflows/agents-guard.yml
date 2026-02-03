@@ -77,8 +77,7 @@ jobs:
         if: >-
           github.event_name == 'pull_request_target' &&
           steps.api_client_base.outputs.available != 'true'
-        uses: "stranske/Workflows/.github/actions/setup-api-client@\
-          1ab8f39a2fb5f18b15237a38c4f9e440872d262d"
+        uses: stranske/Workflows/.github/actions/setup-api-client@v1
         with:
           secrets: ${{ toJSON(secrets) }}
           github_token: ${{ github.token }}
@@ -129,8 +128,7 @@ jobs:
 
       - name: Setup API client (Workflows fallback)
         if: github.event_name == 'pull_request' && steps.api_client_head.outputs.available != 'true'
-        uses: "stranske/Workflows/.github/actions/setup-api-client@\
-          1ab8f39a2fb5f18b15237a38c4f9e440872d262d"
+        uses: stranske/Workflows/.github/actions/setup-api-client@v1
         with:
           secrets: ${{ toJSON(secrets) }}
           github_token: ${{ github.token }}
@@ -144,18 +142,14 @@ jobs:
             const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
             const guardRelativePath = '.github/scripts/agents-guard.js';
             const guardPath = path.resolve(workspace, guardRelativePath);
-            const retryHelperPath = path.resolve(
-              process.env.GITHUB_WORKSPACE || process.cwd(),
-              '.github/scripts/github-api-with-retry.js',
-            );
-            const retryHelpers = fs.existsSync(retryHelperPath)
-              ? require(retryHelperPath)
-              : {
-                  withRetry: (fn) => fn(),
-                  paginateWithRetry: (githubInstance, method, params) =>
-                    githubInstance.paginate(method, params),
-                };
-            const { withRetry, paginateWithRetry } = retryHelpers;
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const { github: api, withRetry, paginateWithRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'agents-guard',
+              capabilities: ['contents:read', 'issues:read', 'pull-requests:read'],
+            });
             const prNumber = context.payload.pull_request.number;
             const authorLogin =
               context.payload.pull_request.user &&
@@ -294,7 +288,7 @@ jobs:
             async function safePaginate(label, fn, params) {
               try {
                 return await withApiRetry(
-                  () => paginateWithRetry(github, fn, params),
+                  () => paginateWithRetry(fn, params),
                   { label },
                 );
               } catch (error) {
@@ -308,7 +302,7 @@ jobs:
 
             const files = await safePaginate(
               'listing pull request files',
-              github.rest.pulls.listFiles,
+              api.rest.pulls.listFiles,
               {
               owner,
               repo,
@@ -319,7 +313,7 @@ jobs:
 
             const labels = await safePaginate(
               'enumerating labels on the pull request',
-              github.rest.issues.listLabelsOnIssue,
+              api.rest.issues.listLabelsOnIssue,
               {
               owner,
               repo,
@@ -330,7 +324,7 @@ jobs:
 
             const reviews = await safePaginate(
               'enumerating reviews',
-              github.rest.pulls.listReviews,
+              api.rest.pulls.listReviews,
               {
               owner,
               repo,
