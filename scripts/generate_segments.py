@@ -6,7 +6,10 @@ import os
 import re
 import sys
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
+openai: ModuleType | None
 try:
     import openai  # type: ignore
 except ImportError:
@@ -42,6 +45,14 @@ def slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
+def _require_openai() -> ModuleType:
+    if openai is None:
+        raise SystemExit(
+            "openai package not installed. Add 'openai' to requirements.txt or pip install openai."
+        )
+    return openai
+
+
 def main(output_path: str = "data/segments_generated.json") -> None:
     req_path = Path("request.json")
     if not req_path.exists():
@@ -60,12 +71,13 @@ def main(output_path: str = "data/segments_generated.json") -> None:
         months=months or "(any)",
     )
 
+    openai_client: Any = _require_openai()
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         sys.exit("OPENAI_API_KEY environment variable not set.")
-    openai.api_key = api_key
+    openai_client.api_key = api_key
 
-    response = openai.ChatCompletion.create(  # type: ignore[attr-defined]
+    response = openai_client.ChatCompletion.create(  # type: ignore[attr-defined]
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
@@ -93,8 +105,4 @@ def main(output_path: str = "data/segments_generated.json") -> None:
 
 
 if __name__ == "__main__":
-    if openai is None:
-        sys.exit(
-            "openai package not installed. Add 'openai' to requirements.txt or pip install openai."
-        )
     main()
