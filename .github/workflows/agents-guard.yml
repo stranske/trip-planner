@@ -37,7 +37,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           sparse-checkout: |
+            .github/actions/setup-api-client
             .github/scripts/agents-guard.js
+            .github/scripts/github-api-with-retry.js
+            .github/scripts/token_load_balancer.js
             .github/workflows/agents-guard.yml
 
       - name: Verify pull_request_target safety invariants
@@ -61,8 +64,17 @@ jobs:
         uses: actions/checkout@v6
         with:
           sparse-checkout: |
+            .github/actions/setup-api-client
             .github/scripts/agents-guard.js
+            .github/scripts/github-api-with-retry.js
+            .github/scripts/token_load_balancer.js
             .github/workflows/agents-guard.yml
+
+      - name: Setup API client
+        uses: ./.github/actions/setup-api-client
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          github_token: ${{ github.token }}
 
       - name: Evaluate protected file changes
         id: evaluate
@@ -74,6 +86,14 @@ jobs:
             const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
             const guardRelativePath = '.github/scripts/agents-guard.js';
             const guardPath = path.resolve(workspace, guardRelativePath);
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const { withRetry, paginateWithRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'agents-guard',
+              capabilities: ['contents:read', 'issues:read', 'pull-requests:read'],
+            });
             const prNumber = context.payload.pull_request.number;
               const authorLogin =
                 context.payload.pull_request.user &&
@@ -91,7 +111,7 @@ jobs:
               ) {
               for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
                 try {
-                  return await fn();
+                  return await withRetry(fn);
                 } catch (error) {
                   const status = error?.status || error?.response?.status;
                   const headers = error?.response?.headers || {};
@@ -174,13 +194,13 @@ jobs:
                 );
               try {
                 const response = await withApiRetry(
-                  () => github.rest.repos.getContent({
-                  owner,
-                  repo,
-                  path: guardRelativePath,
-                  ref: baseRef,
-                }),
-                { label: `load ${guardRelativePath}` },
+                  (client) => client.rest.repos.getContent({
+                    owner,
+                    repo,
+                    path: guardRelativePath,
+                    ref: baseRef,
+                  }),
+                  { label: `load ${guardRelativePath}` },
                 );
 
                 if (Array.isArray(response.data) || response.data.type !== 'file') {
@@ -214,7 +234,7 @@ jobs:
             async function safePaginate(label, fn, params) {
               try {
                 return await withApiRetry(
-                  () => github.paginate(fn, params),
+                  () => paginateWithRetry(fn, params),
                   { label },
                 );
               } catch (error) {
@@ -262,7 +282,7 @@ jobs:
             let codeownersContent = '';
             try {
               const response = await withApiRetry(
-                () => github.rest.repos.getContent({
+                (client) => client.rest.repos.getContent({
                   owner,
                   repo,
                   path: '.github/CODEOWNERS',
@@ -329,6 +349,14 @@ jobs:
             const path = require('path');
             const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
             const guardPath = path.resolve(workspace, '.github/scripts/agents-guard.js');
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const { withRetry, paginateWithRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'agents-guard',
+              capabilities: ['issues:read', 'issues:write'],
+            });
 
             let defaultMarker = '<!-- agents-guard-marker -->';
             try {
@@ -351,7 +379,7 @@ jobs:
               ) {
               for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
                 try {
-                  return await fn();
+                  return await withRetry(fn);
                 } catch (error) {
                   const status = error?.status || error?.response?.status;
                   const headers = error?.response?.headers || {};
@@ -420,12 +448,15 @@ jobs:
             const { owner, repo } = context.repo;
 
             const existingComments = await withApiRetry(
-              () => github.paginate(github.rest.issues.listComments, {
-                owner,
-                repo,
-                issue_number: prNumber,
-                per_page: 100,
-              }),
+              () => paginateWithRetry(
+                github.rest.issues.listComments,
+                {
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  per_page: 100,
+                }
+              ),
               { label: 'list guard comments' },
             );
 
@@ -435,7 +466,7 @@ jobs:
             if (alreadyPosted) {
               if (alreadyPosted.body !== markedBody) {
                 await withApiRetry(
-                  () => github.rest.issues.updateComment({
+                  (client) => client.rest.issues.updateComment({
                     owner,
                     repo,
                     comment_id: alreadyPosted.id,
@@ -448,7 +479,7 @@ jobs:
             }
 
             await withApiRetry(
-              () => github.rest.issues.createComment({
+              (client) => client.rest.issues.createComment({
                 owner,
                 repo,
                 issue_number: prNumber,
@@ -467,6 +498,14 @@ jobs:
             ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const { withRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'agents-guard',
+              capabilities: ['statuses:write'],
+            });
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const pullRequest = context.payload.pull_request;
@@ -499,7 +538,7 @@ jobs:
               ) {
               for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
                 try {
-                  return await fn();
+                  return await withRetry(fn);
                 } catch (error) {
                   const status = error?.status || error?.response?.status;
                   const headers = error?.response?.headers || {};
@@ -551,7 +590,7 @@ jobs:
 
             try {
               await withApiRetry(
-                () => github.rest.repos.createCommitStatus({
+                (client) => client.rest.repos.createCommitStatus({
                   owner,
                   repo,
                   sha,

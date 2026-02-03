@@ -20,16 +20,33 @@ jobs:
       github.actor == 'dependabot[bot]' &&
       github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Get PR metadata
         id: metadata
         uses: dependabot/fetch-metadata@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Setup API client
+        uses: ./.github/actions/setup-api-client
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          github_token: ${{ github.token }}
+
       - name: Wait for checks
         uses: actions/github-script@v8
         with:
           script: |
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const { withRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'dependabot-automerge',
+              capabilities: ['checks:read'],
+            });
             const pr = context.payload.pull_request;
             const owner = context.repo.owner;
             const repo = context.repo.repo;
@@ -52,11 +69,13 @@ jobs:
             const pollInterval = 30000; // 30 seconds
 
             while (Date.now() - startTime < maxWaitTime) {
-              const { data: checkRuns } = await github.rest.checks.listForRef({
-                owner,
-                repo,
-                ref: pr.head.sha
-              });
+              const { data: checkRuns } = await withRetry((client) =>
+                client.rest.checks.listForRef({
+                  owner,
+                  repo,
+                  ref: pr.head.sha
+                })
+              );
 
               const allChecks = checkRuns.check_runs || [];
               const requiredChecks = allChecks.filter(c => {
@@ -119,6 +138,14 @@ jobs:
         with:
           github-token: ${{ secrets.CODESPACES_WORKFLOWS || secrets.GITHUB_TOKEN }}
           script: |
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const { withRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'dependabot-automerge',
+              capabilities: ['pull-requests:write', 'issues:write'],
+            });
             const pr = context.payload.pull_request;
             const hasCrossRepoToken = !!process.env.CODESPACES_WORKFLOWS_PAT;
 
@@ -131,7 +158,7 @@ jobs:
             }
 
             try {
-              await github.graphql(`
+              await withRetry((client) => client.graphql(`
                 mutation {
                   enablePullRequestAutoMerge(input: {
                     pullRequestId: "${pr.node_id}",
@@ -145,19 +172,19 @@ jobs:
                     }
                   }
                 }
-              `);
+              `));
 
               console.log(`✓ Auto-merge enabled for PR #${pr.number}`);
 
               // Add a comment
-              await github.rest.issues.createComment({
+              await withRetry((client) => client.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: pr.number,
                 body:
                   '🤖 Auto-merge enabled - this PR will be ' +
                   'automatically merged when all checks pass.'
-              });
+              }));
             } catch (error) {
               console.error('Failed to enable auto-merge:', error);
               // Do not attempt direct merge - rely on branch protections
