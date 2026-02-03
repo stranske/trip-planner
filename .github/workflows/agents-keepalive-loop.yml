@@ -42,6 +42,7 @@ jobs:
     outputs:
       pr_number: ${{ steps.evaluate.outputs.pr_number }}
       pr_ref: ${{ steps.evaluate.outputs.pr_ref }}
+      base_ref: ${{ steps.evaluate.outputs.base_ref }}
       head_sha: ${{ steps.evaluate.outputs.head_sha }}
       action: ${{ steps.evaluate.outputs.action }}
       reason: ${{ steps.evaluate.outputs.reason }}
@@ -235,6 +236,7 @@ jobs:
             const output = {
               pr_number: String(result.prNumber || ''),
               pr_ref: String(result.prRef || ''),
+              base_ref: String(result.baseRef || ''),
               head_sha: String(result.headSha || ''),
               action: result.action || '',
               reason: result.reason || '',
@@ -393,6 +395,7 @@ jobs:
       mode: keepalive
       pr_number: ${{ needs.evaluate.outputs.pr_number }}
       pr_ref: ${{ needs.evaluate.outputs.pr_ref }}
+      base_ref: ${{ needs.evaluate.outputs.base_ref }}
       appendix: ${{ needs.evaluate.outputs.task_appendix }}
       iteration: ${{ needs.evaluate.outputs.iteration }}
       environment: ${{ needs.evaluate.outputs.has_high_privilege == 'true' && 'agent-high-privilege' || 'agent-standard' }}

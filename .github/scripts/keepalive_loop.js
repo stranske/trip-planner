@@ -1748,6 +1748,7 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
       core?.info?.(`Rate limits exhausted - deferring. Recommendation: ${rateLimitStatus.recommendation}`);
       return {
         prNumber: overridePrNumber || 0,
+        baseRef: '',
         action: 'defer',
         reason: 'rate-limit-exhausted',
         rateLimitStatus,
@@ -1762,6 +1763,7 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     if (!prNumber) {
       return {
         prNumber: 0,
+        baseRef: '',
         action: 'skip',
         reason: 'pr-not-found',
       };
@@ -1997,6 +1999,7 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     return {
       prNumber,
       prRef: pr.head.ref || '',
+      baseRef: pr.base?.ref || '',
       headSha: pr.head.sha || '',
       action,
       reason,

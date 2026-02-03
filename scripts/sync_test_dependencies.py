@@ -26,7 +26,7 @@ if SRC_PATH.exists():
 
 TOMLKIT_ERROR: ImportError | None
 try:
-    import tomlkit  # type: ignore[import-not-found]
+    import tomlkit
 except ImportError as exc:  # pragma: no cover - exercised via CLI messaging.
     TOMLKIT_ERROR = exc
 else:
