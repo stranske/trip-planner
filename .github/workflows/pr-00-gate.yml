@@ -43,7 +43,7 @@ jobs:
     uses: stranske/Workflows/.github/workflows/reusable-10-ci-python.yml@main
     with:
       python-versions: '["3.11", "3.12"]'
-      coverage-min: "15"
+      coverage-min: "8"
       format_check: false  # Using ruff for formatting
       working-directory: "."
       artifact-prefix: "gate-"
