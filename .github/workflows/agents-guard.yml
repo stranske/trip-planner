@@ -133,15 +133,6 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
-            const retryHelperPath = path.resolve(process.env.GITHUB_WORKSPACE || process.cwd(), '.github/scripts/github-api-with-retry.js');
-            const retryHelpers = fs.existsSync(retryHelperPath)
-              ? require(retryHelperPath)
-              : {
-                  withRetry: (fn) => fn(),
-                  paginateWithRetry: (githubInstance, method, params) =>
-                    githubInstance.paginate(method, params),
-                };
-            const { withRetry, paginateWithRetry } = retryHelpers;
             const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
             const guardRelativePath = '.github/scripts/agents-guard.js';
             const guardPath = path.resolve(workspace, guardRelativePath);
@@ -165,7 +156,7 @@ jobs:
             async function withApiRetry(fn, { label = 'operation', maxAttempts = 5, baseDelay = 1000 } = {}) {
               for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
                 try {
-                  return await withRetry(() => fn());
+                  return await withRetry(fn);
                 } catch (error) {
                   const status = error?.status || error?.response?.status;
                   const headers = error?.response?.headers || {};
@@ -271,7 +262,7 @@ jobs:
             async function safePaginate(label, fn, params) {
               try {
                 return await withApiRetry(
-                  () => paginateWithRetry(github, fn, params),
+                  () => paginateWithRetry(fn, params),
                   { label },
                 );
               } catch (error) {
