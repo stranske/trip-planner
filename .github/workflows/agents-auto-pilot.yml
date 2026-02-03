@@ -219,8 +219,21 @@ jobs:
             } else if (context.payload.pull_request) {
               // For PR events, find linked issue
               pr = context.payload.pull_request;
-              const bodyMatch = pr.body?.match(/#(\d+)/);
-              issueNumber = bodyMatch ? parseInt(bodyMatch[1]) : null;
+              const prBody = pr.body || '';
+              const prTitle = pr.title || '';
+              const metaMatch = prBody.match(/<!--\s*meta:issue:(\d+)\s*-->/i);
+              const sourceMatch = prBody.match(/Source:\s*Issue\s*#(\d+)/i);
+              const closeMatch = prBody.match(/\b(close[sd]?|fixe?[sd]?|resolve[sd]?)[:\s]+#(\d+)\b/i);
+              const titleCloseMatch = prTitle.match(/\b(close[sd]?|fixe?[sd]?|resolve[sd]?)[:\s]+#(\d+)\b/i);
+              const fallbackMatch = prBody.match(/#(\d+)/);
+
+              const resolved =
+                metaMatch?.[1] ||
+                sourceMatch?.[1] ||
+                closeMatch?.[2] ||
+                titleCloseMatch?.[2] ||
+                fallbackMatch?.[1];
+              issueNumber = resolved ? parseInt(resolved) : null;
             }
 
             if (!issueNumber) {
@@ -272,7 +285,6 @@ jobs:
             // Since we run optimizer inline now, this should always exist after optimize step
             // the optimizer workflow actually completed its work
             const comments = await paginateWithRetry(
-              github,
               github.rest.issues.listComments,
               {
                 owner: context.repo.owner,
@@ -291,7 +303,6 @@ jobs:
 
             // Check for linked PR (with pagination and multiple event types)
             const timelineEvents = await paginateWithRetry(
-              github,
               github.rest.issues.listEventsForTimeline,
               {
                 owner: context.repo.owner,

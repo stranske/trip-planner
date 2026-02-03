@@ -92,6 +92,37 @@ function isIntegrationPermissionError(error) {
   );
 }
 
+
+const TRANSIENT_ERROR_CODES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'EAI_AGAIN',
+  'ENOTFOUND',
+]);
+
+const IDEMPOTENT_HTTP_METHODS = new Set([
+  'GET',
+  'HEAD',
+  'OPTIONS',
+]);
+
+function isTransientError(error) {
+  if (!error) {
+    return false;
+  }
+  const status = error.status || error?.response?.status;
+  if (status && [500, 502, 503, 504].includes(status)) {
+    return true;
+  }
+  const message = String(error.message || '').toLowerCase();
+  if (message.includes('fetch failed') || message.includes('network error')) {
+    return true;
+  }
+  const code = String(error.code || error?.cause?.code || '').toUpperCase();
+  return TRANSIENT_ERROR_CODES.has(code);
+}
+
 function logWithCore(core, level, message) {
   if (core && typeof core[level] === 'function') {
     core[level](message);
@@ -152,6 +183,7 @@ function resolveOctokitFactory({ github, getOctokit, Octokit }) {
  * @param {string} options.task - Task name for specialization matching
  * @param {number} options.minRemaining - Minimum remaining calls needed
  * @param {Function} options.onTokenSwitch - Callback on token switch
+ * @param {boolean} options.allowNonIdempotentRetries - Allow retries for non-idempotent methods
  * @returns {Promise<any>} - Result of the API call
  */
 async function withRetry(fn, options = {}) {
@@ -171,6 +203,7 @@ async function withRetry(fn, options = {}) {
     task = null,
     minRemaining = 100,
     onTokenSwitch = null,
+    allowNonIdempotentRetries = false,
   } = options;
 
   let lastError;
@@ -256,6 +289,13 @@ async function withRetry(fn, options = {}) {
       const rateLimitError = isRateLimitError(error);
       const secondaryRateLimit = isSecondaryRateLimitError(error);
       const integrationPermissionError = isIntegrationPermissionError(error);
+      const transientError = isTransientError(error);
+      const requestMethod = String(error?.request?.method || '').toUpperCase();
+      const isIdempotentMethod = requestMethod
+        ? IDEMPOTENT_HTTP_METHODS.has(requestMethod)
+        : false;
+      const allowNonIdempotent = allowNonIdempotentRetries === true;
+      const shouldRetryTransient = transientError && (isIdempotentMethod || allowNonIdempotent);
       const headers = normaliseHeaders(error?.response?.headers || error?.headers);
 
       if (tokenRegistry && currentTokenSource) {
@@ -278,8 +318,8 @@ async function withRetry(fn, options = {}) {
         return null;
       }
 
-      // Don't retry on non-rate-limit errors
-      if (!rateLimitError && !secondaryRateLimit) {
+      // Don't retry on non-rate-limit errors unless they're transient and safe
+      if (!rateLimitError && !secondaryRateLimit && !shouldRetryTransient) {
         throw error;
       }
 
@@ -293,7 +333,12 @@ async function withRetry(fn, options = {}) {
 
       // Don't retry if we've exhausted attempts
       if (attempt === maxRetries) {
-        console.error(`Max retries (${maxRetries}) reached for rate limit error`);
+        const retryReason = secondaryRateLimit
+          ? 'secondary rate limit'
+          : rateLimitError
+            ? 'rate limit'
+            : 'transient error';
+        console.error(`Max retries (${maxRetries}) reached for ${retryReason}`);
         throw error;
       }
 
@@ -311,8 +356,14 @@ async function withRetry(fn, options = {}) {
       const jitter = Math.random() * 0.3 * delay;
       const actualDelay = delay + jitter;
 
+      const retryReason = secondaryRateLimit
+        ? 'secondary rate limit'
+        : rateLimitError
+          ? 'rate limit'
+          : 'transient error';
+
       console.log(
-        `Rate limit hit (attempt ${attempt + 1}/${maxRetries + 1}). ` +
+        `${retryReason} (attempt ${attempt + 1}/${maxRetries + 1}). ` +
         `Retrying in ${Math.round(actualDelay / 1000)}s...`
       );
 
