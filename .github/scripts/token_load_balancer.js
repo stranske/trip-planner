@@ -123,6 +123,8 @@ const CAPABILITY_ALIASES = {
   'actions:write': ['workflow-dispatch'],
   'rate_limit:read': ['read-repo'],
   'deployments:write': ['write-repo'],
+  'checks:read': ['read-repo'],
+  'statuses:write': ['write-repo'],
 };
 
 function normalizeCapabilities(capabilities = []) {

@@ -101,8 +101,10 @@ jobs:
               labels = context.payload.pull_request.labels.map(l => l.name);
             }
 
-            const hasAutoPilot = labels.includes('agents:auto-pilot') || labels.includes('agent:codex');
-            const isAutoPilotTrigger = labelName === 'agents:auto-pilot' || labelName === 'agent:codex';
+            const hasAutoPilot = labels.includes('agents:auto-pilot')
+              || labels.includes('agent:codex');
+            const isAutoPilotTrigger = labelName === 'agents:auto-pilot'
+              || labelName === 'agent:codex';
             if (!hasAutoPilot && !isAutoPilotTrigger) {
               core.info(`Skipping: auto-pilot not enabled (trigger: ${labelName})`);
               core.setOutput('enabled', 'false');
@@ -138,6 +140,7 @@ jobs:
             const { withRetry } = await createTokenAwareRetry({
               github,
               core,
+              env: process.env,
               task: 'auto-pilot-resolve-workflows-ref',
             });
 
@@ -1540,12 +1543,14 @@ jobs:
 
             // Helper: count consecutive "waiting" comments (stall detection)
             async function countConsecutiveWaits(waitText) {
-              const { data: comments } = await withRetry((client) => client.rest.issues.listComments({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                per_page: 100
-              }));
+              const { data: comments } = await withRetry((client) =>
+                client.rest.issues.listComments({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  per_page: 100
+                })
+              );
 
               // Look at comments in reverse order (newest first)
               const reversed = [...comments].reverse();
@@ -1727,12 +1732,14 @@ jobs:
 
             // If branch has no commits ahead of base, dispatch the belt worker
             try {
-              const { data: comparison } = await withRetry((client) => client.rest.repos.compareCommits({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                base: baseBranch,
-                head: branchName
-              }));
+              const { data: comparison } = await withRetry((client) =>
+                client.rest.repos.compareCommits({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  base: baseBranch,
+                  head: branchName
+                })
+              );
 
               if ((comparison.ahead_by || 0) === 0) {
                 core.info(`Branch ${branchName} has no commits ahead of ${baseBranch}`);
@@ -2072,12 +2079,14 @@ jobs:
 
             // Helper: count consecutive "monitor-pr" comments (stall detection)
             async function countConsecutiveWaits(waitText) {
-              const { data: comments } = await withRetry((client) => client.rest.issues.listComments({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                per_page: 100
-              }));
+              const { data: comments } = await withRetry((client) =>
+                client.rest.issues.listComments({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  per_page: 100
+                })
+              );
 
               // Look at comments in reverse order (newest first)
               const reversed = [...comments].reverse();

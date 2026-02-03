@@ -19,6 +19,9 @@ jobs:
     if: false && github.event.label.name == 'verify:create-issue'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
       - name: Setup API client
         uses: ./.github/actions/setup-api-client
         with:
