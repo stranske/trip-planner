@@ -112,6 +112,21 @@ runs:
           echo "✅ @octokit dependencies installed"
         fi
 
+    - name: Export NODE_PATH for shared deps
+      shell: bash
+      run: |
+        set -euo pipefail
+        INSTALL_DIR="${GITHUB_WORKSPACE}/.github/scripts"
+        if [ -d "${INSTALL_DIR}/node_modules" ]; then
+          if [ -n "${NODE_PATH:-}" ]; then
+            echo "NODE_PATH=${INSTALL_DIR}/node_modules:${NODE_PATH}" >> "$GITHUB_ENV"
+          else
+            echo "NODE_PATH=${INSTALL_DIR}/node_modules" >> "$GITHUB_ENV"
+          fi
+        else
+          echo "::notice::setup-api-client: ${INSTALL_DIR}/node_modules not found; skipping NODE_PATH export."
+        fi
+
     - name: Export load balancer tokens
       id: export-tokens
       shell: bash

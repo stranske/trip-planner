@@ -118,7 +118,10 @@ jobs:
               core.info('Removed agent:retry label');
             } catch (error) {
               if (error.message.includes('rate limit') || error.status === 403) {
-                core.warning(`⚠️ Rate limited - could not remove agent:retry label: ${error.message}`);
+                core.warning(
+                  `⚠️ Rate limited - could not remove agent:retry label: ` +
+                    `${error.message}`
+                );
               } else if (!error.message.includes('Label does not exist')) {
                 core.warning(`Could not remove agent:retry: ${error.message}`);
               }
@@ -137,7 +140,10 @@ jobs:
               core.info('Removed agent:rate-limited label');
             } catch (error) {
               if (error.message.includes('rate limit') || error.status === 403) {
-                core.warning(`⚠️ Rate limited - could not remove agent:rate-limited label: ${error.message}`);
+                core.warning(
+                  `⚠️ Rate limited - could not remove agent:rate-limited label: ` +
+                    `${error.message}`
+                );
               } else if (!error.message.includes('Label does not exist')) {
                 // Only warn if it's not just "label doesn't exist"
                 core.warning(`Could not remove agent:rate-limited: ${error.message}`);
@@ -276,7 +282,12 @@ jobs:
       needs.evaluate.outputs.action == 'fix' ||
       needs.evaluate.outputs.action == 'conflict'
     runs-on: ubuntu-latest
-    environment: ${{ needs.evaluate.outputs.has_high_privilege == 'true' && 'agent-high-privilege' || 'agent-standard' }}
+    environment: >-
+      ${{
+        needs.evaluate.outputs.has_high_privilege == 'true' &&
+        'agent-high-privilege' ||
+        'agent-standard'
+      }}
     outputs:
       secrets_ok: ${{ steps.check.outputs.secrets_ok }}
     steps:
@@ -398,7 +409,12 @@ jobs:
       base_ref: ${{ needs.evaluate.outputs.base_ref }}
       appendix: ${{ needs.evaluate.outputs.task_appendix }}
       iteration: ${{ needs.evaluate.outputs.iteration }}
-      environment: ${{ needs.evaluate.outputs.has_high_privilege == 'true' && 'agent-high-privilege' || 'agent-standard' }}
+      environment: >-
+        ${{
+          needs.evaluate.outputs.has_high_privilege == 'true' &&
+          'agent-high-privilege' ||
+          'agent-standard'
+        }}
 
   # Placeholder for future Claude agent support
   # run-claude:
@@ -417,7 +433,12 @@ jobs:
     needs: evaluate
     if: needs.evaluate.outputs.action == 'review'
     runs-on: ubuntu-latest
-    environment: ${{ needs.evaluate.outputs.has_high_privilege == 'true' && 'agent-high-privilege' || 'agent-standard' }}
+    environment: >-
+      ${{
+        needs.evaluate.outputs.has_high_privilege == 'true' &&
+        'agent-high-privilege' ||
+        'agent-standard'
+      }}
     outputs:
       recommendation: ${{ steps.review.outputs.recommendation }}
       alignment_score: ${{ steps.review.outputs.alignment_score }}
@@ -548,16 +569,21 @@ jobs:
 
           # Parse results
           if [ -f review_result.json ]; then
-            echo "recommendation=$(jq -r '.recommendation // "REDIRECT"' review_result.json)" >> "$GITHUB_OUTPUT"
-            echo "alignment_score=$(jq -r '.alignment_score // 5' review_result.json)" >> "$GITHUB_OUTPUT"
-            echo "feedback=$(jq -r '.feedback_for_agent // ""' review_result.json)" >> "$GITHUB_OUTPUT"
+            echo "recommendation=$(jq -r '.recommendation // "REDIRECT"' review_result.json)" \
+              >> "$GITHUB_OUTPUT"
+            echo "alignment_score=$(jq -r '.alignment_score // 5' review_result.json)" \
+              >> "$GITHUB_OUTPUT"
+            echo "feedback=$(jq -r '.feedback_for_agent // ""' review_result.json)" \
+              >> "$GITHUB_OUTPUT"
             echo "summary=$(jq -r '.summary // ""' review_result.json)" >> "$GITHUB_OUTPUT"
 
             cat review_result.json >> "$GITHUB_STEP_SUMMARY"
           else
             echo "recommendation=REDIRECT" >> "$GITHUB_OUTPUT"
             echo "alignment_score=5" >> "$GITHUB_OUTPUT"
-            echo "feedback=Unable to analyze progress. Please review acceptance criteria." >> "$GITHUB_OUTPUT"
+            printf '%s\n' \
+              "feedback=Unable to analyze progress. Please review acceptance criteria." \
+              >> "$GITHUB_OUTPUT"
           fi
 
       - name: Post review feedback to PR
@@ -598,8 +624,10 @@ jobs:
               feedback || 'No specific feedback.',
               '',
               '---',
-              `_This review was triggered because the agent has been working for ${rounds} rounds without completing any task checkboxes._`,
-              '_The review evaluates whether recent work is advancing toward the acceptance criteria._',
+              `_This review was triggered because the agent has been working for ${rounds} ` +
+                `rounds without completing any task checkboxes._`,
+              '_The review evaluates whether recent work is advancing toward ' +
+                'the acceptance criteria._',
             ].join('\n');
 
             await withRetry((client) =>
@@ -640,7 +668,12 @@ jobs:
       needs.evaluate.outputs.pr_number != '' &&
       needs.evaluate.outputs.pr_number != '0'
     runs-on: ubuntu-latest
-    environment: ${{ needs.evaluate.outputs.has_high_privilege == 'true' && 'agent-high-privilege' || 'agent-standard' }}
+    environment: >-
+      ${{
+        needs.evaluate.outputs.has_high_privilege == 'true' &&
+        'agent-high-privilege' ||
+        'agent-standard'
+      }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -795,7 +828,12 @@ jobs:
         id: update-summary
         uses: actions/github-script@v8
         env:
-          CODEX_SUMMARY: ${{ needs.run-codex.outputs.final-message-summary || needs.run-codex.outputs.error-summary || '' }}
+          CODEX_SUMMARY: >-
+            ${{
+              needs.run-codex.outputs.final-message-summary ||
+              needs.run-codex.outputs.error-summary ||
+              ''
+            }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -866,9 +904,15 @@ jobs:
             const prNumber = Number('${{ steps.update-summary.outputs.pr_number }}') || 0;
             const errorMessage = '${{ steps.update-summary.outputs.rate_limit_error }}';
             const resetTime = '${{ steps.update-summary.outputs.rate_limit_reset }}';
-            const remaining = Number('${{ steps.update-summary.outputs.rate_limit_remaining }}') || 0;
-            const action = '${{ steps.update-summary.outputs.action }}' || '${{ needs.evaluate.outputs.action }}';
-            const reason = '${{ steps.update-summary.outputs.reason }}' || '${{ needs.evaluate.outputs.reason }}';
+            const remaining = Number(
+              '${{ steps.update-summary.outputs.rate_limit_remaining }}'
+            ) || 0;
+            const action =
+              '${{ steps.update-summary.outputs.action }}' ||
+              '${{ needs.evaluate.outputs.action }}';
+            const reason =
+              '${{ steps.update-summary.outputs.reason }}' ||
+              '${{ needs.evaluate.outputs.reason }}';
 
             if (!prNumber) {
               core.warning('No PR number available for rate limit notification');
@@ -892,7 +936,9 @@ jobs:
             if (result.skipped) {
               core.info('Rate limit notification skipped (recent notification exists)');
             } else if (result.posted || result.labeled) {
-              core.info(`Rate limit notification: posted=${result.posted}, labeled=${result.labeled}`);
+              core.info(
+                `Rate limit notification: posted=${result.posted}, labeled=${result.labeled}`
+              );
             } else {
               core.warning(`Failed to notify PR: ${result.error}`);
             }
