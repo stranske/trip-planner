@@ -290,7 +290,7 @@ jobs:
             async function safePaginate(label, fn, params) {
               try {
                 return await withApiRetry(
-                  () => paginateWithRetry(github, fn, params),
+                  () => paginateWithRetry(fn, params),
                   { label },
                 );
               } catch (error) {
