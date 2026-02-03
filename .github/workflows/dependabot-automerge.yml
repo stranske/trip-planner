@@ -44,7 +44,6 @@ jobs:
               'resolve_pr',
               'Cleanup',
               'Dependabot Auto-merge',
-              'automerge',
             ];
 
             // Wait up to 10 minutes for checks to complete
