@@ -98,7 +98,7 @@ runs:
           # Install with pinned versions for consistency
           # Capture stderr for debugging if the command fails
           npm_output=$(mktemp)
-          if npm install --no-save \
+          if npm install --no-save --location=project \
             @octokit/rest@20.0.2 \
             @octokit/plugin-retry@6.0.1 \
             @octokit/plugin-paginate-rest@9.1.5 \
@@ -109,7 +109,7 @@ runs:
             echo "::warning::npm install failed with: $(cat "$npm_output")"
             echo "::warning::Retrying with --legacy-peer-deps"
             rm -f "$npm_output"
-            npm install --no-save --legacy-peer-deps \
+            npm install --no-save --legacy-peer-deps --location=project \
               @octokit/rest@20.0.2 \
               @octokit/plugin-retry@6.0.1 \
               @octokit/plugin-paginate-rest@9.1.5 \

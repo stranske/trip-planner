@@ -103,6 +103,13 @@ jobs:
             tools
           sparse-checkout-cone-mode: false
 
+      - name: Setup API client
+        if: steps.check.outputs.should_run == 'true'
+        uses: ./.github/actions/setup-api-client
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          github_token: ${{ steps.token.outputs.token }}
+
       - name: Set up Python
         if: steps.check.outputs.should_run == 'true'
         uses: actions/setup-python@v5
@@ -123,10 +130,27 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
           ISSUE_NUMBER: ${{ steps.check.outputs.issue_number }}
-        run: |
-          gh api "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}" > /tmp/issue.json
-          jq -r '.body' /tmp/issue.json > /tmp/issue_body.md
-          echo "Issue body saved to /tmp/issue_body.md"
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ steps.token.outputs.token }}
+          script: |
+            const fs = require('fs');
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const { github: retryGithub, withRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'issue-optimizer',
+              capabilities: ['issues:read'],
+            });
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const { owner, repo } = context.repo;
+            const { data } = await withRetry((client) =>
+              client.rest.issues.get({ owner, repo, issue_number: issueNumber })
+            );
+            fs.writeFileSync('/tmp/issue.json', JSON.stringify(data, null, 2));
+            fs.writeFileSync('/tmp/issue_body.md', data.body || '');
+            core.info('Issue body saved to /tmp/issue_body.md');
 
       - name: Phase 1 - Analyze Issue
         if: steps.check.outputs.should_run == 'true' && steps.check.outputs.phase == 'analyze'
@@ -186,12 +210,43 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/workflows-scripts
         run: |
           echo "Checking for potential duplicate issues (advisory)"
-            gh api \
-              "repos/${{ github.repository }}/issues?state=open&per_page=100" \
-              --paginate > /tmp/open_issues.json
-            gh api \
-              "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments" \
-              --paginate > /tmp/dedup_comments.json
+
+          node - <<'NODE'
+          const fs = require('fs');
+          const { Octokit } = require('@octokit/rest');
+          const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+
+          const issueNumber = Number(process.env.ISSUE_NUMBER);
+          const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
+          const github = new Octokit({ auth: process.env.GH_TOKEN });
+          const core = { info: console.log, warning: console.warn, debug: () => {} };
+
+          (async () => {
+            const { paginateWithRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'issue-optimizer',
+              capabilities: ['issues:read'],
+            });
+
+            const openIssues = await paginateWithRetry(
+              github.rest.issues.listForRepo,
+              { owner, repo, state: 'open', per_page: 100 }
+            );
+
+            const comments = await paginateWithRetry(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number: issueNumber, per_page: 100 }
+            );
+
+            fs.writeFileSync('/tmp/open_issues.json', JSON.stringify(openIssues, null, 2));
+            fs.writeFileSync('/tmp/dedup_comments.json', JSON.stringify(comments, null, 2));
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
 
           python - <<'PY' || true
           import json
@@ -247,10 +302,36 @@ jobs:
         run: |
           echo "Extracting suggestions from comments on issue #${ISSUE_NUMBER}"
 
-          # Get all comments and find the one with suggestions JSON
-            gh api \
-              "repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments" \
-              --paginate > /tmp/comments.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const { Octokit } = require('@octokit/rest');
+          const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+
+          const issueNumber = Number(process.env.ISSUE_NUMBER);
+          const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
+          const github = new Octokit({ auth: process.env.GH_TOKEN });
+          const core = { info: console.log, warning: console.warn, debug: () => {} };
+
+          (async () => {
+            const { paginateWithRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'issue-optimizer',
+              capabilities: ['issues:read'],
+            });
+
+            const comments = await paginateWithRetry(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number: issueNumber, per_page: 100 }
+            );
+
+            fs.writeFileSync('/tmp/comments.json', JSON.stringify(comments, null, 2));
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
 
           # Extract suggestions JSON from comment
           python -c "
@@ -355,7 +436,8 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.token.outputs.token || github.token }}
           ISSUE_NUMBER: ${{ steps.check.outputs.issue_number }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_URL: >-
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [ -n "${ISSUE_NUMBER}" ]; then
             body=$(cat <<'COMMENT'

@@ -674,7 +674,9 @@ jobs:
 
             const { owner, repo } = context.repo;
             const prNumber = Number(prInfo.number);
-            const pr = await withRetry((client) => client.rest.pulls.get({ owner, repo, pull_number: prNumber }));
+            const pr = await withRetry((client) =>
+              client.rest.pulls.get({ owner, repo, pull_number: prNumber })
+            );
             const prData = pr.data;
 
             if (!prData || prData.state !== 'open') {
