@@ -223,8 +223,12 @@ jobs:
               const prTitle = pr.title || '';
               const metaMatch = prBody.match(/<!--\s*meta:issue:(\d+)\s*-->/i);
               const sourceMatch = prBody.match(/Source:\s*Issue\s*#(\d+)/i);
-              const closeMatch = prBody.match(/\b(close[sd]?|fixe?[sd]?|resolve[sd]?)[:\s]+#(\d+)\b/i);
-              const titleCloseMatch = prTitle.match(/\b(close[sd]?|fixe?[sd]?|resolve[sd]?)[:\s]+#(\d+)\b/i);
+              const closeMatch = prBody.match(
+                /\b(close[sd]?|fixe?[sd]?|resolve[sd]?)[:\s]+#(\d+)\b/i
+              );
+              const titleCloseMatch = prTitle.match(
+                /\b(close[sd]?|fixe?[sd]?|resolve[sd]?)[:\s]+#(\d+)\b/i
+              );
               const fallbackMatch = prBody.match(/#(\d+)/);
 
               const resolved =

@@ -86,6 +86,7 @@ jobs:
 
 
       - name: Handle agent:retry label
+        id: retry_label
         if: >-
           github.event_name == 'pull_request' &&
           github.event.action == 'labeled' &&
@@ -151,6 +152,7 @@ jobs:
             }
 
             core.info('Label cleanup complete - proceeding with keepalive evaluation');
+            core.setOutput('force_retry', 'true');
 
       - name: Capture timestamps
         id: timestamps
@@ -223,7 +225,13 @@ jobs:
         uses: actions/github-script@v8
         env:
           INPUT_PR_NUMBER: ${{ github.event.inputs.pr_number || '' }}
-          INPUT_FORCE_RETRY: ${{ github.event.inputs.force_retry || 'false' }}
+          INPUT_FORCE_RETRY: >-
+            ${{ steps.retry_label.outputs.force_retry ||
+                (github.event_name == 'pull_request' &&
+                 github.event.action == 'labeled' &&
+                 github.event.label.name == 'agent:retry') ||
+                github.event.inputs.force_retry ||
+                'false' }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
