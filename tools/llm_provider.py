@@ -21,6 +21,7 @@ LangSmith Tracing:
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import os
@@ -122,6 +123,7 @@ class LLMProvider(ABC):
         session_output: str,
         tasks: list[str],
         context: str | None = None,
+        quality_context: SessionQualityContext | None = None,
     ) -> CompletionAnalysis:
         """
         Analyze session output to determine task completion status.
@@ -130,11 +132,42 @@ class LLMProvider(ABC):
             session_output: Codex session output (summary or JSONL events)
             tasks: List of task descriptions from PR checkboxes
             context: Optional additional context (PR description, etc.)
+            quality_context: Optional session quality context for confidence checks
 
         Returns:
             CompletionAnalysis with task status breakdown
         """
         pass
+
+    def supports_quality_context(self) -> bool:
+        """Return True if analyze_completion accepts a quality_context parameter."""
+        try:
+            parameters = inspect.signature(self.analyze_completion).parameters
+        except (TypeError, ValueError):
+            return False
+        return "quality_context" in parameters or any(
+            param.kind == inspect.Parameter.VAR_KEYWORD for param in parameters.values()
+        )
+
+
+def _supports_quality_context(provider: LLMProvider) -> bool:
+    supports = getattr(provider, "supports_quality_context", None)
+    if callable(supports):
+        return bool(supports())
+    if supports is not None:
+        return bool(supports)
+    try:
+        parameters = inspect.signature(provider.analyze_completion).parameters
+    except (TypeError, ValueError):
+        return False
+    return "quality_context" in parameters or any(
+        param.kind == inspect.Parameter.VAR_KEYWORD for param in parameters.values()
+    )
+
+
+def supports_quality_context(provider: LLMProvider) -> bool:
+    """Return True if provider supports a quality_context parameter."""
+    return _supports_quality_context(provider)
 
 
 class GitHubModelsProvider(LLMProvider):
@@ -146,6 +179,9 @@ class GitHubModelsProvider(LLMProvider):
 
     def is_available(self) -> bool:
         return bool(os.environ.get("GITHUB_TOKEN"))
+
+    def supports_quality_context(self) -> bool:
+        return True
 
     def _get_client(self):
         """Get LangChain ChatOpenAI client configured for GitHub Models."""
@@ -389,6 +425,9 @@ class OpenAIProvider(LLMProvider):
     def is_available(self) -> bool:
         return bool(os.environ.get("OPENAI_API_KEY"))
 
+    def supports_quality_context(self) -> bool:
+        return True
+
     def _get_client(self):
         """Get LangChain ChatOpenAI client."""
         try:
@@ -408,6 +447,7 @@ class OpenAIProvider(LLMProvider):
         session_output: str,
         tasks: list[str],
         context: str | None = None,
+        quality_context: SessionQualityContext | None = None,
     ) -> CompletionAnalysis:
         client = self._get_client()
         if not client:
@@ -419,7 +459,11 @@ class OpenAIProvider(LLMProvider):
 
         try:
             response = client.invoke(prompt)
-            result = github_provider._parse_response(response.content, tasks)
+            result = github_provider._parse_response(
+                response.content,
+                tasks,
+                quality_context=quality_context,
+            )
             # Override provider name
             return CompletionAnalysis(
                 completed_tasks=result.completed_tasks,
@@ -428,6 +472,9 @@ class OpenAIProvider(LLMProvider):
                 confidence=result.confidence,
                 reasoning=result.reasoning,
                 provider_used=self.name,
+                raw_confidence=result.raw_confidence,
+                confidence_adjusted=result.confidence_adjusted,
+                quality_warnings=result.quality_warnings,
             )
         except Exception as e:
             logger.error(f"OpenAI API error: {e}")
@@ -464,12 +511,18 @@ class RegexFallbackProvider(LLMProvider):
     def is_available(self) -> bool:
         return True  # Always available
 
+    def supports_quality_context(self) -> bool:
+        return False
+
     def analyze_completion(
         self,
         session_output: str,
         tasks: list[str],
-        _context: str | None = None,
+        context: str | None = None,
+        quality_context: SessionQualityContext | None = None,
     ) -> CompletionAnalysis:
+        _ = context
+        _ = quality_context
         output_lower = session_output.lower()
         completed = []
         in_progress = []
@@ -536,6 +589,18 @@ class FallbackChainProvider(LLMProvider):
         self._providers = providers
         self._active_provider: LLMProvider | None = None
 
+    def supports_quality_context(self) -> bool:
+        """Return True if any underlying provider supports quality_context."""
+        return any(self._provider_supports_quality_context(p) for p in self._providers)
+
+    def quality_context_capable_providers(self) -> list[str]:
+        """List provider names in the chain that support quality_context."""
+        return [
+            provider.name
+            for provider in self._providers
+            if self._provider_supports_quality_context(provider)
+        ]
+
     @property
     def name(self) -> str:
         if self._active_provider:
@@ -550,10 +615,21 @@ class FallbackChainProvider(LLMProvider):
         session_output: str,
         tasks: list[str],
         context: str | None = None,
+        quality_context: SessionQualityContext | None = None,
     ) -> CompletionAnalysis:
         last_error = None
+        providers = self._providers
 
-        for provider in self._providers:
+        if quality_context is not None:
+            quality_aware, legacy = self._partition_providers_by_quality_context()
+            if quality_aware:
+                logger.debug(
+                    "Quality context available; preferring providers: %s",
+                    [provider.name for provider in quality_aware],
+                )
+            providers = quality_aware + legacy
+
+        for provider in providers:
             if not provider.is_available():
                 logger.debug(f"Provider {provider.name} not available, skipping")
                 continue
@@ -561,7 +637,13 @@ class FallbackChainProvider(LLMProvider):
             try:
                 logger.info(f"Attempting analysis with {provider.name}")
                 self._active_provider = provider
-                result = provider.analyze_completion(session_output, tasks, context)
+                result = self._analyze_with_provider(
+                    provider,
+                    session_output=session_output,
+                    tasks=tasks,
+                    context=context,
+                    quality_context=quality_context,
+                )
                 logger.info(f"Successfully analyzed with {provider.name}")
                 return result
             except Exception as e:
@@ -572,6 +654,62 @@ class FallbackChainProvider(LLMProvider):
         if last_error:
             raise RuntimeError(f"All providers failed. Last error: {last_error}")
         raise RuntimeError("No providers available")
+
+    @staticmethod
+    def _provider_supports_quality_context(provider: LLMProvider) -> bool:
+        return _supports_quality_context(provider)
+
+    def _partition_providers_by_quality_context(
+        self,
+    ) -> tuple[list[LLMProvider], list[LLMProvider]]:
+        quality_aware: list[LLMProvider] = []
+        legacy: list[LLMProvider] = []
+        for provider in self._providers:
+            if self._provider_supports_quality_context(provider):
+                quality_aware.append(provider)
+            else:
+                legacy.append(provider)
+        return quality_aware, legacy
+
+    def _analyze_with_provider(
+        self,
+        provider: LLMProvider,
+        *,
+        session_output: str,
+        tasks: list[str],
+        context: str | None,
+        quality_context: SessionQualityContext | None,
+    ) -> CompletionAnalysis:
+        if quality_context is not None and self._provider_supports_quality_context(provider):
+            try:
+                return provider.analyze_completion(
+                    session_output=session_output,
+                    tasks=tasks,
+                    context=context,
+                    quality_context=quality_context,
+                )
+            except TypeError as exc:
+                if not self._is_quality_context_type_error(exc):
+                    raise
+                logger.debug(
+                    "Provider %s rejected quality_context, retrying without it",
+                    provider.name,
+                )
+
+        return provider.analyze_completion(
+            session_output=session_output,
+            tasks=tasks,
+            context=context,
+        )
+
+    @staticmethod
+    def _is_quality_context_type_error(error: TypeError) -> bool:
+        message = str(error)
+        if "quality_context" not in message:
+            return False
+        if "unexpected keyword argument" in message:
+            return True
+        return "got multiple values for argument" in message
 
 
 def get_llm_provider(force_provider: str | None = None) -> LLMProvider:
@@ -624,6 +762,16 @@ def check_providers() -> dict[str, bool]:
         "openai": OpenAIProvider().is_available(),
         "regex-fallback": True,
     }
+
+
+def get_quality_context_capable_providers() -> list[str]:
+    """List providers that support quality_context."""
+    providers = [
+        GitHubModelsProvider(),
+        OpenAIProvider(),
+        RegexFallbackProvider(),
+    ]
+    return [provider.name for provider in providers if _supports_quality_context(provider)]
 
 
 if __name__ == "__main__":
