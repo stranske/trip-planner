@@ -138,6 +138,46 @@ function parseStateComment(body) {
   return { version, data: {} };
 }
 
+function hasFiniteNumericValue(value) {
+  if (value === null || value === undefined) {
+    return false;
+  }
+  if (typeof value === 'string' && value.trim() === '') {
+    return false;
+  }
+  return Number.isFinite(Number(value));
+}
+
+function isLoopState(data) {
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+  if (hasFiniteNumericValue(data.iteration) || hasFiniteNumericValue(data.max_iterations)) {
+    return true;
+  }
+  if (data.tasks && typeof data.tasks === 'object') {
+    if (hasFiniteNumericValue(data.tasks.total) || hasFiniteNumericValue(data.tasks.unchecked)) {
+      return true;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(data, 'keepalive_enabled')) {
+    return true;
+  }
+  if (Object.prototype.hasOwnProperty.call(data, 'autofix_enabled')) {
+    return true;
+  }
+  if (Object.prototype.hasOwnProperty.call(data, 'running')) {
+    return true;
+  }
+  if (data.verification && typeof data.verification === 'object') {
+    return true;
+  }
+  if (data.last_instruction && typeof data.last_instruction === 'object') {
+    return true;
+  }
+  return false;
+}
+
 function formatStateComment(data) {
   const payload = data && typeof data === 'object' ? { ...data } : {};
   const version = normalise(payload.version) || STATE_VERSION;
@@ -188,6 +228,7 @@ async function findStateComment({ github, owner, repo, prNumber, trace }) {
     return null;
   }
   const traceNorm = normaliseLower(trace);
+  let fallback = null;
   for (let index = comments.length - 1; index >= 0; index -= 1) {
     const comment = comments[index];
     const parsed = parseStateComment(comment?.body);
@@ -200,6 +241,15 @@ async function findStateComment({ github, owner, repo, prNumber, trace }) {
       if (candidateTrace !== traceNorm) {
         continue;
       }
+    } else if (!isLoopState(candidate)) {
+      if (!fallback) {
+        fallback = {
+          comment,
+          state: candidate,
+          version: parsed.version,
+        };
+      }
+      continue;
     }
     return {
       comment,
@@ -207,7 +257,7 @@ async function findStateComment({ github, owner, repo, prNumber, trace }) {
       version: parsed.version,
     };
   }
-  return null;
+  return fallback;
 }
 
 async function createKeepaliveStateManager({ github: rawGithub, context, prNumber, trace, round }) {
