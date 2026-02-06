@@ -854,6 +854,7 @@ jobs:
               iteration: Number('${{ needs.evaluate.outputs.iteration }}') || 0,
               max_iterations: Number('${{ needs.evaluate.outputs.max_iterations }}') || 0,
               failure_threshold: Number('${{ needs.evaluate.outputs.failure_threshold }}') || 3,
+              rounds_without_task_completion: Number('${{ needs.evaluate.outputs.rounds_without_task_completion }}') || 0,
               tasks_total: Number('${{ needs.evaluate.outputs.tasks_total }}') || 0,
               tasks_unchecked: Number('${{ needs.evaluate.outputs.tasks_unchecked }}') || 0,
               keepalive_enabled: '${{ needs.evaluate.outputs.keepalive_enabled }}',
