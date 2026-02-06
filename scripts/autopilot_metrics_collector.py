@@ -344,9 +344,7 @@ def build_record_from_args(args: argparse.Namespace) -> dict[str, Any]:
         started_at = _env_or_value(args.started_at, "AUTOPILOT_STEP_STARTED_AT")
         ended_at = _env_or_value(args.ended_at, "AUTOPILOT_STEP_ENDED_AT")
         started_at_ms = _env_or_value(args.started_at_ms, "AUTOPILOT_STEP_STARTED_AT_MS")
-        ended_at_ms: str | int | None = _env_or_value(
-            args.ended_at_ms, "AUTOPILOT_STEP_ENDED_AT_MS"
-        )
+        ended_at_ms = _env_or_value(args.ended_at_ms, "AUTOPILOT_STEP_ENDED_AT_MS")
         if started_at and started_at_ms:
             raise ValidationError("use only one of started_at or started_at_ms")
         if ended_at and ended_at_ms:
@@ -474,7 +472,7 @@ def _summary_env_details() -> dict[str, str]:
 
 def _write_failure_summary(
     *,
-    error: BaseException,
+    error: Exception,
     exit_code: int,
     args: argparse.Namespace | None,
 ) -> None:
