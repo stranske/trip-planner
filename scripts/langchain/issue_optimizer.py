@@ -680,7 +680,11 @@ def _append_deferred_tasks(formatted_body: str, suggestions: dict[str, Any]) -> 
     return "\n".join(parts).strip()
 
 
-def _apply_task_decomposition(formatted_body: str, suggestions: dict[str, Any]) -> str:
+def _apply_task_decomposition(formatted_body: str | None, suggestions: dict[str, Any]) -> str:
+    # Guard against None input (can happen when issue body is too large)
+    if formatted_body is None:
+        return ""
+
     raw_entries = suggestions.get("task_splitting")
     if not isinstance(raw_entries, list) or not raw_entries:
         return formatted_body

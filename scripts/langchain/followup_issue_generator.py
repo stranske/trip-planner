@@ -605,57 +605,31 @@ def _parse_checklist(lines: list[str]) -> list[str]:
 
 
 def _get_llm_client(reasoning: bool = False) -> tuple[Any, str] | None:
-    """Get LLM client with fallback.
-
-    Args:
-        reasoning: If True, use a reasoning model (o3-mini) for complex analysis.
-                   If False, use standard model (gpt-4o) for formatting tasks.
-    """
+    """Get LLM client using slot order with optional reasoning model override."""
     try:
-        from langchain_openai import ChatOpenAI
+        from tools.langchain_client import build_chat_client
     except ImportError as e:
-        print(f"Warning: langchain_openai not available: {e}", file=sys.stderr)
+        print(f"Warning: langchain_client not available: {e}", file=sys.stderr)
         return None
 
-    # GitHub Models constants (inline to avoid import dependency)
-    github_models_base_url = "https://models.inference.ai.azure.com"
-    github_default_model = "gpt-4o"
-
-    # Select model based on task type
-    # Reasoning models (o3-mini) are better for deep analysis and understanding
-    # Standard models (gpt-4o) are better for formatting and generation
     if reasoning:
-        default_model = "o3-mini"
-        env_var = "FOLLOWUP_REASONING_MODEL"
+        model = os.environ.get("FOLLOWUP_REASONING_MODEL", "o3-mini")
+        resolved = build_chat_client(model=model, provider="openai")
+        if not resolved:
+            resolved = build_chat_client()
     else:
-        default_model = "gpt-4o"
-        env_var = "FOLLOWUP_MODEL"
+        model = os.environ.get("FOLLOWUP_MODEL")
+        resolved = build_chat_client(model=model)
 
-    # Prefer OpenAI for complex multi-turn generation
-    if os.environ.get("OPENAI_API_KEY"):
-        model = os.environ.get(env_var, default_model)
-        print(f"Using OpenAI with model: {model}", file=sys.stderr)
-        # Reasoning models don't support temperature parameter
-        if model.startswith(("o1", "o3")):
-            return ChatOpenAI(model=model, timeout=60), model
-        return ChatOpenAI(model=model, temperature=0.3, timeout=30), model
+    if not resolved:
+        print("Warning: No LLM API keys found", file=sys.stderr)
+        return None
 
-    # Fall back to GitHub Models
-    if os.environ.get("GITHUB_TOKEN"):
-        print(f"Using GitHub Models with model: {github_default_model}", file=sys.stderr)
-        return (
-            ChatOpenAI(
-                model=github_default_model,
-                base_url=github_models_base_url,
-                api_key=os.environ["GITHUB_TOKEN"],
-                temperature=0.3,
-                timeout=30,
-            ),
-            github_default_model,
-        )
-
-    print("Warning: No LLM API keys found (OPENAI_API_KEY or GITHUB_TOKEN)", file=sys.stderr)
-    return None
+    print(
+        f"Using {resolved.provider} with model: {resolved.model}",
+        file=sys.stderr,
+    )
+    return resolved.client, resolved.model
 
 
 def _prepare_iteration_details(codex_log: str) -> str:

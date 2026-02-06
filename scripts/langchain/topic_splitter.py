@@ -14,16 +14,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 import uuid
 from pathlib import Path
 from typing import Any
-
-# LLM configuration
-GITHUB_MODELS_BASE_URL = "https://models.inference.ai.azure.com"
-DEFAULT_MODEL = "gpt-4o-mini"
 
 TOPIC_SPLITTER_PROMPT = """
 You are a text parsing assistant. The input contains one or more GitHub issues
@@ -59,36 +54,17 @@ Input text to split:
 
 
 def _get_llm_client() -> tuple[object, str] | None:
-    """Get LangChain LLM client."""
+    """Get LangChain LLM client using slot order."""
     try:
-        from langchain_openai import ChatOpenAI
+        from tools.langchain_client import build_chat_client
     except ImportError:
-        print("langchain_openai not installed", file=sys.stderr)
+        print("langchain_client not available", file=sys.stderr)
         return None
 
-    github_token = os.environ.get("GITHUB_TOKEN")
-    openai_token = os.environ.get("OPENAI_API_KEY")
-    if not github_token and not openai_token:
+    resolved = build_chat_client()
+    if not resolved:
         return None
-
-    if github_token:
-        return (
-            ChatOpenAI(
-                model=DEFAULT_MODEL,
-                base_url=GITHUB_MODELS_BASE_URL,
-                api_key=github_token,
-                temperature=0.1,
-            ),
-            "github-models",
-        )
-    return (
-        ChatOpenAI(
-            model=DEFAULT_MODEL,
-            api_key=openai_token,
-            temperature=0.1,
-        ),
-        "openai",
-    )
+    return resolved.client, resolved.provider
 
 
 def _generate_guid(title: str) -> str:
@@ -108,7 +84,9 @@ def split_topics_with_llm(input_text: str) -> list[dict[str, Any]]:
     """
     client_info = _get_llm_client()
     if not client_info:
-        raise RuntimeError("No LLM client available. Set GITHUB_TOKEN or OPENAI_API_KEY.")
+        raise RuntimeError(
+            "No LLM client available. Set OPENAI_API_KEY, CLAUDE_API_STRANSKE, or GITHUB_TOKEN."
+        )
 
     llm, provider = client_info
     print(f"Using LLM provider: {provider}", file=sys.stderr)

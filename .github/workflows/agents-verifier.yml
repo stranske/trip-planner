@@ -10,7 +10,8 @@
 #
 # Required secrets (via secrets: inherit):
 # - CODEX_AUTH_JSON: Authentication for Codex API
-# - OPENAI_API_KEY: For OpenAI provider (optional, falls back to GitHub Models)
+# - OPENAI_API_KEY: For OpenAI provider (optional, falls back to Claude/GitHub Models)
+# - CLAUDE_API_STRANSKE: For Claude provider (optional, falls back to GitHub Models)
 # - Ensure repository/org secrets are configured for verification to work
 #
 # Note: Uses pull_request_target instead of pull_request to ensure secrets
@@ -38,28 +39,28 @@ on:
         default: 'evaluate'
       model:
         description: >-
-          Model for evaluation. GitHub Models: gpt-4o (default).
-          OpenAI (requires key): o1, gpt-5.2.
+          Model override for evaluation. Leave empty to use slot 1.
           For stricter evaluation, use compare mode with different providers.
         required: false
         type: string
-        default: 'gpt-4o'
+        default: ''
       model2:
         description: >-
           Second model for compare mode (cross-provider verification).
-          Default: gpt-4o (GitHub Models) paired with gpt-5.2 (OpenAI).
-          Using different providers ensures diverse evaluation perspectives.
+          Leave empty to use slot 2.
         required: false
         type: string
-        default: 'gpt-4o'
+        default: ''
       provider:
-        description: 'LLM provider (OpenAI requires OPENAI_API_KEY secret)'
+        description: 'LLM provider override (auto uses slot order)'
         required: true
         type: choice
         options:
+          - auto
           - github-models
           - openai
-        default: 'github-models'
+          - anthropic
+        default: 'auto'
 
 permissions:
   contents: read
@@ -179,17 +180,15 @@ jobs:
             core.info(`Verifier triggered with mode: ${mode}`);
             core.setOutput('should_run', 'true');
             core.setOutput('mode', mode);
-            // For compare mode, use models from different families/providers
-            // model1 goes to GitHub Models, model2 goes to OpenAI
+            // For compare mode, use slot defaults (OpenAI + Claude)
             if (mode === 'compare') {
-              // gpt-4o (GitHub Models) + gpt-5.2 (OpenAI) for cross-provider comparison
-              core.setOutput('model', 'gpt-4o');
-              core.setOutput('model2', 'gpt-5.2');
+              core.setOutput('model', '');
+              core.setOutput('model2', '');
             } else {
-              core.setOutput('model', '');  // Use default (gpt-4o)
+              core.setOutput('model', '');
               core.setOutput('model2', '');
             }
-            core.setOutput('provider', '');  // Use default
+            core.setOutput('provider', '');
             core.setOutput('pr_number', pr.number.toString());
 
   verifier:
