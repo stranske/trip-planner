@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from collections.abc import Iterable
@@ -75,45 +74,21 @@ def _load_prompt() -> str:
 
 
 def _get_llm_client(force_openai: bool = False) -> tuple[object, str] | None:
-    """Get LLM client, trying GitHub Models first (cheaper), then OpenAI.
+    """Get LLM client using slot order (OpenAI, Claude, GitHub Models).
 
     Args:
         force_openai: If True, skip GitHub Models and use OpenAI directly.
                       Use this for retry after GitHub Models 401 error.
     """
     try:
-        from langchain_openai import ChatOpenAI
+        from tools.langchain_client import build_chat_client
     except ImportError:
         return None
 
-    github_token = os.environ.get("GITHUB_TOKEN")
-    openai_token = os.environ.get("OPENAI_API_KEY")
-    if not github_token and not openai_token:
+    resolved = build_chat_client(provider="openai" if force_openai else None)
+    if not resolved:
         return None
-
-    from tools.llm_provider import DEFAULT_MODEL, GITHUB_MODELS_BASE_URL
-
-    # Try GitHub Models first (cheaper) unless forced to use OpenAI
-    if github_token and not force_openai:
-        return (
-            ChatOpenAI(
-                model=DEFAULT_MODEL,
-                base_url=GITHUB_MODELS_BASE_URL,
-                api_key=github_token,
-                temperature=0.1,
-            ),
-            "github-models",
-        )
-    if openai_token:
-        return (
-            ChatOpenAI(
-                model=DEFAULT_MODEL,
-                api_key=openai_token,
-                temperature=0.1,
-            ),
-            "openai",
-        )
-    return None
+    return resolved.client, resolved.provider
 
 
 def _strip_code_fences(lines: Iterable[str]) -> list[str]:

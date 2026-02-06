@@ -33,7 +33,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           LABEL_NAME: ${{ github.event.label.name }}
           DISPATCH_PHASE: ${{ inputs.phase }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             {
               echo "phase=$DISPATCH_PHASE"
@@ -41,23 +44,47 @@ jobs:
               echo "should_run=true"
             } >> "$GITHUB_OUTPUT"
           elif [[ "$LABEL_NAME" == "agents:optimize" ]]; then
-            {
-              echo "phase=analyze"
-              echo "issue_number=${{ github.event.issue.number }}"
-              echo "should_run=true"
-            } >> "$GITHUB_OUTPUT"
+            # Skip if auto-pilot label is present (auto-pilot runs optimizer inline)
+            # Use pipefail to ensure gh errors cause check to fail-closed
+            if gh issue view "${{ github.event.issue.number }}" --json labels \
+                --jq '.labels[].name' | grep -qx 'agents:auto-pilot'; then
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "Skipping: auto-pilot label present (runs inline)"
+            else
+              {
+                echo "phase=analyze"
+                echo "issue_number=${{ github.event.issue.number }}"
+                echo "should_run=true"
+              } >> "$GITHUB_OUTPUT"
+            fi
           elif [[ "$LABEL_NAME" == "agents:apply-suggestions" ]]; then
-            {
-              echo "phase=apply"
-              echo "issue_number=${{ github.event.issue.number }}"
-              echo "should_run=true"
-            } >> "$GITHUB_OUTPUT"
+            # Skip if auto-pilot label is present (auto-pilot manages this label for state)
+            # Use pipefail to ensure gh errors cause check to fail-closed
+            if gh issue view "${{ github.event.issue.number }}" --json labels \
+                --jq '.labels[].name' | grep -qx 'agents:auto-pilot'; then
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "Skipping: auto-pilot label present (manages apply inline)"
+            else
+              {
+                echo "phase=apply"
+                echo "issue_number=${{ github.event.issue.number }}"
+                echo "should_run=true"
+              } >> "$GITHUB_OUTPUT"
+            fi
           elif [[ "$LABEL_NAME" == "agents:format" ]]; then
-            {
-              echo "phase=format"
-              echo "issue_number=${{ github.event.issue.number }}"
-              echo "should_run=true"
-            } >> "$GITHUB_OUTPUT"
+            # Skip if auto-pilot label is present (auto-pilot runs format inline)
+            # Use pipefail to ensure gh errors cause check to fail-closed
+            if gh issue view "${{ github.event.issue.number }}" --json labels \
+                --jq '.labels[].name' | grep -qx 'agents:auto-pilot'; then
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "Skipping: auto-pilot label present (runs inline)"
+            else
+              {
+                echo "phase=format"
+                echo "issue_number=${{ github.event.issue.number }}"
+                echo "should_run=true"
+              } >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
           fi
@@ -122,7 +149,61 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           # Install langchain dependencies
-          pip install langchain langchain-core langchain-openai langchain-community
+          pip install langchain langchain-core langchain-openai \
+            langchain-anthropic langchain-community
+
+      - name: Check optimizer recursion guard
+        if: steps.check.outputs.should_run == 'true'
+        id: recursion_guard
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          ISSUE_NUMBER: ${{ steps.check.outputs.issue_number }}
+        run: |
+          # Check how many optimizer runs for this issue in last hour
+          one_hour_ago=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v-1H '+%Y-%m-%dT%H:%M:%SZ')
+          
+          # shellcheck disable=SC2016
+          count=$(gh run list \
+            --workflow=agents-issue-optimizer.yml \
+            --json conclusion,createdAt,displayTitle \
+            | jq --arg cutoff "$one_hour_ago" --arg issue "#$ISSUE_NUMBER" \
+              '[.[] | select(.createdAt > $cutoff and (.displayTitle | contains($issue)))] | length')
+          
+          echo "Optimizer runs for issue #$ISSUE_NUMBER in last hour: $count"
+          
+          if [ "$count" -gt 3 ]; then
+            echo "⚠️ Too many optimizer runs ($count > 3) in last hour"
+            echo "recursion_detected=true" >> "$GITHUB_OUTPUT"
+            
+            # Post warning comment
+            REPO="${{ github.repository }}"
+            printf '%s\n' \
+              "## ⚠️ Optimizer Paused" \
+              "" \
+              "**Reason:** More than 3 optimizer runs detected in the last hour (__COUNT__ runs)." \
+              "" \
+              "This usually indicates:" \
+              "- Task decomposition spiral (creating too many subtasks)" \
+              "- Repeated failures causing retry loop" \
+              "" \
+              "**Next steps:**" \
+              "1. Check issue body for task explosion (hundreds of repeated tasks)" \
+              "2. Check recent workflow runs for errors" \
+              "3. If issue body is corrupted, close and recreate with clean body" \
+              "4. Remove \`agents:auto-pilot-pause\` label to retry after fixing" \
+              "" \
+              "Auto-pilot has been paused. See [recovery procedures](https://github.com/${REPO}/blob/phase-3/Agents.md#auto-pilot-recovery-procedures)." \
+              > /tmp/recursion_guard_comment.md
+            sed -i "s/__COUNT__/${count}/g" /tmp/recursion_guard_comment.md
+            gh issue comment "$ISSUE_NUMBER" --body-file /tmp/recursion_guard_comment.md
+            
+            # Add pause label
+            gh issue edit "$ISSUE_NUMBER" --add-label "agents:auto-pilot-pause"
+            
+            exit 1
+          else
+            echo "recursion_detected=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Get issue body
         if: steps.check.outputs.should_run == 'true'
@@ -159,6 +240,7 @@ jobs:
           ISSUE_NUMBER: ${{ steps.check.outputs.issue_number }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CLAUDE_API_STRANSKE: ${{ secrets.CLAUDE_API_STRANSKE }}
           PYTHONPATH: ${{ github.workspace }}/workflows-scripts
         run: |
           echo "Running analysis on issue #${ISSUE_NUMBER}"
@@ -207,6 +289,7 @@ jobs:
           ISSUE_NUMBER: ${{ steps.check.outputs.issue_number }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CLAUDE_API_STRANSKE: ${{ secrets.CLAUDE_API_STRANSKE }}
           PYTHONPATH: ${{ github.workspace }}/workflows-scripts
         run: |
           echo "Checking for potential duplicate issues (advisory)"
@@ -382,6 +465,7 @@ jobs:
           GH_TOKEN: ${{ steps.token.outputs.token }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CLAUDE_API_STRANSKE: ${{ secrets.CLAUDE_API_STRANSKE }}
           PYTHONPATH: ${{ github.workspace }}/workflows-scripts
         run: |
           echo "Formatting issue #${ISSUE_NUMBER} into AGENT_ISSUE_TEMPLATE structure"
@@ -419,11 +503,10 @@ jobs:
           PHASE: ${{ steps.check.outputs.phase }}
         run: |
           if [[ "$PHASE" == "apply" ]]; then
-            # Remove both optimization labels and add formatted label
+            # Only remove agents:optimize, keep agents:apply-suggestions for state tracking
             gh issue edit "${ISSUE_NUMBER}" --remove-label "agents:optimize" || true
-            gh issue edit "${ISSUE_NUMBER}" --remove-label "agents:apply-suggestions"
             gh issue edit "${ISSUE_NUMBER}" --add-label "agents:formatted"
-            echo "Labels updated: removed optimize/apply-suggestions, added formatted"
+            echo "Labels updated: removed optimize, kept apply-suggestions for state tracking"
           elif [[ "$PHASE" == "format" ]]; then
             # Remove format trigger label and add formatted result label
             gh issue edit "${ISSUE_NUMBER}" --remove-label "agents:format"

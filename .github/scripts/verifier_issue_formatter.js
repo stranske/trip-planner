@@ -345,7 +345,63 @@ function buildChecklist(items) {
   if (!Array.isArray(items) || items.length === 0) {
     return '';
   }
-  return items.map((item) => `- [ ] ${item}`).join('\n');
+  const deduped = dedupeItems(items);
+  return deduped.map((item) => `- [ ] ${item}`).join('\n');
+}
+
+function normalizeChecklistItem(item) {
+  return String(item || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function dedupeItems(items) {
+  const seen = new Set();
+  const result = [];
+  for (const item of items) {
+    const key = normalizeChecklistItem(item);
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(String(item).trim());
+  }
+  return result;
+}
+
+function dedupeParagraphs(text) {
+  const raw = String(text || '').trim();
+  if (!raw) {
+    return '';
+  }
+  const paragraphs = raw.split(/\n{2,}/);
+  const seen = new Set();
+  const result = [];
+  for (const paragraph of paragraphs) {
+    const key = normalizeChecklistItem(paragraph);
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(paragraph.trim());
+  }
+  return result.join('\n\n');
+}
+
+function dedupeLines(text) {
+  const raw = String(text || '');
+  if (!raw.trim()) {
+    return '';
+  }
+  const seen = new Set();
+  const result = [];
+  for (const line of raw.split('\n')) {
+    const key = normalizeChecklistItem(line);
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(line.trim());
+  }
+  return result.join('\n');
 }
 
 /**
@@ -416,6 +472,7 @@ function formatFollowUpIssue({
       why = whyMatch[1].trim();
     }
   }
+  why = dedupeParagraphs(why);
 
   // Extract Non-Goals section
   let nonGoals = '';
@@ -433,6 +490,7 @@ function formatFollowUpIssue({
       nonGoals = ngMatch[1].trim();
     }
   }
+  nonGoals = dedupeParagraphs(nonGoals);
 
   // Determine unmet acceptance criteria
   // Priority: 1) Verifier's explicit unmet criteria, 2) Cross-reference with verified, 3) Fall back to unchecked items
@@ -461,6 +519,7 @@ function formatFollowUpIssue({
     // Fall back to all unchecked items from the original issue
     refinedUnmetCriteria = uncheckedAcceptance;
   }
+  refinedUnmetCriteria = dedupeItems(refinedUnmetCriteria);
 
   // Build new task list based on scenario:
   // 1. If there are incomplete tasks, copy them
@@ -483,6 +542,7 @@ function formatFollowUpIssue({
       newTasks = refinedUnmetCriteria;
     }
   }
+  newTasks = dedupeItems(newTasks);
 
   // Build implementation notes
   const notesLines = [];
@@ -526,7 +586,7 @@ function formatFollowUpIssue({
   }
 
   // Scope section - strip checkboxes since scope is informational, not actionable
-  const cleanedScope = stripCheckboxesFromScope(merged.scope);
+  const cleanedScope = dedupeLines(stripCheckboxesFromScope(merged.scope));
   if (cleanedScope) {
     sections.push(['## Scope', '', `<!-- Updated scope for this follow-up -->`, `Address unmet acceptance criteria from PR #${prNumber || 'N/A'}.`, '', 'Original scope:', cleanedScope].join('\n'));
   } else {

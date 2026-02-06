@@ -2,9 +2,10 @@
 LLM Provider Abstraction with Fallback Chain
 
 Provides a unified interface for LLM calls with automatic fallback:
-1. GitHub Models API (primary) - uses GITHUB_TOKEN
-2. OpenAI API (fallback) - uses OPENAI_API_KEY
-3. Regex patterns (last resort) - no API calls
+1. OpenAI API (primary) - uses OPENAI_API_KEY
+2. Anthropic API (secondary) - uses CLAUDE_API_STRANSKE
+3. GitHub Models API (fallback) - uses GITHUB_TOKEN
+4. Regex patterns (last resort) - no API calls
 
 Usage:
     from tools.llm_provider import get_llm_provider, LLMProvider
@@ -36,6 +37,7 @@ GITHUB_MODELS_BASE_URL = "https://models.inference.ai.azure.com"
 # gpt-4o-mini was too lenient and passed obvious deficiencies
 # Also avoids token-limit failures on large issues (8k limit in gpt-4o-mini)
 DEFAULT_MODEL = "gpt-4o"
+ANTHROPIC_API_KEY_ENV = "CLAUDE_API_STRANSKE"
 
 
 def _setup_langsmith_tracing() -> bool:
@@ -487,6 +489,69 @@ class OpenAIProvider(LLMProvider):
             raise
 
 
+class AnthropicProvider(LLMProvider):
+    """LLM provider using Anthropic API directly."""
+
+    @property
+    def name(self) -> str:
+        return "anthropic"
+
+    def is_available(self) -> bool:
+        return bool(os.environ.get(ANTHROPIC_API_KEY_ENV))
+
+    def supports_quality_context(self) -> bool:
+        return True
+
+    def _get_client(self):
+        try:
+            from langchain_anthropic import ChatAnthropic
+        except ImportError:
+            logger.warning("langchain_anthropic not installed")
+            return None
+
+        return ChatAnthropic(
+            model="claude-4.5-sonnet",
+            anthropic_api_key=os.environ.get(ANTHROPIC_API_KEY_ENV),
+            temperature=0.1,
+        )
+
+    def analyze_completion(
+        self,
+        session_output: str,
+        tasks: list[str],
+        context: str | None = None,
+        quality_context: SessionQualityContext | None = None,
+    ) -> CompletionAnalysis:
+        client = self._get_client()
+        if not client:
+            raise RuntimeError("LangChain Anthropic not available")
+
+        github_provider = GitHubModelsProvider()
+        prompt = github_provider._build_analysis_prompt(session_output, tasks, context)
+
+        try:
+            response = client.invoke(prompt)
+            result = github_provider._parse_response(
+                response.content,
+                tasks,
+                quality_context=quality_context,
+            )
+            return CompletionAnalysis(
+                completed_tasks=result.completed_tasks,
+                in_progress_tasks=result.in_progress_tasks,
+                blocked_tasks=result.blocked_tasks,
+                confidence=result.confidence,
+                reasoning=result.reasoning,
+                provider_used=self.name,
+                raw_confidence=result.raw_confidence,
+                confidence_adjusted=result.confidence_adjusted,
+                quality_warnings=result.quality_warnings,
+            )
+        except Exception as e:
+            logger.error(f"Anthropic API error: {e}")
+            raise
+
+
 class RegexFallbackProvider(LLMProvider):
     """Fallback provider using regex pattern matching (no API calls)."""
 
@@ -724,18 +789,20 @@ def get_llm_provider(force_provider: str | None = None) -> LLMProvider:
 
     Args:
         force_provider: If set, use only this provider (for testing).
-            Options: "github-models", "openai", "regex-fallback"
+            Options: "github-models", "openai", "anthropic", "regex-fallback"
 
     Returns a FallbackChainProvider that tries:
-    1. GitHub Models API (if GITHUB_TOKEN set)
-    2. OpenAI API (if OPENAI_API_KEY set)
-    3. Regex fallback (always available)
+    1. OpenAI API (if OPENAI_API_KEY set)
+    2. Anthropic API (if CLAUDE_API_STRANSKE set)
+    3. GitHub Models API (if GITHUB_TOKEN set)
+    4. Regex fallback (always available)
     """
     # Force a specific provider for testing
     if force_provider:
         provider_map: dict[str, type[LLMProvider]] = {
             "github-models": GitHubModelsProvider,
             "openai": OpenAIProvider,
+            "anthropic": AnthropicProvider,
             "regex-fallback": RegexFallbackProvider,
         }
         if force_provider not in provider_map:
@@ -753,8 +820,9 @@ def get_llm_provider(force_provider: str | None = None) -> LLMProvider:
         return provider
 
     providers = [
-        GitHubModelsProvider(),
         OpenAIProvider(),
+        AnthropicProvider(),
+        GitHubModelsProvider(),
         RegexFallbackProvider(),
     ]
 
@@ -766,6 +834,7 @@ def check_providers() -> dict[str, bool]:
     return {
         "github-models": GitHubModelsProvider().is_available(),
         "openai": OpenAIProvider().is_available(),
+        "anthropic": AnthropicProvider().is_available(),
         "regex-fallback": True,
     }
 
@@ -773,8 +842,9 @@ def check_providers() -> dict[str, bool]:
 def get_quality_context_support_table() -> dict[str, bool]:
     """Return provider -> quality_context support map for built-in providers."""
     providers = [
-        GitHubModelsProvider(),
         OpenAIProvider(),
+        AnthropicProvider(),
+        GitHubModelsProvider(),
         RegexFallbackProvider(),
     ]
     return {provider.name: _supports_quality_context(provider) for provider in providers}

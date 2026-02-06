@@ -69,11 +69,8 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event.action == 'labeled' && (
         github.event.label.name == 'agents:auto-pilot' ||
-        github.event.label.name == 'agent:codex' ||
         contains(github.event.issue.labels.*.name, 'agents:auto-pilot') ||
-        contains(github.event.issue.labels.*.name, 'agent:codex') ||
-        contains(github.event.pull_request.labels.*.name, 'agents:auto-pilot') ||
-        contains(github.event.pull_request.labels.*.name, 'agent:codex')
+        contains(github.event.pull_request.labels.*.name, 'agents:auto-pilot')
       )) ||
       (github.event.action == 'closed' &&
        contains(github.event.issue.labels.*.name, 'agents:auto-pilot'))
@@ -101,10 +98,8 @@ jobs:
               labels = context.payload.pull_request.labels.map(l => l.name);
             }
 
-            const hasAutoPilot = labels.includes('agents:auto-pilot')
-              || labels.includes('agent:codex');
-            const isAutoPilotTrigger = labelName === 'agents:auto-pilot'
-              || labelName === 'agent:codex';
+            const hasAutoPilot = labels.includes('agents:auto-pilot');
+            const isAutoPilotTrigger = labelName === 'agents:auto-pilot';
             if (!hasAutoPilot && !isAutoPilotTrigger) {
               core.info(`Skipping: auto-pilot not enabled (trigger: ${labelName})`);
               core.setOutput('enabled', 'false');
@@ -184,7 +179,8 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           # Install langchain dependencies for inline optimizer
-          pip install langchain langchain-core langchain-openai langchain-community
+          pip install langchain langchain-core langchain-openai \
+            langchain-anthropic langchain-community
 
       - name: Initialize auto-pilot metrics logs
         if: steps.check_enabled.outputs.enabled == 'true'
@@ -590,6 +586,7 @@ jobs:
           STEP_COUNT: ${{ steps.cycles.outputs.count }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CLAUDE_API_STRANSKE: ${{ secrets.CLAUDE_API_STRANSKE }}
           PYTHONPATH: ${{ github.workspace }}
         run: |
 
@@ -788,6 +785,7 @@ jobs:
           STEP_COUNT: ${{ steps.cycles.outputs.count }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CLAUDE_API_STRANSKE: ${{ secrets.CLAUDE_API_STRANSKE }}
           PYTHONPATH: ${{ github.workspace }}
         run: |
 
@@ -2086,12 +2084,102 @@ jobs:
               core,
               env: process.env,
               task: 'auto-pilot-monitor-pr',
-              capabilities: ['issues:write', 'contents:read']
+              capabilities: ['issues:write', 'contents:read', 'pull_requests:read']
             });
             const prNumber = '${{ steps.context.outputs.linked_pr }}';
             const issueNumber = parseInt(process.env.ISSUE_NUMBER);
             const stepCount = parseInt(process.env.STEP_COUNT || '0') + 1;
             const maxStallRetries = parseInt(process.env.MAX_STALL_RETRIES || '5');
+
+            // FIRST: Check actual PR state
+            core.info(`Checking PR #${prNumber} state...`);
+            let prData;
+            try {
+              const { data } = await withRetry((client) =>
+                client.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: parseInt(prNumber)
+                })
+              );
+              prData = data;
+            } catch (e) {
+              core.warning(`Could not fetch PR #${prNumber}: ${e.message}`);
+              // If PR doesn't exist, treat as complete (manually closed?)
+              core.setOutput('pr_completed', 'true');
+              core.setOutput('pr_status', 'not-found');
+              return;
+            }
+
+            const prState = prData.state; // "open" or "closed"
+            const prMerged = prData.merged || false;
+            const prMergeable = prData.mergeable;
+            
+            core.info(`PR state: ${prState}, merged: ${prMerged}, mergeable: ${prMergeable}`);
+
+            // Check for completion
+            if (prMerged) {
+              core.info('✅ PR is merged - proceeding to verify step');
+              await withRetry((client) => client.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `## ✅ PR Merged
+
+            PR #${prNumber} has been merged. Auto-pilot will now proceed to verification.`
+              }));
+              core.setOutput('pr_completed', 'true');
+              core.setOutput('pr_status', 'merged');
+              core.setOutput('stop_autopilot', 'false');
+              return;
+            }
+
+            if (prState === 'closed' && !prMerged) {
+              core.info('PR is closed without merge - ending auto-pilot');
+              await withRetry((client) => client.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `## ⚠️ PR Closed Without Merge
+
+            PR #${prNumber} was closed without merging. Auto-pilot will end.`
+              }));
+              core.setOutput('pr_completed', 'true');
+              core.setOutput('pr_status', 'closed');
+              core.setOutput('stop_autopilot', 'true');
+              return;
+            }
+
+            // PR is still open - check checks
+            let checksStatus = 'unknown';
+            let allChecksPassed = false;
+            try {
+              const { data: checkRuns } = await withRetry((client) =>
+                client.rest.checks.listForRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: prData.head.sha,
+                  per_page: 100
+                })
+              );
+              
+              if (checkRuns.total_count > 0) {
+                const failedChecks = checkRuns.check_runs.filter(
+                  run => run.conclusion !== 'success' && run.conclusion !== 'skipped'
+                );
+                allChecksPassed = failedChecks.length === 0;
+                checksStatus = allChecksPassed ? 'passing' : 'failing';
+                core.info(`Checks: ${checkRuns.total_count} total, ${failedChecks.length} failing`);
+              }
+            } catch (e) {
+              core.warning(`Could not fetch PR checks: ${e.message}`);
+            }
+
+            // If all checks pass and PR is mergeable, it's ready (but we still wait for human merge)
+            if (allChecksPassed && prMergeable !== false) {
+              core.info('PR is ready to merge (all checks passed)');
+              checksStatus = 'ready';
+            }
 
             // Helper: count consecutive "monitor-pr" comments (stall detection)
             async function countConsecutiveWaits(waitText) {
@@ -2185,7 +2273,14 @@ jobs:
               issue_number: issueNumber,
               body: `🤖 **Auto-pilot step ${stepCount}**: Monitoring PR status
 
-            PR #${prNumber} exists. Keepalive and autofix will handle CI.
+            PR #${prNumber} is still open.
+            
+            **Status:**
+            - State: ${prState}
+            - Checks: ${checksStatus}
+            - Mergeable: ${prMergeable !== false ? 'yes' : 'no'}
+
+            Keepalive and autofix will handle CI. Auto-pilot will check again on next trigger.
 
             📊 Stall count: ${stallCount + 1}/${maxStallRetries}
 
