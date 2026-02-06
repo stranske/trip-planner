@@ -344,9 +344,7 @@ def build_record_from_args(args: argparse.Namespace) -> dict[str, Any]:
         started_at = _env_or_value(args.started_at, "AUTOPILOT_STEP_STARTED_AT")
         ended_at = _env_or_value(args.ended_at, "AUTOPILOT_STEP_ENDED_AT")
         started_at_ms = _env_or_value(args.started_at_ms, "AUTOPILOT_STEP_STARTED_AT_MS")
-        ended_at_ms: str | int | None = _env_or_value(
-            args.ended_at_ms, "AUTOPILOT_STEP_ENDED_AT_MS"
-        )
+        ended_at_ms = _env_or_value(args.ended_at_ms, "AUTOPILOT_STEP_ENDED_AT_MS")
         if started_at and started_at_ms:
             raise ValidationError("use only one of started_at or started_at_ms")
         if ended_at and ended_at_ms:
@@ -363,7 +361,7 @@ def build_record_from_args(args: argparse.Namespace) -> dict[str, Any]:
                 )
             if started_at_ms is not None:
                 if ended_at_ms is None:
-                    ended_at_ms = _utc_now_epoch_ms()
+                    ended_at_ms = str(_utc_now_epoch_ms())
                 duration_ms = _duration_ms_from_epoch_bounds(
                     _coerce_int(started_at_ms, "started_at_ms"),
                     _coerce_int(ended_at_ms, "ended_at_ms"),
