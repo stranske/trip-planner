@@ -299,7 +299,7 @@ jobs:
       - name: Install dependencies
         if: steps.check-merged.outputs.merged == 'true'
         run: |
-          pip install langchain langchain-openai requests
+          pip install langchain langchain-openai langchain-anthropic requests
 
       - name: Collect verification and original issue data
         id: collect
@@ -391,6 +391,7 @@ jobs:
         if: steps.check-merged.outputs.merged == 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CLAUDE_API_STRANSKE: ${{ secrets.CLAUDE_API_STRANSKE }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ORIGINAL_ISSUE_NUMBER: ${{ steps.collect.outputs.original_issue_number }}
           ORIGINAL_ISSUE_TITLE: ${{ steps.collect.outputs.original_issue_title }}
