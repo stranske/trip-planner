@@ -91,9 +91,20 @@ runs:
         echo "📦 Installing @octokit dependencies in $INSTALL_DIR..."
         cd "$INSTALL_DIR"
 
+        # Track if we create package.json so we can clean it up
+        CREATED_PACKAGE_JSON=false
+        if [ ! -f "package.json" ]; then
+          echo '{"private":true}' > package.json
+          CREATED_PACKAGE_JSON=true
+        fi
+
         # Check if already installed
         if [ -d "node_modules/@octokit/rest" ]; then
           echo "✅ @octokit/rest already installed"
+          # Clean up if we created package.json (already installed case)
+          if [ "$CREATED_PACKAGE_JSON" = "true" ]; then
+            rm -f package.json package-lock.json
+          fi
         else
           # Install with pinned versions for consistency
           # Capture stderr for debugging if the command fails
@@ -116,6 +127,12 @@ runs:
               @octokit/auth-app@6.0.3
           fi
           echo "✅ @octokit dependencies installed"
+
+          # Clean up package*.json if we created them to avoid polluting working tree
+          if [ "$CREATED_PACKAGE_JSON" = "true" ]; then
+            rm -f package.json package-lock.json
+            echo "🧹 Cleaned up temporary package*.json files"
+          fi
         fi
 
     - name: Export NODE_PATH for shared deps
