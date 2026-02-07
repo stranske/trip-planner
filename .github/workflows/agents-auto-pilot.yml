@@ -2114,7 +2114,7 @@ jobs:
             const prState = prData.state; // "open" or "closed"
             const prMerged = prData.merged || false;
             const prMergeable = prData.mergeable;
-            
+
             core.info(`PR state: ${prState}, merged: ${prMerged}, mergeable: ${prMergeable}`);
 
             // Check for completion
@@ -2162,7 +2162,7 @@ jobs:
                   per_page: 100
                 })
               );
-              
+
               if (checkRuns.total_count > 0) {
                 const failedChecks = checkRuns.check_runs.filter(
                   run => run.conclusion !== 'success' && run.conclusion !== 'skipped'
@@ -2175,7 +2175,8 @@ jobs:
               core.warning(`Could not fetch PR checks: ${e.message}`);
             }
 
-            // If all checks pass and PR is mergeable, it's ready (but we still wait for human merge)
+            // If all checks pass and PR is mergeable,
+            // it's ready (but we still wait for human merge)
             if (allChecksPassed && prMergeable !== false) {
               core.info('PR is ready to merge (all checks passed)');
               checksStatus = 'ready';
@@ -2274,7 +2275,7 @@ jobs:
               body: `🤖 **Auto-pilot step ${stepCount}**: Monitoring PR status
 
             PR #${prNumber} is still open.
-            
+
             **Status:**
             - State: ${prState}
             - Checks: ${checksStatus}

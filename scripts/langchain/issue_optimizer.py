@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+
 from scripts.langchain.structured_output import (
     DEFAULT_REPAIR_PROMPT,
     build_repair_callback,
