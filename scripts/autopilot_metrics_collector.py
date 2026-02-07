@@ -353,22 +353,27 @@ def build_record_from_args(args: argparse.Namespace) -> dict[str, Any]:
             raise ValidationError("ended_at cannot be used with started_at_ms")
         if started_at and ended_at_ms:
             raise ValidationError("ended_at_ms cannot be used with started_at")
-        duration_ms = args.duration_ms
-        if duration_ms is None:
+        duration_ms_raw = args.duration_ms
+        if duration_ms_raw is None:
             if not started_at and started_at_ms is None:
                 raise ValidationError(
                     "duration_ms is required unless started_at or started_at_ms is set"
                 )
             if started_at_ms is not None:
-                if ended_at_ms is None:
-                    ended_at_ms = _utc_now_epoch_ms()
-                duration_ms = _duration_ms_from_epoch_bounds(
+                ended_at_ms_value = (
+                    _utc_now_epoch_ms()
+                    if ended_at_ms is None
+                    else _coerce_int(ended_at_ms, "ended_at_ms")
+                )
+                duration_ms_value = _duration_ms_from_epoch_bounds(
                     _coerce_int(started_at_ms, "started_at_ms"),
-                    _coerce_int(ended_at_ms, "ended_at_ms"),
+                    ended_at_ms_value,
                 )
             else:
                 ended_at = ended_at or _utc_now_iso()
-                duration_ms = _duration_ms_from_bounds(str(started_at), str(ended_at))
+                duration_ms_value = _duration_ms_from_bounds(str(started_at), str(ended_at))
+        else:
+            duration_ms_value = _coerce_int(duration_ms_raw, "duration_ms")
         if args.success is None:
             raise ValidationError("success is required")
         success = _coerce_bool(args.success, "success")
@@ -376,7 +381,7 @@ def build_record_from_args(args: argparse.Namespace) -> dict[str, Any]:
         record.update(
             {
                 "step_name": args.step_name,
-                "duration_ms": _coerce_int(duration_ms, "duration_ms"),
+                "duration_ms": duration_ms_value,
                 "success": success,
                 "failure_reason": _normalize_failure_reason(success, failure_reason),
             }
