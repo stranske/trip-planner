@@ -504,7 +504,9 @@ class AnthropicProvider(LLMProvider):
 
     def _get_client(self):
         try:
-            from langchain_anthropic import ChatAnthropic
+            from langchain_anthropic import (
+                ChatAnthropic,  # type: ignore[import-not-found]
+            )
         except ImportError:
             logger.warning("langchain_anthropic not installed")
             return None
