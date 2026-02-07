@@ -239,9 +239,41 @@ jobs:
             const options = { github, context, core };
             // Pass workflow_dispatch inputs if present
             const inputPrNumber = process.env.INPUT_PR_NUMBER;
-            const forceRetry = process.env.INPUT_FORCE_RETRY === 'true';
+            let forceRetry = process.env.INPUT_FORCE_RETRY === 'true';
             if (inputPrNumber) {
               options.overridePrNumber = parseInt(inputPrNumber, 10);
+            }
+            // Check if agent:retry label exists on PR (works for all event types)
+            if (!forceRetry) {
+              const { owner, repo } = context.repo;
+              // Resolve PR number from override, workflow_run, or pull_request event
+              const prNumberForLabelCheck =
+                options.overridePrNumber ||
+                (context.payload?.workflow_run?.pull_requests?.[0]?.number) ||
+                (context.payload?.pull_request?.number);
+              if (prNumberForLabelCheck) {
+                try {
+                  const labelsResponse = await github.rest.issues.listLabelsOnIssue({
+                    owner,
+                    repo,
+                    issue_number: prNumberForLabelCheck,
+                  });
+                  const hasRetryLabel = Array.isArray(labelsResponse.data) &&
+                    labelsResponse.data.some(label => label.name === 'agent:retry');
+                  if (hasRetryLabel) {
+                    forceRetry = true;
+                    core.info(
+                      `agent:retry label found on PR #${prNumberForLabelCheck} - ` +
+                      `enabling force retry`
+                    );
+                  }
+                } catch (error) {
+                  core.warning(
+                    `Could not check labels for PR #${prNumberForLabelCheck}: ` +
+                    `${error.message}`
+                  );
+                }
+              }
             }
             if (forceRetry) {
               options.forceRetry = true;
@@ -651,17 +683,22 @@ jobs:
             // If STOP recommended, remove agent label to prevent further runs
             if (recommendation === 'STOP') {
               core.warning('Progress review recommends STOP - agent work appears unaligned');
-              try {
-                await withRetry((client) =>
-                  client.rest.issues.removeLabel({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: prNumber,
-                    name: 'agent:codex',
-                  })
-                );
-              } catch (e) {
-                core.info(`Could not remove label: ${e.message}`);
+              const agentType = '${{ needs.evaluate.outputs.agent_type }}';
+              if (agentType) {
+                const agentLabel = `agent:${agentType}`;
+                try {
+                  await withRetry((client) =>
+                    client.rest.issues.removeLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: prNumber,
+                      name: agentLabel,
+                    })
+                  );
+                  core.info(`Removed ${agentLabel} label after STOP recommendation`);
+                } catch (e) {
+                  core.info(`Could not remove ${agentLabel} label: ${e.message}`);
+                }
               }
             }
 
