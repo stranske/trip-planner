@@ -33,10 +33,11 @@ logger = logging.getLogger(__name__)
 
 # GitHub Models API endpoint (OpenAI-compatible)
 GITHUB_MODELS_BASE_URL = "https://models.inference.ai.azure.com"
-# Use gpt-4o for evaluation - best available on GitHub Models
-# gpt-4o-mini was too lenient and passed obvious deficiencies
-# Also avoids token-limit failures on large issues (8k limit in gpt-4o-mini)
-DEFAULT_MODEL = "gpt-4o"
+# codex-mini-latest: code-optimized rolling model, Chat Completions compatible.
+# Trialing for keepalive task-completion analysis (T3 tier).
+# Previous: gpt-4o (functional but legacy).
+# Rejected: gpt-4o-mini (too lenient, passed obvious deficiencies).
+DEFAULT_MODEL = "codex-mini-latest"
 ANTHROPIC_API_KEY_ENV = "CLAUDE_API_STRANSKE"
 
 
@@ -85,6 +86,7 @@ class CompletionAnalysis:
     confidence: float  # 0.0 to 1.0
     reasoning: str  # Explanation of the analysis
     provider_used: str  # Which provider generated this
+    model_name: str = "unknown"  # Specific model used (e.g., gpt-4o, claude-3.5-sonnet)
 
     # Quality metrics for BS detection
     raw_confidence: float | None = None  # Original confidence before adjustment
@@ -406,6 +408,7 @@ Be conservative - if unsure, don't mark as completed."""
                 confidence=adjusted_confidence,
                 reasoning=reasoning,
                 provider_used=self.name,
+                model_name=DEFAULT_MODEL,
                 raw_confidence=raw_confidence if adjusted_confidence != raw_confidence else None,
                 confidence_adjusted=adjusted_confidence != raw_confidence,
                 quality_warnings=warnings if warnings else None,
@@ -420,6 +423,7 @@ Be conservative - if unsure, don't mark as completed."""
                 confidence=0.0,
                 reasoning=f"Failed to parse response: {e}",
                 provider_used=self.name,
+                model_name=DEFAULT_MODEL,
             )
 
 
@@ -480,6 +484,7 @@ class OpenAIProvider(LLMProvider):
                 confidence=result.confidence,
                 reasoning=result.reasoning,
                 provider_used=self.name,
+                model_name=DEFAULT_MODEL,
                 raw_confidence=result.raw_confidence,
                 confidence_adjusted=result.confidence_adjusted,
                 quality_warnings=result.quality_warnings,
@@ -504,15 +509,13 @@ class AnthropicProvider(LLMProvider):
 
     def _get_client(self):
         try:
-            from langchain_anthropic import (
-                ChatAnthropic,  # type: ignore[import-not-found]
-            )
+            from langchain_anthropic import ChatAnthropic
         except ImportError:
             logger.warning("langchain_anthropic not installed")
             return None
 
         return ChatAnthropic(
-            model="claude-4.5-sonnet",
+            model="claude-sonnet-4-5-20250929",
             anthropic_api_key=os.environ.get(ANTHROPIC_API_KEY_ENV),
             temperature=0.1,
         )
@@ -545,6 +548,7 @@ class AnthropicProvider(LLMProvider):
                 confidence=result.confidence,
                 reasoning=result.reasoning,
                 provider_used=self.name,
+                model_name="claude-sonnet-4-5-20250929",
                 raw_confidence=result.raw_confidence,
                 confidence_adjusted=result.confidence_adjusted,
                 quality_warnings=result.quality_warnings,
@@ -650,6 +654,7 @@ class RegexFallbackProvider(LLMProvider):
             in_progress_tasks=in_progress,
             blocked_tasks=blocked,
             confidence=0.3,  # Low confidence for regex
+            model_name="regex-patterns",
             reasoning="Pattern-based analysis (no LLM available)",
             provider_used=self.name,
         )

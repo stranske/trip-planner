@@ -428,15 +428,7 @@ jobs:
        needs.evaluate.outputs.action == 'fix' ||
        needs.evaluate.outputs.action == 'conflict')
     uses: stranske/Workflows/.github/workflows/reusable-codex-run.yml@main
-    secrets:
-      CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
-      # Use KEEPALIVE_APP for isolated rate limit pool (5000/hr)
-      # Falls back to WORKFLOWS_APP if not configured
-      WORKFLOWS_APP_ID: >-
-        ${{ secrets.KEEPALIVE_APP_ID || secrets.WORKFLOWS_APP_ID }}
-      WORKFLOWS_APP_PRIVATE_KEY: >-
-        ${{ secrets.KEEPALIVE_APP_PRIVATE_KEY ||
-            secrets.WORKFLOWS_APP_PRIVATE_KEY }}
+    secrets: inherit
     with:
       skip: >-
         ${{ needs.evaluate.outputs.action != 'run' &&
@@ -912,8 +904,10 @@ jobs:
               // LLM analysis details for task completion reporting
               llm_provider:
                 '${{ needs.run-codex.outputs.llm-provider || '' }}',
+              llm_model:
+                '${{ needs.run-codex.outputs.llm-model || '' }}',
               llm_confidence:
-                '${{ needs.run-codex.outputs.llm-confidence || '' }}',
+                '${{ needs.run-codex.outputs.llm-confidence || ''}}',
               llm_analysis_run: '${{ needs.run-codex.outputs.llm-analysis-run }}' === 'true',
             };
             await updateKeepaliveLoopSummary({ github, context, core, inputs });
