@@ -47,6 +47,7 @@ exclude_lines = [
 module = [
     "jsonschema",
     "jinja2",
+    "langchain_anthropic",
     "langchain_openai",
     "langchain_core.*",
     "tomlkit",
