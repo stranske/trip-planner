@@ -483,7 +483,157 @@ function mergeCheckboxStates(newContent, existingStates) {
 const CONNECTOR_BOT_LOGINS = [
   'chatgpt-codex-connector[bot]',
   'github-actions[bot]',  // Sometimes used for automation
+  'stranske-keepalive[bot]',
+  'agents-workflows-bot[bot]',
 ];
+
+const COMPLETION_COMMENT_MARKER = '<!-- codex-completion-checkpoint -->';
+const COMPLETION_WARNING_MARKER = '<!-- completion-author-warning -->';
+
+function normaliseLogin(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+async function fetchIssueComments(github, owner, repo, prNumber, core) {
+  try {
+    return await github.paginate(github.rest.issues.listComments, {
+      owner,
+      repo,
+      issue_number: prNumber,
+      per_page: 100,
+    });
+  } catch (error) {
+    if (core) {
+      core.warning(`Failed to fetch PR comments: ${error.message}`);
+    }
+    return [];
+  }
+}
+
+function parseConnectorCheckboxStatesFromComments(comments, core) {
+  const states = new Map();
+  const allowed = new Set(CONNECTOR_BOT_LOGINS.map(normaliseLogin));
+  const connectorComments = Array.isArray(comments)
+    ? comments.filter((comment) => allowed.has(normaliseLogin(comment?.user?.login)))
+    : [];
+
+  if (connectorComments.length === 0) {
+    return states;
+  }
+
+  for (const comment of connectorComments) {
+    const commentStates = parseCheckboxStates(comment.body);
+    for (const [key] of commentStates) {
+      states.set(key, true);
+    }
+  }
+
+  if (states.size > 0 && core) {
+    core.info(`Found ${states.size} checked checkbox(es) from connector bot comments`);
+  }
+
+  return states;
+}
+
+function findUnauthorizedCompletionAuthors(comments) {
+  const allowed = new Set(CONNECTOR_BOT_LOGINS.map(normaliseLogin));
+  const found = new Map();
+  for (const comment of Array.isArray(comments) ? comments : []) {
+    const body = String(comment?.body || '');
+    if (!body.includes(COMPLETION_COMMENT_MARKER)) {
+      continue;
+    }
+    const rawLogin = String(comment?.user?.login || '').trim();
+    const login = normaliseLogin(rawLogin);
+    if (!login || allowed.has(login)) {
+      continue;
+    }
+    if (!found.has(login)) {
+      found.set(login, rawLogin || login);
+    }
+  }
+  return Array.from(found.values());
+}
+
+function buildCompletionAuthorWarningBody(logins, { resolved = false } = {}) {
+  const lines = [COMPLETION_WARNING_MARKER];
+  if (resolved) {
+    lines.push('## ✅ Completion Comment Authors Authorized');
+    lines.push('');
+    lines.push('No unauthorized completion checkpoint authors were detected in the latest scan.');
+    return lines.join('\n');
+  }
+
+  lines.push('## ⚠️ Completion Comment Author Not Authorized');
+  lines.push('');
+  lines.push('The PR has completion checkpoint comments from the following login(s):');
+  for (const login of logins) {
+    lines.push(`- ${login}`);
+  }
+  lines.push('');
+  lines.push('Automated Status Summary only merges completion checkboxes from authorized bots.');
+  lines.push('If this bot should be trusted, add it to `CONNECTOR_BOT_LOGINS` in `agents_pr_meta_update_body.js` (Workflows repo and consumer templates).');
+  return lines.join('\n');
+}
+
+async function upsertCompletionAuthorWarning({ github, owner, repo, prNumber, comments, unauthorizedLogins, core }) {
+  try {
+    const list = Array.isArray(unauthorizedLogins) ? unauthorizedLogins.filter(Boolean) : [];
+    const existing = (Array.isArray(comments) ? comments : [])
+      .find((comment) => comment?.body && comment.body.includes(COMPLETION_WARNING_MARKER));
+    const updateComment = async (commentId, body, label) => {
+      await withRetries(
+        () => github.rest.issues.updateComment({
+          owner,
+          repo,
+          comment_id: commentId,
+          body,
+        }),
+        { description: label, core },
+      );
+    };
+    const createComment = async (body, label) => {
+      await withRetries(
+        () => github.rest.issues.createComment({
+          owner,
+          repo,
+          issue_number: prNumber,
+          body,
+        }),
+        { description: label, core },
+      );
+    };
+
+    if (list.length === 0) {
+      if (existing) {
+        const body = buildCompletionAuthorWarningBody([], { resolved: true });
+        await updateComment(existing.id, body, `issues.updateComment #${existing.id}`);
+        if (core) {
+          core.info('Updated completion author warning comment to resolved state.');
+        }
+      }
+      return;
+    }
+
+    const body = buildCompletionAuthorWarningBody(list);
+    if (existing) {
+      await updateComment(existing.id, body, `issues.updateComment #${existing.id}`);
+      if (core) {
+        core.info('Updated completion author warning comment.');
+      }
+      return;
+    }
+
+    await createComment(body, `issues.createComment #${prNumber}`);
+    if (core) {
+      core.info('Posted completion author warning comment.');
+    }
+  } catch (error) {
+    if (core) {
+      core.warning(`Failed to upsert completion author warning: ${error.message}`);
+    }
+  }
+}
 
 /**
  * Fetch comments from connector bots and extract checked checkbox states.
@@ -497,44 +647,8 @@ const CONNECTOR_BOT_LOGINS = [
  * @returns {Promise<Map<string, boolean>>} Map of normalized checkbox text to checked state
  */
 async function fetchConnectorCheckboxStates(github, owner, repo, prNumber, core) {
-  const states = new Map();
-  
-  try {
-    const comments = await github.paginate(github.rest.issues.listComments, {
-      owner,
-      repo,
-      issue_number: prNumber,
-      per_page: 100,
-    });
-    
-    // Filter to connector bot comments only
-    const connectorComments = comments.filter((c) => 
-      c.user && CONNECTOR_BOT_LOGINS.includes(c.user.login)
-    );
-    
-    if (connectorComments.length === 0) {
-      return states;
-    }
-    
-    // Parse checkbox states from all connector comments
-    // Later comments override earlier ones (most recent state wins)
-    for (const comment of connectorComments) {
-      const commentStates = parseCheckboxStates(comment.body);
-      for (const [key] of commentStates) {
-        states.set(key, true);
-      }
-    }
-    
-    if (states.size > 0 && core) {
-      core.info(`Found ${states.size} checked checkbox(es) from connector bot comments`);
-    }
-  } catch (error) {
-    if (core) {
-      core.warning(`Failed to fetch connector comments: ${error.message}`);
-    }
-  }
-  
-  return states;
+  const comments = await fetchIssueComments(github, owner, repo, prNumber, core);
+  return parseConnectorCheckboxStatesFromComments(comments, core);
 }
 
 /**
@@ -1151,8 +1265,23 @@ async function run({github: rawGithub, context, core, inputs}) {
     ? [...requiredChecksRaw, 'gate']
     : requiredChecksRaw;
 
+  const issueComments = await fetchIssueComments(github, owner, repo, pr.number, core);
   // Fetch checkbox states from connector bot comments to merge into status summary
-  const connectorStates = await fetchConnectorCheckboxStates(github, owner, repo, pr.number, core);
+  const connectorStates = parseConnectorCheckboxStatesFromComments(issueComments, core);
+  const unauthorizedAuthors = findUnauthorizedCompletionAuthors(issueComments);
+  try {
+    await upsertCompletionAuthorWarning({
+      github,
+      owner,
+      repo,
+      prNumber: pr.number,
+      comments: issueComments,
+      unauthorizedLogins: unauthorizedAuthors,
+      core,
+    });
+  } catch (error) {
+    core.warning(`Completion author warning skipped: ${error.message}`);
+  }
 
   const agentType = resolveAgentType({ inputs, env: process.env, pr });
 
@@ -1219,6 +1348,11 @@ module.exports = {
   parseCheckboxStates,
   mergeCheckboxStates,
   fetchConnectorCheckboxStates,
+  fetchIssueComments,
+  parseConnectorCheckboxStatesFromComments,
+  findUnauthorizedCompletionAuthors,
+  buildCompletionAuthorWarningBody,
+  upsertCompletionAuthorWarning,
   stripPrTemplateContent,
   upsertBlock,
   buildContextBlock,
