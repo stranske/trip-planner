@@ -199,7 +199,7 @@ def build_chat_client(
         return None
 
     try:
-        from langchain_anthropic import ChatAnthropic
+        from langchain_anthropic import ChatAnthropic  # type: ignore[import-not-found]
     except ImportError:
         ChatAnthropic = None
 
