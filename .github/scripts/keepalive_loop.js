@@ -1914,29 +1914,34 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
         action = 'stop';
         reason = 'complete-gate-failure-max';
       } else if (gateNormalized === 'cancelled') {
-        gateRateLimit = await detectRateLimitCancellation({
-          github,
-          context,
-          runId: gateRun.runId,
-          core,
-        });
-        if (gateRateLimit) {
-          if (tasksRemaining && !rateLimitDefer) {
-            // Rate limits are infrastructure noise; proceed with work when tokens remain.
-            action = 'run';
-            reason = 'bypass-rate-limit-gate';
-            if (core) core.info('Gate cancelled due to rate limits - bypassing Gate');
-          } else {
-            action = rateLimitDefer ? 'defer' : 'wait';
-            reason = rateLimitDefer ? 'gate-cancelled-rate-limit' : 'gate-cancelled';
-          }
-        } else if (forceRetry && tasksRemaining) {
-          action = 'run';
-          reason = 'force-retry-cancelled';
-          if (core) core.info(`Force retry enabled: bypassing cancelled gate (rate_limit=${gateRateLimit})`);
+        if (rateLimitDefer) {
+          action = 'defer';
+          reason = 'rate-limit-exhausted';
         } else {
-          action = 'wait';
-          reason = 'gate-cancelled';
+          gateRateLimit = await detectRateLimitCancellation({
+            github,
+            context,
+            runId: gateRun.runId,
+            core,
+          });
+          if (gateRateLimit) {
+            if (tasksRemaining && !rateLimitDefer) {
+              // Rate limits are infrastructure noise; proceed with work when tokens remain.
+              action = 'run';
+              reason = 'bypass-rate-limit-gate';
+              if (core) core.info('Gate cancelled due to rate limits - bypassing Gate');
+            } else {
+              action = 'wait';
+              reason = 'gate-cancelled';
+            }
+          } else if (forceRetry && tasksRemaining) {
+            action = 'run';
+            reason = 'force-retry-cancelled';
+            if (core) core.info(`Force retry enabled: bypassing cancelled gate (rate_limit=${gateRateLimit})`);
+          } else {
+            action = 'wait';
+            reason = 'gate-cancelled';
+          }
         }
       } else {
         // Gate failed - check if failure is rate-limit related vs code quality
@@ -2274,6 +2279,7 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       'missing-agent-label',
       'gate-cancelled',
       'gate-cancelled-rate-limit',
+      'rate-limit-exhausted',
     ].includes(baseReason);
     const isTransientWait =
       waitLikeAction &&
