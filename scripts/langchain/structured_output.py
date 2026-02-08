@@ -26,6 +26,9 @@ Return ONLY valid JSON that matches the schema with no surrounding text.
 Do not wrap the JSON in markdown fences.
 """.strip()
 
+MIN_REPAIR_ATTEMPTS = 0
+MAX_REPAIR_ATTEMPTS = 1
+
 
 @dataclass(frozen=True)
 class StructuredOutputResult(Generic[T]):
@@ -85,6 +88,13 @@ def build_repair_callback(
     return _repair
 
 
+def clamp_repair_attempts(max_repair_attempts: int) -> int:
+    return min(
+        MAX_REPAIR_ATTEMPTS,
+        max(MIN_REPAIR_ATTEMPTS, int(max_repair_attempts)),
+    )
+
+
 def parse_structured_output(
     content: str,
     model: type[T],
@@ -109,7 +119,7 @@ def parse_structured_output(
         error_detail = None
 
     if error_detail is not None:
-        attempts = max(0, min(int(max_repair_attempts), 1))
+        attempts = clamp_repair_attempts(max_repair_attempts)
         if repair is None or attempts == 0:
             return StructuredOutputResult(
                 payload=None,

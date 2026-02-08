@@ -1,0 +1,216 @@
+name: agents-weekly-metrics
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  aggregate:
+    name: Aggregate agent metrics
+    runs-on: ubuntu-latest
+    environment: agent-standard
+    steps:
+      # Mint GitHub App token early to use for API calls (avoids rate limits)
+      - name: Mint GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v2
+        continue-on-error: true
+        with:
+          app-id: ${{ secrets.WORKFLOWS_APP_ID || '0' }}
+          private-key: ${{ secrets.WORKFLOWS_APP_PRIVATE_KEY || 'dummy' }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+
+          token: ${{ steps.app_token.outputs.token || github.token }}
+          sparse-checkout: |
+            .github/actions/setup-api-client
+            .github/scripts/github-api-with-retry.js
+            .github/scripts/token_load_balancer.js
+          sparse-checkout-cone-mode: false
+
+      - name: Install GitHub API dependencies
+        run: npm install --no-save --no-package-lock @octokit/rest @octokit/auth-app
+
+      - name: Setup API client
+        uses: ./.github/actions/setup-api-client
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          github_token: ${{ github.token }}
+
+
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Download metrics artifacts
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token || github.token }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1009,SC1073,SC1039,SC1072
+          mkdir -p artifacts
+
+          # Get artifact IDs and names
+          # shellcheck disable=SC1009,SC1073,SC1039,SC1072
+          node - <<'NODE' |
+          const { Octokit } = require('@octokit/rest');
+          const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+          const core = { info: () => {}, warning: console.warn, debug: () => {} };
+          const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
+          const target = new Set([
+            'keepalive-metrics',
+            'agents-autofix-metrics',
+            'agents-verifier-metrics'
+          ]);
+          const prefixes = ['autopilot-metrics-'];
+
+          (async () => {
+            const github = new Octokit({ auth: process.env.GH_TOKEN || process.env.GITHUB_TOKEN });
+            const { paginateWithRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'agents-weekly-metrics-artifacts',
+              capabilities: ['actions:read']
+            });
+            const artifacts = await paginateWithRetry(github.rest.actions.listArtifactsForRepo, {
+              owner,
+              repo,
+              per_page: 100
+            });
+            const lines = artifacts
+              .filter((artifact) => !artifact.expired && (
+                target.has(artifact.name) ||
+                prefixes.some((p) => artifact.name.startsWith(p))
+              ))
+              .map((artifact) => `${artifact.id}\t${artifact.name}`)
+              .join('\n');
+            process.stdout.write(lines);
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          while IFS=$'\t' read -r id name; do
+            echo "Downloading artifact $id ($name)"
+            mkdir -p "artifacts/$name"
+            # shellcheck disable=SC1009,SC1073,SC1039,SC1072
+            export ARTIFACT_ID="$id"
+            export ARTIFACT_DIR="artifacts/$name"
+            export ARTIFACT_ZIP="artifacts/$name/$id.zip"
+            if ! node - <<'NODE'
+            const fs = require('fs');
+            const { Octokit } = require('@octokit/rest');
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const core = { info: () => {}, warning: console.warn, debug: () => {} };
+            const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
+            const artifactId = Number(process.env.ARTIFACT_ID);
+            const zipPath = process.env.ARTIFACT_ZIP;
+            (async () => {
+              const token = process.env.GH_TOKEN ||
+                process.env.GITHUB_TOKEN;
+              const github = new Octokit({ auth: token });
+              const { withRetry } = await createTokenAwareRetry({
+                github,
+                core,
+                env: process.env,
+                task: 'agents-weekly-metrics-download',
+                capabilities: ['actions:read']
+              });
+              const response = await withRetry((client) => client.rest.actions.downloadArtifact({
+                owner,
+                repo,
+                artifact_id: artifactId,
+                archive_format: 'zip'
+              }));
+              const data = response.data;
+              const buffer = Buffer.isBuffer(data)
+                ? data
+                : Buffer.from(data instanceof ArrayBuffer ? new Uint8Array(data) : data);
+              fs.writeFileSync(zipPath, buffer);
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+            NODE
+            then
+              echo "Warning: Could not download artifact $id ($name)"
+              continue
+            fi
+            unzip -o "artifacts/$name/$id.zip" -d "artifacts/$name" >/dev/null || \
+              echo "Warning: Could not unzip artifact $id ($name)"
+          done || true  # Don't fail if no artifacts found
+
+      - name: Aggregate metrics
+        env:
+          METRICS_DIR: artifacts
+          OUTPUT_PATH: agent-weekly-metrics.md
+        run: |
+          python scripts/aggregate_agent_metrics.py
+
+      - name: Upload weekly summary
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-weekly-metrics
+          path: agent-weekly-metrics.md
+          retention-days: 30
+
+      - name: Post summary to tracking issue
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ steps.app_token.outputs.token || github.token }}
+          script: |
+            const fs = require('fs');
+            const retryHelperPath = './.github/scripts/github-api-with-retry.js';
+            const retryHelpers = fs.existsSync(retryHelperPath)
+              ? require(retryHelperPath)
+              : {
+                  withRetry: (fn) => fn(),
+                  paginateWithRetry: (githubInstance, method, params) =>
+                    githubInstance.paginate(method, params),
+                };
+            const { withRetry, paginateWithRetry } = retryHelpers;
+            const { owner, repo } = context.repo;
+            const summaryPath = 'agent-weekly-metrics.md';
+            const body = fs.existsSync(summaryPath)
+              ? fs.readFileSync(summaryPath, 'utf8')
+              : 'No metrics available.';
+            const title = 'Agent metrics weekly summary';
+
+            const issues = await paginateWithRetry(github, github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100,
+            });
+            let target = issues.find((issue) => issue.title === title);
+
+            if (!target) {
+              const created = await withRetry(() => github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body: 'Tracking issue for weekly agent workflow metrics.\n\n' + body,
+              }));
+              target = created.data;
+            } else {
+              await withRetry(() => github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: target.number,
+                body,
+              }));
+            }
+
+            core.setOutput('issue_number', target.number);
