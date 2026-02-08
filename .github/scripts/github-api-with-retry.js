@@ -119,8 +119,24 @@ function isTransientError(error) {
   if (message.includes('fetch failed') || message.includes('network error')) {
     return true;
   }
-  const code = String(error.code || error?.cause?.code || '').toUpperCase();
-  return TRANSIENT_ERROR_CODES.has(code);
+  // Check for transient network error codes (ECONNRESET, ETIMEDOUT, etc.).
+  // Avoid accessing error.code on Octokit RequestError objects — the property
+  // has a deprecated getter that emits noisy deprecation warnings.  Prefer
+  // error.cause.code (Node.js fetch/network errors) and only fall back to
+  // error.code when the error is NOT an Octokit HTTP error (has no .status).
+  const causeCode = String(error?.cause?.code || '').toUpperCase();
+  if (TRANSIENT_ERROR_CODES.has(causeCode)) {
+    return true;
+  }
+  // Only check error.code via hasOwnProperty to avoid triggering
+  // Octokit RequestError's deprecated getter (which defines .code on the
+  // prototype, not as an own property).  Node.js network errors set .code
+  // as an own property (e.g. ECONNRESET).
+  if (!status && Object.prototype.hasOwnProperty.call(error, 'code')) {
+    const code = String(error.code).toUpperCase();
+    return TRANSIENT_ERROR_CODES.has(code);
+  }
+  return false;
 }
 
 function logWithCore(core, level, message) {
@@ -338,7 +354,31 @@ async function withRetry(fn, options = {}) {
           : rateLimitError
             ? 'rate limit'
             : 'transient error';
-        console.error(`Max retries (${maxRetries}) reached for ${retryReason}`);
+        const errorMsg = `Max retries (${maxRetries}) reached for ${retryReason}`;
+        console.error(errorMsg);
+        // Surface as a GitHub Actions error annotation so the failure
+        // mode is visible in run summaries, not buried in logs.
+        let annotationDetails;
+        if (retryReason === 'rate limit') {
+          annotationDetails =
+            'This indicates all available tokens are exhausted. ' +
+            'Check token rotation and rate limit budgets.';
+        } else if (retryReason === 'secondary rate limit') {
+          annotationDetails =
+            'A secondary rate limit (abuse detection) was ' +
+            'repeatedly hit. Reduce concurrency or spread ' +
+            'requests over a longer period.';
+        } else {
+          annotationDetails =
+            'Repeated transient failures despite retries. ' +
+            'Check network conditions and GitHub status.';
+        }
+        logWithCore(
+          core,
+          'error',
+          `${errorMsg}. Token: ${currentTokenSource || 'unknown'}. ` +
+          annotationDetails
+        );
         throw error;
       }
 
