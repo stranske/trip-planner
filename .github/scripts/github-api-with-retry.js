@@ -119,8 +119,24 @@ function isTransientError(error) {
   if (message.includes('fetch failed') || message.includes('network error')) {
     return true;
   }
-  const code = String(error.code || error?.cause?.code || '').toUpperCase();
-  return TRANSIENT_ERROR_CODES.has(code);
+  // Check for transient network error codes (ECONNRESET, ETIMEDOUT, etc.).
+  // Avoid accessing error.code on Octokit RequestError objects — the property
+  // has a deprecated getter that emits noisy deprecation warnings.  Prefer
+  // error.cause.code (Node.js fetch/network errors) and only fall back to
+  // error.code when the error is NOT an Octokit HTTP error (has no .status).
+  const causeCode = String(error?.cause?.code || '').toUpperCase();
+  if (TRANSIENT_ERROR_CODES.has(causeCode)) {
+    return true;
+  }
+  // Only check error.code via hasOwnProperty to avoid triggering
+  // Octokit RequestError's deprecated getter (which defines .code on the
+  // prototype, not as an own property).  Node.js network errors set .code
+  // as an own property (e.g. ECONNRESET).
+  if (!status && Object.prototype.hasOwnProperty.call(error, 'code')) {
+    const code = String(error.code).toUpperCase();
+    return TRANSIENT_ERROR_CODES.has(code);
+  }
+  return false;
 }
 
 function logWithCore(core, level, message) {
