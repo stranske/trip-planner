@@ -213,7 +213,6 @@ jobs:
             // Extract follow-up-depth from original issue body or PR body
             // Format: <!-- follow-up-depth: N -->
             let chainDepth = 0;
-            const prBody = context.payload.pull_request.body || '';
             const depthSources = [originalIssueBody, prBody];
             for (const source of depthSources) {
               const depthMatch = source.match(
@@ -651,7 +650,7 @@ jobs:
               repo: context.repo.repo,
               title: title,
               body: body,
-              labels: ['follow-up', 'agent:codex']
+              labels: ['follow-up', 'agent:codex', 'agents:auto-pilot']
             }));
 
             core.info(`Created issue #${issue.data.number}`);
