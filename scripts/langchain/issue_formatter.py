@@ -16,6 +16,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts.langchain.injection_guard import check_prompt_injection
+except ImportError:  # pragma: no cover - fallback for direct invocation
+    from injection_guard import check_prompt_injection
+
 # Maximum issue body size to prevent OpenAI rate limit errors (30k TPM limit)
 # ~4 chars per token, so 50k chars ≈ 12.5k tokens, leaving headroom for prompt + output
 MAX_ISSUE_BODY_SIZE = 50000
@@ -442,6 +447,17 @@ def format_issue_body(issue_body: str, *, use_llm: bool = True) -> dict[str, Any
     if not issue_body:
         issue_body = ""
 
+    guard_result = check_prompt_injection(issue_body)
+    if guard_result["blocked"]:
+        return {
+            "formatted_body": issue_body,
+            "provider_used": None,
+            "used_llm": False,
+            "blocked": True,
+            "guard_blocked": True,
+            "guard_reason": guard_result["reason"],
+        }
+
     # Check size before processing to avoid rate limit errors
     if len(issue_body) > MAX_ISSUE_BODY_SIZE:
         err_msg = (
@@ -549,6 +565,9 @@ def main() -> None:
             "used_llm": result.get("used_llm", False),
             "labels": build_label_transition(),
         }
+        if result.get("blocked"):
+            payload["guard_blocked"] = True
+            payload["guard_reason"] = result.get("guard_reason") or ""
         print(json.dumps(payload, ensure_ascii=True))
     else:
         print(result["formatted_body"])
