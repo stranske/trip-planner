@@ -4,6 +4,7 @@ Prompt injection detection utility for langchain scripts.
 
 Public API:
     detect_prompt_injection(text: str) -> tuple[bool, str]
+    check_prompt_injection(text: object | None) -> GuardCheckResult
 
 Return schema:
     GuardResult = tuple[bool, str]
@@ -40,7 +41,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Final, Literal, TypeAlias
+from typing import Final, Literal, TypeAlias, TypedDict, cast
 
 ReasonCode: TypeAlias = Literal[
     "INSTRUCTION_OVERRIDE",
@@ -51,6 +52,25 @@ ReasonCode: TypeAlias = Literal[
 ]
 
 GuardResult: TypeAlias = tuple[bool, str]
+
+
+class GuardCheckResultAllowed(TypedDict):
+    """Guard result for inputs that are not blocked."""
+
+    blocked: Literal[False]
+    reason: Literal[""]
+    code: None
+
+
+class GuardCheckResultBlocked(TypedDict):
+    """Guard result for inputs that are blocked or when guard fails closed."""
+
+    blocked: Literal[True]
+    reason: str
+    code: ReasonCode | Literal["GUARD_ERROR"] | None
+
+
+GuardCheckResult: TypeAlias = GuardCheckResultAllowed | GuardCheckResultBlocked
 
 
 @dataclass(frozen=True)
@@ -163,3 +183,92 @@ def detect_prompt_injection(text: str) -> GuardResult:
             return True, reason
 
     return False, ""
+
+
+def _normalize_guard_input(text: object | None) -> str:
+    """Normalize arbitrary input for guard evaluation.
+
+    Returns an empty string for None and for values that do not produce
+    meaningful content. This keeps the guard behavior stable for callers.
+    """
+
+    if text is None:
+        return ""
+
+    if isinstance(text, bytes):
+        return text.decode("utf-8", errors="ignore")
+
+    if isinstance(text, str):
+        return text
+
+    return str(text)
+
+
+def _extract_reason_code(reason: str) -> ReasonCode | None:
+    """Return the reason code when the format is valid."""
+
+    if ":" not in reason:
+        return None
+
+    prefix = reason.split(":", 1)[0].strip()
+    if prefix in REASON_CODE_MESSAGES:
+        return cast(ReasonCode, prefix)
+
+    return None
+
+
+def check_prompt_injection(text: object | None) -> GuardCheckResult:
+    """Run prompt-injection detection with input validation and a stable result shape.
+
+    Args:
+        text: Arbitrary input. None and empty/whitespace-only strings are treated
+            as not blocked. Non-string inputs are coerced to string safely.
+
+    Returns:
+        GuardCheckResult:
+            blocked: True when prompt injection is detected or guard fails closed.
+            reason: Human-readable reason (empty string when not blocked).
+            code: ReasonCode | "GUARD_ERROR" | None.
+    """
+
+    try:
+        normalized = _normalize_guard_input(text)
+        if not normalized.strip():
+            return {"blocked": False, "reason": "", "code": None}
+
+        blocked, reason = detect_prompt_injection(normalized)
+        if not blocked:
+            return {"blocked": False, "reason": "", "code": None}
+
+        if not isinstance(reason, str) or not reason.strip():
+            return {
+                "blocked": True,
+                "reason": "GUARD_ERROR: Invalid reason format",
+                "code": "GUARD_ERROR",
+            }
+
+        code = _extract_reason_code(reason)
+        # Fallback: extract code from patterns when reason parsing fails
+        if code is None:
+            for pattern in _PATTERNS:
+                if pattern.regex.search(normalized):
+                    code = pattern.code
+                    break
+        return {"blocked": True, "reason": reason, "code": code}
+    except Exception as exc:  # fail closed on guard errors
+        return {
+            "blocked": True,
+            "reason": f"GUARD_ERROR: {exc}",
+            "code": "GUARD_ERROR",
+        }
+
+
+__all__ = [
+    "GuardCheckResult",
+    "GuardPattern",
+    "GuardResult",
+    "ReasonCode",
+    "check_prompt_injection",
+    "detect_prompt_injection",
+    "list_guard_patterns",
+]
