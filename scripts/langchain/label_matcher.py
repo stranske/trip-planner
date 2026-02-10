@@ -5,6 +5,7 @@ Semantic label matching helpers for issue intake.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from collections.abc import Iterable, Mapping
@@ -28,6 +29,7 @@ class LabelVectorStore:
     store: object
     provider: str
     model: str
+    is_fallback: bool
     labels: list[LabelRecord]
 
 
@@ -186,6 +188,8 @@ _DOCS_KEYWORDS = {
     "tutorials",
 }
 
+logger = logging.getLogger(__name__)
+
 
 def _normalize_label(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", name.lower())
@@ -269,6 +273,7 @@ def build_label_vector_store(
 
     resolved = client_info or semantic_matcher.get_embedding_client(model=model)
     if resolved is None:
+        logger.info("No embedding provider available for label matching.")
         return None
 
     try:
@@ -279,10 +284,17 @@ def build_label_vector_store(
     texts = [_label_text(label) for label in label_records]
     metadatas = [{"name": label.name, "description": label.description} for label in label_records]
     store = FAISS.from_texts(texts, resolved.client, metadatas=metadatas)
+    logger.info(
+        "Label matcher embedding provider=%s model=%s is_fallback=%s",
+        resolved.provider,
+        resolved.model,
+        resolved.is_fallback,
+    )
     return LabelVectorStore(
         store=store,
         provider=resolved.provider,
         model=resolved.model,
+        is_fallback=resolved.is_fallback,
         labels=label_records,
     )
 

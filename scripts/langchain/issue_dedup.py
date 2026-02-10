@@ -5,6 +5,7 @@ Build FAISS vector stores for issue deduplication.
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -29,6 +30,7 @@ class IssueVectorStore:
     store: object
     provider: str
     model: str
+    is_fallback: bool
     issues: list[IssueRecord]
 
 
@@ -43,6 +45,8 @@ class IssueMatch:
 DEFAULT_SIMILARITY_THRESHOLD = 0.8
 DEFAULT_SIMILARITY_K = 5
 SIMILAR_ISSUES_MARKER = "<!-- issue-dedup:similar-issues -->"
+
+logger = logging.getLogger(__name__)
 
 
 def _coerce_issue(item: Any) -> IssueRecord | None:
@@ -100,6 +104,7 @@ def build_issue_vector_store(
 
     resolved = client_info or semantic_matcher.get_embedding_client(model=model)
     if resolved is None:
+        logger.info("No embedding provider available for issue deduplication.")
         return None
 
     try:
@@ -112,10 +117,17 @@ def build_issue_vector_store(
         {"number": issue.number, "title": issue.title, "url": issue.url} for issue in issue_records
     ]
     store = FAISS.from_texts(texts, resolved.client, metadatas=metadatas)
+    logger.info(
+        "Issue dedup embedding provider=%s model=%s is_fallback=%s",
+        resolved.provider,
+        resolved.model,
+        resolved.is_fallback,
+    )
     return IssueVectorStore(
         store=store,
         provider=resolved.provider,
         model=resolved.model,
+        is_fallback=resolved.is_fallback,
         issues=issue_records,
     )
 
