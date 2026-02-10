@@ -1,0 +1,205 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2026-02-07",
+  "models": [
+    {
+      "model_id": "gpt-5.2",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.95, "T2": 0.95, "T3": 0.95, "T4": 0.95, "T5": 0.95 },
+      "cost_score": 0.30,
+      "speed_score": 0.68,
+      "notes": "Latest flagship (Dec 2025). Top quality, higher cost."
+    },
+    {
+      "model_id": "gpt-5.1",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.90, "T2": 0.90, "T3": 0.92, "T4": 0.92, "T5": 0.93 },
+      "cost_score": 0.40,
+      "speed_score": 0.72,
+      "notes": "Nov 2025 flagship. Reasoning defaults to none — set effort explicitly."
+    },
+    {
+      "model_id": "gpt-5.1-codex",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.88, "T2": 0.92, "T3": 0.95, "T4": 0.93, "T5": 0.94 },
+      "cost_score": 0.38,
+      "speed_score": 0.70,
+      "notes": "Code-optimized GPT-5.1. Strong candidate for Codex session analysis."
+    },
+    {
+      "model_id": "gpt-5.1-mini",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.82, "T2": 0.80, "T3": 0.75, "T4": 0.72, "T5": 0.68 },
+      "cost_score": 0.82,
+      "speed_score": 0.92,
+      "notes": "Lightweight 5.1. Risk of leniency on analysis tasks."
+    },
+    {
+      "model_id": "gpt-5",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.88, "T2": 0.88, "T3": 0.90, "T4": 0.90, "T5": 0.90 },
+      "cost_score": 0.45,
+      "speed_score": 0.75,
+      "notes": "Aug 2025 flagship. Proven, superseded by 5.1+."
+    },
+    {
+      "model_id": "gpt-5-mini",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.78, "T2": 0.75, "T3": 0.70, "T4": 0.68, "T5": 0.62 },
+      "cost_score": 0.85,
+      "speed_score": 0.93,
+      "notes": "Budget GPT-5. Caution: mini models have documented leniency issues."
+    },
+    {
+      "model_id": "gpt-5-nano",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.70, "T2": 0.65, "T3": 0.55, "T4": 0.50, "T5": 0.40 },
+      "cost_score": 0.95,
+      "speed_score": 0.98,
+      "notes": "Smallest GPT-5. Only suitable for T1 tasks."
+    },
+    {
+      "model_id": "gpt-4.1",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.88, "T2": 0.88, "T3": 0.88, "T4": 0.87, "T5": 0.88 },
+      "cost_score": 0.55,
+      "speed_score": 0.80,
+      "notes": "Battle-tested (Apr 2025). Excellent stability and structured output."
+    },
+    {
+      "model_id": "gpt-4.1-mini",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.80, "T2": 0.78, "T3": 0.72, "T4": 0.70, "T5": 0.65 },
+      "cost_score": 0.90,
+      "speed_score": 0.95,
+      "notes": "Lightweight 4.1. Good for T1/T2, risky for T3+."
+    },
+    {
+      "model_id": "gpt-4.1-nano",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.68, "T2": 0.63, "T3": 0.52, "T4": 0.48, "T5": 0.38 },
+      "cost_score": 1.00,
+      "speed_score": 1.00,
+      "notes": "Cheapest and fastest. Only for trivial classification."
+    },
+    {
+      "model_id": "codex-mini-latest",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.75, "T2": 0.80, "T3": 0.78, "T4": 0.72, "T5": 0.65 },
+      "cost_score": 0.80,
+      "speed_score": 0.88,
+      "notes": "Rolling Codex alias. Good for code-centric extraction."
+    },
+    {
+      "model_id": "o4-mini",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.85, "T2": 0.88, "T3": 0.92, "T4": 0.88, "T5": 0.93 },
+      "cost_score": 0.30,
+      "speed_score": 0.35,
+      "notes": "Reasoning model. High quality but 5-15s latency. Use for high-stakes only."
+    },
+    {
+      "model_id": "o3",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.90, "T2": 0.92, "T3": 0.95, "T4": 0.92, "T5": 0.96 },
+      "cost_score": 0.15,
+      "speed_score": 0.15,
+      "notes": "Deep reasoning. 10-30s response. Generally too slow for CI/CD."
+    },
+    {
+      "model_id": "o3-mini",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.83, "T2": 0.85, "T3": 0.88, "T4": 0.85, "T5": 0.90 },
+      "cost_score": 0.35,
+      "speed_score": 0.30,
+      "notes": "Legacy reasoning mini. Superseded by o4-mini."
+    },
+    {
+      "model_id": "gpt-4o",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.85, "T2": 0.85, "T3": 0.85, "T4": 0.84, "T5": 0.84 },
+      "cost_score": 0.55,
+      "speed_score": 0.80,
+      "notes": "Legacy — currently used as DEFAULT_MODEL. Two generations behind."
+    },
+    {
+      "model_id": "gpt-4o-mini",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.60, "T2": 0.55, "T3": 0.45, "T4": 0.40, "T5": 0.30 },
+      "cost_score": 0.78,
+      "speed_score": 0.88,
+      "blocked": true,
+      "notes": "BLOCKED: Documented as too lenient, passes obvious deficiencies."
+    },
+    {
+      "model_id": "claude-opus-4-6",
+      "provider": "anthropic",
+      "api": "chat",
+      "quality": { "T1": 0.93, "T2": 0.94, "T3": 0.96, "T4": 0.96, "T5": 0.98 },
+      "cost_score": 0.08,
+      "speed_score": 0.38,
+      "notes": "Just released Feb 5, 2026. Highest quality, very expensive."
+    },
+    {
+      "model_id": "claude-opus-4-5",
+      "provider": "anthropic",
+      "api": "chat",
+      "quality": { "T1": 0.92, "T2": 0.93, "T3": 0.95, "T4": 0.95, "T5": 0.97 },
+      "cost_score": 0.10,
+      "speed_score": 0.40,
+      "notes": "Opus tier. Overkill for most tasks, great for T5."
+    },
+    {
+      "model_id": "claude-sonnet-4-5-20250929",
+      "provider": "anthropic",
+      "api": "chat",
+      "quality": { "T1": 0.90, "T2": 0.90, "T3": 0.92, "T4": 0.92, "T5": 0.94 },
+      "cost_score": 0.35,
+      "speed_score": 0.62,
+      "notes": "Best Anthropic price/performance. Strong alternative to GPT-5.1."
+    },
+    {
+      "model_id": "claude-sonnet-4-0",
+      "provider": "anthropic",
+      "api": "chat",
+      "quality": { "T1": 0.85, "T2": 0.85, "T3": 0.88, "T4": 0.88, "T5": 0.90 },
+      "cost_score": 0.40,
+      "speed_score": 0.65,
+      "notes": "Previous Sonnet. Proven but superseded by 4-5."
+    },
+    {
+      "model_id": "claude-haiku-4-5",
+      "provider": "anthropic",
+      "api": "chat",
+      "quality": { "T1": 0.80, "T2": 0.78, "T3": 0.72, "T4": 0.70, "T5": 0.62 },
+      "cost_score": 0.75,
+      "speed_score": 0.90,
+      "notes": "Fast and cheap Claude. Good for T1/T2, untested for T3+."
+    },
+    {
+      "model_id": "claude-3-7-sonnet-latest",
+      "provider": "anthropic",
+      "api": "chat",
+      "quality": { "T1": 0.82, "T2": 0.82, "T3": 0.85, "T4": 0.85, "T5": 0.87 },
+      "cost_score": 0.42,
+      "speed_score": 0.65,
+      "notes": "Legacy Claude 3.7. Superseded by Claude 4 Sonnet."
+    }
+  ]
+}

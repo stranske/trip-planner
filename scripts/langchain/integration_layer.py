@@ -79,6 +79,7 @@ def _build_label_store(labels: Iterable[Any]) -> label_matcher.LabelVectorStore 
         store=object(),
         provider="keyword",
         model="keyword",
+        is_fallback=True,
         labels=label_records,
     )
 
