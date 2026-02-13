@@ -13,7 +13,7 @@ name: Autofix
 
 on:
   workflow_run:
-    workflows: ["Gate"]
+    workflows: ["Gate", "CI"]
     types: [completed]
   pull_request_target:
     types:
@@ -73,21 +73,57 @@ jobs:
             const { createTokenAwareRetry } = require(
               './.github/scripts/github-api-with-retry.js'
             );
-            const { withRetry } = await createTokenAwareRetry({
+            const { withRetry, paginateWithRetry } = await createTokenAwareRetry({
               github,
               core,
               env: process.env,
               task: 'autofix-resolve-context',
             });
 
-            // --- workflow_run trigger (after Gate completes) ---
+            const hasRelevantFailureCheck = async ({ owner, repo, ref }) => {
+              const { data } = await withRetry((client) =>
+                client.rest.checks.listForRef({
+                  owner,
+                  repo,
+                  ref,
+                  filter: 'latest',
+                  per_page: 100,
+                })
+              );
+
+              const failedChecks = (data.check_runs || []).filter(
+                (cr) => (cr.conclusion || '').toLowerCase() === 'failure'
+              );
+
+              const relevantFailures = failedChecks.filter((cr) => {
+                const name = String(cr.name || '').toLowerCase();
+                return name.includes('lint-format') || name.includes('lint-ruff');
+              });
+
+              if (relevantFailures.length === 0) {
+                core.info(
+                  'No lint-format/lint-ruff check failures found; skipping autofix.'
+                );
+                return false;
+              }
+
+              core.info(
+                `Relevant failures: ${relevantFailures
+                  .map((cr) => cr.name)
+                  .join(', ')}`
+              );
+              return true;
+            };
+
+            // --- workflow_run trigger (after Gate/CI completes) ---
             if (context.eventName === 'workflow_run') {
               const run = context.payload.workflow_run;
+              const workflowName = run?.name || 'workflow';
 
-              // Only proceed when Gate failed
+              // Only proceed when the upstream workflow failed
               if (run.conclusion !== 'failure') {
                 core.info(
-                  `Gate concluded '${run.conclusion}' — ` +
+                  `${workflowName} concluded '${run.conclusion}' — ` +
                   'no autofix needed'
                 );
                 core.setOutput('should_run', 'false');
@@ -116,12 +152,70 @@ jobs:
                 return;
               }
 
+              if (pr.draft) {
+                core.info('PR is draft.');
+                core.setOutput('should_run', 'false');
+                return;
+              }
+
               const sameRepo =
                 pr.head.repo !== null &&
                 pr.head.repo.full_name ===
                   pr.base.repo?.full_name;
               if (!sameRepo) {
                 core.info('Fork PR — not supported.');
+                core.setOutput('should_run', 'false');
+                return;
+              }
+
+              const headSha = pr.head?.sha;
+              if (!headSha) {
+                core.info('PR head SHA missing; skipping autofix.');
+                core.setOutput('should_run', 'false');
+                return;
+              }
+
+              const shouldAutofix = await hasRelevantFailureCheck({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: headSha,
+              });
+
+              if (!shouldAutofix) {
+                core.setOutput('should_run', 'false');
+                return;
+              }
+
+              // Only run autofix when Python files are present.
+              let files = [];
+              try {
+                files = await paginateWithRetry(
+                  github.rest.pulls.listFiles,
+                  {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: prNumber,
+                    per_page: 100,
+                  },
+                  { maxRetries: 3 }
+                );
+              } catch (error) {
+                const message = String(error?.message || error || '');
+                const status = Number(error?.status || error?.response?.status || 0);
+                if (status === 403 && message.toLowerCase().includes('rate limit')) {
+                  core.warning('Rate limited listing PR files; skipping autofix.');
+                  core.setOutput('should_run', 'false');
+                  return;
+                }
+                throw error;
+              }
+
+              const hasPython = files.some(
+                (file) => file.filename.endsWith('.py') || file.filename.endsWith('.pyi')
+              );
+
+              if (!hasPython) {
+                core.info('No Python files changed.');
                 core.setOutput('should_run', 'false');
                 return;
               }
@@ -185,12 +279,64 @@ jobs:
               return;
             }
 
+            if (pr.state !== 'open') {
+              core.info('PR is not open.');
+              core.setOutput('should_run', 'false');
+              return;
+            }
+
+            if (pr.draft) {
+              core.info('PR is draft.');
+              core.setOutput('should_run', 'false');
+              return;
+            }
+
             const sameRepo =
               pr.head.repo !== null &&
               pr.head.repo.full_name ===
                 pr.base.repo?.full_name;
+
+            if (!sameRepo) {
+              core.info('Fork PR — not supported.');
+              core.setOutput('should_run', 'false');
+              return;
+            }
+
             const labels =
               (pr.labels || []).map(l => l.name);
+
+            let files = [];
+            try {
+              files = await paginateWithRetry(
+                github.rest.pulls.listFiles,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pr.number,
+                  per_page: 100,
+                },
+                { maxRetries: 3 }
+              );
+            } catch (error) {
+              const message = String(error?.message || error || '');
+              const status = Number(error?.status || error?.response?.status || 0);
+              if (status === 403 && message.toLowerCase().includes('rate limit')) {
+                core.warning('Rate limited listing PR files; skipping autofix.');
+                core.setOutput('should_run', 'false');
+                return;
+              }
+              throw error;
+            }
+
+            const hasPython = files.some(
+              (file) => file.filename.endsWith('.py') || file.filename.endsWith('.pyi')
+            );
+
+            if (!hasPython) {
+              core.info('No Python files changed.');
+              core.setOutput('should_run', 'false');
+              return;
+            }
 
             core.setOutput('should_run', 'true');
             core.setOutput('pr_number', pr.number);
