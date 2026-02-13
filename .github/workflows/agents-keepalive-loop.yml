@@ -633,12 +633,17 @@ jobs:
             // Extract acceptance criteria from PR body
             const body = pr.body || '';
             const criteria = [];
-            // Look for acceptance criteria section
-            const acMatch = body.match(/## Acceptance Criteria[\s\S]*?(?=##|$)/i);
-            if (acMatch) {
-              const lines = acMatch[0].split('\n');
-              for (const line of lines) {
-                const match = line.match(/^\s*[-*+]\s*(?:\[[ xX]\]\s*)?(.+)/i);
+            const lines = body.split('\n');
+            const startIndex = lines.findIndex((line) =>
+              /^#{2,6}\s*Acceptance\s+criteria\b/i.test(line.trim())
+            );
+            if (startIndex !== -1) {
+              for (let i = startIndex + 1; i < lines.length; i += 1) {
+                const trimmed = lines[i].trim();
+                if (/^#{1,6}\s*(\S|$)/.test(trimmed)) {
+                  break;
+                }
+                const match = lines[i].match(/^\s*[-*+]\s*(?:\[[ xX]\]\s*)?(.+)/);
                 if (match) {
                   criteria.push(match[1].trim());
                 }
