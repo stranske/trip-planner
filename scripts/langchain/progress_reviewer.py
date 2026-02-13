@@ -509,20 +509,23 @@ def main() -> int:
     parser.add_argument(
         "--acceptance-criteria",
         nargs="+",
+        action="append",
         default=[],
-        help="List of acceptance criteria",
+        help="List of acceptance criteria (can be provided multiple times)",
     )
     parser.add_argument(
         "--recent-commits",
         nargs="+",
+        action="append",
         default=[],
-        help="List of recent commit messages",
+        help="List of recent commit messages (can be provided multiple times)",
     )
     parser.add_argument(
         "--files-changed",
         nargs="+",
+        action="append",
         default=[],
-        help="List of files changed",
+        help="List of files changed (can be provided multiple times)",
     )
     parser.add_argument(
         "--rounds-without-completion",
@@ -548,10 +551,14 @@ def main() -> int:
 
     args = parser.parse_args()
 
+    acceptance_criteria = [item for group in args.acceptance_criteria for item in group]
+    recent_commits = [item for group in args.recent_commits for item in group]
+    files_changed = [item for group in args.files_changed for item in group]
+
     result = review_progress(
-        acceptance_criteria=args.acceptance_criteria,
-        recent_commits=args.recent_commits,
-        files_changed=args.files_changed,
+        acceptance_criteria=acceptance_criteria,
+        recent_commits=recent_commits,
+        files_changed=files_changed,
         rounds_without_completion=args.rounds_without_completion,
         use_llm=not args.no_llm,
         model=args.model,
