@@ -13,7 +13,7 @@ name: Autofix
 
 on:
   workflow_run:
-    workflows: ["Gate", "CI"]
+    workflows: ["Gate", "CI", "Python CI"]
     types: [completed]
   pull_request_target:
     types:

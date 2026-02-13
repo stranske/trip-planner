@@ -113,8 +113,35 @@ def main() -> int:
     classification_out = Path(os.environ.get("CLASSIFICATION_OUT", _DEFAULT_CLASSIFICATION))
 
     if not junit_path.is_file():
-        print(f"JUnit report not found: {junit_path}", file=sys.stderr)
-        return 1
+        timestamp = (
+            _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        )
+        record: dict[str, Any] = {
+            "timestamp": timestamp,
+            "status": "skipped",
+            "reason": "missing-junit-report",
+            "junit_path": str(junit_path),
+        }
+        github_meta = {
+            key.lower(): os.environ[key]
+            for key in ("GITHUB_RUN_ID", "GITHUB_RUN_NUMBER", "GITHUB_SHA", "GITHUB_REF")
+            if os.environ.get(key)
+        }
+        if github_meta:
+            record["github"] = github_meta
+
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        with history_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+
+        if classification_out.exists():
+            classification_out.unlink()
+
+        print(
+            f"JUnit report not found: {junit_path} (wrote skipped record to {history_path})",
+            file=sys.stderr,
+        )
+        return 0
 
     try:
         metrics, from_file = _load_metrics(junit_path, metrics_path)
