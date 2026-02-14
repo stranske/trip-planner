@@ -167,53 +167,47 @@ jobs:
       pr_number: ${{ fromJSON(needs.resolve.outputs.pr_number) }}
     secrets: inherit
 
-  handlers:
-    name: Run PR handlers
+  pr_meta:
+    name: PR meta handler
     needs: [resolve, pr_context]
     if: |
       needs.resolve.outputs.pr_number != '' &&
-      (needs.resolve.outputs.run_pr_meta == 'true' ||
-       needs.resolve.outputs.run_bot_comments == 'true')
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        handler: [pr-meta, bot-comments]
-    steps:
-      - name: PR meta handler
-        if: matrix.handler == 'pr-meta' && needs.resolve.outputs.run_pr_meta == 'true'
-        uses: stranske/Workflows/.github/workflows/reusable-20-pr-meta.yml@main
-        with:
-          pr_number: ${{ fromJSON(needs.resolve.outputs.pr_number) }}
-          comment_id: ${{ needs.resolve.outputs.comment_id }}
-          comment_body: ${{ needs.resolve.outputs.comment_body }}
-          event_name: ${{ needs.resolve.outputs.event_name }}
-          event_action: ${{ needs.resolve.outputs.event_action }}
-          allowed_keepalive_logins: ${{ vars.ALLOWED_KEEPALIVE_LOGINS }}
-          allow_replay: ${{ needs.resolve.outputs.event_name == 'workflow_run' }}
-          dry_run: ${{ needs.resolve.outputs.debug == 'true' }}
-        secrets: inherit
+      needs.resolve.outputs.run_pr_meta == 'true'
+    uses: stranske/Workflows/.github/workflows/reusable-20-pr-meta.yml@main
+    with:
+      pr_number: ${{ fromJSON(needs.resolve.outputs.pr_number) }}
+      comment_id: ${{ needs.resolve.outputs.comment_id }}
+      comment_body: ${{ needs.resolve.outputs.comment_body }}
+      event_name: ${{ needs.resolve.outputs.event_name }}
+      event_action: ${{ needs.resolve.outputs.event_action }}
+      allowed_keepalive_logins: ${{ vars.ALLOWED_KEEPALIVE_LOGINS }}
+      allow_replay: ${{ needs.resolve.outputs.event_name == 'workflow_run' }}
+      dry_run: ${{ needs.resolve.outputs.debug == 'true' }}
+    secrets: inherit
 
-      - name: Bot comment handler
-        if: |
-          matrix.handler == 'bot-comments' &&
-          needs.resolve.outputs.run_bot_comments == 'true' &&
-          (
-            needs.resolve.outputs.event_name != 'workflow_run' ||
-            (needs.resolve.outputs.gate_conclusion == 'success' &&
-             needs.pr_context.outputs.has_agent_label == 'true')
-          )
-        uses: stranske/Workflows/.github/workflows/reusable-bot-comment-handler.yml@main
-        with:
-          pr_number: ${{ fromJSON(needs.resolve.outputs.pr_number) }}
-          dry_run: ${{ needs.resolve.outputs.dry_run == 'true' }}
-        secrets:
-          service_bot_pat: ${{ secrets.SERVICE_BOT_PAT }}
-          gh_app_id: ${{ secrets.GH_APP_ID }}
-          gh_app_private_key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+  bot_comments:
+    name: Bot comment handler
+    needs: [resolve, pr_context]
+    if: |
+      needs.resolve.outputs.pr_number != '' &&
+      needs.resolve.outputs.run_bot_comments == 'true' &&
+      (
+        needs.resolve.outputs.event_name != 'workflow_run' ||
+        (needs.resolve.outputs.gate_conclusion == 'success' &&
+         needs.pr_context.outputs.has_agent_label == 'true')
+      )
+    uses: stranske/Workflows/.github/workflows/reusable-bot-comment-handler.yml@main
+    with:
+      pr_number: ${{ fromJSON(needs.resolve.outputs.pr_number) }}
+      dry_run: ${{ needs.resolve.outputs.dry_run == 'true' }}
+    secrets:
+      service_bot_pat: ${{ secrets.SERVICE_BOT_PAT }}
+      gh_app_id: ${{ secrets.GH_APP_ID }}
+      gh_app_private_key: ${{ secrets.GH_APP_PRIVATE_KEY }}
 
   cleanup_bot_comment_label:
     name: Cleanup bot comment label
-    needs: [resolve, handlers]
+    needs: [resolve, bot_comments]
     if: |
       always() &&
       needs.resolve.outputs.run_bot_comments == 'true' &&
