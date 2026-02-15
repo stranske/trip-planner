@@ -118,16 +118,16 @@ jobs:
             };
 
             const hasRelevantFailureJobForRun = async ({ owner, repo, runId }) => {
-              const { data } = await withRetry((client) =>
-                client.rest.actions.listJobsForWorkflowRun({
+              const jobs = await paginateWithRetry(
+                github.rest.actions.listJobsForWorkflowRun,
+                {
                   owner,
                   repo,
                   run_id: runId,
                   per_page: 100,
-                })
+                },
+                { maxRetries: 3 }
               );
-
-              const jobs = data?.jobs || [];
               const failedJobs = jobs.filter(
                 (job) => (job.conclusion || '').toLowerCase() === 'failure'
               );
@@ -224,9 +224,8 @@ jobs:
                   const status = Number(error?.status || error?.response?.status || 0);
                   if (status === 403 && message.toLowerCase().includes('rate limit')) {
                     core.warning(
-                      'Rate limited listing workflow jobs; proceeding with autofix.'
+                      'Rate limited listing workflow jobs; falling back to check runs.'
                     );
-                    shouldAutofix = true;
                   } else {
                     core.warning(
                       `Failed to list workflow jobs; falling back to check runs: ${message}`
