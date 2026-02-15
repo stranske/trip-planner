@@ -69,6 +69,8 @@ jobs:
         id: context
         uses: actions/github-script@v8
         with:
+          github-token: >-
+            ${{ secrets.AGENTS_AUTOMATION_PAT || secrets.ACTIONS_BOT_PAT || github.token }}
           script: |
             const { createTokenAwareRetry } = require(
               './.github/scripts/github-api-with-retry.js'
@@ -119,6 +121,7 @@ jobs:
             if (context.eventName === 'workflow_run') {
               const run = context.payload.workflow_run;
               const workflowName = run?.name || 'workflow';
+              const triggerHeadSha = String(run?.head_sha || run?.head_commit?.id || '');
 
               // Only proceed when the upstream workflow failed
               if (run.conclusion !== 'failure') {
@@ -175,11 +178,24 @@ jobs:
                 return;
               }
 
-              const shouldAutofix = await hasRelevantFailureCheck({
+              const refForChecks = triggerHeadSha || headSha;
+              let shouldAutofix = await hasRelevantFailureCheck({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                ref: headSha,
+                ref: refForChecks,
               });
+
+              if (!shouldAutofix && triggerHeadSha && triggerHeadSha !== headSha) {
+                core.info(
+                  `No relevant failures found for trigger SHA ${triggerHeadSha}; ` +
+                  `re-checking latest PR head ${headSha}`
+                );
+                shouldAutofix = await hasRelevantFailureCheck({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: headSha,
+                });
+              }
 
               if (!shouldAutofix) {
                 core.setOutput('should_run', 'false');
@@ -203,16 +219,20 @@ jobs:
                 const message = String(error?.message || error || '');
                 const status = Number(error?.status || error?.response?.status || 0);
                 if (status === 403 && message.toLowerCase().includes('rate limit')) {
-                  core.warning('Rate limited listing PR files; skipping autofix.');
-                  core.setOutput('should_run', 'false');
-                  return;
+                  core.warning('Rate limited listing PR files; proceeding without file filter.');
+                  files = null;
+                } else {
+                  throw error;
                 }
-                throw error;
               }
 
-              const hasPython = files.some(
-                (file) => file.filename.endsWith('.py') || file.filename.endsWith('.pyi')
-              );
+              const hasPython =
+                files === null
+                  ? true
+                  : files.some(
+                      (file) =>
+                        file.filename.endsWith('.py') || file.filename.endsWith('.pyi')
+                    );
 
               if (!hasPython) {
                 core.info('No Python files changed.');
@@ -321,16 +341,20 @@ jobs:
               const message = String(error?.message || error || '');
               const status = Number(error?.status || error?.response?.status || 0);
               if (status === 403 && message.toLowerCase().includes('rate limit')) {
-                core.warning('Rate limited listing PR files; skipping autofix.');
-                core.setOutput('should_run', 'false');
-                return;
+                core.warning('Rate limited listing PR files; proceeding without file filter.');
+                files = null;
+              } else {
+                throw error;
               }
-              throw error;
             }
 
-            const hasPython = files.some(
-              (file) => file.filename.endsWith('.py') || file.filename.endsWith('.pyi')
-            );
+            const hasPython =
+              files === null
+                ? true
+                : files.some(
+                    (file) =>
+                      file.filename.endsWith('.py') || file.filename.endsWith('.pyi')
+                  );
 
             if (!hasPython) {
               core.info('No Python files changed.');
