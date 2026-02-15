@@ -987,21 +987,44 @@ def _invoke_llm(
     issue_number: int | None,
 ) -> str:
     """Invoke LLM and return response text."""
-    from langchain_core.messages import HumanMessage
+    try:
+        from langchain_core.messages import HumanMessage
+    except ModuleNotFoundError:
+        HumanMessage = None  # type: ignore[assignment]
 
     config = _build_llm_config(
         operation=operation,
         pr_number=pr_number,
         issue_number=issue_number,
     )
+
+    if HumanMessage is not None:
+        messages: list[Any] = [HumanMessage(content=prompt)]
+        try:
+            response = client.invoke(messages, config=config)
+        except TypeError as exc:
+            LOGGER.warning(
+                "LLM invoke failed with config/metadata; using config/metadata fallback. Error: %s",
+                exc,
+            )
+            response = client.invoke(messages)
+        return response.content
+
+    # langchain_core isn't available. Prefer non-message invoke signatures first.
     try:
-        response = client.invoke([HumanMessage(content=prompt)], config=config)
+        response = client.invoke(prompt, config=config)
     except TypeError as exc:
         LOGGER.warning(
             "LLM invoke failed with config/metadata; using config/metadata fallback. Error: %s",
             exc,
         )
-        response = client.invoke([HumanMessage(content=prompt)])
+        try:
+            response = client.invoke(prompt)
+        except Exception as inner_exc:
+            raise RuntimeError(
+                "Unable to invoke client without langchain_core installed. "
+                "Install langchain-core or provide a client that accepts plain string prompts."
+            ) from inner_exc
     return response.content
 
 
