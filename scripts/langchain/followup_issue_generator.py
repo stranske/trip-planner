@@ -1008,7 +1008,7 @@ def _invoke_llm(
                 exc,
             )
             response = client.invoke(messages)
-        return response.content
+        return getattr(response, "content", None) or str(response)
 
     # langchain_core isn't available. Prefer non-message invoke signatures first.
     try:
@@ -1025,7 +1025,7 @@ def _invoke_llm(
                 "Unable to invoke client without langchain_core installed. "
                 "Install langchain-core or provide a client that accepts plain string prompts."
             ) from inner_exc
-    return response.content
+    return getattr(response, "content", None) or str(response)
 
 
 def _extract_json(text: str) -> dict[str, Any]:
