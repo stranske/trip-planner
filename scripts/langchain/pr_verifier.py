@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
 from scripts import api_client
 from scripts.langchain.structured_output import (
     build_repair_callback,
