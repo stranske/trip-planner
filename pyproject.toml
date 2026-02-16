@@ -4,6 +4,7 @@ version = "0.1.0"
 
 
 [project.optional-dependencies]
+app = []
 dev = [
     "ruff>=0.15.0",
     "mypy>=1.19.1",
