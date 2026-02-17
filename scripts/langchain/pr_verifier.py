@@ -6,6 +6,8 @@ Run with:
     python scripts/langchain/pr_verifier.py --context-file verifier-context.md --json
 """
 
+# ruff: noqa: I001
+
 from __future__ import annotations
 
 import argparse
