@@ -31,11 +31,13 @@ def _resolve_chat_prompt_template() -> Any | None:
         return ChatPromptTemplate
 
     try:  # pragma: no cover - exercised indirectly
-        from langchain_core.prompts import ChatPromptTemplate as imported
+        from langchain_core.prompts import (
+            ChatPromptTemplate as ImportedChatPromptTemplate,
+        )
     except ImportError:  # pragma: no cover - handled by caller
         return None
 
-    return imported
+    return ImportedChatPromptTemplate
 
 
 AGENT_CAPABILITY_CHECK_PROMPT = """

@@ -6,6 +6,8 @@ Run with:
     python scripts/langchain/issue_optimizer.py --input-file issue.md --json
 """
 
+# ruff: noqa: I001
+
 from __future__ import annotations
 
 import argparse
