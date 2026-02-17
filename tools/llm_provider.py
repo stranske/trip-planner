@@ -68,6 +68,133 @@ def _setup_langsmith_tracing() -> bool:
 # This flag can be used to conditionally enable LangSmith-specific features.
 LANGSMITH_ENABLED = _setup_langsmith_tracing()
 
+LANGSMITH_TRACE_URL_BASE = "https://smith.langchain.com/r/"
+
+
+def build_langsmith_metadata(
+    *,
+    operation: str,
+    repo: str | None = None,
+    run_id: str | None = None,
+    issue_or_pr_number: str | None = None,
+    pr_number: int | None = None,
+    issue_number: int | None = None,
+) -> dict[str, object]:
+    """Build a standardized LangSmith metadata and tags config dict.
+
+    Returns a dict with ``metadata`` and ``tags`` keys suitable for passing
+    as ``config=`` to a LangChain ``client.invoke()`` call.  When
+    ``LANGSMITH_API_KEY`` is set the metadata also includes a
+    ``langsmith_project`` field so traces are grouped correctly.
+
+    The returned dict always includes ``metadata`` and ``tags`` keys. When
+    LangSmith tracing is enabled, ``metadata`` gains an additional
+    ``langsmith_project`` entry so traces group correctly.
+    """
+    repo = repo or os.environ.get("GITHUB_REPOSITORY", "unknown")
+    run_id = (
+        run_id
+        or os.environ.get("GITHUB_RUN_ID")
+        or os.environ.get("RUN_ID")
+        or "unknown"
+    )
+
+    if issue_or_pr_number is None:
+        if pr_number is not None:
+            issue_or_pr_number = str(pr_number)
+        elif issue_number is not None:
+            issue_or_pr_number = str(issue_number)
+        else:
+            env_pr = os.environ.get("PR_NUMBER", "")
+            env_issue = os.environ.get("ISSUE_NUMBER", "")
+            issue_or_pr_number = (
+                env_pr if env_pr.isdigit() else env_issue if env_issue.isdigit() else "unknown"
+            )
+
+    metadata: dict[str, object] = {
+        "repo": repo,
+        "run_id": run_id,
+        "issue_or_pr_number": issue_or_pr_number,
+        "operation": operation,
+        "pr_number": str(pr_number) if pr_number is not None else None,
+        "issue_number": str(issue_number) if issue_number is not None else None,
+    }
+
+    if LANGSMITH_ENABLED:
+        metadata["langsmith_project"] = os.environ.get("LANGCHAIN_PROJECT", "workflows-agents")
+
+    tags = [
+        "workflows-agents",
+        f"operation:{operation}",
+        f"repo:{repo}",
+        f"issue_or_pr:{issue_or_pr_number}",
+        f"run_id:{run_id}",
+    ]
+
+    return {"metadata": metadata, "tags": tags}
+
+
+def derive_langsmith_trace_url(trace_id: str | None) -> str | None:
+    """Derive a clickable LangSmith trace URL from a trace ID.
+
+    Returns ``None`` when *trace_id* is falsy.
+    """
+    if not trace_id:
+        return None
+    return f"{LANGSMITH_TRACE_URL_BASE}{trace_id}"
+
+
+def extract_trace_id(response) -> str | None:
+    """Extract LangSmith trace ID from a LangChain response object.
+
+    Works with responses from ChatOpenAI, ChatAnthropic, and other LangChain clients.
+    Returns None if no trace ID is available or LangSmith tracing is disabled.
+
+    Args:
+        response: LangChain response object (e.g., AIMessage from client.invoke())
+
+    Returns:
+        Trace ID string or None
+    """
+    if not LANGSMITH_ENABLED:
+        return None
+
+    # LangChain response objects have a response_metadata dict with run_id
+    # The run_id is the trace ID in LangSmith
+    try:
+        # Try to get run_id from response metadata (primary method)
+        if hasattr(response, "response_metadata"):
+            metadata = response.response_metadata
+            if isinstance(metadata, dict) and "run_id" in metadata:
+                return str(metadata["run_id"])
+
+        # Fallback: Some LangChain providers may use id attribute directly
+        # WARNING: This may not always correspond to the LangSmith trace ID
+        if hasattr(response, "id"):
+            trace_id = str(response.id)
+            logger.debug(
+                "Using response.id as trace ID (fallback). "
+                "Verify this corresponds to LangSmith trace for your provider."
+            )
+            return trace_id
+
+        # Additional fallback for compatibility
+        if hasattr(response, "__dict__"):
+            response_dict = response.__dict__
+            if "id" in response_dict:
+                trace_id = str(response_dict["id"])
+                logger.debug(
+                    "Using response.__dict__['id'] as trace ID (fallback). "
+                    "Verify this corresponds to LangSmith trace for your provider."
+                )
+                return trace_id
+
+    except Exception as e:
+        logger.debug(f"Failed to extract trace ID from response: {e}")
+        return None
+
+    return None
+
 
 def _is_token_limit_error(error: Exception) -> bool:
     """Check if error is a token limit (413) error from GitHub Models."""
