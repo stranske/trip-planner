@@ -607,7 +607,7 @@ jobs:
         with:
           script: |
             const fs = require('node:fs');
-            const { getAgentConfig } = require('./.github/scripts/agent_registry.js');
+            const { getAgentConfig } = require('./.belt-tools/.github/scripts/agent_registry.js');
             const agentKey = String('${{ steps.ctx.outputs.agent_key }}' || 'codex').trim().toLowerCase() || 'codex';
             const branch = String('${{ steps.ctx.outputs.branch }}' || '').trim();
             if (!branch) {
