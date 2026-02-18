@@ -132,7 +132,9 @@ def build_review_payload(result: ProgressReviewResult) -> dict:
         if analysis and analysis.blocking_issues:
             suggestions.extend([item for item in analysis.blocking_issues if item])
         if analysis and analysis.scope_drift_identified:
-            suggestions.extend([item for item in analysis.scope_drift_identified if item])
+            suggestions.extend(
+                [item for item in analysis.scope_drift_identified if item]
+            )
         payload["review"] = {
             "score": result.alignment_score,
             "feedback": result.feedback_for_agent,
@@ -270,9 +272,15 @@ def build_review_prompt(
     rounds_without_completion: int,
 ) -> str:
     """Build the prompt for LLM review."""
-    criteria_text = "\n".join(f"- {c}" for c in acceptance_criteria) or "No criteria provided"
-    commits_text = "\n".join(f"- {c}" for c in recent_commits[-20:]) or "No commits"  # Last 20
-    files_text = "\n".join(f"- {f}" for f in files_changed[-30:]) or "No files"  # Last 30
+    criteria_text = (
+        "\n".join(f"- {c}" for c in acceptance_criteria) or "No criteria provided"
+    )
+    commits_text = (
+        "\n".join(f"- {c}" for c in recent_commits[-20:]) or "No commits"
+    )  # Last 20
+    files_text = (
+        "\n".join(f"- {f}" for f in files_changed[-30:]) or "No files"
+    )  # Last 30
 
     return PROGRESS_REVIEW_PROMPT.format(
         rounds_without_completion=rounds_without_completion,
@@ -335,7 +343,9 @@ def _build_llm_config(
     repo = os.environ.get("GITHUB_REPOSITORY", "unknown")
     run_id = os.environ.get("GITHUB_RUN_ID") or os.environ.get("RUN_ID") or "unknown"
     env_pr = os.environ.get("PR_NUMBER", "")
-    issue_or_pr = env_pr if env_pr.isdigit() else str(pr_number) if pr_number else "unknown"
+    issue_or_pr = (
+        env_pr if env_pr.isdigit() else str(pr_number) if pr_number else "unknown"
+    )
 
     metadata = {
         "repo": repo,

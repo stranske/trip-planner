@@ -114,7 +114,8 @@ def build_issue_vector_store(
 
     texts = [_issue_text(issue) for issue in issue_records]
     metadatas = [
-        {"number": issue.number, "title": issue.title, "url": issue.url} for issue in issue_records
+        {"number": issue.number, "title": issue.title, "url": issue.url}
+        for issue in issue_records
     ]
     store = FAISS.from_texts(texts, resolved.client, metadatas=metadatas)
     logger.info(
@@ -156,7 +157,9 @@ def _similarity_from_score(score: float, score_type: str) -> float:
     return score
 
 
-def _issue_from_metadata(metadata: Mapping[str, Any], fallback_title: str | None) -> IssueRecord:
+def _issue_from_metadata(
+    metadata: Mapping[str, Any], fallback_title: str | None
+) -> IssueRecord:
     title = str(metadata.get("title") or fallback_title or "").strip()
     number = metadata.get("number")
     url = metadata.get("url")

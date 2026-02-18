@@ -116,7 +116,9 @@ def _generate_guard_blocked_followup(
     """Generate a minimal follow-up issue that routes to human review."""
 
     title = f"[Follow-up] Human review required for PR #{pr_number}"
-    issue_number_text = str(original_issue_number) if original_issue_number else "unknown"
+    issue_number_text = (
+        str(original_issue_number) if original_issue_number else "unknown"
+    )
     issue_title_text = original_issue_title or "unknown"
 
     body_parts = [
@@ -268,7 +270,9 @@ def _resolve_verdict_policy(
 # Pre-computed normalized aliases for efficient section resolution.
 # Maps normalized alias string -> section key
 _NORMALIZED_ALIAS_MAP: dict[str, str] = {
-    _normalize_heading(alias): key for key, aliases in SECTION_ALIASES.items() for alias in aliases
+    _normalize_heading(alias): key
+    for key, aliases in SECTION_ALIASES.items()
+    for alias in aliases
 }
 
 # Prompts for multi-round LLM interaction
@@ -596,8 +600,14 @@ def extract_verification_data(comment_body: str) -> VerificationData:
     )
     if single_verdict and not data.provider_verdicts:
         verdict = (single_verdict.group(1) or single_verdict.group(2) or "").strip()
-        confidence_match = re.search(r"Verdict:.*?@?\s*([0-9.]+%?)", comment_body, re.IGNORECASE)
-        confidence = _parse_confidence_value(confidence_match.group(1)) if confidence_match else 0
+        confidence_match = re.search(
+            r"Verdict:.*?@?\s*([0-9.]+%?)", comment_body, re.IGNORECASE
+        )
+        confidence = (
+            _parse_confidence_value(confidence_match.group(1))
+            if confidence_match
+            else 0
+        )
         data.provider_verdicts["default"] = {
             "verdict": verdict,
             "confidence": confidence,
@@ -638,7 +648,9 @@ def extract_verification_data(comment_body: str) -> VerificationData:
 
     # Try plain label format: "Concerns:" followed by bullets
     concerns_label_matches = re.findall(
-        r"^Concerns:\s*\n((?:\s*-\s+[^\n]+\n?)+)", comment_body, re.IGNORECASE | re.MULTILINE
+        r"^Concerns:\s*\n((?:\s*-\s+[^\n]+\n?)+)",
+        comment_body,
+        re.IGNORECASE | re.MULTILINE,
     )
     for match in concerns_label_matches:
         for line in match.split("\n"):
@@ -701,7 +713,9 @@ def extract_verification_data(comment_body: str) -> VerificationData:
     if iter_match:
         data.iteration_count = int(iter_match.group(1))
 
-    remaining_match = re.search(r"Remaining unchecked items?:\s*(\d+)\s*of\s*(\d+)", comment_body)
+    remaining_match = re.search(
+        r"Remaining unchecked items?:\s*(\d+)\s*of\s*(\d+)", comment_body
+    )
     if remaining_match:
         unchecked, total = int(remaining_match.group(1)), int(remaining_match.group(2))
         data.tasks_attempted = total
@@ -709,7 +723,9 @@ def extract_verification_data(comment_body: str) -> VerificationData:
 
     # Extract non-actionable items
     non_actionable_match = re.search(
-        r"Non-actionable items.*?:\s*\n([\s\S]*?)(?=\n\n|\n###|\n##|$)", comment_body, re.IGNORECASE
+        r"Non-actionable items.*?:\s*\n([\s\S]*?)(?=\n\n|\n###|\n##|$)",
+        comment_body,
+        re.IGNORECASE,
     )
     if non_actionable_match:
         items_text = non_actionable_match.group(1)
@@ -721,11 +737,15 @@ def extract_verification_data(comment_body: str) -> VerificationData:
 
     # Extract structural issues
     structural_match = re.search(
-        r"### ⚠️ Issues Detected.*?\n([\s\S]*?)(?=\n##|\n---|\Z)", comment_body, re.IGNORECASE
+        r"### ⚠️ Issues Detected.*?\n([\s\S]*?)(?=\n##|\n---|\Z)",
+        comment_body,
+        re.IGNORECASE,
     )
     if structural_match:
         issues_text = structural_match.group(1)
-        problem_pattern = re.compile(r"\*\*Problem:\*\*\s*(.+?)(?=\n\*\*|\n-|\Z)", re.DOTALL)
+        problem_pattern = re.compile(
+            r"\*\*Problem:\*\*\s*(.+?)(?=\n\*\*|\n-|\Z)", re.DOTALL
+        )
         for match in problem_pattern.finditer(issues_text):
             data.structural_issues.append(match.group(1).strip())
 
@@ -900,7 +920,9 @@ def _build_llm_config(
         env_pr = os.environ.get("PR_NUMBER", "")
         env_issue = os.environ.get("ISSUE_NUMBER", "")
         issue_or_pr = (
-            env_pr if env_pr.isdigit() else env_issue if env_issue.isdigit() else "unknown"
+            env_pr
+            if env_pr.isdigit()
+            else env_issue if env_issue.isdigit() else "unknown"
         )
     metadata = {
         "repo": repo,
@@ -1099,7 +1121,9 @@ def _extract_json(text: str) -> dict[str, Any]:
 
 def _strip_markdown_fence(text: str) -> str:
     """Remove surrounding markdown code fences from a string if present."""
-    fence_match = re.match(r"^```(?:[a-zA-Z0-9_-]+)?\s*\n([\s\S]*?)\n```\s*$", text.strip())
+    fence_match = re.match(
+        r"^```(?:[a-zA-Z0-9_-]+)?\s*\n([\s\S]*?)\n```\s*$", text.strip()
+    )
     if fence_match:
         return fence_match.group(1).strip()
     return text.strip()
@@ -1305,7 +1329,9 @@ def _generate_with_llm(
     # Round 3: Generate acceptance criteria (use standard model)
     ac_prompt = GENERATE_ACCEPTANCE_CRITERIA_PROMPT.format(
         tasks_json=json.dumps(tasks_data.get("tasks", []), indent=2),
-        unmet_criteria=json.dumps(analysis.get("rewritten_acceptance_criteria", []), indent=2),
+        unmet_criteria=json.dumps(
+            analysis.get("rewritten_acceptance_criteria", []), indent=2
+        ),
     )
 
     ac_response, trace_id_3, trace_url_3 = _invoke_llm(
@@ -1332,7 +1358,9 @@ def _generate_with_llm(
         verdict=verdict,
         why_section=why_section,
         tasks_json=json.dumps(tasks_data.get("tasks", []), indent=2),
-        acceptance_criteria_json=json.dumps(ac_data.get("acceptance_criteria", []), indent=2),
+        acceptance_criteria_json=json.dumps(
+            ac_data.get("acceptance_criteria", []), indent=2
+        ),
         deferred_tasks_json=json.dumps(tasks_data.get("deferred", []), indent=2),
         background_analysis=json.dumps(
             {
@@ -1569,12 +1597,16 @@ def _build_why_section(
         )
 
     if verification_data.structural_issues:
-        parts.append("The original issue had structural problems that may have hindered progress.")
+        parts.append(
+            "The original issue had structural problems that may have hindered progress."
+        )
 
     if needs_human_reason:
         parts.append(needs_human_reason)
 
-    parts.append("This follow-up addresses the remaining gaps with improved task structure.")
+    parts.append(
+        "This follow-up addresses the remaining gaps with improved task structure."
+    )
 
     return " ".join(parts)
 
@@ -1700,10 +1732,12 @@ def main() -> int:
     # Debug: show extracted data
     print(f"Extracted {len(verification_data.concerns)} concerns", file=sys.stderr)
     print(
-        f"Extracted {len(verification_data.provider_verdicts)} provider verdicts", file=sys.stderr
+        f"Extracted {len(verification_data.provider_verdicts)} provider verdicts",
+        file=sys.stderr,
     )
     print(
-        f"Extracted {len(original_issue.acceptance_criteria)} acceptance criteria", file=sys.stderr
+        f"Extracted {len(original_issue.acceptance_criteria)} acceptance criteria",
+        file=sys.stderr,
     )
     print(f"Extracted {len(original_issue.tasks)} tasks", file=sys.stderr)
     if verification_data.concerns:

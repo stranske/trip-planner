@@ -22,7 +22,9 @@ class AutofixContext:
 
     @property
     def file_list(self) -> list[str]:
-        return [line.strip() for line in self.file_list_raw.splitlines() if line.strip()]
+        return [
+            line.strip() for line in self.file_list_raw.splitlines() if line.strip()
+        ]
 
 
 def load_enriched(path: Path) -> dict | None:
@@ -56,7 +58,9 @@ def build_report(ctx: AutofixContext) -> dict:
 
 
 def write_report(report: dict, destination: Path) -> None:
-    destination.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    destination.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def build_context() -> AutofixContext:
