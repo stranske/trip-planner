@@ -107,9 +107,11 @@ function normaliseNewlines(value) {
 
 function findInstructionStart(body) {
   const markers = [
+    /<!--\s*agent-keepalive-round[^>]*-->/i,
     /<!--\s*codex-keepalive-round[^>]*-->/i,
     /<!--\s*keepalive-round[^>]*-->/i,
     /<!--\s*keepalive-attempt[^>]*-->/i,
+    /<!--\s*agent-keepalive-marker\s*-->/i,
     /<!--\s*codex-keepalive-marker\s*-->/i,
   ];
   for (const marker of markers) {
@@ -165,7 +167,20 @@ function computeInstructionByteLength(text) {
   return Buffer.byteLength(String(text || ''), 'utf8');
 }
 
-const AUTOMATION_LOGINS = new Set(['chatgpt-codex-connector', 'stranske-automation-bot']);
+// Automation bot logins — loaded from registry when
+// available, hardcoded fallback otherwise.
+let AUTOMATION_LOGINS;
+try {
+  const { getAllAutomationLogins } =
+    require('./agent_registry.js');
+  AUTOMATION_LOGINS =
+    new Set(getAllAutomationLogins());
+} catch {
+  AUTOMATION_LOGINS = new Set([
+    'chatgpt-codex-connector',
+    'stranske-automation-bot',
+  ]);
+}
 const INSTRUCTION_REACTION = 'hooray';
 // Valid GitHub reactions: +1, -1, laugh, confused, heart, hooray, rocket, eyes
 const LOCK_REACTION = 'rocket';
@@ -239,6 +254,14 @@ function extractIssueNumberFromPull(pull) {
 }
 
 async function detectKeepalive({ core, github, context, env = process.env }) {
+  // Resolve default agent from registry (used for agent_alias output)
+  let _defaultAgent = 'codex';
+  try {
+    const { loadAgentRegistry } = require('./agent_registry.js');
+    const reg = loadAgentRegistry();
+    _defaultAgent = reg.default_agent || 'codex';
+  } catch (_) { /* registry not available */ }
+
   const allowedLogins = parseAllowedLogins(env);
   const keepaliveMarker = env.KEEPALIVE_MARKER || '';
   const toBool = (value) => String(value || '').trim().toLowerCase() === 'true';
@@ -273,15 +296,18 @@ async function detectKeepalive({ core, github, context, env = process.env }) {
   if (keepaliveMarker) {
     canonicalMarkerPatterns.push(new RegExp(escapeRegExp(keepaliveMarker), 'i'));
   }
+  canonicalMarkerPatterns.push(/<!--\s*agent-keepalive-marker\s*-->/i);
   canonicalMarkerPatterns.push(/<!--\s*codex-keepalive-marker\s*-->/i);
   canonicalMarkerPatterns.push(/<!--\s*keepalive-marker\s*-->/i);
 
   const canonicalRoundPatterns = [
+    /<!--\s*agent-keepalive-round\s*:?#?\s*(\d+)\s*-->/i,
     /<!--\s*codex-keepalive-round\s*:?#?\s*(\d+)\s*-->/i,
     /<!--\s*keepalive-round\s*:?#?\s*(\d+)\s*-->/i,
   ];
 
   const canonicalTracePatterns = [
+    /<!--\s*agent-keepalive-trace\s*:?#?\s*([^>]+?)\s*-->/i,
     /<!--\s*codex-keepalive-trace\s*:?#?\s*([^>]+?)\s*-->/i,
     /<!--\s*keepalive-trace\s*:?#?\s*([^>]+?)\s*-->/i,
   ];
@@ -364,7 +390,9 @@ async function detectKeepalive({ core, github, context, env = process.env }) {
       return false;
     }
     const normalised = normaliseBody(value);
-    if (!normalised || !normalised.toLowerCase().startsWith('@codex')) {
+    // @<agent> is the activation trigger pattern
+    const lower = (normalised || '').toLowerCase();
+    if (!lower || !/^@(codex|claude)\b/.test(lower)) {
       return false;
     }
     return normalised.toLowerCase().includes(DEFAULT_INSTRUCTION_SIGNATURE);
@@ -406,7 +434,7 @@ async function detectKeepalive({ core, github, context, env = process.env }) {
     const headSha = outputs.head_sha || (context?.payload?.pull_request?.head?.sha || '').slice(0, 7) || '-';
     const capValue = outputs.cap || 'n/a';
     const activeValue = outputs.active || 'n/a';
-    const dispatchSummary = `DISPATCH: ok=${dispatchOk} path=${dispatchPath} reason=${outputs.reason || 'unknown'} pr=${prValue} activation=${commentId} agent=${outputs.agent_alias || 'codex'} head=${headSha} cap=${capValue} active=${activeValue} trace=${traceValue}`;
+    const dispatchSummary = `DISPATCH: ok=${dispatchOk} path=${dispatchPath} reason=${outputs.reason || 'unknown'} pr=${prValue} activation=${commentId} agent=${outputs.agent_alias || _defaultAgent} head=${headSha} cap=${capValue} active=${activeValue} trace=${traceValue}`;
     core.info(dispatchSummary);
     
     // Also log the INSTRUCTION line for backwards compatibility
@@ -482,17 +510,21 @@ async function detectKeepalive({ core, github, context, env = process.env }) {
   }
 
   // INITIAL ACTIVATION HANDLING:
-  // If no round marker but comment is from an allowed author and starts with @codex,
-  // treat it as initial activation (round 1). This handles the case where a human posts
-  // "@codex <instructions>" without keepalive markers - we bootstrap the first round.
-  // IMPORTANT: Only @codex triggers activation (not any @mention like @maintainer).
+  // If no round marker but comment is from an allowed author and starts with an
+  // agent activation trigger, treat it as initial activation (round 1). This handles
+  // the case where a human posts "@<agent> <instructions>" without keepalive markers.
+  // IMPORTANT: Only known agent triggers activate (not any @mention like @maintainer).
   // Do NOT treat comments that contain the keepalive instruction signature as initial
   // activation - those are manual re-posts of existing instructions and should be rejected.
   const normalisedBody = normaliseBody(body).toLowerCase();
-  const startsWithCodexMention = normalisedBody.startsWith('@codex') &&
-    (normalisedBody.length === 6 || /^@codex[\s,;:!?]/.test(normalisedBody));
-  const isInitialActivation = !roundMatch && isAuthorAllowed && body &&
-    startsWithCodexMention && !isLikelyInstruction(body);
+  const startsWithAgentMention =
+    /^@(codex|claude)([\s,;:!?]|$)/.test(normalisedBody);
+  const hasAgentActivationMarker =
+    normalisedBody.includes('<!-- agent-activation-marker');
+  const isInitialActivation =
+    !roundMatch && isAuthorAllowed && body &&
+    (startsWithAgentMention || hasAgentActivationMarker) &&
+    !isLikelyInstruction(body);
 
   if (!roundMatch && !isInitialActivation) {
     outputs.reason = 'missing-round';
@@ -579,7 +611,7 @@ async function detectKeepalive({ core, github, context, env = process.env }) {
   outputs.branch = pull?.head?.ref || '';
   outputs.base = pull?.base?.ref || '';
   outputs.head_sha = (pull?.head?.sha || '').slice(0, 7);
-  outputs.agent_alias = 'codex'; // Default agent alias
+  outputs.agent_alias = _defaultAgent;
 
   const instructionBody = extractInstructionSegment(body);
   if (!instructionBody) {

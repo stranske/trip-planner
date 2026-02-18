@@ -12,10 +12,9 @@ import argparse
 import ast
 import re
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any, cast
-
-import tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_PATH = REPO_ROOT / "src"
@@ -213,9 +212,7 @@ def _read_local_modules() -> set[str]:
 
 def get_project_modules() -> set[str]:
     """Return the full set of project modules (static + dynamically detected + local)."""
-    return (
-        _BASE_PROJECT_MODULES | _detect_local_project_modules() | _read_local_modules()
-    )
+    return _BASE_PROJECT_MODULES | _detect_local_project_modules() | _read_local_modules()
 
 
 # For backward compatibility - will be populated on first use
@@ -368,9 +365,7 @@ def add_dependencies_to_pyproject(missing: set[str], fix: bool = False) -> bool:
         dev_group.multiline(True)
         optional[DEV_EXTRA] = dev_group
 
-    existing_normalised = {
-        _normalise_package_name(str(item).split("[")[0]) for item in dev_group
-    }
+    existing_normalised = {_normalise_package_name(str(item).split("[")[0]) for item in dev_group}
 
     added = False
     for package in sorted(missing):
@@ -389,9 +384,7 @@ def add_dependencies_to_pyproject(missing: set[str], fix: bool = False) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Sync test dependencies to pyproject.toml"
-    )
+    parser = argparse.ArgumentParser(description="Sync test dependencies to pyproject.toml")
     parser.add_argument(
         "--fix",
         action="store_true",

@@ -95,7 +95,9 @@ async function runKeepaliveGate({ core, github, context, env }) {
     },
   });
 
-  const agentAlias = preGate.primaryAgent || 'codex';
+  let _defaultAgent = 'codex';
+  try { const { loadAgentRegistry } = require('./agent_registry.js'); _defaultAgent = loadAgentRegistry().default_agent || 'codex'; } catch (_) {}
+  const agentAlias = preGate.primaryAgent || _defaultAgent;
   const runCap = Number.isFinite(preGate.runCap) ? preGate.runCap : '';
   const activeRuns = Number.isFinite(preGate.activeRuns) ? preGate.activeRuns : '';
   const inflightRuns = '';
@@ -104,7 +106,7 @@ async function runKeepaliveGate({ core, github, context, env }) {
   const runCapDetail = (() => {
     const breakdown = preGate.activeBreakdown || {};
     const orchestratorCount = Number(breakdown.orchestrator ?? breakdown['agents-70-orchestrator.yml'] ?? 0);
-    const workerCount = Number(breakdown.worker ?? breakdown['agents-72-codex-belt-worker.yml'] ?? 0);
+    const workerCount = Number(breakdown.worker ?? breakdown['agents-belt-worker.yml'] ?? breakdown['agents-72-codex-belt-worker.yml'] ?? 0);
     const normaliseCount = (value) => (Number.isFinite(value) ? value : 0);
     return `run cap detail: orchestrator=${normaliseCount(orchestratorCount)}, worker=${normaliseCount(workerCount)}`;
   })();
