@@ -31,6 +31,8 @@ const TIMEOUT_VARIABLE_NAMES = [
   'WORKFLOW_TIMEOUT_WARNING_MINUTES',
 ];
 
+// NOTE: Prompt files live under .github/codex/prompts/ — this directory name is
+// an API contract (baked into consumer repos). The prompts are agent-agnostic.
 const PROMPT_ROUTES = {
   fix_ci: {
     mode: 'fix_ci',
@@ -49,6 +51,13 @@ const PROMPT_ROUTES = {
     file: '.github/codex/prompts/keepalive_next_task.md',
   },
 };
+
+// Resolve default agent from registry
+let _defaultAgent = 'codex';
+try {
+  const { loadAgentRegistry } = require('./agent_registry.js');
+  _defaultAgent = loadAgentRegistry().default_agent || 'codex';
+} catch (_) { /* registry not available */ }
 
 function normalise(value) {
   return String(value ?? '').trim();
@@ -820,12 +829,13 @@ function classifyFailureDetails({ action, runResult, summaryReason, agentExitCod
   }
 
   // Detect dirty git state issues - agent saw unexpected changes before starting.
-  // These are typically workflow artifacts (.workflows-lib, codex-session-*.jsonl)
+  // These are typically workflow artifacts (.workflows-lib, agent session *.jsonl)
   // that should have been cleaned up but weren't. Classify as transient.
   const dirtyGitPatterns = [
     /unexpected\s*changes/i,
     /\.workflows-lib.*modified/i,
-    /codex-session.*untracked/i,
+    /codex-session.*untracked/i, // Codex-specific session artifact pattern
+    /agent-session.*untracked/i,
     /existing\s*changes/i,
     /how\s*would\s*you\s*like\s*me\s*to\s*proceed/i,
     /before\s*making\s*edits/i,
@@ -846,7 +856,7 @@ function classifyFailureDetails({ action, runResult, summaryReason, agentExitCod
     if (category === ERROR_CATEGORIES.transient) {
       type = 'infrastructure';
     } else if (agentExitCode && agentExitCode !== '0') {
-      type = 'codex';
+      type = 'agent';
     } else {
       type = 'infrastructure';
     }
@@ -1085,6 +1095,7 @@ function extractConfigSnippet(body) {
     return '';
   }
 
+  // API contract: both naming variants exist in production PR bodies
   const commentBlockPatterns = [
     /<!--\s*keepalive-config:start\s*-->([\s\S]*?)<!--\s*keepalive-config:end\s*-->/i,
     /<!--\s*codex-config:start\s*-->([\s\S]*?)<!--\s*codex-config:end\s*-->/i,
@@ -1882,6 +1893,8 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     let requestedAgentKeys = [];
     let hasAgentLabel = false;
 
+    const nonRoutingAgentKeys = new Set(['needs-attention', 'rate-limited', 'retry']);
+
     try {
       const { loadAgentRegistry } = require('./agent_registry.js');
       const registry = loadAgentRegistry();
@@ -1889,52 +1902,63 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
         Object.keys(registry.agents || {}).map((key) => normalise(String(key || '')).toLowerCase()),
       );
       validAgentKeys.add('auto');
-      const nonRoutingAgentKeys = new Set(['needs-attention', 'rate-limited', 'retry']);
 
+      const normalizedAgentLabels = labelObjects
+        .map((label) => ({
+          label,
+          normalized: normalise(label.name).toLowerCase(),
+        }))
+        .filter(({ normalized }) => normalized.startsWith(agentPrefix));
+
+      const routingEntries = normalizedAgentLabels
+        .map(({ label, normalized }) => ({
+          label,
+          key: normalized.slice(agentPrefix.length),
+        }))
+        .filter(({ key }) => key && !nonRoutingAgentKeys.has(key));
+
+      const registryEntries = routingEntries.filter(({ key }) => validAgentKeys.has(key));
+      const entriesForRouting = registryEntries.length > 0 ? registryEntries : routingEntries;
+
+      routingLabelCandidates = entriesForRouting.map(({ label }) => label);
+      requestedAgentKeys = Array.from(
+        new Set(entriesForRouting.map(({ key }) => key).filter(Boolean)),
+      );
+    } catch (error) {
       routingLabelCandidates = labelObjects.filter((label) => {
         const normalized = normalise(label.name).toLowerCase();
         if (!normalized.startsWith(agentPrefix)) {
           return false;
         }
         const key = normalized.slice(agentPrefix.length);
-        if (!key || nonRoutingAgentKeys.has(key)) {
-          return false;
-        }
-        return true;
+        return key && !nonRoutingAgentKeys.has(key);
       });
-
-      requestedAgentKeys = Array.from(
-        new Set(
-          routingLabelCandidates
-            .map((label) => normalise(label.name).toLowerCase().slice(agentPrefix.length))
-            .filter(Boolean),
-        ),
-      );
-    } catch (error) {
-      routingLabelCandidates = labelObjects;
       requestedAgentKeys = Array.from(
         new Set(
           labels
             .filter((label) => label.startsWith(agentPrefix))
-            .map((label) => label.slice(agentPrefix.length)),
+            .map((label) => label.slice(agentPrefix.length))
+            .filter((key) => key && !nonRoutingAgentKeys.has(key)),
         ),
       );
     }
 
     hasAgentLabel = requestedAgentKeys.length > 0;
     let agentType = '';
+    let agentRoutingMode = 'default';
+    let delegationReason = '';
+    let delegationShouldSwitch = false;
     if (hasAgentLabel) {
       try {
         const { resolveAgentRoutingFromLabels } = require('./agent_registry.js');
         const routing = resolveAgentRoutingFromLabels(routingLabelCandidates.length ? routingLabelCandidates : pr.labels);
         agentType = routing.agentKey;
+        agentRoutingMode = routing.mode;
       } catch (error) {
-        if (requestedAgentKeys.length > 1) {
-          hasAgentLabel = false;
-          agentType = '';
-        } else {
-          agentType = requestedAgentKeys[0] || '';
-        }
+        // Treat any routing failure (unknown agent, conflicting labels, missing helper)
+        // as invalid to avoid enabling keepalive when no downstream runner is eligible.
+        hasAgentLabel = false;
+        agentType = '';
       }
     }
     const hasHighPrivilege = labels.includes('agent-high-privilege');
@@ -1957,6 +1981,37 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
       trace: config.trace,
     });
     const state = stateResult.state || {};
+
+    // agent:auto delegation — resolve actual agent via policy after state is available
+    if (agentRoutingMode === 'auto') {
+      try {
+        const { decideNextAgent } = require('./agent_delegation_policy.js');
+        const { loadAgentRegistry } = require('./agent_registry.js');
+        const registry = loadAgentRegistry();
+        // Build secrets availability from env vars set by the workflow
+        const secrets = {};
+        if (process.env.HAS_CODEX_AUTH === 'true') secrets.CODEX_AUTH_JSON = true;
+        if (process.env.HAS_CLAUDE_AUTH === 'true') secrets.CLAUDE_AUTH_JSON = true;
+        const decision = decideNextAgent({
+          state,
+          labels: labels.map(String),
+          secrets,
+          registry,
+          core,
+        });
+        if (decision.agent) {
+          agentType = decision.agent;
+          delegationReason = decision.reason;
+          delegationShouldSwitch = Boolean(decision.shouldSwitch);
+          core?.info?.(`Delegation policy: ${decision.agent} (${decision.reason}, switch=${decision.shouldSwitch})`);
+        } else {
+          core?.warning?.(`Delegation policy returned no agent: ${decision.reason}`);
+        }
+      } catch (err) {
+        core?.warning?.(`Delegation policy failed, keeping ${agentType}: ${err.message}`);
+      }
+    }
+
     // Prefer state iteration unless config explicitly sets it (0 from config is default, not explicit)
     const configHasExplicitIteration = config.iteration > 0;
     const iteration = configHasExplicitIteration ? config.iteration : toNumber(state.iteration, 0);
@@ -2175,6 +2230,9 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
       hasAgentLabel,
       hasHighPrivilege,
       agentType,
+      agentRoutingMode,
+      delegationReason,
+      delegationShouldSwitch,
       taskAppendix,
       keepaliveEnabled,
       stateCommentId: stateResult.commentId || 0,
@@ -2205,7 +2263,7 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
         action: 'defer',
         reason: 'api-rate-limit',
         promptMode: 'normal',
-        promptFile: '.github/codex/prompts/keepalive_next_task.md',
+        promptFile: PROMPT_ROUTES.normal.file,
         gateConclusion: '',
         config: {},
         iteration: 0,
@@ -2271,9 +2329,14 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
     const failureThresholdInput = inputs.failureThreshold ?? inputs.failure_threshold;
     const roundsWithoutTaskCompletionInput =
       inputs.roundsWithoutTaskCompletion ?? inputs.rounds_without_task_completion;
-    const agentType = normalise(inputs.agent_type ?? inputs.agentType) || 'codex';
+    const agentType = normalise(inputs.agent_type ?? inputs.agentType) || _defaultAgent;
     const runResult = normalise(inputs.runResult || inputs.run_result);
     const stateTrace = normalise(inputs.trace || inputs.keepalive_trace || '');
+
+    // Delegation policy inputs (from evaluate step when agent:auto is active)
+    const delegationReason = normalise(inputs.delegation_reason ?? inputs.delegationReason);
+    const delegationShouldSwitch = toBool(inputs.delegation_should_switch ?? inputs.delegationShouldSwitch, false);
+    const agentRoutingMode = normalise(inputs.agent_routing_mode ?? inputs.agentRoutingMode);
 
     const { state: previousState, commentId } = await loadKeepaliveState({
       github,
@@ -2330,7 +2393,7 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       ? toNumber(roundsWithoutTaskCompletionInput, 0)
       : toNumber(previousState?.rounds_without_task_completion, 0);
 
-    // Agent output details (agent-agnostic, with fallback to old codex_ names)
+    // Agent output details (agent-agnostic, with backwards-compat fallback to codex_ names)
     const agentExitCode = normalise(inputs.agent_exit_code ?? inputs.agentExitCode ?? inputs.codex_exit_code ?? inputs.codexExitCode);
     const agentChangesMade = normalise(inputs.agent_changes_made ?? inputs.agentChangesMade ?? inputs.codex_changes_made ?? inputs.codexChangesMade);
     const agentCommitSha = normalise(inputs.agent_commit_sha ?? inputs.agentCommitSha ?? inputs.codex_commit_sha ?? inputs.codexCommitSha);
@@ -2645,6 +2708,26 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       }
       const thresholdSuffix = thresholdParts.length ? ` (thresholds: ${thresholdParts.join(', ')})` : '';
       core.warning(`Timeout warning (${reason}): ${percent}% consumed, ${remaining}m remaining${thresholdSuffix}.`);
+    }
+
+    // Add delegation info when in auto mode
+    if (agentRoutingMode === 'auto' && delegationReason) {
+      summaryLines.push(
+        '',
+        '### Agent Delegation (auto mode)',
+        `| Field | Value |`,
+        `|-------|-------|`,
+        `| Selected agent | ${agentDisplayName} |`,
+        `| Reason | ${delegationReason} |`,
+      );
+      if (delegationShouldSwitch) {
+        const prevAgent = previousState?.current_agent || 'unknown';
+        summaryLines.push(`| Switch | ${prevAgent} → ${agentType} |`);
+      }
+      const switchCount = toNumber(previousState?.switch_count, 0) + (delegationShouldSwitch ? 1 : 0);
+      if (switchCount > 0) {
+        summaryLines.push(`| Total switches | ${switchCount} |`);
+      }
     }
 
     // Add agent run details if we ran an agent
@@ -2975,6 +3058,56 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
         warning: timeoutStatus.warning || null,
       },
     };
+
+    // Persist agent delegation state when in auto mode
+    if (agentRoutingMode === 'auto' || previousState?.current_agent) {
+      const previousDelegationLog = Array.isArray(previousState?.delegation_log)
+        ? previousState.delegation_log
+        : [];
+      const previousSwitchCount = toNumber(previousState?.switch_count, 0);
+      const previousLastSwitchIteration = toNumber(previousState?.last_switch_iteration, 0);
+      const previousEffectivenessHistory = Array.isArray(previousState?.effectiveness_history)
+        ? previousState.effectiveness_history
+        : [];
+
+      // Build effectiveness entry for this round (only when agent ran)
+      const effectivenessEntry = action === 'run' ? {
+        iteration: nextIteration,
+        agent: agentType,
+        commits: agentCommitSha ? 1 : 0,
+        tasks: Math.max(0, tasksCompletedThisRound),
+        gate: gateConclusion === 'success' ? 'pass' : 'fail',
+        files_changed: agentFilesChanged,
+      } : null;
+
+      const effectivenessHistory = effectivenessEntry
+        ? [...previousEffectivenessHistory, effectivenessEntry].slice(-10)
+        : previousEffectivenessHistory;
+
+      newState.current_agent = agentType;
+      newState.delegation_reason = delegationReason || previousState?.delegation_reason || '';
+      newState.effectiveness_history = effectivenessHistory;
+
+      if (delegationShouldSwitch) {
+        newState.switch_count = previousSwitchCount + 1;
+        newState.last_switch_iteration = nextIteration;
+        newState.delegation_log = [
+          ...previousDelegationLog,
+          {
+            iteration: nextIteration,
+            previous_agent: previousState?.current_agent || '',
+            chosen_agent: agentType,
+            reason: delegationReason,
+            timestamp: new Date().toISOString(),
+          },
+        ].slice(-10);
+      } else {
+        newState.switch_count = previousSwitchCount;
+        newState.last_switch_iteration = previousLastSwitchIteration;
+        newState.delegation_log = previousDelegationLog;
+      }
+    }
+
     const attemptEntry = buildAttemptEntry({
       iteration: metricsIteration,
       action,
@@ -3025,7 +3158,7 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
     const attentionKey = [summaryReason, runResult, errorCategory, errorType, agentExitCode].filter(Boolean).join('|');
     const priorAttentionKey = normalise(previousAttention.key);
 
-    // NOTE: Failure comment posting removed - handled by reusable-codex-run.yml with proper deduplication
+    // NOTE: Failure comment posting removed - handled by reusable-*-run.yml with proper deduplication
     // This prevents duplicate failure notifications on PRs
 
     summaryLines.push('', formatStateComment(newState));
@@ -3157,7 +3290,7 @@ async function markAgentRunning({ github: rawGithub, context, core, inputs }) {
     return;
   }
 
-  const agentType = normalise(inputs.agent_type ?? inputs.agentType) || 'codex';
+  const agentType = normalise(inputs.agent_type ?? inputs.agentType) || _defaultAgent;
   const iteration = toNumber(inputs.iteration, 0);
   const maxIterations = toNumber(inputs.maxIterations ?? inputs.max_iterations, 0);
   const tasksTotal = toNumber(inputs.tasksTotal ?? inputs.tasks_total, 0);
