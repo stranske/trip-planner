@@ -82,12 +82,8 @@ def _criteria_from_env(model: str | None) -> EmbeddingSelectionCriteria:
     return EmbeddingSelectionCriteria(
         model=resolved_model,
         preferred_provider=os.environ.get("EMBEDDING_PROVIDER_PREFERRED") or None,
-        provider_allowlist=_parse_provider_list(
-            os.environ.get("EMBEDDING_PROVIDER_ALLOWLIST")
-        ),
-        provider_denylist=_parse_provider_list(
-            os.environ.get("EMBEDDING_PROVIDER_DENYLIST")
-        ),
+        provider_allowlist=_parse_provider_list(os.environ.get("EMBEDDING_PROVIDER_ALLOWLIST")),
+        provider_denylist=_parse_provider_list(os.environ.get("EMBEDDING_PROVIDER_DENYLIST")),
         prefer_low_cost=_parse_bool(os.environ.get("EMBEDDING_PREFER_LOW_COST")),
         prefer_low_latency=_parse_bool(os.environ.get("EMBEDDING_PREFER_LOW_LATENCY")),
     )

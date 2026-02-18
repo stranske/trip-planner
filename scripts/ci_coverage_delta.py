@@ -55,12 +55,7 @@ def _build_payload(
     *,
     fail_on_drop: bool,
 ) -> tuple[dict[str, Any], bool]:
-    timestamp = (
-        _dt.datetime.now(_dt.UTC)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
+    timestamp = _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     drop = max(0.0, baseline - current) if baseline > 0 else 0.0
     delta = current - baseline
     status: str
@@ -95,9 +90,7 @@ def main() -> int:
     baseline = _parse_float(
         os.environ.get("BASELINE_COVERAGE"), "BASELINE_COVERAGE", _DEFAULT_BASELINE
     )
-    alert_drop = _parse_float(
-        os.environ.get("ALERT_DROP"), "ALERT_DROP", _DEFAULT_ALERT_DROP
-    )
+    alert_drop = _parse_float(os.environ.get("ALERT_DROP"), "ALERT_DROP", _DEFAULT_ALERT_DROP)
     fail_on_drop = _truthy(os.environ.get("FAIL_ON_DROP"))
 
     try:
@@ -106,13 +99,9 @@ def main() -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    payload, should_fail = _build_payload(
-        current, baseline, alert_drop, fail_on_drop=fail_on_drop
-    )
+    payload, should_fail = _build_payload(current, baseline, alert_drop, fail_on_drop=fail_on_drop)
 
-    output_path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    output_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"Coverage delta written to {output_path}")
 
     return 1 if should_fail else 0
