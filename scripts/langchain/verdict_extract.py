@@ -33,9 +33,7 @@ class VerdictGithubOutputs(TypedDict):
     verdict_metadata: str
 
 
-def _build_github_outputs(
-    result: verdict_policy.VerdictPolicyResult,
-) -> VerdictGithubOutputs:
+def _build_github_outputs(result: verdict_policy.VerdictPolicyResult) -> VerdictGithubOutputs:
     return {
         "verdict": result.verdict,
         "needs_human": str(result.needs_human).lower(),
@@ -45,23 +43,17 @@ def _build_github_outputs(
         "selected_provider": result.selected_provider or "",
         "selected_model": result.selected_model or "",
         "selected_confidence": (
-            f"{result.selected_confidence:.4f}"
-            if result.selected_confidence is not None
-            else ""
+            f"{result.selected_confidence:.4f}" if result.selected_confidence is not None else ""
         ),
         "split_verdict": str(result.split_verdict).lower(),
         "concerns_confidence": (
-            f"{result.concerns_confidence:.4f}"
-            if result.concerns_confidence is not None
-            else ""
+            f"{result.concerns_confidence:.4f}" if result.concerns_confidence is not None else ""
         ),
         "verdict_metadata": json.dumps(result.as_dict()),
     }
 
 
-def _write_github_outputs(
-    result: verdict_policy.VerdictPolicyResult, output_path: str
-) -> None:
+def _write_github_outputs(result: verdict_policy.VerdictPolicyResult, output_path: str) -> None:
     outputs = _build_github_outputs(result)
 
     with open(output_path, "a", encoding="utf-8") as handle:

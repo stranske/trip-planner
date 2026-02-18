@@ -55,12 +55,7 @@ def _build_history_record(
     metrics_path: Path,
     metrics_from_file: bool,
 ) -> dict[str, Any]:
-    timestamp = (
-        _dt.datetime.now(_dt.UTC)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
+    timestamp = _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     summary = metrics.get("summary", {})
     failures = metrics.get("failures", [])
 
@@ -86,12 +81,7 @@ def _build_history_record(
 
 
 def _build_classification_payload(metrics: dict[str, Any]) -> dict[str, Any]:
-    timestamp = (
-        _dt.datetime.now(_dt.UTC)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
+    timestamp = _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     failures = metrics.get("failures", []) or []
     counts = Counter(entry.get("status", "unknown") for entry in failures)
     payload: dict[str, Any] = {
@@ -120,16 +110,11 @@ def main() -> int:
     if classification_env is None:
         classification_env = os.environ.get("ENABLE_CLASSIFICATION_FLAG")
     classification_flag = _truthy(classification_env)
-    classification_out = Path(
-        os.environ.get("CLASSIFICATION_OUT", _DEFAULT_CLASSIFICATION)
-    )
+    classification_out = Path(os.environ.get("CLASSIFICATION_OUT", _DEFAULT_CLASSIFICATION))
 
     if not junit_path.is_file():
         timestamp = (
-            _dt.datetime.now(_dt.UTC)
-            .replace(microsecond=0)
-            .isoformat()
-            .replace("+00:00", "Z")
+            _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         )
         record: dict[str, Any] = {
             "timestamp": timestamp,
@@ -139,12 +124,7 @@ def main() -> int:
         }
         github_meta = {
             key.lower(): os.environ[key]
-            for key in (
-                "GITHUB_RUN_ID",
-                "GITHUB_RUN_NUMBER",
-                "GITHUB_SHA",
-                "GITHUB_REF",
-            )
+            for key in ("GITHUB_RUN_ID", "GITHUB_RUN_NUMBER", "GITHUB_SHA", "GITHUB_REF")
             if os.environ.get(key)
         }
         if github_meta:
