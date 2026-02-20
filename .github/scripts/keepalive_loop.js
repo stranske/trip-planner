@@ -2049,6 +2049,17 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
       ? 0
       : prevRoundsWithoutCompletion + (iteration > 0 ? 1 : 0);
 
+    // Track consecutive rounds with zero file changes AND zero task completion.
+    // This is a strong signal of infrastructure failure (auth, permissions, sandbox)
+    // distinct from "productive but unfocused" (which has file changes).
+    const prevZeroActivityRounds = toNumber(state.consecutive_zero_activity_rounds, 0);
+    const consecutiveZeroActivityRounds = (lastFilesChanged === 0 && tasksCompletedSinceLastRound === 0 && iteration > 0)
+      ? prevZeroActivityRounds + 1
+      : 0;
+    // Stop after 2 consecutive zero-activity rounds — almost certainly an infra failure
+    const zeroActivityThreshold = 2;
+    const shouldStopForZeroActivity = consecutiveZeroActivityRounds >= zeroActivityThreshold;
+
     const prevCompleteGateFailureRounds = toNumber(state.complete_gate_failure_rounds, 0);
     const completeGateFailureRounds = allComplete && gateNormalized !== 'success'
       ? prevCompleteGateFailureRounds + 1
@@ -2071,9 +2082,10 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     // An iteration is productive if it has a reasonable productivity score
     const isProductive = productivityScore >= 20 && !hasRecentFailures;
 
-    // max_iterations is a "stuck detection" threshold, not a hard cap
-    // Continue past max if productive work is happening
-    const shouldStopForMaxIterations = iteration >= maxIterations && !isProductive;
+    // max_iterations is a hard cap on agent runs.
+    // Productive agents at max iterations are stopped with a clear reason;
+    // use the agent:retry label to explicitly continue past the cap.
+    const shouldStopForMaxIterations = iteration >= maxIterations;
 
     // Build task appendix for the agent prompt (after state load for reconciliation info)
     const taskAppendix = buildTaskAppendix(normalisedSections, checkboxCounts, state, { prBody: pr.body });
@@ -2174,6 +2186,13 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
         action = 'stop';
         reason = 'tasks-complete';
       }
+    } else if (shouldStopForZeroActivity) {
+      // Zero files changed for multiple consecutive rounds = infrastructure failure
+      // (auth broken, sandbox permissions, CLI not installed, etc.)
+      // Stop immediately — no amount of retries will help without human intervention.
+      action = 'stop';
+      reason = 'zero-activity-infrastructure';
+      if (core) core.warning(`Agent produced 0 file changes for ${consecutiveZeroActivityRounds} consecutive rounds — likely infrastructure failure (auth, permissions, sandbox). Stopping.`);
     } else if (shouldStopForMaxIterations && forceRetry && tasksRemaining) {
       action = 'run';
       reason = 'force-retry-max-iterations';
@@ -2604,6 +2623,17 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       allTasksComplete && gateConclusion && gateConclusion !== 'success'
         ? previousCompleteGateFailureRounds + 1
         : 0;
+    // Derive zero-activity rounds from previous state + this round's results.
+    // Mirrors the computation in evaluateKeepaliveLoop so persisted state stays correct.
+    // Only update on 'run' rounds — non-run rounds (review/wait) shouldn't affect the counter
+    // because no agent actually executed, so 0 file changes is expected, not a signal.
+    const previousZeroActivityRounds = toNumber(previousState?.consecutive_zero_activity_rounds, 0);
+    const consecutiveZeroActivityRounds =
+      action !== 'run'
+        ? previousZeroActivityRounds
+        : (agentFilesChanged === 0 && tasksCompletedThisRound <= 0 && currentIteration > 0
+            ? previousZeroActivityRounds + 1
+            : 0);
     const metricsIteration = action === 'run' ? currentIteration + 1 : currentIteration;
     const durationMs = resolveDurationMs({
       durationMs: toOptionalNumber(inputs.duration_ms ?? inputs.durationMs),
@@ -3031,11 +3061,15 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       running: false,
       // Track task reconciliation for next iteration
       needs_task_reconciliation: madeChangesButNoTasksChecked,
-      // Productivity tracking for evidence-based decisions
-      last_files_changed: agentFilesChanged,
-      prev_files_changed: toNumber(previousState?.last_files_changed, 0),
+      // Productivity tracking for evidence-based decisions.
+      // Preserve file-change counts from the last actual run when no agent ran
+      // (e.g. review/wait actions) to avoid destroying productivity signals.
+      last_files_changed: action === 'run' ? agentFilesChanged : toNumber(previousState?.last_files_changed, 0),
+      prev_files_changed: action === 'run' ? toNumber(previousState?.last_files_changed, 0) : toNumber(previousState?.prev_files_changed, 0),
       // Track consecutive rounds without task completion for progress review
       rounds_without_task_completion: roundsWithoutTaskCompletion,
+      // Track consecutive rounds with zero file changes (infrastructure failure detection)
+      consecutive_zero_activity_rounds: consecutiveZeroActivityRounds,
       complete_gate_failure_rounds: completeGateFailureRounds,
       complete_gate_failure_rounds_max: completeGateFailureMax,
       // Quality metrics for analysis validation
