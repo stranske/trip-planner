@@ -211,6 +211,7 @@ jobs:
         env:
           HAS_CODEX_AUTH: ${{ secrets.CODEX_AUTH_JSON != '' }}
           HAS_CLAUDE_AUTH: ${{ secrets.CLAUDE_AUTH_JSON != '' }}
+          HAS_CLAUDE_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
           HAS_APP_ID: >-
             ${{ secrets.KEEPALIVE_APP_ID != '' ||
                 secrets.WORKFLOWS_APP_ID != '' }}
@@ -220,18 +221,13 @@ jobs:
         run: |
           echo "CODEX_AUTH_JSON present: $HAS_CODEX_AUTH"
           echo "CLAUDE_AUTH_JSON present: $HAS_CLAUDE_AUTH"
+          echo "CLAUDE_CODE_OAUTH_TOKEN present: $HAS_CLAUDE_OAUTH"
           echo "KEEPALIVE_APP or WORKFLOWS_APP present: $HAS_APP_ID"
           echo "WORKFLOWS_APP_PRIVATE_KEY present: $HAS_APP_KEY"
-          HAS_ANY="false"
-          [ "$HAS_CODEX_AUTH" = "true" ] && HAS_ANY="true"
-          [ "$HAS_CLAUDE_AUTH" = "true" ] && HAS_ANY="true"
-          [ "$HAS_APP_ID" = "true" ] && HAS_ANY="true"
-          if [ "$HAS_ANY" = "true" ]; then
+          if [ "$HAS_CODEX_AUTH" = "true" ] || [ "$HAS_CLAUDE_AUTH" = "true" ] || [ "$HAS_CLAUDE_OAUTH" = "true" ] || [ "$HAS_APP_ID" = "true" ]; then
             echo "secrets_ok=true" >> "$GITHUB_OUTPUT"
           else
-            msg="No agent auth. Set CODEX_AUTH_JSON,"
-            msg="$msg CLAUDE_AUTH_JSON, or App."
-            echo "::error::$msg"
+            echo "::error::No agent auth found. Set CLAUDE_CODE_OAUTH_TOKEN (preferred), CODEX_AUTH_JSON, CLAUDE_AUTH_JSON, or KEEPALIVE/WORKFLOWS_APP."
             echo "secrets_ok=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
@@ -1017,6 +1013,7 @@ jobs:
       appendix: ${{ needs.prepare.outputs.appendix }}
     secrets:
       CLAUDE_AUTH_JSON: ${{ secrets.CLAUDE_AUTH_JSON }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       WORKFLOWS_APP_ID: ${{ secrets.WORKFLOWS_APP_ID }}
       WORKFLOWS_APP_PRIVATE_KEY: ${{ secrets.WORKFLOWS_APP_PRIVATE_KEY }}
 
