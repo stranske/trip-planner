@@ -258,9 +258,25 @@ def heuristic_alignment_check(
     return alignment_score, aligned, unaligned
 
 
-# ---------------------------------------------------------------------------
-# LLM-based review
-# ---------------------------------------------------------------------------
+# Patterns for orchestrator bookkeeping files that should not count as "agent work".
+# These files are written by the keepalive orchestrator, not the coding agent.
+_BOOKKEEPING_PATTERNS = re.compile(
+    r"(?:^|/)(?:"
+    r"claude-(?:prompt|output)-\d+\.md"
+    r"|codex-(?:prompt|output)-\d+\.md"
+    r"|claude-(?:session|analysis)-\d+\.(?:jsonl|json)"
+    r"|agents/(?:claude|codex)-\d+\.md"
+    r"|\.agents/"
+    r"|autofix-[^/]+\.patch$"
+    r"|autofix-metrics\.ndjson$"
+    r"|autofix-report-pr-\d+$"
+    r")",
+)
+
+
+def _filter_bookkeeping_files(files: list[str]) -> list[str]:
+    """Remove orchestrator bookkeeping files that don't represent agent work."""
+    return [f for f in files if not _BOOKKEEPING_PATTERNS.search(f)]
 
 
 def build_review_prompt(
@@ -537,6 +553,35 @@ def review_progress(
     Returns:
         ProgressReviewResult with recommendation and analysis
     """
+    # Filter out orchestrator bookkeeping files (claude-prompt-*.md, etc.)
+    # so they don't inflate alignment scores or file-change counts.
+    files_changed = _filter_bookkeeping_files(files_changed)
+
+    if not files_changed and rounds_without_completion >= 2:
+        return ProgressReviewResult(
+            recommendation="STOP",
+            confidence=0.9,
+            alignment_score=0.0,
+            trajectory="diverging",
+            analysis=ProgressAnalysis(
+                blocking_issues=[
+                    "Zero source files changed in the latest round despite many rounds without task completion",
+                    "Likely infrastructure failure: auth, permissions, or sandbox",
+                ],
+            ),
+            feedback_for_agent=(
+                "The latest round produced no source file changes after many rounds "
+                "without task completion. This likely indicates an infrastructure "
+                "issue (authentication, permissions, or sandbox configuration). "
+                "Human intervention is required."
+            ),
+            summary=(
+                f"Zero source files changed in the latest round after {rounds_without_completion} "
+                "rounds without task completion — likely infrastructure failure, not scope drift"
+            ),
+            used_llm=False,
+        )
+
     # Quick heuristic check first
     heuristic_score, aligned, unaligned = heuristic_alignment_check(
         acceptance_criteria, recent_commits, files_changed
