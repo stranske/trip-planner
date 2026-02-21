@@ -1,6 +1,6 @@
 {
   "private": true,
   "dependencies": {
-    "minimatch": "^10.0.1"
+    "minimatch": "file:node_modules/minimatch"
   }
 }
