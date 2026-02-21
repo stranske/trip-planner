@@ -555,9 +555,11 @@ def review_progress(
     """
     # Filter out orchestrator bookkeeping files (claude-prompt-*.md, etc.)
     # so they don't inflate alignment scores or file-change counts.
+    original_files_changed = list(files_changed)
     files_changed = _filter_bookkeeping_files(files_changed)
+    bookkeeping_only_changes = bool(original_files_changed) and not files_changed
 
-    if not files_changed and rounds_without_completion >= 2:
+    if not files_changed and not bookkeeping_only_changes and rounds_without_completion >= 2:
         return ProgressReviewResult(
             recommendation="STOP",
             confidence=0.9,
