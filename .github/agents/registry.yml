@@ -25,7 +25,9 @@ agents:
   claude:
     runner_workflow: .github/workflows/reusable-claude-run.yml
     required_secrets:
-      - CLAUDE_AUTH_JSON
+      - CLAUDE_CODE_OAUTH_TOKEN  # preferred: long-lived token from `claude setup-token`
+      - CLAUDE_AUTH_JSON          # fallback: credentials.json (short-lived OAuth)
+    required_secrets_mode: any    # at least one must be present
     branch_prefix: claude/issue-
     ui_mentions_allowed: false
     automation_logins:
