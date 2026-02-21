@@ -157,15 +157,30 @@ function decideNextAgent({ state = {}, labels = [], secrets = {}, registry = {},
  */
 function checkPrerequisites({ agent, agentConfig, secrets, core }) {
   const requiredSecrets = agentConfig.required_secrets || [];
+  const mode = agentConfig.required_secrets_mode || 'all';
 
-  // Check if all required secrets are present
-  for (const secretKey of requiredSecrets) {
-    if (!secrets[secretKey]) {
-      core?.debug?.(`Agent ${agent} missing secret: ${secretKey}`);
+  if (mode === 'any') {
+    // At least one of the listed secrets must be present
+    const hasAny = requiredSecrets.some((key) => !!secrets[key]);
+    if (!hasAny && requiredSecrets.length > 0) {
+      core?.debug?.(
+        `Agent ${agent} missing all secrets (need at least one): ${requiredSecrets.join(', ')}`
+      );
       return {
         available: false,
-        reason: `missing-secret-${secretKey}`,
+        reason: `missing-secret-${requiredSecrets[0]}`,
       };
+    }
+  } else {
+    // Check if all required secrets are present
+    for (const secretKey of requiredSecrets) {
+      if (!secrets[secretKey]) {
+        core?.debug?.(`Agent ${agent} missing secret: ${secretKey}`);
+        return {
+          available: false,
+          reason: `missing-secret-${secretKey}`,
+        };
+      }
     }
   }
 
