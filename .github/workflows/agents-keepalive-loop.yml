@@ -226,8 +226,6 @@ jobs:
         uses: actions/github-script@v8
         env:
           INPUT_PR_NUMBER: ${{ github.event.inputs.pr_number || '' }}
-          HAS_CODEX_AUTH: ${{ secrets.CODEX_AUTH_JSON != '' }}
-          HAS_CLAUDE_AUTH: ${{ secrets.CLAUDE_AUTH_JSON != '' }}
           INPUT_FORCE_RETRY: >-
             ${{ steps.retry_label.outputs.force_retry ||
                 (github.event_name == 'pull_request' &&
@@ -235,6 +233,9 @@ jobs:
                  github.event.label.name == 'agent:retry') ||
                 github.event.inputs.force_retry ||
                 'false' }}
+          HAS_CODEX_AUTH: ${{ secrets.CODEX_AUTH_JSON != '' }}
+          HAS_CLAUDE_AUTH: ${{ secrets.CLAUDE_AUTH_JSON != '' }}
+          HAS_CLAUDE_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -313,7 +314,9 @@ jobs:
               has_agent_label: String(result.hasAgentLabel ?? ''),
               has_high_privilege: String(result.hasHighPrivilege ?? 'false'),
               agent_type: String(result.agentType || ''),
+              agent_routing_mode: String(result.agentRoutingMode || ''),
               delegation_reason: String(result.delegationReason || ''),
+              delegation_should_switch: String(result.delegationShouldSwitch ?? 'false'),
               trace: String(result.config?.trace || result.state?.trace || ''),
               prompt_mode: String(result.promptMode || 'normal'),
                 prompt_file: String(
@@ -331,8 +334,9 @@ jobs:
 
             // Task appendix: Write directly to file to avoid GitHub's secret scanner
             // blocking job outputs (which happens with long/repetitive content).
-            // Writing here (before setting the task_appendix output) ensures the content
-            // reaches the artifact even if that output gets censored.
+            // Writing to the artifact file here (before setting the task_appendix output
+            // via core.setOutput below) ensures the content reaches the artifact even if
+            // that output value gets censored.
             const fs = require('fs');
             const path = require('path');
             const artifactsDir = '/tmp/keepalive-artifacts';
@@ -404,6 +408,7 @@ jobs:
         env:
           HAS_CODEX_AUTH: ${{ secrets.CODEX_AUTH_JSON != '' }}
           HAS_CLAUDE_AUTH: ${{ secrets.CLAUDE_AUTH_JSON != '' }}
+          HAS_CLAUDE_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
           AGENT_TYPE: ${{ needs.evaluate.outputs.agent_type || 'codex' }}
           HAS_APP_ID: >-
             ${{ secrets.KEEPALIVE_APP_ID != '' ||
@@ -415,28 +420,43 @@ jobs:
           echo "Requested agent: $AGENT_TYPE"
           echo "CODEX_AUTH_JSON present: $HAS_CODEX_AUTH"
           echo "CLAUDE_AUTH_JSON present: $HAS_CLAUDE_AUTH"
+          echo "CLAUDE_CODE_OAUTH_TOKEN present: $HAS_CLAUDE_OAUTH"
           echo "KEEPALIVE_APP or WORKFLOWS_APP present: $HAS_APP_ID"
           echo "WORKFLOWS_APP_PRIVATE_KEY present: $HAS_APP_KEY"
           agent_auth_ok=false
           case "$AGENT_TYPE" in
             claude)
-              if [ "$HAS_CLAUDE_AUTH" = "true" ]; then
+              if [ "$HAS_CLAUDE_AUTH" = "true" ] || [ "$HAS_CLAUDE_OAUTH" = "true" ]; then
                 agent_auth_ok=true
               fi
               ;;
-            codex|*)
+            codex)
               if [ "$HAS_CODEX_AUTH" = "true" ]; then
                 agent_auth_ok=true
               fi
               ;;
+            *)
+              if [ "$HAS_CODEX_AUTH" = "true" ] || [ "$HAS_CLAUDE_AUTH" = "true" ] || [ "$HAS_CLAUDE_OAUTH" = "true" ]; then
+                agent_auth_ok=true
+              fi
+              ;;
           esac
-          if [ "$agent_auth_ok" != "true" ]; then
-            [ "$HAS_APP_ID" = "true" ] && agent_auth_ok=true
+          if [ "$agent_auth_ok" != "true" ] && [ "$HAS_APP_ID" = "true" ]; then
+            agent_auth_ok=true
           fi
           if [ "$agent_auth_ok" != "true" ]; then
-            msg="Missing credentials for '$AGENT_TYPE'."
-            msg="$msg Set *_AUTH_JSON or App."
-            echo "::error::$msg"
+            case "$AGENT_TYPE" in
+              claude)
+                missing_msg="Missing credentials for agent 'claude'. Set CLAUDE_CODE_OAUTH_TOKEN (preferred), CLAUDE_AUTH_JSON, or configure KEEPALIVE/WORKFLOWS_APP credentials."
+                ;;
+              codex)
+                missing_msg="Missing credentials for agent 'codex'. Set CODEX_AUTH_JSON, or configure KEEPALIVE/WORKFLOWS_APP credentials."
+                ;;
+              *)
+                missing_msg="Missing credentials for agent '${AGENT_TYPE}'. Configure that agent's credentials or KEEPALIVE/WORKFLOWS_APP credentials."
+                ;;
+            esac
+            echo "::error::$missing_msg"
             echo "secrets_ok=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
@@ -503,7 +523,8 @@ jobs:
             await markAgentRunning({ github, context, core, inputs });
 
   # Route to appropriate agent based on agent:* label
-  # Supports: agent:codex -> CLI Codex, agent:claude -> Claude API
+  # Supports: agent:codex -> CLI Codex, agent:claude -> Claude agent
+  # Future: agent:gemini, etc. will have their own jobs
   run-codex:
     name: Keepalive next task (Codex)
     needs:
@@ -652,6 +673,7 @@ jobs:
             core.setOutput('messages', JSON.stringify(messages));
             core.setOutput('files', JSON.stringify(files.slice(0, 50)));
 
+
       - name: Extract acceptance criteria
         id: criteria
         uses: actions/github-script@v8
@@ -745,6 +767,7 @@ jobs:
               "feedback=Unable to analyze progress. Please review acceptance criteria." \
               >> "$GITHUB_OUTPUT"
           fi
+
 
       - name: Evaluate whether to post review
         id: review_guard

@@ -555,29 +555,57 @@ def review_progress(
     """
     # Filter out orchestrator bookkeeping files (claude-prompt-*.md, etc.)
     # so they don't inflate alignment scores or file-change counts.
+    original_files_changed = list(files_changed)
     files_changed = _filter_bookkeeping_files(files_changed)
+    bookkeeping_only_changes = bool(original_files_changed) and not files_changed
 
     if not files_changed and rounds_without_completion >= 2:
+        if bookkeeping_only_changes:
+            summary_detail = (
+                "Only bookkeeping artifacts (claude/codex prompts, autofix patches, etc.) "
+                "were touched, so the agent produced no source changes."
+            )
+            blocking_issues = [
+                (
+                    "Only bookkeeping/orchestrator artifacts changed despite "
+                    f"{rounds_without_completion} consecutive rounds without completion"
+                ),
+                "Agent output is not reaching source files; likely stuck rerunning bookkeeping steps",
+            ]
+            feedback = (
+                f"The last {rounds_without_completion} rounds only generated bookkeeping "
+                "artifacts (prompts, outputs, patches) without touching any source files. "
+                "Please investigate why the agent keeps re-emitting orchestrator files instead "
+                "of making code changes."
+            )
+        else:
+            summary_detail = (
+                "Zero source files changed in the latest round — likely an infra or auth issue."
+            )
+            blocking_issues = [
+                (
+                    "Zero source files changed in the latest round after "
+                    f"{rounds_without_completion} consecutive rounds without task completion"
+                ),
+                "Likely infrastructure failure: auth, permissions, or sandbox",
+            ]
+            feedback = (
+                f"The latest round produced no source file changes after "
+                f"{rounds_without_completion} consecutive rounds without task completion. "
+                "This likely indicates an infrastructure issue (authentication, permissions, "
+                "or sandbox configuration). Human intervention is required."
+            )
+
         return ProgressReviewResult(
             recommendation="STOP",
             confidence=0.9,
             alignment_score=0.0,
             trajectory="diverging",
-            analysis=ProgressAnalysis(
-                blocking_issues=[
-                    "Zero source files changed in the latest round despite many rounds without task completion",
-                    "Likely infrastructure failure: auth, permissions, or sandbox",
-                ],
-            ),
-            feedback_for_agent=(
-                "The latest round produced no source file changes after many rounds "
-                "without task completion. This likely indicates an infrastructure "
-                "issue (authentication, permissions, or sandbox configuration). "
-                "Human intervention is required."
-            ),
+            analysis=ProgressAnalysis(blocking_issues=blocking_issues),
+            feedback_for_agent=feedback,
             summary=(
-                f"Zero source files changed in the latest round after {rounds_without_completion} "
-                "rounds without task completion — likely infrastructure failure, not scope drift"
+                f"{summary_detail} After {rounds_without_completion} rounds without task completion, "
+                "human intervention is required."
             ),
             used_llm=False,
         )
