@@ -1995,6 +1995,7 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
         const secrets = {};
         if (process.env.HAS_CODEX_AUTH === 'true') secrets.CODEX_AUTH_JSON = true;
         if (process.env.HAS_CLAUDE_AUTH === 'true') secrets.CLAUDE_AUTH_JSON = true;
+        if (process.env.HAS_CLAUDE_OAUTH === 'true') secrets.CLAUDE_CODE_OAUTH_TOKEN = true;
         const decision = decideNextAgent({
           state,
           labels: labels.map(String),
@@ -2634,16 +2635,18 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
     // Negative deltas should not be treated as activity for zero-activity detection.
     const zeroActivityTaskDelta = totalsStable ? Math.max(0, tasksCompletedThisRound) : 0;
     const actionRunsAgent = AGENT_EXECUTION_ACTIONS.has(action);
-    const consecutiveZeroActivityRounds =
-      !actionRunsAgent
-        ? previousZeroActivityRounds
-        : (currentIteration > 0 &&
-            agentFilesChanged === 0 &&
-            zeroActivityTaskDelta === 0 &&
-            !checklistChanged
-            ? previousZeroActivityRounds + 1
-            : 0);
-    const metricsIteration = action === 'run' ? currentIteration + 1 : currentIteration;
+    const zeroActivityCandidate =
+      actionRunsAgent &&
+      currentIteration > 0 &&
+      agentFilesChanged === 0 &&
+      zeroActivityTaskDelta === 0 &&
+      !checklistChanged;
+    const consecutiveZeroActivityRounds = zeroActivityCandidate
+      ? previousZeroActivityRounds + 1
+      : actionRunsAgent
+        ? 0
+        : previousZeroActivityRounds;
+    const metricsIteration = actionRunsAgent ? currentIteration + 1 : currentIteration;
     const durationMs = resolveDurationMs({
       durationMs: toOptionalNumber(inputs.duration_ms ?? inputs.durationMs),
       startTs: toOptionalNumber(inputs.start_ts ?? inputs.startTs),
