@@ -50,6 +50,8 @@ jobs:
             .github/scripts/agents-guard.js
             .github/scripts/github-api-with-retry.js
             .github/scripts/token_load_balancer.js
+            .github/scripts/package.json
+            .github/scripts/node_modules
             .github/workflows/agents-guard.yml
 
       - name: Check API client action (base)
@@ -106,6 +108,8 @@ jobs:
             .github/scripts/agents-guard.js
             .github/scripts/github-api-with-retry.js
             .github/scripts/token_load_balancer.js
+            .github/scripts/package.json
+            .github/scripts/node_modules
             .github/workflows/agents-guard.yml
       - name: Check API client action (head)
         if: github.event_name == 'pull_request'
