@@ -30,15 +30,18 @@ env:
         secrets.ACTIONS_BOT_PAT ||
         secrets.SERVICE_BOT_PAT ||
         github.token }}
-  MANUAL_GATE_RUN_ID: ${{ inputs.gate_run_id || '' }}
-  MANUAL_PR_NUMBER: ${{ inputs.pr_number || '' }}
-  MANUAL_HEAD_SHA: ${{ inputs.head_sha || '' }}
+  MANUAL_GATE_RUN_ID: >-
+    ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.gate_run_id || '' }}
+  MANUAL_PR_NUMBER: >-
+    ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number || '' }}
+  MANUAL_HEAD_SHA: >-
+    ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.head_sha || '' }}
 
 concurrency:
   group: >-
     agents-autofix-loop-${{
-      github.event.workflow_run.pull_requests[0].number ||
-      inputs.pr_number ||
+      (github.event.workflow_run && github.event.workflow_run.pull_requests[0].number) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number) ||
       github.run_id
     }}
   cancel-in-progress: false
