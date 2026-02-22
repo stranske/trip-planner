@@ -91,6 +91,61 @@ runs:
         echo "📦 Installing @octokit dependencies in $INSTALL_DIR..."
         cd "$INSTALL_DIR"
 
+        declare -a VENDORED_ALIAS_DIRS=()
+
+        cleanup_vendor_aliases() {
+          if [ "${#VENDORED_ALIAS_DIRS[@]}" -gt 0 ]; then
+            for vendored_alias in "${VENDORED_ALIAS_DIRS[@]}"; do
+              rm -rf "$vendored_alias" || true
+              local parent
+              parent=$(dirname "$vendored_alias")
+              if [ "$parent" != "." ]; then
+                rmdir "$parent" 2>/dev/null || true
+              fi
+            done
+          fi
+        }
+
+        trap cleanup_vendor_aliases EXIT
+
+        create_vendor_aliases() {
+          if [ ! -f "package.json" ]; then
+            return 0
+          fi
+
+          local aliases=()
+          mapfile -t aliases < <(
+            node -e 'const fs=require("fs");const path=require("path");const pkgPath=path.resolve("package.json");if(!fs.existsSync(pkgPath)){process.exit(0);}const pkg=JSON.parse(fs.readFileSync(pkgPath,"utf8"));const sections=[pkg.dependencies||{},pkg.devDependencies||{}];const seen=new Set();for(const section of sections){for(const spec of Object.values(section)){if(typeof spec==="string"&&spec.startsWith("file:node_modules/")){const trimmed=spec.slice("file:node_modules/".length).replace(/\/+$/,"");if(trimmed){seen.add(trimmed);}}}}process.stdout.write(Array.from(seen).join("\n"));'
+          )
+
+          for vendored_alias in "${aliases[@]}"; do
+            if [ -z "$vendored_alias" ]; then
+              continue
+            fi
+            local source_path="node_modules/${vendored_alias}"
+            if [ ! -d "$source_path" ]; then
+              continue
+            fi
+            if [ -e "$vendored_alias" ]; then
+              continue
+            fi
+            local parent_dir
+            parent_dir=$(dirname "$vendored_alias")
+            if [ "$parent_dir" != "." ]; then
+              mkdir -p "$parent_dir"
+            fi
+            rm -rf "$vendored_alias" || true
+            cp -R "$source_path" "$vendored_alias"
+            VENDORED_ALIAS_DIRS+=("$vendored_alias")
+          done
+        }
+
+        create_vendor_aliases
+
+        # npm scripts for vendored packages can invoke missing tools (tshy, etc.).
+        # Disable lifecycle scripts globally for this step.
+        export npm_config_ignore_scripts=true
+
         # Track if we create package.json so we can clean it up
         CREATED_PACKAGE_JSON=false
         if [ ! -f "package.json" ]; then
@@ -154,6 +209,9 @@ runs:
 
           echo "✅ @octokit dependencies installed"
         fi
+
+        cleanup_vendor_aliases
+        trap - EXIT
 
     - name: Export NODE_PATH for shared deps
       shell: bash
