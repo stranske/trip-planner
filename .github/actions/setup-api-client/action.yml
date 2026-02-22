@@ -91,6 +91,79 @@ runs:
         echo "📦 Installing @octokit dependencies in $INSTALL_DIR..."
         cd "$INSTALL_DIR"
 
+        declare -a VENDORED_ALIAS_DIRS=()
+
+        cleanup_vendor_aliases() {
+          if [ "${#VENDORED_ALIAS_DIRS[@]}" -eq 0 ]; then
+            return 0
+          fi
+
+          local cleanup_dir="$INSTALL_DIR"
+          if [ -z "$cleanup_dir" ]; then
+            echo "::warning::Install dir is empty, skipping vendored alias cleanup"
+            return 0
+          fi
+
+          (
+            cd "$cleanup_dir" 2>/dev/null || exit 0
+            for vendored_alias in "${VENDORED_ALIAS_DIRS[@]}"; do
+              if [ -z "$vendored_alias" ]; then
+                continue
+              fi
+              rm -rf "$vendored_alias" || true
+              local parent_dir
+              parent_dir=$(dirname "$vendored_alias")
+              # Remove empty parent directories that may have been created for scoped packages
+              while [ "$parent_dir" != "." ] && [ "$parent_dir" != "/" ]; do
+                rmdir "$parent_dir" 2>/dev/null || break
+                parent_dir=$(dirname "$parent_dir")
+              done
+            done
+          )
+        }
+
+        trap cleanup_vendor_aliases EXIT
+
+        create_vendor_aliases() {
+          if [ ! -f "package.json" ]; then
+            return 0
+          fi
+
+          local alias_tmp
+          alias_tmp=$(mktemp)
+
+          local helper_root="${GITHUB_ACTION_PATH:-${GITHUB_WORKSPACE}/.github/actions/setup-api-client}"
+          local alias_helper="${helper_root}/create_vendor_aliases.js"
+          if [ ! -f "$alias_helper" ]; then
+            echo "::error::Missing vendored alias helper: $alias_helper"
+            rm -f "$alias_tmp"
+            return 1
+          fi
+
+          if node "$alias_helper" "$INSTALL_DIR" >"$alias_tmp"; then
+            :
+          else
+            echo "::warning::Failed to prepare vendored dependency aliases"
+            rm -f "$alias_tmp"
+            return 1
+          fi
+
+          while IFS= read -r vendored_alias; do
+            if [ -z "$vendored_alias" ]; then
+              continue
+            fi
+            VENDORED_ALIAS_DIRS+=("$vendored_alias")
+          done <"$alias_tmp"
+
+          rm -f "$alias_tmp"
+        }
+
+        create_vendor_aliases
+
+        # npm scripts for vendored packages can invoke missing tools (tshy, etc.).
+        # Disable lifecycle scripts globally for this step.
+        export npm_config_ignore_scripts=true
+
         # Track if we create package.json so we can clean it up
         CREATED_PACKAGE_JSON=false
         if [ ! -f "package.json" ]; then
@@ -121,22 +194,23 @@ runs:
           # Install with pinned versions for consistency
           # Capture stderr for debugging if the command fails
           npm_output=$(mktemp)
-          if npm install --no-save --location=project \
+          npm_cmd=(npm install --no-save --location=project \
             @octokit/rest@20.0.2 \
             @octokit/plugin-retry@6.0.1 \
             @octokit/plugin-paginate-rest@9.1.5 \
-            @octokit/auth-app@6.0.3 \
-            2>"$npm_output"; then
+            @octokit/auth-app@6.0.3)
+          if "${npm_cmd[@]}" 2>"$npm_output"; then
             rm -f "$npm_output"
           else
             echo "::warning::npm install failed with: $(cat "$npm_output")"
             echo "::warning::Retrying with --legacy-peer-deps"
             rm -f "$npm_output"
-            npm install --no-save --legacy-peer-deps --location=project \
+            npm_cmd=(npm install --no-save --legacy-peer-deps --location=project \
               @octokit/rest@20.0.2 \
               @octokit/plugin-retry@6.0.1 \
               @octokit/plugin-paginate-rest@9.1.5 \
-              @octokit/auth-app@6.0.3
+              @octokit/auth-app@6.0.3)
+            "${npm_cmd[@]}"
           fi
 
           # Restore vendored package metadata that npm may have overwritten
@@ -155,6 +229,8 @@ runs:
           echo "✅ @octokit dependencies installed"
         fi
 
+        cleanup_vendor_aliases
+        trap - EXIT
     - name: Export NODE_PATH for shared deps
       shell: bash
       run: |
