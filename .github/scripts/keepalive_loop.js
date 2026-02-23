@@ -2081,10 +2081,12 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     // An iteration is productive if it has a reasonable productivity score
     const isProductive = productivityScore >= 20 && !hasRecentFailures;
 
-    // max_iterations caps *unproductive* runs.
+    // max_iterations is a hard cap on agent runs.
+    // Productive agents at max iterations are stopped with a clear reason;
+    // use the agent:retry label to explicitly continue past the cap.
     const hasMaxIterations = maxIterations > 0;
     const reachedMaxIterations = hasMaxIterations && iteration >= maxIterations;
-    const shouldStopForMaxIterations = reachedMaxIterations && !isProductive;
+    const shouldStopForMaxIterations = reachedMaxIterations;
 
     // Build task appendix for the agent prompt (after state load for reconciliation info)
     const taskAppendix = buildTaskAppendix(normalisedSections, checkboxCounts, state, { prBody: pr.body });

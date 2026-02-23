@@ -50,7 +50,7 @@ jobs:
             const { withRetry } = await createTokenAwareRetry({
               github,
               core,
-              retryLabel: 'dispatch-autofix-loop',
+              task: 'dispatch-autofix-loop',
             });
 
             const payload = context.payload.client_payload || {};
@@ -70,8 +70,8 @@ jobs:
             const defaultBranch = context.payload.repository?.default_branch || 'main';
             const ref = `refs/heads/${defaultBranch}`;
             try {
-              await withRetry(() =>
-                github.request('POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches', {
+              await withRetry((client) =>
+                client.request('POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches', {
                   owner,
                   repo,
                   workflow_id: 'agents-autofix-loop.yml',

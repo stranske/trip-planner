@@ -1,11 +1,6 @@
 name: Agents Autofix Loop
 
 on:
-  workflow_run:
-    workflows:
-      - Gate
-    types:
-      - completed
   workflow_dispatch:
     inputs:
       gate_run_id:
@@ -30,21 +25,17 @@ env:
         secrets.ACTIONS_BOT_PAT ||
         secrets.SERVICE_BOT_PAT ||
         github.token }}
-  MANUAL_GATE_RUN_ID: >-
-    ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.gate_run_id || '' }}
-  MANUAL_PR_NUMBER: >-
-    ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number || '' }}
-  MANUAL_HEAD_SHA: >-
-    ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.head_sha || '' }}
+  MANUAL_GATE_RUN_ID: ${{ inputs.gate_run_id || '' }}
+  MANUAL_PR_NUMBER: ${{ inputs.pr_number || '' }}
+  MANUAL_HEAD_SHA: ${{ inputs.head_sha || '' }}
 
 concurrency:
   group: >-
     agents-autofix-loop-${{
-      (github.event.workflow_run && github.event.workflow_run.pull_requests[0].number) ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number) ||
+      inputs.pr_number ||
       github.run_id
     }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   prepare:
@@ -130,31 +121,37 @@ jobs:
             }
 
             const { evaluatePromptInjectionGuard } = require(guardPath);
-
+            const { owner, repo } = context.repo;
             const manualInputs = {
               runId: (process.env.MANUAL_GATE_RUN_ID || '').trim(),
               prNumber: (process.env.MANUAL_PR_NUMBER || '').trim(),
             };
-            let run = context.payload.workflow_run;
-            if (!run && manualInputs.runId) {
-              const runIdNumber = Number(manualInputs.runId);
-              if (Number.isNaN(runIdNumber)) {
-                core.setFailed(`Invalid manual gate_run_id: ${manualInputs.runId}`);
-                return;
-              }
-              try {
-                const response = await withRetry(() =>
-                  github.rest.actions.getWorkflowRun({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    run_id: runIdNumber,
-                  })
-                );
-                run = response.data;
-              } catch (error) {
-                core.setFailed(`Failed to load workflow_run ${manualInputs.runId}: ${error.message}`);
-                return;
-              }
+
+            if (!manualInputs.runId) {
+              core.setOutput('blocked', 'false');
+              core.setOutput('reason', 'missing-gate-run-id');
+              return;
+            }
+
+            const runIdNumber = Number(manualInputs.runId);
+            if (!Number.isFinite(runIdNumber) || runIdNumber <= 0) {
+              core.setFailed(`Invalid manual gate_run_id: ${manualInputs.runId}`);
+              return;
+            }
+
+            let run;
+            try {
+              const response = await withRetry(() =>
+                github.rest.actions.getWorkflowRun({
+                  owner,
+                  repo,
+                  run_id: runIdNumber,
+                })
+              );
+              run = response.data;
+            } catch (error) {
+              core.setFailed(`Failed to load workflow_run ${manualInputs.runId}: ${error.message}`);
+              return;
             }
 
             const manualPrNumber = manualInputs.prNumber ? Number(manualInputs.prNumber) : NaN;
@@ -203,7 +200,7 @@ jobs:
               core.setFailed(`Security gate blocked: ${result.reason}`);
             }
 
-      - name: Evaluate workflow_run
+      - name: Evaluate gate run
         id: evaluate
         uses: actions/github-script@v8
         with:
@@ -225,29 +222,33 @@ jobs:
               prNumber: (process.env.MANUAL_PR_NUMBER || '').trim(),
               headSha: (process.env.MANUAL_HEAD_SHA || '').trim(),
             };
-            const isManualDispatch = context.eventName === 'workflow_dispatch';
-            let run = context.payload.workflow_run;
-            if (isManualDispatch && manualInputs.runId) {
-              const runIdNumber = Number(manualInputs.runId);
-              if (Number.isNaN(runIdNumber)) {
-                core.setFailed(`Invalid gate_run_id input: ${manualInputs.runId}`);
-                return;
-              }
-              try {
-                const response = await withRetry(() =>
-                  github.rest.actions.getWorkflowRun({
-                    owner,
-                    repo,
-                    run_id: runIdNumber,
-                  })
-                );
-                run = response.data;
-              } catch (error) {
-                core.setFailed(
-                  `Failed to load Gate run ${manualInputs.runId}: ${error.message}`
-                );
-                return;
-              }
+
+            if (!manualInputs.runId) {
+              core.setFailed('gate_run_id input is required for workflow_dispatch runs');
+              return;
+            }
+
+            const runIdNumber = Number(manualInputs.runId);
+            if (!Number.isFinite(runIdNumber) || runIdNumber <= 0) {
+              core.setFailed(`Invalid gate_run_id input: ${manualInputs.runId}`);
+              return;
+            }
+
+            let run;
+            try {
+              const response = await withRetry(() =>
+                github.rest.actions.getWorkflowRun({
+                  owner,
+                  repo,
+                  run_id: runIdNumber,
+                })
+              );
+              run = response.data;
+            } catch (error) {
+              core.setFailed(
+                `Failed to load Gate run ${manualInputs.runId}: ${error.message}`
+              );
+              return;
             }
             const outputs = {
               should_run: 'false',
@@ -275,11 +276,7 @@ jobs:
               }
             };
 
-            if (!run) {
-              return stop('missing workflow_run payload');
-            }
-
-            outputs.gate_run_id = String(manualInputs.runId || run.id || '');
+            outputs.gate_run_id = String(manualInputs.runId || run?.id || '');
 
             if ((run.conclusion || '').toLowerCase() === 'success') {
               return stop('upstream Gate succeeded');
@@ -290,7 +287,7 @@ jobs:
             }
 
             let prInfo = Array.isArray(run.pull_requests) ? run.pull_requests[0] : undefined;
-            if (isManualDispatch && manualInputs.prNumber) {
+            if (manualInputs.prNumber) {
               const manualPrNumber = Number(manualInputs.prNumber);
               if (!Number.isFinite(manualPrNumber) || manualPrNumber <= 0) {
                 return stop('invalid manual pr_number input');
@@ -298,7 +295,7 @@ jobs:
               prInfo = { number: manualPrNumber };
             }
             if (!prInfo?.number) {
-              return stop('no pull request context on workflow_run');
+              return stop('no pull request context on gate run');
             }
 
             const prNumber = Number(manualInputs.prNumber || prInfo.number);
@@ -786,11 +783,8 @@ jobs:
             const attemptLimit = Number('${{ needs.prepare.outputs.max_attempts || 0 }}') || 0;
             const headShaBefore = '${{ needs.prepare.outputs.head_sha }}';
             const gateConclusionBefore =
-              '${{ needs.prepare.outputs.gate_conclusion }}' ||
-              (context.payload.workflow_run?.conclusion || '');
-            const gateRunId =
-              '${{ needs.prepare.outputs.gate_run_id }}' ||
-              String(context.payload.workflow_run?.id || '');
+              '${{ needs.prepare.outputs.gate_conclusion }}' || 'unknown';
+            const gateRunId = '${{ needs.prepare.outputs.gate_run_id }}';
             const triggerReason = '${{ needs.prepare.outputs.trigger_reason || 'unknown' }}';
             const triggerJob = '${{ needs.prepare.outputs.trigger_job }}';
             const triggerStep = '${{ needs.prepare.outputs.trigger_step }}';
