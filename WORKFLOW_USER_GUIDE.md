@@ -83,7 +83,8 @@ Issue: "Add user authentication"
 **Steps:**
 1. Create a well-structured issue with clear tasks
 2. Add label: `agents:auto-pilot`
-3. Monitor progress comments
+3. (Optional) Add `runner:codex`, `runner:claude`, etc. to pick the agent you want auto-pilot to use (skip this to use the registry default).
+4. Monitor progress comments
 
 **What Happens:**
 1. ✅ Issue is formatted automatically
@@ -424,6 +425,8 @@ Orchestrates entire pipeline:
 - Pause: `agents:auto-pilot-pause`
 - Failure: `agents:auto-pilot-failed`
 
+**Agent Selection:** Add `runner:codex`, `runner:claude`, etc. next to `agents:auto-pilot` when you want to pick the agent explicitly. Skip the `runner:` label to use the registry default.
+
 **Best For:** Well-defined, medium complexity tasks
 
 ---
@@ -477,7 +480,7 @@ Orchestrates entire pipeline:
 1. PR must be merged
 2. PR must have verification comment (from `verify:evaluate` or `verify:compare`)
 3. Verification comment must contain concerns or low scores
-4. Check `agents-verify-to-issue.yml` logs
+4. Check `agents-verify-to-issue-v2.yml` logs
 
 ---
 
