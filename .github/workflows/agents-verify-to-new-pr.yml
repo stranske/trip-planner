@@ -82,6 +82,7 @@ jobs:
             .github/scripts/token_load_balancer.js
             scripts/langchain
             tools
+          sparse-checkout-cone-mode: false
 
       - name: Setup API client
         uses: ./.github/actions/setup-api-client
@@ -768,36 +769,43 @@ jobs:
             core.setOutput('issue_number', issue.data.number);
             core.setOutput('issue_url', issue.data.html_url);
 
-      - name: Persist follow-up issue metadata
+      - name: Dispatch auto-pilot continuation
         if: >-
           steps.check-merged.outputs.merged == 'true' &&
           steps.chain-check.outputs.exceeded != 'true' &&
-          steps.extract-verdict.outputs.needs_human != 'true'
-        run: |
-          cat <<'EOF' > followup_issue_output.json
-          {
-            "issue_number": "${{ steps.create-issue.outputs.issue_number }}",
-            "issue_url": "${{ steps.create-issue.outputs.issue_url }}",
-            "pr_number": "${{ steps.check-merged.outputs.pr_number }}",
-            "workflow_run_id": "${{ github.run_id }}"
-          }
-          EOF
-
-      - name: Upload follow-up issue metadata
-        if: >-
-          steps.check-merged.outputs.merged == 'true' &&
-          steps.chain-check.outputs.exceeded != 'true' &&
-          steps.extract-verdict.outputs.needs_human != 'true'
-        uses: actions/upload-artifact@v6
+          steps.extract-verdict.outputs.needs_human != 'true' &&
+          steps.create-issue.outputs.issue_number != ''
+        uses: actions/github-script@v8
+        env:
+          ISSUE_NUMBER: ${{ steps.create-issue.outputs.issue_number }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         with:
-          name: verify-create-new-pr-output
-          path: followup_issue_output.json
-          if-no-files-found: error
-          retention-days: 7
+          github-token: ${{ steps.select-token.outputs.token }}
+          script: |
+            const fs = require('fs');
+            const helperPath = './.github/scripts/github-api-with-retry.js';
+            const retryHelpers = fs.existsSync(helperPath)
+              ? require(helperPath)
+              : { withRetry: (fn) => fn() };
+            const { withRetry } = retryHelpers;
 
-      # Auto-pilot dispatch is handled by the bridge workflow
-      # (agents-verify-to-new-pr-autopilot.yml) via workflow_run completion.
-      # Do NOT add an inline dispatch here — it would create duplicate runs.
+            const issueNumber = process.env.ISSUE_NUMBER;
+            if (!issueNumber) {
+              core.setFailed('Missing issue number; cannot dispatch auto-pilot.');
+              return;
+            }
+            const ref = process.env.DEFAULT_BRANCH || 'main';
+            await withRetry((client) => (client || github).rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'agents-auto-pilot.yml',
+              ref,
+              inputs: {
+                issue_number: String(issueNumber),
+                force_step: 'optimize'
+              }
+            }));
+            core.info(`Dispatched agents-auto-pilot for follow-up issue #${issueNumber}.`);
 
       - name: Comment on original PR
         if: >-
