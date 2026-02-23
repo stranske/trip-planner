@@ -342,8 +342,14 @@ jobs:
             const hasFormat = labels.includes('agents:formatted');
             const hasOptimize = labels.includes('agents:optimize');
             const hasApplySuggestions = labels.includes('agents:apply-suggestions');
-            const nonRoutingAgentLabels = new Set(['agent:rate-limited', 'agent:needs-attention', 'agent:retry']);
-            const hasAgentLabel = labels.some(l => l.startsWith('agent:') && !nonRoutingAgentLabels.has(l));
+            const nonRoutingAgentLabels = new Set([
+              'agent:rate-limited',
+              'agent:needs-attention',
+              'agent:retry',
+            ]);
+            const hasAgentLabel = labels.some(
+              (label) => label.startsWith('agent:') && !nonRoutingAgentLabels.has(label),
+            );
             const hasAutofix = labels.includes('autofix');
             const hasAutomerge = labels.includes('automerge');
             const hasVerify = labels.includes('verify:evaluate');
@@ -1707,16 +1713,142 @@ jobs:
             const issueNumber = parseInt(process.env.ISSUE_NUMBER);
             const stepCount = parseInt(process.env.STEP_COUNT || '0') + 1;
 
-            let agentKey = 'codex';
-            try {
-              const { loadAgentRegistry } = require('./.github/scripts/agent_registry.js');
-              const registry = loadAgentRegistry();
-              const defaultAgent = registry.default_agent || agentKey;
-              agentKey = String(defaultAgent).trim().toLowerCase() || agentKey;
-              } catch (error) {
-                const prefix = `Failed to load agent registry; defaulting to ${agentKey}:`;
-                core.warning(`${prefix} ${error.message}`);
+            const toLabelName = (label) => {
+              if (!label) return '';
+              if (typeof label === 'string') return label;
+              return label.name || '';
+            };
+
+            const loadIssueLabels = async () => {
+              const payload = context.payload || {};
+              if (
+                payload.issue &&
+                Number(payload.issue.number) === issueNumber &&
+                Array.isArray(payload.issue.labels)
+              ) {
+                return payload.issue.labels;
               }
+              if (
+                payload.pull_request &&
+                Number(payload.pull_request.number) === issueNumber &&
+                Array.isArray(payload.pull_request.labels)
+              ) {
+                return payload.pull_request.labels;
+              }
+              try {
+                const { data: issue } = await withRetry((client) =>
+                  client.rest.issues.get({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issueNumber
+                  })
+                );
+                return issue.labels || [];
+              } catch (fetchError) {
+                const warnContext = fetchError?.message || fetchError;
+                core.warning(
+                  'Failed to load issue labels before capability check: ' + warnContext,
+                );
+                return [];
+              }
+            };
+
+            let issueLabels = await loadIssueLabels();
+            let agentKey = 'codex';
+            let defaultAgent = agentKey;
+            let registry = null;
+            let recognizedAgentLabels = [];
+            const runnerOverride = issueLabels
+              .map((label) => toLabelName(label).toLowerCase())
+              .find((name) => name.startsWith('runner:'));
+
+            try {
+              const registryLib = require('./.github/scripts/agent_registry.js');
+              const { loadAgentRegistry, resolveAgentFromLabels } = registryLib;
+              registry = loadAgentRegistry();
+              defaultAgent =
+                String(registry.default_agent || agentKey).trim().toLowerCase() || agentKey;
+
+              if (Array.isArray(issueLabels) && issueLabels.length) {
+                const knownAgents = new Set(Object.keys(registry.agents || {}));
+                recognizedAgentLabels = issueLabels
+                  .map((label) => {
+                    const normalized = toLabelName(label).toLowerCase();
+                    const display = typeof label === 'string' ? label : (label?.name || normalized);
+                    return { normalized, display };
+                  })
+                  .filter(({ normalized }) => normalized.startsWith('agent:'))
+                  .filter(({ normalized }) => {
+                    const suffix = normalized.slice('agent:'.length);
+                    if (suffix === 'auto') {
+                      return true;
+                    }
+                    return knownAgents.has(suffix);
+                  });
+
+                const routingLabels = recognizedAgentLabels.length
+                  ? recognizedAgentLabels.map(({ normalized }) => normalized)
+                  : issueLabels;
+
+                if (runnerOverride) {
+                  const runnerKey = runnerOverride.slice('runner:'.length).trim();
+                  agentKey = runnerKey || defaultAgent;
+                } else if (routingLabels.length) {
+                  try {
+                    agentKey =
+                      resolveAgentFromLabels(
+                        routingLabels,
+                        { registryPath: './.github/agents/registry.yml' },
+                      ) || defaultAgent;
+                  } catch (resolveError) {
+                    const resolveContext = resolveError?.message || resolveError;
+                    core.warning(
+                      'Failed to resolve agent label; defaulting to ' +
+                        defaultAgent +
+                        ': ' +
+                        resolveContext,
+                    );
+                    agentKey = defaultAgent;
+                  }
+                } else {
+                  agentKey = defaultAgent;
+                }
+              } else if (runnerOverride) {
+                const runnerKey = runnerOverride.slice('runner:'.length).trim();
+                agentKey = runnerKey || defaultAgent;
+              } else {
+                agentKey = defaultAgent;
+              }
+            } catch (error) {
+              const prefix = `Failed to load agent registry; defaulting to ${agentKey}:`;
+              core.warning(`${prefix} ${error.message}`);
+            }
+
+            if (registry && recognizedAgentLabels.length) {
+              const removalTargets = new Set(
+                recognizedAgentLabels
+                  .filter(({ normalized }) => normalized !== `agent:${agentKey}`)
+                  .map(({ display, normalized }) => (display || normalized).trim())
+                  .filter(Boolean)
+              );
+              for (const labelName of removalTargets) {
+                try {
+                  await withRetry((client) =>
+                    client.rest.issues.removeLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: issueNumber,
+                      name: labelName
+                    })
+                  );
+                } catch (removeError) {
+                  const removeContext = removeError?.message || removeError;
+                  core.warning(
+                    `Failed to remove label ${labelName}: ${removeContext}`,
+                  );
+                }
+              }
+            }
 
             await withRetry((client) => client.rest.issues.createComment({
               owner: context.repo.owner,
@@ -1969,13 +2101,103 @@ jobs:
             const issueTitle = process.env.ISSUE_TITLE || `Issue #${issueNumber}`;
             const stepCount = parseInt(process.env.STEP_COUNT || '0') + 1;
             let agentKey = 'codex';
+            let issueLabels = [];
             let branchPrefix = 'codex/issue-';
+
+            const toLabelName = (label) => {
+              if (!label) return '';
+              if (typeof label === 'string') return label;
+              return label.name || '';
+            };
+
+            const loadIssueLabels = async () => {
+              const payload = context.payload || {};
+              if (
+                payload.issue &&
+                Number(payload.issue.number) === issueNumber &&
+                Array.isArray(payload.issue.labels)
+              ) {
+                return payload.issue.labels;
+              }
+              if (
+                payload.pull_request &&
+                Number(payload.pull_request.number) === issueNumber &&
+                Array.isArray(payload.pull_request.labels)
+              ) {
+                return payload.pull_request.labels;
+              }
+              try {
+                const { data: issue } = await withRetry((client) =>
+                  client.rest.issues.get({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issueNumber
+                  })
+                );
+                return issue.labels || [];
+              } catch (fetchError) {
+                const warnContext = fetchError?.message || fetchError;
+                core.warning(
+                  'Failed to load issue labels before create-pr: ' + warnContext,
+                );
+                return [];
+              }
+            };
+
+            issueLabels = await loadIssueLabels();
+
             try {
               const registryLib = require('./.github/scripts/agent_registry.js');
-              const { loadAgentRegistry, getAgentConfig } = registryLib;
+              const { loadAgentRegistry, getAgentConfig, resolveAgentFromLabels } = registryLib;
               const registry = loadAgentRegistry();
-              const defaultAgent = registry.default_agent || agentKey;
-              agentKey = String(defaultAgent).trim().toLowerCase() || agentKey;
+              const defaultAgent =
+                String(registry.default_agent || agentKey).trim().toLowerCase() || agentKey;
+              const runnerOverride = issueLabels
+                .map((label) => toLabelName(label).toLowerCase())
+                .find((name) => name.startsWith('runner:'));
+
+              let recognizedAgentLabels = [];
+              if (Array.isArray(issueLabels) && issueLabels.length) {
+                const knownAgents = new Set(Object.keys(registry.agents || {}));
+                recognizedAgentLabels = issueLabels
+                  .map((label) => toLabelName(label).toLowerCase())
+                  .filter((normalized) => normalized.startsWith('agent:'))
+                  .filter((normalized) => {
+                    const suffix = normalized.slice('agent:'.length);
+                    if (suffix === 'auto') {
+                      return true;
+                    }
+                    return knownAgents.has(suffix);
+                  });
+              }
+
+              const routingLabels = recognizedAgentLabels.length
+                ? recognizedAgentLabels
+                : issueLabels;
+
+              if (runnerOverride) {
+                const runnerKey = runnerOverride.slice('runner:'.length).trim();
+                agentKey = runnerKey || defaultAgent;
+                } else if (routingLabels.length) {
+                  try {
+                    agentKey =
+                      resolveAgentFromLabels(
+                        routingLabels,
+                        { registryPath: './.github/agents/registry.yml' },
+                      ) || defaultAgent;
+                } catch (resolveError) {
+                  const resolveContext = resolveError?.message || resolveError;
+                  core.warning(
+                    'Failed to resolve agent label; defaulting to ' +
+                      defaultAgent +
+                      ': ' +
+                      resolveContext,
+                  );
+                  agentKey = defaultAgent;
+                }
+              } else {
+                agentKey = defaultAgent;
+              }
               const cfg = getAgentConfig(agentKey);
               branchPrefix = String(cfg.branch_prefix || branchPrefix);
             } catch (error) {

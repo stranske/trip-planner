@@ -80,6 +80,7 @@ jobs:
             .github/scripts/token_load_balancer.js
             scripts/langchain
             tools
+          sparse-checkout-cone-mode: false
 
       - name: Setup API client
         uses: ./.github/actions/setup-api-client

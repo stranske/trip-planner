@@ -16,6 +16,10 @@ agents:
       - chatgpt-codex-connector
     readiness_candidates:
       - chatgpt-codex-connector
+    preflight:
+      assign_user: chatgpt-codex-connector
+      command_phrase: ''
+      enabled: true
     capabilities:
       pr_keepalive: true
       pr_autofix: true
@@ -34,6 +38,10 @@ agents:
       - stranske-automation-bot
     readiness_candidates:
       - stranske-automation-bot
+    preflight:
+      assign_user: stranske-automation-bot
+      command_phrase: ''
+      enabled: true
     capabilities:
       pr_keepalive: true
       pr_autofix: true
