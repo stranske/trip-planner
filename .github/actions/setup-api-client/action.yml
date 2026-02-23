@@ -164,6 +164,46 @@ runs:
 
         create_vendor_aliases
 
+        # Strip unresolvable file: dependencies from package.json so npm install
+        # doesn't choke when vendored packages are missing (e.g. sparse checkout
+        # that doesn't include node_modules/).  Back up the original first so we
+        # can restore it after npm install — avoids leaking modified state into
+        # downstream steps that expect a clean workspace.
+        STRIPPED_PKG_JSON=false
+        if [ -f "package.json" ]; then
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const raw = fs.readFileSync("package.json", "utf8");
+            const pkg = JSON.parse(raw);
+            let changed = false;
+            for (const section of ["dependencies", "devDependencies"]) {
+              if (!pkg[section]) continue;
+              for (const [name, spec] of Object.entries(pkg[section])) {
+                if (typeof spec === "string" && spec.startsWith("file:")) {
+                  const target = path.resolve(spec.slice(5));
+                  if (!fs.existsSync(target)) {
+                    delete pkg[section][name];
+                    changed = true;
+                    console.log("::notice::Stripped unresolvable vendored dep: " + name + " (" + spec + ")");
+                  }
+                }
+              }
+              if (pkg[section] && Object.keys(pkg[section]).length === 0) {
+                delete pkg[section];
+              }
+            }
+            if (changed) {
+              fs.copyFileSync("package.json", "package.json.bak");
+              fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+              process.stdout.write("STRIPPED");
+            }
+          '
+          if [ -f "package.json.bak" ]; then
+            STRIPPED_PKG_JSON=true
+          fi
+        fi
+
         # Vendored packages often ship lifecycle scripts (tshy builds, custom bundlers, etc.)
         # that expect repo-specific tooling. Disable lifecycle scripts globally so npm install
         # never invokes those hooks inside CI.
@@ -176,8 +216,9 @@ runs:
           CREATED_PACKAGE_JSON=true
         fi
 
-        # Check if already installed
-        if [ -d "node_modules/@octokit/rest" ]; then
+        # Check if already installed (including lru-cache, a required transitive dep
+        # of @octokit/auth-app used for GitHub App token minting).
+        if [ -d "node_modules/@octokit/rest" ] && [ -d "node_modules/lru-cache" ]; then
           echo "✅ @octokit/rest already installed"
         else
           # Snapshot vendored package metadata before npm install.
@@ -196,14 +237,18 @@ runs:
             echo "📸 Snapshotted vendored package metadata"
           fi
 
-          # Install with pinned versions for consistency
+          # Install with pinned versions for consistency.
+          # lru-cache is an explicit transitive dep of @octokit/auth-app required for
+          # GitHub App token minting; pin it here so npm always hoists it to the top
+          # level even if a prior cached node_modules state is missing it.
           # Capture stderr for debugging if the command fails
           npm_output=$(mktemp)
           npm_cmd=(npm install --no-save --location=project \
             @octokit/rest@20.0.2 \
             @octokit/plugin-retry@6.0.1 \
             @octokit/plugin-paginate-rest@9.1.5 \
-            @octokit/auth-app@6.0.3)
+            @octokit/auth-app@6.0.3 \
+            lru-cache@^10.0.0)
           if "${npm_cmd[@]}" 2>"$npm_output"; then
             rm -f "$npm_output"
           else
@@ -214,7 +259,8 @@ runs:
               @octokit/rest@20.0.2 \
               @octokit/plugin-retry@6.0.1 \
               @octokit/plugin-paginate-rest@9.1.5 \
-              @octokit/auth-app@6.0.3)
+              @octokit/auth-app@6.0.3 \
+              lru-cache@^10.0.0)
             "${npm_cmd[@]}"
           fi
 
@@ -232,6 +278,12 @@ runs:
           fi
 
           echo "✅ @octokit dependencies installed"
+        fi
+
+        # Restore original package.json if we stripped file: deps earlier,
+        # so downstream steps see an unmodified workspace.
+        if [ "$STRIPPED_PKG_JSON" = "true" ] && [ -f "package.json.bak" ]; then
+          mv "package.json.bak" "package.json"
         fi
 
         cleanup_vendor_aliases

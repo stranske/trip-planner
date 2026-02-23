@@ -280,9 +280,47 @@ function getKeepaliveMarkerPrefix({ registryPath } = {}) {
   );
 }
 
+function getAgentEntries({ registryPath } = {}) {
+  const registry = loadAgentRegistry({ registryPath });
+  return Object.entries(registry.agents || {}).map(([key, config]) => ({
+    key,
+    config: config || {},
+  }));
+}
+
+function getAgentPreflightConfigs({ registryPath, includeDisabled = false } = {}) {
+  const entries = getAgentEntries({ registryPath });
+  const configs = [];
+  for (const entry of entries) {
+    const preflight = entry.config?.preflight || {};
+    const enabled = includeDisabled ? true : preflight.enabled !== false;
+    if (!enabled) {
+      continue;
+    }
+    const assignUser =
+      preflight.assign_user ??
+      preflight.user ??
+      (Array.isArray(entry.config.readiness_candidates)
+        ? entry.config.readiness_candidates[0]
+        : '');
+    const command = preflight.command_phrase ?? preflight.command ?? '';
+    if (!assignUser) {
+      continue;
+    }
+    configs.push({
+      key: entry.key,
+      assign_user: String(assignUser).trim(),
+      command_phrase: String(command || '').trim(),
+    });
+  }
+  return configs;
+}
+
 module.exports = {
   getAllAutomationLogins,
   getAgentConfig,
+  getAgentEntries,
+  getAgentPreflightConfigs,
   getKeepaliveMarkerPrefix,
   getReadinessCandidates,
   getRunnerWorkflow,
