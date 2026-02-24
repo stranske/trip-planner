@@ -1306,9 +1306,13 @@ async function classifyGateFailure({ github, context, pr, core }) {
       failureType = 'lint';
     }
 
-    // Only route to fix mode for test/mypy failures
-    // Lint failures should go to autofix
-    const shouldFixMode = failureType === 'test' || failureType === 'mypy' || failureType === 'unknown';
+    // Route all classifiable failures to fix mode so the keepalive loop
+    // can dispatch a CI-fix iteration.  Previously lint was excluded on
+    // the assumption that a separate autofix chain would handle it, but
+    // that chain is fragile (depends on repository_dispatch + dispatcher
+    // + autofix-loop) and has broken in practice, leaving PRs stalled
+    // when lint is the only gate failure.
+    const shouldFixMode = failureType === 'test' || failureType === 'mypy' || failureType === 'lint' || failureType === 'unknown';
 
     if (core) {
       core.info(`[keepalive] Gate failure classification: type=${failureType}, shouldFixMode=${shouldFixMode}, failedJobs=[${failedJobs.join(', ')}]`);
@@ -2064,6 +2068,12 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
       ? prevCompleteGateFailureRounds + 1
       : 0;
 
+    // Track consecutive fix attempts.  After fixAttemptMax rounds of trying
+    // to fix the same gate failure, bypass the gate and continue with tasks.
+    // This prevents lint/type-check/test failures from blocking all progress.
+    const fixAttemptMax = 2;
+    const consecutiveFixRounds = toNumber(state.consecutive_fix_rounds, 0);
+
     // Progress review threshold: trigger after N rounds of activity without task completion
     // This catches "productive but unfocused" patterns where agent makes changes but doesn't advance criteria
     // Default is 4 rounds - enough leeway for prep work but early enough for course correction
@@ -2081,12 +2091,14 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     // An iteration is productive if it has a reasonable productivity score
     const isProductive = productivityScore >= 20 && !hasRecentFailures;
 
-    // max_iterations is a hard cap on agent runs.
-    // Productive agents at max iterations are stopped with a clear reason;
-    // use the agent:retry label to explicitly continue past the cap.
+    // max_iterations is a soft cap on agent runs.  Productive agents
+    // (recent file changes, no persistent failures) with remaining tasks
+    // continue in "extended mode" (reason: ready-extended) past the cap.
+    // Unproductive agents are hard-stopped to avoid wasting compute.
+    // Use the agent:retry label to force-continue regardless.
     const hasMaxIterations = maxIterations > 0;
     const reachedMaxIterations = hasMaxIterations && iteration >= maxIterations;
-    const shouldStopForMaxIterations = reachedMaxIterations;
+    const shouldStopForMaxIterations = reachedMaxIterations && !isProductive;
 
     // Build task appendix for the agent prompt (after state load for reconciliation info)
     const taskAppendix = buildTaskAppendix(normalisedSections, checkboxCounts, state, { prBody: pr.body });
@@ -2166,7 +2178,14 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
       } else {
         // Gate failed - check if failure is rate-limit related vs code quality
         const gateFailure = await classifyGateFailure({ github, context, pr, core });
-        if (gateFailure.shouldFixMode && gateNormalized === 'failure') {
+        if (gateFailure.shouldFixMode && gateNormalized === 'failure' && consecutiveFixRounds >= fixAttemptMax && tasksRemaining) {
+          // Already tried to fix this gate failure type — continue with tasks.
+          // The gate failure can be addressed later or by a future iteration
+          // that incidentally resolves it.
+          action = 'run';
+          reason = `bypass-fix-${gateFailure.failureType}`;
+          if (core) core.info(`Bypassing gate fix after ${consecutiveFixRounds} consecutive fix rounds — continuing with tasks.`);
+        } else if (gateFailure.shouldFixMode && gateNormalized === 'failure') {
           action = 'fix';
           reason = `fix-${gateFailure.failureType}`;
         } else if (forceRetry && tasksRemaining) {
@@ -2535,7 +2554,7 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       agentFilesChanged > 0 &&
       tasksCompletedThisRound <= 0;
 
-    if (action === 'run') {
+    if (action === 'run' || action === 'fix') {
       if (runResult === 'success') {
         nextIteration = currentIteration + 1;
         failure = {};
@@ -2627,6 +2646,13 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       allTasksComplete && gateConclusion && gateConclusion !== 'success'
         ? previousCompleteGateFailureRounds + 1
         : 0;
+    // Track consecutive fix rounds: increment when action is 'fix', reset otherwise.
+    // evaluateKeepaliveLoop reads this to bypass gate failures after N fix attempts.
+    const previousFixRounds = toNumber(previousState?.consecutive_fix_rounds, 0);
+    const consecutiveFixRounds = action === 'fix'
+      ? previousFixRounds + 1
+      : 0;
+
     const previousZeroActivityRounds = toNumber(previousState?.consecutive_zero_activity_rounds, 0);
     const previousTasksTotal = toNumber(previousTasks.total, tasksTotal);
     const previousTasksUnchecked = toNumber(previousTasks.unchecked, tasksUnchecked);
@@ -3089,6 +3115,8 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       consecutive_zero_activity_rounds: consecutiveZeroActivityRounds,
       complete_gate_failure_rounds: completeGateFailureRounds,
       complete_gate_failure_rounds_max: completeGateFailureMax,
+      // Track consecutive fix attempts so evaluate can bypass after threshold
+      consecutive_fix_rounds: consecutiveFixRounds,
       // Quality metrics for analysis validation
       last_effort_score: sessionEffortScore,
       last_data_quality: sessionDataQuality,
@@ -3204,7 +3232,7 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
     }
 
     const shouldEscalate =
-      (action === 'run' && runResult && runResult !== 'success' && errorCategory !== ERROR_CATEGORIES.transient) ||
+      ((action === 'run' || action === 'fix') && runResult && runResult !== 'success' && errorCategory !== ERROR_CATEGORIES.transient) ||
       (action === 'stop' && !isSuccessStop && !isNeutralStop && errorCategory !== ERROR_CATEGORIES.transient);
 
     const attentionKey = [summaryReason, runResult, errorCategory, errorType, agentExitCode].filter(Boolean).join('|');
