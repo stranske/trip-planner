@@ -21,8 +21,8 @@ try {
   // Load balancer not available - will use fallback
 }
 
-const ATTEMPT_HISTORY_LIMIT = 5;
-const ATTEMPTED_TASK_LIMIT = 6;
+const ATTEMPT_HISTORY_LIMIT = 20;
+const ATTEMPTED_TASK_LIMIT = 20;
 
 const TIMEOUT_VARIABLE_NAMES = [
   'WORKFLOW_TIMEOUT_DEFAULT',
@@ -250,6 +250,164 @@ function updateAttemptedTasks(existing, nextTask, iteration, limit = ATTEMPTED_T
     timestamp: new Date().toISOString(),
   };
   return [...trimmed, entry].slice(-limit);
+}
+
+// ---------------------------------------------------------------------------
+// Append-only work-log comment
+// ---------------------------------------------------------------------------
+// Each keepalive round appends a row to a collapsible "Work Log" comment on
+// the PR.  The comment is identified by a hidden HTML marker so it can be
+// found and updated across rounds.
+const WORK_LOG_MARKER = '<!-- keepalive-work-log -->';
+
+function formatWorkLogEntry({
+  iteration,
+  action,
+  reason,
+  runResult,
+  agentType,
+  agentFilesChanged,
+  tasksCompletedDelta,
+  tasksTotal,
+  tasksUnchecked,
+  agentCommitSha,
+  gateConclusion,
+  forceRetry,
+}) {
+  const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const tasksComplete = Math.max(0, (tasksTotal || 0) - (tasksUnchecked || 0));
+  const iterLabel = `${iteration ?? '?'}`;
+  const agent = (agentType || 'unknown').charAt(0).toUpperCase() + (agentType || 'unknown').slice(1);
+  const actionLabel = `${action || 'unknown'}` + (reason ? ` (${reason})` : '');
+  const files = agentFilesChanged > 0 ? `${agentFilesChanged} file(s)` : '—';
+  const tasks = tasksCompletedDelta > 0 ? `+${tasksCompletedDelta}` : '0';
+  const commitLink = agentCommitSha
+    ? `[\`${agentCommitSha.slice(0, 7)}\`](../commit/${agentCommitSha})`
+    : '—';
+  const gate = gateConclusion || '—';
+  const result = runResult || '—';
+  const retryFlag = forceRetry ? ' **retry**' : '';
+  return `| ${iterLabel} | ${ts} | ${agent} | ${actionLabel}${retryFlag} | ${result} | ${files} | ${tasks} | ${tasksComplete}/${tasksTotal ?? '?'} | ${commitLink} | ${gate} |`;
+}
+
+// Maximum number of rows in the work-log table before the oldest entries are
+// trimmed.  Keeps the comment within GitHub's 65 536-char limit even with long
+// action/reason strings.
+const WORK_LOG_MAX_ROWS = 100;
+
+async function appendWorkLogEntry({ github, owner, repo, prNumber, entry, core }) {
+  if (!github?.rest?.issues || !prNumber) {
+    return;
+  }
+
+  const tableHeader =
+    '| # | Time (UTC) | Agent | Action | Result | Files | Tasks | Progress | Commit | Gate |\n' +
+    '|---|------------|-------|--------|--------|-------|-------|----------|--------|------|';
+
+  const header = [
+    WORK_LOG_MARKER,
+    '<details><summary><strong>Keepalive Work Log</strong> (click to expand)</summary>',
+    '',
+    tableHeader,
+  ].join('\n');
+
+  const footer = '\n</details>';
+
+  // Find existing work log comment — iterate pages and stop as soon as
+  // the marker is found to avoid fetching all comments on busy PRs.
+  let existingComment = null;
+  try {
+    if (github.paginate?.iterator) {
+      const iter = github.paginate.iterator(github.rest.issues.listComments, {
+        owner,
+        repo,
+        issue_number: prNumber,
+        per_page: 100,
+      });
+      outer: for await (const page of iter) {
+        for (const comment of (page.data || [])) {
+          if (comment?.body?.includes(WORK_LOG_MARKER)) {
+            existingComment = comment;
+            break outer;
+          }
+        }
+      }
+    } else {
+      // Fallback for stubs/older Octokit without paginate.iterator
+      const comments = await github.paginate(github.rest.issues.listComments, {
+        owner,
+        repo,
+        issue_number: prNumber,
+        per_page: 100,
+      });
+      for (let i = comments.length - 1; i >= 0; i--) {
+        if (comments[i]?.body?.includes(WORK_LOG_MARKER)) {
+          existingComment = comments[i];
+          break;
+        }
+      }
+    }
+  } catch (err) {
+    core?.warning?.(`[work-log] Failed to list comments: ${err.message}`);
+    return;
+  }
+
+  if (existingComment) {
+    // Append the new row before the closing </details> tag
+    let body = existingComment.body || '';
+    const closingIdx = body.lastIndexOf('</details>');
+    if (closingIdx >= 0) {
+      body = body.slice(0, closingIdx) + entry + '\n' + body.slice(closingIdx);
+    } else {
+      body = body + '\n' + entry;
+    }
+
+    // Trim oldest rows if the table exceeds WORK_LOG_MAX_ROWS.
+    // Table rows start with '| ' and are between the header separator and
+    // the closing </details>.
+    const headerSepIdx = body.indexOf('|---|');
+    const closingIdx2 = body.lastIndexOf('</details>');
+    if (headerSepIdx >= 0 && closingIdx2 > headerSepIdx) {
+      const headerEnd = body.indexOf('\n', headerSepIdx);
+      if (headerEnd >= 0) {
+        const tableBody = body.slice(headerEnd + 1, closingIdx2);
+        const rows = tableBody.split('\n').filter((r) => r.startsWith('|'));
+        if (rows.length > WORK_LOG_MAX_ROWS) {
+          const trimmed = rows.slice(rows.length - WORK_LOG_MAX_ROWS);
+          body =
+            body.slice(0, headerEnd + 1) +
+            trimmed.join('\n') +
+            '\n' +
+            body.slice(closingIdx2);
+          core?.info?.(`[work-log] Trimmed ${rows.length - WORK_LOG_MAX_ROWS} oldest row(s)`);
+        }
+      }
+    }
+
+    try {
+      await github.rest.issues.updateComment({
+        owner,
+        repo,
+        comment_id: existingComment.id,
+        body,
+      });
+    } catch (err) {
+      core?.warning?.(`[work-log] Failed to update comment: ${err.message}`);
+    }
+  } else {
+    // Create the work log comment
+    const body = header + '\n' + entry + footer;
+    try {
+      await github.rest.issues.createComment({
+        owner,
+        repo,
+        issue_number: prNumber,
+        body,
+      });
+    } catch (err) {
+      core?.warning?.(`[work-log] Failed to create comment: ${err.message}`);
+    }
+  }
 }
 
 function resolveDurationMs({ durationMs, startTs }) {
@@ -2043,24 +2201,33 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     // Track task completion trend
     const previousTasks = state.tasks || {};
     const prevUnchecked = toNumber(previousTasks.unchecked, checkboxCounts.unchecked);
-    const prevTotal = toNumber(previousTasks.total, checkboxCounts.total);
-    const totalsStable = prevTotal === checkboxCounts.total;
     const rawCompletionDelta = prevUnchecked - checkboxCounts.unchecked;
-    const tasksCompletedSinceLastRound = totalsStable && rawCompletionDelta > 0
+    // Credit task completion whenever unchecked count decreased, even if the
+    // total changed (e.g., parent-child cascade added new sub-tasks, or tasks
+    // were manually added to the PR body).  Previously, totalsStable being
+    // false zeroed all credit and caused false "unproductive" readings.
+    const tasksCompletedSinceLastRound = rawCompletionDelta > 0
       ? rawCompletionDelta
       : 0;
 
-    // Track consecutive rounds without task completion (for progress review trigger)
+    // Track consecutive rounds without task completion (for progress review trigger).
+    // When forceRetry is active (user added agent:retry), reset the counter — the
+    // human explicitly judged the agent productive enough to continue.
     const prevRoundsWithoutCompletion = toNumber(state.rounds_without_task_completion, 0);
-    const roundsWithoutTaskCompletion = tasksCompletedSinceLastRound > 0
+    const roundsWithoutTaskCompletion = forceRetry
       ? 0
-      : prevRoundsWithoutCompletion + (iteration > 0 ? 1 : 0);
+      : tasksCompletedSinceLastRound > 0
+        ? 0
+        : prevRoundsWithoutCompletion + (iteration > 0 ? 1 : 0);
 
     // Track consecutive zero-activity rounds (no files + no tasks completed).
     // Treat the persisted state as the source of truth; updateKeepaliveLoopSummary
     // increments or resets this counter after each agent run.
+    // forceRetry resets this counter as well — the user wants a fresh start.
     const zeroActivityThreshold = 2;
-    const persistedConsecutiveZeroActivityRounds = toNumber(state.consecutive_zero_activity_rounds, 0);
+    const persistedConsecutiveZeroActivityRounds = forceRetry
+      ? 0
+      : toNumber(state.consecutive_zero_activity_rounds, 0);
     const shouldStopForZeroActivity = persistedConsecutiveZeroActivityRounds >= zeroActivityThreshold;
 
     const prevCompleteGateFailureRounds = toNumber(state.complete_gate_failure_rounds, 0);
@@ -2081,12 +2248,19 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
       && (!allComplete || gateNormalized !== 'success');
 
     // Calculate productivity score (0-100)
-    // This is evidence-based: higher score = more confidence work is happening
+    // This is evidence-based: higher score = more confidence work is happening.
+    // Includes a cumulative track-record signal: agents that have completed tasks
+    // historically get credit even if the last 2 rounds were quiet (CI fixes, etc).
+    const totalTasksCompleted = toNumber(state.total_tasks_completed, 0);
     let productivityScore = 0;
     if (lastFilesChanged > 0) productivityScore += Math.min(40, lastFilesChanged * 10);
     if (tasksCompletedSinceLastRound > 0) productivityScore += Math.min(40, tasksCompletedSinceLastRound * 20);
     if (prevFilesChanged > 0 && iteration > 1) productivityScore += 10; // Recent historical activity
     if (!hasRecentFailures) productivityScore += 10; // No failures is a positive signal
+    // Cumulative track record: an agent that has completed tasks before is more
+    // likely to be productive in subsequent rounds.  Give it enough credit to
+    // stay above the isProductive threshold during CI-fix / infrastructure lulls.
+    if (totalTasksCompleted > 0 && iteration > 1) productivityScore += Math.min(20, totalTasksCompleted * 5);
 
     // An iteration is productive if it has a reasonable productivity score
     const isProductive = productivityScore >= 20 && !hasRecentFailures;
@@ -2398,10 +2572,10 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
     const hasKeepaliveEnabledInput = keepaliveEnabledInput !== undefined && keepaliveEnabledInput !== '';
     const hasAutofixEnabledInput = autofixEnabledInput !== undefined && autofixEnabledInput !== '';
 
-    const tasksTotal = hasTasksTotalInput
+    let tasksTotal = hasTasksTotalInput
       ? toNumber(tasksTotalInput, 0)
       : toNumber(previousState?.tasks?.total, 0);
-    const tasksUnchecked = hasTasksUncheckedInput
+    let tasksUnchecked = hasTasksUncheckedInput
       ? toNumber(tasksUncheckedInput, 0)
       : toNumber(previousState?.tasks?.unchecked, 0);
     const keepaliveEnabledFallback = toBool(
@@ -2432,7 +2606,10 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
         ? toNumber(failureThresholdInput, 3)
         : toNumber(previousState?.failure_threshold, 3),
     );
-    const roundsWithoutTaskCompletion = hasRoundsWithoutTaskCompletionInput
+    // Resolve force_retry early — needed by the live-recount and zero-activity blocks.
+    const isForceRetry = toBool(inputs.force_retry ?? inputs.forceRetry, false);
+
+    let roundsWithoutTaskCompletion = hasRoundsWithoutTaskCompletionInput
       ? toNumber(roundsWithoutTaskCompletionInput, 0)
       : toNumber(previousState?.rounds_without_task_completion, 0);
 
@@ -2502,6 +2679,62 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
     const focusUnchecked = focusItems.filter((item) => !item.checked);
     const currentFocus = normaliseTaskText(previousState?.current_focus || '');
     const fallbackFocus = focusUnchecked[0]?.text || '';
+
+    // Re-count checkboxes from the LIVE PR body (after autoReconcile has run).
+    // The evaluate step's task counts are stale — they were captured before the
+    // agent ran and before autoReconcile updated the PR body.  By re-counting
+    // here we correctly credit work done this round.
+    if (prBody) {
+      const liveCombined = [focusSections.tasks, focusSections.acceptance]
+        .filter(Boolean)
+        .join('\n');
+      const liveCounts = countCheckboxes(liveCombined);
+      if (liveCounts.total > 0) {
+        const staleTotal = tasksTotal;
+        const staleUnchecked = tasksUnchecked;
+        tasksTotal = liveCounts.total;
+        tasksUnchecked = liveCounts.unchecked;
+        if (staleTotal !== tasksTotal || staleUnchecked !== tasksUnchecked) {
+          core?.info?.(
+            `[summary] Re-counted checkboxes from live PR body: ` +
+            `total ${staleTotal}→${tasksTotal}, unchecked ${staleUnchecked}→${tasksUnchecked}`,
+          );
+        }
+      }
+    }
+
+    // Recalculate rounds_without_task_completion using live checkbox counts.
+    // The evaluate step calculated this counter before autoReconcile ran, so it
+    // may incorrectly show "no progress" even though autoReconcile just checked
+    // tasks off.  Re-derive the counter here with the authoritative counts.
+    // When force_retry is active, honour the evaluate-step's reset to 0 and
+    // do not overwrite it — the human explicitly wants a fresh start.
+    if (isForceRetry) {
+      if (roundsWithoutTaskCompletion !== 0) {
+        core?.info?.(
+          `[summary] force_retry active — keeping rounds_without_task_completion at 0 ` +
+          `(was ${roundsWithoutTaskCompletion})`,
+        );
+        roundsWithoutTaskCompletion = 0;
+      }
+    } else {
+      const prevTasks = previousState?.tasks || {};
+      const prevUncheckedForCounter = toNumber(prevTasks.unchecked, tasksUnchecked);
+      const liveCompletionDelta = prevUncheckedForCounter - tasksUnchecked;
+      const liveTasksCompletedSinceLastRound =
+        liveCompletionDelta > 0 ? liveCompletionDelta : 0;
+      const prevRounds = toNumber(previousState?.rounds_without_task_completion, 0);
+      const recalculated = liveTasksCompletedSinceLastRound > 0
+        ? 0
+        : prevRounds + (toNumber(previousState?.iteration ?? iteration, 0) > 0 ? 1 : 0);
+      if (recalculated !== roundsWithoutTaskCompletion) {
+        core?.info?.(
+          `[summary] Recalculated rounds_without_task_completion from live counts: ` +
+          `${roundsWithoutTaskCompletion}→${recalculated} (liveDelta=${liveCompletionDelta})`,
+        );
+        roundsWithoutTaskCompletion = recalculated;
+      }
+    }
 
     // Use the iteration from the CURRENT persisted state, not the stale value from evaluate.
     // This prevents race conditions where another run updated state between evaluate and summary.
@@ -2653,7 +2886,11 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       ? previousFixRounds + 1
       : 0;
 
-    const previousZeroActivityRounds = toNumber(previousState?.consecutive_zero_activity_rounds, 0);
+    // When force_retry was active (user added agent:retry), reset the zero-activity
+    // counter so the agent gets a clean slate — same intent as the evaluate-step reset.
+    const previousZeroActivityRounds = isForceRetry
+      ? 0
+      : toNumber(previousState?.consecutive_zero_activity_rounds, 0);
     const previousTasksTotal = toNumber(previousTasks.total, tasksTotal);
     const previousTasksUnchecked = toNumber(previousTasks.unchecked, tasksUnchecked);
     const totalsStable = previousTasksTotal === tasksTotal;
@@ -3117,6 +3354,10 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       complete_gate_failure_rounds_max: completeGateFailureMax,
       // Track consecutive fix attempts so evaluate can bypass after threshold
       consecutive_fix_rounds: consecutiveFixRounds,
+      // Cumulative task completion counter (never resets) for long-term productivity signal
+      total_tasks_completed:
+        toNumber(previousState?.total_tasks_completed, 0) +
+        Math.max(0, tasksCompletedThisRound),
       // Quality metrics for analysis validation
       last_effort_score: sessionEffortScore,
       last_data_quality: sessionDataQuality,
@@ -3259,6 +3500,34 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
           issue_number: prNumber,
           body,
         });
+      }
+
+      // Append to the work log comment (best-effort; failures don't block the loop)
+      try {
+        const logEntry = formatWorkLogEntry({
+          iteration: nextIteration,
+          action,
+          reason: summaryReason,
+          runResult,
+          agentType,
+          agentFilesChanged,
+          tasksCompletedDelta: Math.max(0, tasksCompletedThisRound),
+          tasksTotal,
+          tasksUnchecked,
+          agentCommitSha,
+          gateConclusion,
+          forceRetry: isForceRetry,
+        });
+        await appendWorkLogEntry({
+          github,
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          prNumber,
+          entry: logEntry,
+          core,
+        });
+      } catch (workLogError) {
+        core?.warning?.(`[work-log] append failed: ${workLogError.message}`);
       }
 
       if (shouldEscalate) {
@@ -3959,4 +4228,7 @@ module.exports = {
   postRateLimitNotification,
   hasRecentRateLimitNotification,
   RATE_LIMIT_COMMENT_MARKER,
+  appendWorkLogEntry,
+  formatWorkLogEntry,
+  WORK_LOG_MARKER,
 };
