@@ -68,6 +68,7 @@ jobs:
       rate_limit_remaining: ${{ steps.evaluate.outputs.rate_limit_remaining }}
       rate_limit_recommendation: ${{ steps.evaluate.outputs.rate_limit_recommendation }}
       rounds_without_task_completion: ${{ steps.evaluate.outputs.rounds_without_task_completion }}
+      force_retry: ${{ steps.evaluate.outputs.force_retry }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -327,6 +328,8 @@ jobs:
               rate_limit_recommendation: String(result.rateLimitStatus?.recommendation ?? ''),
               // Progress review tracking
               rounds_without_task_completion: String(result.roundsWithoutTaskCompletion ?? '0'),
+              // Pass through forceRetry so the summary step can reset counters
+              force_retry: String(result.forceRetry ?? false),
             };
             for (const [key, value] of Object.entries(output)) {
               core.setOutput(key, value);
@@ -1116,6 +1119,7 @@ jobs:
               llm_model: llmModel,
               llm_confidence: llmConfidence,
               llm_analysis_run: llmAnalysisRun,
+              force_retry: '${{ needs.evaluate.outputs.force_retry }}',
             };
             await updateKeepaliveLoopSummary({ github, context, core, inputs });
 
