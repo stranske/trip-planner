@@ -706,7 +706,25 @@ function upsertBlock(body, marker, replacement) {
   const startIndex = body.indexOf(start);
   const endIndex = body.indexOf(end);
   if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-    return `${body.slice(0, startIndex)}${replacement}${body.slice(endIndex + end.length)}`;
+    // Replace the first marker pair in place
+    let result = `${body.slice(0, startIndex)}${replacement}${body.slice(endIndex + end.length)}`;
+
+    // Remove any duplicate marker pairs left by concurrent writers
+    let hadDuplicates = false;
+    let limit = 10;
+    while (limit-- > 0) {
+      const dupStart = result.indexOf(start, startIndex + replacement.length);
+      const dupEnd = result.indexOf(end, dupStart + start.length);
+      if (dupStart !== -1 && dupEnd !== -1 && dupEnd > dupStart) {
+        result = `${result.slice(0, dupStart)}${result.slice(dupEnd + end.length)}`;
+        hadDuplicates = true;
+      } else {
+        break;
+      }
+    }
+
+    // Collapse triple+ newlines left by removed blocks
+    return hadDuplicates ? result.replace(/\n{3,}/g, '\n\n') : result;
   }
 
   const trimmed = body.trimEnd();
