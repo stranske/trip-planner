@@ -434,7 +434,7 @@ jobs:
           echo "$metrics_json" >> keepalive-metrics.ndjson
 
       - name: Upload keepalive metrics artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: keepalive-metrics
           path: keepalive-metrics.ndjson
@@ -630,6 +630,7 @@ jobs:
         with:
           sparse-checkout: |
             .github/scripts/prompt_injection_guard.js
+            .github/scripts/github-rate-limited-wrapper.js
             .github/scripts/github-api-with-retry.js
             .github/scripts/token_load_balancer.js
             .github/scripts/agent_registry.js
@@ -1269,7 +1270,7 @@ jobs:
           PY
 
       - name: Upload metrics artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: agents-autofix-metrics
           path: autofix-metrics.ndjson
