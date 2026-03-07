@@ -25,10 +25,33 @@ jobs:
       pr_number: ${{ steps.resolve.outputs.pr_number }}
       reason: ${{ steps.resolve.outputs.reason }}
     steps:
+      - name: Checkout (for API wrappers)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          sparse-checkout: |
+            .github/actions/setup-api-client
+            .github/scripts/github-api-with-retry.js
+            .github/scripts/github-rate-limited-wrapper.js
+            .github/scripts/token_load_balancer.js
+          sparse-checkout-cone-mode: false
+
+      - name: Setup API client
+        uses: ./.github/actions/setup-api-client
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          github_token: ${{ github.token }}
+
       - id: resolve
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
+            const fs = require('fs');
+            const retryPath = './.github/scripts/github-api-with-retry.js';
+            const { createTokenAwareRetry } = fs.existsSync(retryPath)
+              ? require(retryPath)
+              : { createTokenAwareRetry: async () => ({ withRetry: (fn) => fn(github) }) };
+            const { withRetry } = await createTokenAwareRetry({ github, core });
+
             const eventName = context.eventName;
             let shouldRun = "false";
             let prNumber = "";
@@ -42,10 +65,12 @@ jobs:
                 const pull_number = Number(raw);
                 const { owner, repo } = context.repo;
                 try {
-                  const { data: pr } = await github.rest.pulls.get({
-                    owner,
-                    repo,
-                    pull_number,
+                  const { data: pr } = await withRetry(async (octokit) => {
+                    return octokit.rest.pulls.get({
+                      owner,
+                      repo,
+                      pull_number,
+                    });
                   });
                   prNumber = String(pull_number);
                   if (pr.state !== "open") {
@@ -88,7 +113,7 @@ jobs:
       workflow_unchanged: ${{ steps.workflow-integrity.outputs.workflow_unchanged }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
 
@@ -156,7 +181,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 1
 
