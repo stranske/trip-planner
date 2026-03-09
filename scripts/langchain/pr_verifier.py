@@ -162,6 +162,15 @@ Apply the following adjustments:
 - At chain depth {depth}, focus strictly on whether THIS iteration resolves
   its targeted concerns.  Avoid raising new concerns that were not part of
   the original feedback.
+- Treat the original source issue/PR scope as baseline context that may
+  already be satisfied by earlier merged work. Do NOT re-grade the full
+  original issue checklist unless this iteration explicitly reopens it.
+- If acceptance criteria require out-of-band GitHub metadata actions
+  (for example: comments/labels/body updates on already merged PRs/issues),
+  do not treat missing evidence in THIS diff as a hard completeness failure.
+  Call these out as "external evidence required" and keep verdict focused on
+  whether code/disposition artifacts in this iteration address the targeted
+  verifier concerns.
 """.strip()
 
 # File path patterns considered infrastructure/platform rather than application
