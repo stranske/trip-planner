@@ -482,7 +482,10 @@ async function buildVerifierContext({ github, context, core, ciWorkflows }) {
   // Also check for follow-up label on linked issues as a depth-1 indicator
   if (chainDepth === 0) {
     for (const issue of closingIssues) {
-      if (issue.labels && issue.labels.some((l) => l.name === 'follow-up')) {
+      const hasFollowupLabel = issue.labels && issue.labels.some((l) => l.name === 'follow-up');
+      const hasFollowupTitle = /follow-?up/i.test(String(issue.title || ''));
+      const hasSourceRef = /source\s+(issue|pr)\s*:\s*#\d+/i.test(String(issue.body || ''));
+      if (hasFollowupLabel || hasFollowupTitle || hasSourceRef) {
         chainDepth = Math.max(chainDepth, 1);
       }
     }
