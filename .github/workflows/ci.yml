@@ -7,6 +7,10 @@
 # - Type checking (mypy)
 # - Tests (pytest) on Python 3.11 and 3.12
 #
+# NOTE: Do NOT add a top-level 'permissions:' block here. It causes
+# startup_failure when calling reusable workflows. The reusable workflow
+# defines its own permissions.
+#
 # Copy this file to: .github/workflows/ci.yml
 # Also copy: autofix-versions.env to .github/workflows/autofix-versions.env
 name: CI
@@ -18,11 +22,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  checks: write
-  pull-requests: write
-
 jobs:
   python:
     name: Python CI
@@ -31,5 +30,5 @@ jobs:
       python-versions: '["3.11", "3.12"]'
       typecheck: true
       coverage: true
-      coverage-min: '15'
+      coverage-min: '80'
     secrets: inherit

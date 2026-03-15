@@ -22,7 +22,6 @@
 # Optional secrets: Passed via `secrets: inherit` to reusable workflow
 #
 # Examples of custom Gates based on this template:
-#   - stranske/trip-planner (Flask + requirements.txt)
 #   - stranske/Manager-Database (FastAPI + docker-compose)
 # -----------------------------------------------------------------------------
 
@@ -43,10 +42,12 @@ jobs:
     uses: stranske/Workflows/.github/workflows/reusable-10-ci-python.yml@main
     with:
       python-versions: '["3.11", "3.12"]'
-      coverage-min: "8"
+      coverage-min: "80"
       format_check: false  # Using ruff for formatting
       working-directory: "."
       artifact-prefix: "gate-"
+      # Enable soft coverage gate for trend tracking and hotspot reporting
+      enable-soft-gate: true
     secrets: inherit
 
   summary:
