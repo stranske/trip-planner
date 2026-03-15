@@ -1,5 +1,9 @@
 # Trip Planner Methodology
 
+This document captures the **legacy itinerary scoring model** already present in the repo.
+
+It should now be treated as one subsystem inside the broader product direction described in [product-architecture-brief.md](product-architecture-brief.md), not as the full application design.
+
 ## 1. Scoring Factors
 - **Natural** (0‑5)
 - **Cultural** (0‑5)

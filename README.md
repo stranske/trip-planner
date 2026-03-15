@@ -1,17 +1,44 @@
 # trip-planner
-<br>markdown<br>## Static HTML Bundle<br>The self‑contained demo bundle lives in `/bundle/`.<br><br>**Local test:**<br>
-<br>markdown<br>## Will be editing
-<br>file:///home/oai/share/bundle/index.html<br><br><br>**Deploy:** 
 
-## Quick Start
+`trip-planner` is transitioning from a static itinerary-scoring demo into a broader travel-planning application with two product modes:
 
-1. **Install deps**
+- recreational trip planning for individuals and families
+- business trip planning that optimizes against company travel constraints and exports policy-ready trip plans
+
+## Current Direction
+
+The target product should handle:
+
+- trip design from traveler preferences
+- lodging, airfare, rail, rental-car, and local transport option planning
+- day-by-day activity planning with maps and route context
+- budget and tradeoff analysis
+- interactive LLM-assisted trip refinement
+- business-travel planning that can hand structured output to `Travel-Plan-Permission`
+
+## Key Docs
+
+- [Product and architecture brief](docs/product-architecture-brief.md)
+- [Source channel strategy](docs/source-channel-strategy.md)
+- [Legacy itinerary methodology](docs/methodology.md)
+- [CI system guide](docs/CI_SYSTEM_GUIDE.md)
+
+## Current Repo State
+
+The implementation in this repository is still mostly a script-based generator for static itinerary bundles:
+
+- `scripts/validate_request.py`
+- `scripts/generate_itins.py`
+- `scripts/build_html.py`
+
+That legacy flow remains useful as seed logic for the future preference-scoring and itinerary-ranking engine, but it is no longer the full product definition.
+
+## Legacy Quick Start
 
 ```bash
 pip install -r requirements.txt
 
-python scripts/validate_request.py   # schema check
-python scripts/generate_itins.py     # writes data/itineraries_*.json
-python scripts/build_html.py         # renders bundle/ HTML
-
-
+python scripts/validate_request.py
+python scripts/generate_itins.py
+python scripts/build_html.py
+```
