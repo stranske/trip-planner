@@ -14,6 +14,8 @@ Acceptance criteria:
 
 - each tradeoff is named, defined, and distinguished from nearby dimensions
 - the taxonomy covers route shape, movement, comfort, certainty, budget philosophy, day structure, and fatigue
+- first-tier dimensions are explicitly prioritized
+- hybrid factors that can act as either anchors or tradeoff dimensions are modeled correctly
 - contradictions and conditional preferences are accounted for
 
 ### 2. Define `LeisurePreferenceProfile`
@@ -27,6 +29,7 @@ Acceptance criteria:
 - schema includes trip frame, hard constraints, tradeoff vectors, conditional rules, and tension flags
 - each field has a clear downstream use
 - the model supports confidence and stability values
+- the schema can represent when a normally secondary factor has been elevated into anchor-level importance
 
 ### 3. Define The Evidence Model
 
@@ -38,6 +41,7 @@ Acceptance criteria:
 
 - the design distinguishes direct statements, tradeoff choices, scenario responses, and resource-allocation choices
 - each major dimension has at least two evidence paths
+- the evidence model can distinguish general preference from anchor-level priority
 
 ### 4. Define Preference Resolution Logic
 
@@ -109,4 +113,8 @@ Acceptance criteria:
 
 ## Immediate Focus
 
-The next worthwhile deep work item is Issue 1: defining the leisure-travel tradeoff taxonomy in enough detail that a high-quality preference evaluation algorithm can be implemented without slipping back into generic quiz design.
+The next worthwhile deep work item is still Issue 1, but it now has a clearer scope:
+
+- define the first-tier leisure tradeoffs
+- define hybrid factors such as food, rest, and route modes
+- define when a factor behaves like an anchor vs. a tradeoff dimension
