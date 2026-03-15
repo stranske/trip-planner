@@ -115,9 +115,10 @@ Acceptance criteria:
 
 ## Immediate Focus
 
-Issue 1 is now far enough along to move into Issue 2 and its immediate follow-ons:
+The design is now far enough along to move from schema-only work into learning and contract-definition work:
 
-- convert the taxonomy into the canonical `LeisurePreferenceProfile` schema
-- define stable value semantics for each first-tier dimension
-- formalize interaction rules so they can shape downstream itinerary objectives
-- define how tension flags are generated when preferences cannot be satisfied cleanly
+- define the evidence model and learning loop for leisure preferences
+- define contradiction handling and conditional overrides
+- define interaction and autonomy controls as part of the preference engine
+- lock the core domain contracts needed before itinerary and source work expands
+- keep `BusinessTravelProfile` separate while shared infrastructure is still being designed

@@ -33,6 +33,7 @@ Those old fields should map into richer structures rather than disappear.
   "budget_model": {},
   "tradeoff_dimensions": {},
   "hybrid_factors": {},
+  "conditional_overrides": [],
   "interaction_rules": [],
   "tension_flags": [],
   "evidence_summary": {}
@@ -265,7 +266,45 @@ Some factors can be anchors, tradeoff dimensions, or both.
 
 This is the richer successor to the repo’s current `route_passions`.
 
-## 7. Interaction Rules
+## 7. Conditional Overrides
+
+Some preferences are real but only under specific conditions.
+
+Examples:
+
+- scenic rail matters strongly in alpine regions, but not in dense business cities
+- food quality becomes near-anchor-level in Italy or Japan, but is secondary elsewhere
+- elastic wandering is preferred in historic neighborhoods, but not on airport-transfer days
+
+These should not be forced into one global dimension value.
+
+### Conditional Override Record
+
+```json
+{
+  "id": "food_priority_in_primary_food_regions",
+  "when": {
+    "region_tags": ["food_primary"],
+    "trip_stage": ["inventory_selection", "daily_activity_design"]
+  },
+  "effect": {
+    "dimension_adjustments": [],
+    "hybrid_factor_adjustments": [],
+    "anchor_promotions": []
+  },
+  "confidence": 0.7,
+  "notes": ""
+}
+```
+
+This layer should be used for:
+
+- region-specific intensification
+- trip-stage-specific behavior
+- segment-specific behavior
+- conditional promotion of a hybrid factor into anchor-like status
+
+## 8. Interaction Rules
 
 These rules are not optional add-ons. They are part of the profile.
 
@@ -550,7 +589,7 @@ Those are enough to shape itinerary generation without locking the final ranking
 }
 ```
 
-## 8. Interaction Precedence And Conflict Handling
+## 9. Interaction Precedence And Conflict Handling
 
 The preference engine should resolve profile logic in this order:
 
@@ -574,7 +613,7 @@ Example:
 - that is not a contradiction by itself
 - but it becomes tense if the route also has many fixed calendar anchors and high breadth pressure
 
-## 9. Tension Flags
+## 10. Tension Flags
 
 Tension flags should record unresolved conflicts rather than flatten them away.
 
@@ -596,7 +635,7 @@ Suggested tension sources for version 1:
 - strong quality floors under budget compression
 - elastic discovery goals combined with too many fixed-booking commitments
 
-## 10. Evidence Summary
+## 11. Evidence Summary
 
 This layer connects future elicitation design to the resolved profile.
 
@@ -631,4 +670,5 @@ The next natural step is to define:
 
 - the evidence model for each dimension and hybrid factor
 - how evidence weights produce `value`, `confidence`, `salience`, and `stability`
+- how conditional overrides are inferred and updated
 - how interaction-rule outputs map into itinerary objectives and later ranking logic

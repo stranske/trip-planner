@@ -94,6 +94,16 @@ LangChain should sit on top of explicit tools and domain services for:
 
 The product should support more than one planning mode from the start of the design:
 
+These should be treated as operating styles, not rigid user buckets.
+
+The app should let users shift along a control spectrum such as:
+
+- more system initiative vs. more frequent checkpoints
+- more synthesis before response vs. earlier option presentation
+- more abstract elicitation vs. faster concrete-option testing
+
+That setting should be allowed to vary by trip stage rather than stay fixed for the whole trip.
+
 #### Delegated Planning Mode
 
 - user provides a compact set of high-value inputs
@@ -130,6 +140,8 @@ This mode is especially important for:
 
 These modes should share one underlying preference model rather than fragment the product into separate planners.
 
+See [preference-learning-model.md](preference-learning-model.md).
+
 ### 5. Source And Quality Layer
 
 The application needs a source strategy that uses different channels for different jobs.
@@ -158,6 +170,8 @@ The system should not treat raw ratings as the final truth. It should use them a
 
 For some travelers, the best way to learn this is not by asking for a verbal preference. It is by showing a few concrete, linked options with semi-detailed explanations and seeing which quality/value patterns they actually choose.
 
+See [source-quality-model.md](source-quality-model.md) and [source-channel-strategy.md](source-channel-strategy.md).
+
 ### 6. Business-Travel Output
 
 Business mode should:
@@ -168,6 +182,8 @@ Business mode should:
 - produce structured payloads that plug into `Travel-Plan-Permission`
 
 The business side will likely need a separate profile model and a mostly separate optimization flow.
+
+See [business-travel-profile.md](business-travel-profile.md).
 
 ## Recommended Architecture
 
@@ -215,6 +231,8 @@ The next design iteration should define explicit schemas for:
 - `PolicyConstraintSet`
 - `TripPlanProposal`
 - `PolicyEvaluationResult`
+
+See [domain-contracts.md](domain-contracts.md).
 
 ## How The Legacy Methodology Fits
 
