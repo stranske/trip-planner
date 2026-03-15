@@ -16,6 +16,7 @@ Acceptance criteria:
 - the taxonomy covers route shape, movement, comfort, certainty, budget philosophy, day structure, and fatigue
 - first-tier dimensions are explicitly prioritized
 - hybrid factors that can act as either anchors or tradeoff dimensions are modeled correctly
+- major interaction effects between dimensions are identified
 - contradictions and conditional preferences are accounted for
 
 ### 2. Define `LeisurePreferenceProfile`
@@ -52,6 +53,7 @@ Goal:
 Acceptance criteria:
 
 - rules exist for weighting evidence
+- interaction effects can influence the resolved profile
 - contradictions are surfaced rather than hidden
 - conditional preferences can override global tendencies when relevant
 - low-confidence output is represented explicitly
@@ -118,3 +120,4 @@ The next worthwhile deep work item is still Issue 1, but it now has a clearer sc
 - define the first-tier leisure tradeoffs
 - define hybrid factors such as food, rest, and route modes
 - define when a factor behaves like an anchor vs. a tradeoff dimension
+- define the highest-value interaction effects so preferences are not modeled as isolated sliders

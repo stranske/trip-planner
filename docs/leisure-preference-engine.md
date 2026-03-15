@@ -247,6 +247,13 @@ This captures whether the traveler will regret missing canonical places more tha
 
 Some travelers want shaped days with clear objectives. Others want one anchor and a lot of room for drifting.
 
+This should include:
+
+- comfort with wandering without a precise objective
+- desire for loose neighborhood exploration
+- preference for “things to wander toward” rather than tightly scheduled activities
+- preference for districts, promenades, landscapes, or market areas that reward unstructured time
+
 ### 7. Urban Density vs. Landscape Exposure
 
 The deeper question is what kind of attention the traveler wants to sustain for weeks:
@@ -284,6 +291,13 @@ The model should estimate:
 - how strongly late arrivals and early starts damage the trip
 - what kind of recovery they prefer
 
+Recovery should be treated as both:
+
+- physical recovery
+- cognitive and sensory recovery
+
+For many long trips, cognitive/sensory fatigue matters just as much as physical fatigue.
+
 ### 12. Logistical Self-Reliance vs. Convenience Support
 
 This should capture whether the traveler prefers to handle complexity personally or to spend, simplify, and structure the trip to reduce operational burden.
@@ -305,6 +319,11 @@ The useful version of this dimension is broader than “outdoors vs. museums.”
 - built-environment immersion
 - ecological experience
 - artistic, historical, and civic experience
+
+On the culture side, the model should explicitly cover both:
+
+- historic depth
+- contemporary life
 
 ### 14. Scenic Transit vs. Destination Time
 
@@ -345,6 +364,8 @@ Two travelers can both be “culture-oriented” while wanting very different th
 - one may want monuments, churches, ruins, and museums
 - another may care more about contemporary neighborhoods, design, music, markets, and present-day urban life
 
+This is not separate from the nature/culture dimension; it refines the culture side of that broader axis.
+
 ### 18. Sensory Richness vs. Calm Restoration
 
 For some trips, the traveler wants:
@@ -382,6 +403,127 @@ The planner needs to know whether the trip should optimize for:
 - tight coordination
 - partial independence
 - modular plans with optional divergence
+
+## Interaction Effects
+
+These dimensions should not be evaluated in isolation. The preference model needs to represent meaningful interaction effects.
+
+### High-Priority Interaction Clusters
+
+#### 1. Pace Cluster
+
+- movement appetite vs. friction sensitivity
+- recovery need vs. sustainable intensity
+- breadth vs. depth
+- structured days vs. elastic days
+
+This cluster largely determines whether a trip feels exhilarating or depleting.
+
+#### 2. Route Logic Cluster
+
+- scenic transit vs. destination time
+- route coherence vs. eclectic contrast
+- logistical self-reliance vs. convenience support
+- movement appetite vs. friction sensitivity
+
+This cluster determines what kinds of routes are satisfying, not just feasible.
+
+#### 3. Experience Attention Cluster
+
+- nature vs. culture
+- historic depth vs. contemporary life
+- iconic certainty vs. curious discovery
+- structured days vs. elastic days
+
+This cluster shapes what the traveler actually wants to notice and spend time on.
+
+#### 4. Energy And Atmosphere Cluster
+
+- social energy vs. solitude
+- recovery need vs. sustainable intensity
+- sensory richness vs. calm restoration
+- structured days vs. elastic days
+
+This cluster often explains why two superficially similar itineraries feel completely different.
+
+#### 5. Spend And Quality Cluster
+
+- total budget sensitivity
+- category-level spending priorities
+- food seriousness vs. incidental dining
+- comfort vs. immersion
+- quality-floor anchors
+
+This cluster determines not just what the traveler can afford, but what they believe is worth paying for.
+
+### Important Pairwise Effects
+
+Some pairings should be modeled explicitly.
+
+#### Breadth x Recovery
+
+High breadth with high recovery need is a common source of planning error.
+
+The system should detect when the traveler likes variety in theory but enjoys it only if the route includes recovery blocks or slower transitions.
+
+#### Movement x Scenic Transit
+
+A traveler may dislike friction but still accept long movement days when the transit itself is rewarding.
+
+This is one reason route modes cannot be treated as only a separate preference field.
+
+#### Structure x Discovery
+
+Travelers who prefer elastic days can still want strong discovery support.
+
+For them, the planner should not over-schedule. It should instead provide:
+
+- high-quality wandering zones
+- directional prompts
+- optional nearby anchors
+- neighborhoods or landscapes likely to reward loose exploration
+
+#### Nature/Culture x Historic/Contemporary
+
+The old nature/culture axis is too coarse unless it can interact with the historic/contemporary split.
+
+Examples:
+
+- a culture-first traveler may be highly historic
+- another culture-first traveler may be strongly contemporary
+- a nature-first traveler may still want modern city intervals for energy reset
+
+#### Social Energy x Recovery
+
+Some travelers want lively places but need quieter lodging or decompression breaks.
+
+The model should distinguish:
+
+- desired public atmosphere
+- desired private recovery environment
+
+#### Budget x Quality Floors
+
+Some travelers are budget-sensitive overall but still have non-negotiable floors for:
+
+- location
+- private room quality
+- food quality
+- transit simplicity
+
+This should not be treated as inconsistency. It is often the core of their spending philosophy.
+
+## Design Implication
+
+The preference engine should therefore avoid a model where each dimension is just an independent slider.
+
+It should support:
+
+- first-order dimensions
+- hybrid anchor/tradeoff factors
+- interaction rules
+- contradiction detection
+- segment-specific overrides
 
 ## The Output Model
 
