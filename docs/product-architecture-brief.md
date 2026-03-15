@@ -29,26 +29,22 @@ The integration model should be:
 - `Travel-Plan-Permission` evaluates policy fit, approved vendors, exceptions, and approval requirements
 - `trip-planner` can then re-optimize against returned constraints
 
-Relevant local references:
-
-- `Travel-Plan-Permission` README
-- `Travel-Plan-Permission/docs/policy-api.md`
-- `Travel-Plan-Permission/schemas/trip_plan.min.schema.json`
-
 ## Product Capabilities
 
-### 1. Preference Engine
+### 1. Leisure Preference Evaluation
 
-The old repo used fixed scoring across natural, cultural, significance, and experience-bundle factors. That should become part of a broader preference model that captures:
+The leisure side should begin with a thoughtful preference-evaluation model, not with a lightweight quiz and not with the ranking layer.
 
-- destination style
-- activity intensity
-- nature vs. culture balance
-- budget sensitivity
-- tolerance for transfers and travel complexity
-- lodging style
-- route density per day
-- business constraints, when applicable
+For longer independent trips, the important problem is understanding how a traveler trades off:
+
+- depth vs. breadth
+- certainty vs. openness
+- comfort vs. immersion
+- route ambition vs. fatigue
+- iconic priorities vs. curiosity-driven discovery
+- spend minimization vs. spending where it matters most
+
+See [leisure-preference-engine.md](leisure-preference-engine.md).
 
 ### 2. Inventory And Coherence Engine
 
@@ -71,12 +67,12 @@ The system should enforce:
 
 ### 3. Budget And Tradeoff System
 
-Budgeting should not just total prices. It should support:
+Budgeting should support:
 
 - planned vs. actual cost tracking
 - tradeoff analysis
 - opportunity cost of higher-comfort or lower-complexity options
-- optional cost hiding for experience-first trip design
+- category-specific spending preferences
 - business-policy-aware cost reasoning
 
 ### 4. Interactive Planning Layer
@@ -88,9 +84,9 @@ Use LangChain-based orchestration for:
 - explanation of tradeoffs
 - policy-prep flows for business trips
 
-LangChain should not be the whole architecture. It should sit on top of explicit tools and domain services for:
+LangChain should sit on top of explicit tools and domain services for:
 
-- search and source retrieval
+- source retrieval
 - itinerary scoring
 - budget calculation
 - map/routing queries
@@ -104,6 +100,8 @@ Business mode should:
 - optimize toward policy fit before export
 - record vendor choices, comparables, and justification
 - produce structured payloads that plug into `Travel-Plan-Permission`
+
+The business side will likely need a separate profile model and a mostly separate optimization flow.
 
 ## Recommended Architecture
 
@@ -124,36 +122,12 @@ Build toward a stateful web app with:
 Organize the application into five bounded modules:
 
 1. `preferences`
-   - traveler profiles
-   - trip goals
-   - preference elicitation and weighting
 2. `options`
-   - source adapters
-   - canonical flight/lodging/activity/transport records
-   - vendor metadata and approval flags
 3. `itinerary`
-   - route assembly
-   - coherence rules
-   - scoring and ranking
 4. `budget`
-   - estimated and actual costs
-   - tradeoffs
-   - scenario comparison
 5. `business_policy_export`
-   - policy-ready proposal schema
-   - compatibility with `Travel-Plan-Permission`
-   - constraint feedback loop
 
-### Supporting Services
-
-- identity and account storage
-- trip persistence
-- cache for external source data
-- map/geocoding/routing service
-- audit trail for business plan changes
-- LLM orchestration and tool execution layer
-
-## Domain Model
+### Domain Model
 
 The next design iteration should define explicit schemas for:
 
@@ -161,7 +135,8 @@ The next design iteration should define explicit schemas for:
 - `TravelerProfile`
 - `Trip`
 - `TripMode`
-- `PreferenceProfile`
+- `LeisurePreferenceProfile`
+- `BusinessTravelProfile`
 - `Destination`
 - `PointOfInterest`
 - `TravelSegment`
@@ -174,8 +149,6 @@ The next design iteration should define explicit schemas for:
 - `PolicyConstraintSet`
 - `TripPlanProposal`
 - `PolicyEvaluationResult`
-
-The most important near-term design decision is to define these contracts before building a larger LLM workflow. Without stable types, conversational updates will become fragile quickly.
 
 ## How The Legacy Methodology Fits
 
@@ -190,15 +163,16 @@ The current scoring model in [methodology.md](methodology.md) should be retained
 
 ### Phase 1: Foundation
 
-- define canonical schemas
+- define the leisure-travel tradeoff taxonomy
+- define canonical preference schemas
 - add user/trip persistence model
 - preserve and refactor the existing scoring code into reusable modules
 - stand up source-adapter interfaces
 
 ### Phase 2: Leisure MVP
 
+- implement preference evaluation before itinerary ranking
 - worldwide destination and activity planning
-- preference capture
 - itinerary ranking
 - schematic map support
 - budget scenarios
@@ -210,19 +184,3 @@ The current scoring model in [methodology.md](methodology.md) should be retained
 - approved-source filtering
 - structured export to `Travel-Plan-Permission`
 - approval-readiness summary
-
-### Phase 4: Advanced Planning
-
-- fuller interactive maps
-- route menus inspired by guide-based travel design
-- richer local transportation modeling
-- actual-spend tracking and post-trip analysis
-
-## Open Design Questions
-
-These remain worth resolving in a later pass:
-
-- whether business mode should support direct booking connections in the first production release or start with priced recommendations plus links
-- how much live pricing should be cached vs. refreshed on demand
-- which map/provider stack should back routing, transit, and nearby-option discovery
-- whether leisure and business should share one UI shell with modes, or one platform with separate entry journeys
