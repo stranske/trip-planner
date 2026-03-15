@@ -79,6 +79,21 @@ def test_profile_serializes_with_canonical_keys() -> None:
     assert serialized["hard_constraints"]["must_include_places"] == ["Kyoto"]
 
 
+def test_profile_defaults_anchor_groups_when_not_provided() -> None:
+    profile = LeisurePreferenceProfile(
+        trip_frame=TripFrame(duration_days=14),
+        hard_constraints=HardConstraints(),
+        budget_model=BudgetModel(),
+        tradeoff_dimensions={
+            key: TradeoffDimension() for key in TRADEOFF_DIMENSION_KEYS
+        },
+        hybrid_factors={key: HybridFactor(mode="tradeoff") for key in HYBRID_FACTOR_KEYS},
+    )
+
+    assert set(profile.anchors) == set(ANCHOR_GROUPS)
+    assert all(not values for values in profile.anchors.values())
+
+
 def test_trip_frame_rejects_invalid_party() -> None:
     try:
         TripFrame(traveler_party="enterprise")

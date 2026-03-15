@@ -32,6 +32,10 @@ def _default_stage_sensitivity() -> dict[str, float]:
     return {stage: 0.0 for stage in schema.PLANNING_STAGES}
 
 
+def _default_anchor_groups() -> dict[str, list["Anchor"]]:
+    return {group: [] for group in schema.ANCHOR_GROUPS}
+
+
 @dataclass(slots=True)
 class TripFrame:
     duration_days: int | None = None
@@ -271,7 +275,7 @@ class LeisurePreferenceProfile:
     budget_model: BudgetModel
     tradeoff_dimensions: dict[str, TradeoffDimension]
     hybrid_factors: dict[str, HybridFactor]
-    anchors: dict[str, list[Anchor]] = field(default_factory=dict)
+    anchors: dict[str, list[Anchor]] = field(default_factory=_default_anchor_groups)
     conditional_overrides: list[dict[str, Any]] = field(default_factory=list)
     interaction_rules: list[InteractionRule] = field(default_factory=list)
     tension_flags: list[TensionFlag] = field(default_factory=list)
