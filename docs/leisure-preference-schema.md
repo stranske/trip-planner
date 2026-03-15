@@ -142,6 +142,12 @@ Each first-tier dimension should use a shared structure.
   "confidence": 0.8,
   "salience": 0.9,
   "stability": 0.7,
+  "trip_stage_sensitivity": {
+    "initial_design": 0.9,
+    "inventory_selection": 0.7,
+    "daily_activity_design": 0.5,
+    "in_trip_adjustment": 0.4
+  },
   "scope": "global|segment_specific|conditional",
   "notes": ""
 }
@@ -153,6 +159,26 @@ Interpretation:
 - negative means left pole
 - positive means right pole
 - `salience` captures importance, separate from direction
+
+Use the metadata like this:
+
+- `value`: where the traveler sits between the two poles
+- `confidence`: how well supported that inferred value is by evidence
+- `salience`: how consequential this dimension is when tradeoffs must be made
+- `stability`: how likely the preference is to remain consistent across destinations, segments, and later reflection
+- `trip_stage_sensitivity`: how strongly the dimension matters at different planning stages
+
+Examples:
+
+- a traveler may show high `salience` but moderate `stability` on `food` if food matters a lot, but only in certain cities
+- `structure_vs_elasticity` may have high `trip_stage_sensitivity.initial_design` and lower `trip_stage_sensitivity.in_trip_adjustment` if the traveler likes early scaffolding but loosens up once in place
+- `scenic_transit_vs_destination_time` may be low-salience for most of the trip but highly salient during route selection
+
+`trip_stage_sensitivity` should complement, not replace, `salience` and `stability`:
+
+- `salience` answers "how much does this matter when a decision must be made?"
+- `stability` answers "how persistently true is this preference?"
+- `trip_stage_sensitivity` answers "when in the planning lifecycle does this preference matter most?"
 
 ### First-Tier Dimension Keys
 

@@ -92,7 +92,73 @@ LangChain should sit on top of explicit tools and domain services for:
 - map/routing queries
 - policy requirement assembly
 
-### 5. Business-Travel Output
+The product should support more than one planning mode from the start of the design:
+
+#### Delegated Planning Mode
+
+- user provides a compact set of high-value inputs
+- system does most of the initial synthesis
+- best for travelers who want leverage more than prolonged interaction
+
+This mode should still surface assumptions clearly and let the user correct them afterward.
+
+#### Collaborative Iterative Mode
+
+- user refines the plan across multiple rounds
+- system preserves memory of prior choices, objections, and revealed preferences
+- best for travelers who want to shape the plan actively over time
+
+#### Revealed-Preference Option Mode
+
+- system presents 2-3 meaningful option sets rather than asking only abstract questions
+- user reactions to concrete options update the preference profile
+- best when word-level self-description is weaker than response to examples
+
+This mode is especially important for:
+
+- comfort and quality thresholds
+- spending tradeoffs
+- route style
+- daily activity density
+- food and lodging value judgments
+
+#### In-Trip Adjustment Mode
+
+- user can revise the plan while traveling
+- system adapts to fatigue, weather, mood, closures, or newly discovered interests
+- best for longer trips with significant elasticity
+
+These modes should share one underlying preference model rather than fragment the product into separate planners.
+
+### 5. Source And Quality Layer
+
+The application needs a source strategy that uses different channels for different jobs.
+
+For commercial inventory and value/quality interpretation, the planner should ingest:
+
+- hotel ratings and reviews
+- restaurant ratings and review signals
+- airfare and transport inventory
+- business-approved booking channels where relevant
+
+For discovery and high-quality option generation, the planner should also ingest:
+
+- strong editorial travel sources
+- high-quality blogs
+- non-commercial destination and route guides
+- local specialist sources when they materially improve curation
+
+The system should not treat raw ratings as the final truth. It should use them as one signal in a broader quality/value model that also considers:
+
+- location fit
+- route coherence
+- category-specific traveler priorities
+- consistency of reviews
+- whether a user tends to prefer high-rated consensus options or more idiosyncratic strong-fit choices
+
+For some travelers, the best way to learn this is not by asking for a verbal preference. It is by showing a few concrete, linked options with semi-detailed explanations and seeing which quality/value patterns they actually choose.
+
+### 6. Business-Travel Output
 
 Business mode should:
 
