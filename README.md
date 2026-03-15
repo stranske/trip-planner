@@ -18,10 +18,13 @@ The target product should handle:
 
 ## Key Docs
 
+- [Implementation plan](docs/implementation-plan.md)
 - [Product and architecture brief](docs/product-architecture-brief.md)
+- [Leisure preference contract](docs/leisure-preference-contract.md)
 - [Source channel strategy](docs/source-channel-strategy.md)
 - [Legacy itinerary methodology](docs/methodology.md)
 - [CI system guide](docs/CI_SYSTEM_GUIDE.md)
+- [Legacy static demo archive](archive/legacy-static-demo/README.md)
 
 ## Current Repo State
 
@@ -31,7 +34,11 @@ The implementation in this repository is still mostly a script-based generator f
 - `scripts/generate_itins.py`
 - `scripts/build_html.py`
 
-That legacy flow remains useful as seed logic for the future preference-scoring and itinerary-ranking engine, but it is no longer the full product definition.
+The first canonical application package now starts in:
+
+- `trip_planner/preferences/`
+
+The old script flow is not the default design path for new work. It remains only where a narrow compatibility bridge is still useful, and older static-demo artifacts have been moved under `archive/legacy-static-demo/`.
 
 ## Legacy Quick Start
 
