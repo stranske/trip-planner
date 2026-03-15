@@ -115,9 +115,9 @@ Acceptance criteria:
 
 ## Immediate Focus
 
-The next worthwhile deep work item is still Issue 1, but it now has a clearer scope:
+Issue 1 is now far enough along to move into Issue 2 and its immediate follow-ons:
 
-- define the first-tier leisure tradeoffs
-- define hybrid factors such as food, rest, and route modes
-- define when a factor behaves like an anchor vs. a tradeoff dimension
-- define the highest-value interaction effects so preferences are not modeled as isolated sliders
+- convert the taxonomy into the canonical `LeisurePreferenceProfile` schema
+- define stable value semantics for each first-tier dimension
+- formalize interaction rules so they can shape downstream itinerary objectives
+- define how tension flags are generated when preferences cannot be satisfied cleanly

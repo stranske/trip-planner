@@ -11,6 +11,7 @@
 - [Product and architecture brief](docs/product-architecture-brief.md)
 - [Leisure preference contract](docs/leisure-preference-contract.md)
 - [Leisure preference engine](docs/leisure-preference-engine.md)
+- [Leisure preference schema draft](docs/leisure-preference-schema.md)
 - [Preference roadmap](docs/preference-roadmap.md)
 - [Planning autonomy and revealed preference contracts](docs/contracts/planning-autonomy.md)
 - [Shared planning contracts](docs/shared-planning-contracts.md)
