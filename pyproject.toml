@@ -44,6 +44,15 @@ exclude_lines = [
     "if __name__ == .__main__.:",
 ]
 
+[tool.black]
+extend-exclude = '''
+(
+  /\.venv/
+| /\.workflows-lib/
+| /node_modules/
+)
+'''
+
 [[tool.mypy.overrides]]
 module = [
     "jsonschema",
