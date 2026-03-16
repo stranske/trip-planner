@@ -291,6 +291,140 @@ export const leisureFeedbackLoopScenario = {
   panel_state: leisureFeedbackLoopState,
 };
 
+/** @type {PlannerPanelState} */
+export const inTripRevisionPromptState = {
+  trip: {
+    trip_id: "trip-kyoto-intrip-replan",
+    user_id: "traveler-12",
+    mode: "leisure",
+    status: "in_trip",
+    trip_frame: {
+      start_date: "2025-04-14",
+      end_date: "2025-04-20",
+      duration_days: 7,
+      primary_regions: ["Kyoto", "Uji"],
+      traveler_party: {
+        kind: "solo",
+        traveler_count: 1,
+        notes: "Rain shifted two outdoor blocks into the middle of the trip.",
+      },
+    },
+    profile_refs: {
+      leisure_profile_id: "profile-leisure-33",
+    },
+    title: "Kyoto mid-trip reset after weather shift",
+    summary:
+      "The planner is revising the next two days around heavy rain while preserving one tea-focused neighborhood stop.",
+  },
+  option_set: {
+    option_set_id: "option-set-rain-replan-01",
+    trip_id: "trip-kyoto-intrip-replan",
+    purpose: "in_trip_revision",
+    scope: "daily_plan",
+    title: "Reshape tomorrow around the rain window",
+    explanation: [
+      "Both options protect the booked tea workshop while reducing time spent crossing the city in peak rain.",
+      "The revision prompt is narrowed to pace and neighborhood clustering rather than reopening the full itinerary.",
+    ],
+    comparison_axes: [
+      { key: "weather_resilience", label: "Rain Resilience", direction: "higher_better" },
+      { key: "walking_load", label: "Walking Load", direction: "lower_better" },
+      { key: "reservation_risk", label: "Reservation Risk", direction: "lower_better" },
+    ],
+    options: [
+      {
+        option_id: "option-gion-indoor-cluster",
+        kind: "daily_plan",
+        label: "Cluster indoor stops around Gion",
+        summary: "Keep the tea workshop, add a covered market lunch, and hold the evening flexible.",
+        drawbacks: ["Shrinks time for temple gardens until the weather clears."],
+        explanation: ["Best if minimizing wet transit matters more than covering more neighborhoods tomorrow."],
+      },
+      {
+        option_id: "option-uji-half-day-shift",
+        kind: "daily_plan",
+        label: "Move Uji to a shorter half-day outing",
+        summary: "Use the drier early window for Uji, then return for museum time near the hotel.",
+        drawbacks: ["Creates a tighter connection back into central Kyoto."],
+        explanation: ["Best if keeping one scenic rail segment still feels worth the extra coordination."],
+      },
+    ],
+  },
+  proposal: null,
+  policy_evaluation: null,
+  pending_decisions: [
+    {
+      decision_id: "rain-replan-signal",
+      title: "Choose the revision style",
+      prompt: "When a day goes sideways mid-trip, what should the planner protect first?",
+      choices: [
+        "Protect the booked anchor and make the rest easier.",
+        "Keep the broader geography even if transfers stay tighter.",
+      ],
+    },
+  ],
+  outputs: [
+    {
+      output_id: "revision-summary-01",
+      title: "Why the planner is asking now",
+      body: "Tomorrow's rain band conflicts with your original east-side walking block, so the panel is asking for a revision preference before it rebooks the day.",
+      tags: ["in-trip", "revision-prompt"],
+    },
+    {
+      output_id: "revision-summary-02",
+      title: "What stays fixed",
+      body: "The booked tea workshop remains the anchor; the revision only changes the surrounding neighborhood flow.",
+      tags: ["anchored-booking", "weather"],
+    },
+  ],
+  planner_behavior: {
+    trip_stage: "revise",
+    ask_before_next_major_change: true,
+    target_research_passes: 1,
+    target_options_before_checkpoint: 2,
+    surface_options_early: true,
+    explanation_density: "lean",
+  },
+  next_step_actions: [
+    {
+      action_id: "answer-rain-revision",
+      action_kind: "answer_decision",
+      label: "Answer the revision prompt",
+      description: "Tell the planner whether tomorrow should optimize for easier flow or broader coverage.",
+      emphasis: "primary",
+      target_section: "decisions",
+    },
+    {
+      action_id: "compare-revision-options",
+      action_kind: "compare_options",
+      label: "Compare the revised day plans",
+      description: "Review the two weather-adjusted options before the planner changes the itinerary.",
+      emphasis: "secondary",
+      target_section: "options",
+    },
+    {
+      action_id: "review-revision-rationale",
+      action_kind: "review_outputs",
+      label: "Review the revision rationale",
+      description: "Read why the planner narrowed the replan to tomorrow's weather conflict.",
+      emphasis: "quiet",
+      target_section: "outputs",
+    },
+  ],
+};
+
+/** @type {PlannerUiScenarioRecord} */
+export const inTripRevisionPromptScenario = {
+  scenario_id: "in-trip-revision-prompt",
+  label: "In-trip revision prompt",
+  workflow:
+    "Traveler is already in-trip, weather disrupts the next day, and the planner asks for a focused revision preference before changing the itinerary.",
+  persona_summary:
+    "Solo Kyoto trip with one fixed tea booking where the traveler wants the planner to recover gracefully from weather disruption.",
+  panel_state: inTripRevisionPromptState,
+};
+
 export const plannerUiStateMocks = {
   leisure_feedback_loop: leisureFeedbackLoopScenario,
+  in_trip_revision_prompt: inTripRevisionPromptScenario,
 };

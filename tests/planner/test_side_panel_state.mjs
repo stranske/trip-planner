@@ -81,9 +81,13 @@ async function loadModule(relativePath) {
   return import(`data:text/javascript,${encodeURIComponent(source)}`);
 }
 
-const { leisureFeedbackLoopScenario, leisureFeedbackLoopState, plannerUiStateMocks } = await loadModule(
-  "bundle/planner/mock-state.js"
-);
+const {
+  inTripRevisionPromptScenario,
+  inTripRevisionPromptState,
+  leisureFeedbackLoopScenario,
+  leisureFeedbackLoopState,
+  plannerUiStateMocks,
+} = await loadModule("bundle/planner/mock-state.js");
 const {
   createPlannerSidePanelStore,
   renderComparablesDisplayComponent,
@@ -225,6 +229,21 @@ test("planner UI mock catalog exposes the leisure feedback loop workflow state",
   assert.equal(leisureFeedbackLoopScenario.panel_state.next_step_actions[0].target_section, "decisions");
 });
 
+test("planner UI mock catalog exposes the in-trip revision prompt workflow state", () => {
+  assert.equal(plannerUiStateMocks.in_trip_revision_prompt, inTripRevisionPromptScenario);
+  assert.equal(inTripRevisionPromptScenario.scenario_id, "in-trip-revision-prompt");
+  assert.match(inTripRevisionPromptScenario.workflow, /weather disrupts the next day/);
+  assert.match(inTripRevisionPromptScenario.persona_summary, /Solo Kyoto trip/);
+  assert.equal(inTripRevisionPromptScenario.panel_state, inTripRevisionPromptState);
+  assert.equal(inTripRevisionPromptScenario.panel_state.trip.status, "in_trip");
+  assert.equal(inTripRevisionPromptScenario.panel_state.option_set.purpose, "in_trip_revision");
+  assert.equal(
+    inTripRevisionPromptScenario.panel_state.pending_decisions[0].decision_id,
+    "rain-replan-signal"
+  );
+  assert.equal(inTripRevisionPromptScenario.panel_state.next_step_actions[0].target_section, "decisions");
+});
+
 test("planner side panel controller rerenders on section and decision changes", () => {
   const mountNode = new FakeMountNode();
   const controller = renderPlannerSidePanel(mountNode, leisureFeedbackLoopState);
@@ -243,6 +262,22 @@ test("planner side panel controller rerenders on section and decision changes", 
 
   controller.destroy();
   assert.equal(mountNode.listeners.has("click"), false);
+});
+
+test("planner side panel renders the in-trip revision prompt scenario", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderPlannerSidePanel(mountNode, inTripRevisionPromptState);
+
+  assert.match(mountNode.innerHTML, /Choose the revision style/);
+  assert.match(mountNode.innerHTML, /what should the planner protect first/i);
+  assert.match(mountNode.innerHTML, /Protect the booked anchor and make the rest easier\./);
+
+  controller.setActiveSection("outputs");
+
+  assert.match(mountNode.innerHTML, /Why the planner is asking now/);
+  assert.match(mountNode.innerHTML, /revision only changes the surrounding neighborhood flow/i);
+
+  controller.destroy();
 });
 
 test("planner outputs display renders messages and output metadata", () => {
