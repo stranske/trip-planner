@@ -7,7 +7,6 @@ from typing import Any
 
 from trip_planner.contracts._validators import (
     require_non_empty,
-    require_non_negative,
     require_probability,
     require_string_mapping,
     require_strings,
