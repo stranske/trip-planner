@@ -157,27 +157,48 @@ function renderSectionTabs(state) {
 }
 
 /**
+ * @param {import("./mock-state.js").PlannerOutputRecord[]} outputs
+ * @returns {string}
+ */
+export function renderPlannerOutputsDisplay(outputs) {
+  if (!outputs.length) {
+    return '<p class="planner-empty-state">No planner outputs yet.</p>';
+  }
+
+  return `
+    <div class="planner-output-feed" role="list" aria-label="Planner outputs">
+      ${outputs
+    .map(
+      (output) => `
+        <article class="planner-output-card" role="listitem" data-planner-output-id="${output.output_id}">
+          <div class="planner-section-header">
+            <h4>${output.title}</h4>
+            <span class="planner-meta">message</span>
+          </div>
+          <p>${output.body}</p>
+          ${
+            output.tags.length
+              ? `
+                <div class="planner-chip-row" aria-label="Output tags">
+                  ${output.tags.map((tag) => `<span class="planner-chip">${tag}</span>`).join("")}
+                </div>
+              `
+              : ""
+          }
+        </article>
+      `
+    )
+    .join("")}
+    </div>
+  `;
+}
+
+/**
  * @param {PlannerPanelViewState} state
  * @returns {string}
  */
 function renderOutputs(state) {
-  if (!state.data.outputs.length) {
-    return '<p class="planner-empty-state">No planner outputs yet.</p>';
-  }
-
-  return state.data.outputs
-    .map(
-      (output) => `
-        <article class="planner-output-card">
-          <h4>${output.title}</h4>
-          <p>${output.body}</p>
-          <div class="planner-chip-row">
-            ${output.tags.map((tag) => `<span class="planner-chip">${tag}</span>`).join("")}
-          </div>
-        </article>
-      `
-    )
-    .join("");
+  return renderPlannerOutputsDisplay(state.data.outputs);
 }
 
 /**

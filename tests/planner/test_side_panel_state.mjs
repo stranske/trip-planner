@@ -63,7 +63,7 @@ async function loadModule(relativePath) {
 }
 
 const { leisureFeedbackLoopState } = await loadModule("bundle/planner/mock-state.js");
-const { createPlannerSidePanelStore, renderPlannerSidePanel } = await loadModule(
+const { createPlannerSidePanelStore, renderPlannerOutputsDisplay, renderPlannerSidePanel } = await loadModule(
   "bundle/planner/side-panel.js"
 );
 
@@ -96,4 +96,20 @@ test("planner side panel controller rerenders on section and decision changes", 
 
   controller.destroy();
   assert.equal(mountNode.listeners.has("click"), false);
+});
+
+test("planner outputs display renders messages and output metadata", () => {
+  const markup = renderPlannerOutputsDisplay(leisureFeedbackLoopState.outputs);
+
+  assert.match(markup, /aria-label="Planner outputs"/);
+  assert.match(markup, /data-planner-output-id="summary-01"/);
+  assert.match(markup, /Planner read/);
+  assert.match(markup, /quality where it changes the day/);
+  assert.match(markup, /feedback-loop/);
+});
+
+test("planner outputs display renders an empty state when no outputs exist", () => {
+  const markup = renderPlannerOutputsDisplay([]);
+
+  assert.match(markup, /No planner outputs yet\./);
 });
