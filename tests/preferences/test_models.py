@@ -12,11 +12,15 @@ from trip_planner.preferences.models import (
     TradeoffDimension,
     TripFrame,
 )
-from trip_planner.preferences.schema import ANCHOR_GROUPS, HYBRID_FACTOR_KEYS, TRADEOFF_DIMENSION_KEYS
+from trip_planner.preferences.schema import (
+    ANCHOR_GROUPS,
+    HYBRID_FACTOR_KEYS,
+    TRADEOFF_DIMENSION_KEYS,
+)
 
 
 def _make_profile() -> LeisurePreferenceProfile:
-    anchors = {group: [] for group in ANCHOR_GROUPS}
+    anchors: dict[str, list[Anchor]] = {group: [] for group in ANCHOR_GROUPS}
     anchors["place_anchors"] = [
         Anchor(type="place", label="Kyoto", strength=0.9, flexibility=0.2)
     ]
@@ -38,12 +42,13 @@ def _make_profile() -> LeisurePreferenceProfile:
             spending_priorities={"lodging_location": 0.8},
         ),
         tradeoff_dimensions={
-            key: TradeoffDimension(value=0.0, confidence=0.2, salience=0.2, stability=0.2)
+            key: TradeoffDimension(
+                value=0.0, confidence=0.2, salience=0.2, stability=0.2
+            )
             for key in TRADEOFF_DIMENSION_KEYS
         },
         hybrid_factors={
-            key: HybridFactor(mode="tradeoff")
-            for key in HYBRID_FACTOR_KEYS
+            key: HybridFactor(mode="tradeoff") for key in HYBRID_FACTOR_KEYS
         },
         interaction_rules=[
             InteractionRule(
@@ -87,7 +92,9 @@ def test_profile_defaults_anchor_groups_when_not_provided() -> None:
         tradeoff_dimensions={
             key: TradeoffDimension() for key in TRADEOFF_DIMENSION_KEYS
         },
-        hybrid_factors={key: HybridFactor(mode="tradeoff") for key in HYBRID_FACTOR_KEYS},
+        hybrid_factors={
+            key: HybridFactor(mode="tradeoff") for key in HYBRID_FACTOR_KEYS
+        },
     )
 
     assert set(profile.anchors) == set(ANCHOR_GROUPS)

@@ -16,9 +16,10 @@ def test_legacy_request_adapter_maps_existing_request_shape() -> None:
     assert profile.hard_constraints.must_include_places == payload["must_see"]
     assert profile.trip_frame.season_window == payload["trip_window"]["months"]
     assert profile.budget_model.total_budget_sensitivity == payload["cost_sensitivity"]
-    assert "Mapped from legacy nature_ratio field." in profile.tradeoff_dimensions[
-        "nature_vs_culture"
-    ].notes
+    assert (
+        "Mapped from legacy nature_ratio field."
+        in profile.tradeoff_dimensions["nature_vs_culture"].notes
+    )
     assert profile.hybrid_factors["route_modes"].preferences["rail"] == 1.0
 
 
@@ -74,7 +75,11 @@ def test_load_legacy_request_reads_from_path(tmp_path: Path) -> None:
     request_path.write_text(
         json.dumps(
             {
-                "trip_window": {"months": ["September"], "min_weeks": 2, "max_weeks": 3},
+                "trip_window": {
+                    "months": ["September"],
+                    "min_weeks": 2,
+                    "max_weeks": 3,
+                },
                 "must_see": ["Kyoto"],
                 "nature_ratio": 0.4,
                 "complexity_tolerance": "high",

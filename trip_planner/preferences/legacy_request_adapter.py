@@ -26,10 +26,7 @@ def _empty_anchor_groups() -> dict[str, list[Anchor]]:
 
 
 def _empty_tradeoff_dimensions() -> dict[str, TradeoffDimension]:
-    return {
-        key: TradeoffDimension()
-        for key in schema.TRADEOFF_DIMENSION_KEYS
-    }
+    return {key: TradeoffDimension() for key in schema.TRADEOFF_DIMENSION_KEYS}
 
 
 def _empty_hybrid_factors() -> dict[str, HybridFactor]:
@@ -64,18 +61,28 @@ def adapt_legacy_request(raw_request: Mapping[str, Any]) -> LeisurePreferencePro
     must_see = [str(place) for place in raw_request.get("must_see", [])]
 
     trip_frame = TripFrame(
-        duration_days=int(max_weeks * 7) if isinstance(max_weeks, (int, float)) else None,
+        duration_days=(
+            int(max_weeks * 7) if isinstance(max_weeks, (int, float)) else None
+        ),
         season_window=months,
         trip_stage="mixed",
     )
     hard_constraints = HardConstraints(
         date_window=DateWindow(
-            start=str(raw_request["trip_start"]) if raw_request.get("trip_start") else None,
+            start=(
+                str(raw_request["trip_start"])
+                if raw_request.get("trip_start")
+                else None
+            ),
             end=str(raw_request["trip_end"]) if raw_request.get("trip_end") else None,
         ),
         duration_bounds=DurationBounds(
-            min_days=int(min_weeks * 7) if isinstance(min_weeks, (int, float)) else None,
-            max_days=int(max_weeks * 7) if isinstance(max_weeks, (int, float)) else None,
+            min_days=(
+                int(min_weeks * 7) if isinstance(min_weeks, (int, float)) else None
+            ),
+            max_days=(
+                int(max_weeks * 7) if isinstance(max_weeks, (int, float)) else None
+            ),
         ),
         must_include_places=must_see,
     )
@@ -132,7 +139,9 @@ def adapt_legacy_request(raw_request: Mapping[str, Any]) -> LeisurePreferencePro
         )
 
     hybrid_factors = _empty_hybrid_factors()
-    route_preferences = _normalize_route_preferences(raw_request.get("route_passions", {}))
+    route_preferences = _normalize_route_preferences(
+        raw_request.get("route_passions", {})
+    )
     if route_preferences:
         highest_preference = max(route_preferences.values())
         hybrid_factors["route_modes"] = HybridFactor(

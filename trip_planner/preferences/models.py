@@ -165,7 +165,9 @@ class TradeoffDimension:
     confidence: float = 0.0
     salience: float = 0.0
     stability: float = 0.0
-    trip_stage_sensitivity: dict[str, float] = field(default_factory=_default_stage_sensitivity)
+    trip_stage_sensitivity: dict[str, float] = field(
+        default_factory=_default_stage_sensitivity
+    )
     scope: str = "global"
     notes: str = ""
 
@@ -203,7 +205,9 @@ class HybridFactor:
         if self.mode not in schema.HYBRID_FACTOR_MODES:
             raise ValueError(f"mode must be one of {schema.HYBRID_FACTOR_MODES}")
         if self.tradeoff_role not in schema.HYBRID_FACTOR_ROLES:
-            raise ValueError(f"tradeoff_role must be one of {schema.HYBRID_FACTOR_ROLES}")
+            raise ValueError(
+                f"tradeoff_role must be one of {schema.HYBRID_FACTOR_ROLES}"
+            )
         _require_probability(self.salience, "salience")
         _require_probability(self.anchor_strength, "anchor_strength")
         _require_string_key_mapping(self.preferences, "preferences")
@@ -315,7 +319,9 @@ class LeisurePreferenceProfile:
             for factor in self.hybrid_factors.values()
         ):
             raise ValueError("hybrid_factors must contain HybridFactor instances")
-        if any(not isinstance(rule, InteractionRule) for rule in self.interaction_rules):
+        if any(
+            not isinstance(rule, InteractionRule) for rule in self.interaction_rules
+        ):
             raise ValueError("interaction_rules must contain InteractionRule instances")
         if any(not isinstance(flag, TensionFlag) for flag in self.tension_flags):
             raise ValueError("tension_flags must contain TensionFlag instances")
