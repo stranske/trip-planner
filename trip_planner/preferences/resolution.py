@@ -7,7 +7,6 @@ from copy import deepcopy
 from . import schema
 from .evidence import PreferenceEvidence
 from .evidence_catalog import (
-    support_for_anchor_group,
     support_for_dimension,
     support_for_hybrid_factor,
 )
