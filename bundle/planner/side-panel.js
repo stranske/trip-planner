@@ -652,12 +652,125 @@ export function renderComparablesDisplayComponent(proposal, policyEvaluation) {
 }
 
 /**
+ * @param {import("./mock-state.js").ProposalRecord | null} proposal
+ * @param {import("./mock-state.js").PolicyEvaluationRecord | null} policyEvaluation
+ * @returns {string}
+ */
+export function renderJustificationBurdenComponent(proposal, policyEvaluation) {
+  const justifications = proposal?.justifications ?? [];
+  const approvalNotes = proposal?.approval_notes ?? [];
+  const requestedException = proposal?.requested_exception ?? null;
+  const approvalRequirements = policyEvaluation?.approval_requirements ?? [];
+  const documentationCount =
+    justifications.length +
+    approvalNotes.length +
+    (requestedException ? 1 : 0) +
+    approvalRequirements.length;
+
+  if (!documentationCount) {
+    return '<p class="planner-empty-state">No justification burden is attached to this approval review.</p>';
+  }
+
+  return `
+    <div class="planner-feedback-layout" aria-label="Justification burden">
+      <article class="planner-output-card" data-justification-burden="summary">
+        <div class="planner-section-header">
+          <h4>Documentation burden</h4>
+          <span class="planner-meta">${documentationCount} items</span>
+        </div>
+        <div class="planner-chip-row" aria-label="Documentation burden summary">
+          <span class="planner-chip">${justifications.length} justification record${justifications.length === 1 ? "" : "s"}</span>
+          <span class="planner-chip">${approvalRequirements.length} approval role${approvalRequirements.length === 1 ? "" : "s"}</span>
+          <span class="planner-chip">${approvalNotes.length} approval note${approvalNotes.length === 1 ? "" : "s"}</span>
+          ${requestedException ? '<span class="planner-chip">Exception request attached</span>' : ""}
+        </div>
+      </article>
+      <article class="planner-output-card">
+        <div class="planner-section-header">
+          <h4>Justification records</h4>
+          <span class="planner-meta">${justifications.length} attached</span>
+        </div>
+        ${
+          justifications.length
+            ? `
+              <ul class="planner-list">
+                ${justifications
+                  .map(
+                    (justification) => `
+                      <li data-justification-category="${justification.category}">
+                        <strong>${justification.category}</strong>: ${justification.summary}
+                        ${
+                          justification.evidence.length
+                            ? ` Evidence: ${justification.evidence.join(" ")}`
+                            : ""
+                        }
+                      </li>
+                    `
+                  )
+                  .join("")}
+              </ul>
+            `
+            : '<p class="planner-empty-state">No justification records attached.</p>'
+        }
+      </article>
+      <article class="planner-output-card">
+        <div class="planner-section-header">
+          <h4>Approval packet notes</h4>
+          <span class="planner-meta">${approvalNotes.length} notes</span>
+        </div>
+        ${
+          approvalNotes.length
+            ? `
+              <ul class="planner-list">
+                ${approvalNotes.map((note) => `<li>${note}</li>`).join("")}
+              </ul>
+            `
+            : '<p class="planner-empty-state">No approval notes captured yet.</p>'
+        }
+      </article>
+      <article class="planner-output-card">
+        <div class="planner-section-header">
+          <h4>Exception request</h4>
+          <span class="planner-meta">${requestedException ? requestedException.exception_type.replaceAll("_", " ") : "not requested"}</span>
+        </div>
+        ${
+          requestedException
+            ? `
+              <p>${requestedException.reason}</p>
+              <div class="planner-chip-row" aria-label="Exception request approvals">
+                ${requestedException.requested_approval_roles.map((role) => `<span class="planner-chip">${role}</span>`).join("")}
+              </div>
+              ${
+                requestedException.notes.length
+                  ? `
+                    <ul class="planner-list">
+                      ${requestedException.notes.map((note) => `<li>${note}</li>`).join("")}
+                    </ul>
+                  `
+                  : '<p class="planner-empty-state">No exception notes captured yet.</p>'
+              }
+            `
+            : '<p class="planner-empty-state">No exception request is required for this proposal.</p>'
+        }
+      </article>
+    </div>
+  `;
+}
+
+/**
  * @param {PlannerPanelViewState} state
  * @returns {string}
  */
 function renderPolicyStatus(state) {
   return `
     ${renderPolicyPostureDisplayComponent(state.data.policy_evaluation)}
+    <section aria-label="Justification burden review">
+      <div class="planner-section-header">
+        <h3>Justification Burden</h3>
+        <span class="planner-meta">${state.data.proposal?.justifications?.length ?? 0} records</span>
+      </div>
+      ${renderJustificationBurdenComponent(state.data.proposal, state.data.policy_evaluation)}
+    </section>
     <section aria-label="Comparables review">
       <div class="planner-section-header">
         <h3>Comparables</h3>

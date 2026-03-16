@@ -85,6 +85,7 @@ const { leisureFeedbackLoopState } = await loadModule("bundle/planner/mock-state
 const {
   createPlannerSidePanelStore,
   renderComparablesDisplayComponent,
+  renderJustificationBurdenComponent,
   renderNextStepActionsComponent,
   renderOptionFeedbackPromptsComponent,
   renderPendingDecisionsComponent,
@@ -132,6 +133,31 @@ const businessApprovalState = {
         notes: ["Extends total travel time by nearly three hours."],
       },
     ],
+    justifications: [
+      {
+        category: "lodging",
+        summary: "Higher nightly rate keeps the team near the client site for a pre-dawn audit start.",
+        evidence: [
+          "Audit kickoff begins at 05:45 local time.",
+          "The lower-cost hotel adds a 40-minute transfer each way.",
+        ],
+      },
+      {
+        category: "schedule",
+        summary: "The selected hotel reduces fatigue risk across consecutive site inspections.",
+        evidence: ["Traveler arrives after a late connection on the prior evening."],
+      },
+    ],
+    approval_notes: [
+      "Attach the lower-cost comparable to the approval packet.",
+      "Reference the fatigue-management rationale in the manager request.",
+    ],
+    requested_exception: {
+      exception_type: "lodging_rate_cap",
+      reason: "Request an exception to preserve site access and reduce fatigue risk.",
+      requested_approval_roles: ["manager", "finance"],
+      notes: ["Document why the within-cap hotel materially degrades the operating schedule."],
+    },
   },
   policy_evaluation: {
     evaluation_id: "eval-approval-01",
@@ -329,6 +355,32 @@ test("comparables display component renders an empty state when no alternatives 
   assert.match(markup, /No comparable options attached to this approval review\./);
 });
 
+test("justification burden component renders required documentation and approval packet context", () => {
+  const markup = renderJustificationBurdenComponent(
+    businessApprovalState.proposal,
+    businessApprovalState.policy_evaluation
+  );
+
+  assert.match(markup, /aria-label="Justification burden"/);
+  assert.match(markup, /data-justification-burden="summary"/);
+  assert.match(markup, /Higher nightly rate keeps the team near the client site/);
+  assert.match(markup, /Audit kickoff begins at 05:45 local time\./);
+  assert.match(markup, /Attach the lower-cost comparable to the approval packet\./);
+  assert.match(markup, /Request an exception to preserve site access and reduce fatigue risk\./);
+  assert.match(markup, /lodging rate cap/);
+  assert.match(markup, /manager/);
+  assert.match(markup, /finance/);
+});
+
+test("justification burden component renders an empty state when no documentation burden exists", () => {
+  const markup = renderJustificationBurdenComponent(
+    { proposal_id: "proposal-empty", comparables: [] },
+    null
+  );
+
+  assert.match(markup, /No justification burden is attached to this approval review\./);
+});
+
 test("pending decisions component renders the default decision prompt and choices", () => {
   const markup = renderPendingDecisionsComponent(leisureFeedbackLoopState.pending_decisions);
 
@@ -388,6 +440,9 @@ test("planner side panel approval section includes the policy posture display", 
   assert.match(mountNode.innerHTML, /Policy posture/);
   assert.match(mountNode.innerHTML, /exception required/);
   assert.match(mountNode.innerHTML, /Compliance score: 68%/);
+  assert.match(mountNode.innerHTML, /Justification Burden/);
+  assert.match(mountNode.innerHTML, /Documentation burden/);
+  assert.match(mountNode.innerHTML, /Request an exception to preserve site access and reduce fatigue risk\./);
   assert.match(mountNode.innerHTML, /Preferred alternatives/);
   assert.match(mountNode.innerHTML, /Comparables/);
   assert.match(mountNode.innerHTML, /Within-cap airport hotel/);

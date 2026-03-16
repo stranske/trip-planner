@@ -80,9 +80,27 @@
  */
 
 /**
+ * @typedef {Object} ProposalJustificationRecord
+ * @property {string} category
+ * @property {string} summary
+ * @property {string[]} evidence
+ */
+
+/**
+ * @typedef {Object} ProposalExceptionRequestRecord
+ * @property {string} exception_type
+ * @property {string} reason
+ * @property {string[]} requested_approval_roles
+ * @property {string[]} notes
+ */
+
+/**
  * @typedef {Object} ProposalRecord
  * @property {string} proposal_id
  * @property {ComparableOptionRecord[]} comparables
+ * @property {ProposalJustificationRecord[]} [justifications]
+ * @property {string[]} [approval_notes]
+ * @property {ProposalExceptionRequestRecord | null} [requested_exception]
  */
 
 /**
