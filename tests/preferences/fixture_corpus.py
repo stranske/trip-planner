@@ -71,7 +71,7 @@ def load_fixture_corpus(path: Path | None = None) -> list[TravelerFixture]:
     fixtures = payload.get("fixtures", [])
     if not isinstance(fixtures, list):
         raise ValueError("fixtures must be a list")
-    fixture_objects = [_build_fixture(entry) for entry in fixtures]
+    fixture_objects = [_build_fixture(index, entry) for index, entry in enumerate(fixtures)]
     fixture_ids = [fixture.id for fixture in fixture_objects]
     if len(set(fixture_ids)) != len(fixture_ids):
         raise ValueError("fixture corpus ids must be unique")
@@ -82,21 +82,31 @@ def load_fixture_map() -> dict[str, TravelerFixture]:
     return {fixture.id: fixture for fixture in load_fixture_corpus()}
 
 
-def _build_fixture(payload: dict[str, Any]) -> TravelerFixture:
+def _build_fixture(index: int, payload: Any) -> TravelerFixture:
+    if not isinstance(payload, dict):
+        raise ValueError(f"fixture at index {index} must be an object")
+    fixture_id = payload.get("id", f"<fixture {index}>")
+    for required_field in ("id", "fixture_kind", "summary"):
+        if not payload.get(required_field):
+            raise ValueError(f"fixture {fixture_id!r} must define {required_field}")
     intended = payload.get("intended_interpretation", {})
+    if not isinstance(intended, dict):
+        raise ValueError(f"fixture {fixture_id!r} intended_interpretation must be an object")
+    raw_inputs = payload.get("raw_inputs", {})
+    if not isinstance(raw_inputs, dict):
+        raise ValueError(f"fixture {fixture_id!r} raw_inputs must be an object")
     profile = build_profile_from_overrides(payload.get("profile_overrides", {}))
     evidence = [build_evidence_record(item) for item in payload.get("evidence", [])]
     if not intended.get("qualitative_summary"):
         raise ValueError(
-            f"fixture {payload.get('id', '<unknown>')!r} must define intended_interpretation."
-            "qualitative_summary"
+            f"fixture {fixture_id!r} must define intended_interpretation.qualitative_summary"
         )
     return TravelerFixture(
         id=payload["id"],
         fixture_kind=payload["fixture_kind"],
         summary=payload["summary"],
         tags=list(payload.get("tags", [])),
-        raw_inputs=dict(payload.get("raw_inputs", {})),
+        raw_inputs=dict(raw_inputs),
         intended_interpretation=IntendedInterpretation(
             qualitative_summary=intended["qualitative_summary"],
             dominant_dimensions=list(intended.get("dominant_dimensions", [])),
@@ -115,14 +125,39 @@ def build_profile_from_overrides(overrides: dict[str, Any]) -> LeisurePreference
     profile_payload["trip_frame"] = {**profile_payload["trip_frame"], **trip_frame_overrides}
 
     hard_constraint_overrides = overrides.get("hard_constraints", {})
+    allowed_constraint_keys = {
+        "date_window",
+        "duration_bounds",
+        "budget_ceiling",
+        "must_include_places",
+        "must_protect_experiences",
+        "mobility_constraints",
+        "lodging_constraints",
+        "visa_border_constraints",
+    }
+    unknown_constraint_keys = set(hard_constraint_overrides) - allowed_constraint_keys
+    if unknown_constraint_keys:
+        raise ValueError(
+            "unsupported hard constraint override keys: " f"{sorted(unknown_constraint_keys)}"
+        )
     date_window = {
         **profile_payload["hard_constraints"]["date_window"],
         **hard_constraint_overrides.get("date_window", {}),
     }
+    unknown_date_window_keys = set(date_window) - {"start", "end"}
+    if unknown_date_window_keys:
+        raise ValueError(
+            "unsupported date_window override keys: " f"{sorted(unknown_date_window_keys)}"
+        )
     duration_bounds = {
         **profile_payload["hard_constraints"]["duration_bounds"],
         **hard_constraint_overrides.get("duration_bounds", {}),
     }
+    unknown_duration_keys = set(duration_bounds) - {"min_days", "max_days"}
+    if unknown_duration_keys:
+        raise ValueError(
+            "unsupported duration_bounds override keys: " f"{sorted(unknown_duration_keys)}"
+        )
     merged_constraints = {
         **profile_payload["hard_constraints"],
         **hard_constraint_overrides,

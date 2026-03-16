@@ -127,3 +127,31 @@ def test_fixture_corpus_rejects_missing_qualitative_summary(tmp_path: Path) -> N
         assert "qualitative_summary" in str(exc)
     else:
         raise AssertionError("Fixture corpus should reject missing qualitative summaries")
+
+
+def test_fixture_corpus_rejects_non_object_fixture_entries(tmp_path: Path) -> None:
+    payload = json.loads(fixture_corpus_path().read_text(encoding="utf-8"))
+    payload["fixtures"][0] = "not-a-fixture"
+    path = tmp_path / "bad-entry.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    try:
+        load_fixture_corpus(path)
+    except ValueError as exc:
+        assert "index 0" in str(exc)
+    else:
+        raise AssertionError("Fixture corpus should reject non-object fixture entries")
+
+
+def test_fixture_corpus_rejects_unknown_hard_constraint_keys(tmp_path: Path) -> None:
+    payload = json.loads(fixture_corpus_path().read_text(encoding="utf-8"))
+    payload["fixtures"][8]["profile_overrides"]["hard_constraints"]["budget_ceiling_typo"] = 1000
+    path = tmp_path / "bad-hard-constraints.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    try:
+        load_fixture_corpus(path)
+    except ValueError as exc:
+        assert "hard constraint override keys" in str(exc)
+    else:
+        raise AssertionError("Fixture corpus should reject unknown hard constraint override keys")
