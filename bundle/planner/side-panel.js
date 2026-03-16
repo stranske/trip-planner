@@ -202,23 +202,24 @@ function renderOutputs(state) {
 }
 
 /**
- * @param {PlannerPanelViewState} state
+ * @param {import("./mock-state.js").PendingDecisionRecord[]} pendingDecisions
+ * @param {string | null} selectedDecisionId
  * @returns {string}
  */
-function renderPendingDecisions(state) {
-  if (!state.data.pending_decisions.length) {
+export function renderPendingDecisionsComponent(pendingDecisions, selectedDecisionId = null) {
+  if (!pendingDecisions.length) {
     return '<p class="planner-empty-state">No pending decisions.</p>';
   }
 
-  const selectedDecisionId = state.ui.selected_decision_id ?? state.data.pending_decisions[0].decision_id;
+  const resolvedSelectedDecisionId = selectedDecisionId ?? pendingDecisions[0].decision_id;
   const selectedDecision =
-    state.data.pending_decisions.find((decision) => decision.decision_id === selectedDecisionId) ??
-    state.data.pending_decisions[0];
+    pendingDecisions.find((decision) => decision.decision_id === resolvedSelectedDecisionId) ??
+    pendingDecisions[0];
 
   return `
     <div class="planner-decision-layout">
       <div class="planner-decision-list" role="list" aria-label="Pending decisions">
-        ${state.data.pending_decisions
+        ${pendingDecisions
           .map(
             (decision) => `
               <button
@@ -243,6 +244,17 @@ function renderPendingDecisions(state) {
       </article>
     </div>
   `;
+}
+
+/**
+ * @param {PlannerPanelViewState} state
+ * @returns {string}
+ */
+function renderPendingDecisions(state) {
+  return renderPendingDecisionsComponent(
+    state.data.pending_decisions,
+    state.ui.selected_decision_id ?? state.data.pending_decisions[0]?.decision_id ?? null
+  );
 }
 
 /**

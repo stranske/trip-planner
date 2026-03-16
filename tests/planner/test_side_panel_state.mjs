@@ -63,9 +63,12 @@ async function loadModule(relativePath) {
 }
 
 const { leisureFeedbackLoopState } = await loadModule("bundle/planner/mock-state.js");
-const { createPlannerSidePanelStore, renderPlannerOutputsDisplay, renderPlannerSidePanel } = await loadModule(
-  "bundle/planner/side-panel.js"
-);
+const {
+  createPlannerSidePanelStore,
+  renderPendingDecisionsComponent,
+  renderPlannerOutputsDisplay,
+  renderPlannerSidePanel,
+} = await loadModule("bundle/planner/side-panel.js");
 
 test("planner side panel store initializes with decision-focused UI state", () => {
   const store = createPlannerSidePanelStore(leisureFeedbackLoopState);
@@ -112,4 +115,41 @@ test("planner outputs display renders an empty state when no outputs exist", () 
   const markup = renderPlannerOutputsDisplay([]);
 
   assert.match(markup, /No planner outputs yet\./);
+});
+
+test("pending decisions component renders the default decision prompt and choices", () => {
+  const markup = renderPendingDecisionsComponent(leisureFeedbackLoopState.pending_decisions);
+
+  assert.match(markup, /aria-label="Pending decisions"/);
+  assert.match(markup, /Choose the better base camp/);
+  assert.match(markup, /Which tradeoff feels more like the trip you want\?/);
+  assert.match(markup, /Stay central and accept tighter rooms\./);
+  assert.match(markup, /Prioritize recovery quiet and a little extra transit\./);
+  assert.match(markup, /planner-decision-link is-active/);
+});
+
+test("pending decisions component respects explicit decision selection when multiple prompts exist", () => {
+  const markup = renderPendingDecisionsComponent(
+    [
+      ...leisureFeedbackLoopState.pending_decisions,
+      {
+        decision_id: "pace-signal",
+        title: "Choose the first full-day pace",
+        prompt: "How much structure should Day 2 have after arrival?",
+        choices: ["Keep it open until lunch.", "Lock in one museum and one long dinner."],
+      },
+    ],
+    "pace-signal"
+  );
+
+  assert.match(markup, /Choose the first full-day pace/);
+  assert.match(markup, /How much structure should Day 2 have after arrival\?/);
+  assert.match(markup, /Lock in one museum and one long dinner\./);
+  assert.doesNotMatch(markup, /Which tradeoff feels more like the trip you want\?/);
+});
+
+test("pending decisions component renders an empty state when no prompts exist", () => {
+  const markup = renderPendingDecisionsComponent([]);
+
+  assert.match(markup, /No pending decisions\./);
 });
