@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from trip_planner.business import (
+    JustificationRecord,
     PolicyConstraintSet,
     PolicyEvaluationResult,
     TripPlanProposal,
@@ -86,6 +87,18 @@ def test_trip_plan_proposal_requires_selected_options_list() -> None:
         raise AssertionError("TripPlanProposal should require selected_options")
 
 
+def test_trip_plan_proposal_rejects_empty_selected_options() -> None:
+    scenario = _load_scenario("policy_round_trip_compliant.json")
+    scenario["proposal"]["selected_options"] = []
+
+    try:
+        TripPlanProposal.from_dict(scenario["proposal"])
+    except ValueError as exc:
+        assert "selected_options" in str(exc)
+    else:
+        raise AssertionError("TripPlanProposal should reject empty selected_options")
+
+
 def test_trip_plan_proposal_rejects_non_list_approval_notes() -> None:
     scenario = _load_scenario("policy_round_trip_compliant.json")
     scenario["proposal"]["approval_notes"] = "manager approval pending"
@@ -133,3 +146,13 @@ def test_policy_evaluation_result_rejects_non_list_notes() -> None:
         assert "notes" in str(exc)
     else:
         raise AssertionError("PolicyEvaluationResult should reject non-list notes")
+
+
+def test_business_package_exports_justification_record() -> None:
+    record = JustificationRecord(
+        category="lodging",
+        summary="Preferred a walkable hotel to reduce fatigue before meetings.",
+        evidence=["10-minute walk to client office"],
+    )
+
+    assert record.category == "lodging"
