@@ -1,0 +1,93 @@
+{
+  "schema_version": "0.1.0",
+  "profile_kind": "business",
+  "traveler_context": {
+    "employee_type": "contractor",
+    "traveler_experience": "occasional",
+    "home_airport": "MSP",
+    "loyalty_programs": [],
+    "mobility_or_access_needs": ["avoid back-to-back overnight drives"]
+  },
+  "trip_purpose": {
+    "purpose_type": "site_visit",
+    "business_justification": "Perform an on-site operational audit across multiple facilities.",
+    "required_presence_windows": [
+      {
+        "start": "2026-07-20T07:30:00-05:00",
+        "end": "2026-07-20T17:30:00-05:00",
+        "label": "Primary site inspection"
+      },
+      {
+        "start": "2026-07-21T08:00:00-05:00",
+        "end": "2026-07-21T13:00:00-05:00",
+        "label": "Secondary facility audit"
+      }
+    ],
+    "trip_criticality": "high"
+  },
+  "policy_constraints": {
+    "required_booking_channels": ["Concur"],
+    "airfare_rules": {
+      "cabin": "economy",
+      "regional_airport_allowed": true
+    },
+    "lodging_rules": {
+      "max_nightly_rate_usd": 240,
+      "parking_reimbursement_allowed": true
+    },
+    "ground_transport_rules": {
+      "rental_car_default": true,
+      "compact_or_midsize_only": true
+    },
+    "per_diem_or_meal_rules": {
+      "standard_per_diem": "midwest_us"
+    },
+    "approval_triggers": ["extra_night_for_fatigue_management"],
+    "documentation_rules": ["retain site agenda", "retain parking receipts"]
+  },
+  "vendor_constraints": {
+    "preferred_vendors": ["Enterprise", "Hilton Garden Inn"],
+    "approved_vendors": ["Enterprise", "Hertz", "Avis", "Hilton Garden Inn", "Hampton Inn"],
+    "disallowed_vendors": [],
+    "comparison_requirements": {
+      "airfare": 2,
+      "lodging": 2,
+      "car_rental": 2
+    }
+  },
+  "schedule_requirements": {
+    "arrival_buffer_preference": "conservative",
+    "meeting_protection_priority": 0.92,
+    "same_day_return_tolerance": 0.05,
+    "red_eye_tolerance": 0.0
+  },
+  "cost_controls": {
+    "overall_cost_priority": 0.8,
+    "policy_compliance_priority": 0.98,
+    "employee_convenience_priority": 0.66,
+    "splurge_requires_justification": true
+  },
+  "comfort_floors": {
+    "lodging_needs": ["parking", "safe late arrival", "quiet room"],
+    "transport_needs": ["reliable rental car", "daylight driving where possible"],
+    "arrival_readiness_needs": ["avoid exhausted first-day arrival"],
+    "work_enablers": ["early breakfast availability", "workspace in room"]
+  },
+  "documentation_requirements": {
+    "required_receipt_categories": ["airfare", "lodging", "car_rental", "parking"],
+    "justification_fields": ["site access necessity", "inspection schedule rigidity"],
+    "comparable_capture_required": true,
+    "booking_link_retention_required": true
+  },
+  "approval_targets": {
+    "needs_manager_approval": true,
+    "needs_finance_review": true,
+    "needs_exception_preclearance": true,
+    "approval_roles": ["manager", "finance"]
+  },
+  "exception_strategy": {
+    "fallback_mode": "manual_review",
+    "require_additional_comparables": true,
+    "notes": ["Escalate when fatigue-safe routing requires an extra lodging night."]
+  }
+}
