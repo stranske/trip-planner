@@ -63,6 +63,10 @@ class OptionEvidence:
         if self.option_kind not in OPTION_KINDS:
             raise ValueError(f"option_kind must be one of {OPTION_KINDS}")
         _require_strings(self.presented_option_ids, "presented_option_ids")
+        if self.presented_option_ids and self.option_id not in self.presented_option_ids:
+            raise ValueError("presented_option_ids must include option_id when provided")
+        if len(self.presented_option_ids) != len(set(self.presented_option_ids)):
+            raise ValueError("presented_option_ids cannot contain duplicates")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -136,10 +140,15 @@ class PreferenceEvidence:
                 raise ValueError(
                     "option_evidence is required for option_selection and option_rejection"
                 )
-        elif self.option_evidence is not None and self.evidence_type == "anchor_declaration":
-            raise ValueError("anchor_declaration cannot attach option_evidence directly")
+        elif self.option_evidence is not None:
+            raise ValueError(
+                "option_evidence is only allowed for option_selection and option_rejection"
+            )
         if any(not isinstance(item, ContradictionMarker) for item in self.contradictions):
             raise ValueError("contradictions must contain ContradictionMarker instances")
+        from .evidence_catalog import validate_evidence_support
+
+        validate_evidence_support(self)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

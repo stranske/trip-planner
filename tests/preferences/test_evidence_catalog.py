@@ -40,17 +40,15 @@ def test_validate_evidence_support_accepts_valid_anchor_path() -> None:
 
 
 def test_validate_evidence_support_rejects_invalid_dimension_combo() -> None:
-    record = PreferenceEvidence(
-        id="ev-103",
-        evidence_type="hard_constraint_declaration",
-        source_type="structured_input",
-        affected_dimensions=["social_energy_vs_solitude"],
-        sequence=1,
-        note="This should not work for a normal tradeoff dimension.",
-    )
-
     try:
-        validate_evidence_support(record)
+        PreferenceEvidence(
+            id="ev-103",
+            evidence_type="hard_constraint_declaration",
+            source_type="structured_input",
+            affected_dimensions=["social_energy_vs_solitude"],
+            sequence=1,
+            note="This should not work for a normal tradeoff dimension.",
+        )
     except ValueError as exc:
         assert "not valid evidence for dimension" in str(exc)
     else:
@@ -58,16 +56,14 @@ def test_validate_evidence_support_rejects_invalid_dimension_combo() -> None:
 
 
 def test_validate_evidence_support_rejects_invalid_hybrid_combo() -> None:
-    record = PreferenceEvidence(
-        id="ev-104",
-        evidence_type="hard_constraint_declaration",
-        source_type="structured_input",
-        affected_hybrid_factors=["music"],
-        sequence=3,
-    )
-
     try:
-        validate_evidence_support(record)
+        PreferenceEvidence(
+            id="ev-104",
+            evidence_type="hard_constraint_declaration",
+            source_type="structured_input",
+            affected_hybrid_factors=["music"],
+            sequence=3,
+        )
     except ValueError as exc:
         assert "not valid evidence for hybrid factor" in str(exc)
     else:

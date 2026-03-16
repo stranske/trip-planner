@@ -80,3 +80,53 @@ def test_preference_evidence_rejects_unknown_dimension() -> None:
         assert "unsupported dimensions" in str(exc)
     else:
         raise AssertionError("Unknown dimensions should fail validation")
+
+
+def test_option_evidence_requires_selected_option_in_presented_list() -> None:
+    try:
+        OptionEvidence(
+            option_set_id="set-2",
+            option_id="opt-hotel",
+            option_kind="lodging",
+            presented_option_ids=["opt-hostel", "opt-villa"],
+        )
+    except ValueError as exc:
+        assert "must include option_id" in str(exc)
+    else:
+        raise AssertionError("Presented option lists should include the selected option")
+
+
+def test_preference_evidence_rejects_option_payload_on_non_option_types() -> None:
+    try:
+        PreferenceEvidence(
+            id="ev-005",
+            evidence_type="direct_statement",
+            source_type="user_message",
+            affected_dimensions=["nature_vs_culture"],
+            sequence=3,
+            option_evidence=OptionEvidence(
+                option_set_id="set-1",
+                option_id="opt-rail",
+                option_kind="mixed_bundle",
+                presented_option_ids=["opt-rail"],
+            ),
+        )
+    except ValueError as exc:
+        assert "only allowed" in str(exc)
+    else:
+        raise AssertionError("Non-option evidence should reject option payloads")
+
+
+def test_preference_evidence_rejects_invalid_support_path_at_construction() -> None:
+    try:
+        PreferenceEvidence(
+            id="ev-006",
+            evidence_type="hard_constraint_declaration",
+            source_type="structured_input",
+            affected_dimensions=["social_energy_vs_solitude"],
+            sequence=5,
+        )
+    except ValueError as exc:
+        assert "not valid evidence for dimension" in str(exc)
+    else:
+        raise AssertionError("Invalid support paths should fail during construction")
