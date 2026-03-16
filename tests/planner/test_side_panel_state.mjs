@@ -82,6 +82,8 @@ async function loadModule(relativePath) {
 }
 
 const {
+  businessApprovalReadyReviewScenario,
+  businessApprovalReadyReviewState,
   inTripRevisionPromptScenario,
   inTripRevisionPromptState,
   leisureFeedbackLoopScenario,
@@ -102,110 +104,7 @@ const {
   renderPlannerSidePanel,
 } = await loadModule("bundle/planner/side-panel.js");
 
-const businessApprovalState = {
-  ...leisureFeedbackLoopState,
-  trip: {
-    ...leisureFeedbackLoopState.trip,
-    mode: "business",
-    status: "booked",
-    title: "Dallas client review with policy packet",
-    summary: "The approval surface should summarize compliance posture before export.",
-  },
-  proposal: {
-    proposal_id: "proposal-approval-01",
-    comparables: [
-      {
-        category: "lodging",
-        label: "Within-cap airport hotel",
-        vendor: "Courtyard",
-        booking_channel: "Concur",
-        estimated_cost: {
-          currency: "USD",
-          typical_amount: 214,
-        },
-        notes: [
-          "Requires a pre-dawn transfer to the client site.",
-          "Stays within the standard nightly lodging cap.",
-        ],
-      },
-      {
-        category: "airfare",
-        label: "One-stop daytime routing",
-        vendor: "American",
-        booking_channel: "Concur",
-        estimated_cost: {
-          currency: "USD",
-          typical_amount: 386,
-        },
-        notes: ["Extends total travel time by nearly three hours."],
-      },
-    ],
-    justifications: [
-      {
-        category: "lodging",
-        summary: "Higher nightly rate keeps the team near the client site for a pre-dawn audit start.",
-        evidence: [
-          "Audit kickoff begins at 05:45 local time.",
-          "The lower-cost hotel adds a 40-minute transfer each way.",
-        ],
-      },
-      {
-        category: "schedule",
-        summary: "The selected hotel reduces fatigue risk across consecutive site inspections.",
-        evidence: ["Traveler arrives after a late connection on the prior evening."],
-      },
-    ],
-    approval_notes: [
-      "Attach the lower-cost comparable to the approval packet.",
-      "Reference the fatigue-management rationale in the manager request.",
-    ],
-    requested_exception: {
-      exception_type: "lodging_rate_cap",
-      reason: "Request an exception to preserve site access and reduce fatigue risk.",
-      requested_approval_roles: ["manager", "finance"],
-      notes: ["Document why the within-cap hotel materially degrades the operating schedule."],
-    },
-  },
-  policy_evaluation: {
-    evaluation_id: "eval-approval-01",
-    proposal_id: "proposal-approval-01",
-    status: "exception_required",
-    approval_requirements: [
-      {
-        role: "manager",
-        reason: "Operational exception requires manager approval",
-        mandatory: true,
-      },
-      {
-        role: "finance",
-        reason: "Lodging cap exception requires finance review",
-        mandatory: true,
-      },
-    ],
-    failure_reasons: [
-      {
-        code: "lodging_rate_cap",
-        message: "Selected lodging exceeds the nightly cap but includes an operational-safety justification.",
-        severity: "warning",
-        related_category: "lodging",
-      },
-    ],
-    preferred_alternatives: [
-      {
-        category: "lodging",
-        summary: "Use the attached lower-cost comparable if the exception is denied.",
-        rationale: "Preserves site access with a lower nightly cost ceiling.",
-        comparable_ref: "lodging",
-      },
-    ],
-    exception_guidance: [
-      "Retain the lower-cost comparable in the approval packet.",
-      "Document the operational-safety rationale in the manager approval request.",
-    ],
-    notes: ["Proposal is exception-eligible if the fatigue-management rationale is approved."],
-    compliance_score: 0.68,
-  },
-};
+const businessApprovalState = businessApprovalReadyReviewState;
 
 test("planner side panel store initializes with decision-focused UI state", () => {
   const store = createPlannerSidePanelStore(leisureFeedbackLoopState);
@@ -242,6 +141,26 @@ test("planner UI mock catalog exposes the in-trip revision prompt workflow state
     "rain-replan-signal"
   );
   assert.equal(inTripRevisionPromptScenario.panel_state.next_step_actions[0].target_section, "decisions");
+});
+
+test("planner UI mock catalog exposes the business approval-ready review workflow state", () => {
+  assert.equal(
+    plannerUiStateMocks.business_approval_ready_review,
+    businessApprovalReadyReviewScenario
+  );
+  assert.equal(businessApprovalReadyReviewScenario.scenario_id, "business-approval-ready-review");
+  assert.match(businessApprovalReadyReviewScenario.workflow, /ready for approval review/);
+  assert.match(businessApprovalReadyReviewScenario.persona_summary, /pre-dawn client audit/);
+  assert.equal(businessApprovalReadyReviewScenario.panel_state, businessApprovalReadyReviewState);
+  assert.equal(businessApprovalReadyReviewScenario.panel_state.trip.mode, "business");
+  assert.equal(
+    businessApprovalReadyReviewScenario.panel_state.policy_evaluation?.status,
+    "exception_required"
+  );
+  assert.equal(
+    businessApprovalReadyReviewScenario.panel_state.next_step_actions[0].target_section,
+    "approval"
+  );
 });
 
 test("planner side panel controller rerenders on section and decision changes", () => {
