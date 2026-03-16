@@ -8,6 +8,14 @@ from .evidence_catalog import (
     support_for_hybrid_factor,
     validate_evidence_support,
 )
+from .explanations import (
+    DimensionResolutionExplanation,
+    HybridFactorExplanation,
+    InteractionActivation,
+    MaterialInfluence,
+    ResolutionExplanation,
+    ResolvedLeisureProfile,
+)
 from .legacy_request_adapter import adapt_legacy_request, load_legacy_request
 from .models import (
     Anchor,
@@ -23,6 +31,7 @@ from .models import (
     TradeoffDimension,
     TripFrame,
 )
+from .resolution import resolve_leisure_profile
 
 __all__ = [
     "Anchor",
@@ -31,18 +40,25 @@ __all__ = [
     "ContradictionMarker",
     "DateWindow",
     "DurationBounds",
+    "DimensionResolutionExplanation",
     "EvidenceSummary",
     "HardConstraints",
     "HybridFactor",
+    "HybridFactorExplanation",
     "InteractionRule",
+    "InteractionActivation",
+    "MaterialInfluence",
     "LeisurePreferenceProfile",
     "OptionEvidence",
     "PreferenceEvidence",
+    "ResolutionExplanation",
+    "ResolvedLeisureProfile",
     "TensionFlag",
     "TradeoffDimension",
     "TripFrame",
     "adapt_legacy_request",
     "load_legacy_request",
+    "resolve_leisure_profile",
     "support_for_anchor_group",
     "support_for_dimension",
     "support_for_hybrid_factor",
