@@ -16,6 +16,10 @@ This package is the source of truth for the first implementation pass of the lei
   - allowed evidence pathways and strength levels for tradeoffs, hybrid factors, and anchors
 - `trip_planner/preferences/legacy_request_adapter.py`
   - narrow compatibility adapter from the repo's older `request.json` shape into the canonical contract
+- `tests/fixtures/preferences/leisure_traveler_corpus.json`
+  - regression corpus of leisure archetypes and tension cases used to validate future resolver work
+- `tests/preferences/fixture_corpus.py`
+  - reusable loader that instantiates fixture profiles and evidence records from the corpus
 
 ## What This Replaces
 
