@@ -23,6 +23,7 @@ The target product should handle:
 - [Leisure preference contract](docs/leisure-preference-contract.md)
 - [Shared planning contracts](docs/shared-planning-contracts.md)
 - [Business travel profile contract](docs/business-travel-profile-contract.md)
+- [Policy-facing proposal contracts](docs/contracts/trip-plan-proposal.md)
 - [Source channel strategy](docs/source-channel-strategy.md)
 - [Legacy itinerary methodology](docs/methodology.md)
 - [CI system guide](docs/CI_SYSTEM_GUIDE.md)

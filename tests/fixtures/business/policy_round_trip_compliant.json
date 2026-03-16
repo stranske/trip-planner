@@ -1,0 +1,94 @@
+{
+  "constraint_set": {
+    "policy_id": "policy-001",
+    "organization_id": "org-001",
+    "policy_version": "2026.1",
+    "required_booking_channels": ["Concur"],
+    "airfare_rules": {"cabin": "economy"},
+    "lodging_rules": {"max_nightly_rate_usd": 300},
+    "ground_transport_rules": {"rideshare_allowed": true},
+    "meal_rules": {"per_diem": "standard"},
+    "approval_rules": ["manager approval required"],
+    "documentation_rules": ["retain airfare and lodging receipts"],
+    "allowed_exception_types": ["fare_cap", "lodging_cap"]
+  },
+  "proposal": {
+    "proposal_id": "proposal-001",
+    "trip_id": "trip-business-001",
+    "mode": "business",
+    "constraint_set_id": "policy-001",
+    "traveler_context": {
+      "employee_type": "employee",
+      "traveler_experience": "frequent",
+      "home_airport": "ORD",
+      "loyalty_programs": ["United MileagePlus"],
+      "mobility_or_access_needs": []
+    },
+    "selected_options": [
+      {
+        "category": "airfare",
+        "option_id": "air-001",
+        "label": "United nonstop economy",
+        "vendor": "United",
+        "booking_channel": "Concur",
+        "estimated_cost": {"currency": "USD", "typical_amount": 420.0},
+        "justification_refs": ["just-001"]
+      },
+      {
+        "category": "lodging",
+        "option_id": "hotel-001",
+        "label": "Hilton near convention center",
+        "vendor": "Hilton",
+        "booking_channel": "Concur",
+        "estimated_cost": {"currency": "USD", "typical_amount": 780.0},
+        "justification_refs": ["just-002"]
+      }
+    ],
+    "cost_summary": {
+      "currency": "USD",
+      "total_estimated_cost": 1340.0,
+      "category_estimates": {"airfare": 420.0, "lodging": 780.0, "ground_transport": 140.0},
+      "notes": ["All selected channels are policy-approved."]
+    },
+    "comparables": [
+      {
+        "category": "airfare",
+        "label": "American one-stop economy",
+        "vendor": "American",
+        "booking_channel": "Concur",
+        "estimated_cost": {"currency": "USD", "typical_amount": 390.0},
+        "notes": ["Longer total travel time."]
+      }
+    ],
+    "justifications": [
+      {
+        "category": "airfare",
+        "summary": "Nonstop arrival improves readiness for same-day client meetings.",
+        "evidence": ["meeting begins two hours after arrival window"]
+      },
+      {
+        "category": "lodging",
+        "summary": "Walking-distance hotel reduces ground-transport complexity.",
+        "evidence": ["hotel is 0.3 miles from venue"]
+      }
+    ],
+    "booking_channel_summaries": [
+      {"category": "airfare", "selected_channel": "Concur", "approved": true, "rationale": "Policy-required booking tool."},
+      {"category": "lodging", "selected_channel": "Concur", "approved": true, "rationale": "Policy-required booking tool."}
+    ],
+    "approval_notes": ["Manager approval captured before proposal export."]
+  },
+  "evaluation_result": {
+    "evaluation_id": "eval-001",
+    "proposal_id": "proposal-001",
+    "status": "compliant",
+    "approval_requirements": [
+      {"role": "manager", "reason": "Standard travel approval", "mandatory": true}
+    ],
+    "failure_reasons": [],
+    "preferred_alternatives": [],
+    "exception_guidance": [],
+    "notes": ["Proposal satisfies booking-channel and documentation requirements."],
+    "compliance_score": 1.0
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "constraint_set": {
+    "policy_id": "policy-002",
+    "organization_id": "org-001",
+    "policy_version": "2026.1",
+    "required_booking_channels": ["Concur"],
+    "airfare_rules": {"cabin": "economy"},
+    "lodging_rules": {"max_nightly_rate_usd": 260},
+    "ground_transport_rules": {"rideshare_allowed": true},
+    "meal_rules": {"per_diem": "standard"},
+    "approval_rules": ["finance review over 2000 total cost"],
+    "documentation_rules": ["retain all receipts"],
+    "allowed_exception_types": ["lodging_cap"]
+  },
+  "proposal": {
+    "proposal_id": "proposal-002",
+    "trip_id": "trip-business-002",
+    "mode": "business",
+    "constraint_set_id": "policy-002",
+    "traveler_context": {
+      "employee_type": "employee",
+      "traveler_experience": "occasional",
+      "home_airport": "DFW",
+      "loyalty_programs": [],
+      "mobility_or_access_needs": []
+    },
+    "selected_options": [
+      {
+        "category": "airfare",
+        "option_id": "air-101",
+        "label": "Direct economy fare",
+        "vendor": "American",
+        "booking_channel": "Direct vendor site",
+        "estimated_cost": {"currency": "USD", "typical_amount": 550.0},
+        "justification_refs": ["just-101"]
+      },
+      {
+        "category": "lodging",
+        "option_id": "hotel-101",
+        "label": "Client-preferred hotel",
+        "vendor": "Boutique Hotel",
+        "booking_channel": "Direct vendor site",
+        "estimated_cost": {"currency": "USD", "typical_amount": 980.0},
+        "justification_refs": ["just-102"]
+      }
+    ],
+    "cost_summary": {
+      "currency": "USD",
+      "total_estimated_cost": 1780.0,
+      "category_estimates": {"airfare": 550.0, "lodging": 980.0, "ground_transport": 250.0},
+      "notes": ["Selected outside approved booking channel."]
+    },
+    "comparables": [
+      {
+        "category": "lodging",
+        "label": "Approved chain hotel",
+        "vendor": "Hilton",
+        "booking_channel": "Concur",
+        "estimated_cost": {"currency": "USD", "typical_amount": 690.0},
+        "notes": ["Within policy nightly cap."]
+      }
+    ],
+    "justifications": [
+      {
+        "category": "lodging",
+        "summary": "Client suggested staying on property for convenience.",
+        "evidence": ["client-hosted dinner is in the same hotel"]
+      }
+    ],
+    "booking_channel_summaries": [
+      {"category": "airfare", "selected_channel": "Direct vendor site", "approved": false, "rationale": "Traveler bypassed required booking tool."},
+      {"category": "lodging", "selected_channel": "Direct vendor site", "approved": false, "rationale": "Traveler bypassed required booking tool."}
+    ],
+    "approval_notes": ["No pre-approved exception requested."]
+  },
+  "evaluation_result": {
+    "evaluation_id": "eval-002",
+    "proposal_id": "proposal-002",
+    "status": "non_compliant",
+    "approval_requirements": [
+      {"role": "manager", "reason": "Travel requires re-review after policy failure", "mandatory": true}
+    ],
+    "failure_reasons": [
+      {"code": "booking_channel_violation", "message": "Selected options were not booked through the required channel.", "severity": "blocking", "related_category": "booking_channel"},
+      {"code": "lodging_rate_cap", "message": "Selected hotel exceeds the nightly lodging cap.", "severity": "blocking", "related_category": "lodging"}
+    ],
+    "preferred_alternatives": [
+      {"category": "lodging", "summary": "Use approved chain hotel through Concur", "rationale": "Preserves client proximity while satisfying rate cap.", "comparable_ref": "lodging"}
+    ],
+    "exception_guidance": [],
+    "notes": ["Proposal should be rebuilt using approved channels before approval."],
+    "compliance_score": 0.22
+  }
+}
