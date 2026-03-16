@@ -179,7 +179,7 @@ def _apply_dimension_resolution(
             profile.evidence_summary.sources.setdefault(dimension_key, []).append(record.id)
             if record.signal_direction == "positive":
                 positive_support += weight
-            else:
+            elif record.signal_direction == "negative":
                 weakening_support += weight
             contradiction_support += sum(
                 marker.weakening_strength * weight * 0.65 for marker in record.contradictions
@@ -198,6 +198,25 @@ def _apply_dimension_resolution(
             value = _clamp_axis(base_direction * magnitude)
         else:
             value = 0.0
+            if positive_support > 0.0 or weakening_support > 0.0 or contradiction_support > 0.0:
+                tension_id = f"{dimension_key}-needs-directional-seed"
+                flag = TensionFlag(
+                    id=tension_id,
+                    severity=_clamp_probability(0.45 + positive_support + contradiction_support),
+                    description=(
+                        f"{dimension_key} has evidence support but still needs directional seeding."
+                    ),
+                )
+                profile.tension_flags.append(flag)
+                explanation.tension_explanations[tension_id] = list(
+                    explanation.dimension_explanations[dimension_key].influences
+                )
+                explanation.dimension_explanations[dimension_key].tension_flag_ids.append(
+                    tension_id
+                )
+                profile.evidence_summary.confidence_notes.append(
+                    f"{dimension_key} received evidence but remained at a zero-direction seed value."
+                )
         dimension.value = value
         dimension.confidence = _clamp_probability(
             max(dimension.confidence, 0.25)

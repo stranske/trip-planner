@@ -65,3 +65,20 @@ def test_resolution_emits_contradiction_tension_when_evidence_conflicts() -> Non
     assert "movement_vs_friction-contradiction" in (
         result.explanation.dimension_explanations["movement_vs_friction"].tension_flag_ids
     )
+
+
+def test_resolution_flags_dimensions_that_need_directional_seed() -> None:
+    fixture = next(item for item in load_fixture_corpus() if item.id == "discovery-wanderer")
+    seed = _resolution_seed(fixture.profile)
+    seed.tradeoff_dimensions["iconic_vs_discovery"].value = 0.0
+
+    result = resolve_leisure_profile(seed, fixture.evidence)
+
+    assert any(
+        flag.id == "iconic_vs_discovery-needs-directional-seed"
+        for flag in result.profile.tension_flags
+    )
+    assert any(
+        "zero-direction seed value" in note
+        for note in result.profile.evidence_summary.confidence_notes
+    )
