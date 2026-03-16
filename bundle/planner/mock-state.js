@@ -151,6 +151,15 @@
  * @property {NextStepActionRecord[]} next_step_actions
  */
 
+/**
+ * @typedef {Object} PlannerUiScenarioRecord
+ * @property {string} scenario_id
+ * @property {string} label
+ * @property {string} workflow
+ * @property {string} persona_summary
+ * @property {PlannerPanelState} panel_state
+ */
+
 /** @type {PlannerPanelState} */
 export const leisureFeedbackLoopState = {
   trip: {
@@ -271,4 +280,17 @@ export const leisureFeedbackLoopState = {
       target_section: "outputs",
     },
   ],
+};
+
+/** @type {PlannerUiScenarioRecord} */
+export const leisureFeedbackLoopScenario = {
+  scenario_id: "leisure-feedback-loop",
+  label: "Leisure feedback loop",
+  workflow: "Traveler compares lodging tradeoffs, gives feedback, and answers a single focused decision.",
+  persona_summary: "Pair trip that values walkability, food value, and a softer recovery day after arrival.",
+  panel_state: leisureFeedbackLoopState,
+};
+
+export const plannerUiStateMocks = {
+  leisure_feedback_loop: leisureFeedbackLoopScenario,
 };

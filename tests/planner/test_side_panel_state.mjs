@@ -81,7 +81,9 @@ async function loadModule(relativePath) {
   return import(`data:text/javascript,${encodeURIComponent(source)}`);
 }
 
-const { leisureFeedbackLoopState } = await loadModule("bundle/planner/mock-state.js");
+const { leisureFeedbackLoopScenario, leisureFeedbackLoopState, plannerUiStateMocks } = await loadModule(
+  "bundle/planner/mock-state.js"
+);
 const {
   createPlannerSidePanelStore,
   renderComparablesDisplayComponent,
@@ -210,6 +212,17 @@ test("planner side panel store initializes with decision-focused UI state", () =
 
   store.setActiveSection("options");
   assert.equal(store.getState().ui.active_section, "options");
+});
+
+test("planner UI mock catalog exposes the leisure feedback loop workflow state", () => {
+  assert.equal(plannerUiStateMocks.leisure_feedback_loop, leisureFeedbackLoopScenario);
+  assert.equal(leisureFeedbackLoopScenario.scenario_id, "leisure-feedback-loop");
+  assert.match(leisureFeedbackLoopScenario.workflow, /Traveler compares lodging tradeoffs/);
+  assert.match(leisureFeedbackLoopScenario.persona_summary, /walkability, food value/);
+  assert.equal(leisureFeedbackLoopScenario.panel_state, leisureFeedbackLoopState);
+  assert.equal(leisureFeedbackLoopScenario.panel_state.trip.mode, "leisure");
+  assert.equal(leisureFeedbackLoopScenario.panel_state.pending_decisions[0].decision_id, "lodging-signal");
+  assert.equal(leisureFeedbackLoopScenario.panel_state.next_step_actions[0].target_section, "decisions");
 });
 
 test("planner side panel controller rerenders on section and decision changes", () => {
