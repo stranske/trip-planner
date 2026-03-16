@@ -6,10 +6,10 @@ tasks:
   - id: task-01
     title: 'Create the planner side-panel container component with layout (verify:
       confirm completion in repo)'
-    status: doing
+    status: done
     started_at: '2026-03-16T17:23:49Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-03-16T17:24:05Z'
+    commit: 19e7955e86e62e18cad5edff679210c3aa1835e3
     notes: []
   - id: task-02
     title: 'Create the planner side-panel container component with state management
