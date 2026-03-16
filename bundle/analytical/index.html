@@ -1,12 +1,19 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Trip Planner – Analytical (Placeholder)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trip Planner - Analytical Workspace</title>
   <link rel="stylesheet" href="../style.css">
 </head>
 <body>
-  <h1>Analytical Itineraries – Placeholder</h1>
-  <p>This page will list Compact and Extended itineraries once rendering is complete.</p>
+  <main id="planner-app"></main>
+  <script type="module">
+    import { leisureFeedbackLoopState } from "../planner/mock-state.js";
+    import { renderPlannerSidePanel } from "../planner/side-panel.js";
+
+    const app = document.querySelector("#planner-app");
+    renderPlannerSidePanel(app, leisureFeedbackLoopState);
+  </script>
 </body>
 </html>
