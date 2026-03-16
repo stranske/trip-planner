@@ -65,6 +65,7 @@ async function loadModule(relativePath) {
 const { leisureFeedbackLoopState } = await loadModule("bundle/planner/mock-state.js");
 const {
   createPlannerSidePanelStore,
+  renderOptionFeedbackPromptsComponent,
   renderPendingDecisionsComponent,
   renderPlannerOutputsDisplay,
   renderPlannerSidePanel,
@@ -117,6 +118,30 @@ test("planner outputs display renders an empty state when no outputs exist", () 
   assert.match(markup, /No planner outputs yet\./);
 });
 
+test("option feedback prompts component renders collection fields and pacing suggestions", () => {
+  const markup = renderOptionFeedbackPromptsComponent(
+    leisureFeedbackLoopState.option_set,
+    leisureFeedbackLoopState.planner_behavior
+  );
+
+  assert.match(markup, /aria-label="Option feedback prompts"/);
+  assert.match(markup, /data-planner-option-feedback="option-bairro-alto"/);
+  assert.match(markup, /What feels strongest about this option\?/);
+  assert.match(markup, /What should the planner change if this misses\?/);
+  assert.match(markup, /Show options even sooner/);
+  assert.match(markup, /Do more before asking again/);
+  assert.match(markup, /Explain less/);
+});
+
+test("option feedback prompts component renders an empty state when no options exist", () => {
+  const markup = renderOptionFeedbackPromptsComponent(
+    { ...leisureFeedbackLoopState.option_set, options: [] },
+    leisureFeedbackLoopState.planner_behavior
+  );
+
+  assert.match(markup, /No option feedback prompts yet\./);
+});
+
 test("pending decisions component renders the default decision prompt and choices", () => {
   const markup = renderPendingDecisionsComponent(leisureFeedbackLoopState.pending_decisions);
 
@@ -152,4 +177,17 @@ test("pending decisions component renders an empty state when no prompts exist",
   const markup = renderPendingDecisionsComponent([]);
 
   assert.match(markup, /No pending decisions\./);
+});
+
+test("planner side panel options section includes the option feedback prompts surface", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderPlannerSidePanel(mountNode, leisureFeedbackLoopState);
+
+  controller.setActiveSection("options");
+
+  assert.match(mountNode.innerHTML, /Stay shape for the first half of the trip/);
+  assert.match(mountNode.innerHTML, /What feels strongest about this option\?/);
+  assert.match(mountNode.innerHTML, /data-planner-feedback-kind="show_options_sooner"/);
+
+  controller.destroy();
 });

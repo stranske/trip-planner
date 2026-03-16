@@ -220,7 +220,8 @@ body {
 }
 
 .planner-output-card,
-.planner-decision-card {
+.planner-decision-card,
+.planner-feedback-card {
   padding: 14px;
   border-radius: var(--radius-md);
   background: #fffdf9;
@@ -235,13 +236,15 @@ body {
 }
 
 .planner-output-card h4,
-.planner-decision-card h4 {
+.planner-decision-card h4,
+.planner-feedback-card h4 {
   margin: 0 0 8px;
   font-size: 1rem;
 }
 
 .planner-output-card p,
-.planner-decision-card p {
+.planner-decision-card p,
+.planner-feedback-card p {
   margin: 0;
   line-height: 1.5;
 }
@@ -306,6 +309,53 @@ body {
 .planner-decision-link.is-active {
   border-color: rgba(15, 107, 91, 0.34);
   background: rgba(15, 107, 91, 0.08);
+}
+
+.planner-feedback-layout {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.planner-feedback-prompts {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.planner-feedback-field {
+  display: grid;
+  gap: 6px;
+  color: var(--text-strong);
+  font-size: 0.94rem;
+}
+
+.planner-feedback-field textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 88px;
+  padding: 12px 14px;
+  border: 1px solid rgba(111, 84, 41, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-strong);
+  font: inherit;
+}
+
+.planner-feedback-field textarea::placeholder {
+  color: rgba(106, 90, 72, 0.8);
+}
+
+.planner-feedback-action {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 11px;
+  border: 1px solid rgba(15, 107, 91, 0.18);
+  border-radius: 999px;
+  background: rgba(15, 107, 91, 0.08);
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
 }
 
 .planner-footer-note {

@@ -258,6 +258,100 @@ function renderPendingDecisions(state) {
 }
 
 /**
+ * @param {import("./mock-state.js").PlannerBehaviorRecord} behavior
+ * @returns {{ feedback_kind: string, label: string }[]}
+ */
+function getFeedbackPromptActions(behavior) {
+  return [
+    {
+      feedback_kind: "show_options_sooner",
+      label: behavior.surface_options_early ? "Show options even sooner" : "Show options sooner",
+    },
+    {
+      feedback_kind: "do_more_before_asking",
+      label: behavior.target_research_passes > 2 ? "Do more before asking again" : "Research deeper first",
+    },
+    {
+      feedback_kind: "ask_me_earlier",
+      label: behavior.ask_before_next_major_change ? "Ask me earlier on route changes" : "Check in sooner",
+    },
+    {
+      feedback_kind: "explain_more",
+      label: behavior.explanation_density === "detailed" ? "Keep the detailed rationale" : "Explain more",
+    },
+    {
+      feedback_kind: "explain_less",
+      label: behavior.explanation_density === "lean" ? "Keep this concise" : "Explain less",
+    },
+  ];
+}
+
+/**
+ * @param {import("./mock-state.js").OptionSetRecord} optionSet
+ * @param {import("./mock-state.js").PlannerBehaviorRecord} behavior
+ * @returns {string}
+ */
+export function renderOptionFeedbackPromptsComponent(optionSet, behavior) {
+  if (!optionSet.options.length) {
+    return '<p class="planner-empty-state">No option feedback prompts yet.</p>';
+  }
+
+  const feedbackActions = getFeedbackPromptActions(behavior);
+
+  return `
+    <div class="planner-feedback-layout" aria-label="Option feedback prompts">
+      ${optionSet.options
+        .map(
+          (option) => `
+            <article class="planner-feedback-card" data-planner-option-feedback="${option.option_id}">
+              <div class="planner-section-header">
+                <h4>${option.label}</h4>
+                <span class="planner-meta">${option.kind}</span>
+              </div>
+              <p class="planner-feedback-summary">${option.summary}</p>
+              <div class="planner-feedback-prompts">
+                <label class="planner-feedback-field">
+                  <span>What feels strongest about this option?</span>
+                  <textarea
+                    rows="3"
+                    name="feedback-positive-${option.option_id}"
+                    placeholder="Example: Keep the walkable core, but I need calmer nights."
+                  ></textarea>
+                </label>
+                <label class="planner-feedback-field">
+                  <span>What should the planner change if this misses?</span>
+                  <textarea
+                    rows="3"
+                    name="feedback-revise-${option.option_id}"
+                    placeholder="Example: Hold the same neighborhood access, but widen the room and arrival buffer."
+                  ></textarea>
+                </label>
+              </div>
+              <div class="planner-chip-row" aria-label="Feedback prompt suggestions">
+                ${feedbackActions
+                  .map(
+                    (action) => `
+                      <button
+                        type="button"
+                        class="planner-feedback-action"
+                        data-planner-feedback-kind="${action.feedback_kind}"
+                        data-planner-option-id="${option.option_id}"
+                      >
+                        ${action.label}
+                      </button>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+/**
  * @param {PlannerPanelViewState} state
  * @returns {string}
  */
@@ -301,6 +395,7 @@ function renderOptions(state) {
         ${optionSet.options.map((option) => `<li><strong>${option.label}</strong>: ${option.summary}</li>`).join("")}
       </ul>
     </div>
+    ${renderOptionFeedbackPromptsComponent(optionSet, state.data.planner_behavior)}
   `;
 }
 
