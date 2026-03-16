@@ -352,6 +352,40 @@ export function renderOptionFeedbackPromptsComponent(optionSet, behavior) {
 }
 
 /**
+ * @param {import("./mock-state.js").NextStepActionRecord[]} nextStepActions
+ * @param {PlannerPanelSection} activeSection
+ * @returns {string}
+ */
+export function renderNextStepActionsComponent(nextStepActions, activeSection) {
+  if (!nextStepActions.length) {
+    return '<p class="planner-empty-state">No next-step actions available.</p>';
+  }
+
+  return `
+    <div class="planner-next-step-layout" role="list" aria-label="Next-step actions">
+      ${nextStepActions
+        .map(
+          (action) => `
+            <article
+              class="planner-output-card planner-next-step-card planner-next-step-card--${action.emphasis}${action.target_section === activeSection ? " is-contextual" : ""}"
+              role="listitem"
+              data-planner-next-step="${action.action_id}"
+              data-planner-action-kind="${action.action_kind}"
+            >
+              <div class="planner-section-header">
+                <h4>${action.label}</h4>
+                <span class="planner-meta">${formatSectionLabel(action.target_section)}</span>
+              </div>
+              <p>${action.description}</p>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+/**
  * @param {PlannerPanelViewState} state
  * @returns {string}
  */
@@ -469,6 +503,13 @@ function renderPlannerMarkup(state) {
               <span class="planner-meta">${renderActiveSectionMeta(state)}</span>
             </div>
             ${renderActiveSection(state)}
+          </section>
+          <section class="planner-section" aria-labelledby="planner-next-step-title">
+            <div class="planner-section-header">
+              <h3 id="planner-next-step-title">Next-Step Actions</h3>
+              <span class="planner-meta">${state.data.next_step_actions.length} ready</span>
+            </div>
+            ${renderNextStepActionsComponent(state.data.next_step_actions, state.ui.active_section)}
           </section>
         </div>
         <p class="planner-footer-note">

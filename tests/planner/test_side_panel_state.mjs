@@ -65,6 +65,7 @@ async function loadModule(relativePath) {
 const { leisureFeedbackLoopState } = await loadModule("bundle/planner/mock-state.js");
 const {
   createPlannerSidePanelStore,
+  renderNextStepActionsComponent,
   renderOptionFeedbackPromptsComponent,
   renderPendingDecisionsComponent,
   renderPlannerOutputsDisplay,
@@ -142,6 +143,26 @@ test("option feedback prompts component renders an empty state when no options e
   assert.match(markup, /No option feedback prompts yet\./);
 });
 
+test("next-step actions component renders available traveler actions", () => {
+  const markup = renderNextStepActionsComponent(
+    leisureFeedbackLoopState.next_step_actions,
+    "decisions"
+  );
+
+  assert.match(markup, /aria-label="Next-step actions"/);
+  assert.match(markup, /data-planner-next-step="answer-lodging-signal"/);
+  assert.match(markup, /data-planner-action-kind="answer_decision"/);
+  assert.match(markup, /Answer the lodging decision/);
+  assert.match(markup, /planner-next-step-card--primary is-contextual/);
+  assert.match(markup, /Compare the lodging options again/);
+});
+
+test("next-step actions component renders an empty state when no actions exist", () => {
+  const markup = renderNextStepActionsComponent([], "outputs");
+
+  assert.match(markup, /No next-step actions available\./);
+});
+
 test("pending decisions component renders the default decision prompt and choices", () => {
   const markup = renderPendingDecisionsComponent(leisureFeedbackLoopState.pending_decisions);
 
@@ -188,6 +209,21 @@ test("planner side panel options section includes the option feedback prompts su
   assert.match(mountNode.innerHTML, /Stay shape for the first half of the trip/);
   assert.match(mountNode.innerHTML, /What feels strongest about this option\?/);
   assert.match(mountNode.innerHTML, /data-planner-feedback-kind="show_options_sooner"/);
+
+  controller.destroy();
+});
+
+test("planner side panel includes the next-step actions section", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderPlannerSidePanel(mountNode, leisureFeedbackLoopState);
+
+  assert.match(mountNode.innerHTML, /Next-Step Actions/);
+  assert.match(mountNode.innerHTML, /Answer the lodging decision/);
+  assert.match(mountNode.innerHTML, /Compare the lodging options again/);
+
+  controller.setActiveSection("options");
+
+  assert.match(mountNode.innerHTML, /planner-next-step-card--secondary is-contextual/);
 
   controller.destroy();
 });

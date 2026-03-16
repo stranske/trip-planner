@@ -88,6 +88,16 @@
  */
 
 /**
+ * @typedef {Object} NextStepActionRecord
+ * @property {string} action_id
+ * @property {"review_outputs" | "answer_decision" | "compare_options" | "prepare_approval"} action_kind
+ * @property {string} label
+ * @property {string} description
+ * @property {"primary" | "secondary" | "quiet"} emphasis
+ * @property {"outputs" | "decisions" | "options" | "approval"} target_section
+ */
+
+/**
  * @typedef {Object} PlannerPanelState
  * @property {TripRecord} trip
  * @property {OptionSetRecord} option_set
@@ -95,6 +105,7 @@
  * @property {PendingDecisionRecord[]} pending_decisions
  * @property {PlannerOutputRecord[]} outputs
  * @property {PlannerBehaviorRecord} planner_behavior
+ * @property {NextStepActionRecord[]} next_step_actions
  */
 
 /** @type {PlannerPanelState} */
@@ -190,4 +201,30 @@ export const leisureFeedbackLoopState = {
     surface_options_early: true,
     explanation_density: "standard",
   },
+  next_step_actions: [
+    {
+      action_id: "answer-lodging-signal",
+      action_kind: "answer_decision",
+      label: "Answer the lodging decision",
+      description: "Tell the planner whether central access or recovery quiet should win this round.",
+      emphasis: "primary",
+      target_section: "decisions",
+    },
+    {
+      action_id: "compare-lodging-options",
+      action_kind: "compare_options",
+      label: "Compare the lodging options again",
+      description: "Re-open the option set with the current walkability, quiet, and cost tradeoffs.",
+      emphasis: "secondary",
+      target_section: "options",
+    },
+    {
+      action_id: "review-planner-read",
+      action_kind: "review_outputs",
+      label: "Review what changed",
+      description: "Scan the latest planner outputs before confirming the next checkpoint.",
+      emphasis: "quiet",
+      target_section: "outputs",
+    },
+  ],
 };
