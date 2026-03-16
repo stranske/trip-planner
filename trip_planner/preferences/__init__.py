@@ -1,5 +1,12 @@
 """Leisure preference contracts and narrow legacy compatibility adapters."""
 
+from .autonomy import (
+    AutonomyFeedback,
+    AutonomyGuardrails,
+    AutonomyPreference,
+    PlannerBehaviorMetadata,
+    PlanningAutonomyProfile,
+)
 from .evidence import ContradictionMarker, OptionEvidence, PreferenceEvidence
 from .evidence_catalog import (
     ANCHOR_SIGNAL_GUIDANCE,
@@ -31,12 +38,21 @@ from .models import (
     TradeoffDimension,
     TripFrame,
 )
+from .revealed_preference import (
+    RevealedPreferenceSignal,
+    RevealedPreferenceUpdate,
+    build_revealed_preference_update,
+)
 from .resolution import resolve_leisure_profile
 
 __all__ = [
     "Anchor",
     "ANCHOR_SIGNAL_GUIDANCE",
+    "AutonomyFeedback",
+    "AutonomyGuardrails",
+    "AutonomyPreference",
     "BudgetModel",
+    "build_revealed_preference_update",
     "ContradictionMarker",
     "DateWindow",
     "DurationBounds",
@@ -50,7 +66,11 @@ __all__ = [
     "MaterialInfluence",
     "LeisurePreferenceProfile",
     "OptionEvidence",
+    "PlannerBehaviorMetadata",
+    "PlanningAutonomyProfile",
     "PreferenceEvidence",
+    "RevealedPreferenceSignal",
+    "RevealedPreferenceUpdate",
     "ResolutionExplanation",
     "ResolvedLeisureProfile",
     "TensionFlag",

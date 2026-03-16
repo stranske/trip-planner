@@ -21,6 +21,7 @@ The target product should handle:
 - [Implementation plan](docs/implementation-plan.md)
 - [Product and architecture brief](docs/product-architecture-brief.md)
 - [Leisure preference contract](docs/leisure-preference-contract.md)
+- [Planning autonomy and revealed preference contracts](docs/contracts/planning-autonomy.md)
 - [Shared planning contracts](docs/shared-planning-contracts.md)
 - [Business travel profile contract](docs/business-travel-profile-contract.md)
 - [Policy-facing proposal contracts](docs/contracts/trip-plan-proposal.md)
