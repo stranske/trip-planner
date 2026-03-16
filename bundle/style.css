@@ -271,6 +271,34 @@ body {
   font-size: 0.84rem;
 }
 
+.planner-readiness-meter {
+  position: relative;
+  overflow: hidden;
+  height: 10px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: rgba(46, 38, 29, 0.08);
+}
+
+.planner-readiness-meter__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.planner-readiness-meter__fill--positive {
+  background: #1e7a55;
+}
+
+.planner-readiness-meter__fill--caution {
+  background: #b7791f;
+}
+
+.planner-readiness-meter__fill--critical {
+  background: #b33a2b;
+}
+
 .planner-option-list,
 .planner-list {
   margin: 0;

@@ -758,11 +758,127 @@ export function renderJustificationBurdenComponent(proposal, policyEvaluation) {
 }
 
 /**
+ * @param {import("./mock-state.js").ProposalRecord | null} proposal
+ * @param {import("./mock-state.js").PolicyEvaluationRecord | null} policyEvaluation
+ * @returns {string}
+ */
+export function renderProposalReadinessIndicatorComponent(proposal, policyEvaluation) {
+  if (!proposal || !policyEvaluation) {
+    return '<p class="planner-empty-state">No proposal readiness state is available for this planner review.</p>';
+  }
+
+  const comparableCount = proposal.comparables.length;
+  const justificationCount = proposal.justifications?.length ?? 0;
+  const approvalRoleCount = policyEvaluation.approval_requirements.length;
+  const blockingFailureCount = policyEvaluation.failure_reasons.filter(
+    (failure) => failure.severity === "blocking"
+  ).length;
+  const hasExceptionPath = policyEvaluation.status !== "exception_required" || Boolean(proposal.requested_exception);
+  const readinessChecks = [
+    {
+      label: "Comparables attached",
+      detail: `${comparableCount} option${comparableCount === 1 ? "" : "s"} in the approval packet`,
+      complete: comparableCount > 0,
+    },
+    {
+      label: "Business rationale captured",
+      detail: `${justificationCount} justification record${justificationCount === 1 ? "" : "s"}`,
+      complete: justificationCount > 0,
+    },
+    {
+      label: "Approval route identified",
+      detail: `${approvalRoleCount} approver role${approvalRoleCount === 1 ? "" : "s"} identified`,
+      complete: approvalRoleCount > 0 || policyEvaluation.status === "compliant",
+    },
+    {
+      label: "Submission path defined",
+      detail:
+        policyEvaluation.status === "exception_required"
+          ? hasExceptionPath
+            ? "Exception request is attached"
+            : "Exception request is still missing"
+          : "No exception packet required",
+      complete: hasExceptionPath,
+    },
+  ];
+  const completedChecks = readinessChecks.filter((check) => check.complete).length;
+  const readinessPercent = Math.round((completedChecks / readinessChecks.length) * 100);
+  const statusTone =
+    blockingFailureCount > 0
+      ? "critical"
+      : readinessPercent === 100
+        ? "positive"
+        : "caution";
+  const readinessLabel =
+    blockingFailureCount > 0
+      ? "blocked"
+      : readinessPercent === 100
+        ? policyEvaluation.status === "exception_required"
+          ? "exception packet ready"
+          : "ready to submit"
+        : "needs completion";
+
+  return `
+    <div class="planner-feedback-layout" aria-label="Proposal readiness indicator">
+      <article
+        class="planner-output-card"
+        data-proposal-readiness="${readinessLabel.replaceAll(" ", "-")}"
+      >
+        <div class="planner-section-header">
+          <h4>Proposal readiness</h4>
+          <span class="planner-status-pill planner-status-pill--${statusTone}">${readinessLabel}</span>
+        </div>
+        <p>${completedChecks} of ${readinessChecks.length} approval checks complete.</p>
+        <div
+          class="planner-readiness-meter"
+          role="progressbar"
+          aria-label="Proposal readiness progress"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="${readinessPercent}"
+        >
+          <span class="planner-readiness-meter__fill planner-readiness-meter__fill--${statusTone}" style="width: ${readinessPercent}%"></span>
+        </div>
+        <div class="planner-chip-row" aria-label="Proposal readiness summary">
+          <span class="planner-chip">${Math.round(policyEvaluation.compliance_score * 100)}% compliance</span>
+          <span class="planner-chip">${blockingFailureCount} blocking issue${blockingFailureCount === 1 ? "" : "s"}</span>
+          <span class="planner-chip">${approvalRoleCount} approver${approvalRoleCount === 1 ? "" : "s"}</span>
+        </div>
+      </article>
+      <article class="planner-output-card">
+        <div class="planner-section-header">
+          <h4>Approval checklist</h4>
+          <span class="planner-meta">${completedChecks}/${readinessChecks.length} complete</span>
+        </div>
+        <ul class="planner-list">
+          ${readinessChecks
+            .map(
+              (check) => `
+                <li data-readiness-complete="${check.complete}">
+                  <strong>${check.complete ? "Ready" : "Open"}:</strong> ${check.label}. ${check.detail}.
+                </li>
+              `
+            )
+            .join("")}
+        </ul>
+      </article>
+    </div>
+  `;
+}
+
+/**
  * @param {PlannerPanelViewState} state
  * @returns {string}
  */
 function renderPolicyStatus(state) {
   return `
+    <section aria-label="Proposal readiness review">
+      <div class="planner-section-header">
+        <h3>Proposal Readiness</h3>
+        <span class="planner-meta">${state.data.policy_evaluation ? "active" : "inactive"}</span>
+      </div>
+      ${renderProposalReadinessIndicatorComponent(state.data.proposal, state.data.policy_evaluation)}
+    </section>
     ${renderPolicyPostureDisplayComponent(state.data.policy_evaluation)}
     <section aria-label="Justification burden review">
       <div class="planner-section-header">

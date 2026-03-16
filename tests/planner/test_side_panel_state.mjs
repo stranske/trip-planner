@@ -90,6 +90,7 @@ const {
   renderOptionFeedbackPromptsComponent,
   renderPendingDecisionsComponent,
   renderPolicyPostureDisplayComponent,
+  renderProposalReadinessIndicatorComponent,
   renderPlannerOutputsDisplay,
   renderStructuredResponseCaptureComponent,
   renderPlannerSidePanel,
@@ -381,6 +382,27 @@ test("justification burden component renders an empty state when no documentatio
   assert.match(markup, /No justification burden is attached to this approval review\./);
 });
 
+test("proposal readiness indicator component renders readiness status and checklist", () => {
+  const markup = renderProposalReadinessIndicatorComponent(
+    businessApprovalState.proposal,
+    businessApprovalState.policy_evaluation
+  );
+
+  assert.match(markup, /aria-label="Proposal readiness indicator"/);
+  assert.match(markup, /data-proposal-readiness="exception-packet-ready"/);
+  assert.match(markup, /4 of 4 approval checks complete\./);
+  assert.match(markup, /aria-valuenow="100"/);
+  assert.match(markup, /68% compliance/);
+  assert.match(markup, /Ready:<\/strong> Comparables attached\. 2 options in the approval packet\./);
+  assert.match(markup, /Ready:<\/strong> Submission path defined\. Exception request is attached\./);
+});
+
+test("proposal readiness indicator component renders an empty state when approval data is absent", () => {
+  const markup = renderProposalReadinessIndicatorComponent(null, null);
+
+  assert.match(markup, /No proposal readiness state is available for this planner review\./);
+});
+
 test("pending decisions component renders the default decision prompt and choices", () => {
   const markup = renderPendingDecisionsComponent(leisureFeedbackLoopState.pending_decisions);
 
@@ -437,6 +459,9 @@ test("planner side panel approval section includes the policy posture display", 
 
   controller.setActiveSection("approval");
 
+  assert.match(mountNode.innerHTML, /Proposal Readiness/);
+  assert.match(mountNode.innerHTML, /exception packet ready/);
+  assert.match(mountNode.innerHTML, /4 of 4 approval checks complete\./);
   assert.match(mountNode.innerHTML, /Policy posture/);
   assert.match(mountNode.innerHTML, /exception required/);
   assert.match(mountNode.innerHTML, /Compliance score: 68%/);
