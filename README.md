@@ -21,6 +21,7 @@ The target product should handle:
 - [Implementation plan](docs/implementation-plan.md)
 - [Product and architecture brief](docs/product-architecture-brief.md)
 - [Leisure preference contract](docs/leisure-preference-contract.md)
+- [Shared planning contracts](docs/shared-planning-contracts.md)
 - [Source channel strategy](docs/source-channel-strategy.md)
 - [Legacy itinerary methodology](docs/methodology.md)
 - [CI system guide](docs/CI_SYSTEM_GUIDE.md)
@@ -34,9 +35,10 @@ The implementation in this repository is still mostly a script-based generator f
 - `scripts/generate_itins.py`
 - `scripts/build_html.py`
 
-The first canonical application package now starts in:
+The first canonical application packages now start in:
 
 - `trip_planner/preferences/`
+- `trip_planner/contracts/`
 
 The old script flow is not the default design path for new work. It remains only where a narrow compatibility bridge is still useful, and older static-demo artifacts have been moved under `archive/legacy-static-demo/`.
 
