@@ -1,0 +1,87 @@
+{
+  "schema_version": "0.1.0",
+  "profile_kind": "business",
+  "traveler_context": {
+    "employee_type": "employee",
+    "traveler_experience": "occasional",
+    "home_airport": "ORD",
+    "loyalty_programs": ["United MileagePlus", "Marriott Bonvoy"],
+    "mobility_or_access_needs": []
+  },
+  "trip_purpose": {
+    "purpose_type": "conference",
+    "business_justification": "Attend an industry conference and represent the organization at partner sessions.",
+    "required_presence_windows": [
+      {
+        "start": "2026-09-14T08:00:00-05:00",
+        "end": "2026-09-16T18:00:00-05:00",
+        "label": "Conference program"
+      }
+    ],
+    "trip_criticality": "medium"
+  },
+  "policy_constraints": {
+    "required_booking_channels": ["Concur"],
+    "airfare_rules": {
+      "cabin": "economy",
+      "advance_purchase_days": 14
+    },
+    "lodging_rules": {
+      "max_nightly_rate_usd": 320,
+      "conference_hotel_allowed": true
+    },
+    "ground_transport_rules": {
+      "rideshare_allowed": true,
+      "rental_car_default": false
+    },
+    "per_diem_or_meal_rules": {
+      "per_diem_city_tier": "conference"
+    },
+    "approval_triggers": ["airfare_over_900_usd"],
+    "documentation_rules": ["retain conference registration receipt"]
+  },
+  "vendor_constraints": {
+    "preferred_vendors": ["United", "Marriott"],
+    "approved_vendors": ["United", "American", "Delta", "Marriott", "Hilton"],
+    "disallowed_vendors": [],
+    "comparison_requirements": {
+      "airfare": 2,
+      "lodging": 2
+    }
+  },
+  "schedule_requirements": {
+    "arrival_buffer_preference": "moderate",
+    "meeting_protection_priority": 0.8,
+    "same_day_return_tolerance": 0.1,
+    "red_eye_tolerance": 0.0
+  },
+  "cost_controls": {
+    "overall_cost_priority": 0.72,
+    "policy_compliance_priority": 0.96,
+    "employee_convenience_priority": 0.54,
+    "splurge_requires_justification": true
+  },
+  "comfort_floors": {
+    "lodging_needs": ["quiet room", "walkable conference access"],
+    "transport_needs": ["reliable airport transfer"],
+    "arrival_readiness_needs": ["arrive evening before keynote"],
+    "work_enablers": ["desk", "strong wifi"]
+  },
+  "documentation_requirements": {
+    "required_receipt_categories": ["airfare", "lodging", "registration"],
+    "justification_fields": ["conference relevance", "expected partner meetings"],
+    "comparable_capture_required": true,
+    "booking_link_retention_required": true
+  },
+  "approval_targets": {
+    "needs_manager_approval": true,
+    "needs_finance_review": false,
+    "needs_exception_preclearance": false,
+    "approval_roles": ["manager"]
+  },
+  "exception_strategy": {
+    "fallback_mode": "nearest_compliant",
+    "require_additional_comparables": false,
+    "notes": ["Prefer policy-compliant hotel alternatives before requesting exceptions."]
+  }
+}

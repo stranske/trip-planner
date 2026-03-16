@@ -22,6 +22,7 @@ The target product should handle:
 - [Product and architecture brief](docs/product-architecture-brief.md)
 - [Leisure preference contract](docs/leisure-preference-contract.md)
 - [Shared planning contracts](docs/shared-planning-contracts.md)
+- [Business travel profile contract](docs/business-travel-profile-contract.md)
 - [Source channel strategy](docs/source-channel-strategy.md)
 - [Legacy itinerary methodology](docs/methodology.md)
 - [CI system guide](docs/CI_SYSTEM_GUIDE.md)
@@ -39,6 +40,7 @@ The first canonical application packages now start in:
 
 - `trip_planner/preferences/`
 - `trip_planner/contracts/`
+- `trip_planner/business/`
 
 The old script flow is not the default design path for new work. It remains only where a narrow compatibility bridge is still useful, and older static-demo artifacts have been moved under `archive/legacy-static-demo/`.
 
