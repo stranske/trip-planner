@@ -597,11 +597,75 @@ export function renderPolicyPostureDisplayComponent(policyEvaluation) {
 }
 
 /**
+ * @param {import("./mock-state.js").ProposalRecord | null} proposal
+ * @param {import("./mock-state.js").PolicyEvaluationRecord | null} policyEvaluation
+ * @returns {string}
+ */
+export function renderComparablesDisplayComponent(proposal, policyEvaluation) {
+  if (!proposal?.comparables.length) {
+    return '<p class="planner-empty-state">No comparable options attached to this approval review.</p>';
+  }
+
+  const preferredRefs = new Set(
+    (policyEvaluation?.preferred_alternatives ?? [])
+      .map((alternative) => alternative.comparable_ref)
+      .filter(Boolean)
+  );
+
+  return `
+    <div class="planner-output-feed" role="list" aria-label="Comparable options">
+      ${proposal.comparables
+        .map((comparable) => {
+          const amount = comparable.estimated_cost.typical_amount.toFixed(0);
+          const isPreferredFallback = preferredRefs.has(comparable.category);
+
+          return `
+            <article
+              class="planner-output-card"
+              role="listitem"
+              data-planner-comparable-category="${comparable.category}"
+            >
+              <div class="planner-section-header">
+                <h4>${comparable.label}</h4>
+                <span class="planner-meta">${comparable.category}</span>
+              </div>
+              <p>${comparable.vendor} via ${comparable.booking_channel}</p>
+              <div class="planner-chip-row" aria-label="Comparable option details">
+                <span class="planner-chip">${comparable.estimated_cost.currency} ${amount}</span>
+                ${isPreferredFallback ? '<span class="planner-chip">Preferred fallback</span>' : ""}
+              </div>
+              ${
+                comparable.notes.length
+                  ? `
+                    <ul class="planner-list">
+                      ${comparable.notes.map((note) => `<li>${note}</li>`).join("")}
+                    </ul>
+                  `
+                  : '<p class="planner-empty-state">No comparable notes recorded.</p>'
+              }
+            </article>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+/**
  * @param {PlannerPanelViewState} state
  * @returns {string}
  */
 function renderPolicyStatus(state) {
-  return renderPolicyPostureDisplayComponent(state.data.policy_evaluation);
+  return `
+    ${renderPolicyPostureDisplayComponent(state.data.policy_evaluation)}
+    <section aria-label="Comparables review">
+      <div class="planner-section-header">
+        <h3>Comparables</h3>
+        <span class="planner-meta">${state.data.proposal?.comparables.length ?? 0} options</span>
+      </div>
+      ${renderComparablesDisplayComponent(state.data.proposal, state.data.policy_evaluation)}
+    </section>
+  `;
 }
 
 /**

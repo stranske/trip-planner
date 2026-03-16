@@ -64,6 +64,28 @@
  */
 
 /**
+ * @typedef {Object} ComparableCostRecord
+ * @property {string} currency
+ * @property {number} typical_amount
+ */
+
+/**
+ * @typedef {Object} ComparableOptionRecord
+ * @property {string} category
+ * @property {string} label
+ * @property {string} vendor
+ * @property {string} booking_channel
+ * @property {ComparableCostRecord} estimated_cost
+ * @property {string[]} notes
+ */
+
+/**
+ * @typedef {Object} ProposalRecord
+ * @property {string} proposal_id
+ * @property {ComparableOptionRecord[]} comparables
+ */
+
+/**
  * @typedef {Object} PendingDecisionRecord
  * @property {string} decision_id
  * @property {string} title
@@ -103,6 +125,7 @@
  * @typedef {Object} PlannerPanelState
  * @property {TripRecord} trip
  * @property {OptionSetRecord} option_set
+ * @property {ProposalRecord | null} proposal
  * @property {PolicyEvaluationRecord | null} policy_evaluation
  * @property {PendingDecisionRecord[]} pending_decisions
  * @property {PlannerOutputRecord[]} outputs
@@ -169,6 +192,7 @@ export const leisureFeedbackLoopState = {
       },
     ],
   },
+  proposal: null,
   policy_evaluation: null,
   pending_decisions: [
     {

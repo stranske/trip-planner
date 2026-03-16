@@ -84,6 +84,7 @@ async function loadModule(relativePath) {
 const { leisureFeedbackLoopState } = await loadModule("bundle/planner/mock-state.js");
 const {
   createPlannerSidePanelStore,
+  renderComparablesDisplayComponent,
   renderNextStepActionsComponent,
   renderOptionFeedbackPromptsComponent,
   renderPendingDecisionsComponent,
@@ -101,6 +102,36 @@ const businessApprovalState = {
     status: "booked",
     title: "Dallas client review with policy packet",
     summary: "The approval surface should summarize compliance posture before export.",
+  },
+  proposal: {
+    proposal_id: "proposal-approval-01",
+    comparables: [
+      {
+        category: "lodging",
+        label: "Within-cap airport hotel",
+        vendor: "Courtyard",
+        booking_channel: "Concur",
+        estimated_cost: {
+          currency: "USD",
+          typical_amount: 214,
+        },
+        notes: [
+          "Requires a pre-dawn transfer to the client site.",
+          "Stays within the standard nightly lodging cap.",
+        ],
+      },
+      {
+        category: "airfare",
+        label: "One-stop daytime routing",
+        vendor: "American",
+        booking_channel: "Concur",
+        estimated_cost: {
+          currency: "USD",
+          typical_amount: 386,
+        },
+        notes: ["Extends total travel time by nearly three hours."],
+      },
+    ],
   },
   policy_evaluation: {
     evaluation_id: "eval-approval-01",
@@ -277,6 +308,27 @@ test("policy posture display component renders an empty state when policy evalua
   assert.match(markup, /Business approval-readiness is not active for this planner state\./);
 });
 
+test("comparables display component renders alternative options for approval review", () => {
+  const markup = renderComparablesDisplayComponent(
+    businessApprovalState.proposal,
+    businessApprovalState.policy_evaluation
+  );
+
+  assert.match(markup, /aria-label="Comparable options"/);
+  assert.match(markup, /data-planner-comparable-category="lodging"/);
+  assert.match(markup, /Within-cap airport hotel/);
+  assert.match(markup, /Courtyard via Concur/);
+  assert.match(markup, /USD 214/);
+  assert.match(markup, /Preferred fallback/);
+  assert.match(markup, /Requires a pre-dawn transfer to the client site\./);
+});
+
+test("comparables display component renders an empty state when no alternatives exist", () => {
+  const markup = renderComparablesDisplayComponent({ proposal_id: "proposal-empty", comparables: [] }, null);
+
+  assert.match(markup, /No comparable options attached to this approval review\./);
+});
+
 test("pending decisions component renders the default decision prompt and choices", () => {
   const markup = renderPendingDecisionsComponent(leisureFeedbackLoopState.pending_decisions);
 
@@ -337,6 +389,8 @@ test("planner side panel approval section includes the policy posture display", 
   assert.match(mountNode.innerHTML, /exception required/);
   assert.match(mountNode.innerHTML, /Compliance score: 68%/);
   assert.match(mountNode.innerHTML, /Preferred alternatives/);
+  assert.match(mountNode.innerHTML, /Comparables/);
+  assert.match(mountNode.innerHTML, /Within-cap airport hotel/);
 
   controller.destroy();
 });
