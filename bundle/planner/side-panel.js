@@ -1,8 +1,109 @@
 /**
- * @import { PlannerPanelState } from "./mock-state.js"
+ * @import { PlannerBehaviorRecord, PlannerPanelState } from "./mock-state.js"
  */
 
-function renderSummaryCards(trip) {
+const PANEL_SECTIONS = /** @type {const} */ (["outputs", "decisions", "options", "approval"]);
+
+/**
+ * @typedef {"outputs" | "decisions" | "options" | "approval"} PlannerPanelSection
+ */
+
+/**
+ * @typedef {Object} PlannerPanelUiState
+ * @property {PlannerPanelSection} active_section
+ * @property {string | null} selected_decision_id
+ */
+
+/**
+ * @typedef {Object} PlannerPanelViewState
+ * @property {PlannerPanelState} data
+ * @property {PlannerPanelUiState} ui
+ */
+
+function getInitialActiveSection(state) {
+  if (state.pending_decisions.length) {
+    return "decisions";
+  }
+
+  if (state.outputs.length) {
+    return "outputs";
+  }
+
+  if (state.option_set.options.length) {
+    return "options";
+  }
+
+  return "approval";
+}
+
+function getInitialDecisionId(state) {
+  return state.pending_decisions[0]?.decision_id ?? null;
+}
+
+/**
+ * @param {PlannerPanelState} state
+ * @returns {PlannerPanelViewState}
+ */
+function createInitialViewState(state) {
+  return {
+    data: state,
+    ui: {
+      active_section: getInitialActiveSection(state),
+      selected_decision_id: getInitialDecisionId(state),
+    },
+  };
+}
+
+/**
+ * @param {PlannerPanelSection} section
+ * @returns {string}
+ */
+function formatSectionLabel(section) {
+  if (section === "approval") {
+    return "Approval Readiness";
+  }
+
+  if (section === "options") {
+    return "Option Set";
+  }
+
+  if (section === "decisions") {
+    return "Pending Decisions";
+  }
+
+  return "Outputs";
+}
+
+/**
+ * @param {PlannerBehaviorRecord} behavior
+ * @returns {string}
+ */
+function renderBehaviorSummary(behavior) {
+  return `
+    <section class="planner-behavior-card" aria-label="Planner behavior guidance">
+      <div class="planner-section-header">
+        <h3>Planner State</h3>
+        <span class="planner-meta">${behavior.trip_stage}</span>
+      </div>
+      <div class="planner-chip-row">
+        <span class="planner-chip">${behavior.target_research_passes} research passes</span>
+        <span class="planner-chip">${behavior.target_options_before_checkpoint} options before check-in</span>
+        <span class="planner-chip">${behavior.explanation_density} explanation</span>
+      </div>
+      <p class="planner-behavior-copy">
+        ${behavior.ask_before_next_major_change ? "Ask before major route changes." : "Planner can advance without a checkpoint."}
+        ${behavior.surface_options_early ? " Surface concrete options early." : " Hold options until more research is complete."}
+      </p>
+    </section>
+  `;
+}
+
+/**
+ * @param {PlannerPanelViewState} state
+ * @returns {string}
+ */
+function renderSummaryCards(state) {
+  const { trip } = state.data;
   const { duration_days: durationDays, primary_regions: primaryRegions, traveler_party: travelerParty } =
     trip.trip_frame;
 
@@ -24,12 +125,47 @@ function renderSummaryCards(trip) {
   `;
 }
 
-function renderOutputs(outputs) {
-  if (!outputs.length) {
+/**
+ * @param {PlannerPanelViewState} state
+ * @returns {string}
+ */
+function renderSectionTabs(state) {
+  const counts = {
+    outputs: state.data.outputs.length,
+    decisions: state.data.pending_decisions.length,
+    options: state.data.option_set.options.length,
+    approval: state.data.policy_evaluation ? 1 : 0,
+  };
+
+  return `
+    <nav class="planner-tab-list" aria-label="Planner panel sections">
+      ${PANEL_SECTIONS.map(
+        (section) => `
+          <button
+            type="button"
+            class="planner-tab${state.ui.active_section === section ? " is-active" : ""}"
+            data-planner-section="${section}"
+            aria-pressed="${state.ui.active_section === section}"
+          >
+            <span>${formatSectionLabel(section)}</span>
+            <span class="planner-tab-count">${counts[section]}</span>
+          </button>
+        `
+      ).join("")}
+    </nav>
+  `;
+}
+
+/**
+ * @param {PlannerPanelViewState} state
+ * @returns {string}
+ */
+function renderOutputs(state) {
+  if (!state.data.outputs.length) {
     return '<p class="planner-empty-state">No planner outputs yet.</p>';
   }
 
-  return outputs
+  return state.data.outputs
     .map(
       (output) => `
         <article class="planner-output-card">
@@ -44,31 +180,61 @@ function renderOutputs(outputs) {
     .join("");
 }
 
-function renderPendingDecisions(pendingDecisions) {
-  if (!pendingDecisions.length) {
+/**
+ * @param {PlannerPanelViewState} state
+ * @returns {string}
+ */
+function renderPendingDecisions(state) {
+  if (!state.data.pending_decisions.length) {
     return '<p class="planner-empty-state">No pending decisions.</p>';
   }
 
-  return pendingDecisions
-    .map(
-      (decision) => `
-        <article class="planner-decision-card">
-          <h4>${decision.title}</h4>
-          <p>${decision.prompt}</p>
-          <ul class="planner-option-list">
-            ${decision.choices.map((choice) => `<li>${choice}</li>`).join("")}
-          </ul>
-        </article>
-      `
-    )
-    .join("");
+  const selectedDecisionId = state.ui.selected_decision_id ?? state.data.pending_decisions[0].decision_id;
+  const selectedDecision =
+    state.data.pending_decisions.find((decision) => decision.decision_id === selectedDecisionId) ??
+    state.data.pending_decisions[0];
+
+  return `
+    <div class="planner-decision-layout">
+      <div class="planner-decision-list" role="list" aria-label="Pending decisions">
+        ${state.data.pending_decisions
+          .map(
+            (decision) => `
+              <button
+                type="button"
+                class="planner-decision-link${decision.decision_id === selectedDecision.decision_id ? " is-active" : ""}"
+                data-planner-decision="${decision.decision_id}"
+                aria-pressed="${decision.decision_id === selectedDecision.decision_id}"
+              >
+                <strong>${decision.title}</strong>
+                <span>${decision.choices.length} choices</span>
+              </button>
+            `
+          )
+          .join("")}
+      </div>
+      <article class="planner-decision-card">
+        <h4>${selectedDecision.title}</h4>
+        <p>${selectedDecision.prompt}</p>
+        <ul class="planner-option-list">
+          ${selectedDecision.choices.map((choice) => `<li>${choice}</li>`).join("")}
+        </ul>
+      </article>
+    </div>
+  `;
 }
 
-function renderPolicyStatus(policyEvaluation) {
+/**
+ * @param {PlannerPanelViewState} state
+ * @returns {string}
+ */
+function renderPolicyStatus(state) {
+  const { policy_evaluation: policyEvaluation } = state.data;
+
   if (!policyEvaluation) {
     return `
       <p class="planner-empty-state">
-        Business approval-readiness is not active for this leisure planner state.
+        Business approval-readiness is not active for this planner state.
       </p>
     `;
   }
@@ -84,7 +250,13 @@ function renderPolicyStatus(policyEvaluation) {
   `;
 }
 
-function renderOptions(optionSet) {
+/**
+ * @param {PlannerPanelViewState} state
+ * @returns {string}
+ */
+function renderOptions(state) {
+  const { option_set: optionSet } = state.data;
+
   return `
     <div class="planner-output-card">
       <h4>${optionSet.title}</h4>
@@ -100,17 +272,57 @@ function renderOptions(optionSet) {
 }
 
 /**
- * @param {HTMLElement} mountNode
- * @param {PlannerPanelState} state
+ * @param {PlannerPanelViewState} state
+ * @returns {string}
  */
-export function renderPlannerSidePanel(mountNode, state) {
-  mountNode.innerHTML = `
+function renderActiveSection(state) {
+  if (state.ui.active_section === "decisions") {
+    return renderPendingDecisions(state);
+  }
+
+  if (state.ui.active_section === "options") {
+    return renderOptions(state);
+  }
+
+  if (state.ui.active_section === "approval") {
+    return renderPolicyStatus(state);
+  }
+
+  return renderOutputs(state);
+}
+
+/**
+ * @param {PlannerPanelViewState} state
+ * @returns {string}
+ */
+function renderActiveSectionMeta(state) {
+  if (state.ui.active_section === "decisions") {
+    return `${state.data.pending_decisions.length} waiting`;
+  }
+
+  if (state.ui.active_section === "options") {
+    return state.data.option_set.scope;
+  }
+
+  if (state.ui.active_section === "approval") {
+    return "Policy bridge";
+  }
+
+  return `${state.data.outputs.length} items`;
+}
+
+/**
+ * @param {PlannerPanelViewState} state
+ * @returns {string}
+ */
+function renderPlannerMarkup(state) {
+  return `
     <section class="planner-shell" aria-label="Interactive planner workspace">
       <section class="planner-hero" aria-labelledby="planner-title">
         <p class="eyebrow">Interactive Planner</p>
-        <h1 id="planner-title">${state.trip.title}</h1>
-        <p>${state.trip.summary}</p>
-        ${renderSummaryCards(state.trip)}
+        <h1 id="planner-title">${state.data.trip.title}</h1>
+        <p>${state.data.trip.summary}</p>
+        ${renderSummaryCards(state)}
       </section>
       <aside class="planner-panel" aria-label="Planner side panel">
         <header class="planner-panel-header">
@@ -118,42 +330,154 @@ export function renderPlannerSidePanel(mountNode, state) {
             <h2>Planner Side Panel</h2>
             <p>Structured orchestration output, ready for traveler interaction.</p>
           </div>
-          <span class="planner-status-pill">${state.trip.status.replaceAll("_", " ")}</span>
+          <span class="planner-status-pill">${state.data.trip.status.replaceAll("_", " ")}</span>
         </header>
+        ${renderBehaviorSummary(state.data.planner_behavior)}
+        ${renderSectionTabs(state)}
         <div class="planner-sections">
-          <section class="planner-section" aria-labelledby="planner-outputs-title">
+          <section class="planner-section" aria-labelledby="planner-active-section-title">
             <div class="planner-section-header">
-              <h3 id="planner-outputs-title">Outputs</h3>
-              <span class="planner-meta">${state.outputs.length} items</span>
+              <h3 id="planner-active-section-title">${formatSectionLabel(state.ui.active_section)}</h3>
+              <span class="planner-meta">${renderActiveSectionMeta(state)}</span>
             </div>
-            ${renderOutputs(state.outputs)}
-          </section>
-          <section class="planner-section" aria-labelledby="planner-decisions-title">
-            <div class="planner-section-header">
-              <h3 id="planner-decisions-title">Pending Decisions</h3>
-              <span class="planner-meta">${state.pending_decisions.length} waiting</span>
-            </div>
-            ${renderPendingDecisions(state.pending_decisions)}
-          </section>
-          <section class="planner-section" aria-labelledby="planner-options-title">
-            <div class="planner-section-header">
-              <h3 id="planner-options-title">Option Set</h3>
-              <span class="planner-meta">${state.option_set.scope}</span>
-            </div>
-            ${renderOptions(state.option_set)}
-          </section>
-          <section class="planner-section" aria-labelledby="planner-policy-title">
-            <div class="planner-section-header">
-              <h3 id="planner-policy-title">Approval Readiness</h3>
-              <span class="planner-meta">Policy bridge</span>
-            </div>
-            ${renderPolicyStatus(state.policy_evaluation)}
+            ${renderActiveSection(state)}
           </section>
         </div>
         <p class="planner-footer-note">
-          This container establishes the layout for later state actions, approval components, and feedback prompts.
+          The side panel now owns local UI state for active section focus and pending-decision selection.
         </p>
       </aside>
     </section>
   `;
+}
+
+/**
+ * @param {PlannerPanelState} data
+ * @returns {{
+ *   getState: () => PlannerPanelViewState,
+ *   setActiveSection: (section: PlannerPanelSection) => PlannerPanelViewState,
+ *   selectDecision: (decisionId: string) => PlannerPanelViewState,
+ *   replaceData: (nextData: PlannerPanelState) => PlannerPanelViewState
+ * }}
+ */
+export function createPlannerSidePanelStore(data) {
+  /** @type {PlannerPanelViewState} */
+  let state = createInitialViewState(data);
+
+  return {
+    getState() {
+      return state;
+    },
+    setActiveSection(section) {
+      if (!PANEL_SECTIONS.includes(section)) {
+        return state;
+      }
+
+      state = {
+        ...state,
+        ui: {
+          ...state.ui,
+          active_section: section,
+        },
+      };
+      return state;
+    },
+    selectDecision(decisionId) {
+      if (!state.data.pending_decisions.some((decision) => decision.decision_id === decisionId)) {
+        return state;
+      }
+
+      state = {
+        ...state,
+        ui: {
+          ...state.ui,
+          active_section: "decisions",
+          selected_decision_id: decisionId,
+        },
+      };
+      return state;
+    },
+    replaceData(nextData) {
+      const nextState = createInitialViewState(nextData);
+      const selectedDecisionId = nextData.pending_decisions.some(
+        (decision) => decision.decision_id === state.ui.selected_decision_id
+      )
+        ? state.ui.selected_decision_id
+        : nextState.ui.selected_decision_id;
+
+      state = {
+        data: nextData,
+        ui: {
+          active_section: PANEL_SECTIONS.includes(state.ui.active_section)
+            ? state.ui.active_section
+            : nextState.ui.active_section,
+          selected_decision_id: selectedDecisionId,
+        },
+      };
+      return state;
+    },
+  };
+}
+
+/**
+ * @param {HTMLElement} mountNode
+ * @param {PlannerPanelState} initialState
+ */
+export function renderPlannerSidePanel(mountNode, initialState) {
+  const store = createPlannerSidePanelStore(initialState);
+
+  function render() {
+    mountNode.innerHTML = renderPlannerMarkup(store.getState());
+  }
+
+  /**
+   * @param {Event} event
+   */
+  function handleClick(event) {
+    const target = event.target;
+
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const sectionButton = target.closest("[data-planner-section]");
+    if (sectionButton instanceof HTMLElement) {
+      store.setActiveSection(
+        /** @type {PlannerPanelSection} */ (sectionButton.dataset.plannerSection ?? "outputs")
+      );
+      render();
+      return;
+    }
+
+    const decisionButton = target.closest("[data-planner-decision]");
+    if (decisionButton instanceof HTMLElement && decisionButton.dataset.plannerDecision) {
+      store.selectDecision(decisionButton.dataset.plannerDecision);
+      render();
+    }
+  }
+
+  render();
+  mountNode.addEventListener("click", handleClick);
+
+  return {
+    getState: store.getState,
+    setActiveSection(section) {
+      const nextState = store.setActiveSection(section);
+      render();
+      return nextState;
+    },
+    selectDecision(decisionId) {
+      const nextState = store.selectDecision(decisionId);
+      render();
+      return nextState;
+    },
+    replaceState(nextData) {
+      const nextState = store.replaceData(nextData);
+      render();
+      return nextState;
+    },
+    destroy() {
+      mountNode.removeEventListener("click", handleClick);
+    },
+  };
 }

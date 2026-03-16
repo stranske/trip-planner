@@ -78,12 +78,23 @@
  */
 
 /**
+ * @typedef {Object} PlannerBehaviorRecord
+ * @property {string} trip_stage
+ * @property {boolean} ask_before_next_major_change
+ * @property {number} target_research_passes
+ * @property {number} target_options_before_checkpoint
+ * @property {boolean} surface_options_early
+ * @property {"lean" | "standard" | "detailed"} explanation_density
+ */
+
+/**
  * @typedef {Object} PlannerPanelState
  * @property {TripRecord} trip
  * @property {OptionSetRecord} option_set
  * @property {PolicyEvaluationRecord | null} policy_evaluation
  * @property {PendingDecisionRecord[]} pending_decisions
  * @property {PlannerOutputRecord[]} outputs
+ * @property {PlannerBehaviorRecord} planner_behavior
  */
 
 /** @type {PlannerPanelState} */
@@ -171,4 +182,12 @@ export const leisureFeedbackLoopState = {
       tags: ["interactive", "decision-ready"],
     },
   ],
+  planner_behavior: {
+    trip_stage: "compare",
+    ask_before_next_major_change: true,
+    target_research_passes: 3,
+    target_options_before_checkpoint: 2,
+    surface_options_early: true,
+    explanation_density: "standard",
+  },
 };

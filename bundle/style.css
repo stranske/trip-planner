@@ -117,6 +117,14 @@ body {
   padding: 22px;
 }
 
+.planner-behavior-card {
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 248, 239, 0.92);
+  border: 1px solid rgba(111, 84, 41, 0.12);
+}
+
 .planner-panel-header {
   display: flex;
   justify-content: space-between;
@@ -151,6 +159,40 @@ body {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.planner-tab-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.planner-tab {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(111, 84, 41, 0.12);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--text-strong);
+  font: inherit;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.planner-tab:hover,
+.planner-tab.is-active {
+  border-color: rgba(15, 107, 91, 0.34);
+  background: rgba(15, 107, 91, 0.08);
+  transform: translateY(-1px);
+}
+
+.planner-tab-count {
+  color: var(--text-muted);
+  font-size: 0.85rem;
 }
 
 .planner-sections {
@@ -204,6 +246,12 @@ body {
   line-height: 1.5;
 }
 
+.planner-behavior-copy {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
 .planner-chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -226,6 +274,40 @@ body {
   padding-left: 18px;
 }
 
+.planner-decision-layout {
+  display: grid;
+  gap: 12px;
+}
+
+.planner-decision-list {
+  display: grid;
+  gap: 10px;
+}
+
+.planner-decision-link {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgba(111, 84, 41, 0.12);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.7);
+  text-align: left;
+  color: var(--text-strong);
+  font: inherit;
+  cursor: pointer;
+}
+
+.planner-decision-link span {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.planner-decision-link.is-active {
+  border-color: rgba(15, 107, 91, 0.34);
+  background: rgba(15, 107, 91, 0.08);
+}
+
 .planner-footer-note {
   margin-top: 16px;
   padding-top: 14px;
@@ -236,6 +318,10 @@ body {
 
 @media (max-width: 920px) {
   .planner-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .planner-tab-list {
     grid-template-columns: 1fr;
   }
 
