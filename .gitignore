@@ -7,3 +7,7 @@
 codex-prompt.md
 codex-output.md
 verifier-context.md
+
+__pycache__/
+*.py[cod]
+.mypy_cache/
