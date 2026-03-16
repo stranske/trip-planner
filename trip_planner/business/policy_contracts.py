@@ -204,6 +204,8 @@ class TripPlanProposal:
             raise ValueError("TripPlanProposal mode must be 'business'")
         if not isinstance(self.traveler_context, TravelerContext):
             raise ValueError("traveler_context must be a TravelerContext")
+        if not self.selected_options:
+            raise ValueError("selected_options must contain at least one SelectedOptionSummary")
         if any(not isinstance(item, SelectedOptionSummary) for item in self.selected_options):
             raise ValueError("selected_options must contain SelectedOptionSummary instances")
         if not isinstance(self.cost_summary, ProposalCostSummary):
