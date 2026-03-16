@@ -97,3 +97,17 @@ def test_option_rejects_invalid_kind() -> None:
         assert "kind" in str(exc)
     else:
         raise AssertionError("Option should reject unsupported kinds")
+
+
+def test_option_rejects_non_string_fit_signal_keys() -> None:
+    try:
+        Option(
+            option_id="opt-3",
+            kind="route",
+            label="Broken fit signal mapping",
+            fit_signals={1: 0.8},  # type: ignore[dict-item]
+        )
+    except ValueError as exc:
+        assert "fit_signals" in str(exc)
+    else:
+        raise AssertionError("Option should reject non-string fit_signals keys")

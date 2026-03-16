@@ -6,9 +6,9 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from ._validators import (
+    require_float_mapping,
     require_non_empty,
     require_non_negative,
-    require_optional_non_empty,
     require_probability,
     require_strings,
 )
@@ -124,9 +124,7 @@ class Option:
             raise ValueError("cost_summary must be an OptionCostSummary")
         if not isinstance(self.quality_summary, OptionQualitySummary):
             raise ValueError("quality_summary must be an OptionQualitySummary")
-        for key, value in self.fit_signals.items():
-            require_optional_non_empty(key, f"fit_signals[{key}]")
-            require_probability(value, f"fit_signals[{key}]")
+        require_float_mapping(self.fit_signals, "fit_signals")
         require_strings(self.drawbacks, "drawbacks")
         require_strings(self.booking_links, "booking_links")
         require_strings(self.source_refs, "source_refs")
