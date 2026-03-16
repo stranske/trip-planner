@@ -81,6 +81,14 @@ async function loadModule(relativePath) {
   return import(`data:text/javascript,${encodeURIComponent(source)}`);
 }
 
+function normalizeMarkup(markup) {
+  return markup.replace(/>\s+</g, "><").replace(/\s+/g, " ").trim();
+}
+
+async function loadFixture(relativePath) {
+  return normalizeMarkup(await fs.readFile(path.join(repoRoot, relativePath), "utf8"));
+}
+
 const {
   businessApprovalReadyReviewScenario,
   businessApprovalReadyReviewState,
@@ -296,6 +304,13 @@ test("policy posture display component renders compliance status and approval de
   assert.match(markup, /Proposal is exception-eligible if the fatigue-management rationale is approved\./);
 });
 
+test("policy posture display component matches the approval snapshot", async () => {
+  const markup = renderPolicyPostureDisplayComponent(businessApprovalState.policy_evaluation);
+  const snapshot = await loadFixture("tests/fixtures/planner/policy_posture_display.html");
+
+  assert.equal(normalizeMarkup(markup), snapshot);
+});
+
 test("policy posture display component renders an empty state when policy evaluation is absent", () => {
   const markup = renderPolicyPostureDisplayComponent(null);
 
@@ -362,6 +377,16 @@ test("proposal readiness indicator component renders readiness status and checkl
   assert.match(markup, /68% compliance/);
   assert.match(markup, /Ready:<\/strong> Comparables attached\. 2 options in the approval packet\./);
   assert.match(markup, /Ready:<\/strong> Submission path defined\. Exception request is attached\./);
+});
+
+test("proposal readiness indicator component matches the approval snapshot", async () => {
+  const markup = renderProposalReadinessIndicatorComponent(
+    businessApprovalState.proposal,
+    businessApprovalState.policy_evaluation
+  );
+  const snapshot = await loadFixture("tests/fixtures/planner/proposal_readiness_indicator.html");
+
+  assert.equal(normalizeMarkup(markup), snapshot);
 });
 
 test("proposal readiness indicator component renders an empty state when approval data is absent", () => {

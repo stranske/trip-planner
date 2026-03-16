@@ -1,8 +1,45 @@
 /**
- * @import { PlannerBehaviorRecord, PlannerPanelState } from "./mock-state.js"
+ * @import {
+ *   NextStepActionRecord,
+ *   OptionSetRecord,
+ *   PendingDecisionRecord,
+ *   PlannerBehaviorRecord,
+ *   PlannerOutputRecord,
+ *   PlannerPanelState,
+ *   PolicyEvaluationRecord,
+ *   ProposalRecord,
+ * } from "./orchestration-contracts"
  */
 
 const PANEL_SECTIONS = /** @type {const} */ (["outputs", "decisions", "options", "approval"]);
+
+/**
+ * @param {PlannerPanelState} state
+ * @returns {PlannerPanelSection}
+ */
+function getInitialActiveSection(state) {
+  if (state.pending_decisions.length) {
+    return "decisions";
+  }
+
+  if (state.outputs.length) {
+    return "outputs";
+  }
+
+  if (state.option_set.options.length) {
+    return "options";
+  }
+
+  return "approval";
+}
+
+/**
+ * @param {PlannerPanelState} state
+ * @returns {string | null}
+ */
+function getInitialDecisionId(state) {
+  return state.pending_decisions[0]?.decision_id ?? null;
+}
 
 /**
  * @typedef {"outputs" | "decisions" | "options" | "approval"} PlannerPanelSection
@@ -33,26 +70,6 @@ const PANEL_SECTIONS = /** @type {const} */ (["outputs", "decisions", "options",
  * @property {string | null} decision_id
  * @property {"options"} source_section
  */
-
-function getInitialActiveSection(state) {
-  if (state.pending_decisions.length) {
-    return "decisions";
-  }
-
-  if (state.outputs.length) {
-    return "outputs";
-  }
-
-  if (state.option_set.options.length) {
-    return "options";
-  }
-
-  return "approval";
-}
-
-function getInitialDecisionId(state) {
-  return state.pending_decisions[0]?.decision_id ?? null;
-}
 
 /**
  * @param {PlannerPanelState} state
@@ -171,7 +188,7 @@ function renderSectionTabs(state) {
 }
 
 /**
- * @param {import("./mock-state.js").PlannerOutputRecord[]} outputs
+ * @param {PlannerOutputRecord[]} outputs
  * @returns {string}
  */
 export function renderPlannerOutputsDisplay(outputs) {
@@ -216,7 +233,7 @@ function renderOutputs(state) {
 }
 
 /**
- * @param {import("./mock-state.js").PendingDecisionRecord[]} pendingDecisions
+ * @param {PendingDecisionRecord[]} pendingDecisions
  * @param {string | null} selectedDecisionId
  * @returns {string}
  */
@@ -272,7 +289,7 @@ function renderPendingDecisions(state) {
 }
 
 /**
- * @param {import("./mock-state.js").PlannerBehaviorRecord} behavior
+ * @param {PlannerBehaviorRecord} behavior
  * @returns {{ feedback_kind: string, label: string }[]}
  */
 function getFeedbackPromptActions(behavior) {
@@ -301,8 +318,8 @@ function getFeedbackPromptActions(behavior) {
 }
 
 /**
- * @param {import("./mock-state.js").OptionSetRecord} optionSet
- * @param {import("./mock-state.js").PlannerBehaviorRecord} behavior
+ * @param {OptionSetRecord} optionSet
+ * @param {PlannerBehaviorRecord} behavior
  * @returns {string}
  */
 export function renderOptionFeedbackPromptsComponent(optionSet, behavior) {
@@ -366,7 +383,7 @@ export function renderOptionFeedbackPromptsComponent(optionSet, behavior) {
 }
 
 /**
- * @param {import("./mock-state.js").OptionSetRecord} optionSet
+ * @param {OptionSetRecord} optionSet
  * @param {string | null} selectedDecisionId
  * @returns {string}
  */
@@ -418,7 +435,7 @@ export function renderStructuredResponseCaptureComponent(optionSet, selectedDeci
 }
 
 /**
- * @param {import("./mock-state.js").NextStepActionRecord[]} nextStepActions
+ * @param {NextStepActionRecord[]} nextStepActions
  * @param {PlannerPanelSection} activeSection
  * @returns {string}
  */
@@ -452,7 +469,7 @@ export function renderNextStepActionsComponent(nextStepActions, activeSection) {
 }
 
 /**
- * @param {import("./mock-state.js").PolicyEvaluationRecord | null} policyEvaluation
+ * @param {PolicyEvaluationRecord | null} policyEvaluation
  * @returns {string}
  */
 export function renderPolicyPostureDisplayComponent(policyEvaluation) {
@@ -597,8 +614,8 @@ export function renderPolicyPostureDisplayComponent(policyEvaluation) {
 }
 
 /**
- * @param {import("./mock-state.js").ProposalRecord | null} proposal
- * @param {import("./mock-state.js").PolicyEvaluationRecord | null} policyEvaluation
+ * @param {ProposalRecord | null} proposal
+ * @param {PolicyEvaluationRecord | null} policyEvaluation
  * @returns {string}
  */
 export function renderComparablesDisplayComponent(proposal, policyEvaluation) {
@@ -652,8 +669,8 @@ export function renderComparablesDisplayComponent(proposal, policyEvaluation) {
 }
 
 /**
- * @param {import("./mock-state.js").ProposalRecord | null} proposal
- * @param {import("./mock-state.js").PolicyEvaluationRecord | null} policyEvaluation
+ * @param {ProposalRecord | null} proposal
+ * @param {PolicyEvaluationRecord | null} policyEvaluation
  * @returns {string}
  */
 export function renderJustificationBurdenComponent(proposal, policyEvaluation) {
@@ -758,8 +775,8 @@ export function renderJustificationBurdenComponent(proposal, policyEvaluation) {
 }
 
 /**
- * @param {import("./mock-state.js").ProposalRecord | null} proposal
- * @param {import("./mock-state.js").PolicyEvaluationRecord | null} policyEvaluation
+ * @param {ProposalRecord | null} proposal
+ * @param {PolicyEvaluationRecord | null} policyEvaluation
  * @returns {string}
  */
 export function renderProposalReadinessIndicatorComponent(proposal, policyEvaluation) {
@@ -1148,8 +1165,19 @@ export function createPlannerSidePanelStore(data) {
 }
 
 /**
+ * @typedef {{
+ *   getState: () => PlannerPanelViewState,
+ *   setActiveSection: (section: PlannerPanelSection) => PlannerPanelViewState,
+ *   selectDecision: (decisionId: string) => PlannerPanelViewState,
+ *   replaceState: (nextData: PlannerPanelState) => PlannerPanelViewState,
+ *   destroy: () => void,
+ * }} PlannerSidePanelController
+ */
+
+/**
  * @param {HTMLElement} mountNode
  * @param {PlannerPanelState} initialState
+ * @returns {PlannerSidePanelController}
  */
 export function renderPlannerSidePanel(mountNode, initialState) {
   const store = createPlannerSidePanelStore(initialState);
