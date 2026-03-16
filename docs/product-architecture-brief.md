@@ -29,26 +29,22 @@ The integration model should be:
 - `Travel-Plan-Permission` evaluates policy fit, approved vendors, exceptions, and approval requirements
 - `trip-planner` can then re-optimize against returned constraints
 
-Relevant local references:
-
-- `Travel-Plan-Permission` README
-- `Travel-Plan-Permission/docs/policy-api.md`
-- `Travel-Plan-Permission/schemas/trip_plan.min.schema.json`
-
 ## Product Capabilities
 
-### 1. Preference Engine
+### 1. Leisure Preference Evaluation
 
-The old repo used fixed scoring across natural, cultural, significance, and experience-bundle factors. That should become part of a broader preference model that captures:
+The leisure side should begin with a thoughtful preference-evaluation model, not with a lightweight quiz and not with the ranking layer.
 
-- destination style
-- activity intensity
-- nature vs. culture balance
-- budget sensitivity
-- tolerance for transfers and travel complexity
-- lodging style
-- route density per day
-- business constraints, when applicable
+For longer independent trips, the important problem is understanding how a traveler trades off:
+
+- depth vs. breadth
+- certainty vs. openness
+- comfort vs. immersion
+- route ambition vs. fatigue
+- iconic priorities vs. curiosity-driven discovery
+- spend minimization vs. spending where it matters most
+
+See [leisure-preference-engine.md](leisure-preference-engine.md).
 
 ### 2. Inventory And Coherence Engine
 
@@ -71,12 +67,12 @@ The system should enforce:
 
 ### 3. Budget And Tradeoff System
 
-Budgeting should not just total prices. It should support:
+Budgeting should support:
 
 - planned vs. actual cost tracking
 - tradeoff analysis
 - opportunity cost of higher-comfort or lower-complexity options
-- optional cost hiding for experience-first trip design
+- category-specific spending preferences
 - business-policy-aware cost reasoning
 
 ### 4. Interactive Planning Layer
@@ -88,15 +84,95 @@ Use LangChain-based orchestration for:
 - explanation of tradeoffs
 - policy-prep flows for business trips
 
-LangChain should not be the whole architecture. It should sit on top of explicit tools and domain services for:
+LangChain should sit on top of explicit tools and domain services for:
 
-- search and source retrieval
+- source retrieval
 - itinerary scoring
 - budget calculation
 - map/routing queries
 - policy requirement assembly
 
-### 5. Business-Travel Output
+The product should support more than one planning mode from the start of the design:
+
+These should be treated as operating styles, not rigid user buckets.
+
+The app should let users shift along a control spectrum such as:
+
+- more system initiative vs. more frequent checkpoints
+- more synthesis before response vs. earlier option presentation
+- more abstract elicitation vs. faster concrete-option testing
+
+That setting should be allowed to vary by trip stage rather than stay fixed for the whole trip.
+
+#### Delegated Planning Mode
+
+- user provides a compact set of high-value inputs
+- system does most of the initial synthesis
+- best for travelers who want leverage more than prolonged interaction
+
+This mode should still surface assumptions clearly and let the user correct them afterward.
+
+#### Collaborative Iterative Mode
+
+- user refines the plan across multiple rounds
+- system preserves memory of prior choices, objections, and revealed preferences
+- best for travelers who want to shape the plan actively over time
+
+#### Revealed-Preference Option Mode
+
+- system presents 2-3 meaningful option sets rather than asking only abstract questions
+- user reactions to concrete options update the preference profile
+- best when word-level self-description is weaker than response to examples
+
+This mode is especially important for:
+
+- comfort and quality thresholds
+- spending tradeoffs
+- route style
+- daily activity density
+- food and lodging value judgments
+
+#### In-Trip Adjustment Mode
+
+- user can revise the plan while traveling
+- system adapts to fatigue, weather, mood, closures, or newly discovered interests
+- best for longer trips with significant elasticity
+
+These modes should share one underlying preference model rather than fragment the product into separate planners.
+
+See [preference-learning-model.md](preference-learning-model.md).
+
+### 5. Source And Quality Layer
+
+The application needs a source strategy that uses different channels for different jobs.
+
+For commercial inventory and value/quality interpretation, the planner should ingest:
+
+- hotel ratings and reviews
+- restaurant ratings and review signals
+- airfare and transport inventory
+- business-approved booking channels where relevant
+
+For discovery and high-quality option generation, the planner should also ingest:
+
+- strong editorial travel sources
+- high-quality blogs
+- non-commercial destination and route guides
+- local specialist sources when they materially improve curation
+
+The system should not treat raw ratings as the final truth. It should use them as one signal in a broader quality/value model that also considers:
+
+- location fit
+- route coherence
+- category-specific traveler priorities
+- consistency of reviews
+- whether a user tends to prefer high-rated consensus options or more idiosyncratic strong-fit choices
+
+For some travelers, the best way to learn this is not by asking for a verbal preference. It is by showing a few concrete, linked options with semi-detailed explanations and seeing which quality/value patterns they actually choose.
+
+See [source-quality-model.md](source-quality-model.md) and [source-channel-strategy.md](source-channel-strategy.md).
+
+### 6. Business-Travel Output
 
 Business mode should:
 
@@ -104,6 +180,10 @@ Business mode should:
 - optimize toward policy fit before export
 - record vendor choices, comparables, and justification
 - produce structured payloads that plug into `Travel-Plan-Permission`
+
+The business side will likely need a separate profile model and a mostly separate optimization flow.
+
+See [business-travel-profile.md](business-travel-profile.md).
 
 ## Recommended Architecture
 
@@ -124,36 +204,12 @@ Build toward a stateful web app with:
 Organize the application into five bounded modules:
 
 1. `preferences`
-   - traveler profiles
-   - trip goals
-   - preference elicitation and weighting
 2. `options`
-   - source adapters
-   - canonical flight/lodging/activity/transport records
-   - vendor metadata and approval flags
 3. `itinerary`
-   - route assembly
-   - coherence rules
-   - scoring and ranking
 4. `budget`
-   - estimated and actual costs
-   - tradeoffs
-   - scenario comparison
 5. `business_policy_export`
-   - policy-ready proposal schema
-   - compatibility with `Travel-Plan-Permission`
-   - constraint feedback loop
 
-### Supporting Services
-
-- identity and account storage
-- trip persistence
-- cache for external source data
-- map/geocoding/routing service
-- audit trail for business plan changes
-- LLM orchestration and tool execution layer
-
-## Domain Model
+### Domain Model
 
 The next design iteration should define explicit schemas for:
 
@@ -161,7 +217,8 @@ The next design iteration should define explicit schemas for:
 - `TravelerProfile`
 - `Trip`
 - `TripMode`
-- `PreferenceProfile`
+- `LeisurePreferenceProfile`
+- `BusinessTravelProfile`
 - `Destination`
 - `PointOfInterest`
 - `TravelSegment`
@@ -175,7 +232,7 @@ The next design iteration should define explicit schemas for:
 - `TripPlanProposal`
 - `PolicyEvaluationResult`
 
-The most important near-term design decision is to define these contracts before building a larger LLM workflow. Without stable types, conversational updates will become fragile quickly.
+See [domain-contracts.md](domain-contracts.md).
 
 ## How The Legacy Methodology Fits
 
@@ -190,15 +247,16 @@ The current scoring model in [methodology.md](methodology.md) should be retained
 
 ### Phase 1: Foundation
 
-- define canonical schemas
+- define the leisure-travel tradeoff taxonomy
+- define canonical preference schemas
 - add user/trip persistence model
 - preserve and refactor the existing scoring code into reusable modules
 - stand up source-adapter interfaces
 
 ### Phase 2: Leisure MVP
 
+- implement preference evaluation before itinerary ranking
 - worldwide destination and activity planning
-- preference capture
 - itinerary ranking
 - schematic map support
 - budget scenarios
@@ -210,19 +268,3 @@ The current scoring model in [methodology.md](methodology.md) should be retained
 - approved-source filtering
 - structured export to `Travel-Plan-Permission`
 - approval-readiness summary
-
-### Phase 4: Advanced Planning
-
-- fuller interactive maps
-- route menus inspired by guide-based travel design
-- richer local transportation modeling
-- actual-spend tracking and post-trip analysis
-
-## Open Design Questions
-
-These remain worth resolving in a later pass:
-
-- whether business mode should support direct booking connections in the first production release or start with priced recommendations plus links
-- how much live pricing should be cached vs. refreshed on demand
-- which map/provider stack should back routing, transit, and nearby-option discovery
-- whether leisure and business should share one UI shell with modes, or one platform with separate entry journeys
