@@ -191,6 +191,28 @@ test("planner side panel controller rerenders on section and decision changes", 
   assert.equal(mountNode.listeners.has("click"), false);
 });
 
+test("planner side panel renders the leisure feedback loop scenario across its interactive sections", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderPlannerSidePanel(mountNode, leisureFeedbackLoopState);
+
+  assert.match(mountNode.innerHTML, /Lisbon reset with room to wander/);
+  assert.match(mountNode.innerHTML, /Choose the better base camp/);
+  assert.match(mountNode.innerHTML, /Answer the lodging decision/);
+
+  controller.setActiveSection("options");
+
+  assert.match(mountNode.innerHTML, /Stay shape for the first half of the trip/);
+  assert.match(mountNode.innerHTML, /Design hotel near Principe Real/);
+  assert.match(mountNode.innerHTML, /Structured response capture actions/);
+
+  controller.setActiveSection("outputs");
+
+  assert.match(mountNode.innerHTML, /Planner read/);
+  assert.match(mountNode.innerHTML, /one concrete lodging decision instead of asking for more broad preference text/i);
+
+  controller.destroy();
+});
+
 test("planner side panel renders the in-trip revision prompt scenario", () => {
   const mountNode = new FakeMountNode();
   const controller = renderPlannerSidePanel(mountNode, inTripRevisionPromptState);
@@ -203,6 +225,28 @@ test("planner side panel renders the in-trip revision prompt scenario", () => {
 
   assert.match(mountNode.innerHTML, /Why the planner is asking now/);
   assert.match(mountNode.innerHTML, /revision only changes the surrounding neighborhood flow/i);
+
+  controller.destroy();
+});
+
+test("planner side panel renders the business approval-ready review scenario across approval surfaces", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderPlannerSidePanel(mountNode, businessApprovalReadyReviewState);
+
+  assert.match(mountNode.innerHTML, /Dallas client review with policy packet/);
+  assert.match(mountNode.innerHTML, /Confirm the approval packet stance/);
+  assert.match(mountNode.innerHTML, /Prepare the approval packet/);
+
+  controller.setActiveSection("approval");
+
+  assert.match(mountNode.innerHTML, /Proposal Readiness/);
+  assert.match(mountNode.innerHTML, /Operational exception requires manager approval/);
+  assert.match(mountNode.innerHTML, /Within-cap airport hotel/);
+
+  controller.setActiveSection("outputs");
+
+  assert.match(mountNode.innerHTML, /Approval packet status/);
+  assert.match(mountNode.innerHTML, /request approval without reopening trip discovery/i);
 
   controller.destroy();
 });
