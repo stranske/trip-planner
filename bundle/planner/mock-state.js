@@ -57,6 +57,8 @@
  * @property {"compliant" | "non_compliant" | "exception_required"} status
  * @property {{ role: string, reason: string, mandatory: boolean }[]} approval_requirements
  * @property {{ code: string, message: string, severity: string, related_category: string }[]} failure_reasons
+ * @property {{ category: string, summary: string, rationale: string, comparable_ref?: string | null }[]} preferred_alternatives
+ * @property {string[]} exception_guidance
  * @property {string[]} notes
  * @property {number} compliance_score
  */

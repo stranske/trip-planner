@@ -87,10 +87,61 @@ const {
   renderNextStepActionsComponent,
   renderOptionFeedbackPromptsComponent,
   renderPendingDecisionsComponent,
+  renderPolicyPostureDisplayComponent,
   renderPlannerOutputsDisplay,
   renderStructuredResponseCaptureComponent,
   renderPlannerSidePanel,
 } = await loadModule("bundle/planner/side-panel.js");
+
+const businessApprovalState = {
+  ...leisureFeedbackLoopState,
+  trip: {
+    ...leisureFeedbackLoopState.trip,
+    mode: "business",
+    status: "booked",
+    title: "Dallas client review with policy packet",
+    summary: "The approval surface should summarize compliance posture before export.",
+  },
+  policy_evaluation: {
+    evaluation_id: "eval-approval-01",
+    proposal_id: "proposal-approval-01",
+    status: "exception_required",
+    approval_requirements: [
+      {
+        role: "manager",
+        reason: "Operational exception requires manager approval",
+        mandatory: true,
+      },
+      {
+        role: "finance",
+        reason: "Lodging cap exception requires finance review",
+        mandatory: true,
+      },
+    ],
+    failure_reasons: [
+      {
+        code: "lodging_rate_cap",
+        message: "Selected lodging exceeds the nightly cap but includes an operational-safety justification.",
+        severity: "warning",
+        related_category: "lodging",
+      },
+    ],
+    preferred_alternatives: [
+      {
+        category: "lodging",
+        summary: "Use the attached lower-cost comparable if the exception is denied.",
+        rationale: "Preserves site access with a lower nightly cost ceiling.",
+        comparable_ref: "lodging",
+      },
+    ],
+    exception_guidance: [
+      "Retain the lower-cost comparable in the approval packet.",
+      "Document the operational-safety rationale in the manager approval request.",
+    ],
+    notes: ["Proposal is exception-eligible if the fatigue-management rationale is approved."],
+    compliance_score: 0.68,
+  },
+};
 
 test("planner side panel store initializes with decision-focused UI state", () => {
   const store = createPlannerSidePanelStore(leisureFeedbackLoopState);
@@ -208,6 +259,24 @@ test("next-step actions component renders an empty state when no actions exist",
   assert.match(markup, /No next-step actions available\./);
 });
 
+test("policy posture display component renders compliance status and approval details", () => {
+  const markup = renderPolicyPostureDisplayComponent(businessApprovalState.policy_evaluation);
+
+  assert.match(markup, /aria-label="Policy posture display"/);
+  assert.match(markup, /data-policy-status="exception_required"/);
+  assert.match(markup, /Compliance score: 68%/);
+  assert.match(markup, /Operational exception requires manager approval/);
+  assert.match(markup, /lodging.*operational-safety justification/s);
+  assert.match(markup, /Retain the lower-cost comparable in the approval packet\./);
+  assert.match(markup, /Proposal is exception-eligible if the fatigue-management rationale is approved\./);
+});
+
+test("policy posture display component renders an empty state when policy evaluation is absent", () => {
+  const markup = renderPolicyPostureDisplayComponent(null);
+
+  assert.match(markup, /Business approval-readiness is not active for this planner state\./);
+});
+
 test("pending decisions component renders the default decision prompt and choices", () => {
   const markup = renderPendingDecisionsComponent(leisureFeedbackLoopState.pending_decisions);
 
@@ -254,6 +323,20 @@ test("planner side panel options section includes the option feedback prompts su
   assert.match(mountNode.innerHTML, /Stay shape for the first half of the trip/);
   assert.match(mountNode.innerHTML, /What feels strongest about this option\?/);
   assert.match(mountNode.innerHTML, /data-planner-feedback-kind="show_options_sooner"/);
+
+  controller.destroy();
+});
+
+test("planner side panel approval section includes the policy posture display", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderPlannerSidePanel(mountNode, businessApprovalState);
+
+  controller.setActiveSection("approval");
+
+  assert.match(mountNode.innerHTML, /Policy posture/);
+  assert.match(mountNode.innerHTML, /exception required/);
+  assert.match(mountNode.innerHTML, /Compliance score: 68%/);
+  assert.match(mountNode.innerHTML, /Preferred alternatives/);
 
   controller.destroy();
 });

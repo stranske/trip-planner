@@ -452,12 +452,10 @@ export function renderNextStepActionsComponent(nextStepActions, activeSection) {
 }
 
 /**
- * @param {PlannerPanelViewState} state
+ * @param {import("./mock-state.js").PolicyEvaluationRecord | null} policyEvaluation
  * @returns {string}
  */
-function renderPolicyStatus(state) {
-  const { policy_evaluation: policyEvaluation } = state.data;
-
+export function renderPolicyPostureDisplayComponent(policyEvaluation) {
   if (!policyEvaluation) {
     return `
       <p class="planner-empty-state">
@@ -466,15 +464,144 @@ function renderPolicyStatus(state) {
     `;
   }
 
+  const statusLabel = policyEvaluation.status.replaceAll("_", " ");
+  const scorePercent = Math.round(policyEvaluation.compliance_score * 100);
+  const scoreTone =
+    policyEvaluation.status === "compliant"
+      ? "positive"
+      : policyEvaluation.status === "exception_required"
+        ? "caution"
+        : "critical";
+  const blockingFailures = policyEvaluation.failure_reasons.filter(
+    (failure) => failure.severity === "blocking"
+  ).length;
+
   return `
-    <div class="planner-output-card">
-      <h4>${policyEvaluation.status.replaceAll("_", " ")}</h4>
-      <p>Compliance score: ${Math.round(policyEvaluation.compliance_score * 100)}%</p>
-      <ul class="planner-list">
-        ${policyEvaluation.notes.map((note) => `<li>${note}</li>`).join("")}
-      </ul>
+    <div class="planner-feedback-layout" aria-label="Policy posture display">
+      <article class="planner-output-card" data-policy-status="${policyEvaluation.status}">
+        <div class="planner-section-header">
+          <h4>Policy posture</h4>
+          <span class="planner-status-pill planner-status-pill--${scoreTone}">${statusLabel}</span>
+        </div>
+        <p>Compliance score: ${scorePercent}%</p>
+        <div class="planner-chip-row" aria-label="Policy posture summary">
+          <span class="planner-chip">${policyEvaluation.approval_requirements.length} approval requirement${policyEvaluation.approval_requirements.length === 1 ? "" : "s"}</span>
+          <span class="planner-chip">${policyEvaluation.failure_reasons.length} policy issue${policyEvaluation.failure_reasons.length === 1 ? "" : "s"}</span>
+          <span class="planner-chip">${blockingFailures} blocking</span>
+        </div>
+      </article>
+      <article class="planner-output-card">
+        <div class="planner-section-header">
+          <h4>Approvals</h4>
+          <span class="planner-meta">${policyEvaluation.approval_requirements.length} roles</span>
+        </div>
+        ${
+          policyEvaluation.approval_requirements.length
+            ? `
+              <ul class="planner-list">
+                ${policyEvaluation.approval_requirements
+                  .map(
+                    (requirement) => `
+                      <li>
+                        <strong>${requirement.role}</strong>: ${requirement.reason}
+                        ${requirement.mandatory ? " Required." : " Optional."}
+                      </li>
+                    `
+                  )
+                  .join("")}
+              </ul>
+            `
+            : '<p class="planner-empty-state">No approval roles required.</p>'
+        }
+      </article>
+      <article class="planner-output-card">
+        <div class="planner-section-header">
+          <h4>Policy findings</h4>
+          <span class="planner-meta">${policyEvaluation.failure_reasons.length} issues</span>
+        </div>
+        ${
+          policyEvaluation.failure_reasons.length
+            ? `
+              <ul class="planner-list">
+                ${policyEvaluation.failure_reasons
+                  .map(
+                    (failure) => `
+                      <li>
+                        <strong>${failure.related_category || failure.code}</strong>: ${failure.message}
+                        (${failure.severity})
+                      </li>
+                    `
+                  )
+                  .join("")}
+              </ul>
+            `
+            : '<p class="planner-empty-state">No policy failures identified.</p>'
+        }
+      </article>
+      <article class="planner-output-card">
+        <div class="planner-section-header">
+          <h4>Preferred alternatives</h4>
+          <span class="planner-meta">${policyEvaluation.preferred_alternatives.length} options</span>
+        </div>
+        ${
+          policyEvaluation.preferred_alternatives.length
+            ? `
+              <ul class="planner-list">
+                ${policyEvaluation.preferred_alternatives
+                  .map(
+                    (alternative) => `
+                      <li>
+                        <strong>${alternative.category}</strong>: ${alternative.summary}
+                        ${alternative.rationale}
+                      </li>
+                    `
+                  )
+                  .join("")}
+              </ul>
+            `
+            : '<p class="planner-empty-state">No preferred alternatives suggested.</p>'
+        }
+      </article>
+      <article class="planner-output-card">
+        <div class="planner-section-header">
+          <h4>Exception guidance</h4>
+          <span class="planner-meta">${policyEvaluation.exception_guidance.length} notes</span>
+        </div>
+        ${
+          policyEvaluation.exception_guidance.length
+            ? `
+              <ul class="planner-list">
+                ${policyEvaluation.exception_guidance.map((guidance) => `<li>${guidance}</li>`).join("")}
+              </ul>
+            `
+            : '<p class="planner-empty-state">No exception guidance required.</p>'
+        }
+      </article>
+      <article class="planner-output-card">
+        <div class="planner-section-header">
+          <h4>Policy notes</h4>
+          <span class="planner-meta">${policyEvaluation.notes.length} updates</span>
+        </div>
+        ${
+          policyEvaluation.notes.length
+            ? `
+              <ul class="planner-list">
+                ${policyEvaluation.notes.map((note) => `<li>${note}</li>`).join("")}
+              </ul>
+            `
+            : '<p class="planner-empty-state">No policy notes yet.</p>'
+        }
+      </article>
     </div>
   `;
+}
+
+/**
+ * @param {PlannerPanelViewState} state
+ * @returns {string}
+ */
+function renderPolicyStatus(state) {
+  return renderPolicyPostureDisplayComponent(state.data.policy_evaluation);
 }
 
 /**
