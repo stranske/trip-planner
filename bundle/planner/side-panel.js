@@ -20,6 +20,20 @@ const PANEL_SECTIONS = /** @type {const} */ (["outputs", "decisions", "options",
  * @property {PlannerPanelUiState} ui
  */
 
+/**
+ * @typedef {"accept" | "reject" | "revise" | "save_as_fallback" | "do_more_before_asking_again"} StructuredResponseActionKind
+ */
+
+/**
+ * @typedef {Object} StructuredResponseBaseDetail
+ * @property {StructuredResponseActionKind} action_type
+ * @property {string} trip_id
+ * @property {string} option_set_id
+ * @property {string} option_id
+ * @property {string | null} decision_id
+ * @property {"options"} source_section
+ */
+
 function getInitialActiveSection(state) {
   if (state.pending_decisions.length) {
     return "decisions";
@@ -352,6 +366,58 @@ export function renderOptionFeedbackPromptsComponent(optionSet, behavior) {
 }
 
 /**
+ * @param {import("./mock-state.js").OptionSetRecord} optionSet
+ * @param {string | null} selectedDecisionId
+ * @returns {string}
+ */
+export function renderStructuredResponseCaptureComponent(optionSet, selectedDecisionId = null) {
+  if (!optionSet.options.length) {
+    return '<p class="planner-empty-state">No structured response actions available.</p>';
+  }
+
+  return `
+    <div class="planner-feedback-layout" aria-label="Structured response capture actions">
+      ${optionSet.options
+        .map(
+          (option) => `
+            <article class="planner-feedback-card" data-planner-response-card="${option.option_id}">
+              <div class="planner-section-header">
+                <h4>${option.label}</h4>
+                <span class="planner-meta">Structured response</span>
+              </div>
+              <p class="planner-feedback-summary">${option.summary}</p>
+              <div class="planner-chip-row" aria-label="Structured response actions">
+                ${[
+                  ["accept", "Accept"],
+                  ["reject", "Reject"],
+                  ["revise", "Revise"],
+                  ["save_as_fallback", "Save as fallback"],
+                  ["do_more_before_asking_again", "Do more before asking again"],
+                ]
+                  .map(
+                    ([actionKind, label]) => `
+                      <button
+                        type="button"
+                        class="planner-feedback-action planner-feedback-action--structured"
+                        data-planner-response-action="${actionKind}"
+                        data-planner-option-id="${option.option_id}"
+                        data-planner-decision-id="${selectedDecisionId ?? ""}"
+                      >
+                        ${label}
+                      </button>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+/**
  * @param {import("./mock-state.js").NextStepActionRecord[]} nextStepActions
  * @param {PlannerPanelSection} activeSection
  * @returns {string}
@@ -417,6 +483,7 @@ function renderPolicyStatus(state) {
  */
 function renderOptions(state) {
   const { option_set: optionSet } = state.data;
+  const selectedDecisionId = state.ui.selected_decision_id ?? state.data.pending_decisions[0]?.decision_id ?? null;
 
   return `
     <div class="planner-output-card">
@@ -430,7 +497,79 @@ function renderOptions(state) {
       </ul>
     </div>
     ${renderOptionFeedbackPromptsComponent(optionSet, state.data.planner_behavior)}
+    ${renderStructuredResponseCaptureComponent(optionSet, selectedDecisionId)}
   `;
+}
+
+/**
+ * @param {PlannerPanelState} data
+ * @param {StructuredResponseActionKind} actionType
+ * @param {string} optionId
+ * @param {string | null} decisionId
+ * @returns {{ eventName: string, detail: Record<string, unknown> }}
+ */
+function createStructuredResponseEvent(data, actionType, optionId, decisionId) {
+  /** @type {StructuredResponseBaseDetail} */
+  const baseDetail = {
+    action_type: actionType,
+    trip_id: data.trip.trip_id,
+    option_set_id: data.option_set.option_set_id,
+    option_id: optionId,
+    decision_id: decisionId,
+    source_section: "options",
+  };
+
+  if (actionType === "accept") {
+    return {
+      eventName: "planner-response-accept",
+      detail: {
+        ...baseDetail,
+        accepted_option_id: optionId,
+      },
+    };
+  }
+
+  if (actionType === "reject") {
+    return {
+      eventName: "planner-response-reject",
+      detail: {
+        ...baseDetail,
+        rejected_option_id: optionId,
+      },
+    };
+  }
+
+  if (actionType === "revise") {
+    return {
+      eventName: "planner-response-revise",
+      detail: {
+        ...baseDetail,
+        revision_target: {
+          option_id: optionId,
+          decision_id: decisionId,
+        },
+      },
+    };
+  }
+
+  if (actionType === "save_as_fallback") {
+    return {
+      eventName: "planner-response-save-as-fallback",
+      detail: {
+        ...baseDetail,
+        fallback_option_id: optionId,
+      },
+    };
+  }
+
+  return {
+    eventName: "planner-response-do-more-before-asking-again",
+    detail: {
+      ...baseDetail,
+      deferred_option_id: optionId,
+      requested_follow_up: "do_more_before_asking_again",
+    },
+  };
 }
 
 /**
@@ -622,6 +761,23 @@ export function renderPlannerSidePanel(mountNode, initialState) {
     if (decisionButton instanceof HTMLElement && decisionButton.dataset.plannerDecision) {
       store.selectDecision(decisionButton.dataset.plannerDecision);
       render();
+      return;
+    }
+
+    const responseButton = target.closest("[data-planner-response-action]");
+    if (
+      responseButton instanceof HTMLElement &&
+      responseButton.dataset.plannerResponseAction &&
+      responseButton.dataset.plannerOptionId
+    ) {
+      const { eventName, detail } = createStructuredResponseEvent(
+        store.getState().data,
+        /** @type {StructuredResponseActionKind} */ (responseButton.dataset.plannerResponseAction),
+        responseButton.dataset.plannerOptionId,
+        responseButton.dataset.plannerDecisionId || null
+      );
+
+      mountNode.dispatchEvent(new CustomEvent(eventName, { detail }));
     }
   }
 

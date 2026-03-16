@@ -18,6 +18,7 @@ class FakeMountNode extends FakeHTMLElement {
     super();
     this.innerHTML = "";
     this.listeners = new Map();
+    this.dispatchedEvents = [];
   }
 
   addEventListener(type, listener) {
@@ -36,6 +37,11 @@ class FakeMountNode extends FakeHTMLElement {
       listener({ target });
     }
   }
+
+  dispatchEvent(event) {
+    this.dispatchedEvents.push(event);
+    return true;
+  }
 }
 
 class FakeButton extends FakeHTMLElement {
@@ -53,9 +59,22 @@ class FakeButton extends FakeHTMLElement {
       return this;
     }
 
+    if (selector === "[data-planner-response-action]" && this.dataset.plannerResponseAction) {
+      return this;
+    }
+
     return null;
   }
 }
+
+class FakeCustomEvent {
+  constructor(type, init = {}) {
+    this.type = type;
+    this.detail = init.detail;
+  }
+}
+
+globalThis.CustomEvent = FakeCustomEvent;
 
 async function loadModule(relativePath) {
   const source = await fs.readFile(path.join(repoRoot, relativePath), "utf8");
@@ -69,6 +88,7 @@ const {
   renderOptionFeedbackPromptsComponent,
   renderPendingDecisionsComponent,
   renderPlannerOutputsDisplay,
+  renderStructuredResponseCaptureComponent,
   renderPlannerSidePanel,
 } = await loadModule("bundle/planner/side-panel.js");
 
@@ -143,6 +163,31 @@ test("option feedback prompts component renders an empty state when no options e
   assert.match(markup, /No option feedback prompts yet\./);
 });
 
+test("structured response capture component renders all response actions per option", () => {
+  const markup = renderStructuredResponseCaptureComponent(
+    leisureFeedbackLoopState.option_set,
+    leisureFeedbackLoopState.pending_decisions[0].decision_id
+  );
+
+  assert.match(markup, /aria-label="Structured response capture actions"/);
+  assert.match(markup, /data-planner-response-action="accept"/);
+  assert.match(markup, /data-planner-response-action="reject"/);
+  assert.match(markup, /data-planner-response-action="revise"/);
+  assert.match(markup, /data-planner-response-action="save_as_fallback"/);
+  assert.match(markup, /data-planner-response-action="do_more_before_asking_again"/);
+  assert.match(markup, /Save as fallback/);
+  assert.match(markup, /Do more before asking again/);
+});
+
+test("structured response capture component renders an empty state when no options exist", () => {
+  const markup = renderStructuredResponseCaptureComponent(
+    { ...leisureFeedbackLoopState.option_set, options: [] },
+    null
+  );
+
+  assert.match(markup, /No structured response actions available\./);
+});
+
 test("next-step actions component renders available traveler actions", () => {
   const markup = renderNextStepActionsComponent(
     leisureFeedbackLoopState.next_step_actions,
@@ -209,6 +254,148 @@ test("planner side panel options section includes the option feedback prompts su
   assert.match(mountNode.innerHTML, /Stay shape for the first half of the trip/);
   assert.match(mountNode.innerHTML, /What feels strongest about this option\?/);
   assert.match(mountNode.innerHTML, /data-planner-feedback-kind="show_options_sooner"/);
+
+  controller.destroy();
+});
+
+test("planner side panel emits a typed accept response event", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderPlannerSidePanel(mountNode, leisureFeedbackLoopState);
+
+  controller.setActiveSection("options");
+  mountNode.click(
+    new FakeButton({
+      plannerResponseAction: "accept",
+      plannerOptionId: "option-bairro-alto",
+      plannerDecisionId: "lodging-signal",
+    })
+  );
+
+  assert.equal(mountNode.dispatchedEvents[0].type, "planner-response-accept");
+  assert.deepEqual(mountNode.dispatchedEvents[0].detail, {
+    action_type: "accept",
+    trip_id: "trip-leisure-lisbon-oct",
+    option_set_id: "option-set-lodging-01",
+    option_id: "option-bairro-alto",
+    decision_id: "lodging-signal",
+    source_section: "options",
+    accepted_option_id: "option-bairro-alto",
+  });
+
+  controller.destroy();
+});
+
+test("planner side panel emits a typed reject response event", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderPlannerSidePanel(mountNode, leisureFeedbackLoopState);
+
+  controller.setActiveSection("options");
+  mountNode.click(
+    new FakeButton({
+      plannerResponseAction: "reject",
+      plannerOptionId: "option-bairro-alto",
+      plannerDecisionId: "lodging-signal",
+    })
+  );
+
+  assert.equal(mountNode.dispatchedEvents[0].type, "planner-response-reject");
+  assert.deepEqual(mountNode.dispatchedEvents[0].detail, {
+    action_type: "reject",
+    trip_id: "trip-leisure-lisbon-oct",
+    option_set_id: "option-set-lodging-01",
+    option_id: "option-bairro-alto",
+    decision_id: "lodging-signal",
+    source_section: "options",
+    rejected_option_id: "option-bairro-alto",
+  });
+
+  controller.destroy();
+});
+
+test("planner side panel emits a typed revise response event", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderPlannerSidePanel(mountNode, leisureFeedbackLoopState);
+
+  controller.setActiveSection("options");
+  mountNode.click(
+    new FakeButton({
+      plannerResponseAction: "revise",
+      plannerOptionId: "option-bairro-alto",
+      plannerDecisionId: "lodging-signal",
+    })
+  );
+
+  assert.equal(mountNode.dispatchedEvents[0].type, "planner-response-revise");
+  assert.deepEqual(mountNode.dispatchedEvents[0].detail, {
+    action_type: "revise",
+    trip_id: "trip-leisure-lisbon-oct",
+    option_set_id: "option-set-lodging-01",
+    option_id: "option-bairro-alto",
+    decision_id: "lodging-signal",
+    source_section: "options",
+    revision_target: {
+      option_id: "option-bairro-alto",
+      decision_id: "lodging-signal",
+    },
+  });
+
+  controller.destroy();
+});
+
+test("planner side panel emits a typed save-as-fallback response event", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderPlannerSidePanel(mountNode, leisureFeedbackLoopState);
+
+  controller.setActiveSection("options");
+  mountNode.click(
+    new FakeButton({
+      plannerResponseAction: "save_as_fallback",
+      plannerOptionId: "option-bairro-alto",
+      plannerDecisionId: "lodging-signal",
+    })
+  );
+
+  assert.equal(mountNode.dispatchedEvents[0].type, "planner-response-save-as-fallback");
+  assert.deepEqual(mountNode.dispatchedEvents[0].detail, {
+    action_type: "save_as_fallback",
+    trip_id: "trip-leisure-lisbon-oct",
+    option_set_id: "option-set-lodging-01",
+    option_id: "option-bairro-alto",
+    decision_id: "lodging-signal",
+    source_section: "options",
+    fallback_option_id: "option-bairro-alto",
+  });
+
+  controller.destroy();
+});
+
+test("planner side panel emits a typed do-more-before-asking-again response event", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderPlannerSidePanel(mountNode, leisureFeedbackLoopState);
+
+  controller.setActiveSection("options");
+  mountNode.click(
+    new FakeButton({
+      plannerResponseAction: "do_more_before_asking_again",
+      plannerOptionId: "option-bairro-alto",
+      plannerDecisionId: "lodging-signal",
+    })
+  );
+
+  assert.equal(
+    mountNode.dispatchedEvents[0].type,
+    "planner-response-do-more-before-asking-again"
+  );
+  assert.deepEqual(mountNode.dispatchedEvents[0].detail, {
+    action_type: "do_more_before_asking_again",
+    trip_id: "trip-leisure-lisbon-oct",
+    option_set_id: "option-set-lodging-01",
+    option_id: "option-bairro-alto",
+    decision_id: "lodging-signal",
+    source_section: "options",
+    deferred_option_id: "option-bairro-alto",
+    requested_follow_up: "do_more_before_asking_again",
+  });
 
   controller.destroy();
 });
