@@ -28,6 +28,7 @@ from trip_planner.preferences.models import (
 from trip_planner.preferences.schema import (
     ANCHOR_GROUPS,
     HYBRID_FACTOR_KEYS,
+    SCHEMA_VERSION,
     TRADEOFF_DIMENSION_KEYS,
 )
 
@@ -61,12 +62,20 @@ def fixture_corpus_path() -> Path:
     )
 
 
-def load_fixture_corpus() -> list[TravelerFixture]:
-    payload = json.loads(fixture_corpus_path().read_text())
+def load_fixture_corpus(path: Path | None = None) -> list[TravelerFixture]:
+    payload = json.loads((path or fixture_corpus_path()).read_text(encoding="utf-8"))
+    if payload.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError(
+            "fixture corpus schema_version must match trip_planner.preferences.schema.SCHEMA_VERSION"
+        )
     fixtures = payload.get("fixtures", [])
     if not isinstance(fixtures, list):
         raise ValueError("fixtures must be a list")
-    return [_build_fixture(entry) for entry in fixtures]
+    fixture_objects = [_build_fixture(entry) for entry in fixtures]
+    fixture_ids = [fixture.id for fixture in fixture_objects]
+    if len(set(fixture_ids)) != len(fixture_ids):
+        raise ValueError("fixture corpus ids must be unique")
+    return fixture_objects
 
 
 def load_fixture_map() -> dict[str, TravelerFixture]:
@@ -77,6 +86,11 @@ def _build_fixture(payload: dict[str, Any]) -> TravelerFixture:
     intended = payload.get("intended_interpretation", {})
     profile = build_profile_from_overrides(payload.get("profile_overrides", {}))
     evidence = [build_evidence_record(item) for item in payload.get("evidence", [])]
+    if not intended.get("qualitative_summary"):
+        raise ValueError(
+            f"fixture {payload.get('id', '<unknown>')!r} must define intended_interpretation."
+            "qualitative_summary"
+        )
     return TravelerFixture(
         id=payload["id"],
         fixture_kind=payload["fixture_kind"],

@@ -1,6 +1,13 @@
+import json
+from pathlib import Path
+
 from trip_planner.preferences.schema import TRADEOFF_DIMENSION_KEYS
 
-from tests.preferences.fixture_corpus import load_fixture_corpus, load_fixture_map
+from tests.preferences.fixture_corpus import (
+    fixture_corpus_path,
+    load_fixture_corpus,
+    load_fixture_map,
+)
 
 
 def test_fixture_corpus_loads_and_instantiates_profiles() -> None:
@@ -63,10 +70,60 @@ def test_fixture_corpus_preserves_option_evidence_for_revealed_preferences() -> 
     rail_fixture = fixtures["scenic-rail-nomad"]
     comfort_fixture = fixtures["comfort-floor-traveler"]
 
-    rail_option = rail_fixture.evidence[1].option_evidence
-    comfort_option = comfort_fixture.evidence[1].option_evidence
+    rail_option = next(
+        record.option_evidence
+        for record in rail_fixture.evidence
+        if record.evidence_type == "option_selection"
+    )
+    comfort_option = next(
+        record.option_evidence
+        for record in comfort_fixture.evidence
+        if record.evidence_type == "option_selection"
+    )
 
     assert rail_option is not None
     assert rail_option.option_kind == "mixed_bundle"
     assert comfort_option is not None
     assert comfort_option.option_kind == "transport"
+
+
+def test_fixture_corpus_rejects_wrong_schema_version(tmp_path: Path) -> None:
+    payload = json.loads(fixture_corpus_path().read_text(encoding="utf-8"))
+    payload["schema_version"] = "9.9.9"
+    path = tmp_path / "bad-schema.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    try:
+        load_fixture_corpus(path)
+    except ValueError as exc:
+        assert "schema_version" in str(exc)
+    else:
+        raise AssertionError("Fixture corpus should reject unsupported schema versions")
+
+
+def test_fixture_corpus_rejects_duplicate_ids(tmp_path: Path) -> None:
+    payload = json.loads(fixture_corpus_path().read_text(encoding="utf-8"))
+    payload["fixtures"][1]["id"] = payload["fixtures"][0]["id"]
+    path = tmp_path / "duplicate-ids.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    try:
+        load_fixture_corpus(path)
+    except ValueError as exc:
+        assert "ids must be unique" in str(exc)
+    else:
+        raise AssertionError("Fixture corpus should reject duplicate fixture ids")
+
+
+def test_fixture_corpus_rejects_missing_qualitative_summary(tmp_path: Path) -> None:
+    payload = json.loads(fixture_corpus_path().read_text(encoding="utf-8"))
+    payload["fixtures"][0]["intended_interpretation"]["qualitative_summary"] = ""
+    path = tmp_path / "missing-summary.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    try:
+        load_fixture_corpus(path)
+    except ValueError as exc:
+        assert "qualitative_summary" in str(exc)
+    else:
+        raise AssertionError("Fixture corpus should reject missing qualitative summaries")
