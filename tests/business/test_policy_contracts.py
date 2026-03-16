@@ -74,6 +74,30 @@ def test_trip_plan_proposal_rejects_non_business_mode() -> None:
         raise AssertionError("TripPlanProposal should reject non-business modes")
 
 
+def test_trip_plan_proposal_requires_selected_options_list() -> None:
+    scenario = _load_scenario("policy_round_trip_compliant.json")
+    del scenario["proposal"]["selected_options"]
+
+    try:
+        TripPlanProposal.from_dict(scenario["proposal"])
+    except KeyError as exc:
+        assert exc.args == ("selected_options",)
+    else:
+        raise AssertionError("TripPlanProposal should require selected_options")
+
+
+def test_trip_plan_proposal_rejects_non_list_approval_notes() -> None:
+    scenario = _load_scenario("policy_round_trip_compliant.json")
+    scenario["proposal"]["approval_notes"] = "manager approval pending"
+
+    try:
+        TripPlanProposal.from_dict(scenario["proposal"])
+    except ValueError as exc:
+        assert "approval_notes" in str(exc)
+    else:
+        raise AssertionError("TripPlanProposal should reject non-list approval_notes")
+
+
 def test_policy_evaluation_result_rejects_invalid_status() -> None:
     try:
         PolicyEvaluationResult(
@@ -85,3 +109,27 @@ def test_policy_evaluation_result_rejects_invalid_status() -> None:
         assert "status" in str(exc)
     else:
         raise AssertionError("PolicyEvaluationResult should reject unsupported statuses")
+
+
+def test_policy_evaluation_result_rejects_non_list_exception_guidance() -> None:
+    scenario = _load_scenario("policy_round_trip_exception.json")
+    scenario["evaluation_result"]["exception_guidance"] = "submit fatigue rationale"
+
+    try:
+        PolicyEvaluationResult.from_dict(scenario["evaluation_result"])
+    except ValueError as exc:
+        assert "exception_guidance" in str(exc)
+    else:
+        raise AssertionError("PolicyEvaluationResult should reject non-list exception_guidance")
+
+
+def test_policy_evaluation_result_rejects_non_list_notes() -> None:
+    scenario = _load_scenario("policy_round_trip_non_compliant.json")
+    scenario["evaluation_result"]["notes"] = {"summary": "use preferred booking channel"}
+
+    try:
+        PolicyEvaluationResult.from_dict(scenario["evaluation_result"])
+    except ValueError as exc:
+        assert "notes" in str(exc)
+    else:
+        raise AssertionError("PolicyEvaluationResult should reject non-list notes")

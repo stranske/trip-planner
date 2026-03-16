@@ -20,6 +20,24 @@ POLICY_EVALUATION_STATUSES: tuple[str, ...] = ("compliant", "non_compliant", "ex
 FAILURE_SEVERITIES: tuple[str, ...] = ("warning", "blocking")
 
 
+def _require_list_field(payload: dict[str, Any], key: str) -> list[Any]:
+    if key not in payload:
+        raise KeyError(key)
+    value = payload[key]
+    if not isinstance(value, list):
+        raise ValueError(f"{key} must be provided as a list")
+    return list(value)
+
+
+def _optional_list_field(payload: dict[str, Any], key: str) -> list[Any]:
+    if key not in payload:
+        return []
+    value = payload[key]
+    if not isinstance(value, list):
+        raise ValueError(f"{key} must be provided as a list")
+    return list(value)
+
+
 @dataclass(slots=True)
 class PolicyConstraintSet:
     policy_id: str
@@ -213,6 +231,12 @@ class TripPlanProposal:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "TripPlanProposal":
+        selected_options = _require_list_field(payload, "selected_options")
+        comparables = _optional_list_field(payload, "comparables")
+        justifications = _optional_list_field(payload, "justifications")
+        booking_channel_summaries = _optional_list_field(payload, "booking_channel_summaries")
+        approval_notes = _optional_list_field(payload, "approval_notes")
+
         return cls(
             proposal_id=payload["proposal_id"],
             trip_id=payload["trip_id"],
@@ -229,7 +253,7 @@ class TripPlanProposal:
                         ),
                     }
                 )
-                for item in payload.get("selected_options", [])
+                for item in selected_options
             ],
             cost_summary=ProposalCostSummary(**payload["cost_summary"]),
             comparables=[
@@ -239,16 +263,13 @@ class TripPlanProposal:
                         "estimated_cost": MoneyRange(**item["estimated_cost"]),
                     }
                 )
-                for item in payload.get("comparables", [])
+                for item in comparables
             ],
-            justifications=[
-                JustificationRecord(**item) for item in payload.get("justifications", [])
-            ],
+            justifications=[JustificationRecord(**item) for item in justifications],
             booking_channel_summaries=[
-                BookingChannelSummary(**item)
-                for item in payload.get("booking_channel_summaries", [])
+                BookingChannelSummary(**item) for item in booking_channel_summaries
             ],
-            approval_notes=list(payload.get("approval_notes", [])),
+            approval_notes=approval_notes,
             requested_exception=(
                 ExceptionRequest(**payload["requested_exception"])
                 if payload.get("requested_exception")
@@ -339,20 +360,22 @@ class PolicyEvaluationResult:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "PolicyEvaluationResult":
+        approval_requirements = _optional_list_field(payload, "approval_requirements")
+        failure_reasons = _optional_list_field(payload, "failure_reasons")
+        preferred_alternatives = _optional_list_field(payload, "preferred_alternatives")
+        exception_guidance = _optional_list_field(payload, "exception_guidance")
+        notes = _optional_list_field(payload, "notes")
+
         return cls(
             evaluation_id=payload["evaluation_id"],
             proposal_id=payload["proposal_id"],
             status=payload["status"],
-            approval_requirements=[
-                ApprovalRequirement(**item) for item in payload.get("approval_requirements", [])
-            ],
-            failure_reasons=[
-                PolicyFailureReason(**item) for item in payload.get("failure_reasons", [])
-            ],
+            approval_requirements=[ApprovalRequirement(**item) for item in approval_requirements],
+            failure_reasons=[PolicyFailureReason(**item) for item in failure_reasons],
             preferred_alternatives=[
-                PreferredAlternative(**item) for item in payload.get("preferred_alternatives", [])
+                PreferredAlternative(**item) for item in preferred_alternatives
             ],
-            exception_guidance=list(payload.get("exception_guidance", [])),
-            notes=list(payload.get("notes", [])),
+            exception_guidance=exception_guidance,
+            notes=notes,
             compliance_score=payload.get("compliance_score", 1.0),
         )
