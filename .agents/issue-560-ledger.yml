@@ -1,0 +1,199 @@
+version: 1
+issue: 560
+base: main
+branch: codex/issue-560
+tasks:
+  - id: task-01
+    title: 'Create the planner side-panel container component with layout (verify:
+      confirm completion in repo)'
+    status: done
+    started_at: '2026-03-16T17:23:49Z'
+    finished_at: '2026-03-16T17:24:05Z'
+    commit: 19e7955e86e62e18cad5edff679210c3aa1835e3
+    notes: []
+  - id: task-02
+    title: 'Create the planner side-panel container component with state management
+      (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: 'Build the planner outputs display component to show messages and results
+      (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: 'Implement the pending decisions component to render decision prompts (verify:
+      confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: 'Create the option-feedback prompts component for user feedback collection
+      (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: 'Build the next-step actions component to display available actions (verify:
+      confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: 'Implement structured response capture actions in the planner UI: accept,
+      reject, revise, save as fallback, do-more-before-asking-again (verify: confirm
+      completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: 'Create the policy posture display component showing compliance status
+      (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: 'Build the comparables display component to show alternative options (verify:
+      confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: 'Implement the justification burden component to display required documentation
+      (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: 'Create the proposal readiness indicator component with status visualization
+      (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: 'Create UI state mock for the leisure feedback loop workflow (verify: confirm
+      completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: 'Add UI state mock for the in-trip revision prompt scenario (verify: confirm
+      completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: 'Build UI state mock for the business approval-ready review state (verify:
+      confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: 'Write frontend tests for planner action capture functionality (verify:
+      tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-16
+    title: 'Create frontend tests for pending-decision rendering behavior (verify:
+      tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-17
+    title: 'Implement frontend tests for business approval-readiness display states
+      (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-18
+    title: 'Planner interaction UI components import and use types/interfaces from
+      orchestration modules (issues #543, #546) and pass type checking without ''any''
+      types in integration points'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-19
+    title: Each feedback action (accept/reject/revise/save-as-fallback/do-more-before-asking-again)
+      emits a unique event type with a corresponding test that verifies the event
+      payload structure and type discrimination
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-20
+    title: Business approval-readiness components display all required fields (policy
+      posture status, proposal readiness indicator) without console errors and pass
+      snapshot tests
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-21
+    title: 'Frontend tests exist and pass for at least: leisure feedback loop state,
+      in-trip revision prompt state, and business approval-ready review state as specified
+      in the tasks'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-22
+    title: 'Documentation includes: a diagram showing data flow from orchestration
+      to UI components, code examples of consuming orchestration outputs, and a table
+      mapping policy evaluation states to UI display components'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-23
+    title: Write documentation describing how the planner side-panel and business
+      readiness surfaces consume orchestration outputs, saved-state outputs, and policy-integration
+      outputs. (Agent cannot make subjective decisions about documentation structure,
+      level of detail, or what constitutes sufficient explanation of complex integration
+      patterns | Provide a documentation template or outline specifying required sections,
+      example formats, and specific integration points to document)
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
