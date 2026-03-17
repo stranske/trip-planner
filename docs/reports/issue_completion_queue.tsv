@@ -1,0 +1,4 @@
+priority	category	issue	issue_url	source_pr	source_pr_url	component_gap	next_action	status
+1	C2	580	https://github.com/stranske/trip-planner/issues/580	571	https://github.com/stranske/trip-planner/pull/571	Unresolved review thread (1)	Open follow-up fix PR and disposition thread	in_progress
+1	C2	579	https://github.com/stranske/trip-planner/issues/579	566	https://github.com/stranske/trip-planner/pull/566	Unresolved review threads (2)	Open follow-up fix PR and disposition both threads	in_progress
+1	C3	578	https://github.com/stranske/trip-planner/issues/578	561	https://github.com/stranske/trip-planner/pull/561	verify:compare non-PASS lacks documented disposition	Post disposition and close follow-up issue	in_progress

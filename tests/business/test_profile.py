@@ -14,7 +14,8 @@ from trip_planner.preferences.schema import HYBRID_FACTOR_KEYS, TRADEOFF_DIMENSI
 
 
 def _fixture_path(name: str) -> Path:
-    return Path("tests/fixtures/business") / name
+    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "business"
+    return fixtures_dir / name
 
 
 def _load_fixture(name: str) -> BusinessTravelProfile:

@@ -340,8 +340,28 @@ def _finalize_explanations(
     profile: LeisurePreferenceProfile,
     explanation: ResolutionExplanation,
 ) -> None:
+    # Interactions run before this stage and may move values away from zero.
+    # Drop stale "needs-directional-seed" artifacts when the final resolved value
+    # is no longer zero, so tensions/notes reflect the final profile state.
+    filtered_tension_flags: list[TensionFlag] = []
+    confidence_notes = list(profile.evidence_summary.confidence_notes)
     for key, dimension in profile.tradeoff_dimensions.items():
         detail = explanation.dimension_explanations[key]
+        directional_seed_tension_id = f"{key}-needs-directional-seed"
+        directional_seed_note = (
+            f"{key} received evidence but remained at a zero-direction seed value."
+        )
+        if dimension.value != 0.0:
+            if directional_seed_tension_id in detail.tension_flag_ids:
+                detail.tension_flag_ids = [
+                    tension_id
+                    for tension_id in detail.tension_flag_ids
+                    if tension_id != directional_seed_tension_id
+                ]
+            explanation.tension_explanations.pop(directional_seed_tension_id, None)
+            confidence_notes = [
+                note for note in confidence_notes if note != directional_seed_note
+            ]
         detail.resolved_value = dimension.value
         detail.confidence = dimension.confidence
         detail.salience = dimension.salience
@@ -354,6 +374,17 @@ def _finalize_explanations(
             detail.notes.append(
                 "Interaction rules materially affected this dimension during resolution."
             )
+    for tension in profile.tension_flags:
+        if tension.id.endswith("-needs-directional-seed"):
+            key = tension.id[: -len("-needs-directional-seed")]
+        else:
+            key = ""
+        if tension.id.endswith("-needs-directional-seed") and key in profile.tradeoff_dimensions:
+            if profile.tradeoff_dimensions[key].value != 0.0:
+                continue
+        filtered_tension_flags.append(tension)
+    profile.tension_flags = filtered_tension_flags
+    profile.evidence_summary.confidence_notes = confidence_notes
     for key, factor in profile.hybrid_factors.items():
         hybrid_detail = explanation.hybrid_factor_explanations[key]
         hybrid_detail.mode = factor.mode
