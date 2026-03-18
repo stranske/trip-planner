@@ -38,6 +38,17 @@ class FakeMountNode extends FakeHTMLElement {
     }
   }
 
+  keydown(target, key) {
+    const listener = this.listeners.get("keydown");
+    if (listener) {
+      listener({
+        target,
+        key,
+        preventDefault() {},
+      });
+    }
+  }
+
   dispatchEvent(event) {
     this.dispatchedEvents.push(event);
     return true;
@@ -182,6 +193,10 @@ test("planner side panel controller rerenders on section and decision changes", 
   assert.equal(controller.getState().ui.active_section, "outputs");
   assert.match(mountNode.innerHTML, /Planner read/);
 
+  mountNode.keydown(new FakeButton({ plannerSection: "outputs" }), "ArrowRight");
+  assert.equal(controller.getState().ui.active_section, "decisions");
+  assert.match(mountNode.innerHTML, /Pending Decisions/);
+
   mountNode.click(new FakeButton({ plannerDecision: "lodging-signal" }));
   assert.equal(controller.getState().ui.active_section, "decisions");
   assert.equal(controller.getState().ui.selected_decision_id, "lodging-signal");
@@ -196,6 +211,9 @@ test("planner side panel renders the leisure feedback loop scenario across its i
   const controller = renderPlannerSidePanel(mountNode, leisureFeedbackLoopState);
 
   assert.match(mountNode.innerHTML, /Lisbon reset with room to wander/);
+  assert.match(mountNode.innerHTML, /role="tablist"/);
+  assert.match(mountNode.innerHTML, /role="tab"/);
+  assert.match(mountNode.innerHTML, /role="tabpanel"/);
   assert.match(mountNode.innerHTML, /Choose the better base camp/);
   assert.match(mountNode.innerHTML, /Answer the lodging decision/);
 
@@ -421,6 +439,7 @@ test("proposal readiness indicator component renders readiness status and checkl
   assert.match(markup, /68% compliance/);
   assert.match(markup, /Ready:<\/strong> Comparables attached\. 2 options in the approval packet\./);
   assert.match(markup, /Ready:<\/strong> Submission path defined\. Exception request is attached\./);
+  assert.match(markup, /No additional actions are required before submission\./);
 });
 
 test("proposal readiness indicator component matches the approval snapshot", async () => {
