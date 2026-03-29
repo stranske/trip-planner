@@ -23,12 +23,7 @@ def test_resolution_clears_directional_seed_artifacts_after_interactions() -> No
     seed.tradeoff_dimensions["breadth_vs_depth"].value = -0.6
     seed.tradeoff_dimensions["recovery_vs_intensity"].value = -0.6
 
-    movement_evidence = [
-        record for record in fixture.evidence if "movement_vs_friction" in record.affected_dimensions
-    ]
-    assert movement_evidence
-
-    result = resolve_leisure_profile(seed, movement_evidence)
+    result = resolve_leisure_profile(seed, fixture.evidence)
     tension_id = "movement_vs_friction-needs-directional-seed"
     confidence_note = (
         "movement_vs_friction received evidence but remained at a zero-direction seed value."
