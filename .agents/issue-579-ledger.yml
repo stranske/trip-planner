@@ -6,10 +6,10 @@ tasks:
   - id: task-01
     title: Create `docs/pr-566-thread-disposition.md` documenting each of the 2 unresolved
       threads with their content and context
-    status: doing
+    status: done
     started_at: '2026-03-29T22:12:46Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-03-29T22:12:55Z'
+    commit: 40b489efb8d5dbad673ca295e44ae71b9aad9f58
     notes: []
   - id: task-02
     title: Add disposition decision (fix-warranted or dismissed) for each thread in
