@@ -1,0 +1,122 @@
+version: 1
+issue: 579
+base: main
+branch: codex/issue-579
+tasks:
+  - id: task-01
+    title: Create `docs/pr-566-thread-disposition.md` documenting each of the 2 unresolved
+      threads with their content and context
+    status: doing
+    started_at: '2026-03-29T22:12:46Z'
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-02
+    title: Add disposition decision (fix-warranted or dismissed) for each thread in
+      `docs/pr-566-thread-disposition.md` with clear reasoning
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: Identify specific code changes needed for any threads marked as fix-warranted
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: Create a new follow-up PR implementing minimal code changes for fix-warranted
+      threads (if any)
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: Update `docs/pr-566-thread-disposition.md` with follow-up PR link(s) for
+      fix-warranted threads
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: 'Add comment templates to `docs/pr-566-thread-disposition.md` that can
+      be posted to each thread on PR #566'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: 'Post disposition rationale comments to each of the 2 unresolved threads
+      on PR #566 using templates from `docs/pr-566-thread-disposition.md`'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: Mark threads as resolved or dismissed in GitHub UI based on documented
+      dispositions
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: 'Add follow-up PR link(s) to relevant thread comments on PR #566'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: File `docs/pr-566-thread-disposition.md` exists and contains exactly 2
+      thread entries
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: 'Each thread entry in `docs/pr-566-thread-disposition.md` includes: thread
+      identifier, original comment content, disposition decision, and rationale (minimum
+      1 sentence)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: 'Each thread entry includes a comment template ready to be posted to PR
+      #566'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: Any follow-up PR created is linked in both its description and in `docs/pr-566-thread-disposition.md`
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: All code changes in follow-up PR(s) include test coverage with passing
+      tests
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: 'Follow-up PR(s) reference PR #566 in their description'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
