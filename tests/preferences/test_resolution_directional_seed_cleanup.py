@@ -1,9 +1,11 @@
+from copy import deepcopy
+
 from tests.preferences.fixture_corpus import load_fixture_corpus
 from trip_planner.preferences import EvidenceSummary, resolve_leisure_profile
 
 
 def _resolution_seed(fixture_profile):
-    seed = fixture_profile.__class__.from_dict(fixture_profile.to_dict())
+    seed = deepcopy(fixture_profile)
     for dimension in seed.tradeoff_dimensions.values():
         dimension.confidence = 0.2
         dimension.salience = 0.2
@@ -21,7 +23,12 @@ def test_resolution_clears_directional_seed_artifacts_after_interactions() -> No
     seed.tradeoff_dimensions["breadth_vs_depth"].value = -0.6
     seed.tradeoff_dimensions["recovery_vs_intensity"].value = -0.6
 
-    result = resolve_leisure_profile(seed, fixture.evidence)
+    movement_evidence = [
+        record for record in fixture.evidence if "movement_vs_friction" in record.affected_dimensions
+    ]
+    assert movement_evidence
+
+    result = resolve_leisure_profile(seed, movement_evidence)
     tension_id = "movement_vs_friction-needs-directional-seed"
     confidence_note = (
         "movement_vs_friction received evidence but remained at a zero-direction seed value."
