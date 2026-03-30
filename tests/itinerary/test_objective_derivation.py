@@ -122,3 +122,26 @@ def test_derivation_carries_forward_hard_constraint_guidance() -> None:
     assert any(
         line.startswith("hard_constraints:must_include_places=") for line in objectives.explanations
     )
+
+
+def test_short_trip_base_count_respects_duration_cap_with_many_required_places() -> None:
+    profile = build_profile_from_overrides(
+        {
+            "trip_frame": {"duration_days": 3},
+            "hard_constraints": {
+                "duration_bounds": {"min_days": 2, "max_days": 3},
+                "must_include_places": ["A", "B", "C", "D"],
+            },
+            "tradeoff_dimensions": {
+                "breadth_vs_depth": {"value": -0.45},
+                "route_coherence_vs_eclectic_contrast": {"value": 0.0},
+            },
+        }
+    )
+    resolved = resolve_leisure_profile(profile, [])
+
+    objectives = derive_itinerary_objectives(resolved, trip_id="trip-short")
+
+    duration_cap = max(2, 3 // 2)
+    assert objectives.target_base_count.min_value >= 2
+    assert objectives.target_base_count.max_value <= duration_cap

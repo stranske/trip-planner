@@ -86,6 +86,11 @@ def _target_base_count(
         min_value = max(min_value, 2)
     if interaction_biases.get("compress_route_before_downgrading_lodging", 0.0) >= 0.9:
         max_value = max(min_value, min(max_value, 3))
+    duration_cap = max(2, duration_days // 2)
+    if min_value > duration_cap:
+        min_value = duration_cap
+    if max_value > duration_cap:
+        max_value = max(min_value, duration_cap)
     return CountRange(min_value=min_value, max_value=max_value)
 
 
@@ -179,7 +184,15 @@ def _budget_protection(
     priorities = resolved.profile.budget_model.spending_priorities
     protected_categories = sorted(
         key for key, value in priorities.items() if value >= 0.45
-    ) or sorted(priorities.keys())[:2]
+    )
+    if not protected_categories:
+        protected_categories = [
+            key
+            for key, _ in sorted(
+                priorities.items(),
+                key=lambda item: (-item[1], item[0]),
+            )[:2]
+        ]
     sensitivity = _clamp(resolved.profile.budget_model.total_budget_sensitivity, 0.0, 1.0)
     notes = [f"Derived from budget sensitivity={sensitivity:.2f}."]
     if resolved.profile.hard_constraints.budget_ceiling is not None:
