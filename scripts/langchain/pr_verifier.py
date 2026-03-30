@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field
-from scripts import api_client
 from scripts.langchain.structured_output import (
     build_repair_callback,
     parse_structured_output,
@@ -406,6 +405,44 @@ def _get_chain_depth() -> int:
         return 0
 
 
+def _extract_related_pr_numbers(context: str) -> list[int]:
+    """Extract PR references mentioned in context outside the current PR header."""
+    if not context:
+        return []
+
+    current_pr, _ = _extract_pr_metadata(context)
+    references: list[int] = []
+    seen: set[int] = set()
+
+    for line in context.splitlines():
+        if "Pull request:" in line:
+            continue
+        matches = list(re.finditer(r"/pull/(?P<number>\d+)", line, re.IGNORECASE))
+        matches.extend(re.finditer(r"\bPR\s+#(?P<number>\d+)\b", line, re.IGNORECASE))
+        for match in matches:
+            number = int(match.group("number"))
+            if number == current_pr or number in seen:
+                continue
+            seen.add(number)
+            references.append(number)
+
+    return references
+
+
+def _followup_reference_summary(context: str) -> str:
+    """Summarize whether local follow-up context cites earlier PRs."""
+    refs = _extract_related_pr_numbers(context)
+    if refs:
+        return (
+            "Local follow-up reference evidence: prior PR references present in context: "
+            + ", ".join(f"#{number}" for number in refs)
+        )
+    return (
+        "External evidence required: no prior PR references were found in the local context, "
+        "so PR-body linkage must be verified in GitHub."
+    )
+
+
 def _prepare_prompt(context: str, diff: str | None) -> str:
     diff_block = diff.strip() if diff and diff.strip() else "(diff unavailable)"
     context_block = context.strip() if context and context.strip() else "(context unavailable)"
@@ -432,7 +469,14 @@ def _prepare_prompt(context: str, diff: str | None) -> str:
             "Follow-up chain depth %d detected; appending depth-aware guidance",
             chain_depth,
         )
-        prompt = prompt.rstrip() + "\n\n" + CHAIN_DEPTH_ADDENDUM.format(depth=chain_depth) + "\n"
+        prompt = (
+            prompt.rstrip()
+            + "\n\n"
+            + CHAIN_DEPTH_ADDENDUM.format(depth=chain_depth)
+            + "\n\n"
+            + _followup_reference_summary(context_block)
+            + "\n"
+        )
 
     return prompt.format(context=context_block, diff=diff_block)
 
@@ -634,7 +678,11 @@ def _create_followup_issue(
         title = f"LLM evaluation concerns for PR #{pr_number}"
 
     try:
+        from scripts import api_client
+
         issue = api_client.create_issue(repo, token, title, body, labels)
+    except ImportError:
+        return None
     except RuntimeError as exc:
         print(f"pr_verifier: failed to create follow-up issue: {exc}", file=sys.stderr)
         return None
