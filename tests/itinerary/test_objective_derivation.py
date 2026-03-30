@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from trip_planner.itinerary import derive_itinerary_objectives
 from trip_planner.preferences import resolve_leisure_profile
 from tests.preferences.fixture_corpus import (
@@ -79,3 +81,44 @@ def test_derivation_respects_quality_floor_and_budget_contracts() -> None:
     assert "lodging" in objectives.quality_floor_protection.required_categories
     assert objectives.budget_protection.sensitivity == 0.82
     assert objectives.budget_protection.protected_categories[:2] == ["food", "lodging_location"]
+
+
+def test_interaction_biases_change_objective_bundle() -> None:
+    fixture = load_fixture_map()["breadth-under-recovery-pressure"]
+    resolved = resolve_leisure_profile(fixture.profile, fixture.evidence)
+
+    without_interactions = deepcopy(resolved)
+    without_interactions.explanation.activated_interactions = []
+
+    with_biases = derive_itinerary_objectives(resolved, trip_id="trip-bias")
+    without_biases = derive_itinerary_objectives(without_interactions, trip_id="trip-bias")
+
+    assert with_biases.target_base_count.min_value >= without_biases.target_base_count.min_value
+    assert with_biases.move_density.max_moves < without_biases.move_density.max_moves
+    assert any("recovery blocks" in note for note in with_biases.move_density.notes)
+
+
+def test_derivation_carries_forward_hard_constraint_guidance() -> None:
+    profile = build_profile_from_overrides(
+        {
+            "hard_constraints": {
+                "duration_bounds": {"min_days": 18, "max_days": 24},
+                "must_include_places": ["Istanbul", "Cappadocia", "Antalya"],
+                "must_protect_experiences": ["hammam", "coastal boat day"],
+                "budget_ceiling": 4200.0,
+            },
+            "tradeoff_dimensions": {
+                "breadth_vs_depth": {"value": -0.35},
+                "route_coherence_vs_eclectic_contrast": {"value": 0.2},
+            },
+        }
+    )
+    resolved = resolve_leisure_profile(profile, [])
+
+    objectives = derive_itinerary_objectives(resolved, trip_id="trip-constraints")
+
+    assert objectives.target_base_count.min_value >= 2
+    assert any("Hard budget ceiling=4200" in note for note in objectives.budget_protection.notes)
+    assert any(
+        line.startswith("hard_constraints:must_include_places=") for line in objectives.explanations
+    )
