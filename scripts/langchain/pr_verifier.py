@@ -580,9 +580,16 @@ def _extract_followup_pr_links(context: str) -> list[str]:
     seen: set[str] = set()
 
     for line in _iter_context_entries(context):
-        if "follow-up pr:" not in line.lower():
+        lowered = line.lower()
+        marker = ""
+        if "follow-up pr opened:" in lowered:
+            marker = "follow-up pr opened:"
+        elif "follow-up pr:" in lowered:
+            marker = "follow-up pr:"
+        if not marker:
             continue
-        matches = _GITHUB_PR_LINK_RE.finditer(line)
+        marker_index = lowered.index(marker)
+        matches = _GITHUB_PR_LINK_RE.finditer(line[marker_index:])
         for match in matches:
             link = match.group(0)
             if link in seen:

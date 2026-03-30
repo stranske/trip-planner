@@ -175,6 +175,16 @@ Pull request: [#583](https://github.com/stranske/trip-planner/pull/583)
     ]
 
 
+def test_extract_followup_pr_links_supports_completion_queue_wording():
+    context = """
+1\tC2\t579\thttps://github.com/stranske/trip-planner/issues/579\t566\thttps://github.com/stranske/trip-planner/pull/566\tUnresolved review threads (2)\tFollow-up PR opened: https://github.com/stranske/trip-planner/pull/581; post disposition + resolve threads when API write access recovers\tpending_remote_write
+""".strip()
+
+    assert pr_verifier._extract_followup_pr_links(context) == [
+        "https://github.com/stranske/trip-planner/pull/581",
+    ]
+
+
 def test_missing_linked_followup_description_numbers_tracks_each_linked_pr():
     context = """
 ## Thread 1
