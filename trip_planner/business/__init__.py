@@ -1,5 +1,16 @@
 """Canonical business travel profile contracts."""
 
+from .objective_derivation import derive_business_planning_objectives
+from .objectives import (
+    BookingChannelObjectives,
+    BusinessPlanningObjectives,
+    ComparableRequirementObjectives,
+    ComfortFloorObjectives,
+    CostControlObjectives,
+    ExceptionPathObjectives,
+    JustificationReadinessObjectives,
+    ScheduleProtectionObjectives,
+)
 from .profile import (
     ApprovalTargets,
     BusinessTravelProfile,
@@ -33,14 +44,22 @@ __all__ = [
     "ApprovalTargets",
     "ApprovalRequirement",
     "BusinessTravelProfile",
+    "BusinessPlanningObjectives",
     "BookingChannelSummary",
+    "BookingChannelObjectives",
+    "ComparableRequirementObjectives",
     "ComparableOption",
     "ComfortFloors",
+    "ComfortFloorObjectives",
     "CostControls",
+    "CostControlObjectives",
+    "derive_business_planning_objectives",
     "DocumentationRequirements",
     "ExceptionStrategy",
     "ExceptionRequest",
+    "ExceptionPathObjectives",
     "JustificationRecord",
+    "JustificationReadinessObjectives",
     "PolicyConstraintSet",
     "PolicyEvaluationResult",
     "PolicyFailureReason",
@@ -49,6 +68,7 @@ __all__ = [
     "ProposalCostSummary",
     "RequiredPresenceWindow",
     "ScheduleRequirements",
+    "ScheduleProtectionObjectives",
     "SelectedOptionSummary",
     "TravelerContext",
     "TripPlanProposal",
