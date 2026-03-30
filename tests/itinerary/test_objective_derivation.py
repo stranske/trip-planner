@@ -109,11 +109,17 @@ def test_interaction_biases_change_objective_bundle() -> None:
         without_interactions, trip_id="trip-bias"
     )
 
-    assert (
-        with_biases.target_base_count.min_value
-        >= without_biases.target_base_count.min_value
-    )
-    assert with_biases.move_density.max_moves < without_biases.move_density.max_moves
+    with_min = with_biases.target_base_count.min_value
+    without_min = without_biases.target_base_count.min_value
+    assert with_min is not None
+    assert without_min is not None
+    assert with_min >= without_min
+
+    with_max_moves = with_biases.move_density.max_moves
+    without_max_moves = without_biases.move_density.max_moves
+    assert with_max_moves is not None
+    assert without_max_moves is not None
+    assert with_max_moves < without_max_moves
     assert any("recovery blocks" in note for note in with_biases.move_density.notes)
 
 
@@ -136,7 +142,9 @@ def test_derivation_carries_forward_hard_constraint_guidance() -> None:
 
     objectives = derive_itinerary_objectives(resolved, trip_id="trip-constraints")
 
-    assert objectives.target_base_count.min_value >= 2
+    min_value = objectives.target_base_count.min_value
+    assert min_value is not None
+    assert min_value >= 2
     assert any(
         "Hard budget ceiling=4200" in note
         for note in objectives.budget_protection.notes
@@ -168,5 +176,9 @@ def test_short_trip_base_count_respects_duration_cap_with_many_required_places()
     objectives = derive_itinerary_objectives(resolved, trip_id="trip-short")
 
     duration_cap = max(2, 3 // 2)
-    assert objectives.target_base_count.min_value >= 2
-    assert objectives.target_base_count.max_value <= duration_cap
+    min_value = objectives.target_base_count.min_value
+    max_value = objectives.target_base_count.max_value
+    assert min_value is not None
+    assert max_value is not None
+    assert min_value >= 2
+    assert max_value <= duration_cap
