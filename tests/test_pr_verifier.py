@@ -315,3 +315,17 @@ def test_pr_566_disposition_doc_verifies_only_originating_pr_reference():
     assert "Verified from local context" in summary
     assert "originating PR(s): #566, #571." in summary
     assert "#581" not in summary.split("originating PR(s): ", 1)[1]
+
+
+def test_pr_566_disposition_doc_matches_linked_followup_description_evidence():
+    disposition = (REPO_ROOT / "docs" / "pr-566-thread-disposition.md").read_text(encoding="utf-8")
+
+    assert pr_verifier._extract_followup_pr_links(disposition) == [
+        "https://github.com/stranske/trip-planner/pull/581"
+    ]
+    assert pr_verifier._missing_linked_followup_description_numbers(disposition) == []
+
+    description_evidence = pr_verifier._extract_followup_pr_description_evidence(disposition)
+
+    assert any("PR body evidence:" in line for line in description_evidence)
+    assert any("explicitly references PR #566" in line for line in description_evidence)
