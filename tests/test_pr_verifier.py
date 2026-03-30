@@ -58,8 +58,27 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
 
     assert "Verified from local context" in prompt
     assert "Follow-up PR links recorded in local context" in prompt
+    assert "Explicit follow-up PR description evidence" in prompt
+    assert "PR description: Follow-up PR #581 references #566 in its body." in prompt
     assert "description/body explicitly references the originating PR(s): #566." in prompt
     assert "External evidence required" not in prompt
+
+
+def test_extract_followup_pr_description_evidence_deduplicates_matching_lines():
+    context = """
+## Thread 1
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- PR description: Follow-up PR #581 references #566 in its body.
+- PR description: Follow-up PR #581 references #566 in its body.
+- PR body evidence: Follow-up PR #582 references #566 and #571.
+
+Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
+""".strip()
+
+    assert pr_verifier._extract_followup_pr_description_evidence(context) == [
+        "- PR description: Follow-up PR #581 references #566 in its body.",
+        "- PR body evidence: Follow-up PR #582 references #566 and #571.",
+    ]
 
 
 def test_extract_followup_pr_links_deduplicates_links():

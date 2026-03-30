@@ -461,6 +461,33 @@ def _has_local_pr_body_reference_evidence(context: str, refs: list[int]) -> bool
     return False
 
 
+def _extract_followup_pr_description_evidence(context: str) -> list[str]:
+    """Return explicit local statements that a follow-up PR body/description references prior PRs."""
+    if not context:
+        return []
+
+    evidence: list[str] = []
+    seen: set[str] = set()
+
+    for raw_line in context.splitlines():
+        line = raw_line.strip()
+        lowered = line.lower()
+        if "pull request:" in lowered:
+            continue
+        if not any(keyword in lowered for keyword in ("follow-up pr", "pr description", "pr body")):
+            continue
+        if not any(keyword in lowered for keyword in ("description", "body")):
+            continue
+        if not re.search(r"#\d+", line):
+            continue
+        if line in seen:
+            continue
+        seen.add(line)
+        evidence.append(line)
+
+    return evidence
+
+
 def _extract_followup_pr_links(context: str) -> list[str]:
     """Return follow-up PR links recorded in local context."""
     if not context:
@@ -487,16 +514,23 @@ def _followup_reference_summary(context: str) -> str:
     """Summarize and enforce prior-PR reference expectations for follow-ups."""
     refs = _extract_related_pr_numbers(context)
     links = _extract_followup_pr_links(context)
+    description_evidence = _extract_followup_pr_description_evidence(context)
     link_summary = (
         "Follow-up PR links recorded in local context: " + ", ".join(links) + ". "
         if links
         else "No follow-up PR links were recorded in the local context. "
+    )
+    description_summary = (
+        "Explicit follow-up PR description evidence: " + " | ".join(description_evidence) + ". "
+        if description_evidence
+        else ""
     )
     if _has_local_pr_body_reference_evidence(context, refs):
         ref_list = ", ".join(f"#{number}" for number in refs)
         return (
             "Verified from local context: "
             + link_summary
+            + description_summary
             + "The follow-up PR description/body explicitly references the originating PR(s): "
             + ref_list
             + "."
@@ -506,6 +540,7 @@ def _followup_reference_summary(context: str) -> str:
         return (
             "Local follow-up reference evidence: "
             + link_summary
+            + description_summary
             + "Prior PR references present in context: "
             + ref_list
             + ". Follow-up PR descriptions must explicitly reference the originating PR(s): "
