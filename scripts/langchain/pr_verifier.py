@@ -29,12 +29,16 @@ from scripts.langchain.structured_output import (
 
 LOGGER = logging.getLogger(__name__)
 
-_GITHUB_PR_LINK_RE = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/(?P<number>\d+)")
+_GITHUB_PR_LINK_RE = re.compile(
+    r"https://github\.com/[^/\s]+/[^/\s]+/pull/(?P<number>\d+)"
+)
 _PR_NUMBER_RE = re.compile(r"\bPR\s+#?(?P<number>\d+)\b", re.IGNORECASE)
 
 
 class InvokableClient(Protocol):
-    def invoke(self, prompt: str, config: dict[str, object] | None = None) -> object: ...
+    def invoke(
+        self, prompt: str, config: dict[str, object] | None = None
+    ) -> object: ...
 
 
 @dataclass
@@ -315,7 +319,10 @@ def _get_llm_clients(
         return []
 
     clients = build_chat_clients(model1=model1, model2=model2)
-    return [(cast(InvokableClient, entry.client), entry.provider, entry.model) for entry in clients]
+    return [
+        (cast(InvokableClient, entry.client), entry.provider, entry.model)
+        for entry in clients
+    ]
 
 
 @dataclass(frozen=True)
@@ -327,7 +334,11 @@ class ComparisonRunner:
 
     @classmethod
     def from_environment(
-        cls, context: str, diff: str | None, model1: str | None = None, model2: str | None = None
+        cls,
+        context: str,
+        diff: str | None,
+        model1: str | None = None,
+        model2: str | None = None,
     ) -> ComparisonRunner:
         return cls(
             context=context,
@@ -336,7 +347,9 @@ class ComparisonRunner:
             clients=_get_llm_clients(model1, model2),
         )
 
-    def run_single(self, client: InvokableClient, provider: str, model: str) -> EvaluationResult:
+    def run_single(
+        self, client: InvokableClient, provider: str, model: str
+    ) -> EvaluationResult:
         try:
             response, trace_id, trace_url = _invoke_llm(
                 client,
@@ -451,7 +464,11 @@ def _extract_related_pr_numbers(context: str) -> list[int]:
                 matches.append(match)
         for match in matches:
             number = int(match.group("number"))
-            if number == current_pr or number in linked_followup_numbers or number in seen:
+            if (
+                number == current_pr
+                or number in linked_followup_numbers
+                or number in seen
+            ):
                 continue
             seen.add(number)
             references.append(number)
@@ -466,7 +483,9 @@ def _extract_pr_numbers_from_line(line: str) -> set[int]:
     (``PR 566`` or ``PRs 566 and 571``).
     """
     numbers = {int(match.group("number")) for match in _PR_NUMBER_RE.finditer(line)}
-    numbers.update(int(match.group("number")) for match in re.finditer(r"#(?P<number>\d+)\b", line))
+    numbers.update(
+        int(match.group("number")) for match in re.finditer(r"#(?P<number>\d+)\b", line)
+    )
 
     if re.search(r"\bPRs?\b", line, re.IGNORECASE):
         trailing_match = re.search(r"\bPRs?\b(?P<tail>.*)", line, re.IGNORECASE)
@@ -485,8 +504,12 @@ def _extract_linkable_pr_numbers_from_text(text: str) -> set[int]:
     if not text:
         return set()
 
-    numbers = {int(match.group("number")) for match in _GITHUB_PR_LINK_RE.finditer(text)}
-    numbers.update(int(match.group("number")) for match in re.finditer(r"#(?P<number>\d+)\b", text))
+    numbers = {
+        int(match.group("number")) for match in _GITHUB_PR_LINK_RE.finditer(text)
+    }
+    numbers.update(
+        int(match.group("number")) for match in re.finditer(r"#(?P<number>\d+)\b", text)
+    )
     return numbers
 
 
@@ -513,7 +536,9 @@ def _has_local_pr_body_reference_evidence(context: str, refs: list[int]) -> bool
         return False
 
     linked_followup_numbers = _extract_linked_followup_pr_numbers(context)
-    missing_linked_description_numbers = _missing_linked_followup_description_numbers(context)
+    missing_linked_description_numbers = _missing_linked_followup_description_numbers(
+        context
+    )
     ref_tokens = tuple(f"#{number}" for number in refs)
     for line in _iter_context_entries(context):
         lowered = line.lower()
@@ -535,7 +560,9 @@ def _has_local_pr_body_reference_evidence(context: str, refs: list[int]) -> bool
     return False
 
 
-def _extract_followup_pr_description_link_evidence(context: str, refs: list[int]) -> list[str]:
+def _extract_followup_pr_description_link_evidence(
+    context: str, refs: list[int]
+) -> list[str]:
     """Return description/body evidence lines that contain GitHub-linkable prior-PR references."""
     if not context or not refs:
         return []
@@ -547,10 +574,14 @@ def _extract_followup_pr_description_link_evidence(context: str, refs: list[int]
 
     for line in _extract_followup_pr_description_evidence(context):
         mentioned_numbers = _extract_pr_numbers_from_line(line)
-        if linked_followup_numbers and not linked_followup_numbers.intersection(mentioned_numbers):
+        if linked_followup_numbers and not linked_followup_numbers.intersection(
+            mentioned_numbers
+        ):
             continue
         subject_text = _extract_evidence_subject_text(line)
-        if not ref_set.intersection(_extract_linkable_pr_numbers_from_text(subject_text)):
+        if not ref_set.intersection(
+            _extract_linkable_pr_numbers_from_text(subject_text)
+        ):
             continue
         if line in seen:
             continue
@@ -618,7 +649,10 @@ def _extract_followup_pr_description_evidence(context: str) -> list[str]:
         lowered = line.lower()
         if "pull request:" in lowered:
             continue
-        if not any(keyword in lowered for keyword in ("follow-up pr", "pr description", "pr body")):
+        if not any(
+            keyword in lowered
+            for keyword in ("follow-up pr", "pr description", "pr body")
+        ):
             continue
         if not any(keyword in lowered for keyword in ("description", "body")):
             continue
@@ -725,9 +759,13 @@ def _followup_reference_summary(context: str) -> str:
     refs = _extract_related_pr_numbers(context)
     links = _extract_followup_pr_links(context)
     description_evidence = _extract_followup_pr_description_evidence(context)
-    description_link_evidence = _extract_followup_pr_description_link_evidence(context, refs)
+    description_link_evidence = _extract_followup_pr_description_link_evidence(
+        context, refs
+    )
     merge_metadata_evidence = _extract_followup_pr_merge_metadata_evidence(context)
-    missing_linked_description_numbers = _missing_linked_followup_description_numbers(context)
+    missing_linked_description_numbers = _missing_linked_followup_description_numbers(
+        context
+    )
     missing_linked_link_numbers = _missing_linked_followup_link_numbers(context, refs)
     link_summary = (
         "Follow-up PR links recorded in local context: " + ", ".join(links) + ". "
@@ -735,7 +773,9 @@ def _followup_reference_summary(context: str) -> str:
         else "No follow-up PR links were recorded in the local context. "
     )
     description_summary = (
-        "Explicit follow-up PR description evidence: " + " | ".join(description_evidence) + ". "
+        "Explicit follow-up PR description evidence: "
+        + " | ".join(description_evidence)
+        + ". "
         if description_evidence
         else ""
     )
@@ -767,7 +807,10 @@ def _followup_reference_summary(context: str) -> str:
         if missing_linked_link_numbers
         else ""
     )
-    if _has_local_pr_body_reference_evidence(context, refs) and not missing_linked_link_numbers:
+    if (
+        _has_local_pr_body_reference_evidence(context, refs)
+        and not missing_linked_link_numbers
+    ):
         ref_list = ", ".join(f"#{number}" for number in refs)
         return (
             "Verified from local context: "
@@ -837,14 +880,18 @@ def _followup_reference_summary(context: str) -> str:
 
 def _prepare_prompt(context: str, diff: str | None) -> str:
     diff_block = diff.strip() if diff and diff.strip() else "(diff unavailable)"
-    context_block = context.strip() if context and context.strip() else "(context unavailable)"
+    context_block = (
+        context.strip() if context and context.strip() else "(context unavailable)"
+    )
 
     change_type = _classify_change_type(diff)
 
     if change_type == "infrastructure":
         if PROMPT_PATH.is_file():
             # Custom prompt file exists — append the lightweight addendum
-            LOGGER.info("Infrastructure PR detected; appending infra guidance to custom prompt")
+            LOGGER.info(
+                "Infrastructure PR detected; appending infra guidance to custom prompt"
+            )
             prompt = _load_prompt()
             prompt = prompt.rstrip() + "\n\n" + INFRA_PROMPT_ADDENDUM + "\n"
         else:
@@ -920,7 +967,9 @@ def _build_llm_config(
         env_pr = os.environ.get("PR_NUMBER", "")
         env_issue = os.environ.get("ISSUE_NUMBER", "")
         issue_or_pr = (
-            env_pr if env_pr.isdigit() else env_issue if env_issue.isdigit() else "unknown"
+            env_pr
+            if env_pr.isdigit()
+            else env_issue if env_issue.isdigit() else "unknown"
         )
     metadata = {
         "repo": repo,
@@ -1141,7 +1190,14 @@ def _is_auth_error(exc: Exception) -> bool:
     """Check if an exception is an authentication/authorization error."""
     exc_str = str(exc).lower()
     # Common auth error patterns from various LLM APIs
-    auth_patterns = ["401", "unauthorized", "forbidden", "403", "permission", "authentication"]
+    auth_patterns = [
+        "401",
+        "unauthorized",
+        "forbidden",
+        "403",
+        "permission",
+        "authentication",
+    ]
     return any(pattern in exc_str for pattern in auth_patterns)
 
 
@@ -1166,7 +1222,9 @@ def evaluate_pr(
     """
     resolved = _get_llm_client(model=model, provider=provider)
     if resolved is None:
-        return _fallback_evaluation("LLM client unavailable (missing credentials or dependency).")
+        return _fallback_evaluation(
+            "LLM client unavailable (missing credentials or dependency)."
+        )
 
     client, provider_name = resolved
     prompt = _prepare_prompt(context, diff)
@@ -1184,7 +1242,9 @@ def evaluate_pr(
     except Exception as exc:  # pragma: no cover - exercised in integration
         # If auth error and not explicitly requesting a provider, try fallback
         if _is_auth_error(exc) and provider is None:
-            fallback_provider = "openai" if "github-models" in provider_name else "github-models"
+            fallback_provider = (
+                "openai" if "github-models" in provider_name else "github-models"
+            )
             fallback_resolved = _get_llm_client(model=model, provider=fallback_provider)
             if fallback_resolved is not None:
                 fallback_client, fallback_provider_name = fallback_resolved
@@ -1241,12 +1301,17 @@ def evaluate_pr(
 
 
 def evaluate_pr_multiple(
-    context: str, diff: str | None = None, model1: str | None = None, model2: str | None = None
+    context: str,
+    diff: str | None = None,
+    model1: str | None = None,
+    model2: str | None = None,
 ) -> list[EvaluationResult]:
     change_type = _classify_change_type(diff)
     runner = ComparisonRunner.from_environment(context, diff, model1, model2)
     if not runner.clients:
-        result = _fallback_evaluation("LLM client unavailable (missing credentials or dependency).")
+        result = _fallback_evaluation(
+            "LLM client unavailable (missing credentials or dependency)."
+        )
         result.change_type = change_type
         return [result]
     results: list[EvaluationResult] = []
@@ -1286,7 +1351,9 @@ def _shared_concerns(results: list[EvaluationResult]) -> list[str]:
             normalized = _normalize_text(concern)
             if not normalized:
                 continue
-            entry = counts.setdefault(normalized, SharedConcernEntry(count=0, text=concern))
+            entry = counts.setdefault(
+                normalized, SharedConcernEntry(count=0, text=concern)
+            )
             entry.count += 1
     shared = []
     for entry in counts.values():
@@ -1335,7 +1402,9 @@ def format_comparison_report(results: list[EvaluationResult]) -> str:
         summary = _compact_text(summary_source, limit=200) if summary_source else "N/A"
         model_name = result.model or "N/A"
         conf = _format_confidence(result.confidence)
-        lines.append(f"| {labels[index]} | {model_name} | {result.verdict} | {conf} | {summary} |")
+        lines.append(
+            f"| {labels[index]} | {model_name} | {result.verdict} | {conf} | {summary} |"
+        )
     lines.append("")
 
     # Add expandable full details for each provider
@@ -1375,7 +1444,11 @@ def format_comparison_report(results: list[EvaluationResult]) -> str:
         agreements.append(f"- Verdict: {verdict} (all providers)")
 
     for key in SCORE_KEYS:
-        scores = [getattr(result.scores, key) for result in results if result.scores is not None]
+        scores = [
+            getattr(result.scores, key)
+            for result in results
+            if result.scores is not None
+        ]
         if len(scores) != len(results):
             continue
         min_score = min(scores)
@@ -1403,7 +1476,8 @@ def format_comparison_report(results: list[EvaluationResult]) -> str:
 
     for key in SCORE_KEYS:
         scores = [
-            getattr(result.scores, key) if result.scores is not None else None for result in results
+            getattr(result.scores, key) if result.scores is not None else None
+            for result in results
         ]
         available = [score for score in scores if score is not None]
         if len(available) < 2:
@@ -1411,7 +1485,9 @@ def format_comparison_report(results: list[EvaluationResult]) -> str:
         min_score = min(available)
         max_score = max(available)
         if max_score - min_score > 1:
-            rendered = [f"{score:.1f}/10" if score is not None else "N/A" for score in scores]
+            rendered = [
+                f"{score:.1f}/10" if score is not None else "N/A" for score in scores
+            ]
             rows.append((key.capitalize(), rendered))
 
     if rows:
@@ -1420,7 +1496,9 @@ def format_comparison_report(results: list[EvaluationResult]) -> str:
         lines.append(header)
         lines.append(separator)
         for dimension, values in rows:
-            lines.append("| {dim} | {vals} |".format(dim=dimension, vals=" | ".join(values)))
+            lines.append(
+                "| {dim} | {vals} |".format(dim=dimension, vals=" | ".join(values))
+            )
     else:
         lines.append("No major disagreements detected.")
     lines.append("")
@@ -1460,7 +1538,9 @@ def _load_text(path: str | None) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate PRs against acceptance criteria.")
+    parser = argparse.ArgumentParser(
+        description="Evaluate PRs against acceptance criteria."
+    )
     parser.add_argument("--context-file", help="Path to verifier context markdown.")
     parser.add_argument("--diff-file", help="Path to PR diff or summary.")
     parser.add_argument("--output-file", help="Path to write evaluation output.")
@@ -1496,13 +1576,17 @@ def main() -> None:
         action="store_true",
         help="Run evaluations across multiple providers and output a comparison report.",
     )
-    parser.add_argument("--json", action="store_true", help="Emit JSON payload to stdout.")
+    parser.add_argument(
+        "--json", action="store_true", help="Emit JSON payload to stdout."
+    )
     args = parser.parse_args()
 
     context = _load_text(args.context_file)
     diff = _load_text(args.diff_file) if args.diff_file else None
     if args.compare:
-        results = evaluate_pr_multiple(context, diff=diff, model1=args.model, model2=args.model2)
+        results = evaluate_pr_multiple(
+            context, diff=diff, model1=args.model, model2=args.model2
+        )
         report = format_comparison_report(results)
         if args.output_file:
             Path(args.output_file).write_text(report, encoding="utf-8")
