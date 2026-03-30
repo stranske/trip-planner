@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from trip_planner.business import BusinessTravelProfile, CostControls, TravelerContext
 from trip_planner.preferences.models import (
     BudgetModel,
@@ -88,9 +90,19 @@ def test_business_and_leisure_profiles_remain_separate_contracts() -> None:
     assert not hasattr(leisure_profile, "policy_constraints")
 
 
-def test_business_profile_fixture_loader_is_cwd_independent(monkeypatch, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("fixture_name", "expected_airport"),
+    [
+        ("conference_profile.json", "ORD"),
+        ("client_meeting_profile.json", "DFW"),
+        ("site_visit_profile.json", "MSP"),
+    ],
+)
+def test_business_profile_fixture_loader_is_cwd_independent(
+    monkeypatch, tmp_path: Path, fixture_name: str, expected_airport: str
+) -> None:
     monkeypatch.chdir(tmp_path)
 
-    profile = _load_fixture("conference_profile.json")
+    profile = _load_fixture(fixture_name)
 
-    assert profile.traveler_context.home_airport == "ORD"
+    assert profile.traveler_context.home_airport == expected_airport
