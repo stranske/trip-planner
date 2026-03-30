@@ -90,23 +90,36 @@ The two profiles may share some nested contract shapes, but they should not be o
   "destination_id": "dest_123",
   "place_kind": "city|region|neighborhood|landscape|site",
   "name": "Kyoto",
+  "summary": "Normalized place entity used upstream from option generation.",
   "parent_refs": [],
   "geo": {
-    "lat": 35.0116,
-    "lng": 135.7681,
-    "country_code": "JP"
+    "latitude": 35.0116,
+    "longitude": 135.7681,
+    "country_code": "JP",
+    "region_code": "JP-26"
   },
   "tags": [],
   "seasonal_signals": [],
-  "mobility_profile": {},
-  "experience_signals": {},
-  "source_refs": []
+  "mobility_profile": {
+    "arrival_modes": [],
+    "local_modes": [],
+    "walkability": 0.0,
+    "transit_coverage": 0.0,
+    "car_dependency": 0.0
+  },
+  "experience_signals": [],
+  "adjacency_refs": [],
+  "region_expansion_refs": [],
+  "source_refs": [],
+  "operational_notes": []
 }
 ```
 
 Important design point:
 
-`Destination` is not yet an option. It is a normalized place entity.
+`Destination` is not yet an option. It is a normalized place entity that later lodging,
+activity, route, and mixed option models can reference without re-normalizing geography,
+hierarchy, source provenance, or expansion context.
 
 ## 5. Option Set
 

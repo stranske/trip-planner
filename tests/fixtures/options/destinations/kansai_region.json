@@ -1,0 +1,77 @@
+{
+  "destination_id": "dest-region-kansai",
+  "place_kind": "region",
+  "name": "Kansai",
+  "summary": "Multi-city region used as a routing shell for Kyoto, Osaka, and nearby side trips.",
+  "geo": {
+    "latitude": 34.6937,
+    "longitude": 135.5023,
+    "country_code": "JP",
+    "region_code": "JP-27",
+    "time_zone": "Asia/Tokyo",
+    "locality_hint": "Western Honshu"
+  },
+  "tags": [
+    "cultural-core",
+    "rail-connected",
+    "multi-base"
+  ],
+  "seasonal_signals": [
+    {
+      "season": "spring",
+      "summary": "Peak blossom demand raises booking pressure across Kyoto and Osaka.",
+      "impact": "mixed",
+      "peak_months": [3, 4],
+      "notes": [
+        "Lock in lodging early for city-center stays."
+      ]
+    }
+  ],
+  "mobility_profile": {
+    "arrival_modes": ["rail", "car"],
+    "local_modes": ["rail", "transit", "car"],
+    "walkability": 0.55,
+    "transit_coverage": 0.88,
+    "car_dependency": 0.35,
+    "notes": [
+      "Regional rail makes cross-city expansion practical."
+    ]
+  },
+  "experience_signals": [
+    {
+      "key": "urban-cultural-mix",
+      "label": "Urban-cultural mix",
+      "sentiment": "positive",
+      "strength": 0.89,
+      "notes": [
+        "Supports city-hopping itineraries with varied neighborhoods."
+      ]
+    }
+  ],
+  "adjacency_refs": [
+    {
+      "destination_id": "dest-region-chugoku",
+      "relationship_kind": "adjacent_region",
+      "summary": "Westbound rail continuation into Hiroshima and the Setouchi corridor.",
+      "transit_time_minutes": 95,
+      "notes": []
+    }
+  ],
+  "region_expansion_refs": [
+    {
+      "destination_id": "dest-region-chubu",
+      "relationship_kind": "contiguous_region",
+      "summary": "Northeast expansion toward Lake Biwa and Hokuriku links.",
+      "transit_time_minutes": 70,
+      "notes": []
+    }
+  ],
+  "source_refs": [
+    "prov-kansai-editorial",
+    "prov-kansai-operational"
+  ],
+  "operational_notes": [
+    "Festival calendars and school holidays can materially change lodging availability."
+  ],
+  "schema_version": "0.1.0"
+}

@@ -1,0 +1,78 @@
+{
+  "destination_id": "dest-neighborhood-gion",
+  "place_kind": "neighborhood",
+  "name": "Gion",
+  "summary": "Dense traditional neighborhood suited to short walking loops and evening activity context.",
+  "geo": {
+    "latitude": 35.0037,
+    "longitude": 135.7788,
+    "country_code": "JP",
+    "region_code": "JP-26",
+    "time_zone": "Asia/Tokyo",
+    "locality_hint": "Eastern Kyoto"
+  },
+  "parent_refs": [
+    {
+      "destination_id": "dest-city-kyoto",
+      "relationship_kind": "parent_city",
+      "label": "Kyoto",
+      "notes": [
+        "Neighborhood remains downstream from the city anchor."
+      ]
+    }
+  ],
+  "tags": [
+    "evening-friendly",
+    "historic-streets",
+    "walk-first"
+  ],
+  "seasonal_signals": [
+    {
+      "season": "summer",
+      "summary": "Festival periods increase nighttime density and road closures.",
+      "impact": "mixed",
+      "peak_months": [7],
+      "notes": [
+        "Useful for event energy, harder for cars and buses."
+      ]
+    }
+  ],
+  "mobility_profile": {
+    "arrival_modes": ["walk", "transit"],
+    "local_modes": ["walk", "transit"],
+    "walkability": 0.96,
+    "transit_coverage": 0.71,
+    "car_dependency": 0.08,
+    "notes": [
+      "Best consumed as a fine-grained activity context, not a standalone trip shell."
+    ]
+  },
+  "experience_signals": [
+    {
+      "key": "traditional-streetscape",
+      "label": "Traditional streetscape",
+      "sentiment": "positive",
+      "strength": 0.9,
+      "notes": [
+        "Strong fit for travelers seeking dense cultural ambience."
+      ]
+    }
+  ],
+  "adjacency_refs": [
+    {
+      "destination_id": "dest-site-kiyomizu-dera",
+      "relationship_kind": "gateway",
+      "summary": "Common walking continuation into hillside temple zones.",
+      "transit_time_minutes": 20,
+      "notes": []
+    }
+  ],
+  "region_expansion_refs": [],
+  "source_refs": [
+    "prov-gion-editorial"
+  ],
+  "operational_notes": [
+    "Peak evening foot traffic can reduce the usefulness of rideshare pickups."
+  ],
+  "schema_version": "0.1.0"
+}

@@ -1,0 +1,87 @@
+{
+  "destination_id": "dest-city-kyoto",
+  "place_kind": "city",
+  "name": "Kyoto",
+  "summary": "Primary cultural anchor with strong neighborhood identity and dense temple-adjacent activity context.",
+  "geo": {
+    "latitude": 35.0116,
+    "longitude": 135.7681,
+    "country_code": "JP",
+    "region_code": "JP-26",
+    "time_zone": "Asia/Tokyo",
+    "locality_hint": "Historic city core"
+  },
+  "parent_refs": [
+    {
+      "destination_id": "dest-region-kansai",
+      "relationship_kind": "parent_region",
+      "label": "Kansai",
+      "notes": [
+        "Use the regional shell when expanding beyond a Kyoto-first route."
+      ]
+    }
+  ],
+  "tags": [
+    "culture",
+    "walkable-core",
+    "rail-access"
+  ],
+  "seasonal_signals": [
+    {
+      "season": "autumn",
+      "summary": "Leaf season creates crowding around temple corridors and early-morning transit peaks.",
+      "impact": "mixed",
+      "peak_months": [11],
+      "notes": [
+        "Operational friction increases around headline sites."
+      ]
+    }
+  ],
+  "mobility_profile": {
+    "arrival_modes": ["rail", "shuttle"],
+    "local_modes": ["walk", "transit", "bike"],
+    "walkability": 0.91,
+    "transit_coverage": 0.8,
+    "car_dependency": 0.18,
+    "notes": [
+      "Central neighborhoods work best when the traveler tolerates walking between clusters."
+    ]
+  },
+  "experience_signals": [
+    {
+      "key": "culture_density",
+      "label": "Culture density",
+      "sentiment": "positive",
+      "strength": 0.94,
+      "notes": [
+        "High concentration of temples, gardens, and traditional districts."
+      ]
+    }
+  ],
+  "adjacency_refs": [
+    {
+      "destination_id": "dest-city-osaka",
+      "relationship_kind": "nearby_region",
+      "summary": "Fast regional transfer for contrasting food/nightlife days.",
+      "transit_time_minutes": 30,
+      "notes": []
+    }
+  ],
+  "region_expansion_refs": [
+    {
+      "destination_id": "dest-city-nara",
+      "relationship_kind": "day_trip",
+      "summary": "Easy heritage-oriented side trip without changing base.",
+      "transit_time_minutes": 45,
+      "notes": []
+    }
+  ],
+  "source_refs": [
+    "prov-kyoto-editorial",
+    "prov-kyoto-operational"
+  ],
+  "operational_notes": [
+    "Bus crowding can make cross-town moves slower than map distance suggests."
+  ],
+  "schema_version": "0.1.0"
+}
