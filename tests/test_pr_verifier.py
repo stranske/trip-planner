@@ -216,3 +216,15 @@ def test_pr_566_disposition_doc_records_followup_pr_link_and_description_evidenc
     assert "Follow-up PR: https://github.com/stranske/trip-planner/pull/581" in disposition
     assert "merged PR #581 body included" in disposition
     assert "explicitly references PR #566" in disposition
+
+
+def test_pr_566_disposition_doc_verifies_only_originating_pr_reference():
+    disposition = (REPO_ROOT / "docs" / "pr-566-thread-disposition.md").read_text(encoding="utf-8")
+
+    assert pr_verifier._extract_related_pr_numbers(disposition) == [566, 571]
+
+    summary = pr_verifier._followup_reference_summary(disposition)
+
+    assert "Verified from local context" in summary
+    assert "originating PR(s): #566, #571." in summary
+    assert "#581" not in summary.split("originating PR(s): ", 1)[1]

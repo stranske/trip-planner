@@ -423,6 +423,11 @@ def _extract_related_pr_numbers(context: str) -> list[int]:
         return []
 
     current_pr, _ = _extract_pr_metadata(context)
+    linked_followup_numbers = {
+        int(match.group("number"))
+        for link in _extract_followup_pr_links(context)
+        for match in re.finditer(r"https://github\.com/[^/\s]+/[^/\s]+/pull/(?P<number>\d+)", link)
+    }
     references: list[int] = []
     seen: set[int] = set()
 
@@ -444,7 +449,7 @@ def _extract_related_pr_numbers(context: str) -> list[int]:
                 matches.append(match)
         for match in matches:
             number = int(match.group("number"))
-            if number == current_pr or number in seen:
+            if number == current_pr or number in linked_followup_numbers or number in seen:
                 continue
             seen.add(number)
             references.append(number)
