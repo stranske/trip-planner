@@ -461,28 +461,63 @@ def _has_local_pr_body_reference_evidence(context: str, refs: list[int]) -> bool
     return False
 
 
+def _extract_followup_pr_links(context: str) -> list[str]:
+    """Return follow-up PR links recorded in local context."""
+    if not context:
+        return []
+
+    links: list[str] = []
+    seen: set[str] = set()
+
+    for line in context.splitlines():
+        if "Follow-up PR:" not in line:
+            continue
+        matches = re.finditer(r"https://github\.com/[^/\s]+/[^/\s]+/pull/(?P<number>\d+)", line)
+        for match in matches:
+            link = match.group(0)
+            if link in seen:
+                continue
+            seen.add(link)
+            links.append(link)
+
+    return links
+
+
 def _followup_reference_summary(context: str) -> str:
     """Summarize and enforce prior-PR reference expectations for follow-ups."""
     refs = _extract_related_pr_numbers(context)
+    links = _extract_followup_pr_links(context)
+    link_summary = (
+        "Follow-up PR links recorded in local context: " + ", ".join(links) + ". "
+        if links
+        else "No follow-up PR links were recorded in the local context. "
+    )
     if _has_local_pr_body_reference_evidence(context, refs):
         ref_list = ", ".join(f"#{number}" for number in refs)
         return (
-            "Verified from local context: the follow-up PR description/body explicitly references "
-            "the originating PR(s): " + ref_list + "."
+            "Verified from local context: "
+            + link_summary
+            + "The follow-up PR description/body explicitly references the originating PR(s): "
+            + ref_list
+            + "."
         )
     if refs:
         ref_list = ", ".join(f"#{number}" for number in refs)
         return (
-            "Local follow-up reference evidence: prior PR references present in context: "
+            "Local follow-up reference evidence: "
+            + link_summary
+            + "Prior PR references present in context: "
             + ref_list
             + ". Follow-up PR descriptions must explicitly reference the originating PR(s): "
             + ref_list
             + "."
         )
     return (
-        "External evidence required: no prior PR references were found in the local context, "
-        "so PR-body linkage must be verified in GitHub before treating follow-up PR "
-        "description references as satisfied."
+        "External evidence required: "
+        + link_summary
+        + "No prior PR references were found in the local context, so PR-body linkage "
+        "must be verified in GitHub before treating follow-up PR description references "
+        "as satisfied."
     )
 
 

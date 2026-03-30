@@ -23,6 +23,7 @@ def test_prepare_prompt_includes_followup_reference_summary(monkeypatch):
     context = """
 ### Related Issues/PRs
 - [#566](https://github.com/stranske/trip-planner/pull/566)
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
 
 Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
 """.strip()
@@ -34,6 +35,8 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
     assert "Follow-up Iteration Context" in prompt
     assert "Local follow-up reference evidence" in prompt
     assert "#566" in prompt
+    assert "Follow-up PR links recorded in local context" in prompt
+    assert "https://github.com/stranske/trip-planner/pull/581" in prompt
     assert (
         "Follow-up PR descriptions must explicitly reference the originating PR(s): #566." in prompt
     )
@@ -43,6 +46,7 @@ def test_followup_reference_summary_detects_local_pr_body_evidence(monkeypatch):
     context = """
 ### Related Issues/PRs
 - [#566](https://github.com/stranske/trip-planner/pull/566)
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
 - PR description: Follow-up PR #581 references #566 in its body.
 
 Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
@@ -53,8 +57,25 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
     prompt = pr_verifier._prepare_prompt(context, diff)
 
     assert "Verified from local context" in prompt
+    assert "Follow-up PR links recorded in local context" in prompt
     assert "description/body explicitly references the originating PR(s): #566." in prompt
     assert "External evidence required" not in prompt
+
+
+def test_extract_followup_pr_links_deduplicates_links():
+    context = """
+## Thread 1
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/582
+
+Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
+""".strip()
+
+    assert pr_verifier._extract_followup_pr_links(context) == [
+        "https://github.com/stranske/trip-planner/pull/581",
+        "https://github.com/stranske/trip-planner/pull/582",
+    ]
 
 
 def test_extract_related_pr_numbers_supports_plural_pr_commit_titles():
@@ -72,6 +93,7 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
 def test_prepare_prompt_uses_commit_title_evidence_for_followup_reference(monkeypatch):
     context = """
 ## Thread 1
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
 - Local verification note: `git show --format=fuller --no-patch 88a850b8` confirms the
   merged PR #581 title was `Follow-up fixes for audit gaps on PRs #566 and #571 (#581)`.
 
@@ -83,6 +105,7 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
     prompt = pr_verifier._prepare_prompt(context, diff)
 
     assert "Local follow-up reference evidence" in prompt
+    assert "Follow-up PR links recorded in local context" in prompt
     assert "#566" in prompt
     assert "#571" in prompt
     assert (
@@ -99,5 +122,6 @@ def test_prepare_prompt_flags_missing_followup_reference_evidence(monkeypatch):
     prompt = pr_verifier._prepare_prompt(context, diff)
 
     assert "External evidence required" in prompt
+    assert "No follow-up PR links were recorded in the local context." in prompt
     assert "PR-body linkage must be verified in GitHub" in prompt
     assert "description references as satisfied" in prompt
