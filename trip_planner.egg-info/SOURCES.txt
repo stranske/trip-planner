@@ -37,6 +37,7 @@ tests/test_complexity.py
 tests/test_dependency_version_alignment.py
 tests/test_generate_segments.py
 tests/test_penalty.py
+tests/test_pr_verifier.py
 trip_planner/__init__.py
 trip_planner.egg-info/PKG-INFO
 trip_planner.egg-info/SOURCES.txt

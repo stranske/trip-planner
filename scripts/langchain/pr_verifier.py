@@ -419,6 +419,8 @@ def _extract_related_pr_numbers(context: str) -> list[int]:
             continue
         matches = list(re.finditer(r"/pull/(?P<number>\d+)", line, re.IGNORECASE))
         matches.extend(re.finditer(r"\bPR\s+#(?P<number>\d+)\b", line, re.IGNORECASE))
+        if re.search(r"\bPRs?\b", line, re.IGNORECASE):
+            matches.extend(re.finditer(r"#(?P<number>\d+)\b", line))
         for match in matches:
             number = int(match.group("number"))
             if number == current_pr or number in seen:
