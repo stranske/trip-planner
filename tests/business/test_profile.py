@@ -62,6 +62,17 @@ def test_business_profile_fixture_path_is_cwd_independent(monkeypatch, tmp_path:
     assert fixture_path.is_file()
 
 
+def test_business_profile_fixture_loader_from_nested_cwd(monkeypatch, tmp_path: Path) -> None:
+    nested_cwd = tmp_path / "nested" / "cwd"
+    nested_cwd.mkdir(parents=True)
+    monkeypatch.chdir(nested_cwd)
+
+    profile = _load_fixture("conference_profile.json")
+
+    assert profile.traveler_context.home_airport == "ORD"
+    assert profile.trip_purpose.purpose_type == "conference"
+
+
 def test_business_profile_rejects_invalid_traveler_context() -> None:
     try:
         TravelerContext(
