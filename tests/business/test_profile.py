@@ -14,7 +14,8 @@ from trip_planner.preferences.schema import HYBRID_FACTOR_KEYS, TRADEOFF_DIMENSI
 
 
 def _fixture_path(name: str) -> Path:
-    return Path("tests/fixtures/business") / name
+    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "business"
+    return fixtures_dir / name
 
 
 def _load_fixture(name: str) -> BusinessTravelProfile:
@@ -85,3 +86,11 @@ def test_business_and_leisure_profiles_remain_separate_contracts() -> None:
     assert leisure_profile.profile_kind == "leisure"
     assert not hasattr(business_profile, "tradeoff_dimensions")
     assert not hasattr(leisure_profile, "policy_constraints")
+
+
+def test_business_profile_fixture_loader_is_cwd_independent(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    profile = _load_fixture("conference_profile.json")
+
+    assert profile.traveler_context.home_airport == "ORD"
