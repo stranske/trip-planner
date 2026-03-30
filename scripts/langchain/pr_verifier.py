@@ -462,11 +462,8 @@ def _has_local_pr_body_reference_evidence(context: str, refs: list[int]) -> bool
     if not context or not refs:
         return False
 
-    linked_followup_numbers = {
-        int(match.group("number"))
-        for link in _extract_followup_pr_links(context)
-        for match in re.finditer(r"https://github\.com/[^/\s]+/[^/\s]+/pull/(?P<number>\d+)", link)
-    }
+    linked_followup_numbers = _extract_linked_followup_pr_numbers(context)
+    missing_linked_description_numbers = _missing_linked_followup_description_numbers(context)
     ref_tokens = tuple(f"#{number}" for number in refs)
     for line in context.splitlines():
         lowered = line.lower()
@@ -478,10 +475,39 @@ def _has_local_pr_body_reference_evidence(context: str, refs: list[int]) -> bool
             f"#{number}" in line for number in linked_followup_numbers
         ):
             continue
+        if missing_linked_description_numbers:
+            continue
         if any(token in line for token in ref_tokens):
             return True
 
     return False
+
+
+def _extract_linked_followup_pr_numbers(context: str) -> set[int]:
+    """Return PR numbers recorded through explicit Follow-up PR links."""
+    return {
+        int(match.group("number"))
+        for link in _extract_followup_pr_links(context)
+        for match in re.finditer(r"https://github\.com/[^/\s]+/[^/\s]+/pull/(?P<number>\d+)", link)
+    }
+
+
+def _missing_linked_followup_description_numbers(context: str) -> list[int]:
+    """Return linked follow-up PR numbers that lack matching description/body evidence."""
+    if not context:
+        return []
+
+    linked_numbers = _extract_linked_followup_pr_numbers(context)
+    if not linked_numbers:
+        return []
+
+    described_numbers = {
+        int(match.group("number"))
+        for line in _extract_followup_pr_description_evidence(context)
+        for match in re.finditer(r"\bPR\s+#(?P<number>\d+)\b", line, re.IGNORECASE)
+        if int(match.group("number")) in linked_numbers
+    }
+    return sorted(linked_numbers - described_numbers)
 
 
 def _extract_followup_pr_description_evidence(context: str) -> list[str]:
@@ -568,6 +594,7 @@ def _followup_reference_summary(context: str) -> str:
     links = _extract_followup_pr_links(context)
     description_evidence = _extract_followup_pr_description_evidence(context)
     merge_metadata_evidence = _extract_followup_pr_merge_metadata_evidence(context)
+    missing_linked_description_numbers = _missing_linked_followup_description_numbers(context)
     link_summary = (
         "Follow-up PR links recorded in local context: " + ", ".join(links) + ". "
         if links
@@ -583,6 +610,13 @@ def _followup_reference_summary(context: str) -> str:
         + " | ".join(merge_metadata_evidence)
         + ". "
         if merge_metadata_evidence
+        else ""
+    )
+    missing_description_summary = (
+        "Linked follow-up PRs still missing matching description/body evidence: "
+        + ", ".join(f"#{number}" for number in missing_linked_description_numbers)
+        + ". "
+        if missing_linked_description_numbers
         else ""
     )
     if _has_local_pr_body_reference_evidence(context, refs):
@@ -603,6 +637,7 @@ def _followup_reference_summary(context: str) -> str:
             + link_summary
             + description_summary
             + merge_metadata_summary
+            + missing_description_summary
             + "GitHub-generated merge metadata for the follow-up PR references the originating "
             + "PR(s): "
             + ref_list
@@ -616,6 +651,7 @@ def _followup_reference_summary(context: str) -> str:
             + link_summary
             + description_summary
             + merge_metadata_summary
+            + missing_description_summary
             + "Prior PR references present in context: "
             + ref_list
             + ". Follow-up PR descriptions must explicitly reference the originating PR(s): "

@@ -84,6 +84,29 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
     assert "PR description: Follow-up PR #582 references #566 in its body." in prompt
     assert "Verified from local context" not in prompt
     assert "description/body explicitly references the originating PR(s): #566." not in prompt
+    assert "Linked follow-up PRs still missing matching description/body evidence: #581." in prompt
+
+
+def test_prepare_prompt_requires_matching_description_evidence_for_every_linked_followup_pr(
+    monkeypatch,
+):
+    context = """
+### Related Issues/PRs
+- [#566](https://github.com/stranske/trip-planner/pull/566)
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/582
+- PR description: Follow-up PR #581 references #566 in its body.
+
+Pull request: [#583](https://github.com/stranske/trip-planner/pull/583)
+""".strip()
+    diff = "diff --git a/docs/pr-566-thread-disposition.md b/docs/pr-566-thread-disposition.md"
+
+    monkeypatch.setenv("CHAIN_DEPTH", "1")
+    prompt = pr_verifier._prepare_prompt(context, diff)
+
+    assert "Local follow-up reference evidence" in prompt
+    assert "Verified from local context" not in prompt
+    assert "Linked follow-up PRs still missing matching description/body evidence: #582." in prompt
 
 
 def test_extract_followup_pr_description_evidence_deduplicates_matching_lines():
@@ -133,6 +156,20 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
         "https://github.com/stranske/trip-planner/pull/581",
         "https://github.com/stranske/trip-planner/pull/582",
     ]
+
+
+def test_missing_linked_followup_description_numbers_tracks_each_linked_pr():
+    context = """
+## Thread 1
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/582
+- PR description: Follow-up PR #581 references #566 in its body.
+- PR body evidence: Follow-up PR #583 references #566 and #571.
+
+Pull request: [#584](https://github.com/stranske/trip-planner/pull/584)
+""".strip()
+
+    assert pr_verifier._missing_linked_followup_description_numbers(context) == [582]
 
 
 def test_extract_related_pr_numbers_supports_plural_pr_commit_titles():
