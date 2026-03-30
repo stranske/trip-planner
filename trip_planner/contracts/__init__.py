@@ -20,7 +20,13 @@ from .options import (
     OptionQualitySummary,
     OptionSet,
 )
-from .trip import ProfileRefs, TravelerPartySummary, Trip, TripArtifactRefs, TripFrameSummary
+from .trip import (
+    ProfileRefs,
+    TravelerPartySummary,
+    Trip,
+    TripArtifactRefs,
+    TripFrameSummary,
+)
 
 __all__ = [
     "BudgetProtection",

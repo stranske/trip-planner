@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from .explanations import InteractionActivation, MaterialInfluence, ResolutionExplanation
+from .explanations import (
+    InteractionActivation,
+    MaterialInfluence,
+    ResolutionExplanation,
+)
 from .models import InteractionRule, LeisurePreferenceProfile, TensionFlag
 
 

@@ -1,7 +1,8 @@
 from copy import deepcopy
 
-from .fixture_corpus import load_fixture_corpus
 from trip_planner.preferences import EvidenceSummary, resolve_leisure_profile
+
+from .fixture_corpus import load_fixture_corpus
 
 
 def _resolution_seed(fixture_profile):

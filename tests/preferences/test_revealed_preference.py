@@ -1,10 +1,11 @@
 from copy import deepcopy
 
-from .fixture_corpus import load_fixture_corpus
 from trip_planner.preferences.revealed_preference import (
     RevealedPreferenceSignal,
     build_revealed_preference_update,
 )
+
+from .fixture_corpus import load_fixture_corpus
 
 
 def test_revealed_preference_update_emits_option_evidence() -> None:

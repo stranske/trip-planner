@@ -1,4 +1,8 @@
-from trip_planner.sources import QualityValueFitSummary, SourceRecord, SourceTrustSignals
+from trip_planner.sources import (
+    QualityValueFitSummary,
+    SourceRecord,
+    SourceTrustSignals,
+)
 
 
 def test_source_record_supports_editorial_leisure_source() -> None:

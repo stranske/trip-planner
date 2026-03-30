@@ -11,9 +11,10 @@ Run this script to verify:
 
 import re
 import sys
-import tomllib
 from pathlib import Path
 from typing import List, Tuple
+
+import tomllib
 
 _OPERATORS = ("==", ">=", "<=", "~=", "!=", ">", "<", "===")
 

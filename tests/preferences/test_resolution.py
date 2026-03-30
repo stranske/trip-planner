@@ -1,7 +1,8 @@
 from copy import deepcopy
 
-from .fixture_corpus import load_fixture_corpus
 from trip_planner.preferences import EvidenceSummary, resolve_leisure_profile
+
+from .fixture_corpus import load_fixture_corpus
 
 EXPECTED_TENSION_IDS = {
     "social-recovery-balancer": {"social-energy-recovery-conflict"},
