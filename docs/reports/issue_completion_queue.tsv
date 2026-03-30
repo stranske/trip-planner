@@ -1,0 +1,72 @@
+priority	category	kind	target	issue	pr	state	reason	next_action	url	source_issue	source_pr
+1	C2	open_pr	pr#581	579	581	UNSTABLE	mergeState=UNSTABLE; unresolved_threads=1	inspect running/failing checks and unblock CI first	https://github.com/stranske/trip-planner/pull/581	515	566
+1	C3	followup_issue	issue#580	580	-	OPEN	follow-up issue created from verify non-PASS disposition gap	complete follow-up issue tasks and link disposition/fix	https://github.com/stranske/trip-planner/issues/580	510	571
+1	C3	followup_issue	issue#587	587	-	OPEN	follow-up issue created from verify non-PASS disposition gap	complete follow-up issue tasks and link disposition/fix	https://github.com/stranske/trip-planner/issues/587	510	570
+1	C3	followup_issue	issue#588	588	-	OPEN	follow-up issue created from verify non-PASS disposition gap	complete follow-up issue tasks and link disposition/fix	https://github.com/stranske/trip-planner/issues/588	517	569
+1	C3	followup_issue	issue#589	589	-	OPEN	follow-up issue created from verify non-PASS disposition gap	complete follow-up issue tasks and link disposition/fix	https://github.com/stranske/trip-planner/issues/589	176	178
+1	C3	followup_issue	issue#590	590	-	OPEN	follow-up issue created from verify non-PASS disposition gap	complete follow-up issue tasks and link disposition/fix	https://github.com/stranske/trip-planner/issues/590	511	572
+1	C3	open_issue_gap	issue#560	560	577	MERGED	components incomplete: C1, C3	document verify non-PASS disposition or merge bounded follow-up	https://github.com/stranske/trip-planner/issues/560	560	577
+2	C1	open_issue_gap	issue#508	508	563	MERGED	components incomplete: C1	complete status summary / acceptance evidence and disposition	https://github.com/stranske/trip-planner/issues/508	508	563
+3	C1	closed_issue_gap	issue#509	509	564	CLOSED	historical closed issue missing C1	maintenance debt: complete status summary / acceptance evidence and disposition	https://github.com/stranske/trip-planner/issues/509	509	564
+3	C1	closed_issue_gap	issue#514	514	565	CLOSED	historical closed issue missing C1	maintenance debt: complete status summary / acceptance evidence and disposition	https://github.com/stranske/trip-planner/issues/514	514	565
+3	C1	issue_without_pr	issue#61	61	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/61	61	-
+3	C1	issue_without_pr	issue#64	64	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/64	64	-
+3	C1	issue_without_pr	issue#71	71	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/71	71	-
+3	C1	issue_without_pr	issue#506	506	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/506	506	-
+3	C1	issue_without_pr	issue#512	512	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/512	512	-
+3	C1	issue_without_pr	issue#513	513	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/513	513	-
+3	C1	issue_without_pr	issue#518	518	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/518	518	-
+3	C1	issue_without_pr	issue#519	519	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/519	519	-
+3	C1	issue_without_pr	issue#520	520	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/520	520	-
+3	C1	issue_without_pr	issue#521	521	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/521	521	-
+3	C1	issue_without_pr	issue#522	522	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/522	522	-
+3	C1	issue_without_pr	issue#523	523	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/523	523	-
+3	C1	issue_without_pr	issue#524	524	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/524	524	-
+3	C1	issue_without_pr	issue#525	525	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/525	525	-
+3	C1	issue_without_pr	issue#526	526	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/526	526	-
+3	C1	issue_without_pr	issue#527	527	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/527	527	-
+3	C1	issue_without_pr	issue#528	528	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/528	528	-
+3	C1	issue_without_pr	issue#529	529	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/529	529	-
+3	C1	issue_without_pr	issue#530	530	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/530	530	-
+3	C1	issue_without_pr	issue#531	531	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/531	531	-
+3	C1	issue_without_pr	issue#532	532	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/532	532	-
+3	C1	issue_without_pr	issue#533	533	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/533	533	-
+3	C1	issue_without_pr	issue#534	534	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/534	534	-
+3	C1	issue_without_pr	issue#535	535	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/535	535	-
+3	C1	issue_without_pr	issue#536	536	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/536	536	-
+3	C1	issue_without_pr	issue#537	537	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/537	537	-
+3	C1	issue_without_pr	issue#538	538	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/538	538	-
+3	C1	issue_without_pr	issue#539	539	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/539	539	-
+3	C1	issue_without_pr	issue#540	540	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/540	540	-
+3	C1	issue_without_pr	issue#541	541	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/541	541	-
+3	C1	issue_without_pr	issue#542	542	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/542	542	-
+3	C1	issue_without_pr	issue#543	543	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/543	543	-
+3	C1	issue_without_pr	issue#544	544	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/544	544	-
+3	C1	issue_without_pr	issue#545	545	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/545	545	-
+3	C1	issue_without_pr	issue#546	546	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/546	546	-
+3	C1	issue_without_pr	issue#547	547	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/547	547	-
+3	C1	issue_without_pr	issue#548	548	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/548	548	-
+3	C1	issue_without_pr	issue#549	549	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/549	549	-
+3	C1	issue_without_pr	issue#550	550	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/550	550	-
+3	C1	issue_without_pr	issue#551	551	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/551	551	-
+3	C1	issue_without_pr	issue#552	552	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/552	552	-
+3	C1	issue_without_pr	issue#553	553	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/553	553	-
+3	C1	issue_without_pr	issue#554	554	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/554	554	-
+3	C1	issue_without_pr	issue#555	555	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/555	555	-
+3	C1	issue_without_pr	issue#556	556	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/556	556	-
+3	C1	issue_without_pr	issue#557	557	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/557	557	-
+3	C1	issue_without_pr	issue#558	558	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/558	558	-
+3	C1	issue_without_pr	issue#559	559	-	OPEN	no active PR and no merged issue PR	open/update issue PR and begin issue-scoped implementation	https://github.com/stranske/trip-planner/issues/559	559	-
+3	C2	closed_issue_gap	issue#3	3	-	CLOSED	historical closed issue missing C1, C2, C3	maintenance debt: resolve/disposition unresolved review feedback	https://github.com/stranske/trip-planner/issues/3	3	-
+3	C2	closed_issue_gap	issue#5	5	-	CLOSED	historical closed issue missing C1, C2, C3	maintenance debt: resolve/disposition unresolved review feedback	https://github.com/stranske/trip-planner/issues/5	5	-
+3	C2	closed_issue_gap	issue#30	30	-	CLOSED	historical closed issue missing C1, C2, C3	maintenance debt: resolve/disposition unresolved review feedback	https://github.com/stranske/trip-planner/issues/30	30	-
+3	C2	closed_issue_gap	issue#75	75	-	CLOSED	historical closed issue missing C1, C2, C3	maintenance debt: resolve/disposition unresolved review feedback	https://github.com/stranske/trip-planner/issues/75	75	-
+3	C2	closed_issue_gap	issue#77	77	-	CLOSED	historical closed issue missing C1, C2, C3	maintenance debt: resolve/disposition unresolved review feedback	https://github.com/stranske/trip-planner/issues/77	77	-
+3	C2	closed_issue_gap	issue#176	176	178	CLOSED	historical closed issue missing C1, C2, C3	maintenance debt: resolve/disposition unresolved review feedback	https://github.com/stranske/trip-planner/issues/176	176	178
+3	C2	closed_issue_gap	issue#327	327	-	CLOSED	historical closed issue missing C1, C2, C3	maintenance debt: resolve/disposition unresolved review feedback	https://github.com/stranske/trip-planner/issues/327	327	-
+3	C2	closed_issue_gap	issue#511	511	572	CLOSED	historical closed issue missing C1, C2	maintenance debt: resolve/disposition unresolved review feedback	https://github.com/stranske/trip-planner/issues/511	511	572
+3	C2	closed_issue_gap	issue#517	517	569	CLOSED	historical closed issue missing C1, C2	maintenance debt: resolve/disposition unresolved review feedback	https://github.com/stranske/trip-planner/issues/517	517	569
+3	C2	closed_issue_gap	issue#578	578	-	CLOSED	historical closed issue missing C1, C2, C3	maintenance debt: resolve/disposition unresolved review feedback	https://github.com/stranske/trip-planner/issues/578	578	-
+3	C3	closed_issue_gap	issue#507	507	562	CLOSED	historical closed issue missing C1, C3	maintenance debt: document verify non-PASS disposition or merge bounded follow-up	https://github.com/stranske/trip-planner/issues/507	507	562
+3	C3	closed_issue_gap	issue#510	510	571	CLOSED	historical closed issue missing C1, C3	maintenance debt: document verify non-PASS disposition or merge bounded follow-up	https://github.com/stranske/trip-planner/issues/510	510	571
+3	C3	closed_issue_gap	issue#516	516	568	CLOSED	historical closed issue missing C1, C3	maintenance debt: document verify non-PASS disposition or merge bounded follow-up	https://github.com/stranske/trip-planner/issues/516	516	568
