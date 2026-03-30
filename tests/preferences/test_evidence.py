@@ -130,3 +130,25 @@ def test_preference_evidence_rejects_invalid_support_path_at_construction() -> N
         assert "not valid evidence for dimension" in str(exc)
     else:
         raise AssertionError("Invalid support paths should fail during construction")
+
+
+def test_option_rejection_cannot_have_positive_signal_direction() -> None:
+    try:
+        PreferenceEvidence(
+            id="ev-007",
+            evidence_type="option_rejection",
+            source_type="option_menu",
+            affected_dimensions=["movement_vs_friction"],
+            sequence=8,
+            signal_direction="positive",
+            option_evidence=OptionEvidence(
+                option_set_id="set-3",
+                option_id="opt-bus",
+                option_kind="transport",
+                presented_option_ids=["opt-bus", "opt-rail"],
+            ),
+        )
+    except ValueError as exc:
+        assert "cannot use a positive signal_direction" in str(exc)
+    else:
+        raise AssertionError("Option rejection should not allow positive signal direction")

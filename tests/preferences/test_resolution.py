@@ -82,3 +82,29 @@ def test_resolution_flags_dimensions_that_need_directional_seed() -> None:
         "zero-direction seed value" in note
         for note in result.profile.evidence_summary.confidence_notes
     )
+
+
+def test_directional_seed_artifacts_removed_after_interaction_moves_off_zero() -> None:
+    fixture = next(item for item in load_fixture_corpus() if item.id == "discovery-wanderer")
+    seed = _resolution_seed(fixture.profile)
+    seed.tradeoff_dimensions["movement_vs_friction"].value = 0.0
+    seed.tradeoff_dimensions["breadth_vs_depth"].value = -0.6
+    seed.tradeoff_dimensions["recovery_vs_intensity"].value = -0.6
+
+    result = resolve_leisure_profile(seed, fixture.evidence)
+
+    assert result.profile.tradeoff_dimensions["movement_vs_friction"].value != 0.0
+    assert all(
+        flag.id != "movement_vs_friction-needs-directional-seed"
+        for flag in result.profile.tension_flags
+    )
+    assert (
+        "movement_vs_friction-needs-directional-seed"
+        not in result.explanation.dimension_explanations["movement_vs_friction"].tension_flag_ids
+    )
+    assert "movement_vs_friction-needs-directional-seed" not in result.explanation.tension_explanations
+    assert all(
+        "movement_vs_friction received evidence but remained at a zero-direction seed value."
+        != note
+        for note in result.profile.evidence_summary.confidence_notes
+    )
