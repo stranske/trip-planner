@@ -1,6 +1,6 @@
 from copy import deepcopy
 
-from tests.preferences.fixture_corpus import load_fixture_corpus
+from .fixture_corpus import load_fixture_corpus
 from trip_planner.preferences import EvidenceSummary, resolve_leisure_profile
 
 EXPECTED_TENSION_IDS = {

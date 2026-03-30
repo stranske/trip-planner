@@ -2,7 +2,7 @@ from copy import deepcopy
 
 from trip_planner.itinerary import derive_itinerary_objectives
 from trip_planner.preferences import resolve_leisure_profile
-from tests.preferences.fixture_corpus import (
+from ..preferences.fixture_corpus import (
     build_profile_from_overrides,
     load_fixture_map,
 )

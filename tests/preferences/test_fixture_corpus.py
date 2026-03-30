@@ -3,7 +3,7 @@ from pathlib import Path
 
 from trip_planner.preferences.schema import TRADEOFF_DIMENSION_KEYS
 
-from tests.preferences.fixture_corpus import (
+from .fixture_corpus import (
     fixture_corpus_path,
     load_fixture_corpus,
     load_fixture_map,

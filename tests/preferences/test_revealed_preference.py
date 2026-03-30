@@ -1,6 +1,6 @@
 from copy import deepcopy
 
-from tests.preferences.fixture_corpus import load_fixture_corpus
+from .fixture_corpus import load_fixture_corpus
 from trip_planner.preferences.revealed_preference import (
     RevealedPreferenceSignal,
     build_revealed_preference_update,
