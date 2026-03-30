@@ -427,12 +427,21 @@ def _extract_related_pr_numbers(context: str) -> list[int]:
     seen: set[int] = set()
 
     for line in context.splitlines():
-        if "Pull request:" in line:
+        lowered = line.lower()
+        if "pull request:" in lowered:
             continue
+        if "follow-up pr:" in lowered:
+            continue
+
         matches = list(re.finditer(r"/pull/(?P<number>\d+)", line, re.IGNORECASE))
-        matches.extend(re.finditer(r"\bPR\s+#(?P<number>\d+)\b", line, re.IGNORECASE))
+        if "follow-up pr" not in lowered:
+            matches.extend(re.finditer(r"\bPR\s+#(?P<number>\d+)\b", line, re.IGNORECASE))
         if re.search(r"\bPRs?\b", line, re.IGNORECASE):
-            matches.extend(re.finditer(r"#(?P<number>\d+)\b", line))
+            for match in re.finditer(r"#(?P<number>\d+)\b", line):
+                prefix = line[max(0, match.start() - 4) : match.start()]
+                if re.search(r"PR\s+$", prefix, re.IGNORECASE):
+                    continue
+                matches.append(match)
         for match in matches:
             number = int(match.group("number"))
             if number == current_pr or number in seen:
@@ -448,12 +457,21 @@ def _has_local_pr_body_reference_evidence(context: str, refs: list[int]) -> bool
     if not context or not refs:
         return False
 
+    linked_followup_numbers = {
+        int(match.group("number"))
+        for link in _extract_followup_pr_links(context)
+        for match in re.finditer(r"https://github\.com/[^/\s]+/[^/\s]+/pull/(?P<number>\d+)", link)
+    }
     ref_tokens = tuple(f"#{number}" for number in refs)
     for line in context.splitlines():
         lowered = line.lower()
         if "pull request:" in lowered:
             continue
         if not any(keyword in lowered for keyword in ("description", "body")):
+            continue
+        if linked_followup_numbers and not any(
+            f"#{number}" in line for number in linked_followup_numbers
+        ):
             continue
         if any(token in line for token in ref_tokens):
             return True
