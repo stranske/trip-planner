@@ -13,6 +13,45 @@ NC='\033[0m' # No Color
 echo "=== Test Dependencies Check ==="
 echo ""
 
+dependency_specs=$(python - <<'PY'
+from pathlib import Path
+import tomllib
+
+OPERATORS = ("==", ">=", "<=", "~=", "!=", ">", "<", "===")
+MODULE_MAP = {
+    "pytest-cov": "coverage",
+    "pyyaml": "yaml",
+}
+
+
+def split_spec(raw: str) -> str:
+    entry = raw.strip().strip(",").strip('"')
+    for operator in OPERATORS:
+        if operator in entry:
+            name, _ = entry.split(operator, 1)
+            return name.strip().split("[")[0]
+    return entry.strip().split("[")[0]
+
+
+pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+project = pyproject.get("project", {})
+declared = []
+for entry in project.get("dependencies", []):
+    declared.append(split_spec(entry).lower())
+for group in project.get("optional-dependencies", {}).values():
+    for entry in group:
+        declared.append(split_spec(entry).lower())
+
+seen = set()
+for package_name in declared:
+    if package_name in seen:
+        continue
+    seen.add(package_name)
+    module_name = MODULE_MAP.get(package_name, package_name.replace("-", "_"))
+    print(f"{module_name}:{package_name}")
+PY
+)
+
 # Track overall status
 all_ok=true
 
@@ -32,19 +71,13 @@ echo ""
 
 # Check required Python packages
 echo "Checking required Python packages..."
-required_packages=(
-    "pytest"
-    "coverage"
-    "hypothesis"
-    "pandas"
-    "numpy"
-    "pydantic"
-    "yaml:PyYAML"
-    "requests"
-    "jsonschema"
-)
+mapfile -t required_packages <<< "$dependency_specs"
 
 for pkg_spec in "${required_packages[@]}"; do
+    if [[ -z "$pkg_spec" ]]; then
+        continue
+    fi
+
     # Handle module:package name mapping (e.g., yaml:PyYAML)
     if [[ "$pkg_spec" == *":"* ]]; then
         module_name=$(echo "$pkg_spec" | cut -d: -f1)
@@ -66,9 +99,6 @@ echo ""
 # Check optional Python packages
 echo "Checking optional Python packages..."
 optional_packages=(
-    "black"
-    "ruff"
-    "mypy"
     "streamlit"
     "fastapi"
 )
