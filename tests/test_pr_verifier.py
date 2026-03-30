@@ -211,6 +211,18 @@ Pull request: [#582](https://github.com/stranske/trip-planner/pull/582)
     assert pr_verifier._missing_linked_followup_description_numbers(context) == []
 
 
+def test_missing_linked_followup_description_numbers_accepts_originating_pr_without_hash():
+    context = """
+## Thread 1
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- PR description: Follow-up PR 581 references PR 566 in its body.
+
+Pull request: [#582](https://github.com/stranske/trip-planner/pull/582)
+""".strip()
+
+    assert pr_verifier._missing_linked_followup_description_numbers(context) == []
+
+
 def test_extract_related_pr_numbers_supports_plural_pr_commit_titles():
     context = """
 ### Verification Notes
@@ -291,6 +303,27 @@ Pull request: [#582](https://github.com/stranske/trip-planner/pull/582)
     assert "Verified from local context" in prompt
     assert "Explicit follow-up PR description evidence" in prompt
     assert "Follow-up PR 581 references #566 in its body." in prompt
+    assert "Linked follow-up PRs still missing matching description/body evidence" not in prompt
+
+
+def test_prepare_prompt_accepts_plain_pr_number_body_evidence(monkeypatch):
+    context = """
+## Thread 1
+- Follow-up PR:
+  https://github.com/stranske/trip-planner/pull/581
+- PR body evidence:
+  Follow-up PR 581 references PR 566 in its body.
+
+Pull request: [#582](https://github.com/stranske/trip-planner/pull/582)
+""".strip()
+    diff = "diff --git a/docs/pr-566-thread-disposition.md b/docs/pr-566-thread-disposition.md"
+
+    monkeypatch.setenv("CHAIN_DEPTH", "1")
+    prompt = pr_verifier._prepare_prompt(context, diff)
+
+    assert "Verified from local context" in prompt
+    assert "Explicit follow-up PR description evidence" in prompt
+    assert "Follow-up PR 581 references PR 566 in its body." in prompt
     assert "Linked follow-up PRs still missing matching description/body evidence" not in prompt
 
 

@@ -442,8 +442,7 @@ def _extract_related_pr_numbers(context: str) -> list[int]:
             continue
 
         matches = list(re.finditer(r"/pull/(?P<number>\d+)", line, re.IGNORECASE))
-        if "follow-up pr" not in lowered:
-            matches.extend(_PR_NUMBER_RE.finditer(line))
+        matches.extend(_PR_NUMBER_RE.finditer(line))
         if re.search(r"\bPRs?\b", line, re.IGNORECASE):
             for match in re.finditer(r"#(?P<number>\d+)\b", line):
                 prefix = line[max(0, match.start() - 4) : match.start()]
@@ -458,6 +457,27 @@ def _extract_related_pr_numbers(context: str) -> list[int]:
             references.append(number)
 
     return references
+
+
+def _extract_pr_numbers_from_line(line: str) -> set[int]:
+    """Extract PR numbers from a single evidence line.
+
+    Supports both hash-prefixed forms (``#566``) and plain-text PR wording
+    (``PR 566`` or ``PRs 566 and 571``).
+    """
+    numbers = {int(match.group("number")) for match in _PR_NUMBER_RE.finditer(line)}
+    numbers.update(int(match.group("number")) for match in re.finditer(r"#(?P<number>\d+)\b", line))
+
+    if re.search(r"\bPRs?\b", line, re.IGNORECASE):
+        trailing_match = re.search(r"\bPRs?\b(?P<tail>.*)", line, re.IGNORECASE)
+        if trailing_match:
+            tail = trailing_match.group("tail")
+            numbers.update(
+                int(match.group("number"))
+                for match in re.finditer(r"\b(?P<number>\d{2,5})\b", tail)
+            )
+
+    return numbers
 
 
 def _has_local_pr_body_reference_evidence(context: str, refs: list[int]) -> bool:
@@ -477,12 +497,12 @@ def _has_local_pr_body_reference_evidence(context: str, refs: list[int]) -> bool
         if missing_linked_description_numbers:
             continue
         if linked_followup_numbers:
-            mentioned_linked_numbers = {
-                int(match.group("number")) for match in _PR_NUMBER_RE.finditer(line)
-            }
+            mentioned_linked_numbers = _extract_pr_numbers_from_line(line)
             if not linked_followup_numbers.intersection(mentioned_linked_numbers):
                 continue
-        if any(token in line for token in ref_tokens):
+        if any(token in line for token in ref_tokens) or any(
+            ref in _extract_pr_numbers_from_line(line) for ref in refs
+        ):
             return True
 
     return False
@@ -507,10 +527,10 @@ def _missing_linked_followup_description_numbers(context: str) -> list[int]:
         return []
 
     described_numbers = {
-        int(match.group("number"))
+        number
         for line in _extract_followup_pr_description_evidence(context)
-        for match in _PR_NUMBER_RE.finditer(line)
-        if int(match.group("number")) in linked_numbers
+        for number in _extract_pr_numbers_from_line(line)
+        if number in linked_numbers
     }
     return sorted(linked_numbers - described_numbers)
 
@@ -532,7 +552,7 @@ def _extract_followup_pr_description_evidence(context: str) -> list[str]:
             continue
         if not any(keyword in lowered for keyword in ("description", "body")):
             continue
-        if not re.search(r"#\d+", line):
+        if not _extract_pr_numbers_from_line(line):
             continue
         if line in seen:
             continue
@@ -561,7 +581,7 @@ def _extract_followup_pr_merge_metadata_evidence(context: str) -> list[str]:
             continue
         if not any(keyword in lowered for keyword in ("title", "subject", "body")):
             continue
-        if not re.search(r"#\d+", line):
+        if not _extract_pr_numbers_from_line(line):
             continue
         if line in seen:
             continue
