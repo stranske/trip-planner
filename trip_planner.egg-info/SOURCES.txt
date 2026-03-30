@@ -33,6 +33,7 @@ scripts/langchain/topic_splitter.py
 scripts/langchain/verdict_extract.py
 scripts/langchain/verdict_policy.py
 tests/test_build_html.py
+tests/test_check_test_dependencies_script.py
 tests/test_complexity.py
 tests/test_dependency_version_alignment.py
 tests/test_generate_segments.py
