@@ -287,7 +287,9 @@ def _build_explanations(
             or ["none"]
         ),
         "approval_roles:"
-        + ",".join(_sorted_strings(profile.approval_targets.approval_roles) or ["none"]),
+        + ",".join(
+            _sorted_strings(profile.approval_targets.approval_roles) or ["none"]
+        ),
         f"fallback_mode:{profile.exception_strategy.fallback_mode}",
     ]
     if constraint_set is not None:

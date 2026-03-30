@@ -122,15 +122,15 @@ def test_derivation_sorts_unordered_business_inputs() -> None:
     profile.documentation_requirements.justification_fields = cast(
         Any,
         {
-        "client impact",
-        "agenda",
+            "client impact",
+            "agenda",
         },
     )
     profile.documentation_requirements.required_receipt_categories = cast(
         Any,
         {
-        "lodging",
-        "meals",
+            "lodging",
+            "meals",
         },
     )
     profile.approval_targets.approval_roles = cast(Any, {"manager", "finance"})
@@ -141,8 +141,8 @@ def test_derivation_sorts_unordered_business_inputs() -> None:
     constraint_set.allowed_exception_types = cast(
         Any,
         {
-        "schedule_protection",
-        "fatigue_management",
+            "schedule_protection",
+            "fatigue_management",
         },
     )
 
@@ -184,7 +184,9 @@ def test_derivation_sorts_unordered_business_inputs() -> None:
 
 @pytest.mark.parametrize("value", ["2", 2.5, True])
 def test_comparable_requirement_objectives_reject_non_int_values(value: object) -> None:
-    with pytest.raises(ValueError, match=r"required_categories\[lodging\] must be an int"):
+    with pytest.raises(
+        ValueError, match=r"required_categories\[lodging\] must be an int"
+    ):
         ComparableRequirementObjectives(
             required_categories={"lodging": cast(Any, value)}
         )
