@@ -468,18 +468,20 @@ def _has_local_pr_body_reference_evidence(context: str, refs: list[int]) -> bool
     linked_followup_numbers = _extract_linked_followup_pr_numbers(context)
     missing_linked_description_numbers = _missing_linked_followup_description_numbers(context)
     ref_tokens = tuple(f"#{number}" for number in refs)
-    for line in context.splitlines():
+    for line in _iter_context_entries(context):
         lowered = line.lower()
         if "pull request:" in lowered:
             continue
         if not any(keyword in lowered for keyword in ("description", "body")):
             continue
-        if linked_followup_numbers and not any(
-            f"#{number}" in line for number in linked_followup_numbers
-        ):
-            continue
         if missing_linked_description_numbers:
             continue
+        if linked_followup_numbers:
+            mentioned_linked_numbers = {
+                int(match.group("number")) for match in _PR_NUMBER_RE.finditer(line)
+            }
+            if not linked_followup_numbers.intersection(mentioned_linked_numbers):
+                continue
         if any(token in line for token in ref_tokens):
             return True
 

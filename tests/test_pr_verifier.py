@@ -263,6 +263,27 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
     assert "Verified from local context" not in prompt
 
 
+def test_prepare_prompt_accepts_wrapped_body_evidence_for_linked_followup_pr(monkeypatch):
+    context = """
+## Thread 1
+- Follow-up PR:
+  https://github.com/stranske/trip-planner/pull/581
+- PR body evidence:
+  Follow-up PR 581 references #566 in its body.
+
+Pull request: [#582](https://github.com/stranske/trip-planner/pull/582)
+""".strip()
+    diff = "diff --git a/docs/pr-566-thread-disposition.md b/docs/pr-566-thread-disposition.md"
+
+    monkeypatch.setenv("CHAIN_DEPTH", "1")
+    prompt = pr_verifier._prepare_prompt(context, diff)
+
+    assert "Verified from local context" in prompt
+    assert "Explicit follow-up PR description evidence" in prompt
+    assert "Follow-up PR 581 references #566 in its body." in prompt
+    assert "Linked follow-up PRs still missing matching description/body evidence" not in prompt
+
+
 def test_prepare_prompt_flags_missing_followup_reference_evidence(monkeypatch):
     context = "Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)"
     diff = "diff --git a/docs/pr-566-thread-disposition.md b/docs/pr-566-thread-disposition.md"
