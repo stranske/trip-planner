@@ -444,16 +444,21 @@ def _extract_related_pr_numbers(context: str) -> list[int]:
 
 
 def _followup_reference_summary(context: str) -> str:
-    """Summarize whether local follow-up context cites earlier PRs."""
+    """Summarize and enforce prior-PR reference expectations for follow-ups."""
     refs = _extract_related_pr_numbers(context)
     if refs:
+        ref_list = ", ".join(f"#{number}" for number in refs)
         return (
             "Local follow-up reference evidence: prior PR references present in context: "
-            + ", ".join(f"#{number}" for number in refs)
+            + ref_list
+            + ". Follow-up PR descriptions must explicitly reference the originating PR(s): "
+            + ref_list
+            + "."
         )
     return (
         "External evidence required: no prior PR references were found in the local context, "
-        "so PR-body linkage must be verified in GitHub."
+        "so PR-body linkage must be verified in GitHub before treating follow-up PR "
+        "description references as satisfied."
     )
 
 

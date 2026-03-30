@@ -34,6 +34,9 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
     assert "Follow-up Iteration Context" in prompt
     assert "Local follow-up reference evidence" in prompt
     assert "#566" in prompt
+    assert (
+        "Follow-up PR descriptions must explicitly reference the originating PR(s): #566." in prompt
+    )
 
 
 def test_extract_related_pr_numbers_supports_plural_pr_commit_titles():
@@ -64,6 +67,10 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
     assert "Local follow-up reference evidence" in prompt
     assert "#566" in prompt
     assert "#571" in prompt
+    assert (
+        "Follow-up PR descriptions must explicitly reference the originating PR(s): #566, #571."
+        in prompt
+    )
 
 
 def test_prepare_prompt_flags_missing_followup_reference_evidence(monkeypatch):
@@ -75,3 +82,4 @@ def test_prepare_prompt_flags_missing_followup_reference_evidence(monkeypatch):
 
     assert "External evidence required" in prompt
     assert "PR-body linkage must be verified in GitHub" in prompt
+    assert "description references as satisfied" in prompt
