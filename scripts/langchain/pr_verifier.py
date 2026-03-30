@@ -11,6 +11,7 @@ Run with:
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import logging
 import os
@@ -18,7 +19,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, Protocol, cast
 
 from pydantic import BaseModel, Field
 from scripts.langchain.structured_output import (
@@ -27,6 +28,17 @@ from scripts.langchain.structured_output import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+class InvokableClient(Protocol):
+    def invoke(self, prompt: str, config: dict[str, object] | None = None) -> object: ...
+
+
+@dataclass
+class SharedConcernEntry:
+    count: int
+    text: str
+
 
 PR_EVALUATION_PROMPT = """
 You are reviewing a **merged** pull request to evaluate whether the code
@@ -268,7 +280,7 @@ def _load_prompt() -> str:
 
 def _get_llm_client(
     model: str | None = None, provider: str | None = None
-) -> tuple[object, str] | None:
+) -> tuple[InvokableClient, str] | None:
     """Get an LLM client for evaluation.
 
     Args:
@@ -288,19 +300,19 @@ def _get_llm_client(
     resolved = build_chat_client(model=model, provider=provider)
     if not resolved:
         return None
-    return resolved.client, resolved.provider_label
+    return cast(InvokableClient, resolved.client), resolved.provider_label
 
 
 def _get_llm_clients(
     model1: str | None = None, model2: str | None = None
-) -> list[tuple[object, str, str]]:
+) -> list[tuple[InvokableClient, str, str]]:
     try:
         from tools.langchain_client import build_chat_clients
     except ImportError:
         return []
 
     clients = build_chat_clients(model1=model1, model2=model2)
-    return [(entry.client, entry.provider, entry.model) for entry in clients]
+    return [(cast(InvokableClient, entry.client), entry.provider, entry.model) for entry in clients]
 
 
 @dataclass(frozen=True)
@@ -308,7 +320,7 @@ class ComparisonRunner:
     context: str
     diff: str | None
     prompt: str
-    clients: list[tuple[object, str, str]]  # (client, provider, model)
+    clients: list[tuple[InvokableClient, str, str]]  # (client, provider, model)
 
     @classmethod
     def from_environment(
@@ -321,7 +333,7 @@ class ComparisonRunner:
             clients=_get_llm_clients(model1, model2),
         )
 
-    def run_single(self, client: object, provider: str, model: str) -> EvaluationResult:
+    def run_single(self, client: InvokableClient, provider: str, model: str) -> EvaluationResult:
         try:
             response, trace_id, trace_url = _invoke_llm(
                 client,
@@ -551,7 +563,7 @@ def _build_llm_config(
 
 
 def _invoke_llm(
-    client: object,
+    client: InvokableClient,
     prompt: str,
     *,
     operation: str,
@@ -680,8 +692,7 @@ def _create_followup_issue(
         title = f"LLM evaluation concerns for PR #{pr_number}"
 
     try:
-        from scripts import api_client
-
+        api_client: Any = importlib.import_module("scripts.api_client")
         issue = api_client.create_issue(repo, token, title, body, labels)
     except ImportError:
         return None
@@ -711,7 +722,7 @@ def _fallback_evaluation(
 
 
 def _parse_llm_response(
-    content: str, provider: str, *, client: object | None = None
+    content: str, provider: str, *, client: InvokableClient | None = None
 ) -> EvaluationResult:
     parsed = parse_structured_output(
         content,
@@ -891,18 +902,18 @@ def _format_confidence(confidence: float | None) -> str:
 
 
 def _shared_concerns(results: list[EvaluationResult]) -> list[str]:
-    counts: dict[str, dict[str, object]] = {}
+    counts: dict[str, SharedConcernEntry] = {}
     for result in results:
         for concern in result.concerns:
             normalized = _normalize_text(concern)
             if not normalized:
                 continue
-            entry = counts.setdefault(normalized, {"count": 0, "text": concern})
-            entry["count"] = int(entry["count"]) + 1
+            entry = counts.setdefault(normalized, SharedConcernEntry(count=0, text=concern))
+            entry.count += 1
     shared = []
     for entry in counts.values():
-        if int(entry["count"]) > 1:
-            shared.append(str(entry["text"]))
+        if entry.count > 1:
+            shared.append(entry.text)
     return shared
 
 
