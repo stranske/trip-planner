@@ -443,9 +443,33 @@ def _extract_related_pr_numbers(context: str) -> list[int]:
     return references
 
 
+def _has_local_pr_body_reference_evidence(context: str, refs: list[int]) -> bool:
+    """Return True when local context explicitly says the PR body/description references prior PRs."""
+    if not context or not refs:
+        return False
+
+    ref_tokens = tuple(f"#{number}" for number in refs)
+    for line in context.splitlines():
+        lowered = line.lower()
+        if "pull request:" in lowered:
+            continue
+        if not any(keyword in lowered for keyword in ("description", "body")):
+            continue
+        if any(token in line for token in ref_tokens):
+            return True
+
+    return False
+
+
 def _followup_reference_summary(context: str) -> str:
     """Summarize and enforce prior-PR reference expectations for follow-ups."""
     refs = _extract_related_pr_numbers(context)
+    if _has_local_pr_body_reference_evidence(context, refs):
+        ref_list = ", ".join(f"#{number}" for number in refs)
+        return (
+            "Verified from local context: the follow-up PR description/body explicitly references "
+            "the originating PR(s): " + ref_list + "."
+        )
     if refs:
         ref_list = ", ".join(f"#{number}" for number in refs)
         return (
