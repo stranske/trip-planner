@@ -158,6 +158,23 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
     ]
 
 
+def test_extract_followup_pr_links_supports_wrapped_and_lowercase_entries():
+    context = """
+## Thread 1
+- follow-up pr:
+  https://github.com/stranske/trip-planner/pull/581
+- Follow-up PR:
+  https://github.com/stranske/trip-planner/pull/582
+
+Pull request: [#583](https://github.com/stranske/trip-planner/pull/583)
+""".strip()
+
+    assert pr_verifier._extract_followup_pr_links(context) == [
+        "https://github.com/stranske/trip-planner/pull/581",
+        "https://github.com/stranske/trip-planner/pull/582",
+    ]
+
+
 def test_missing_linked_followup_description_numbers_tracks_each_linked_pr():
     context = """
 ## Thread 1
@@ -170,6 +187,18 @@ Pull request: [#584](https://github.com/stranske/trip-planner/pull/584)
 """.strip()
 
     assert pr_verifier._missing_linked_followup_description_numbers(context) == [582]
+
+
+def test_missing_linked_followup_description_numbers_accepts_pr_numbers_without_hash():
+    context = """
+## Thread 1
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- PR description: Follow-up PR 581 references #566 in its body.
+
+Pull request: [#582](https://github.com/stranske/trip-planner/pull/582)
+""".strip()
+
+    assert pr_verifier._missing_linked_followup_description_numbers(context) == []
 
 
 def test_extract_related_pr_numbers_supports_plural_pr_commit_titles():
@@ -198,13 +227,13 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
     monkeypatch.setenv("CHAIN_DEPTH", "1")
     prompt = pr_verifier._prepare_prompt(context, diff)
 
-    assert "Local follow-up reference evidence" in prompt
+    assert "Partially verified from local context" in prompt
     assert "Follow-up PR links recorded in local context" in prompt
     assert "#566" in prompt
     assert "#571" in prompt
     assert (
         "Follow-up PR descriptions must explicitly reference the originating PR(s): #566, #571."
-        in prompt
+        not in prompt
     )
 
 

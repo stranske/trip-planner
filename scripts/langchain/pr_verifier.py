@@ -29,6 +29,9 @@ from scripts.langchain.structured_output import (
 
 LOGGER = logging.getLogger(__name__)
 
+_GITHUB_PR_LINK_RE = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/(?P<number>\d+)")
+_PR_NUMBER_RE = re.compile(r"\bPR\s+#?(?P<number>\d+)\b", re.IGNORECASE)
+
 
 class InvokableClient(Protocol):
     def invoke(self, prompt: str, config: dict[str, object] | None = None) -> object: ...
@@ -426,7 +429,7 @@ def _extract_related_pr_numbers(context: str) -> list[int]:
     linked_followup_numbers = {
         int(match.group("number"))
         for link in _extract_followup_pr_links(context)
-        for match in re.finditer(r"https://github\.com/[^/\s]+/[^/\s]+/pull/(?P<number>\d+)", link)
+        for match in _GITHUB_PR_LINK_RE.finditer(link)
     }
     references: list[int] = []
     seen: set[int] = set()
@@ -440,7 +443,7 @@ def _extract_related_pr_numbers(context: str) -> list[int]:
 
         matches = list(re.finditer(r"/pull/(?P<number>\d+)", line, re.IGNORECASE))
         if "follow-up pr" not in lowered:
-            matches.extend(re.finditer(r"\bPR\s+#(?P<number>\d+)\b", line, re.IGNORECASE))
+            matches.extend(_PR_NUMBER_RE.finditer(line))
         if re.search(r"\bPRs?\b", line, re.IGNORECASE):
             for match in re.finditer(r"#(?P<number>\d+)\b", line):
                 prefix = line[max(0, match.start() - 4) : match.start()]
@@ -488,7 +491,7 @@ def _extract_linked_followup_pr_numbers(context: str) -> set[int]:
     return {
         int(match.group("number"))
         for link in _extract_followup_pr_links(context)
-        for match in re.finditer(r"https://github\.com/[^/\s]+/[^/\s]+/pull/(?P<number>\d+)", link)
+        for match in _GITHUB_PR_LINK_RE.finditer(link)
     }
 
 
@@ -504,7 +507,7 @@ def _missing_linked_followup_description_numbers(context: str) -> list[int]:
     described_numbers = {
         int(match.group("number"))
         for line in _extract_followup_pr_description_evidence(context)
-        for match in re.finditer(r"\bPR\s+#(?P<number>\d+)\b", line, re.IGNORECASE)
+        for match in _PR_NUMBER_RE.finditer(line)
         if int(match.group("number")) in linked_numbers
     }
     return sorted(linked_numbers - described_numbers)
@@ -518,7 +521,7 @@ def _extract_followup_pr_description_evidence(context: str) -> list[str]:
     evidence: list[str] = []
     seen: set[str] = set()
 
-    for raw_line in context.splitlines():
+    for raw_line in _iter_context_entries(context):
         line = raw_line.strip()
         lowered = line.lower()
         if "pull request:" in lowered:
@@ -545,7 +548,7 @@ def _extract_followup_pr_merge_metadata_evidence(context: str) -> list[str]:
     evidence: list[str] = []
     seen: set[str] = set()
 
-    for raw_line in context.splitlines():
+    for raw_line in _iter_context_entries(context):
         line = raw_line.strip()
         lowered = line.lower()
         if "pull request:" in lowered:
@@ -574,10 +577,10 @@ def _extract_followup_pr_links(context: str) -> list[str]:
     links: list[str] = []
     seen: set[str] = set()
 
-    for line in context.splitlines():
-        if "Follow-up PR:" not in line:
+    for line in _iter_context_entries(context):
+        if "follow-up pr:" not in line.lower():
             continue
-        matches = re.finditer(r"https://github\.com/[^/\s]+/[^/\s]+/pull/(?P<number>\d+)", line)
+        matches = _GITHUB_PR_LINK_RE.finditer(line)
         for match in matches:
             link = match.group(0)
             if link in seen:
@@ -586,6 +589,36 @@ def _extract_followup_pr_links(context: str) -> list[str]:
             links.append(link)
 
     return links
+
+
+def _iter_context_entries(context: str) -> list[str]:
+    """Collapse wrapped markdown bullets into single logical entries."""
+    entries: list[str] = []
+    current: list[str] = []
+
+    for raw_line in context.splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            if current:
+                entries.append(" ".join(current))
+                current = []
+            continue
+
+        if stripped.startswith(("- ", "* ")):
+            if current:
+                entries.append(" ".join(current))
+            current = [stripped]
+            continue
+
+        if current:
+            current.append(stripped)
+        else:
+            entries.append(stripped)
+
+    if current:
+        entries.append(" ".join(current))
+
+    return entries
 
 
 def _followup_reference_summary(context: str) -> str:
