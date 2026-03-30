@@ -14,10 +14,11 @@ from trip_planner.preferences.models import (
 )
 from trip_planner.preferences.schema import HYBRID_FACTOR_KEYS, TRADEOFF_DIMENSION_KEYS
 
+FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "business"
+
 
 def _fixture_path(name: str) -> Path:
-    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "business"
-    return fixtures_dir / name
+    return FIXTURES_DIR / name
 
 
 def _load_fixture(name: str) -> BusinessTravelProfile:
@@ -50,6 +51,15 @@ def test_business_profile_loads_site_visit_fixture() -> None:
     assert profile.trip_purpose.purpose_type == "site_visit"
     assert profile.vendor_constraints.comparison_requirements["car_rental"] == 2
     assert profile.exception_strategy.fallback_mode == "manual_review"
+
+
+def test_business_profile_fixture_path_is_cwd_independent(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    fixture_path = _fixture_path("conference_profile.json")
+
+    assert fixture_path == FIXTURES_DIR / "conference_profile.json"
+    assert fixture_path.is_file()
 
 
 def test_business_profile_rejects_invalid_traveler_context() -> None:
