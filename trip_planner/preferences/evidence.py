@@ -144,6 +144,8 @@ class PreferenceEvidence:
             raise ValueError(
                 "option_evidence is only allowed for option_selection and option_rejection"
             )
+        if self.evidence_type == "option_rejection" and self.signal_direction == "positive":
+            raise ValueError("option_rejection evidence cannot use a positive signal_direction")
         if any(not isinstance(item, ContradictionMarker) for item in self.contradictions):
             raise ValueError("contradictions must contain ContradictionMarker instances")
         from .evidence_catalog import validate_evidence_support
