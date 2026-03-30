@@ -102,7 +102,9 @@ def test_directional_seed_artifacts_removed_after_interaction_moves_off_zero() -
         "movement_vs_friction-needs-directional-seed"
         not in result.explanation.dimension_explanations["movement_vs_friction"].tension_flag_ids
     )
-    assert "movement_vs_friction-needs-directional-seed" not in result.explanation.tension_explanations
+    assert (
+        "movement_vs_friction-needs-directional-seed" not in result.explanation.tension_explanations
+    )
     assert all(
         "movement_vs_friction received evidence but remained at a zero-direction seed value."
         != note

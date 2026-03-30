@@ -488,6 +488,35 @@ def _extract_followup_pr_description_evidence(context: str) -> list[str]:
     return evidence
 
 
+def _extract_followup_pr_merge_metadata_evidence(context: str) -> list[str]:
+    """Return local merge-metadata statements that reference prior PRs for a follow-up PR."""
+    if not context:
+        return []
+
+    evidence: list[str] = []
+    seen: set[str] = set()
+
+    for raw_line in context.splitlines():
+        line = raw_line.strip()
+        lowered = line.lower()
+        if "pull request:" in lowered:
+            continue
+        if "git show" not in lowered:
+            continue
+        if "merged pr #" not in lowered:
+            continue
+        if not any(keyword in lowered for keyword in ("title", "subject", "body")):
+            continue
+        if not re.search(r"#\d+", line):
+            continue
+        if line in seen:
+            continue
+        seen.add(line)
+        evidence.append(line)
+
+    return evidence
+
+
 def _extract_followup_pr_links(context: str) -> list[str]:
     """Return follow-up PR links recorded in local context."""
     if not context:
@@ -515,6 +544,7 @@ def _followup_reference_summary(context: str) -> str:
     refs = _extract_related_pr_numbers(context)
     links = _extract_followup_pr_links(context)
     description_evidence = _extract_followup_pr_description_evidence(context)
+    merge_metadata_evidence = _extract_followup_pr_merge_metadata_evidence(context)
     link_summary = (
         "Follow-up PR links recorded in local context: " + ", ".join(links) + ". "
         if links
@@ -525,15 +555,36 @@ def _followup_reference_summary(context: str) -> str:
         if description_evidence
         else ""
     )
+    merge_metadata_summary = (
+        "Explicit follow-up PR merge metadata evidence: "
+        + " | ".join(merge_metadata_evidence)
+        + ". "
+        if merge_metadata_evidence
+        else ""
+    )
     if _has_local_pr_body_reference_evidence(context, refs):
         ref_list = ", ".join(f"#{number}" for number in refs)
         return (
             "Verified from local context: "
             + link_summary
             + description_summary
+            + merge_metadata_summary
             + "The follow-up PR description/body explicitly references the originating PR(s): "
             + ref_list
             + "."
+        )
+    if merge_metadata_evidence and refs:
+        ref_list = ", ".join(f"#{number}" for number in refs)
+        return (
+            "Partially verified from local context: "
+            + link_summary
+            + description_summary
+            + merge_metadata_summary
+            + "GitHub-generated merge metadata for the follow-up PR references the originating "
+            + "PR(s): "
+            + ref_list
+            + ". The PR description/body text is still not cached locally, so a GitHub check is "
+            + "required before treating description-level linkage as satisfied."
         )
     if refs:
         ref_list = ", ".join(f"#{number}" for number in refs)
@@ -541,6 +592,7 @@ def _followup_reference_summary(context: str) -> str:
             "Local follow-up reference evidence: "
             + link_summary
             + description_summary
+            + merge_metadata_summary
             + "Prior PR references present in context: "
             + ref_list
             + ". Follow-up PR descriptions must explicitly reference the originating PR(s): "

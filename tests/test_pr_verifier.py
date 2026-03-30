@@ -81,6 +81,22 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
     ]
 
 
+def test_extract_followup_pr_merge_metadata_evidence_deduplicates_matching_lines():
+    context = """
+## Thread 1
+- Local verification note: `git show --format=fuller --no-patch 88a850b8` confirms the merged PR #581 title was `Follow-up fixes for audit gaps on PRs #566 and #571 (#581)`.
+- Local verification note: `git show --format=fuller --no-patch 88a850b8` confirms the merged PR #581 title was `Follow-up fixes for audit gaps on PRs #566 and #571 (#581)`.
+- Local verification note: `git show --format=fuller --no-patch 88a850b8` confirms the merged PR #581 body included `Address audit follow-up gaps for PRs 566 and 571`.
+
+Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
+""".strip()
+
+    assert pr_verifier._extract_followup_pr_merge_metadata_evidence(context) == [
+        "- Local verification note: `git show --format=fuller --no-patch 88a850b8` confirms the merged PR #581 title was `Follow-up fixes for audit gaps on PRs #566 and #571 (#581)`.",
+        "- Local verification note: `git show --format=fuller --no-patch 88a850b8` confirms the merged PR #581 body included `Address audit follow-up gaps for PRs 566 and 571`.",
+    ]
+
+
 def test_extract_followup_pr_links_deduplicates_links():
     context = """
 ## Thread 1
@@ -131,6 +147,32 @@ Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
         "Follow-up PR descriptions must explicitly reference the originating PR(s): #566, #571."
         in prompt
     )
+
+
+def test_prepare_prompt_reports_partial_verification_for_merge_metadata(monkeypatch):
+    context = """
+## Thread 1
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Local verification note: `git show --format=fuller --no-patch 88a850b8` confirms the merged PR #581 title was `Follow-up fixes for audit gaps on PRs #566 and #571 (#581)`.
+- Local verification note: `git show --format=fuller --no-patch 88a850b8` confirms the merged PR #581 body included `Address audit follow-up gaps for PRs 566 and 571`.
+
+Pull request: [#581](https://github.com/stranske/trip-planner/pull/581)
+""".strip()
+    diff = "diff --git a/docs/pr-566-thread-disposition.md b/docs/pr-566-thread-disposition.md"
+
+    monkeypatch.setenv("CHAIN_DEPTH", "1")
+    prompt = pr_verifier._prepare_prompt(context, diff)
+
+    assert "Partially verified from local context" in prompt
+    assert "Explicit follow-up PR merge metadata evidence" in prompt
+    assert (
+        "GitHub-generated merge metadata for the follow-up PR references the originating PR(s)"
+        in prompt
+    )
+    assert "The PR description/body text is still not cached locally" in prompt
+    assert "#566" in prompt
+    assert "#571" in prompt
+    assert "Verified from local context" not in prompt
 
 
 def test_prepare_prompt_flags_missing_followup_reference_evidence(monkeypatch):
