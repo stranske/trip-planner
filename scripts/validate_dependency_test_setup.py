@@ -11,40 +11,65 @@ Run this script to verify:
 
 import re
 import sys
+import tomllib
 from pathlib import Path
 from typing import List, Tuple
+
+
+_OPERATORS = ("==", ">=", "<=", "~=", "!=", ">", "<", "===")
+
+
+def _split_spec(raw: str) -> str:
+    entry = raw.strip().strip(",").strip('"')
+    for operator in _OPERATORS:
+        if operator in entry:
+            name, _ = entry.split(operator, 1)
+            return name.strip().split("[")[0]
+    return entry.strip().split("[")[0]
 
 
 def check_lock_file_completeness() -> Tuple[bool, List[str]]:
     """Verify lock file includes all optional dependencies."""
     issues = []
 
-    # Read pyproject.toml to get all optional groups
-    pyproject = Path("pyproject.toml").read_text()
+    pyproject_path = Path("pyproject.toml")
+    lock_path = Path("requirements.lock")
+    if not pyproject_path.exists():
+        issues.append("pyproject.toml not found")
+        return False, issues
+    if not lock_path.exists():
+        issues.append("requirements.lock not found")
+        return False, issues
 
-    # Extract optional dependency groups
-    optional_section = re.search(
-        r"\[project\.optional-dependencies\](.*?)(?=\n\[|\Z)", pyproject, re.DOTALL
-    )
-    if not optional_section:
+    pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    optional_deps = pyproject.get("project", {}).get("optional-dependencies", {})
+    if not optional_deps:
         issues.append("No [project.optional-dependencies] section found")
         return False, issues
 
-    optional_groups = re.findall(r"^(\w+)\s*=", optional_section.group(1), re.MULTILINE)
+    optional_groups = sorted(optional_deps)
     print(f"✓ Found optional dependency groups: {', '.join(optional_groups)}")
 
-    # Check dependabot-auto-lock.yml includes all extras
-    workflow_path = Path(".github/workflows/dependabot-auto-lock.yml")
-    if workflow_path.exists():
-        workflow = workflow_path.read_text()
-        for group in optional_groups:
-            if f"--extra {group}" not in workflow:
-                issues.append(f"dependabot-auto-lock.yml missing --extra {group}")
+    lock_versions = set()
+    for line in lock_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", "--")) or "==" not in stripped:
+            continue
+        name, _ = stripped.split("==", 1)
+        lock_versions.add(name.lower())
 
-        if not issues:
-            print("✓ dependabot-auto-lock.yml includes all extras")
+    missing = []
+    for group in optional_groups:
+        for entry in optional_deps[group]:
+            dependency = _split_spec(entry).lower()
+            normalized = dependency.replace("-", "_")
+            if dependency not in lock_versions and normalized not in lock_versions:
+                missing.append(f"{group}:{dependency}")
+
+    if missing:
+        issues.append("requirements.lock is missing optional dependencies: " + ", ".join(missing))
     else:
-        issues.append("dependabot-auto-lock.yml not found")
+        print("✓ requirements.lock includes all optional dependencies")
 
     return len(issues) == 0, issues
 
@@ -54,30 +79,27 @@ def check_for_hardcoded_versions() -> Tuple[bool, List[str]]:
     issues = []
     test_files = list(Path("tests").rglob("*.py"))
 
-    # Patterns that indicate hardcoded versions
-    version_patterns = [
-        r'==\s*["\']?\d+\.\d+',  # == version
-        r'assert.*version.*==.*["\d]',  # assert version == "x.y"
-    ]
-
     problematic_files = []
     for test_file in test_files:
-        content = test_file.read_text()
+        content = test_file.read_text(encoding="utf-8")
 
         # Skip if it's the lockfile consistency test or dependency alignment test
         if (
             "lockfile_consistency" in test_file.name
             or "dependency_version_alignment" in test_file.name
+            or test_file.name == "test_validate_dependency_test_setup.py"
         ):
             continue
 
-        for pattern in version_patterns:
-            if re.search(pattern, content):
-                # Check if it's in a comment
-                lines = content.split("\n")
-                for i, line in enumerate(lines):
-                    if re.search(pattern, line) and not line.strip().startswith("#"):
-                        problematic_files.append((test_file, i + 1, line.strip()))
+        lines = content.split("\n")
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if "version" not in stripped.lower():
+                continue
+            if re.search(r'==\s*["\']?\d+\.\d+(?:\.\d+)?', stripped):
+                problematic_files.append((test_file, i + 1, stripped))
 
     if problematic_files:
         issues.append("Found potential hardcoded versions in tests:")
