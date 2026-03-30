@@ -102,9 +102,7 @@ class PlaceHierarchyRef:
     def __post_init__(self) -> None:
         require_non_empty(self.destination_id, "destination_id")
         if self.relationship_kind not in PLACE_RELATIONSHIP_KINDS:
-            raise ValueError(
-                f"relationship_kind must be one of {PLACE_RELATIONSHIP_KINDS}"
-            )
+            raise ValueError(f"relationship_kind must be one of {PLACE_RELATIONSHIP_KINDS}")
         require_optional_non_empty(self.label or None, "label")
         require_strings(self.notes, "notes")
 
@@ -230,25 +228,12 @@ class Destination:
             raise ValueError("seasonal_signals must contain SeasonalSignal instances")
         if not isinstance(self.mobility_profile, MobilityProfile):
             raise ValueError("mobility_profile must be a MobilityProfile")
-        if any(
-            not isinstance(item, ExperienceSignal) for item in self.experience_signals
-        ):
-            raise ValueError(
-                "experience_signals must contain ExperienceSignal instances"
-            )
-        if any(
-            not isinstance(item, NearbyDestinationRef) for item in self.adjacency_refs
-        ):
-            raise ValueError(
-                "adjacency_refs must contain NearbyDestinationRef instances"
-            )
-        if any(
-            not isinstance(item, NearbyDestinationRef)
-            for item in self.region_expansion_refs
-        ):
-            raise ValueError(
-                "region_expansion_refs must contain NearbyDestinationRef instances"
-            )
+        if any(not isinstance(item, ExperienceSignal) for item in self.experience_signals):
+            raise ValueError("experience_signals must contain ExperienceSignal instances")
+        if any(not isinstance(item, NearbyDestinationRef) for item in self.adjacency_refs):
+            raise ValueError("adjacency_refs must contain NearbyDestinationRef instances")
+        if any(not isinstance(item, NearbyDestinationRef) for item in self.region_expansion_refs):
+            raise ValueError("region_expansion_refs must contain NearbyDestinationRef instances")
         require_strings(self.tags, "tags")
         require_strings(self.source_refs, "source_refs")
         require_strings(self.operational_notes, "operational_notes")
@@ -265,13 +250,11 @@ class Destination:
             geo=DestinationGeo(**payload["geo"]),
             summary=payload.get("summary", ""),
             parent_refs=[
-                PlaceHierarchyRef(**item)
-                for item in _optional_list_field(payload, "parent_refs")
+                PlaceHierarchyRef(**item) for item in _optional_list_field(payload, "parent_refs")
             ],
             tags=_optional_list_field(payload, "tags"),
             seasonal_signals=[
-                SeasonalSignal(**item)
-                for item in _optional_list_field(payload, "seasonal_signals")
+                SeasonalSignal(**item) for item in _optional_list_field(payload, "seasonal_signals")
             ],
             mobility_profile=MobilityProfile(**payload.get("mobility_profile", {})),
             experience_signals=[
