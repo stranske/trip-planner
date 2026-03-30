@@ -30,6 +30,8 @@ def _require_positive_int_mapping(mapping: dict[str, int], field_name: str) -> N
     if any(not isinstance(key, str) or not key for key in mapping):
         raise ValueError(f"{field_name} must use non-empty string keys")
     for key, value in mapping.items():
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"{field_name}[{key}] must be an int")
         if value <= 0:
             raise ValueError(f"{field_name}[{key}] must be positive")
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from trip_planner.business.objectives import (
     BookingChannelObjectives,
     BusinessPlanningObjectives,
@@ -16,15 +18,12 @@ from trip_planner.business.policy_contracts import PolicyConstraintSet
 from trip_planner.business.profile import BusinessTravelProfile
 
 
-def _merge_unique(*groups: list[str]) -> list[str]:
-    seen: set[str] = set()
-    merged: list[str] = []
-    for group in groups:
-        for item in group:
-            if item not in seen:
-                seen.add(item)
-                merged.append(item)
-    return merged
+def _sorted_strings(values: Iterable[str]) -> list[str]:
+    return sorted(values)
+
+
+def _merge_unique(*groups: Iterable[str]) -> list[str]:
+    return sorted({item for group in groups for item in group})
 
 
 def _effective_required_channels(
@@ -55,7 +54,7 @@ def _effective_allowed_exception_types(
 ) -> list[str]:
     if constraint_set is None:
         return []
-    return list(constraint_set.allowed_exception_types)
+    return _sorted_strings(constraint_set.allowed_exception_types)
 
 
 def _channel_strategy(
@@ -130,7 +129,10 @@ def _comparable_requirements(
     if documentation_rules:
         notes.append("Documentation rules: " + ", ".join(documentation_rules))
     return ComparableRequirementObjectives(
-        required_categories=dict(profile.vendor_constraints.comparison_requirements),
+        required_categories={
+            key: profile.vendor_constraints.comparison_requirements[key]
+            for key in sorted(profile.vendor_constraints.comparison_requirements)
+        },
         capture_required=profile.documentation_requirements.comparable_capture_required,
         additional_comparables_for_exception=(
             profile.exception_strategy.require_additional_comparables
@@ -143,7 +145,9 @@ def _justification_readiness(
     profile: BusinessTravelProfile,
     constraint_set: PolicyConstraintSet | None,
 ) -> JustificationReadinessObjectives:
-    required_fields = list(profile.documentation_requirements.justification_fields)
+    required_fields = _sorted_strings(
+        profile.documentation_requirements.justification_fields
+    )
     if profile.approval_targets.needs_exception_preclearance:
         required_fields = _merge_unique(required_fields, ["exception rationale"])
     documentation_rules = _effective_documentation_rules(profile, constraint_set)
@@ -154,7 +158,7 @@ def _justification_readiness(
         notes.append("Retain booking links for later policy review and audit trails.")
     return JustificationReadinessObjectives(
         required_fields=required_fields,
-        required_receipt_categories=list(
+        required_receipt_categories=_sorted_strings(
             profile.documentation_requirements.required_receipt_categories
         ),
         booking_link_retention_required=(
@@ -214,7 +218,7 @@ def _comfort_floor(profile: BusinessTravelProfile) -> ComfortFloorObjectives:
     if profile.traveler_context.mobility_or_access_needs:
         notes.append("Mobility or access needs must stay feasible in fallback plans.")
     return ComfortFloorObjectives(
-        required_categories=required_categories,
+        required_categories=sorted(required_categories),
         preserve_arrival_readiness=(
             bool(profile.comfort_floors.arrival_readiness_needs)
             or profile.schedule_requirements.arrival_buffer_preference == "conservative"
@@ -250,7 +254,7 @@ def _exception_path(
         posture=posture,
         fallback_mode=fallback_mode,
         allowed_exception_types=allowed_exception_types,
-        approval_roles=list(profile.approval_targets.approval_roles),
+        approval_roles=_sorted_strings(profile.approval_targets.approval_roles),
         preclearance_required=profile.approval_targets.needs_exception_preclearance,
         notes=notes,
     )
@@ -278,16 +282,19 @@ def _build_explanations(
             )
         ),
         "justification_fields:"
-        + ",".join(profile.documentation_requirements.justification_fields or ["none"]),
+        + ",".join(
+            _sorted_strings(profile.documentation_requirements.justification_fields)
+            or ["none"]
+        ),
         "approval_roles:"
-        + ",".join(profile.approval_targets.approval_roles or ["none"]),
+        + ",".join(_sorted_strings(profile.approval_targets.approval_roles) or ["none"]),
         f"fallback_mode:{profile.exception_strategy.fallback_mode}",
     ]
     if constraint_set is not None:
         explanations.append(f"policy_constraint_set:{constraint_set.policy_id}")
         explanations.append(
             "allowed_exception_types:"
-            + ",".join(constraint_set.allowed_exception_types or ["none"])
+            + ",".join(_effective_allowed_exception_types(constraint_set) or ["none"])
         )
     return explanations
 

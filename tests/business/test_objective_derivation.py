@@ -1,8 +1,12 @@
 import json
 from pathlib import Path
+from typing import Any, cast
+
+import pytest
 
 from trip_planner.business import (
     BusinessTravelProfile,
+    ComparableRequirementObjectives,
     PolicyConstraintSet,
     derive_business_planning_objectives,
 )
@@ -106,3 +110,81 @@ def test_distinct_business_fixtures_produce_distinct_objective_bundles() -> None
     }
 
     assert sum(1 for changed in differences.values() if changed) >= 3
+
+
+def test_derivation_sorts_unordered_business_inputs() -> None:
+    profile = _load_profile("client_meeting_profile.json")
+    constraint_set = _load_constraint_set("policy_round_trip_exception.json")
+
+    profile.policy_constraints.required_booking_channels = cast(
+        Any, {"Direct", "Concur"}
+    )
+    profile.documentation_requirements.justification_fields = cast(
+        Any,
+        {
+        "client impact",
+        "agenda",
+        },
+    )
+    profile.documentation_requirements.required_receipt_categories = cast(
+        Any,
+        {
+        "lodging",
+        "meals",
+        },
+    )
+    profile.approval_targets.approval_roles = cast(Any, {"manager", "finance"})
+    constraint_set.required_booking_channels = cast(Any, {"TravelDesk", "Concur"})
+    constraint_set.documentation_rules = cast(
+        Any, {"receipt retention", "manager note"}
+    )
+    constraint_set.allowed_exception_types = cast(
+        Any,
+        {
+        "schedule_protection",
+        "fatigue_management",
+        },
+    )
+
+    objectives = derive_business_planning_objectives(
+        profile,
+        trip_id="trip-business-deterministic",
+        constraint_set=constraint_set,
+    )
+
+    assert objectives.channel_strategy.required_channels == [
+        "Concur",
+        "Direct",
+        "TravelDesk",
+    ]
+    assert objectives.justification_readiness.required_fields == [
+        "agenda",
+        "client impact",
+        "exception rationale",
+    ]
+    assert objectives.justification_readiness.required_receipt_categories == [
+        "lodging",
+        "meals",
+    ]
+    assert objectives.exception_path_posture.allowed_exception_types == [
+        "fatigue_management",
+        "schedule_protection",
+    ]
+    assert objectives.exception_path_posture.approval_roles == [
+        "finance",
+        "manager",
+    ]
+    assert "justification_fields:agenda,client impact" in objectives.explanations
+    assert "approval_roles:finance,manager" in objectives.explanations
+    assert (
+        "allowed_exception_types:fatigue_management,schedule_protection"
+        in objectives.explanations
+    )
+
+
+@pytest.mark.parametrize("value", ["2", 2.5, True])
+def test_comparable_requirement_objectives_reject_non_int_values(value: object) -> None:
+    with pytest.raises(ValueError, match=r"required_categories\[lodging\] must be an int"):
+        ComparableRequirementObjectives(
+            required_categories={"lodging": cast(Any, value)}
+        )
