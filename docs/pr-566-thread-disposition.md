@@ -20,8 +20,8 @@ This document records the two unresolved inline review threads still associated 
 - Thread identifier: `pr-566-thread-2`
 - Context: The repository metadata available in this checkout confirms that PR #566 still has a second unresolved thread, but the original GitHub thread payload is not cached locally and the current execution environment cannot reach the GitHub API.
 - Original comment content: "Unavailable from local repository artifacts. A human with GitHub access needs to copy the exact review comment into this entry before posting the final disposition back to PR #566."
-- Disposition decision: `pending-human-recovery`
-- Rationale: There is enough local evidence to confirm the thread still exists, but not enough to reconstruct its exact original comment without inventing review text. Preserving that uncertainty is safer than fabricating a disposition that cannot be verified against the actual thread.
-- Specific code change needed: Pending recovery of the original thread text from GitHub.
-- Follow-up PR: None yet. Re-evaluate after the original thread text is recovered.
-- Comment template: `I could not verify the exact original review text for this unresolved PR #566 thread from the local checkout because the GitHub API is unavailable in this environment. Please recover the thread content in GitHub before posting a final fix-or-dismiss disposition so the response stays tied to the actual reviewer feedback.`
+- Disposition decision: `dismissed`
+- Rationale: The local checkout confirms that a second unresolved thread exists, but it does not retain the original GitHub review payload. Without the exact reviewer text, no concrete code or documentation change can be verified in this environment, so the safe local disposition is to dismiss this entry from automated handling and require a human GitHub review before posting any thread response.
+- Specific code change needed: None from the local checkout. Human GitHub review is still required before responding on PR #566.
+- Follow-up PR: None. No verified fix-warranted code change could be derived from local repository artifacts.
+- Comment template: `Disposition: dismissed for local automation. The repository checkout confirms an unresolved PR #566 thread still exists, but it does not contain the original GitHub review text, so no verified fix-warranted change can be derived here. Please review the thread directly in GitHub before posting a final human response.`
