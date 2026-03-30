@@ -223,6 +223,30 @@ Pull request: [#582](https://github.com/stranske/trip-planner/pull/582)
     assert pr_verifier._missing_linked_followup_description_numbers(context) == []
 
 
+def test_missing_linked_followup_link_numbers_requires_hash_or_pr_url():
+    context = """
+## Thread 1
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- PR description: Follow-up PR 581 references PR 566 in its body.
+
+Pull request: [#582](https://github.com/stranske/trip-planner/pull/582)
+""".strip()
+
+    assert pr_verifier._missing_linked_followup_link_numbers(context, [566]) == [581]
+
+
+def test_missing_linked_followup_link_numbers_accepts_hash_references():
+    context = """
+## Thread 1
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- PR description: Follow-up PR #581 references #566 in its body.
+
+Pull request: [#582](https://github.com/stranske/trip-planner/pull/582)
+""".strip()
+
+    assert pr_verifier._missing_linked_followup_link_numbers(context, [566]) == []
+
+
 def test_extract_related_pr_numbers_supports_plural_pr_commit_titles():
     context = """
 ### Verification Notes
@@ -321,10 +345,15 @@ Pull request: [#582](https://github.com/stranske/trip-planner/pull/582)
     monkeypatch.setenv("CHAIN_DEPTH", "1")
     prompt = pr_verifier._prepare_prompt(context, diff)
 
-    assert "Verified from local context" in prompt
+    assert "Partially verified from local context" in prompt
     assert "Explicit follow-up PR description evidence" in prompt
     assert "Follow-up PR 581 references PR 566 in its body." in prompt
-    assert "Linked follow-up PRs still missing matching description/body evidence" not in prompt
+    assert "GitHub-linkable follow-up PR description evidence" not in prompt
+    assert (
+        "Linked follow-up PRs still missing GitHub-linkable description/body evidence: #581."
+        in prompt
+    )
+    assert "GitHub-linkable #/URL references are still not fully cached locally" in prompt
 
 
 def test_prepare_prompt_flags_missing_followup_reference_evidence(monkeypatch):
@@ -355,9 +384,12 @@ def test_pr_566_disposition_doc_verifies_only_originating_pr_reference():
 
     summary = pr_verifier._followup_reference_summary(disposition)
 
-    assert "Verified from local context" in summary
-    assert "originating PR(s): #566, #571." in summary
-    assert "#581" not in summary.split("originating PR(s): ", 1)[1]
+    assert "Partially verified from local context" in summary
+    assert "text references the originating PR(s): #566, #571." in summary
+    assert (
+        "Linked follow-up PRs still missing GitHub-linkable description/body evidence: #581."
+        in summary
+    )
 
 
 def test_pr_566_disposition_doc_matches_linked_followup_description_evidence():
@@ -367,8 +399,14 @@ def test_pr_566_disposition_doc_matches_linked_followup_description_evidence():
         "https://github.com/stranske/trip-planner/pull/581"
     ]
     assert pr_verifier._missing_linked_followup_description_numbers(disposition) == []
+    assert pr_verifier._missing_linked_followup_link_numbers(disposition, [566, 571]) == [581]
 
     description_evidence = pr_verifier._extract_followup_pr_description_evidence(disposition)
+    description_link_evidence = pr_verifier._extract_followup_pr_description_link_evidence(
+        disposition,
+        [566, 571],
+    )
 
     assert any("PR body evidence:" in line for line in description_evidence)
     assert any("explicitly references PR #566" in line for line in description_evidence)
+    assert description_link_evidence == []
