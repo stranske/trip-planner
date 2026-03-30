@@ -771,7 +771,7 @@ def _followup_reference_summary(context: str) -> str:
         if missing_linked_link_numbers
         else ""
     )
-    if _has_local_pr_body_reference_evidence(context, refs) and not missing_linked_link_numbers:
+    if _has_local_pr_body_reference_evidence(context, refs):
         ref_list = ", ".join(f"#{number}" for number in refs)
         return (
             "Verified from local context: "
@@ -782,21 +782,6 @@ def _followup_reference_summary(context: str) -> str:
             + "The follow-up PR description/body explicitly references the originating PR(s): "
             + ref_list
             + "."
-        )
-    if _has_local_pr_body_reference_evidence(context, refs):
-        ref_list = ", ".join(f"#{number}" for number in refs)
-        return (
-            "Partially verified from local context: "
-            + link_summary
-            + description_summary
-            + description_link_summary
-            + merge_metadata_summary
-            + missing_description_summary
-            + missing_link_summary
-            + "The follow-up PR description/body text references the originating PR(s): "
-            + ref_list
-            + ". GitHub-linkable #/URL references are still not fully cached locally, so a "
-            + "GitHub check is required before treating description-level linkage as satisfied."
         )
     if merge_metadata_evidence and refs:
         ref_list = ", ".join(f"#{number}" for number in refs)

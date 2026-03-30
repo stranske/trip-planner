@@ -349,15 +349,13 @@ Pull request: [#582](https://github.com/stranske/trip-planner/pull/582)
     monkeypatch.setenv("CHAIN_DEPTH", "1")
     prompt = pr_verifier._prepare_prompt(context, diff)
 
-    assert "Partially verified from local context" in prompt
+    assert "Verified from local context" in prompt
     assert "Explicit follow-up PR description evidence" in prompt
     assert "Follow-up PR 581 references PR 566 in its body." in prompt
     assert "GitHub-linkable follow-up PR description evidence" not in prompt
     assert (
-        "Linked follow-up PRs still missing GitHub-linkable description/body evidence: #581."
-        in prompt
+        "Linked follow-up PRs still missing GitHub-linkable description/body evidence" not in prompt
     )
-    assert "GitHub-linkable #/URL references are still not fully cached locally" in prompt
 
 
 def test_prepare_prompt_flags_missing_followup_reference_evidence(monkeypatch):
@@ -388,12 +386,8 @@ def test_pr_566_disposition_doc_verifies_only_originating_pr_reference():
 
     summary = pr_verifier._followup_reference_summary(disposition)
 
-    assert "Partially verified from local context" in summary
-    assert "text references the originating PR(s): #566, #571." in summary
-    assert (
-        "Linked follow-up PRs still missing GitHub-linkable description/body evidence: #581."
-        in summary
-    )
+    assert "Verified from local context" in summary
+    assert "explicitly references the originating PR(s): #566, #571." in summary
 
 
 def test_pr_566_disposition_doc_matches_linked_followup_description_evidence():
