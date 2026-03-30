@@ -71,13 +71,8 @@ def test_site_visit_profile_derives_policy_nearest_exception_posture() -> None:
 
     assert objectives.exception_path_posture.posture == "policy_nearest"
     assert objectives.exception_path_posture.fallback_mode == "manual_review"
-    assert (
-        "fatigue_management"
-        in objectives.exception_path_posture.allowed_exception_types
-    )
-    assert (
-        objectives.comparable_requirements.additional_comparables_for_exception is True
-    )
+    assert "fatigue_management" in objectives.exception_path_posture.allowed_exception_types
+    assert objectives.comparable_requirements.additional_comparables_for_exception is True
     assert objectives.comfort_floor_protection.preserve_arrival_readiness is True
     assert "transport" in objectives.comfort_floor_protection.required_categories
 
@@ -116,9 +111,7 @@ def test_derivation_sorts_unordered_business_inputs() -> None:
     profile = _load_profile("client_meeting_profile.json")
     constraint_set = _load_constraint_set("policy_round_trip_exception.json")
 
-    profile.policy_constraints.required_booking_channels = cast(
-        Any, {"Direct", "Concur"}
-    )
+    profile.policy_constraints.required_booking_channels = cast(Any, {"Direct", "Concur"})
     profile.documentation_requirements.justification_fields = cast(
         Any,
         {
@@ -135,9 +128,7 @@ def test_derivation_sorts_unordered_business_inputs() -> None:
     )
     profile.approval_targets.approval_roles = cast(Any, {"manager", "finance"})
     constraint_set.required_booking_channels = cast(Any, {"TravelDesk", "Concur"})
-    constraint_set.documentation_rules = cast(
-        Any, {"receipt retention", "manager note"}
-    )
+    constraint_set.documentation_rules = cast(Any, {"receipt retention", "manager note"})
     constraint_set.allowed_exception_types = cast(
         Any,
         {
@@ -177,16 +168,11 @@ def test_derivation_sorts_unordered_business_inputs() -> None:
     assert "justification_fields:agenda,client impact" in objectives.explanations
     assert "approval_roles:finance,manager" in objectives.explanations
     assert (
-        "allowed_exception_types:fatigue_management,schedule_protection"
-        in objectives.explanations
+        "allowed_exception_types:fatigue_management,schedule_protection" in objectives.explanations
     )
 
 
 @pytest.mark.parametrize("value", ["2", 2.5, True])
 def test_comparable_requirement_objectives_reject_non_int_values(value: object) -> None:
-    with pytest.raises(
-        ValueError, match=r"required_categories\[lodging\] must be an int"
-    ):
-        ComparableRequirementObjectives(
-            required_categories={"lodging": cast(Any, value)}
-        )
+    with pytest.raises(ValueError, match=r"required_categories\[lodging\] must be an int"):
+        ComparableRequirementObjectives(required_categories={"lodging": cast(Any, value)})
