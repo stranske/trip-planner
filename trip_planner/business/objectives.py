@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from . import schema
-from trip_planner.contracts._validators import (
+from trip_planner._validators import (
     require_non_empty,
     require_probability,
     require_strings,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from trip_planner.contracts._validators import (
+from trip_planner._validators import (
     require_non_empty,
     require_non_negative,
     require_probability,

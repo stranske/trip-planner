@@ -11,6 +11,9 @@
 ## What The Layer Adds
 
 - bundle-level feasibility with explicit blocking reasons for infeasible but still inspectable alternatives
+- composition summaries that declare bundle order, primary destination, and the exact normalized option IDs assembled into each bundle or mixed alternative
+- provenance summaries that roll source references and booking links up from the included normalized objects without hiding the underlying records
+- quality/value/fit rollups that make mixed alternatives rankable without flattening away category-specific summaries
 - route coherence and schedule-fit summaries that stay separate from raw transport or lodging detail
 - budget posture summaries that roll up category totals without flattening the underlying normalized objects
 - explanation metadata that keeps strengths and tradeoffs attached to the assembled alternative

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from trip_planner.contracts._validators import (
+from trip_planner._validators import (
     require_non_empty,
     require_non_negative,
     require_optional_non_empty,
@@ -19,9 +19,26 @@ from trip_planner.sources import schema as source_schema
 SCHEMA_VERSION = "0.1.0"
 
 TRANSPORT_KINDS: tuple[str, ...] = ("flight", "rail", "car", "ferry", "local_ground")
-SEGMENT_MODES: tuple[str, ...] = ("flight", "rail", "car", "ferry", "bus", "transit", "walk", "shuttle")
+SEGMENT_MODES: tuple[str, ...] = (
+    "flight",
+    "rail",
+    "car",
+    "ferry",
+    "bus",
+    "transit",
+    "walk",
+    "shuttle",
+)
 AVAILABILITY_STATUSES: tuple[str, ...] = ("available", "limited", "request_only", "sold_out")
-CLASS_OF_SERVICE: tuple[str, ...] = ("economy", "premium_economy", "business", "first", "standard", "comfort", "private")
+CLASS_OF_SERVICE: tuple[str, ...] = (
+    "economy",
+    "premium_economy",
+    "business",
+    "first",
+    "standard",
+    "comfort",
+    "private",
+)
 TRANSPORT_KIND_ALIASES: dict[str, str] = {"rental_car": "car"}
 
 
@@ -315,7 +332,9 @@ class TransportOption:
     transfer_burden: TransportTransferBurden = field(default_factory=TransportTransferBurden)
     booking_terms: TransportBookingTerms = field(default_factory=TransportBookingTerms)
     cost_summary: TransportCostSummary = field(default_factory=TransportCostSummary)
-    experience_summary: TransportExperienceSummary = field(default_factory=TransportExperienceSummary)
+    experience_summary: TransportExperienceSummary = field(
+        default_factory=TransportExperienceSummary
+    )
     fit_summary: TransportFitSummary = field(default_factory=TransportFitSummary)
     policy_summary: TransportPolicySummary = field(default_factory=TransportPolicySummary)
     feasibility: TransportFeasibility = field(default_factory=TransportFeasibility)

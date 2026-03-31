@@ -1,6 +1,11 @@
+import json
+from pathlib import Path
+
 from trip_planner.contracts import (
     ComparisonAxis,
+    InventoryBundle,
     MoneyRange,
+    MixedOption,
     Option,
     OptionCostSummary,
     OptionQualitySummary,
@@ -111,3 +116,15 @@ def test_option_rejects_non_string_fit_signal_keys() -> None:
         assert "fit_signals" in str(exc)
     else:
         raise AssertionError("Option should reject non-string fit_signals keys")
+
+
+def test_shared_contract_package_exports_inventory_bundle_and_mixed_option() -> None:
+    fixture_path = Path("tests/fixtures/options/bundles/transport_lodging_bundle.json")
+    payload = json.loads(fixture_path.read_text(encoding="utf-8"))
+
+    bundle = InventoryBundle.from_dict(payload["bundles"][0])
+    mixed_option = MixedOption.from_dict(payload)
+
+    assert bundle.bundle_context == "transport_lodging"
+    assert mixed_option.bundles[0].bundle_id == bundle.bundle_id
+    assert mixed_option.to_option().kind == "mixed"
