@@ -27,7 +27,13 @@ LODGING_KINDS: tuple[str, ...] = (
     "hostel",
     "resort",
 )
-LOCATION_CONTEXTS: tuple[str, ...] = ("urban_core", "inner_neighborhood", "outer_neighborhood", "airport", "resort_area")
+LOCATION_CONTEXTS: tuple[str, ...] = (
+    "urban_core",
+    "inner_neighborhood",
+    "outer_neighborhood",
+    "airport",
+    "resort_area",
+)
 INVENTORY_STATUSES: tuple[str, ...] = ("available", "limited", "request_only", "sold_out")
 
 
@@ -323,8 +329,7 @@ class LodgingOption:
             raise ValueError("location_summary must be a LodgingLocationSummary")
         if self.location_summary.destination_id != self.destination_id:
             raise ValueError(
-                "destination_id on LodgingOption must match "
-                "location_summary.destination_id"
+                "destination_id on LodgingOption must match " "location_summary.destination_id"
             )
         if not isinstance(self.room_summary, LodgingRoomSummary):
             raise ValueError("room_summary must be a LodgingRoomSummary")

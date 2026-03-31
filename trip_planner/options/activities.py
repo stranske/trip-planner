@@ -17,10 +17,31 @@ from trip_planner.sources import ProvenanceReference, QualityValueFitSummary, So
 
 SCHEMA_VERSION = "0.1.0"
 
-ACTIVITY_KINDS: tuple[str, ...] = ("museum", "landscape", "district", "event", "tour", "dining", "wellness", "mixed")
-ACTIVITY_FORMATS: tuple[str, ...] = ("open_ended", "ticketed", "reservation_required", "timed_entry", "drop_in")
+ACTIVITY_KINDS: tuple[str, ...] = (
+    "museum",
+    "landscape",
+    "district",
+    "event",
+    "tour",
+    "dining",
+    "wellness",
+    "mixed",
+)
+ACTIVITY_FORMATS: tuple[str, ...] = (
+    "open_ended",
+    "ticketed",
+    "reservation_required",
+    "timed_entry",
+    "drop_in",
+)
 EFFORT_LEVELS: tuple[str, ...] = ("low", "moderate", "high")
-AVAILABILITY_STATUSES: tuple[str, ...] = ("available", "limited", "request_only", "sold_out", "seasonal")
+AVAILABILITY_STATUSES: tuple[str, ...] = (
+    "available",
+    "limited",
+    "request_only",
+    "sold_out",
+    "seasonal",
+)
 
 
 def _require_string_list(values: Any, field_name: str) -> None:
@@ -324,7 +345,9 @@ class ActivityOption:
     place_id: str
     category: ActivityCategory
     timing_summary: ActivityTimingSummary
-    significance_summary: ActivitySignificanceSummary = field(default_factory=ActivitySignificanceSummary)
+    significance_summary: ActivitySignificanceSummary = field(
+        default_factory=ActivitySignificanceSummary
+    )
     effort_summary: ActivityEffortSummary = field(default_factory=ActivityEffortSummary)
     booking_terms: ActivityBookingTerms = field(default_factory=ActivityBookingTerms)
     cost_summary: ActivityCostSummary = field(default_factory=ActivityCostSummary)
@@ -394,9 +417,7 @@ class ActivityOption:
             effort_summary=ActivityEffortSummary(
                 **_optional_mapping_field(payload, "effort_summary")
             ),
-            booking_terms=ActivityBookingTerms(
-                **_optional_mapping_field(payload, "booking_terms")
-            ),
+            booking_terms=ActivityBookingTerms(**_optional_mapping_field(payload, "booking_terms")),
             cost_summary=ActivityCostSummary(
                 total=_parse_money_range(cost_payload.get("total"), "cost_summary.total"),
                 per_person=_parse_money_range(
@@ -409,9 +430,7 @@ class ActivityOption:
             quality_summary=ActivityQualitySummary(
                 **_optional_mapping_field(payload, "quality_summary")
             ),
-            value_summary=ActivityValueSummary(
-                **_optional_mapping_field(payload, "value_summary")
-            ),
+            value_summary=ActivityValueSummary(**_optional_mapping_field(payload, "value_summary")),
             fit_summary=ActivityFitSummary(**_optional_mapping_field(payload, "fit_summary")),
             feasibility=ActivityFeasibility(**_optional_mapping_field(payload, "feasibility")),
             summary=payload.get("summary", ""),

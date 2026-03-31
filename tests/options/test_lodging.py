@@ -95,7 +95,9 @@ def test_lodging_round_trips_nested_contracts_and_provenance() -> None:
             booking_channel="direct",
         ),
         cost_summary=LodgingCostSummary(
-            nightly=MoneyRange(currency="USD", typical_amount=165.0, min_amount=150.0, max_amount=180.0),
+            nightly=MoneyRange(
+                currency="USD", typical_amount=165.0, min_amount=150.0, max_amount=180.0
+            ),
             total=MoneyRange(currency="USD", typical_amount=660.0),
         ),
         quality_summary=LodgingQualitySummary(overall_signal=0.77, sleep_quality_signal=0.82),
