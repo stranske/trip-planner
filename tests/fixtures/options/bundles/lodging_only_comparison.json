@@ -28,6 +28,21 @@
     "overall_signal": 0.7,
     "within_target_budget": true
   },
+  "composition_summary": {
+    "sequence_index": 0,
+    "assembly_role": "single_base_candidate",
+    "primary_destination_id": "dest-city-kyoto",
+    "component_option_ids": ["lodg-kyoto-central-hotel"]
+  },
+  "provenance_summary": {
+    "source_refs": ["prov-kyoto-central-inventory"],
+    "booking_links": ["https://example.com/kyoto-central-garden-hotel"]
+  },
+  "quality_value_fit": {
+    "quality_signal": 0.81,
+    "value_signal": 0.73,
+    "fit_signal": 0.76
+  },
   "explanation": {
     "headline": "Strong recovery fit without adding route complexity.",
     "strengths": ["Walkable central base.", "Keeps the comparison focused on lodging tradeoffs."],
@@ -105,6 +120,21 @@
           "tags": ["central", "walkable"]
         }
       ],
+      "composition_summary": {
+        "sequence_index": 0,
+        "assembly_role": "stay_baseline",
+        "primary_destination_id": "dest-city-kyoto",
+        "component_option_ids": ["lodg-kyoto-central-hotel"]
+      },
+      "provenance_summary": {
+        "source_refs": ["prov-kyoto-central-inventory"],
+        "booking_links": ["https://example.com/kyoto-central-garden-hotel"]
+      },
+      "quality_value_fit": {
+        "quality_signal": 0.81,
+        "value_signal": 0.73,
+        "fit_signal": 0.76
+      },
       "feasibility": {
         "available": true,
         "internally_consistent": true

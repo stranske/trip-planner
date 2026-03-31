@@ -30,6 +30,27 @@
     "overall_signal": 0.74,
     "within_target_budget": true
   },
+  "composition_summary": {
+    "sequence_index": 0,
+    "assembly_role": "multi_bundle_route_candidate",
+    "primary_destination_id": "dest-city-kyoto",
+    "component_option_ids": [
+      "lodg-osaka-gateway",
+      "transport-kix-osaka-rail",
+      "lodg-kyoto-central-hotel",
+      "transport-osaka-kyoto-rail",
+      "activity-major-museum"
+    ]
+  },
+  "provenance_summary": {
+    "source_refs": ["prov-major-museum"],
+    "booking_links": ["https://example.com/museum"]
+  },
+  "quality_value_fit": {
+    "quality_signal": 0.89,
+    "value_signal": 0.74,
+    "fit_signal": 0.84
+  },
   "explanation": {
     "headline": "Balanced two-city route with a strong cultural anchor day.",
     "strengths": ["Arrival friction is front-loaded into the Osaka gateway bundle.", "Kyoto activity remains visible as a first-class normalized object."],
@@ -124,6 +145,12 @@
           "feasibility": {"available": true, "availability_status": "available"}
         }
       ],
+      "composition_summary": {
+        "sequence_index": 0,
+        "assembly_role": "gateway_arrival",
+        "primary_destination_id": "dest-city-osaka",
+        "component_option_ids": ["lodg-osaka-gateway", "transport-kix-osaka-rail"]
+      },
       "feasibility": {
         "available": true,
         "internally_consistent": true
@@ -283,6 +310,25 @@
           ]
         }
       ],
+      "composition_summary": {
+        "sequence_index": 1,
+        "assembly_role": "cultural_anchor",
+        "primary_destination_id": "dest-city-kyoto",
+        "component_option_ids": [
+          "lodg-kyoto-central-hotel",
+          "transport-osaka-kyoto-rail",
+          "activity-major-museum"
+        ]
+      },
+      "provenance_summary": {
+        "source_refs": ["prov-major-museum"],
+        "booking_links": ["https://example.com/museum"]
+      },
+      "quality_value_fit": {
+        "quality_signal": 0.88,
+        "value_signal": 0.69,
+        "fit_signal": 0.83
+      },
       "feasibility": {
         "available": true,
         "internally_consistent": true
