@@ -19,6 +19,19 @@ if TYPE_CHECKING:
         TransportStrategy,
     )
 
+    _OBJECTIVE_TYPE_CHECKING_EXPORTS = (
+        BudgetProtection,
+        CountRange,
+        DayStructureObjectives,
+        DiscoveryStrategy,
+        ItineraryObjectives,
+        LodgingStrategy,
+        MoveDensityTarget,
+        QualityFloorProtection,
+        RecoveryExpectations,
+        TransportStrategy,
+    )
+
 _DESTINATION_EXPORTS = {
     "ADJACENCY_KINDS",
     "EXPERIENCE_SENTIMENTS",
