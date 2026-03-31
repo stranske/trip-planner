@@ -11,6 +11,7 @@ from trip_planner.options import (
     DestinationTag,
     MobilityProfile,
     OperationalNote,
+    PlaceContext,
 )
 
 
@@ -109,6 +110,61 @@ def test_destination_supporting_records_round_trip() -> None:
     assert payload["source_refs"][0]["source_id"] == "arashiyama-guide"
     assert payload["operational_notes"][0]["impact"] == "high"
     assert payload["operational_notes"][0]["source_ref_ids"] == ["prov-arashiyama-editorial"]
+
+
+def test_place_context_can_be_derived_from_destination() -> None:
+    destination = _load_destination("gion_neighborhood.json")
+
+    place_context = PlaceContext.from_destination(
+        destination,
+        context_id="ctx-gion-evening-loop",
+        role="micro_context",
+        boundary_mode="walkable_cluster",
+        label="Gion evening loop",
+        supporting_destination_ids=[
+            destination.destination_id,
+            "dest-site-kiyomizu-dera",
+        ],
+        notes=["Use for short evening wandering and dining comparisons."],
+    )
+
+    payload = place_context.to_dict()
+
+    assert payload["destination_id"] == "dest-neighborhood-gion"
+    assert payload["place_kind"] == "neighborhood"
+    assert payload["tag_keys"] == ["evening-friendly", "historic-streets", "walk-first"]
+    assert payload["source_ref_ids"] == ["prov-gion-editorial"]
+
+
+def test_place_context_rejects_invalid_role_boundary_and_schema() -> None:
+    with pytest.raises(ValueError, match="role"):
+        PlaceContext(
+            context_id="ctx-invalid-role",
+            destination_id="dest-city-kyoto",
+            place_kind="city",
+            role="ranking_surface",  # type: ignore[arg-type]
+            label="Invalid role",
+        )
+
+    with pytest.raises(ValueError, match="boundary_mode"):
+        PlaceContext(
+            context_id="ctx-invalid-boundary",
+            destination_id="dest-city-kyoto",
+            place_kind="city",
+            role="base",
+            label="Invalid boundary",
+            boundary_mode="metroplex",
+        )
+
+    with pytest.raises(ValueError, match="schema_version"):
+        PlaceContext(
+            context_id="ctx-invalid-version",
+            destination_id="dest-city-kyoto",
+            place_kind="city",
+            role="base",
+            label="Invalid schema version",
+            schema_version="9.9.9",
+        )
 
 
 def test_region_expansion_refs_expose_explicit_expansion_strategy() -> None:

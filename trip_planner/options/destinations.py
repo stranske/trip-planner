@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, TypeAlias
 
-from trip_planner.contracts._validators import (
+from trip_planner._validators import (
     require_non_empty,
     require_non_negative,
     require_optional_non_empty,
@@ -56,6 +56,21 @@ OPERATIONAL_NOTE_KINDS: tuple[str, ...] = (
 )
 OPERATIONAL_NOTE_IMPACTS: tuple[str, ...] = ("low", "medium", "high")
 EXPANSION_MODES: tuple[str, ...] = ("day_trip", "overnight", "hub_spoke", "contiguous")
+PLACE_CONTEXT_ROLES: tuple[str, ...] = (
+    "trip_anchor",
+    "base",
+    "micro_context",
+    "gateway",
+    "day_trip_area",
+    "expansion_area",
+)
+PLACE_CONTEXT_BOUNDARIES: tuple[str, ...] = (
+    "exact_place",
+    "walkable_cluster",
+    "district",
+    "citywide",
+    "regional",
+)
 
 PlaceKind: TypeAlias = Literal["city", "region", "neighborhood", "landscape", "site"]
 PlaceRelationshipKind: TypeAlias = Literal[
@@ -71,6 +86,14 @@ AdjacencyKind: TypeAlias = Literal[
     "contiguous_region",
     "day_trip",
     "gateway",
+]
+PlaceContextRole: TypeAlias = Literal[
+    "trip_anchor",
+    "base",
+    "micro_context",
+    "gateway",
+    "day_trip_area",
+    "expansion_area",
 ]
 
 
@@ -430,4 +453,96 @@ class Destination:
                 for item in _optional_list_field(payload, "operational_notes")
             ],
             schema_version=payload.get("schema_version", SCHEMA_VERSION),
+        )
+
+
+@dataclass(slots=True)
+class PlaceContext:
+    context_id: str
+    destination_id: str
+    place_kind: PlaceKind
+    role: PlaceContextRole
+    label: str
+    boundary_mode: str = "district"
+    summary: str = ""
+    parent_context_ids: list[str] = field(default_factory=list)
+    supporting_destination_ids: list[str] = field(default_factory=list)
+    tag_keys: list[str] = field(default_factory=list)
+    source_ref_ids: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    schema_version: str = SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.context_id, "context_id")
+        require_non_empty(self.destination_id, "destination_id")
+        require_non_empty(self.label, "label")
+        if self.place_kind not in PLACE_KINDS:
+            raise ValueError(f"place_kind must be one of {PLACE_KINDS}")
+        if self.role not in PLACE_CONTEXT_ROLES:
+            raise ValueError(f"role must be one of {PLACE_CONTEXT_ROLES}")
+        if self.boundary_mode not in PLACE_CONTEXT_BOUNDARIES:
+            raise ValueError(f"boundary_mode must be one of {PLACE_CONTEXT_BOUNDARIES}")
+        require_optional_non_empty(self.summary or None, "summary")
+        require_strings(self.parent_context_ids, "parent_context_ids")
+        require_strings(self.supporting_destination_ids, "supporting_destination_ids")
+        require_strings(self.tag_keys, "tag_keys")
+        require_strings(self.source_ref_ids, "source_ref_ids")
+        require_strings(self.notes, "notes")
+        if self.schema_version != SCHEMA_VERSION:
+            raise ValueError(f"schema_version must be {SCHEMA_VERSION!r}")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "PlaceContext":
+        return cls(
+            context_id=payload["context_id"],
+            destination_id=payload["destination_id"],
+            place_kind=payload["place_kind"],
+            role=payload["role"],
+            label=payload["label"],
+            boundary_mode=payload.get("boundary_mode", "district"),
+            summary=payload.get("summary", ""),
+            parent_context_ids=_optional_list_field(payload, "parent_context_ids"),
+            supporting_destination_ids=_optional_list_field(payload, "supporting_destination_ids"),
+            tag_keys=_optional_list_field(payload, "tag_keys"),
+            source_ref_ids=_optional_list_field(payload, "source_ref_ids"),
+            notes=_optional_list_field(payload, "notes"),
+            schema_version=payload.get("schema_version", SCHEMA_VERSION),
+        )
+
+    @classmethod
+    def from_destination(
+        cls,
+        destination: Destination,
+        *,
+        context_id: str,
+        role: PlaceContextRole,
+        label: str | None = None,
+        boundary_mode: str = "district",
+        summary: str = "",
+        parent_context_ids: list[str] | None = None,
+        supporting_destination_ids: list[str] | None = None,
+        tag_keys: list[str] | None = None,
+        source_ref_ids: list[str] | None = None,
+        notes: list[str] | None = None,
+    ) -> "PlaceContext":
+        if not isinstance(destination, Destination):
+            raise ValueError("destination must be a Destination")
+
+        return cls(
+            context_id=context_id,
+            destination_id=destination.destination_id,
+            place_kind=destination.place_kind,
+            role=role,
+            label=label or destination.name,
+            boundary_mode=boundary_mode,
+            summary=summary or destination.summary,
+            parent_context_ids=parent_context_ids or [],
+            supporting_destination_ids=supporting_destination_ids or [destination.destination_id],
+            tag_keys=tag_keys or [tag.key for tag in destination.tags],
+            source_ref_ids=source_ref_ids
+            or [source.provenance_id for source in destination.source_refs],
+            notes=notes or [],
         )
