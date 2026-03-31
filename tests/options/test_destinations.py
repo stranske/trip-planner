@@ -98,13 +98,15 @@ def test_destination_supporting_records_round_trip() -> None:
 
 
 def test_destination_rejects_invalid_place_kind() -> None:
+    payload = {
+        "destination_id": "dest-invalid",
+        "place_kind": "district",
+        "name": "Invalid",
+        "geo": {"latitude": 35.0, "longitude": 135.0, "country_code": "JP"},
+    }
+
     with pytest.raises(ValueError, match="place_kind"):
-        Destination(
-            destination_id="dest-invalid",
-            place_kind="district",
-            name="Invalid",
-            geo=DestinationGeo(latitude=35.0, longitude=135.0, country_code="JP"),
-        )
+        Destination.from_dict(payload)
 
 
 def test_destination_rejects_invalid_geo_and_adjacency_values() -> None:
