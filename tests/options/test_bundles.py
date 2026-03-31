@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from trip_planner.contracts import OptionSet
 from trip_planner.options import InventoryBundle, MixedOption
 
 
@@ -58,6 +59,27 @@ def test_route_level_mixed_option_round_trips_and_converts_to_option_entry() -> 
     assert option.quality_summary.quality_signal == pytest.approx(0.89)
     assert option.quality_summary.value_signal == pytest.approx(0.74)
     assert option.quality_summary.fit_signal == pytest.approx(0.84)
+
+
+def test_mixed_option_imports_through_public_packages_and_feeds_option_set() -> None:
+    mixed_option = _load_mixed_option("route_level_mixed_option.json")
+    option = mixed_option.to_option()
+    option_set = OptionSet(
+        option_set_id="optset-route-level",
+        trip_id=mixed_option.trip_id,
+        purpose="inventory_narrowing",
+        scope="mixed",
+        title="Mixed route alternatives",
+        options=[option],
+        source_refs=option.source_refs,
+        explanation=option.explanation,
+    )
+
+    payload = option_set.to_dict()
+
+    assert payload["options"][0]["kind"] == "mixed"
+    assert payload["options"][0]["fit_signals"]["route_coherence"] == pytest.approx(0.89)
+    assert payload["source_refs"] == ["prov-major-museum"]
 
 
 def test_mixed_option_keeps_normalized_contracts_distinct_while_assembling_shared_option() -> None:
