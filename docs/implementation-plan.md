@@ -31,6 +31,7 @@ See [shared-business-foundation-epic.md](shared-business-foundation-epic.md) for
 
 ### 3. Normalized Planning Objects
 
+- [Epic `#519`: normalized inventory contracts and option modeling](normalized-inventory-contracts-epic.md)
 - `#520` destinations and place-context contracts
 - `#521` `LodgingOption`
 - `#522` `TransportOption`
