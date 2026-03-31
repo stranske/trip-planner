@@ -26,6 +26,9 @@ See [leisure-preference-epic.md](leisure-preference-epic.md) for the dependency 
 - `#516` policy-facing proposal and evaluation contracts
 - `#518` business planning objectives
 
+Epic `#513` is the sequencing contract for the shared planning and business-foundation layer.
+See [shared-business-foundation-epic.md](shared-business-foundation-epic.md) for the dependency chain, shared design rules, and acceptance mapping spanning issues `#514` through `#518`.
+
 ### 3. Normalized Planning Objects
 
 - `#520` destinations and place-context contracts
