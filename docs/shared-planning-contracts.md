@@ -6,6 +6,8 @@ These contracts are the first cross-mode planning layer that sits above the leis
 
 ## Canonical Modules
 
+- `trip_planner/contracts/destinations.py`
+  - `Destination`, `PlaceKind`, geography, hierarchy, adjacency, provenance, seasonal, and experience records
 - `trip_planner/contracts/trip.py`
   - `Trip`, `TripFrameSummary`, mode-specific profile references, and artifact references
 - `trip_planner/contracts/options.py`
@@ -16,6 +18,7 @@ These contracts are the first cross-mode planning layer that sits above the leis
 ## Design Intent
 
 - `Trip` is the shared planning container, not a bag of inlined downstream payloads.
+- `Destination` is the normalized place entity that upstream geography, hierarchy, and provenance work should share before generating options.
 - Leisure and business profiles stay separate; `Trip` references them rather than collapsing them into one schema.
 - `OptionSet` is first-class because the planner is expected to learn from concrete choices, not only from direct statements.
 - `ItineraryObjectives` is the handoff contract between profile resolution and later ranking or route assembly.
