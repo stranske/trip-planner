@@ -22,9 +22,29 @@
     }
   ],
   "tags": [
-    "culture",
-    "walkable-core",
-    "rail-access"
+    {
+      "key": "culture",
+      "label": "Culture",
+      "scope": "experience",
+      "weight": 0.94,
+      "notes": [
+        "Primary signal for temple, garden, and heritage density."
+      ]
+    },
+    {
+      "key": "walkable-core",
+      "label": "Walkable core",
+      "scope": "routing",
+      "weight": 0.88,
+      "notes": []
+    },
+    {
+      "key": "rail-access",
+      "label": "Rail access",
+      "scope": "routing",
+      "weight": 0.82,
+      "notes": []
+    }
   ],
   "seasonal_signals": [
     {
@@ -77,11 +97,31 @@
     }
   ],
   "source_refs": [
-    "prov-kyoto-editorial",
-    "prov-kyoto-operational"
+    {
+      "provenance_id": "prov-kyoto-editorial",
+      "role": "identity",
+      "notes": [
+        "Establishes the city-level normalization shell."
+      ]
+    },
+    {
+      "provenance_id": "prov-kyoto-operational",
+      "role": "operational",
+      "notes": [
+        "Supports crowding and transit friction notes."
+      ]
+    }
   ],
   "operational_notes": [
-    "Bus crowding can make cross-town moves slower than map distance suggests."
+    {
+      "kind": "crowding",
+      "summary": "Bus crowding can make cross-town moves slower than map distance suggests.",
+      "impact": "medium",
+      "applies_in_months": [11],
+      "notes": [
+        "Use rail or walking loops where possible during demand peaks."
+      ]
+    }
   ],
   "schema_version": "0.1.0"
 }

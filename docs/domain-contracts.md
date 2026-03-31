@@ -98,7 +98,15 @@ The two profiles may share some nested contract shapes, but they should not be o
     "country_code": "JP",
     "region_code": "JP-26"
   },
-  "tags": [],
+  "tags": [
+    {
+      "key": "culture",
+      "label": "Culture",
+      "scope": "experience",
+      "weight": 0.9,
+      "notes": []
+    }
+  ],
   "seasonal_signals": [],
   "mobility_profile": {
     "arrival_modes": [],
@@ -110,8 +118,22 @@ The two profiles may share some nested contract shapes, but they should not be o
   "experience_signals": [],
   "adjacency_refs": [],
   "region_expansion_refs": [],
-  "source_refs": [],
-  "operational_notes": []
+  "source_refs": [
+    {
+      "provenance_id": "prov_kyoto_editorial",
+      "role": "identity",
+      "notes": []
+    }
+  ],
+  "operational_notes": [
+    {
+      "kind": "crowding",
+      "summary": "Peak transit load can change cross-town travel time assumptions.",
+      "impact": "medium",
+      "applies_in_months": [11],
+      "notes": []
+    }
+  ]
 }
 ```
 
@@ -119,7 +141,9 @@ Important design point:
 
 `Destination` is not yet an option. It is a normalized place entity that later lodging,
 activity, route, and mixed option models can reference without re-normalizing geography,
-hierarchy, source provenance, or expansion context.
+hierarchy, source provenance, or expansion context. The nested `tags`, `source_refs`, and
+`operational_notes` records are part of that normalized place contract rather than downstream
+recommendation metadata.
 
 ## 5. Option Set
 

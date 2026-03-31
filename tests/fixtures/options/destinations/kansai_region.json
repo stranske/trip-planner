@@ -12,9 +12,27 @@
     "locality_hint": "Western Honshu"
   },
   "tags": [
-    "cultural-core",
-    "rail-connected",
-    "multi-base"
+    {
+      "key": "cultural-core",
+      "label": "Cultural core",
+      "scope": "identity",
+      "weight": 0.9,
+      "notes": []
+    },
+    {
+      "key": "rail-connected",
+      "label": "Rail connected",
+      "scope": "routing",
+      "weight": 0.93,
+      "notes": []
+    },
+    {
+      "key": "multi-base",
+      "label": "Multi-base",
+      "scope": "routing",
+      "weight": 0.78,
+      "notes": []
+    }
   ],
   "seasonal_signals": [
     {
@@ -67,11 +85,27 @@
     }
   ],
   "source_refs": [
-    "prov-kansai-editorial",
-    "prov-kansai-operational"
+    {
+      "provenance_id": "prov-kansai-editorial",
+      "role": "identity",
+      "notes": []
+    },
+    {
+      "provenance_id": "prov-kansai-operational",
+      "role": "seasonal",
+      "notes": [
+        "Backs seasonal booking pressure assumptions."
+      ]
+    }
   ],
   "operational_notes": [
-    "Festival calendars and school holidays can materially change lodging availability."
+    {
+      "kind": "booking",
+      "summary": "Festival calendars and school holidays can materially change lodging availability.",
+      "impact": "high",
+      "applies_in_months": [3, 4, 7, 11],
+      "notes": []
+    }
   ],
   "schema_version": "0.1.0"
 }

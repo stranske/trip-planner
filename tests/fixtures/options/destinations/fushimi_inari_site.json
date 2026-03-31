@@ -22,9 +22,27 @@
     }
   ],
   "tags": [
-    "landmark",
-    "early-start",
-    "stairs"
+    {
+      "key": "landmark",
+      "label": "Landmark",
+      "scope": "identity",
+      "weight": 0.95,
+      "notes": []
+    },
+    {
+      "key": "early-start",
+      "label": "Early start",
+      "scope": "operational",
+      "weight": 0.9,
+      "notes": []
+    },
+    {
+      "key": "stairs",
+      "label": "Stairs",
+      "scope": "operational",
+      "weight": 0.76,
+      "notes": []
+    }
   ],
   "seasonal_signals": [
     {
@@ -69,11 +87,27 @@
   ],
   "region_expansion_refs": [],
   "source_refs": [
-    "prov-site-editorial",
-    "prov-site-operational"
+    {
+      "provenance_id": "prov-site-editorial",
+      "role": "identity",
+      "notes": []
+    },
+    {
+      "provenance_id": "prov-site-operational",
+      "role": "operational",
+      "notes": []
+    }
   ],
   "operational_notes": [
-    "Expect early crowd spikes and long stair-heavy walking loops after sunrise."
+    {
+      "kind": "crowding",
+      "summary": "Expect early crowd spikes and long stair-heavy walking loops after sunrise.",
+      "impact": "high",
+      "applies_in_months": [3, 4, 11],
+      "notes": [
+        "The first hours of the day materially change the experience quality."
+      ]
+    }
   ],
   "schema_version": "0.1.0"
 }

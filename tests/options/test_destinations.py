@@ -3,7 +3,14 @@ from pathlib import Path
 
 import pytest
 
-from trip_planner.options import Destination, DestinationGeo, MobilityProfile
+from trip_planner.options import (
+    Destination,
+    DestinationGeo,
+    DestinationSourceRef,
+    DestinationTag,
+    MobilityProfile,
+    OperationalNote,
+)
 
 
 def _fixture_path(name: str) -> Path:
@@ -35,6 +42,7 @@ def test_city_destination_preserves_hierarchy_and_expansion_context() -> None:
     assert destination.parent_refs[0].destination_id == "dest-region-kansai"
     assert destination.adjacency_refs[0].destination_id == "dest-city-osaka"
     assert destination.region_expansion_refs[0].relationship_kind == "day_trip"
+    assert destination.tags[0].scope == "experience"
     assert destination.mobility_profile.local_modes == ["walk", "transit", "bike"]
     assert destination.experience_signals[0].key == "culture_density"
 
@@ -44,9 +52,49 @@ def test_site_destination_carries_operational_notes_and_source_refs() -> None:
 
     payload = destination.to_dict()
 
-    assert payload["operational_notes"][0].startswith("Expect early")
-    assert payload["source_refs"] == ["prov-site-editorial", "prov-site-operational"]
+    assert payload["operational_notes"][0]["summary"].startswith("Expect early")
+    assert payload["source_refs"][0]["provenance_id"] == "prov-site-editorial"
     assert payload["parent_refs"][0]["destination_id"] == "dest-city-kyoto"
+
+
+def test_destination_supporting_records_round_trip() -> None:
+    destination = Destination(
+        destination_id="dest-landscape-arashiyama",
+        place_kind="landscape",
+        name="Arashiyama Bamboo Grove",
+        geo=DestinationGeo(latitude=35.017, longitude=135.6713, country_code="JP"),
+        tags=[
+            DestinationTag(
+                key="nature",
+                label="Nature-forward",
+                scope="experience",
+                weight=0.8,
+                notes=["Useful when balancing dense city days."],
+            )
+        ],
+        source_refs=[
+            DestinationSourceRef(
+                provenance_id="prov-arashiyama-editorial",
+                role="experience",
+                notes=["Supports the landscape framing."],
+            )
+        ],
+        operational_notes=[
+            OperationalNote(
+                kind="crowding",
+                summary="Early arrival matters before the main coach arrivals.",
+                impact="high",
+                applies_in_months=[3, 4, 11],
+                notes=["Crowding pressure spikes during spring and autumn demand peaks."],
+            )
+        ],
+    )
+
+    payload = destination.to_dict()
+
+    assert payload["tags"][0]["key"] == "nature"
+    assert payload["source_refs"][0]["role"] == "experience"
+    assert payload["operational_notes"][0]["impact"] == "high"
 
 
 def test_destination_rejects_invalid_place_kind() -> None:
@@ -67,6 +115,17 @@ def test_destination_rejects_invalid_geo_and_adjacency_values() -> None:
     payload["adjacency_refs"][0]["transit_time_minutes"] = -10
     with pytest.raises(ValueError, match="transit_time_minutes"):
         Destination.from_dict(payload)
+
+
+def test_destination_rejects_invalid_tag_provenance_and_operational_note_values() -> None:
+    with pytest.raises(ValueError, match="scope"):
+        DestinationTag(key="culture", label="Culture", scope="ranking")
+
+    with pytest.raises(ValueError, match="role"):
+        DestinationSourceRef(provenance_id="prov-1", role="pricing")
+
+    with pytest.raises(ValueError, match="kind"):
+        OperationalNote(kind="closure", summary="Invalid note kind.")
 
 
 def test_mobility_profile_rejects_unknown_modes() -> None:

@@ -43,6 +43,17 @@ MOBILITY_MODES: tuple[str, ...] = (
     "rideshare",
     "shuttle",
 )
+TAG_SCOPES: tuple[str, ...] = ("identity", "routing", "experience", "seasonal", "operational")
+PROVENANCE_ROLES: tuple[str, ...] = ("identity", "seasonal", "operational", "experience", "routing")
+OPERATIONAL_NOTE_KINDS: tuple[str, ...] = (
+    "access",
+    "crowding",
+    "hours",
+    "seasonal",
+    "safety",
+    "booking",
+)
+OPERATIONAL_NOTE_IMPACTS: tuple[str, ...] = ("low", "medium", "high")
 
 PlaceKind: TypeAlias = Literal["city", "region", "neighborhood", "landscape", "site"]
 PlaceRelationshipKind: TypeAlias = Literal[
@@ -176,6 +187,27 @@ class ExperienceSignal:
 
 
 @dataclass(slots=True)
+class DestinationTag:
+    key: str
+    label: str
+    scope: str = "identity"
+    weight: float | None = None
+    notes: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.key, "key")
+        require_non_empty(self.label, "label")
+        if self.scope not in TAG_SCOPES:
+            raise ValueError(f"scope must be one of {TAG_SCOPES}")
+        if self.weight is not None:
+            require_probability(self.weight, "weight")
+        require_strings(self.notes, "notes")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class MobilityProfile:
     arrival_modes: list[str] = field(default_factory=list)
     local_modes: list[str] = field(default_factory=list)
@@ -191,6 +223,22 @@ class MobilityProfile:
             value = getattr(self, field_name)
             if value is not None:
                 require_probability(value, field_name)
+        require_strings(self.notes, "notes")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class DestinationSourceRef:
+    provenance_id: str
+    role: str = "identity"
+    notes: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.provenance_id, "provenance_id")
+        if self.role not in PROVENANCE_ROLES:
+            raise ValueError(f"role must be one of {PROVENANCE_ROLES}")
         require_strings(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
@@ -219,6 +267,27 @@ class NearbyDestinationRef:
 
 
 @dataclass(slots=True)
+class OperationalNote:
+    kind: str
+    summary: str
+    impact: str = "medium"
+    applies_in_months: list[int] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if self.kind not in OPERATIONAL_NOTE_KINDS:
+            raise ValueError(f"kind must be one of {OPERATIONAL_NOTE_KINDS}")
+        require_non_empty(self.summary, "summary")
+        if self.impact not in OPERATIONAL_NOTE_IMPACTS:
+            raise ValueError(f"impact must be one of {OPERATIONAL_NOTE_IMPACTS}")
+        _require_months(self.applies_in_months, "applies_in_months")
+        require_strings(self.notes, "notes")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class Destination:
     destination_id: str
     place_kind: PlaceKind
@@ -226,14 +295,14 @@ class Destination:
     geo: DestinationGeo
     summary: str = ""
     parent_refs: list[PlaceHierarchyRef] = field(default_factory=list)
-    tags: list[str] = field(default_factory=list)
+    tags: list[DestinationTag] = field(default_factory=list)
     seasonal_signals: list[SeasonalSignal] = field(default_factory=list)
     mobility_profile: MobilityProfile = field(default_factory=MobilityProfile)
     experience_signals: list[ExperienceSignal] = field(default_factory=list)
     adjacency_refs: list[NearbyDestinationRef] = field(default_factory=list)
     region_expansion_refs: list[NearbyDestinationRef] = field(default_factory=list)
-    source_refs: list[str] = field(default_factory=list)
-    operational_notes: list[str] = field(default_factory=list)
+    source_refs: list[DestinationSourceRef] = field(default_factory=list)
+    operational_notes: list[OperationalNote] = field(default_factory=list)
     schema_version: str = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
@@ -247,6 +316,8 @@ class Destination:
             raise ValueError("geo must be a DestinationGeo")
         if any(not isinstance(item, PlaceHierarchyRef) for item in self.parent_refs):
             raise ValueError("parent_refs must contain PlaceHierarchyRef instances")
+        if any(not isinstance(item, DestinationTag) for item in self.tags):
+            raise ValueError("tags must contain DestinationTag instances")
         if any(not isinstance(item, SeasonalSignal) for item in self.seasonal_signals):
             raise ValueError("seasonal_signals must contain SeasonalSignal instances")
         if not isinstance(self.mobility_profile, MobilityProfile):
@@ -257,9 +328,10 @@ class Destination:
             raise ValueError("adjacency_refs must contain NearbyDestinationRef instances")
         if any(not isinstance(item, NearbyDestinationRef) for item in self.region_expansion_refs):
             raise ValueError("region_expansion_refs must contain NearbyDestinationRef instances")
-        require_strings(self.tags, "tags")
-        require_strings(self.source_refs, "source_refs")
-        require_strings(self.operational_notes, "operational_notes")
+        if any(not isinstance(item, DestinationSourceRef) for item in self.source_refs):
+            raise ValueError("source_refs must contain DestinationSourceRef instances")
+        if any(not isinstance(item, OperationalNote) for item in self.operational_notes):
+            raise ValueError("operational_notes must contain OperationalNote instances")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -275,7 +347,7 @@ class Destination:
             parent_refs=[
                 PlaceHierarchyRef(**item) for item in _optional_list_field(payload, "parent_refs")
             ],
-            tags=_optional_list_field(payload, "tags"),
+            tags=[DestinationTag(**item) for item in _optional_list_field(payload, "tags")],
             seasonal_signals=[
                 SeasonalSignal(**item) for item in _optional_list_field(payload, "seasonal_signals")
             ],
@@ -294,7 +366,13 @@ class Destination:
                 NearbyDestinationRef(**item)
                 for item in _optional_list_field(payload, "region_expansion_refs")
             ],
-            source_refs=_optional_list_field(payload, "source_refs"),
-            operational_notes=_optional_list_field(payload, "operational_notes"),
+            source_refs=[
+                DestinationSourceRef(**item)
+                for item in _optional_list_field(payload, "source_refs")
+            ],
+            operational_notes=[
+                OperationalNote(**item)
+                for item in _optional_list_field(payload, "operational_notes")
+            ],
             schema_version=payload.get("schema_version", SCHEMA_VERSION),
         )

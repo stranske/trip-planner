@@ -22,9 +22,27 @@
     }
   ],
   "tags": [
-    "evening-friendly",
-    "historic-streets",
-    "walk-first"
+    {
+      "key": "evening-friendly",
+      "label": "Evening friendly",
+      "scope": "experience",
+      "weight": 0.83,
+      "notes": []
+    },
+    {
+      "key": "historic-streets",
+      "label": "Historic streets",
+      "scope": "identity",
+      "weight": 0.91,
+      "notes": []
+    },
+    {
+      "key": "walk-first",
+      "label": "Walk first",
+      "scope": "routing",
+      "weight": 0.95,
+      "notes": []
+    }
   ],
   "seasonal_signals": [
     {
@@ -69,10 +87,20 @@
   ],
   "region_expansion_refs": [],
   "source_refs": [
-    "prov-gion-editorial"
+    {
+      "provenance_id": "prov-gion-editorial",
+      "role": "identity",
+      "notes": []
+    }
   ],
   "operational_notes": [
-    "Peak evening foot traffic can reduce the usefulness of rideshare pickups."
+    {
+      "kind": "access",
+      "summary": "Peak evening foot traffic can reduce the usefulness of rideshare pickups.",
+      "impact": "medium",
+      "applies_in_months": [7],
+      "notes": []
+    }
   ],
   "schema_version": "0.1.0"
 }
