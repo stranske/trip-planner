@@ -62,6 +62,17 @@ from .activities import (
     ActivityTimingSummary,
     ActivityValueSummary,
 )
+from .bundles import (
+    BUNDLE_CONTEXTS,
+    SCHEMA_VERSION as BUNDLE_SCHEMA_VERSION,
+    BudgetPostureSummary,
+    BundleExplanation,
+    BundleFeasibility,
+    InventoryBundle,
+    MixedOption,
+    RouteCoherenceSummary,
+    ScheduleFitSummary,
+)
 from .transport import (
     AVAILABILITY_STATUSES,
     CLASS_OF_SERVICE,
@@ -99,6 +110,11 @@ __all__ = [
     "ActivityTimingSummary",
     "ActivityValueSummary",
     "AVAILABILITY_STATUSES",
+    "BUNDLE_CONTEXTS",
+    "BUNDLE_SCHEMA_VERSION",
+    "BudgetPostureSummary",
+    "BundleExplanation",
+    "BundleFeasibility",
     "CLASS_OF_SERVICE",
     "Destination",
     "DestinationGeo",
@@ -122,6 +138,7 @@ __all__ = [
     "LodgingValueSummary",
     "MOBILITY_MODES",
     "MobilityProfile",
+    "MixedOption",
     "NearbyDestinationRef",
     "OPERATIONAL_NOTE_IMPACTS",
     "OPERATIONAL_NOTE_KINDS",
@@ -138,6 +155,7 @@ __all__ = [
     "SEASONAL_IMPACTS",
     "SEGMENT_MODES",
     "SeasonalSignal",
+    "ScheduleFitSummary",
     "TAG_SCOPES",
     "TRANSPORT_KINDS",
     "TRANSPORT_SCHEMA_VERSION",
@@ -152,4 +170,6 @@ __all__ = [
     "TransportTimingSummary",
     "TransportTransferBurden",
     "EFFORT_LEVELS",
+    "InventoryBundle",
+    "RouteCoherenceSummary",
 ]

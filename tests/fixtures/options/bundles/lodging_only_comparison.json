@@ -1,0 +1,120 @@
+{
+  "option_id": "mixed-kyoto-single-base",
+  "trip_id": "trip-kyoto-spring",
+  "title": "Kyoto single-base recovery stay",
+  "supported_purposes": ["profile_learning", "inventory_narrowing"],
+  "comparison_label": "Central stay with low-friction evening recovery",
+  "summary": "Lodging-only comparison entry that preserves the full lodging contract while surfacing bundle-level fit.",
+  "route_coherence": {
+    "overall_signal": 0.72,
+    "route_shape": "single_base",
+    "movement_summary": "Single-city stay with no base changes.",
+    "destination_sequence": ["dest-city-kyoto"],
+    "base_change_count": 0,
+    "cohesion_signal": 0.84,
+    "recovery_signal": 0.9
+  },
+  "schedule_fit": {
+    "overall_signal": 0.83,
+    "pacing_signal": 0.87,
+    "arrival_alignment_signal": 0.74,
+    "recovery_window_signal": 0.91,
+    "buffer_signal": 0.8,
+    "overcommitment_risk_signal": 0.18
+  },
+  "budget_posture": {
+    "estimated_total": {"currency": "USD", "typical_amount": 840.0},
+    "lodging_total": {"currency": "USD", "typical_amount": 840.0},
+    "overall_signal": 0.7,
+    "within_target_budget": true
+  },
+  "explanation": {
+    "headline": "Strong recovery fit without adding route complexity.",
+    "strengths": ["Walkable central base.", "Keeps the comparison focused on lodging tradeoffs."],
+    "tradeoffs": ["Less contrast than a multi-base route."]
+  },
+  "bundles": [
+    {
+      "bundle_id": "bundle-kyoto-lodging-only",
+      "title": "Kyoto lodging baseline",
+      "bundle_context": "lodging_only",
+      "summary": "Single normalized lodging option for a Kyoto-first comparison set.",
+      "destinations": [
+        {
+          "destination_id": "dest-city-kyoto",
+          "place_kind": "city",
+          "name": "Kyoto",
+          "summary": "Compact cultural city core with strong walkable neighborhood identity.",
+          "geo": {
+            "latitude": 35.0116,
+            "longitude": 135.7681,
+            "country_code": "JP",
+            "region_code": "JP-26",
+            "time_zone": "Asia/Tokyo",
+            "locality_hint": "Historic city core"
+          }
+        }
+      ],
+      "lodging_options": [
+        {
+          "option_id": "lodg-kyoto-central-hotel",
+          "name": "Kyoto Central Garden Hotel",
+          "destination_id": "dest-city-kyoto",
+          "summary": "Central full-service hotel that favors access over deep quiet.",
+          "location_summary": {
+            "destination_id": "dest-city-kyoto",
+            "location_context": "urban_core",
+            "neighborhood": "Kawaramachi",
+            "access_summary": "Quick access to rail, food, and evening walking routes.",
+            "walk_minutes_to_anchor": 5,
+            "quiet_signal": 0.58,
+            "recovery_signal": 0.63,
+            "place_context_ids": ["dest-city-kyoto"]
+          },
+          "room_summary": {
+            "lodging_kind": "hotel",
+            "room_type": "Superior king",
+            "comfort_signal": 0.82,
+            "cleanliness_signal": 0.88,
+            "privacy_signal": 0.79
+          },
+          "cost_summary": {
+            "nightly": {"currency": "USD", "typical_amount": 210.0},
+            "total": {"currency": "USD", "typical_amount": 840.0}
+          },
+          "quality_summary": {"overall_signal": 0.81, "sleep_quality_signal": 0.68},
+          "value_summary": {"overall_signal": 0.73, "location_value_signal": 0.89},
+          "fit_summary": {"overall_signal": 0.76, "quiet_recovery_signal": 0.61, "location_fit_signal": 0.91},
+          "feasibility": {
+            "inventory_status": "available",
+            "available": true,
+            "business_approval_status": "approved"
+          },
+          "booking_links": ["https://example.com/kyoto-central-garden-hotel"],
+          "source_refs": [
+            {
+              "provenance_id": "prov-kyoto-central-inventory",
+              "source_id": "inventory-ota-1",
+              "source_category": "commercial_inventory",
+              "subject_kind": "option",
+              "subject_id": "lodg-kyoto-central-hotel",
+              "contribution_kind": "inventory",
+              "summary": "Primary inventory snapshot for room and booking terms."
+            }
+          ],
+          "tags": ["central", "walkable"]
+        }
+      ],
+      "feasibility": {
+        "available": true,
+        "internally_consistent": true
+      },
+      "explanation": {
+        "headline": "Single-base stay optimized for centrality.",
+        "strengths": ["Fast rail access.", "Strong walkability."],
+        "tradeoffs": ["Lower quiet signal than edge-of-center alternatives."]
+      }
+    }
+  ],
+  "tags": ["lodging-only", "single-base"]
+}
