@@ -90,23 +90,84 @@ The two profiles may share some nested contract shapes, but they should not be o
   "destination_id": "dest_123",
   "place_kind": "city|region|neighborhood|landscape|site",
   "name": "Kyoto",
+  "summary": "Normalized place entity used upstream from option generation.",
   "parent_refs": [],
   "geo": {
-    "lat": 35.0116,
-    "lng": 135.7681,
-    "country_code": "JP"
+    "latitude": 35.0116,
+    "longitude": 135.7681,
+    "country_code": "JP",
+    "region_code": "JP-26"
   },
-  "tags": [],
+  "tags": [
+    {
+      "key": "culture",
+      "label": "Culture",
+      "scope": "experience",
+      "weight": 0.9,
+      "notes": []
+    }
+  ],
   "seasonal_signals": [],
-  "mobility_profile": {},
-  "experience_signals": {},
-  "source_refs": []
+  "mobility_profile": {
+    "arrival_modes": [],
+    "local_modes": [],
+    "access_constraints": [],
+    "interchange_hubs": [],
+    "walkability": null,
+    "transit_coverage": null,
+    "car_dependency": null
+  },
+  "experience_signals": [],
+  "adjacency_refs": [],
+  "region_expansion_refs": [
+    {
+      "destination_id": "dest_456",
+      "relationship_kind": "contiguous_region",
+      "expansion_mode": "contiguous",
+      "summary": "Explicit regional expansion edge for future inventory growth.",
+      "requires_base_change": true,
+      "transit_time_minutes": 70,
+      "trigger_tags": ["rail-connected"],
+      "notes": []
+    }
+  ],
+  "source_refs": [
+    {
+      "provenance_id": "prov_kyoto_editorial",
+      "role": "identity",
+      "source_id": "source_123",
+      "source_category": "editorial",
+      "contribution_kind": "editorial",
+      "summary": "Defines the normalized destination shell.",
+      "freshness_days_at_capture": 14,
+      "notes": []
+    }
+  ],
+  "operational_notes": [
+    {
+      "kind": "crowding",
+      "summary": "Peak transit load can change cross-town travel time assumptions.",
+      "impact": "medium",
+      "applies_in_months": [11],
+      "source_ref_ids": ["prov_kyoto_editorial"],
+      "notes": []
+    }
+  ]
 }
 ```
 
 Important design point:
 
-`Destination` is not yet an option. It is a normalized place entity.
+`Destination` is not yet an option. It is a normalized place entity that later lodging,
+activity, route, and mixed option models can reference without re-normalizing geography,
+hierarchy, source provenance, or expansion context. The nested `tags`, `source_refs`, and
+`operational_notes` records are part of that normalized place contract rather than downstream
+recommendation metadata.
+
+Two details matter for later planner phases:
+
+- `source_refs` can carry source category, contribution kind, summary, and freshness directly on the destination, so itinerary or inventory layers do not need to re-join raw provenance records just to explain a place assumption.
+- `region_expansion_refs` are distinct from generic `adjacency_refs` and encode the intended expansion strategy, base-change expectation, and trigger tags for generalized contiguous-region or side-trip expansion logic.
 
 ## 5. Option Set
 

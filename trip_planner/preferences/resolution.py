@@ -359,9 +359,7 @@ def _finalize_explanations(
                     if tension_id != directional_seed_tension_id
                 ]
             explanation.tension_explanations.pop(directional_seed_tension_id, None)
-            confidence_notes = [
-                note for note in confidence_notes if note != directional_seed_note
-            ]
+            confidence_notes = [note for note in confidence_notes if note != directional_seed_note]
         detail.resolved_value = dimension.value
         detail.confidence = dimension.confidence
         detail.salience = dimension.salience
