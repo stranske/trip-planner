@@ -1,0 +1,146 @@
+{
+  "destination_id": "dest-city-kyoto",
+  "place_kind": "city",
+  "name": "Kyoto",
+  "summary": "Primary cultural anchor with strong neighborhood identity and dense temple-adjacent activity context.",
+  "geo": {
+    "latitude": 35.0116,
+    "longitude": 135.7681,
+    "country_code": "JP",
+    "region_code": "JP-26",
+    "time_zone": "Asia/Tokyo",
+    "locality_hint": "Historic city core"
+  },
+  "parent_refs": [
+    {
+      "destination_id": "dest-region-kansai",
+      "relationship_kind": "parent_region",
+      "label": "Kansai",
+      "notes": [
+        "Use the regional shell when expanding beyond a Kyoto-first route."
+      ]
+    }
+  ],
+  "tags": [
+    {
+      "key": "culture",
+      "label": "Culture",
+      "scope": "experience",
+      "weight": 0.94,
+      "notes": [
+        "Primary signal for temple, garden, and heritage density."
+      ]
+    },
+    {
+      "key": "walkable-core",
+      "label": "Walkable core",
+      "scope": "routing",
+      "weight": 0.88,
+      "notes": []
+    },
+    {
+      "key": "rail-access",
+      "label": "Rail access",
+      "scope": "routing",
+      "weight": 0.82,
+      "notes": []
+    }
+  ],
+  "seasonal_signals": [
+    {
+      "season": "autumn",
+      "summary": "Leaf season creates crowding around temple corridors and early-morning transit peaks.",
+      "impact": "mixed",
+      "peak_months": [11],
+      "source_ref_ids": ["prov-kyoto-operational"],
+      "notes": [
+        "Operational friction increases around headline sites."
+      ]
+    }
+  ],
+  "mobility_profile": {
+    "arrival_modes": ["rail", "shuttle"],
+    "local_modes": ["walk", "transit", "bike"],
+    "access_constraints": [
+      "Historic-core buses can saturate quickly during peak foliage windows."
+    ],
+    "interchange_hubs": ["Kyoto Station", "Karasuma Oike"],
+    "walkability": 0.91,
+    "transit_coverage": 0.8,
+    "car_dependency": 0.18,
+    "notes": [
+      "Central neighborhoods work best when the traveler tolerates walking between clusters."
+    ]
+  },
+  "experience_signals": [
+    {
+      "key": "culture_density",
+      "label": "Culture density",
+      "sentiment": "positive",
+      "strength": 0.94,
+      "notes": [
+        "High concentration of temples, gardens, and traditional districts."
+      ]
+    }
+  ],
+  "adjacency_refs": [
+    {
+      "destination_id": "dest-city-osaka",
+      "relationship_kind": "nearby_region",
+      "summary": "Fast regional transfer for contrasting food/nightlife days.",
+      "transit_time_minutes": 30,
+      "notes": []
+    }
+  ],
+  "region_expansion_refs": [
+    {
+      "destination_id": "dest-city-nara",
+      "relationship_kind": "day_trip",
+      "expansion_mode": "day_trip",
+      "summary": "Easy heritage-oriented side trip without changing base.",
+      "requires_base_change": false,
+      "transit_time_minutes": 45,
+      "trigger_tags": ["culture", "rail-access"],
+      "notes": []
+    }
+  ],
+  "source_refs": [
+    {
+      "provenance_id": "prov-kyoto-editorial",
+      "role": "identity",
+      "source_id": "kyoto-city-guide",
+      "source_category": "editorial",
+      "contribution_kind": "editorial",
+      "summary": "Defines Kyoto as the city-level normalization shell for planning.",
+      "freshness_days_at_capture": 30,
+      "notes": [
+        "Establishes the city-level normalization shell."
+      ]
+    },
+    {
+      "provenance_id": "prov-kyoto-operational",
+      "role": "operational",
+      "source_id": "jr-west-alerts",
+      "source_category": "official_operational",
+      "contribution_kind": "operational",
+      "summary": "Supports crowding and transit-friction assumptions during peak demand.",
+      "freshness_days_at_capture": 3,
+      "notes": [
+        "Supports crowding and transit friction notes."
+      ]
+    }
+  ],
+  "operational_notes": [
+    {
+      "kind": "crowding",
+      "summary": "Bus crowding can make cross-town moves slower than map distance suggests.",
+      "impact": "medium",
+      "applies_in_months": [11],
+      "source_ref_ids": ["prov-kyoto-operational"],
+      "notes": [
+        "Use rail or walking loops where possible during demand peaks."
+      ]
+    }
+  ],
+  "schema_version": "0.1.0"
+}
