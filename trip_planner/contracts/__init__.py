@@ -69,6 +69,7 @@ __all__ = [
     "ItineraryObjectives",
     "LodgingStrategy",
     "MOBILITY_MODES",
+    "MobilityProfile",
     "MoneyRange",
     "MoveDensityTarget",
     "NearbyDestinationRef",
