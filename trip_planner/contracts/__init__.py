@@ -3,6 +3,21 @@
 from __future__ import annotations
 
 from importlib import import_module
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .objectives import (
+        BudgetProtection,
+        CountRange,
+        DayStructureObjectives,
+        DiscoveryStrategy,
+        ItineraryObjectives,
+        LodgingStrategy,
+        MoveDensityTarget,
+        QualityFloorProtection,
+        RecoveryExpectations,
+        TransportStrategy,
+    )
 
 _DESTINATION_EXPORTS = {
     "ADJACENCY_KINDS",
