@@ -1,0 +1,101 @@
+{
+  "option_id": "transport-flight-coastal-hop",
+  "name": "Direct coastal morning flight",
+  "transport_kind": "flight",
+  "origin_id": "dest-sfo",
+  "destination_id": "dest-sba",
+  "timing_summary": {
+    "departure_local": "2026-04-18T06:20:00-07:00",
+    "arrival_local": "2026-04-18T07:34:00-07:00",
+    "duration_minutes": 74,
+    "departure_timezone": "America/Los_Angeles",
+    "arrival_timezone": "America/Los_Angeles",
+    "early_departure": true
+  },
+  "segments": [
+    {
+      "segment_id": "seg-flight-1",
+      "mode": "flight",
+      "origin_label": "San Francisco International Airport",
+      "destination_label": "Santa Barbara Airport",
+      "departure_local": "2026-04-18T06:20:00-07:00",
+      "arrival_local": "2026-04-18T07:34:00-07:00",
+      "carrier": "Pacific Air",
+      "service_number": "PA 204",
+      "duration_minutes": 74
+    }
+  ],
+  "transfer_burden": {
+    "transfer_count": 0,
+    "self_navigation_burden_signal": 0.22,
+    "baggage_complexity_signal": 0.28,
+    "schedule_protection_signal": 0.79,
+    "connection_risk_signal": 0.14
+  },
+  "booking_terms": {
+    "booking_channel": "managed-travel",
+    "refundable": false,
+    "changeability_summary": "Same-day changes incur a fare difference and service fee.",
+    "class_of_service": "economy",
+    "approved_channels": ["managed-travel"],
+    "comparable_reference_ids": ["cmp-rail-1"]
+  },
+  "cost_summary": {
+    "total": {
+      "currency": "USD",
+      "typical_amount": 248.0
+    },
+    "base_fare": {
+      "currency": "USD",
+      "typical_amount": 214.0
+    },
+    "taxes_and_fees": {
+      "currency": "USD",
+      "typical_amount": 34.0
+    }
+  },
+  "experience_summary": {
+    "scenic_value_signal": 0.48,
+    "comfort_signal": 0.58,
+    "privacy_signal": 0.42,
+    "workability_signal": 0.31
+  },
+  "fit_summary": {
+    "overall_signal": 0.73,
+    "schedule_fit_signal": 0.88,
+    "friction_fit_signal": 0.9,
+    "experiential_fit_signal": 0.44,
+    "policy_fit_signal": 0.94
+  },
+  "policy_summary": {
+    "business_approval_status": "preferred",
+    "approved_booking_channel": true,
+    "class_of_service": "economy",
+    "comparable_reference_ids": ["cmp-rail-1"],
+    "policy_notes": ["Matches the default managed-travel booking channel."]
+  },
+  "feasibility": {
+    "available": true,
+    "availability_status": "available",
+    "constraints": ["Carry-on only recommended for fastest exit."]
+  },
+  "summary": "Fastest door-to-door option when protecting the first afternoon.",
+  "booking_links": ["https://example.com/coastal-flight"],
+  "source_refs": [
+    {
+      "provenance_id": "prov-flight-1",
+      "source_id": "pacific-air-search",
+      "source_category": "commercial_inventory",
+      "subject_kind": "option",
+      "subject_id": "transport-flight-coastal-hop",
+      "contribution_kind": "pricing",
+      "summary": "Inventory search captured the nonstop morning fare and seat availability.",
+      "quality_value_fit": {
+        "quality_signal": 0.63,
+        "value_signal": 0.54,
+        "fit_signal": 0.73
+      }
+    }
+  ],
+  "tags": ["fastest", "direct"]
+}

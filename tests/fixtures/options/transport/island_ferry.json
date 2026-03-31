@@ -1,0 +1,89 @@
+{
+  "option_id": "transport-ferry-island-link",
+  "name": "Island ferry with deck views",
+  "transport_kind": "ferry",
+  "origin_id": "dest-athens-port",
+  "destination_id": "dest-hydra",
+  "timing_summary": {
+    "departure_local": "2026-06-08T10:00:00+03:00",
+    "arrival_local": "2026-06-08T11:45:00+03:00",
+    "duration_minutes": 105,
+    "departure_timezone": "Europe/Athens",
+    "arrival_timezone": "Europe/Athens"
+  },
+  "segments": [
+    {
+      "segment_id": "seg-ferry-1",
+      "mode": "ferry",
+      "origin_label": "Piraeus",
+      "destination_label": "Hydra Port",
+      "departure_local": "2026-06-08T10:00:00+03:00",
+      "arrival_local": "2026-06-08T11:45:00+03:00",
+      "carrier": "Aegean Fast Ferries",
+      "service_number": "AF 18",
+      "duration_minutes": 105
+    }
+  ],
+  "transfer_burden": {
+    "transfer_count": 0,
+    "self_navigation_burden_signal": 0.38,
+    "baggage_complexity_signal": 0.41,
+    "schedule_protection_signal": 0.67,
+    "connection_risk_signal": 0.21
+  },
+  "booking_terms": {
+    "booking_channel": "direct",
+    "refundable": true,
+    "changeability_summary": "Full refund until 24 hours before sailing.",
+    "class_of_service": "standard",
+    "approved_channels": ["direct"]
+  },
+  "cost_summary": {
+    "total": {
+      "currency": "USD",
+      "typical_amount": 46.0
+    }
+  },
+  "experience_summary": {
+    "scenic_value_signal": 0.89,
+    "comfort_signal": 0.63,
+    "privacy_signal": 0.22,
+    "workability_signal": 0.18
+  },
+  "fit_summary": {
+    "overall_signal": 0.78,
+    "schedule_fit_signal": 0.74,
+    "friction_fit_signal": 0.7,
+    "experiential_fit_signal": 0.92,
+    "policy_fit_signal": 0.58
+  },
+  "policy_summary": {
+    "business_approval_status": "unknown",
+    "approved_booking_channel": null,
+    "class_of_service": "standard"
+  },
+  "feasibility": {
+    "available": true,
+    "availability_status": "available",
+    "constraints": ["Weather can compress deck access on windy sailings."]
+  },
+  "summary": "High scenic payoff for leisure travel where schedule precision is less critical.",
+  "booking_links": ["https://example.com/island-ferry"],
+  "source_refs": [
+    {
+      "provenance_id": "prov-ferry-1",
+      "source_id": "ferry-operator",
+      "source_category": "commercial_inventory",
+      "subject_kind": "option",
+      "subject_id": "transport-ferry-island-link",
+      "contribution_kind": "availability",
+      "summary": "Operator inventory captured the mid-morning sailing and flexible fares.",
+      "quality_value_fit": {
+        "quality_signal": 0.6,
+        "value_signal": 0.83,
+        "fit_signal": 0.78
+      }
+    }
+  ],
+  "tags": ["scenic", "leisure-transfer"]
+}

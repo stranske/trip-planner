@@ -1,0 +1,113 @@
+{
+  "option_id": "transport-rail-scenic-corridor",
+  "name": "Scenic rail corridor with café car",
+  "transport_kind": "rail",
+  "origin_id": "dest-zurich",
+  "destination_id": "dest-lugano",
+  "timing_summary": {
+    "departure_local": "2026-05-12T09:02:00+02:00",
+    "arrival_local": "2026-05-12T12:18:00+02:00",
+    "duration_minutes": 196,
+    "departure_timezone": "Europe/Zurich",
+    "arrival_timezone": "Europe/Zurich"
+  },
+  "segments": [
+    {
+      "segment_id": "seg-rail-1",
+      "mode": "rail",
+      "origin_label": "Zurich HB",
+      "destination_label": "Arth-Goldau",
+      "departure_local": "2026-05-12T09:02:00+02:00",
+      "arrival_local": "2026-05-12T09:42:00+02:00",
+      "carrier": "SBB",
+      "service_number": "IR 46",
+      "duration_minutes": 40
+    },
+    {
+      "segment_id": "seg-rail-2",
+      "mode": "rail",
+      "origin_label": "Arth-Goldau",
+      "destination_label": "Lugano",
+      "departure_local": "2026-05-12T09:58:00+02:00",
+      "arrival_local": "2026-05-12T12:18:00+02:00",
+      "carrier": "SBB",
+      "service_number": "IC 2",
+      "duration_minutes": 140,
+      "notes": ["Panoramic lake-and-mountain stretch after the Gotthard approach."]
+    }
+  ],
+  "transfer_burden": {
+    "transfer_count": 1,
+    "self_navigation_burden_signal": 0.33,
+    "baggage_complexity_signal": 0.26,
+    "schedule_protection_signal": 0.76,
+    "connection_risk_signal": 0.32,
+    "minimum_connection_minutes": 16,
+    "transfer_summary": "Single same-station platform change with luggage."
+  },
+  "booking_terms": {
+    "booking_channel": "sbb",
+    "refundable": true,
+    "changeability_summary": "Flexible fare can be changed until departure.",
+    "class_of_service": "standard",
+    "approved_channels": ["sbb", "managed-travel"],
+    "comparable_reference_ids": ["cmp-flight-1", "cmp-car-1"]
+  },
+  "cost_summary": {
+    "total": {
+      "currency": "USD",
+      "typical_amount": 138.0
+    },
+    "base_fare": {
+      "currency": "USD",
+      "typical_amount": 122.0
+    },
+    "taxes_and_fees": {
+      "currency": "USD",
+      "typical_amount": 16.0
+    }
+  },
+  "experience_summary": {
+    "scenic_value_signal": 0.96,
+    "comfort_signal": 0.77,
+    "privacy_signal": 0.52,
+    "workability_signal": 0.81,
+    "notes": ["Good laptop window with stable tables in first section."]
+  },
+  "fit_summary": {
+    "overall_signal": 0.91,
+    "schedule_fit_signal": 0.79,
+    "friction_fit_signal": 0.71,
+    "experiential_fit_signal": 0.98,
+    "policy_fit_signal": 0.86
+  },
+  "policy_summary": {
+    "business_approval_status": "approved",
+    "approved_booking_channel": true,
+    "class_of_service": "standard",
+    "comparable_reference_ids": ["cmp-flight-1", "cmp-car-1"]
+  },
+  "feasibility": {
+    "available": true,
+    "availability_status": "available"
+  },
+  "summary": "Best experiential and work-on-the-way option, at the cost of one transfer.",
+  "booking_links": ["https://example.com/scenic-rail"],
+  "source_refs": [
+    {
+      "provenance_id": "prov-rail-1",
+      "source_id": "sbb-timetable",
+      "source_category": "official_operational",
+      "subject_kind": "option",
+      "subject_id": "transport-rail-scenic-corridor",
+      "contribution_kind": "operational",
+      "summary": "Official timetable and service notes confirm the transfer and rolling stock.",
+      "quality_value_fit": {
+        "quality_signal": 0.79,
+        "value_signal": 0.8,
+        "fit_signal": 0.91
+      }
+    }
+  ],
+  "tags": ["scenic", "workable-in-transit"]
+}

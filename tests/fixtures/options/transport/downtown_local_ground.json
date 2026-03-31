@@ -1,0 +1,106 @@
+{
+  "option_id": "transport-local-ground-downtown-loop",
+  "name": "Downtown local ground bundle",
+  "transport_kind": "local_ground",
+  "origin_id": "dest-tokyo-station",
+  "destination_id": "dest-shibuya",
+  "timing_summary": {
+    "departure_local": "2026-05-12T08:20:00+09:00",
+    "arrival_local": "2026-05-12T09:05:00+09:00",
+    "duration_minutes": 45,
+    "departure_timezone": "Asia/Tokyo",
+    "arrival_timezone": "Asia/Tokyo"
+  },
+  "segments": [
+    {
+      "segment_id": "seg-ground-1",
+      "mode": "walk",
+      "origin_label": "Hotel lobby",
+      "destination_label": "Metro entrance",
+      "duration_minutes": 8
+    },
+    {
+      "segment_id": "seg-ground-2",
+      "mode": "transit",
+      "origin_label": "Tokyo Metro",
+      "destination_label": "Shibuya Station",
+      "departure_local": "2026-05-12T08:32:00+09:00",
+      "arrival_local": "2026-05-12T08:54:00+09:00",
+      "carrier": "Tokyo Metro",
+      "service_number": "Ginza Line",
+      "duration_minutes": 22
+    },
+    {
+      "segment_id": "seg-ground-3",
+      "mode": "walk",
+      "origin_label": "Shibuya Station",
+      "destination_label": "Client office",
+      "duration_minutes": 15
+    }
+  ],
+  "transfer_burden": {
+    "transfer_count": 1,
+    "self_navigation_burden_signal": 0.42,
+    "baggage_complexity_signal": 0.1,
+    "schedule_protection_signal": 0.76,
+    "connection_risk_signal": 0.2,
+    "minimum_connection_minutes": 5,
+    "transfer_summary": "One station transfer with clear signage and mostly covered paths."
+  },
+  "booking_terms": {
+    "booking_channel": "public-transit",
+    "refundable": false,
+    "changeability_summary": "Tap-to-pay local transit with no prebooking needed.",
+    "class_of_service": "standard",
+    "approved_channels": ["public-transit"]
+  },
+  "cost_summary": {
+    "total": {
+      "currency": "USD",
+      "typical_amount": 4.5
+    }
+  },
+  "experience_summary": {
+    "scenic_value_signal": 0.35,
+    "comfort_signal": 0.48,
+    "privacy_signal": 0.12,
+    "workability_signal": 0.08
+  },
+  "fit_summary": {
+    "overall_signal": 0.83,
+    "schedule_fit_signal": 0.86,
+    "friction_fit_signal": 0.74,
+    "experiential_fit_signal": 0.32,
+    "policy_fit_signal": 0.95
+  },
+  "policy_summary": {
+    "business_approval_status": "preferred",
+    "approved_booking_channel": true,
+    "class_of_service": "standard",
+    "policy_notes": ["Preferred urban ground option when it meets schedule needs."]
+  },
+  "feasibility": {
+    "available": true,
+    "availability_status": "available",
+    "constraints": ["Peak-hour crowding can slow platform access."]
+  },
+  "summary": "Fastest compliant downtown transfer when a dedicated car is unnecessary.",
+  "booking_links": ["https://example.com/tokyo-metro"],
+  "source_refs": [
+    {
+      "provenance_id": "prov-ground-1",
+      "source_id": "tokyo-metro",
+      "source_category": "official_operational",
+      "subject_kind": "option",
+      "subject_id": "transport-local-ground-downtown-loop",
+      "contribution_kind": "operational",
+      "summary": "Metro timetable confirms morning headways and expected transfer time.",
+      "quality_value_fit": {
+        "quality_signal": 0.52,
+        "value_signal": 0.95,
+        "fit_signal": 0.83
+      }
+    }
+  ],
+  "tags": ["urban-transfer", "policy-preferred"]
+}
