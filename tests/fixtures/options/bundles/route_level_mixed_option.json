@@ -1,0 +1,293 @@
+{
+  "option_id": "mixed-kyoto-osaka-culture-route",
+  "trip_id": "trip-kansai-dual-city",
+  "title": "Kyoto culture anchor with Osaka arrival buffer",
+  "supported_purposes": ["profile_learning", "inventory_narrowing", "final_selection"],
+  "comparison_label": "Route-level mixed option with activities",
+  "summary": "Two-bundle route-level mixed option that preserves normalized transport, lodging, and activity detail.",
+  "route_coherence": {
+    "overall_signal": 0.89,
+    "route_shape": "regional_cluster",
+    "movement_summary": "Gateway arrival in Osaka followed by a Kyoto cultural base.",
+    "destination_sequence": ["dest-kix", "dest-city-osaka", "dest-city-kyoto"],
+    "base_change_count": 2,
+    "cohesion_signal": 0.91,
+    "recovery_signal": 0.82
+  },
+  "schedule_fit": {
+    "overall_signal": 0.84,
+    "pacing_signal": 0.81,
+    "arrival_alignment_signal": 0.87,
+    "recovery_window_signal": 0.79,
+    "buffer_signal": 0.86,
+    "overcommitment_risk_signal": 0.29
+  },
+  "budget_posture": {
+    "estimated_total": {"currency": "USD", "typical_amount": 1331.0},
+    "lodging_total": {"currency": "USD", "typical_amount": 1140.0},
+    "transport_total": {"currency": "USD", "typical_amount": 167.0},
+    "activity_total": {"currency": "USD", "typical_amount": 24.0},
+    "overall_signal": 0.74,
+    "within_target_budget": true
+  },
+  "explanation": {
+    "headline": "Balanced two-city route with a strong cultural anchor day.",
+    "strengths": ["Arrival friction is front-loaded into the Osaka gateway bundle.", "Kyoto activity remains visible as a first-class normalized object."],
+    "tradeoffs": ["Requires one extra base change to keep Osaka and Kyoto roles distinct."]
+  },
+  "bundles": [
+    {
+      "bundle_id": "bundle-osaka-gateway",
+      "title": "Osaka arrival buffer",
+      "bundle_context": "transport_lodging",
+      "destinations": [
+        {
+          "destination_id": "dest-kix",
+          "place_kind": "site",
+          "name": "KIX Airport",
+          "geo": {
+            "latitude": 34.4342,
+            "longitude": 135.244,
+            "country_code": "JP",
+            "time_zone": "Asia/Tokyo"
+          }
+        },
+        {
+          "destination_id": "dest-city-osaka",
+          "place_kind": "city",
+          "name": "Osaka",
+          "geo": {
+            "latitude": 34.6937,
+            "longitude": 135.5023,
+            "country_code": "JP",
+            "region_code": "JP-27",
+            "time_zone": "Asia/Tokyo"
+          }
+        }
+      ],
+      "lodging_options": [
+        {
+          "option_id": "lodg-osaka-gateway",
+          "name": "Osaka Gateway Hotel",
+          "destination_id": "dest-city-osaka",
+          "location_summary": {
+            "destination_id": "dest-city-osaka",
+            "location_context": "urban_core",
+            "access_summary": "Ten-minute walk from Osaka Station.",
+            "walk_minutes_to_anchor": 10,
+            "recovery_signal": 0.64,
+            "place_context_ids": ["dest-city-osaka"]
+          },
+          "room_summary": {
+            "lodging_kind": "hotel",
+            "comfort_signal": 0.72,
+            "cleanliness_signal": 0.81,
+            "privacy_signal": 0.77
+          },
+          "cost_summary": {
+            "nightly": {"currency": "USD", "typical_amount": 150.0},
+            "total": {"currency": "USD", "typical_amount": 300.0}
+          },
+          "fit_summary": {"overall_signal": 0.71, "location_fit_signal": 0.88},
+          "feasibility": {
+            "inventory_status": "available",
+            "available": true,
+            "business_approval_status": "approved"
+          }
+        }
+      ],
+      "transport_options": [
+        {
+          "option_id": "transport-kix-osaka-rail",
+          "name": "Haruka + local rail transfer",
+          "transport_kind": "rail",
+          "origin_id": "dest-kix",
+          "destination_id": "dest-city-osaka",
+          "timing_summary": {
+            "departure_local": "2026-04-05T09:05:00+09:00",
+            "arrival_local": "2026-04-05T10:33:00+09:00",
+            "duration_minutes": 88
+          },
+          "segments": [
+            {
+              "segment_id": "seg-haruka",
+              "mode": "rail",
+              "origin_label": "KIX Airport Station",
+              "destination_label": "Osaka Station"
+            }
+          ],
+          "cost_summary": {
+            "total": {"currency": "USD", "typical_amount": 29.0}
+          },
+          "fit_summary": {"overall_signal": 0.86, "schedule_fit_signal": 0.84},
+          "policy_summary": {"business_approval_status": "approved"},
+          "feasibility": {"available": true, "availability_status": "available"}
+        }
+      ],
+      "feasibility": {
+        "available": true,
+        "internally_consistent": true
+      }
+    },
+    {
+      "bundle_id": "bundle-kyoto-culture-day",
+      "title": "Kyoto cultural anchor",
+      "bundle_context": "route_level",
+      "destinations": [
+        {
+          "destination_id": "dest-city-osaka",
+          "place_kind": "city",
+          "name": "Osaka",
+          "geo": {
+            "latitude": 34.6937,
+            "longitude": 135.5023,
+            "country_code": "JP",
+            "region_code": "JP-27",
+            "time_zone": "Asia/Tokyo"
+          }
+        },
+        {
+          "destination_id": "dest-city-kyoto",
+          "place_kind": "city",
+          "name": "Kyoto",
+          "geo": {
+            "latitude": 35.0116,
+            "longitude": 135.7681,
+            "country_code": "JP",
+            "region_code": "JP-26",
+            "time_zone": "Asia/Tokyo"
+          }
+        }
+      ],
+      "lodging_options": [
+        {
+          "option_id": "lodg-kyoto-central-hotel",
+          "name": "Kyoto Central Garden Hotel",
+          "destination_id": "dest-city-kyoto",
+          "location_summary": {
+            "destination_id": "dest-city-kyoto",
+            "location_context": "urban_core",
+            "access_summary": "Fast access to rail and museum districts.",
+            "walk_minutes_to_anchor": 5,
+            "quiet_signal": 0.58,
+            "recovery_signal": 0.63,
+            "place_context_ids": ["dest-city-kyoto"]
+          },
+          "room_summary": {
+            "lodging_kind": "hotel",
+            "comfort_signal": 0.82,
+            "cleanliness_signal": 0.88,
+            "privacy_signal": 0.79
+          },
+          "cost_summary": {
+            "nightly": {"currency": "USD", "typical_amount": 210.0},
+            "total": {"currency": "USD", "typical_amount": 840.0}
+          },
+          "fit_summary": {"overall_signal": 0.76, "location_fit_signal": 0.91},
+          "feasibility": {
+            "inventory_status": "available",
+            "available": true,
+            "business_approval_status": "approved"
+          }
+        }
+      ],
+      "transport_options": [
+        {
+          "option_id": "transport-osaka-kyoto-rail",
+          "name": "Regional rail transfer to Kyoto",
+          "transport_kind": "rail",
+          "origin_id": "dest-city-osaka",
+          "destination_id": "dest-city-kyoto",
+          "timing_summary": {
+            "departure_local": "2026-04-06T09:00:00+09:00",
+            "arrival_local": "2026-04-06T09:32:00+09:00",
+            "duration_minutes": 32
+          },
+          "segments": [
+            {
+              "segment_id": "seg-osaka-kyoto",
+              "mode": "rail",
+              "origin_label": "Osaka Station",
+              "destination_label": "Kyoto Station"
+            }
+          ],
+          "cost_summary": {
+            "total": {"currency": "USD", "typical_amount": 138.0}
+          },
+          "fit_summary": {"overall_signal": 0.9, "schedule_fit_signal": 0.82},
+          "policy_summary": {"business_approval_status": "approved"},
+          "feasibility": {"available": true, "availability_status": "available"}
+        }
+      ],
+      "activity_options": [
+        {
+          "option_id": "activity-major-museum",
+          "name": "National Museum anchor visit",
+          "activity_kind": "museum",
+          "destination_id": "dest-city-kyoto",
+          "place_id": "place-national-museum",
+          "category": {
+            "primary": "museum",
+            "secondary": ["art", "history"],
+            "tags": ["indoor", "anchor"]
+          },
+          "timing_summary": {
+            "duration_minutes": 180,
+            "typical_start_window": "09:30-13:30",
+            "timing_sensitivity_signal": 0.72,
+            "crowd_pressure_signal": 0.83,
+            "weather_dependency_signal": 0.04
+          },
+          "significance_summary": {
+            "overall_signal": 0.95,
+            "local_icon_signal": 0.91,
+            "cultural_signal": 0.96,
+            "anchor_worthy": true
+          },
+          "effort_summary": {
+            "effort_level": "moderate",
+            "walking_minutes": 70,
+            "standing_minutes": 100,
+            "intensity_signal": 0.34
+          },
+          "booking_terms": {
+            "activity_format": "timed_entry",
+            "booking_required": true,
+            "ticketed": true,
+            "booking_channel": "museum-direct"
+          },
+          "cost_summary": {
+            "total": {"currency": "USD", "typical_amount": 24.0}
+          },
+          "fit_summary": {
+            "overall_signal": 0.66,
+            "traveler_fit_signal": 0.64,
+            "weather_fit_signal": 0.93
+          },
+          "feasibility": {
+            "available": true,
+            "availability_status": "available",
+            "indoor_outdoor": "indoor"
+          },
+          "booking_links": ["https://example.com/museum"],
+          "source_refs": [
+            {
+              "provenance_id": "prov-major-museum",
+              "source_id": "museum-direct",
+              "source_category": "official_operational",
+              "subject_kind": "option",
+              "subject_id": "activity-major-museum",
+              "contribution_kind": "operational",
+              "summary": "Official museum site confirms ticketing and hours."
+            }
+          ]
+        }
+      ],
+      "feasibility": {
+        "available": true,
+        "internally_consistent": true
+      }
+    }
+  ],
+  "tags": ["route-level", "mixed-option", "activity-anchor"]
+}

@@ -1,5 +1,7 @@
 """Canonical shared planning contracts for destinations, trips, options, and objectives."""
 
+from __future__ import annotations
+
 from .destinations import (
     ADJACENCY_KINDS,
     EXPERIENCE_SENTIMENTS,
@@ -49,7 +51,13 @@ from .options import (
     OptionQualitySummary,
     OptionSet,
 )
-from .trip import ProfileRefs, TravelerPartySummary, Trip, TripArtifactRefs, TripFrameSummary
+from .trip import (
+    ProfileRefs,
+    TravelerPartySummary,
+    Trip,
+    TripArtifactRefs,
+    TripFrameSummary,
+)
 
 __all__ = [
     "ADJACENCY_KINDS",
@@ -62,10 +70,10 @@ __all__ = [
     "DestinationGeo",
     "DestinationSourceRef",
     "DestinationTag",
+    "DiscoveryStrategy",
     "EXPERIENCE_SENTIMENTS",
     "ExperienceSignal",
     "EXPANSION_MODES",
-    "DiscoveryStrategy",
     "ItineraryObjectives",
     "LodgingStrategy",
     "MOBILITY_MODES",
@@ -73,20 +81,20 @@ __all__ = [
     "MoneyRange",
     "MoveDensityTarget",
     "NearbyDestinationRef",
+    "OPERATIONAL_NOTE_IMPACTS",
+    "OPERATIONAL_NOTE_KINDS",
+    "OperationalNote",
     "Option",
     "OptionCostSummary",
     "OptionQualitySummary",
     "OptionSet",
-    "OPERATIONAL_NOTE_IMPACTS",
-    "OPERATIONAL_NOTE_KINDS",
-    "OperationalNote",
     "PLACE_KINDS",
     "PLACE_RELATIONSHIP_KINDS",
+    "PROVENANCE_ROLES",
     "PlaceHierarchyRef",
     "PlaceKind",
     "PlaceRelationshipKind",
     "ProfileRefs",
-    "PROVENANCE_ROLES",
     "QualityFloorProtection",
     "RecoveryExpectations",
     "RegionExpansionRef",
