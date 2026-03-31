@@ -265,6 +265,10 @@ class InventoryBundle:
             raise ValueError(
                 "destinations must include each destination referenced by lodging or activity options"
             )
+        if transport_destination_ids and not represented_destination_ids:
+            raise ValueError(
+                "destinations must include each origin_id and destination_id referenced by transport options"
+            )
         if represented_destination_ids and not transport_destination_ids.issubset(
             represented_destination_ids
         ):

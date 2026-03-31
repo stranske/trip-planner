@@ -70,6 +70,20 @@ def test_inventory_bundle_accepts_explicitly_infeasible_but_explained_bundle() -
     ]
 
 
+def test_transport_only_bundle_requires_destinations_for_transport_endpoints() -> None:
+    payload = json.loads(
+        _fixture_path("transport_lodging_bundle.json").read_text(encoding="utf-8")
+    )
+    bundle = payload["bundles"][0]
+    bundle["destinations"] = []
+    bundle["lodging_options"] = []
+
+    with pytest.raises(
+        ValueError, match="destinations must include each origin_id and destination_id"
+    ):
+        InventoryBundle.from_dict(bundle)
+
+
 def test_bundles_reject_inconsistent_destination_and_invalid_mixed_option_metadata() -> (
     None
 ):
