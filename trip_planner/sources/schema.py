@@ -34,6 +34,15 @@ SOURCE_OPTION_KINDS: tuple[str, ...] = (
     "policy",
 )
 
+SOURCE_ENTITY_SCOPES: tuple[str, ...] = (
+    "lodging",
+    "transport",
+    "activity",
+    "destination",
+    "managed_travel",
+    "mixed",
+)
+
 BUSINESS_APPROVAL_STATUSES: tuple[str, ...] = (
     "unknown",
     "approved",
@@ -61,4 +70,42 @@ CONTRIBUTION_KINDS: tuple[str, ...] = (
     "policy",
     "availability",
     "comparison",
+)
+
+ADAPTER_CAPABILITIES: tuple[str, ...] = (
+    "fetch_live",
+    "read_fixture",
+    "read_file",
+    "supports_incremental",
+    "supports_normalization_handoff",
+)
+
+SNAPSHOT_STATUSES: tuple[str, ...] = (
+    "complete",
+    "partial",
+    "failed",
+    "stale",
+)
+
+HANDOFF_STATUSES: tuple[str, ...] = (
+    "not_started",
+    "ready",
+    "partial",
+    "blocked",
+)
+
+ADAPTER_ISSUE_STAGES: tuple[str, ...] = (
+    "availability",
+    "request",
+    "fetch",
+    "decode",
+    "validation",
+    "freshness",
+    "handoff",
+)
+
+ADAPTER_ISSUE_SEVERITIES: tuple[str, ...] = (
+    "info",
+    "warning",
+    "error",
 )

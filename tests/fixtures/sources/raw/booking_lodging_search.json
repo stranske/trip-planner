@@ -1,0 +1,13 @@
+{
+  "search_id": "booking-paris-2026-04-18",
+  "hotel_id": "hotel_75001_rive_gauche",
+  "hotel_name": "Rive Gauche Stay",
+  "nightly_rate": {
+    "amount": "219.00",
+    "currency": "EUR"
+  },
+  "cancellation_policy": "Free cancellation until 24 hours before arrival",
+  "room_type": "Deluxe Queen",
+  "check_in": "2026-04-18",
+  "check_out": "2026-04-21"
+}
