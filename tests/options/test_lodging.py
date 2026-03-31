@@ -160,3 +160,40 @@ def test_lodging_rejects_invalid_nested_values() -> None:
     payload["source_refs"][0]["source_category"] = "unsupported"
     with pytest.raises(ValueError, match="source_category"):
         LodgingOption.from_dict(payload)
+
+
+def test_lodging_requires_positive_min_stay_and_matching_destination_id() -> None:
+    with pytest.raises(ValueError, match="min_stay_nights"):
+        LodgingBookingTerms(min_stay_nights=0)
+
+    with pytest.raises(ValueError, match="destination_id on LodgingOption must match"):
+        LodgingOption(
+            option_id="lodg-mismatch",
+            name="Mismatch Stay",
+            destination_id="dest-a",
+            location_summary=LodgingLocationSummary(
+                destination_id="dest-b",
+                location_context="urban_core",
+            ),
+            room_summary=LodgingRoomSummary(lodging_kind="hotel"),
+        )
+
+
+def test_lodging_rejects_plain_strings_for_list_fields() -> None:
+    with pytest.raises(ValueError, match="booking_links must be a list"):
+        LodgingOption(
+            option_id="lodg-string-links",
+            name="String Links Stay",
+            destination_id="dest-city-kyoto",
+            location_summary=LodgingLocationSummary(
+                destination_id="dest-city-kyoto",
+                location_context="urban_core",
+            ),
+            room_summary=LodgingRoomSummary(lodging_kind="hotel"),
+            booking_links="https://example.com/not-a-list",  # type: ignore[arg-type]
+        )
+
+    payload = json.loads(_fixture_path("central_urban_hotel.json").read_text(encoding="utf-8"))
+    payload["cost_summary"]["notes"] = "not-a-list"
+    with pytest.raises(ValueError, match="notes must be a list"):
+        LodgingOption.from_dict(payload)

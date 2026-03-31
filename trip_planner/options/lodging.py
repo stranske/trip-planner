@@ -31,6 +31,12 @@ LOCATION_CONTEXTS: tuple[str, ...] = ("urban_core", "inner_neighborhood", "outer
 INVENTORY_STATUSES: tuple[str, ...] = ("available", "limited", "request_only", "sold_out")
 
 
+def _require_string_list(values: Any, field_name: str) -> None:
+    if not isinstance(values, list):
+        raise ValueError(f"{field_name} must be a list of non-empty strings")
+    require_strings(values, field_name)
+
+
 def _optional_list_field(payload: dict[str, Any], field_name: str) -> list[Any]:
     value = payload.get(field_name, [])
     if not isinstance(value, list):
@@ -71,7 +77,7 @@ def _parse_provenance_reference(payload: dict[str, Any]) -> ProvenanceReference:
         freshness_days_at_capture=payload.get("freshness_days_at_capture"),
         trust_snapshot=SourceTrustSignals(**trust_payload) if trust_payload else None,
         quality_value_fit=QualityValueFitSummary(**quality_payload) if quality_payload else None,
-        notes=payload.get("notes", []),
+        notes=_optional_list_field(payload, "notes"),
     )
 
 
@@ -105,8 +111,8 @@ class LodgingLocationSummary:
             value = getattr(self, field_name)
             if value is not None:
                 require_probability(value, field_name)
-        require_strings(self.place_context_ids, "place_context_ids")
-        require_strings(self.notes, "notes")
+        _require_string_list(self.place_context_ids, "place_context_ids")
+        _require_string_list(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -138,8 +144,8 @@ class LodgingRoomSummary:
             value = getattr(self, field_name)
             if value is not None:
                 require_probability(value, field_name)
-        require_strings(self.amenities, "amenities")
-        require_strings(self.notes, "notes")
+        _require_string_list(self.amenities, "amenities")
+        _require_string_list(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -159,11 +165,12 @@ class LodgingBookingTerms:
     def __post_init__(self) -> None:
         require_optional_non_empty(self.cancellation_summary or None, "cancellation_summary")
         if self.min_stay_nights is not None:
-            require_non_negative(self.min_stay_nights, "min_stay_nights")
+            if not isinstance(self.min_stay_nights, int) or self.min_stay_nights < 1:
+                raise ValueError("min_stay_nights must be a positive integer when provided")
         require_optional_non_empty(self.booking_channel or None, "booking_channel")
         require_optional_non_empty(self.checkin_window or None, "checkin_window")
         require_optional_non_empty(self.checkout_window or None, "checkout_window")
-        require_strings(self.notes, "notes")
+        _require_string_list(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -182,7 +189,7 @@ class LodgingCostSummary:
             value = getattr(self, field_name)
             if value is not None and not isinstance(value, MoneyRange):
                 raise ValueError(f"{field_name} must be a MoneyRange when provided")
-        require_strings(self.notes, "notes")
+        _require_string_list(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -206,7 +213,7 @@ class LodgingQualitySummary:
             value = getattr(self, field_name)
             if value is not None:
                 require_probability(value, field_name)
-        require_strings(self.notes, "notes")
+        _require_string_list(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -230,7 +237,7 @@ class LodgingValueSummary:
             value = getattr(self, field_name)
             if value is not None:
                 require_probability(value, field_name)
-        require_strings(self.notes, "notes")
+        _require_string_list(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -254,7 +261,7 @@ class LodgingFitSummary:
             value = getattr(self, field_name)
             if value is not None:
                 require_probability(value, field_name)
-        require_strings(self.notes, "notes")
+        _require_string_list(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -278,9 +285,9 @@ class LodgingFeasibility:
                 "business_approval_status must be one of "
                 f"{source_schema.BUSINESS_APPROVAL_STATUSES}"
             )
-        require_strings(self.accessibility_notes, "accessibility_notes")
-        require_strings(self.constraints, "constraints")
-        require_strings(self.notes, "notes")
+        _require_string_list(self.accessibility_notes, "accessibility_notes")
+        _require_string_list(self.constraints, "constraints")
+        _require_string_list(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -314,6 +321,11 @@ class LodgingOption:
             raise ValueError(f"schema_version must be {SCHEMA_VERSION!r}")
         if not isinstance(self.location_summary, LodgingLocationSummary):
             raise ValueError("location_summary must be a LodgingLocationSummary")
+        if self.location_summary.destination_id != self.destination_id:
+            raise ValueError(
+                "destination_id on LodgingOption must match "
+                "location_summary.destination_id"
+            )
         if not isinstance(self.room_summary, LodgingRoomSummary):
             raise ValueError("room_summary must be a LodgingRoomSummary")
         if not isinstance(self.booking_terms, LodgingBookingTerms):
@@ -328,17 +340,18 @@ class LodgingOption:
             raise ValueError("fit_summary must be a LodgingFitSummary")
         if not isinstance(self.feasibility, LodgingFeasibility):
             raise ValueError("feasibility must be a LodgingFeasibility")
-        require_strings(self.booking_links, "booking_links")
+        _require_string_list(self.booking_links, "booking_links")
         if any(not isinstance(item, ProvenanceReference) for item in self.source_refs):
             raise ValueError("source_refs must contain ProvenanceReference instances")
-        require_strings(self.tags, "tags")
-        require_strings(self.notes, "notes")
+        _require_string_list(self.tags, "tags")
+        _require_string_list(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "LodgingOption":
+        cost_payload = _optional_mapping_field(payload, "cost_summary")
         return cls(
             option_id=payload["option_id"],
             name=payload["name"],
@@ -348,22 +361,22 @@ class LodgingOption:
             booking_terms=LodgingBookingTerms(**_optional_mapping_field(payload, "booking_terms")),
             cost_summary=LodgingCostSummary(
                 nightly=_parse_money_range(
-                    _optional_mapping_field(payload, "cost_summary").get("nightly"),
+                    cost_payload.get("nightly"),
                     "cost_summary.nightly",
                 ),
                 total=_parse_money_range(
-                    _optional_mapping_field(payload, "cost_summary").get("total"),
+                    cost_payload.get("total"),
                     "cost_summary.total",
                 ),
                 taxes_and_fees=_parse_money_range(
-                    _optional_mapping_field(payload, "cost_summary").get("taxes_and_fees"),
+                    cost_payload.get("taxes_and_fees"),
                     "cost_summary.taxes_and_fees",
                 ),
                 deposit=_parse_money_range(
-                    _optional_mapping_field(payload, "cost_summary").get("deposit"),
+                    cost_payload.get("deposit"),
                     "cost_summary.deposit",
                 ),
-                notes=_optional_mapping_field(payload, "cost_summary").get("notes", []),
+                notes=cost_payload.get("notes", []),
             ),
             quality_summary=LodgingQualitySummary(
                 **_optional_mapping_field(payload, "quality_summary")

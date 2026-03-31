@@ -4,7 +4,7 @@
 
 It separates the major decision surfaces that frequently get conflated:
 
-- `cost_summary` captures nightly, total, tax, and deposit ranges.
+- `cost_summary` captures nightly, total, taxes-and-fees, and deposit ranges.
 - `quality_summary` captures the inherent lodging product signal such as sleep quality, property condition, and service.
 - `value_summary` captures whether the product is a good trade for the money or policy budget.
 - `fit_summary` captures whether the lodging matches the trip context, especially quiet and recovery needs.
