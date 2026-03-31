@@ -58,7 +58,9 @@ def _optional_mapping_field(payload: dict[str, Any], field_name: str) -> dict[st
     return value
 
 
-def _parse_money_range(payload: dict[str, Any] | None, field_name: str) -> MoneyRange | None:
+def _parse_money_range(
+    payload: dict[str, Any] | None, field_name: str
+) -> MoneyRange | None:
     if payload is None:
         return None
     if not isinstance(payload, dict):
@@ -84,7 +86,9 @@ class BundleFeasibility:
         _require_string_list(self.dependencies, "dependencies")
         _require_string_list(self.accessibility_notes, "accessibility_notes")
         _require_string_list(self.notes, "notes")
-        if (not self.available or not self.internally_consistent) and not self.blocking_reasons:
+        if (
+            not self.available or not self.internally_consistent
+        ) and not self.blocking_reasons:
             raise ValueError(
                 "blocking_reasons must describe why the bundle is unavailable or inconsistent"
             )
@@ -222,7 +226,9 @@ class InventoryBundle:
             raise ValueError("destinations must contain Destination instances")
         if any(not isinstance(item, LodgingOption) for item in self.lodging_options):
             raise ValueError("lodging_options must contain LodgingOption instances")
-        if any(not isinstance(item, TransportOption) for item in self.transport_options):
+        if any(
+            not isinstance(item, TransportOption) for item in self.transport_options
+        ):
             raise ValueError("transport_options must contain TransportOption instances")
         if any(not isinstance(item, ActivityOption) for item in self.activity_options):
             raise ValueError("activity_options must contain ActivityOption instances")
@@ -231,16 +237,16 @@ class InventoryBundle:
         if not isinstance(self.explanation, BundleExplanation):
             raise ValueError("explanation must be a BundleExplanation")
         if not (
-            self.lodging_options
-            or self.transport_options
-            or self.activity_options
+            self.lodging_options or self.transport_options or self.activity_options
         ):
             raise ValueError(
                 "InventoryBundle must include at least one lodging, transport, or activity option"
             )
         _require_string_list(self.tags, "tags")
         _require_string_list(self.notes, "notes")
-        represented_destination_ids = {item.destination_id for item in self.destinations}
+        represented_destination_ids = {
+            item.destination_id for item in self.destinations
+        }
         referenced_destination_ids = {
             item.destination_id for item in self.lodging_options
         } | {item.destination_id for item in self.activity_options}
@@ -317,7 +323,9 @@ class MixedOption:
     supported_purposes: list[str] = field(
         default_factory=lambda: ["profile_learning", "inventory_narrowing"]
     )
-    route_coherence: RouteCoherenceSummary = field(default_factory=RouteCoherenceSummary)
+    route_coherence: RouteCoherenceSummary = field(
+        default_factory=RouteCoherenceSummary
+    )
     schedule_fit: ScheduleFitSummary = field(default_factory=ScheduleFitSummary)
     budget_posture: BudgetPostureSummary = field(default_factory=BudgetPostureSummary)
     explanation: BundleExplanation = field(default_factory=BundleExplanation)
@@ -349,7 +357,9 @@ class MixedOption:
             raise ValueError("explanation must be a BundleExplanation")
         _require_string_list(self.supported_purposes, "supported_purposes")
         invalid_purposes = [
-            purpose for purpose in self.supported_purposes if purpose not in OPTION_SET_PURPOSES
+            purpose
+            for purpose in self.supported_purposes
+            if purpose not in OPTION_SET_PURPOSES
         ]
         if invalid_purposes:
             raise ValueError(
@@ -371,7 +381,9 @@ class MixedOption:
                 for bundle in self.bundles
                 for destination_id in bundle.destination_ids
             }
-            if not bundle_destination_ids.issubset(set(self.route_coherence.destination_sequence)):
+            if not bundle_destination_ids.issubset(
+                set(self.route_coherence.destination_sequence)
+            ):
                 raise ValueError(
                     "route_coherence.destination_sequence must cover each destination in the included bundles"
                 )
@@ -379,12 +391,12 @@ class MixedOption:
     def _aggregate_booking_links(self) -> list[str]:
         values = list(self.booking_links)
         for bundle in self.bundles:
-            for option in bundle.lodging_options:
-                values.extend(option.booking_links)
-            for option in bundle.transport_options:
-                values.extend(option.booking_links)
-            for option in bundle.activity_options:
-                values.extend(option.booking_links)
+            for lodging_option in bundle.lodging_options:
+                values.extend(lodging_option.booking_links)
+            for transport_option in bundle.transport_options:
+                values.extend(transport_option.booking_links)
+            for activity_option in bundle.activity_options:
+                values.extend(activity_option.booking_links)
         return _dedupe_strings(values)
 
     def _aggregate_source_refs(self) -> list[str]:
@@ -392,12 +404,16 @@ class MixedOption:
         for bundle in self.bundles:
             for destination in bundle.destinations:
                 values.extend(item.provenance_id for item in destination.source_refs)
-            for option in bundle.lodging_options:
-                values.extend(item.provenance_id for item in option.source_refs)
-            for option in bundle.transport_options:
-                values.extend(item.provenance_id for item in option.source_refs)
-            for option in bundle.activity_options:
-                values.extend(item.provenance_id for item in option.source_refs)
+            for lodging_option in bundle.lodging_options:
+                values.extend(item.provenance_id for item in lodging_option.source_refs)
+            for transport_option in bundle.transport_options:
+                values.extend(
+                    item.provenance_id for item in transport_option.source_refs
+                )
+            for activity_option in bundle.activity_options:
+                values.extend(
+                    item.provenance_id for item in activity_option.source_refs
+                )
         return _dedupe_strings(values)
 
     def _aggregate_destination_ids(self) -> list[str]:
@@ -444,7 +460,8 @@ class MixedOption:
             booking_links=self._aggregate_booking_links(),
             source_refs=self._aggregate_source_refs(),
             supporting_place_ids=(
-                self.route_coherence.destination_sequence or self._aggregate_destination_ids()
+                self.route_coherence.destination_sequence
+                or self._aggregate_destination_ids()
             ),
             explanation=explanation,
         )

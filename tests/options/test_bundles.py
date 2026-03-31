@@ -33,7 +33,9 @@ def test_transport_plus_lodging_bundle_preserves_category_specific_detail() -> N
     assert bundle.transport_options[0].transport_kind == "rail"
     assert bundle.lodging_options[0].room_summary.lodging_kind == "hotel"
     assert bundle.transport_options[0].timing_summary.duration_minutes == 88
-    assert bundle.lodging_options[0].location_summary.business_access_signal == pytest.approx(0.93)
+    assert bundle.lodging_options[
+        0
+    ].location_summary.business_access_signal == pytest.approx(0.93)
 
 
 def test_route_level_mixed_option_round_trips_and_converts_to_option_entry() -> None:
@@ -51,11 +53,13 @@ def test_route_level_mixed_option_round_trips_and_converts_to_option_entry() -> 
 
 
 def test_inventory_bundle_accepts_explicitly_infeasible_but_explained_bundle() -> None:
-    payload = json.loads(_fixture_path("transport_lodging_bundle.json").read_text(encoding="utf-8"))
+    payload = json.loads(
+        _fixture_path("transport_lodging_bundle.json").read_text(encoding="utf-8")
+    )
     payload["bundles"][0]["feasibility"] = {
         "available": False,
         "internally_consistent": True,
-        "blocking_reasons": ["Rail maintenance blocks the arrival window."]
+        "blocking_reasons": ["Rail maintenance blocks the arrival window."],
     }
 
     mixed_option = MixedOption.from_dict(payload)
@@ -66,18 +70,32 @@ def test_inventory_bundle_accepts_explicitly_infeasible_but_explained_bundle() -
     ]
 
 
-def test_bundles_reject_inconsistent_destination_and_invalid_mixed_option_metadata() -> None:
-    payload = json.loads(_fixture_path("route_level_mixed_option.json").read_text(encoding="utf-8"))
+def test_bundles_reject_inconsistent_destination_and_invalid_mixed_option_metadata() -> (
+    None
+):
+    payload = json.loads(
+        _fixture_path("route_level_mixed_option.json").read_text(encoding="utf-8")
+    )
     payload["bundles"][1]["activity_options"][0]["destination_id"] = "dest-city-nara"
-    with pytest.raises(ValueError, match="destinations must include each destination referenced"):
+    with pytest.raises(
+        ValueError, match="destinations must include each destination referenced"
+    ):
         InventoryBundle.from_dict(payload["bundles"][1])
 
-    payload = json.loads(_fixture_path("lodging_only_comparison.json").read_text(encoding="utf-8"))
+    payload = json.loads(
+        _fixture_path("lodging_only_comparison.json").read_text(encoding="utf-8")
+    )
     payload["supported_purposes"] = ["profile_learning", "profile_learning"]
-    with pytest.raises(ValueError, match="supported_purposes must not contain duplicates"):
+    with pytest.raises(
+        ValueError, match="supported_purposes must not contain duplicates"
+    ):
         MixedOption.from_dict(payload)
 
-    payload = json.loads(_fixture_path("transport_lodging_bundle.json").read_text(encoding="utf-8"))
+    payload = json.loads(
+        _fixture_path("transport_lodging_bundle.json").read_text(encoding="utf-8")
+    )
     payload["route_coherence"]["destination_sequence"] = ["dest-city-osaka"]
-    with pytest.raises(ValueError, match="route_coherence.destination_sequence must cover"):
+    with pytest.raises(
+        ValueError, match="route_coherence.destination_sequence must cover"
+    ):
         MixedOption.from_dict(payload)
