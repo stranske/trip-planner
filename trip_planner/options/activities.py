@@ -14,7 +14,6 @@ from trip_planner.contracts._validators import (
 )
 from trip_planner.contracts.options import MoneyRange
 from trip_planner.sources import ProvenanceReference, QualityValueFitSummary, SourceTrustSignals
-from trip_planner.sources import schema as source_schema
 
 SCHEMA_VERSION = "0.1.0"
 
@@ -425,4 +424,3 @@ class ActivityOption:
             notes=_optional_list_field(payload, "notes"),
             schema_version=payload.get("schema_version", SCHEMA_VERSION),
         )
-
