@@ -60,12 +60,14 @@ def test_mixed_option_keeps_normalized_contracts_distinct_while_assembling_share
 
     assert lodging_option.fit_summary.location_fit_signal == pytest.approx(0.91)
     assert transport_option.policy_summary.business_approval_status == "approved"
-    assert activity_option.significance_summary.overall_signal == pytest.approx(0.95)
-    assert activity_option.fit_summary.overall_signal == pytest.approx(0.66)
-    assert (
-        activity_option.significance_summary.overall_signal
-        > activity_option.fit_summary.overall_signal
-    )
+    significance_signal = activity_option.significance_summary.overall_signal
+    fit_signal = activity_option.fit_summary.overall_signal
+
+    assert significance_signal is not None
+    assert fit_signal is not None
+    assert significance_signal == pytest.approx(0.95)
+    assert fit_signal == pytest.approx(0.66)
+    assert significance_signal > fit_signal
     assert activity_option.feasibility.indoor_outdoor == "indoor"
     assert option.fit_signals == {
         "route_coherence": pytest.approx(0.89),

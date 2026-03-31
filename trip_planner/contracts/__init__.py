@@ -3,6 +3,101 @@
 from __future__ import annotations
 
 from importlib import import_module
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from trip_planner.contracts.activities import (
+        ACTIVITY_FORMATS,
+        ACTIVITY_KINDS,
+        AVAILABILITY_STATUSES as ACTIVITY_AVAILABILITY_STATUSES,
+        EFFORT_LEVELS,
+        ActivityBookingTerms,
+        ActivityCategory,
+        ActivityCostSummary,
+        ActivityEffortSummary,
+        ActivityFeasibility,
+        ActivityFitSummary,
+        ActivityOption,
+        ActivityQualitySummary,
+        ActivitySignificanceSummary,
+        ActivityTimingSummary,
+        ActivityValueSummary,
+        SCHEMA_VERSION as ACTIVITY_SCHEMA_VERSION,
+    )
+    from trip_planner.contracts.destinations import (
+        ADJACENCY_KINDS,
+        EXPERIENCE_SENTIMENTS,
+        EXPANSION_MODES,
+        MOBILITY_MODES,
+        OPERATIONAL_NOTE_IMPACTS,
+        OPERATIONAL_NOTE_KINDS,
+        PLACE_CONTEXT_BOUNDARIES,
+        PLACE_CONTEXT_ROLES,
+        PLACE_KINDS,
+        PLACE_RELATIONSHIP_KINDS,
+        PROVENANCE_ROLES,
+        SCHEMA_VERSION,
+        SEASONS,
+        SEASONAL_IMPACTS,
+        TAG_SCOPES,
+        AdjacencyKind,
+        Destination,
+        DestinationGeo,
+        DestinationSourceRef,
+        DestinationTag,
+        ExperienceSignal,
+        MobilityProfile,
+        NearbyDestinationRef,
+        OperationalNote,
+        PlaceContext,
+        PlaceContextRole,
+        PlaceHierarchyRef,
+        PlaceKind,
+        PlaceRelationshipKind,
+        RegionExpansionRef,
+        SeasonalSignal,
+    )
+    from trip_planner.contracts.lodging import (
+        INVENTORY_STATUSES,
+        LOCATION_CONTEXTS,
+        LODGING_KINDS,
+        LodgingBookingTerms,
+        LodgingCostSummary,
+        LodgingFeasibility,
+        LodgingFitSummary,
+        LodgingLocationSummary,
+        LodgingOption,
+        LodgingQualitySummary,
+        LodgingRoomSummary,
+        LodgingValueSummary,
+    )
+    from trip_planner.contracts.objectives import (
+        BudgetProtection,
+        CountRange,
+        DayStructureObjectives,
+        DiscoveryStrategy,
+        ItineraryObjectives,
+        LodgingStrategy,
+        MoveDensityTarget,
+        QualityFloorProtection,
+        RecoveryExpectations,
+        TransportStrategy,
+    )
+    from trip_planner.contracts.options import (
+        ComparisonAxis,
+        MoneyRange,
+        Option,
+        OptionCostSummary,
+        OptionQualitySummary,
+        OptionSet,
+    )
+    from trip_planner.contracts.trip import (
+        ProfileRefs,
+        TravelerPartySummary,
+        Trip,
+        TripArtifactRefs,
+        TripFrameSummary,
+    )
 
 _EXPORTS: dict[str, str] = {
     "ACTIVITY_AVAILABILITY_STATUSES": "trip_planner.contracts.activities",
