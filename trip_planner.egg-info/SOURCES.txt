@@ -52,6 +52,7 @@ trip_planner/business/profile.py
 trip_planner/business/schema.py
 trip_planner/contracts/__init__.py
 trip_planner/contracts/_validators.py
+trip_planner/contracts/activities.py
 trip_planner/contracts/destinations.py
 trip_planner/contracts/lodging.py
 trip_planner/contracts/objectives.py
