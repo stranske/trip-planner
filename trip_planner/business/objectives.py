@@ -37,9 +37,7 @@ def _require_positive_int_mapping(mapping: dict[str, int], field_name: str) -> N
             raise ValueError(f"{field_name}[{key}] must be positive")
 
 
-def _require_string_list_mapping(
-    mapping: dict[str, list[str]], field_name: str
-) -> None:
+def _require_string_list_mapping(mapping: dict[str, list[str]], field_name: str) -> None:
     if any(not isinstance(key, str) or not key for key in mapping):
         raise ValueError(f"{field_name} must use non-empty string keys")
     for key, value in mapping.items():
@@ -104,13 +102,10 @@ class ScheduleProtectionObjectives:
 
     def __post_init__(self) -> None:
         if self.protection_level not in SCHEDULE_PROTECTION_LEVELS:
-            raise ValueError(
-                f"protection_level must be one of {SCHEDULE_PROTECTION_LEVELS}"
-            )
+            raise ValueError(f"protection_level must be one of {SCHEDULE_PROTECTION_LEVELS}")
         if self.arrival_buffer_preference not in schema.ARRIVAL_BUFFER_PREFERENCES:
             raise ValueError(
-                "arrival_buffer_preference must be one of "
-                f"{schema.ARRIVAL_BUFFER_PREFERENCES}"
+                "arrival_buffer_preference must be one of " f"{schema.ARRIVAL_BUFFER_PREFERENCES}"
             )
         require_probability(self.same_day_return_tolerance, "same_day_return_tolerance")
         require_probability(self.red_eye_tolerance, "red_eye_tolerance")
@@ -205,9 +200,7 @@ class ExceptionPathObjectives:
         if self.posture not in EXCEPTION_PATH_POSTURES:
             raise ValueError(f"posture must be one of {EXCEPTION_PATH_POSTURES}")
         if self.fallback_mode not in schema.EXCEPTION_FALLBACK_MODES:
-            raise ValueError(
-                f"fallback_mode must be one of {schema.EXCEPTION_FALLBACK_MODES}"
-            )
+            raise ValueError(f"fallback_mode must be one of {schema.EXCEPTION_FALLBACK_MODES}")
         require_strings(self.allowed_exception_types, "allowed_exception_types")
         require_strings(self.approval_roles, "approval_roles")
         require_strings(self.notes, "notes")
@@ -220,17 +213,11 @@ class ExceptionPathObjectives:
 class BusinessPlanningObjectives:
     objective_id: str
     trip_id: str
-    compliant_first_path: PlanningPathObjectives = field(
-        default_factory=PlanningPathObjectives
-    )
+    compliant_first_path: PlanningPathObjectives = field(default_factory=PlanningPathObjectives)
     policy_nearest_fallback: PlanningPathObjectives = field(
-        default_factory=lambda: PlanningPathObjectives(
-            mode="policy_nearest", active=False
-        )
+        default_factory=lambda: PlanningPathObjectives(mode="policy_nearest", active=False)
     )
-    channel_strategy: BookingChannelObjectives = field(
-        default_factory=BookingChannelObjectives
-    )
+    channel_strategy: BookingChannelObjectives = field(default_factory=BookingChannelObjectives)
     schedule_protection: ScheduleProtectionObjectives = field(
         default_factory=ScheduleProtectionObjectives
     )
@@ -240,15 +227,9 @@ class BusinessPlanningObjectives:
     justification_readiness: JustificationReadinessObjectives = field(
         default_factory=JustificationReadinessObjectives
     )
-    cost_control_posture: CostControlObjectives = field(
-        default_factory=CostControlObjectives
-    )
-    comfort_floor_protection: ComfortFloorObjectives = field(
-        default_factory=ComfortFloorObjectives
-    )
-    exception_path_posture: ExceptionPathObjectives = field(
-        default_factory=ExceptionPathObjectives
-    )
+    cost_control_posture: CostControlObjectives = field(default_factory=CostControlObjectives)
+    comfort_floor_protection: ComfortFloorObjectives = field(default_factory=ComfortFloorObjectives)
+    exception_path_posture: ExceptionPathObjectives = field(default_factory=ExceptionPathObjectives)
     explanation_bundle: ObjectiveExplanationBundle = field(
         default_factory=ObjectiveExplanationBundle
     )
@@ -264,31 +245,17 @@ class BusinessPlanningObjectives:
         if not isinstance(self.channel_strategy, BookingChannelObjectives):
             raise ValueError("channel_strategy must be a BookingChannelObjectives")
         if not isinstance(self.schedule_protection, ScheduleProtectionObjectives):
-            raise ValueError(
-                "schedule_protection must be a ScheduleProtectionObjectives"
-            )
-        if not isinstance(
-            self.comparable_requirements, ComparableRequirementObjectives
-        ):
-            raise ValueError(
-                "comparable_requirements must be a ComparableRequirementObjectives"
-            )
-        if not isinstance(
-            self.justification_readiness, JustificationReadinessObjectives
-        ):
-            raise ValueError(
-                "justification_readiness must be a JustificationReadinessObjectives"
-            )
+            raise ValueError("schedule_protection must be a ScheduleProtectionObjectives")
+        if not isinstance(self.comparable_requirements, ComparableRequirementObjectives):
+            raise ValueError("comparable_requirements must be a ComparableRequirementObjectives")
+        if not isinstance(self.justification_readiness, JustificationReadinessObjectives):
+            raise ValueError("justification_readiness must be a JustificationReadinessObjectives")
         if not isinstance(self.cost_control_posture, CostControlObjectives):
             raise ValueError("cost_control_posture must be a CostControlObjectives")
         if not isinstance(self.comfort_floor_protection, ComfortFloorObjectives):
-            raise ValueError(
-                "comfort_floor_protection must be a ComfortFloorObjectives"
-            )
+            raise ValueError("comfort_floor_protection must be a ComfortFloorObjectives")
         if not isinstance(self.exception_path_posture, ExceptionPathObjectives):
-            raise ValueError(
-                "exception_path_posture must be an ExceptionPathObjectives"
-            )
+            raise ValueError("exception_path_posture must be an ExceptionPathObjectives")
         if not isinstance(self.explanation_bundle, ObjectiveExplanationBundle):
             raise ValueError("explanation_bundle must be an ObjectiveExplanationBundle")
         require_strings(self.explanations, "explanations")
