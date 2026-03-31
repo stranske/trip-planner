@@ -50,7 +50,10 @@ def test_transport_examples_keep_cheapest_easiest_and_best_fit_distinct() -> Non
 
     assert car.cost_summary.total is not None
     assert flight.cost_summary.total is not None
+    assert car.cost_summary.total.typical_amount is not None
+    assert flight.cost_summary.total.typical_amount is not None
     assert rail.fit_summary.overall_signal is not None
+    assert flight.fit_summary.overall_signal is not None
     assert car.cost_summary.total.typical_amount < flight.cost_summary.total.typical_amount
     assert flight.transfer_burden.transfer_count < rail.transfer_burden.transfer_count
     assert rail.fit_summary.overall_signal > flight.fit_summary.overall_signal
