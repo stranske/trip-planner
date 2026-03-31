@@ -548,7 +548,7 @@ class MixedOption:
             )
 
     def _aggregate_booking_links(self) -> list[str]:
-        values = list(self.booking_links)
+        values: list[str] = []
         for bundle in self.bundles:
             for lodging_option in bundle.lodging_options:
                 values.extend(lodging_option.booking_links)
@@ -559,7 +559,7 @@ class MixedOption:
         return _dedupe_strings(values)
 
     def _aggregate_source_refs(self) -> list[str]:
-        values = list(self.source_refs)
+        values: list[str] = []
         for bundle in self.bundles:
             for destination in bundle.destinations:
                 values.extend(item.provenance_id for item in destination.source_refs)

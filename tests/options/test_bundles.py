@@ -171,3 +171,17 @@ def test_bundles_reject_inconsistent_destination_and_invalid_mixed_option_metada
         ValueError, match="source_refs and provenance_summary.source_refs must be drawn"
     ):
         MixedOption.from_dict(payload)
+
+    payload = json.loads(_fixture_path("route_level_mixed_option.json").read_text(encoding="utf-8"))
+    payload["source_refs"] = ["prov-not-present"]
+    with pytest.raises(
+        ValueError, match="source_refs and provenance_summary.source_refs must be drawn"
+    ):
+        MixedOption.from_dict(payload)
+
+    payload = json.loads(_fixture_path("transport_lodging_bundle.json").read_text(encoding="utf-8"))
+    payload["booking_links"] = ["https://example.com/not-a-real-bundle-link"]
+    with pytest.raises(
+        ValueError, match="booking_links and provenance_summary.booking_links must be drawn"
+    ):
+        MixedOption.from_dict(payload)
