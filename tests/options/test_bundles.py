@@ -50,6 +50,32 @@ def test_route_level_mixed_option_round_trips_and_converts_to_option_entry() -> 
     assert "https://example.com/museum" in option.booking_links
 
 
+def test_mixed_option_keeps_normalized_contracts_distinct_while_assembling_shared_option() -> None:
+    mixed_option = _load_mixed_option("route_level_mixed_option.json")
+    cultural_bundle = mixed_option.bundles[1]
+    lodging_option = cultural_bundle.lodging_options[0]
+    transport_option = cultural_bundle.transport_options[0]
+    activity_option = cultural_bundle.activity_options[0]
+    option = mixed_option.to_option()
+
+    assert lodging_option.fit_summary.location_fit_signal == pytest.approx(0.91)
+    assert transport_option.policy_summary.business_approval_status == "approved"
+    assert activity_option.significance_summary.overall_signal == pytest.approx(0.95)
+    assert activity_option.fit_summary.overall_signal == pytest.approx(0.66)
+    assert (
+        activity_option.significance_summary.overall_signal
+        > activity_option.fit_summary.overall_signal
+    )
+    assert activity_option.feasibility.indoor_outdoor == "indoor"
+    assert option.fit_signals == {
+        "route_coherence": pytest.approx(0.89),
+        "schedule_fit": pytest.approx(0.84),
+        "budget_posture": pytest.approx(0.74),
+    }
+    assert option.source_refs == ["prov-major-museum"]
+    assert option.booking_links == ["https://example.com/museum"]
+
+
 def test_inventory_bundle_accepts_explicitly_infeasible_but_explained_bundle() -> None:
     payload = json.loads(_fixture_path("transport_lodging_bundle.json").read_text(encoding="utf-8"))
     payload["bundles"][0]["feasibility"] = {
@@ -64,6 +90,7 @@ def test_inventory_bundle_accepts_explicitly_infeasible_but_explained_bundle() -
     assert mixed_option.bundles[0].feasibility.blocking_reasons == [
         "Rail maintenance blocks the arrival window."
     ]
+    assert "Rail maintenance blocks the arrival window." in mixed_option.to_option().drawbacks
 
 
 def test_transport_only_bundle_requires_destinations_for_transport_endpoints() -> None:
