@@ -44,6 +44,8 @@ trip_planner.egg-info/dependency_links.txt
 trip_planner.egg-info/requires.txt
 trip_planner.egg-info/top_level.txt
 trip_planner/business/__init__.py
+trip_planner/business/objective_derivation.py
+trip_planner/business/objectives.py
 trip_planner/business/policy_contracts.py
 trip_planner/business/profile.py
 trip_planner/business/schema.py
@@ -52,6 +54,8 @@ trip_planner/contracts/_validators.py
 trip_planner/contracts/objectives.py
 trip_planner/contracts/options.py
 trip_planner/contracts/trip.py
+trip_planner/itinerary/__init__.py
+trip_planner/itinerary/objective_derivation.py
 trip_planner/preferences/__init__.py
 trip_planner/preferences/autonomy.py
 trip_planner/preferences/evidence.py

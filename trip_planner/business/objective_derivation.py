@@ -12,6 +12,8 @@ from trip_planner.business.objectives import (
     CostControlObjectives,
     ExceptionPathObjectives,
     JustificationReadinessObjectives,
+    ObjectiveExplanationBundle,
+    PlanningPathObjectives,
     ScheduleProtectionObjectives,
 )
 from trip_planner.business.policy_contracts import PolicyConstraintSet
@@ -244,12 +246,77 @@ def _exception_path(
     )
 
 
+def _planning_paths(
+    profile: BusinessTravelProfile,
+    channel_strategy: BookingChannelObjectives,
+    schedule_protection: ScheduleProtectionObjectives,
+    comparable_requirements: ComparableRequirementObjectives,
+    exception_path: ExceptionPathObjectives,
+) -> tuple[PlanningPathObjectives, PlanningPathObjectives]:
+    trigger_signals: list[str] = []
+    if channel_strategy.channel_mode == "approved_only":
+        trigger_signals.append("approved_only_channels")
+    if schedule_protection.protection_level == "mission_critical":
+        trigger_signals.append("mission_critical_schedule")
+    if profile.approval_targets.needs_exception_preclearance:
+        trigger_signals.append("exception_preclearance")
+    if comparable_requirements.additional_comparables_for_exception:
+        trigger_signals.append("additional_exception_comparables")
+    if profile.traveler_context.mobility_or_access_needs:
+        trigger_signals.append("mobility_or_access_needs")
+
+    compliant_first = PlanningPathObjectives(
+        mode="compliant_first",
+        active=True,
+        trigger_signals=[
+            signal
+            for signal in trigger_signals
+            if signal in {"approved_only_channels", "mission_critical_schedule"}
+        ],
+        notes=[
+            "Start with policy-compliant channels and vendors before relaxing tradeoffs.",
+            "Preserve schedule protection and comfort floors inside compliant options first.",
+        ],
+    )
+    fallback_active = exception_path.posture != "compliant_first" or bool(
+        {
+            "mission_critical_schedule",
+            "exception_preclearance",
+            "mobility_or_access_needs",
+        }
+        & set(trigger_signals)
+    )
+    policy_nearest = PlanningPathObjectives(
+        mode="policy_nearest",
+        active=fallback_active,
+        trigger_signals=trigger_signals,
+        notes=[
+            "Use the nearest policy fit when a clean compliant plan may not preserve the trip objective.",
+        ]
+        + (
+            ["Retain comparables and justification material so review can explain the fallback."]
+            if fallback_active
+            else []
+        ),
+    )
+    return compliant_first, policy_nearest
+
+
 def _build_explanations(
     profile: BusinessTravelProfile,
     constraint_set: PolicyConstraintSet | None,
-) -> list[str]:
+    compliant_first_path: PlanningPathObjectives,
+    policy_nearest_fallback: PlanningPathObjectives,
+    channel_strategy: BookingChannelObjectives,
+    schedule_protection: ScheduleProtectionObjectives,
+    comparable_requirements: ComparableRequirementObjectives,
+    justification_readiness: JustificationReadinessObjectives,
+    cost_control_posture: CostControlObjectives,
+    comfort_floor_protection: ComfortFloorObjectives,
+    exception_path_posture: ExceptionPathObjectives,
+) -> tuple[list[str], ObjectiveExplanationBundle]:
     required_channels = _effective_required_channels(profile, constraint_set)
-    explanations = [
+    summary = [
         f"purpose:{profile.trip_purpose.purpose_type}",
         f"trip_criticality:{profile.trip_purpose.trip_criticality}",
         f"required_presence_windows:{len(profile.trip_purpose.required_presence_windows)}",
@@ -270,14 +337,46 @@ def _build_explanations(
         "approval_roles:"
         + ",".join(_sorted_strings(profile.approval_targets.approval_roles) or ["none"]),
         f"fallback_mode:{profile.exception_strategy.fallback_mode}",
+        f"compliant_first_active:{str(compliant_first_path.active).lower()}",
+        f"policy_nearest_fallback_active:{str(policy_nearest_fallback.active).lower()}",
     ]
     if constraint_set is not None:
-        explanations.append(f"policy_constraint_set:{constraint_set.policy_id}")
-        explanations.append(
+        summary.append(f"policy_constraint_set:{constraint_set.policy_id}")
+        summary.append(
             "allowed_exception_types:"
             + ",".join(_effective_allowed_exception_types(constraint_set) or ["none"])
         )
-    return explanations
+    category_reasons = {
+        "planning_paths": [
+            f"primary={compliant_first_path.mode}",
+            f"fallback_active={str(policy_nearest_fallback.active).lower()}",
+        ]
+        + policy_nearest_fallback.trigger_signals,
+        "channel_strategy": channel_strategy.notes
+        + [f"channel_mode={channel_strategy.channel_mode}"],
+        "schedule_protection": schedule_protection.notes
+        + [f"protection_level={schedule_protection.protection_level}"],
+        "comparable_requirements": comparable_requirements.notes
+        + ["capture_required=" + str(comparable_requirements.capture_required).lower()],
+        "justification_readiness": justification_readiness.notes
+        + [
+            "maintain_exception_packet="
+            + str(justification_readiness.maintain_exception_packet).lower()
+        ],
+        "cost_control_posture": cost_control_posture.notes
+        + [f"posture={cost_control_posture.posture}"],
+        "comfort_floor_protection": comfort_floor_protection.notes
+        + [
+            "preserve_arrival_readiness="
+            + str(comfort_floor_protection.preserve_arrival_readiness).lower()
+        ],
+        "exception_path_posture": exception_path_posture.notes
+        + [f"posture={exception_path_posture.posture}"],
+    }
+    return summary, ObjectiveExplanationBundle(
+        summary=summary,
+        category_reasons=category_reasons,
+    )
 
 
 def derive_business_planning_objectives(
@@ -287,15 +386,45 @@ def derive_business_planning_objectives(
     objective_id: str | None = None,
 ) -> BusinessPlanningObjectives:
     """Derive deterministic business-planning objectives from policy-aware inputs."""
+    channel_strategy = _channel_strategy(profile, constraint_set)
+    schedule_protection = _schedule_protection(profile)
+    comparable_requirements = _comparable_requirements(profile, constraint_set)
+    justification_readiness = _justification_readiness(profile, constraint_set)
+    cost_control_posture = _cost_control_posture(profile)
+    comfort_floor_protection = _comfort_floor(profile)
+    exception_path_posture = _exception_path(profile, constraint_set)
+    compliant_first_path, policy_nearest_fallback = _planning_paths(
+        profile,
+        channel_strategy,
+        schedule_protection,
+        comparable_requirements,
+        exception_path_posture,
+    )
+    explanations, explanation_bundle = _build_explanations(
+        profile,
+        constraint_set,
+        compliant_first_path,
+        policy_nearest_fallback,
+        channel_strategy,
+        schedule_protection,
+        comparable_requirements,
+        justification_readiness,
+        cost_control_posture,
+        comfort_floor_protection,
+        exception_path_posture,
+    )
     return BusinessPlanningObjectives(
         objective_id=objective_id or f"{trip_id}-business-objectives-v1",
         trip_id=trip_id,
-        channel_strategy=_channel_strategy(profile, constraint_set),
-        schedule_protection=_schedule_protection(profile),
-        comparable_requirements=_comparable_requirements(profile, constraint_set),
-        justification_readiness=_justification_readiness(profile, constraint_set),
-        cost_control_posture=_cost_control_posture(profile),
-        comfort_floor_protection=_comfort_floor(profile),
-        exception_path_posture=_exception_path(profile, constraint_set),
-        explanations=_build_explanations(profile, constraint_set),
+        compliant_first_path=compliant_first_path,
+        policy_nearest_fallback=policy_nearest_fallback,
+        channel_strategy=channel_strategy,
+        schedule_protection=schedule_protection,
+        comparable_requirements=comparable_requirements,
+        justification_readiness=justification_readiness,
+        cost_control_posture=cost_control_posture,
+        comfort_floor_protection=comfort_floor_protection,
+        exception_path_posture=exception_path_posture,
+        explanation_bundle=explanation_bundle,
+        explanations=explanations,
     )

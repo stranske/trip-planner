@@ -13,6 +13,7 @@ from trip_planner.contracts._validators import (
 )
 
 CHANNEL_MODES: tuple[str, ...] = ("approved_only", "approved_first", "flexible")
+PLANNING_PATH_MODES: tuple[str, ...] = ("compliant_first", "policy_nearest")
 SCHEDULE_PROTECTION_LEVELS: tuple[str, ...] = (
     "standard",
     "protected",
@@ -34,6 +35,45 @@ def _require_positive_int_mapping(mapping: dict[str, int], field_name: str) -> N
             raise ValueError(f"{field_name}[{key}] must be an int")
         if value <= 0:
             raise ValueError(f"{field_name}[{key}] must be positive")
+
+
+def _require_string_list_mapping(mapping: dict[str, list[str]], field_name: str) -> None:
+    if any(not isinstance(key, str) or not key for key in mapping):
+        raise ValueError(f"{field_name} must use non-empty string keys")
+    for key, value in mapping.items():
+        if not isinstance(value, list):
+            raise ValueError(f"{field_name}[{key}] must be a list")
+        require_strings(value, f"{field_name}[{key}]")
+
+
+@dataclass(slots=True)
+class PlanningPathObjectives:
+    mode: str = "compliant_first"
+    active: bool = True
+    trigger_signals: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if self.mode not in PLANNING_PATH_MODES:
+            raise ValueError(f"mode must be one of {PLANNING_PATH_MODES}")
+        require_strings(self.trigger_signals, "trigger_signals")
+        require_strings(self.notes, "notes")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class ObjectiveExplanationBundle:
+    summary: list[str] = field(default_factory=list)
+    category_reasons: dict[str, list[str]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        require_strings(self.summary, "summary")
+        _require_string_list_mapping(self.category_reasons, "category_reasons")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass(slots=True)
@@ -173,6 +213,10 @@ class ExceptionPathObjectives:
 class BusinessPlanningObjectives:
     objective_id: str
     trip_id: str
+    compliant_first_path: PlanningPathObjectives = field(default_factory=PlanningPathObjectives)
+    policy_nearest_fallback: PlanningPathObjectives = field(
+        default_factory=lambda: PlanningPathObjectives(mode="policy_nearest", active=False)
+    )
     channel_strategy: BookingChannelObjectives = field(default_factory=BookingChannelObjectives)
     schedule_protection: ScheduleProtectionObjectives = field(
         default_factory=ScheduleProtectionObjectives
@@ -186,11 +230,18 @@ class BusinessPlanningObjectives:
     cost_control_posture: CostControlObjectives = field(default_factory=CostControlObjectives)
     comfort_floor_protection: ComfortFloorObjectives = field(default_factory=ComfortFloorObjectives)
     exception_path_posture: ExceptionPathObjectives = field(default_factory=ExceptionPathObjectives)
+    explanation_bundle: ObjectiveExplanationBundle = field(
+        default_factory=ObjectiveExplanationBundle
+    )
     explanations: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         require_non_empty(self.objective_id, "objective_id")
         require_non_empty(self.trip_id, "trip_id")
+        if not isinstance(self.compliant_first_path, PlanningPathObjectives):
+            raise ValueError("compliant_first_path must be a PlanningPathObjectives")
+        if not isinstance(self.policy_nearest_fallback, PlanningPathObjectives):
+            raise ValueError("policy_nearest_fallback must be a PlanningPathObjectives")
         if not isinstance(self.channel_strategy, BookingChannelObjectives):
             raise ValueError("channel_strategy must be a BookingChannelObjectives")
         if not isinstance(self.schedule_protection, ScheduleProtectionObjectives):
@@ -205,6 +256,8 @@ class BusinessPlanningObjectives:
             raise ValueError("comfort_floor_protection must be a ComfortFloorObjectives")
         if not isinstance(self.exception_path_posture, ExceptionPathObjectives):
             raise ValueError("exception_path_posture must be an ExceptionPathObjectives")
+        if not isinstance(self.explanation_bundle, ObjectiveExplanationBundle):
+            raise ValueError("explanation_bundle must be an ObjectiveExplanationBundle")
         require_strings(self.explanations, "explanations")
 
     def to_dict(self) -> dict[str, Any]:

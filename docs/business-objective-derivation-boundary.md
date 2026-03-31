@@ -5,6 +5,7 @@ Issue #518 introduces a deterministic handoff layer between business-profile inp
 ## In Scope
 
 - Convert `BusinessTravelProfile` plus `PolicyConstraintSet` inputs into `BusinessPlanningObjectives`.
+- Emit both a compliant-first planning path and, when warranted, a policy-nearest fallback path so downstream planners know when to preserve an exception-aware branch.
 - Preserve structured explanation output for channel restrictions, schedule protection, comparable capture, justification readiness, comfort-floor protection, cost posture, and exception-path posture.
 - Keep objective shaping deterministic so fixture-driven tests can assert materially different business planning postures.
 
@@ -16,6 +17,10 @@ Issue #518 introduces a deterministic handoff layer between business-profile inp
 
 ## Contract Position
 
-`BusinessTravelProfile` + `PolicyConstraintSet` -> `BusinessPlanningObjectives` -> option generation / proposal assembly / ranking
+`BusinessTravelProfile` + `PolicyConstraintSet`
+-> `BusinessPlanningObjectives`
+-> option generation / proposal assembly / ranking
 
-This derivation layer owns planning posture only. Later proposal assembly and ranking layers consume the objective bundle but remain responsible for concrete option selection and policy-review packaging.
+This derivation layer owns planning posture only. It decides whether downstream planning should stay strictly compliant-first or carry an explicit policy-nearest fallback branch, but it does not rank live options, search inventory, or decide final winners.
+
+Later proposal assembly and ranking layers consume the objective bundle, apply it to real options, and remain responsible for concrete option selection and policy-review packaging.

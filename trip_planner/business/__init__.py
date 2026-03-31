@@ -9,6 +9,8 @@ from .objectives import (
     CostControlObjectives,
     ExceptionPathObjectives,
     JustificationReadinessObjectives,
+    ObjectiveExplanationBundle,
+    PlanningPathObjectives,
     ScheduleProtectionObjectives,
 )
 from .profile import (
@@ -60,9 +62,11 @@ __all__ = [
     "ExceptionPathObjectives",
     "JustificationRecord",
     "JustificationReadinessObjectives",
+    "ObjectiveExplanationBundle",
     "PolicyConstraintSet",
     "PolicyEvaluationResult",
     "PolicyFailureReason",
+    "PlanningPathObjectives",
     "PolicyConstraints",
     "PreferredAlternative",
     "ProposalCostSummary",

@@ -39,9 +39,15 @@ def test_conference_profile_derives_compliant_first_objectives() -> None:
 
     assert payload["channel_strategy"]["required_channels"] == ["Concur"]
     assert payload["channel_strategy"]["channel_mode"] == "approved_only"
+    assert payload["compliant_first_path"]["active"] is True
+    assert payload["policy_nearest_fallback"]["active"] is False
     assert payload["comparable_requirements"]["required_categories"]["lodging"] == 2
     assert payload["exception_path_posture"]["posture"] == "compliant_first"
     assert "policy_constraint_set:policy-001" in payload["explanations"]
+    assert (
+        payload["explanation_bundle"]["category_reasons"]["channel_strategy"][-1]
+        == "channel_mode=approved_only"
+    )
 
 
 def test_client_meeting_profile_protects_schedule_and_exception_readiness() -> None:
@@ -54,9 +60,16 @@ def test_client_meeting_profile_protects_schedule_and_exception_readiness() -> N
 
     assert objectives.schedule_protection.protection_level == "mission_critical"
     assert objectives.schedule_protection.arrival_buffer_preference == "conservative"
+    assert objectives.compliant_first_path.active is True
+    assert objectives.policy_nearest_fallback.active is True
+    assert "mission_critical_schedule" in objectives.policy_nearest_fallback.trigger_signals
     assert objectives.justification_readiness.maintain_exception_packet is True
     assert objectives.exception_path_posture.posture == "exception_ready"
     assert objectives.cost_control_posture.posture == "policy_first"
+    assert (
+        objectives.explanation_bundle.category_reasons["schedule_protection"][-1]
+        == "protection_level=mission_critical"
+    )
 
 
 def test_site_visit_profile_derives_policy_nearest_exception_posture() -> None:
@@ -69,12 +82,18 @@ def test_site_visit_profile_derives_policy_nearest_exception_posture() -> None:
         constraint_set=constraint_set,
     )
 
+    assert objectives.policy_nearest_fallback.active is True
+    assert objectives.policy_nearest_fallback.mode == "policy_nearest"
     assert objectives.exception_path_posture.posture == "policy_nearest"
     assert objectives.exception_path_posture.fallback_mode == "manual_review"
     assert "fatigue_management" in objectives.exception_path_posture.allowed_exception_types
     assert objectives.comparable_requirements.additional_comparables_for_exception is True
     assert objectives.comfort_floor_protection.preserve_arrival_readiness is True
     assert "transport" in objectives.comfort_floor_protection.required_categories
+    assert (
+        objectives.explanation_bundle.category_reasons["exception_path_posture"][-1]
+        == "posture=policy_nearest"
+    )
 
 
 def test_distinct_business_fixtures_produce_distinct_objective_bundles() -> None:
@@ -170,6 +189,7 @@ def test_derivation_sorts_unordered_business_inputs() -> None:
     assert (
         "allowed_exception_types:fatigue_management,schedule_protection" in objectives.explanations
     )
+    assert objectives.explanation_bundle.summary == objectives.explanations
 
 
 @pytest.mark.parametrize("value", ["2", 2.5, True])
