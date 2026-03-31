@@ -49,9 +49,14 @@ trip_planner/business/profile.py
 trip_planner/business/schema.py
 trip_planner/contracts/__init__.py
 trip_planner/contracts/_validators.py
+trip_planner/contracts/destinations.py
 trip_planner/contracts/objectives.py
 trip_planner/contracts/options.py
 trip_planner/contracts/trip.py
+trip_planner/itinerary/__init__.py
+trip_planner/itinerary/objective_derivation.py
+trip_planner/options/__init__.py
+trip_planner/options/destinations.py
 trip_planner/preferences/__init__.py
 trip_planner/preferences/autonomy.py
 trip_planner/preferences/evidence.py
