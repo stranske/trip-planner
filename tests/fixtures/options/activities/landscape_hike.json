@@ -1,0 +1,91 @@
+{
+  "option_id": "activity-landscape-hike",
+  "name": "Ridge overlook sunrise hike",
+  "activity_kind": "landscape",
+  "destination_id": "dest-banff",
+  "place_id": "place-ridge-overlook",
+  "category": {
+    "primary": "hike",
+    "secondary": ["viewpoint", "outdoor"],
+    "tags": ["sunrise", "nature"],
+    "open_ended": false
+  },
+  "timing_summary": {
+    "duration_minutes": 210,
+    "typical_start_window": "05:00-06:30",
+    "timing_sensitivity_signal": 0.89,
+    "closure_risk_signal": 0.27,
+    "crowd_pressure_signal": 0.36,
+    "weather_dependency_signal": 0.88,
+    "daylight_dependency": true
+  },
+  "significance_summary": {
+    "overall_signal": 0.84,
+    "scenic_signal": 0.97,
+    "anchor_worthy": true
+  },
+  "effort_summary": {
+    "effort_level": "high",
+    "walking_minutes": 170,
+    "intensity_signal": 0.81,
+    "family_flexibility_signal": 0.24
+  },
+  "booking_terms": {
+    "activity_format": "drop_in",
+    "booking_required": false,
+    "ticketed": false
+  },
+  "cost_summary": {
+    "total": {"currency": "USD", "typical_amount": 0.0}
+  },
+  "quality_summary": {
+    "overall_signal": 0.81,
+    "content_quality_signal": 0.79,
+    "maintenance_signal": 0.58
+  },
+  "value_summary": {
+    "overall_signal": 0.93,
+    "uniqueness_signal": 0.91,
+    "time_value_signal": 0.83,
+    "cost_value_signal": 0.98
+  },
+  "fit_summary": {
+    "overall_signal": 0.74,
+    "traveler_fit_signal": 0.77,
+    "pacing_fit_signal": 0.61,
+    "weather_fit_signal": 0.28,
+    "group_fit_signal": 0.52
+  },
+  "feasibility": {
+    "available": true,
+    "availability_status": "seasonal",
+    "seasonality_summary": "Best from late spring through early fall.",
+    "requires_daylight": true,
+    "indoor_outdoor": "outdoor",
+    "constraints": ["Trail can close after snow or lightning."],
+    "accessibility_notes": ["Steep uneven terrain."]
+  },
+  "summary": "High-scenic-value hike with daylight and weather sensitivity.",
+  "source_refs": [
+    {
+      "provenance_id": "prov-ridge-hike",
+      "source_id": "park-trails",
+      "source_category": "official_operational",
+      "subject_kind": "option",
+      "subject_id": "activity-landscape-hike",
+      "contribution_kind": "operational",
+      "summary": "Park trail guidance covers route status, sunrise timing, and closures.",
+      "trust_snapshot": {
+        "freshness_days": 6,
+        "editorial_independence": 0.68,
+        "operational_reliability": 0.9
+      },
+      "quality_value_fit": {
+        "quality_signal": 0.81,
+        "value_signal": 0.93,
+        "fit_signal": 0.74
+      }
+    }
+  ],
+  "tags": ["hike", "outdoors"]
+}

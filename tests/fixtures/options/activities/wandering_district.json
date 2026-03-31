@@ -1,0 +1,92 @@
+{
+  "option_id": "activity-wandering-district",
+  "name": "Laneway wandering and cafe drift",
+  "activity_kind": "district",
+  "destination_id": "dest-melbourne",
+  "place_id": "place-laneway-quarter",
+  "category": {
+    "primary": "wandering-district",
+    "secondary": ["cafes", "street-art"],
+    "tags": ["open-ended", "flexible"],
+    "open_ended": true
+  },
+  "timing_summary": {
+    "duration_minutes": 150,
+    "typical_start_window": "10:00-17:00",
+    "timing_sensitivity_signal": 0.22,
+    "closure_risk_signal": 0.16,
+    "crowd_pressure_signal": 0.44,
+    "weather_dependency_signal": 0.34
+  },
+  "significance_summary": {
+    "overall_signal": 0.62,
+    "local_icon_signal": 0.58,
+    "cultural_signal": 0.67,
+    "anchor_worthy": false,
+    "optional": true
+  },
+  "effort_summary": {
+    "effort_level": "low",
+    "walking_minutes": 95,
+    "intensity_signal": 0.18,
+    "family_flexibility_signal": 0.84
+  },
+  "booking_terms": {
+    "activity_format": "open_ended",
+    "booking_required": false,
+    "ticketed": false
+  },
+  "cost_summary": {
+    "total": {"currency": "USD", "typical_amount": 12.0},
+    "extras": {"currency": "USD", "typical_amount": 8.0}
+  },
+  "quality_summary": {
+    "overall_signal": 0.73,
+    "content_quality_signal": 0.69,
+    "hospitality_signal": 0.76
+  },
+  "value_summary": {
+    "overall_signal": 0.82,
+    "uniqueness_signal": 0.74,
+    "time_value_signal": 0.87,
+    "cost_value_signal": 0.88
+  },
+  "fit_summary": {
+    "overall_signal": 0.9,
+    "traveler_fit_signal": 0.94,
+    "pacing_fit_signal": 0.92,
+    "weather_fit_signal": 0.69,
+    "group_fit_signal": 0.86
+  },
+  "feasibility": {
+    "available": true,
+    "availability_status": "available",
+    "indoor_outdoor": "mixed",
+    "constraints": ["Best when at least part of the block is active."],
+    "accessibility_notes": ["Mostly flat sidewalks; some cobblestone spurs."]
+  },
+  "summary": "Flexible wandering zone that works as a low-friction filler or soft anchor.",
+  "booking_links": [],
+  "source_refs": [
+    {
+      "provenance_id": "prov-laneway-quarter",
+      "source_id": "city-guide",
+      "source_category": "editorial",
+      "subject_kind": "option",
+      "subject_id": "activity-wandering-district",
+      "contribution_kind": "editorial",
+      "summary": "Editorial neighborhood coverage captures browsing rhythm and cafe density.",
+      "trust_snapshot": {
+        "freshness_days": 18,
+        "editorial_independence": 0.88,
+        "operational_reliability": 0.55
+      },
+      "quality_value_fit": {
+        "quality_signal": 0.73,
+        "value_signal": 0.82,
+        "fit_signal": 0.9
+      }
+    }
+  ],
+  "tags": ["district", "wander"]
+}
