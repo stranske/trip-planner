@@ -1,0 +1,96 @@
+{
+  "option_id": "lodg-kyoto-central-hotel",
+  "name": "Kyoto Central Garden Hotel",
+  "destination_id": "dest-city-kyoto",
+  "summary": "Central full-service hotel that trades a bit of quiet for quick access to core sights and dining.",
+  "location_summary": {
+    "destination_id": "dest-city-kyoto",
+    "location_context": "urban_core",
+    "neighborhood": "Kawaramachi",
+    "address_hint": "Five minutes from Shijo station",
+    "access_summary": "Fast access to rail, food, and evening walking routes.",
+    "walk_minutes_to_anchor": 5,
+    "transit_minutes_to_anchor": 3,
+    "quiet_signal": 0.58,
+    "recovery_signal": 0.63,
+    "business_access_signal": 0.72,
+    "place_context_ids": ["dest-city-kyoto", "dest-neighborhood-kawaramachi"],
+    "notes": ["Optimized for centrality rather than insulation from nightlife."]
+  },
+  "room_summary": {
+    "lodging_kind": "hotel",
+    "room_type": "Superior king",
+    "bed_configuration": "1 king bed",
+    "workspace_signal": 0.64,
+    "comfort_signal": 0.82,
+    "cleanliness_signal": 0.88,
+    "privacy_signal": 0.79,
+    "amenities": ["wifi", "air conditioning", "onsite breakfast"],
+    "notes": ["Rooms are compact but efficient."]
+  },
+  "booking_terms": {
+    "cancellation_summary": "Free cancellation until 48 hours before arrival.",
+    "refundable": true,
+    "prepayment_required": false,
+    "booking_channel": "direct",
+    "checkin_window": "15:00-23:30",
+    "checkout_window": "07:00-11:00"
+  },
+  "cost_summary": {
+    "nightly": {"currency": "USD", "typical_amount": 210.0, "min_amount": 185.0, "max_amount": 260.0},
+    "total": {"currency": "USD", "typical_amount": 840.0},
+    "taxes_and_fees": {"currency": "USD", "typical_amount": 74.0},
+    "notes": ["City-center pricing includes a location premium."]
+  },
+  "quality_summary": {
+    "overall_signal": 0.81,
+    "sleep_quality_signal": 0.68,
+    "property_condition_signal": 0.84,
+    "service_signal": 0.83
+  },
+  "value_summary": {
+    "overall_signal": 0.73,
+    "location_value_signal": 0.89,
+    "space_value_signal": 0.58,
+    "policy_value_signal": 0.7
+  },
+  "fit_summary": {
+    "overall_signal": 0.76,
+    "quiet_recovery_signal": 0.61,
+    "location_fit_signal": 0.91,
+    "traveler_style_signal": 0.78,
+    "notes": ["Best when the trip emphasizes walkable density over deep recovery protection."]
+  },
+  "feasibility": {
+    "inventory_status": "available",
+    "available": true,
+    "business_approval_status": "approved",
+    "requires_manual_approval": false
+  },
+  "booking_links": ["https://example.com/kyoto-central-garden-hotel"],
+  "source_refs": [
+    {
+      "provenance_id": "prov-kyoto-central-inventory",
+      "source_id": "inventory-ota-1",
+      "source_category": "commercial_inventory",
+      "subject_kind": "option",
+      "subject_id": "lodg-kyoto-central-hotel",
+      "contribution_kind": "inventory",
+      "summary": "Primary inventory snapshot for room and booking terms.",
+      "freshness_days_at_capture": 2,
+      "trust_snapshot": {
+        "freshness_days": 2,
+        "freshness_confidence": 0.94,
+        "commerciality": 0.86,
+        "operational_reliability": 0.82
+      },
+      "quality_value_fit": {
+        "quality_signal": 0.79,
+        "value_signal": 0.72,
+        "fit_signal": 0.77
+      }
+    }
+  ],
+  "tags": ["central", "full-service", "walkable"],
+  "schema_version": "0.1.0"
+}

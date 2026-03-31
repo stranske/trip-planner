@@ -1,0 +1,85 @@
+{
+  "option_id": "lodg-chicago-lakeshore-conference",
+  "name": "Lakeshore Convention Hotel",
+  "destination_id": "dest-city-chicago",
+  "summary": "Business-approved conference hotel with strong workspace, access, and booking-policy alignment.",
+  "location_summary": {
+    "destination_id": "dest-city-chicago",
+    "location_context": "urban_core",
+    "neighborhood": "Streeterville",
+    "access_summary": "Walkable to the convention venue and easy rideshare access to client meetings.",
+    "walk_minutes_to_anchor": 4,
+    "transit_minutes_to_anchor": 8,
+    "quiet_signal": 0.74,
+    "recovery_signal": 0.77,
+    "business_access_signal": 0.95,
+    "place_context_ids": ["dest-city-chicago", "dest-neighborhood-streeterville"]
+  },
+  "room_summary": {
+    "lodging_kind": "hotel",
+    "room_type": "Executive king",
+    "bed_configuration": "1 king bed",
+    "workspace_signal": 0.91,
+    "comfort_signal": 0.84,
+    "cleanliness_signal": 0.89,
+    "privacy_signal": 0.82,
+    "amenities": ["desk", "meeting floor access", "late check-in", "fitness room"]
+  },
+  "booking_terms": {
+    "cancellation_summary": "Refundable until 24 hours before arrival through the managed-travel channel.",
+    "refundable": true,
+    "prepayment_required": false,
+    "booking_channel": "managed-travel-portal",
+    "checkin_window": "15:00-01:00",
+    "checkout_window": "06:00-12:00"
+  },
+  "cost_summary": {
+    "nightly": {"currency": "USD", "typical_amount": 289.0, "min_amount": 255.0, "max_amount": 340.0},
+    "total": {"currency": "USD", "typical_amount": 867.0},
+    "taxes_and_fees": {"currency": "USD", "typical_amount": 119.0}
+  },
+  "quality_summary": {
+    "overall_signal": 0.85,
+    "sleep_quality_signal": 0.79,
+    "property_condition_signal": 0.87,
+    "service_signal": 0.88
+  },
+  "value_summary": {
+    "overall_signal": 0.76,
+    "location_value_signal": 0.92,
+    "space_value_signal": 0.73,
+    "policy_value_signal": 0.9
+  },
+  "fit_summary": {
+    "overall_signal": 0.89,
+    "quiet_recovery_signal": 0.75,
+    "location_fit_signal": 0.94,
+    "traveler_style_signal": 0.88
+  },
+  "feasibility": {
+    "inventory_status": "available",
+    "available": true,
+    "business_approval_status": "preferred",
+    "requires_manual_approval": false,
+    "constraints": ["conference dates can tighten inventory rapidly"]
+  },
+  "booking_links": ["https://example.com/lakeshore-conference-hotel"],
+  "source_refs": [
+    {
+      "provenance_id": "prov-conference-policy",
+      "source_id": "managed-travel-portal",
+      "source_category": "managed_travel_policy",
+      "subject_kind": "option",
+      "subject_id": "lodg-chicago-lakeshore-conference",
+      "contribution_kind": "policy",
+      "summary": "Managed-travel portal marks the property as preferred and conference-compliant.",
+      "quality_value_fit": {
+        "quality_signal": 0.84,
+        "value_signal": 0.79,
+        "fit_signal": 0.91
+      }
+    }
+  ],
+  "tags": ["business-approved", "conference", "workspace"],
+  "schema_version": "0.1.0"
+}
