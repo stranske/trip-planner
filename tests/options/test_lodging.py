@@ -56,7 +56,12 @@ def test_vacation_rental_keeps_quality_value_and_fit_distinct() -> None:
     assert option.quality_summary.overall_signal == pytest.approx(0.72)
     assert option.value_summary.overall_signal == pytest.approx(0.88)
     assert option.fit_summary.overall_signal == pytest.approx(0.9)
-    assert option.fit_summary.quiet_recovery_signal > option.quality_summary.sleep_quality_signal
+    quiet_recovery_signal = option.fit_summary.quiet_recovery_signal
+    sleep_quality_signal = option.quality_summary.sleep_quality_signal
+
+    assert quiet_recovery_signal is not None
+    assert sleep_quality_signal is not None
+    assert quiet_recovery_signal > sleep_quality_signal
 
 
 def test_lodging_round_trips_nested_contracts_and_provenance() -> None:
