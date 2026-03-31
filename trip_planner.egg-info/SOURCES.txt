@@ -58,7 +58,11 @@ trip_planner/contracts/trip.py
 trip_planner/itinerary/__init__.py
 trip_planner/itinerary/objective_derivation.py
 trip_planner/options/__init__.py
+trip_planner/options/activities.py
+trip_planner/options/bundles.py
 trip_planner/options/destinations.py
+trip_planner/options/lodging.py
+trip_planner/options/transport.py
 trip_planner/preferences/__init__.py
 trip_planner/preferences/autonomy.py
 trip_planner/preferences/evidence.py
