@@ -39,6 +39,9 @@ The goal is to preserve the dependency order between planning layers instead of 
 - `#529` destination and activity ingestion
 - `#530` candidate generation and filtering
 
+Epic `#525` is the sequencing contract for this phase.
+See [source-ingestion-epic.md](source-ingestion-epic.md) for the dependency chain, shared design rules, and acceptance mapping for issues `#526` through `#530`.
+
 ### 5. Ranking And Route Assembly
 
 - `#532` ranking and explanation contracts
