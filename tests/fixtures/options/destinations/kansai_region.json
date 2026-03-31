@@ -40,6 +40,7 @@
       "summary": "Peak blossom demand raises booking pressure across Kyoto and Osaka.",
       "impact": "mixed",
       "peak_months": [3, 4],
+      "source_ref_ids": ["prov-kansai-operational"],
       "notes": [
         "Lock in lodging early for city-center stays."
       ]
@@ -48,6 +49,10 @@
   "mobility_profile": {
     "arrival_modes": ["rail", "car"],
     "local_modes": ["rail", "transit", "car"],
+    "access_constraints": [
+      "Last-mile rural access is weaker once itineraries leave the main rail spine."
+    ],
+    "interchange_hubs": ["Shin-Osaka", "Kyoto Station"],
     "walkability": 0.55,
     "transit_coverage": 0.88,
     "car_dependency": 0.35,
@@ -79,8 +84,11 @@
     {
       "destination_id": "dest-region-chubu",
       "relationship_kind": "contiguous_region",
+      "expansion_mode": "contiguous",
       "summary": "Northeast expansion toward Lake Biwa and Hokuriku links.",
+      "requires_base_change": true,
       "transit_time_minutes": 70,
+      "trigger_tags": ["rail-connected", "multi-base"],
       "notes": []
     }
   ],
@@ -88,11 +96,21 @@
     {
       "provenance_id": "prov-kansai-editorial",
       "role": "identity",
+      "source_id": "japan-guide-kansai",
+      "source_category": "editorial",
+      "contribution_kind": "editorial",
+      "summary": "Frames Kansai as a multi-city regional shell.",
+      "freshness_days_at_capture": 21,
       "notes": []
     },
     {
       "provenance_id": "prov-kansai-operational",
       "role": "seasonal",
+      "source_id": "regional-booking-observations",
+      "source_category": "specialist_non_commercial",
+      "contribution_kind": "operational",
+      "summary": "Backs seasonal lodging pressure and expansion timing assumptions.",
+      "freshness_days_at_capture": 14,
       "notes": [
         "Backs seasonal booking pressure assumptions."
       ]
@@ -104,6 +122,7 @@
       "summary": "Festival calendars and school holidays can materially change lodging availability.",
       "impact": "high",
       "applies_in_months": [3, 4, 7, 11],
+      "source_ref_ids": ["prov-kansai-operational"],
       "notes": []
     }
   ],

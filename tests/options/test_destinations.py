@@ -6,6 +6,7 @@ import pytest
 from trip_planner.options import (
     Destination,
     DestinationGeo,
+    RegionExpansionRef,
     DestinationSourceRef,
     DestinationTag,
     MobilityProfile,
@@ -42,8 +43,11 @@ def test_city_destination_preserves_hierarchy_and_expansion_context() -> None:
     assert destination.parent_refs[0].destination_id == "dest-region-kansai"
     assert destination.adjacency_refs[0].destination_id == "dest-city-osaka"
     assert destination.region_expansion_refs[0].relationship_kind == "day_trip"
+    assert destination.region_expansion_refs[0].expansion_mode == "day_trip"
+    assert destination.region_expansion_refs[0].trigger_tags == ["culture", "rail-access"]
     assert destination.tags[0].scope == "experience"
     assert destination.mobility_profile.local_modes == ["walk", "transit", "bike"]
+    assert destination.mobility_profile.interchange_hubs == ["Kyoto Station", "Karasuma Oike"]
     assert destination.experience_signals[0].key == "culture_density"
 
 
@@ -54,6 +58,8 @@ def test_site_destination_carries_operational_notes_and_source_refs() -> None:
 
     assert payload["operational_notes"][0]["summary"].startswith("Expect early")
     assert payload["source_refs"][0]["provenance_id"] == "prov-site-editorial"
+    assert payload["source_refs"][1]["source_category"] == "specialist_non_commercial"
+    assert payload["operational_notes"][0]["source_ref_ids"] == ["prov-site-operational"]
     assert payload["parent_refs"][0]["destination_id"] == "dest-city-kyoto"
 
 
@@ -76,6 +82,11 @@ def test_destination_supporting_records_round_trip() -> None:
             DestinationSourceRef(
                 provenance_id="prov-arashiyama-editorial",
                 role="experience",
+                source_id="arashiyama-guide",
+                source_category="editorial",
+                contribution_kind="editorial",
+                summary="Defines the bamboo grove as a landscape context.",
+                freshness_days_at_capture=12,
                 notes=["Supports the landscape framing."],
             )
         ],
@@ -85,6 +96,7 @@ def test_destination_supporting_records_round_trip() -> None:
                 summary="Early arrival matters before the main coach arrivals.",
                 impact="high",
                 applies_in_months=[3, 4, 11],
+                source_ref_ids=["prov-arashiyama-editorial"],
                 notes=["Crowding pressure spikes during spring and autumn demand peaks."],
             )
         ],
@@ -94,7 +106,21 @@ def test_destination_supporting_records_round_trip() -> None:
 
     assert payload["tags"][0]["key"] == "nature"
     assert payload["source_refs"][0]["role"] == "experience"
+    assert payload["source_refs"][0]["source_id"] == "arashiyama-guide"
     assert payload["operational_notes"][0]["impact"] == "high"
+    assert payload["operational_notes"][0]["source_ref_ids"] == ["prov-arashiyama-editorial"]
+
+
+def test_region_expansion_refs_expose_explicit_expansion_strategy() -> None:
+    destination = _load_destination("kansai_region.json")
+
+    ref = destination.region_expansion_refs[0]
+
+    assert isinstance(ref, RegionExpansionRef)
+    assert ref.relationship_kind == "contiguous_region"
+    assert ref.expansion_mode == "contiguous"
+    assert ref.requires_base_change is True
+    assert ref.trigger_tags == ["rail-connected", "multi-base"]
 
 
 def test_destination_rejects_invalid_place_kind() -> None:
@@ -126,6 +152,12 @@ def test_destination_rejects_invalid_tag_provenance_and_operational_note_values(
     with pytest.raises(ValueError, match="role"):
         DestinationSourceRef(provenance_id="prov-1", role="pricing")
 
+    with pytest.raises(ValueError, match="source_category"):
+        DestinationSourceRef(
+            provenance_id="prov-1",
+            source_category="unsupported",
+        )
+
     with pytest.raises(ValueError, match="kind"):
         OperationalNote(kind="closure", summary="Invalid note kind.")
 
@@ -133,6 +165,9 @@ def test_destination_rejects_invalid_tag_provenance_and_operational_note_values(
 def test_mobility_profile_rejects_unknown_modes() -> None:
     with pytest.raises(ValueError, match="arrival_modes"):
         MobilityProfile(arrival_modes=["camel"])
+
+    with pytest.raises(ValueError, match="interchange_hubs"):
+        MobilityProfile(interchange_hubs=[""])
 
 
 def test_destination_from_dict_treats_null_mobility_profile_as_unknown() -> None:
@@ -142,6 +177,15 @@ def test_destination_from_dict_treats_null_mobility_profile_as_unknown() -> None
     destination = Destination.from_dict(payload)
 
     assert destination.mobility_profile == MobilityProfile()
+
+
+def test_region_expansion_ref_rejects_unknown_expansion_mode() -> None:
+    with pytest.raises(ValueError, match="expansion_mode"):
+        RegionExpansionRef(
+            destination_id="dest-region-osaka-bay",
+            relationship_kind="adjacent_region",
+            expansion_mode="teleport",
+        )
 
 
 def test_destination_rejects_unexpected_schema_version() -> None:

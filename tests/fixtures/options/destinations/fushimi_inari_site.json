@@ -50,6 +50,7 @@
       "summary": "Popular shoulder-season site with crowding that changes sharply by hour.",
       "impact": "mixed",
       "peak_months": [3, 4],
+      "source_ref_ids": ["prov-site-operational"],
       "notes": [
         "Early arrival materially improves the visit quality."
       ]
@@ -58,6 +59,10 @@
   "mobility_profile": {
     "arrival_modes": ["rail", "walk"],
     "local_modes": ["walk"],
+    "access_constraints": [
+      "Stair-heavy site paths can dominate the visit once beyond the main gate."
+    ],
+    "interchange_hubs": ["Inari Station"],
     "walkability": 0.77,
     "transit_coverage": 0.64,
     "car_dependency": 0.05,
@@ -90,11 +95,21 @@
     {
       "provenance_id": "prov-site-editorial",
       "role": "identity",
+      "source_id": "kyoto-landmark-guide",
+      "source_category": "editorial",
+      "contribution_kind": "editorial",
+      "summary": "Defines the landmark as a site-level destination for itinerary attachment.",
+      "freshness_days_at_capture": 45,
       "notes": []
     },
     {
       "provenance_id": "prov-site-operational",
       "role": "operational",
+      "source_id": "site-access-observations",
+      "source_category": "specialist_non_commercial",
+      "contribution_kind": "operational",
+      "summary": "Supports early-arrival and stair-intensity assumptions for site planning.",
+      "freshness_days_at_capture": 10,
       "notes": []
     }
   ],
@@ -104,6 +119,7 @@
       "summary": "Expect early crowd spikes and long stair-heavy walking loops after sunrise.",
       "impact": "high",
       "applies_in_months": [3, 4, 11],
+      "source_ref_ids": ["prov-site-operational"],
       "notes": [
         "The first hours of the day materially change the experience quality."
       ]

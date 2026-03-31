@@ -50,6 +50,7 @@
       "summary": "Festival periods increase nighttime density and road closures.",
       "impact": "mixed",
       "peak_months": [7],
+      "source_ref_ids": ["prov-gion-editorial"],
       "notes": [
         "Useful for event energy, harder for cars and buses."
       ]
@@ -58,6 +59,10 @@
   "mobility_profile": {
     "arrival_modes": ["walk", "transit"],
     "local_modes": ["walk", "transit"],
+    "access_constraints": [
+      "Street network is best handled on foot once inside the district."
+    ],
+    "interchange_hubs": ["Gion-Shijo Station"],
     "walkability": 0.96,
     "transit_coverage": 0.71,
     "car_dependency": 0.08,
@@ -90,6 +95,11 @@
     {
       "provenance_id": "prov-gion-editorial",
       "role": "identity",
+      "source_id": "gion-district-notes",
+      "source_category": "editorial",
+      "contribution_kind": "editorial",
+      "summary": "Defines Gion as a neighborhood-level destination under Kyoto.",
+      "freshness_days_at_capture": 30,
       "notes": []
     }
   ],
@@ -99,6 +109,7 @@
       "summary": "Peak evening foot traffic can reduce the usefulness of rideshare pickups.",
       "impact": "medium",
       "applies_in_months": [7],
+      "source_ref_ids": ["prov-gion-editorial"],
       "notes": []
     }
   ],
