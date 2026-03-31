@@ -1,0 +1,117 @@
+{
+  "destination_id": "dest-neighborhood-gion",
+  "place_kind": "neighborhood",
+  "name": "Gion",
+  "summary": "Dense traditional neighborhood suited to short walking loops and evening activity context.",
+  "geo": {
+    "latitude": 35.0037,
+    "longitude": 135.7788,
+    "country_code": "JP",
+    "region_code": "JP-26",
+    "time_zone": "Asia/Tokyo",
+    "locality_hint": "Eastern Kyoto"
+  },
+  "parent_refs": [
+    {
+      "destination_id": "dest-city-kyoto",
+      "relationship_kind": "parent_city",
+      "label": "Kyoto",
+      "notes": [
+        "Neighborhood remains downstream from the city anchor."
+      ]
+    }
+  ],
+  "tags": [
+    {
+      "key": "evening-friendly",
+      "label": "Evening friendly",
+      "scope": "experience",
+      "weight": 0.83,
+      "notes": []
+    },
+    {
+      "key": "historic-streets",
+      "label": "Historic streets",
+      "scope": "identity",
+      "weight": 0.91,
+      "notes": []
+    },
+    {
+      "key": "walk-first",
+      "label": "Walk first",
+      "scope": "routing",
+      "weight": 0.95,
+      "notes": []
+    }
+  ],
+  "seasonal_signals": [
+    {
+      "season": "summer",
+      "summary": "Festival periods increase nighttime density and road closures.",
+      "impact": "mixed",
+      "peak_months": [7],
+      "source_ref_ids": ["prov-gion-editorial"],
+      "notes": [
+        "Useful for event energy, harder for cars and buses."
+      ]
+    }
+  ],
+  "mobility_profile": {
+    "arrival_modes": ["walk", "transit"],
+    "local_modes": ["walk", "transit"],
+    "access_constraints": [
+      "Street network is best handled on foot once inside the district."
+    ],
+    "interchange_hubs": ["Gion-Shijo Station"],
+    "walkability": 0.96,
+    "transit_coverage": 0.71,
+    "car_dependency": 0.08,
+    "notes": [
+      "Best consumed as a fine-grained activity context, not a standalone trip shell."
+    ]
+  },
+  "experience_signals": [
+    {
+      "key": "traditional-streetscape",
+      "label": "Traditional streetscape",
+      "sentiment": "positive",
+      "strength": 0.9,
+      "notes": [
+        "Strong fit for travelers seeking dense cultural ambience."
+      ]
+    }
+  ],
+  "adjacency_refs": [
+    {
+      "destination_id": "dest-site-kiyomizu-dera",
+      "relationship_kind": "gateway",
+      "summary": "Common walking continuation into hillside temple zones.",
+      "transit_time_minutes": 20,
+      "notes": []
+    }
+  ],
+  "region_expansion_refs": [],
+  "source_refs": [
+    {
+      "provenance_id": "prov-gion-editorial",
+      "role": "identity",
+      "source_id": "gion-district-notes",
+      "source_category": "editorial",
+      "contribution_kind": "editorial",
+      "summary": "Defines Gion as a neighborhood-level destination under Kyoto.",
+      "freshness_days_at_capture": 30,
+      "notes": []
+    }
+  ],
+  "operational_notes": [
+    {
+      "kind": "access",
+      "summary": "Peak evening foot traffic can reduce the usefulness of rideshare pickups.",
+      "impact": "medium",
+      "applies_in_months": [7],
+      "source_ref_ids": ["prov-gion-editorial"],
+      "notes": []
+    }
+  ],
+  "schema_version": "0.1.0"
+}
