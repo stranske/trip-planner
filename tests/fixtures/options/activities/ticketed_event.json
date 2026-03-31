@@ -1,0 +1,95 @@
+{
+  "option_id": "activity-ticketed-event",
+  "name": "Historic theater evening performance",
+  "activity_kind": "event",
+  "destination_id": "dest-london",
+  "place_id": "place-historic-theater",
+  "category": {
+    "primary": "performance",
+    "secondary": ["theater", "evening"],
+    "tags": ["ticketed", "scheduled"],
+    "open_ended": false
+  },
+  "timing_summary": {
+    "duration_minutes": 140,
+    "typical_start_window": "19:00-19:30",
+    "timing_sensitivity_signal": 0.96,
+    "closure_risk_signal": 0.08,
+    "crowd_pressure_signal": 0.79,
+    "weather_dependency_signal": 0.03
+  },
+  "significance_summary": {
+    "overall_signal": 0.78,
+    "cultural_signal": 0.82,
+    "anchor_worthy": true
+  },
+  "effort_summary": {
+    "effort_level": "low",
+    "walking_minutes": 20,
+    "standing_minutes": 10,
+    "intensity_signal": 0.12,
+    "sensory_load_signal": 0.48
+  },
+  "booking_terms": {
+    "activity_format": "ticketed",
+    "booking_required": true,
+    "ticketed": true,
+    "cancellation_summary": "Discount seats are typically non-refundable.",
+    "booking_channel": "theater-direct",
+    "reservation_cutoff": "Best seats often vanish 1-2 weeks out",
+    "approved_channels": ["theater-direct"]
+  },
+  "cost_summary": {
+    "total": {"currency": "USD", "typical_amount": 98.0},
+    "per_person": {"currency": "USD", "typical_amount": 49.0}
+  },
+  "quality_summary": {
+    "overall_signal": 0.84,
+    "content_quality_signal": 0.87,
+    "hospitality_signal": 0.72
+  },
+  "value_summary": {
+    "overall_signal": 0.69,
+    "uniqueness_signal": 0.79,
+    "time_value_signal": 0.71,
+    "cost_value_signal": 0.55
+  },
+  "fit_summary": {
+    "overall_signal": 0.76,
+    "traveler_fit_signal": 0.82,
+    "pacing_fit_signal": 0.73,
+    "weather_fit_signal": 0.94,
+    "group_fit_signal": 0.68
+  },
+  "feasibility": {
+    "available": true,
+    "availability_status": "limited",
+    "indoor_outdoor": "indoor",
+    "constraints": ["Seat map tightens quickly on weekends."],
+    "accessibility_notes": ["Accessible seating available in select sections."]
+  },
+  "summary": "Ticketed evening anchor with strict start time and moderate seat scarcity.",
+  "booking_links": ["https://example.com/theater"],
+  "source_refs": [
+    {
+      "provenance_id": "prov-historic-theater",
+      "source_id": "theater-direct",
+      "source_category": "commercial_inventory",
+      "subject_kind": "option",
+      "subject_id": "activity-ticketed-event",
+      "contribution_kind": "availability",
+      "summary": "Primary ticketing source confirms seat availability and start times.",
+      "trust_snapshot": {
+        "freshness_days": 1,
+        "editorial_independence": 0.45,
+        "operational_reliability": 0.91
+      },
+      "quality_value_fit": {
+        "quality_signal": 0.84,
+        "value_signal": 0.69,
+        "fit_signal": 0.76
+      }
+    }
+  ],
+  "tags": ["event", "night"]
+}

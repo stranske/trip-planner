@@ -44,6 +44,24 @@ from .lodging import (
     LodgingRoomSummary,
     LodgingValueSummary,
 )
+from .activities import (
+    ACTIVITY_FORMATS,
+    ACTIVITY_KINDS,
+    AVAILABILITY_STATUSES as ACTIVITY_AVAILABILITY_STATUSES,
+    EFFORT_LEVELS,
+    SCHEMA_VERSION as ACTIVITY_SCHEMA_VERSION,
+    ActivityBookingTerms,
+    ActivityCategory,
+    ActivityCostSummary,
+    ActivityEffortSummary,
+    ActivityFeasibility,
+    ActivityFitSummary,
+    ActivityOption,
+    ActivityQualitySummary,
+    ActivitySignificanceSummary,
+    ActivityTimingSummary,
+    ActivityValueSummary,
+)
 from .transport import (
     AVAILABILITY_STATUSES,
     CLASS_OF_SERVICE,
@@ -63,8 +81,23 @@ from .transport import (
 )
 
 __all__ = [
+    "ACTIVITY_AVAILABILITY_STATUSES",
+    "ACTIVITY_FORMATS",
+    "ACTIVITY_KINDS",
+    "ACTIVITY_SCHEMA_VERSION",
     "ADJACENCY_KINDS",
     "AdjacencyKind",
+    "ActivityBookingTerms",
+    "ActivityCategory",
+    "ActivityCostSummary",
+    "ActivityEffortSummary",
+    "ActivityFeasibility",
+    "ActivityFitSummary",
+    "ActivityOption",
+    "ActivityQualitySummary",
+    "ActivitySignificanceSummary",
+    "ActivityTimingSummary",
+    "ActivityValueSummary",
     "AVAILABILITY_STATUSES",
     "CLASS_OF_SERVICE",
     "Destination",
@@ -118,4 +151,5 @@ __all__ = [
     "TransportSegment",
     "TransportTimingSummary",
     "TransportTransferBurden",
+    "EFFORT_LEVELS",
 ]
