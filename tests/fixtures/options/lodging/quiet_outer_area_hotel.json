@@ -1,0 +1,80 @@
+{
+  "option_id": "lodg-kyoto-hillside-retreat",
+  "name": "Kyoto Hillside Retreat",
+  "destination_id": "dest-city-kyoto",
+  "summary": "Outer-area hotel with stronger quiet and recovery characteristics than core-city alternatives.",
+  "location_summary": {
+    "destination_id": "dest-city-kyoto",
+    "location_context": "outer_neighborhood",
+    "neighborhood": "Kitashirakawa",
+    "access_summary": "Bus or taxi ride into central Kyoto, but quieter at night.",
+    "walk_minutes_to_anchor": 28,
+    "transit_minutes_to_anchor": 22,
+    "quiet_signal": 0.93,
+    "recovery_signal": 0.94,
+    "business_access_signal": 0.52,
+    "place_context_ids": ["dest-city-kyoto", "dest-neighborhood-kitashirakawa"]
+  },
+  "room_summary": {
+    "lodging_kind": "hotel",
+    "room_type": "Garden deluxe twin",
+    "bed_configuration": "2 twin beds",
+    "workspace_signal": 0.55,
+    "comfort_signal": 0.88,
+    "cleanliness_signal": 0.9,
+    "privacy_signal": 0.87,
+    "amenities": ["wifi", "garden access", "onsen-style bath"]
+  },
+  "booking_terms": {
+    "cancellation_summary": "Non-refundable after seven days before arrival.",
+    "refundable": true,
+    "prepayment_required": false,
+    "booking_channel": "direct"
+  },
+  "cost_summary": {
+    "nightly": {"currency": "USD", "typical_amount": 190.0, "min_amount": 170.0, "max_amount": 225.0},
+    "total": {"currency": "USD", "typical_amount": 760.0}
+  },
+  "quality_summary": {
+    "overall_signal": 0.84,
+    "sleep_quality_signal": 0.93,
+    "property_condition_signal": 0.82,
+    "service_signal": 0.78
+  },
+  "value_summary": {
+    "overall_signal": 0.81,
+    "location_value_signal": 0.66,
+    "space_value_signal": 0.84,
+    "policy_value_signal": 0.71
+  },
+  "fit_summary": {
+    "overall_signal": 0.87,
+    "quiet_recovery_signal": 0.95,
+    "location_fit_signal": 0.64,
+    "traveler_style_signal": 0.86
+  },
+  "feasibility": {
+    "inventory_status": "available",
+    "available": true,
+    "business_approval_status": "unknown"
+  },
+  "booking_links": ["https://example.com/kyoto-hillside-retreat"],
+  "source_refs": [
+    {
+      "provenance_id": "prov-kyoto-hillside-editorial",
+      "source_id": "quiet-stays-guide",
+      "source_category": "editorial",
+      "subject_kind": "option",
+      "subject_id": "lodg-kyoto-hillside-retreat",
+      "contribution_kind": "editorial",
+      "summary": "Editorial source emphasizes quiet rooms and restorative atmosphere.",
+      "quality_value_fit": {
+        "quality_signal": 0.85,
+        "value_signal": 0.8,
+        "fit_signal": 0.91
+      }
+    }
+  ],
+  "tags": ["quiet", "recovery", "outer-area"],
+  "schema_version": "0.1.0"
+}

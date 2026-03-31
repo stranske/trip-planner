@@ -1,0 +1,86 @@
+{
+  "option_id": "lodg-kyoto-machiya-loft",
+  "name": "Kyoto Machiya Loft",
+  "destination_id": "dest-city-kyoto",
+  "summary": "Apartment-style stay with strong privacy and value, but lighter service and a less standardized quality floor.",
+  "location_summary": {
+    "destination_id": "dest-city-kyoto",
+    "location_context": "inner_neighborhood",
+    "neighborhood": "Nishijin",
+    "access_summary": "Residential area with slower transit access but stronger neighborhood character.",
+    "walk_minutes_to_anchor": 18,
+    "transit_minutes_to_anchor": 16,
+    "quiet_signal": 0.88,
+    "recovery_signal": 0.91,
+    "business_access_signal": 0.41,
+    "place_context_ids": ["dest-city-kyoto", "dest-neighborhood-nishijin"]
+  },
+  "room_summary": {
+    "lodging_kind": "vacation_rental",
+    "room_type": "Whole-home loft",
+    "bed_configuration": "1 queen bed and 1 sofa bed",
+    "workspace_signal": 0.58,
+    "comfort_signal": 0.74,
+    "cleanliness_signal": 0.76,
+    "privacy_signal": 0.98,
+    "amenities": ["kitchen", "washer", "self check-in"]
+  },
+  "booking_terms": {
+    "cancellation_summary": "Free cancellation until 14 days before arrival.",
+    "refundable": true,
+    "prepayment_required": true,
+    "min_stay_nights": 3,
+    "booking_channel": "marketplace"
+  },
+  "cost_summary": {
+    "nightly": {"currency": "USD", "typical_amount": 155.0, "min_amount": 135.0, "max_amount": 180.0},
+    "total": {"currency": "USD", "typical_amount": 775.0},
+    "taxes_and_fees": {"currency": "USD", "typical_amount": 120.0},
+    "deposit": {"currency": "USD", "typical_amount": 200.0}
+  },
+  "quality_summary": {
+    "overall_signal": 0.72,
+    "sleep_quality_signal": 0.79,
+    "property_condition_signal": 0.69,
+    "service_signal": 0.42
+  },
+  "value_summary": {
+    "overall_signal": 0.88,
+    "location_value_signal": 0.74,
+    "space_value_signal": 0.94,
+    "policy_value_signal": 0.39
+  },
+  "fit_summary": {
+    "overall_signal": 0.9,
+    "quiet_recovery_signal": 0.93,
+    "location_fit_signal": 0.73,
+    "traveler_style_signal": 0.92,
+    "notes": ["Strong match for slower, apartment-style stays."]
+  },
+  "feasibility": {
+    "inventory_status": "limited",
+    "available": true,
+    "business_approval_status": "restricted",
+    "requires_manual_approval": true,
+    "constraints": ["host approval required", "non-hotel inventory may be disallowed in managed travel"]
+  },
+  "booking_links": ["https://example.com/kyoto-machiya-loft"],
+  "source_refs": [
+    {
+      "provenance_id": "prov-kyoto-machiya-marketplace",
+      "source_id": "marketplace-listing-11",
+      "source_category": "commercial_inventory",
+      "subject_kind": "option",
+      "subject_id": "lodg-kyoto-machiya-loft",
+      "contribution_kind": "inventory",
+      "summary": "Marketplace listing for pricing and whole-home amenities.",
+      "quality_value_fit": {
+        "quality_signal": 0.7,
+        "value_signal": 0.89,
+        "fit_signal": 0.9
+      }
+    }
+  ],
+  "tags": ["apartment-style", "quiet", "longer-stay"],
+  "schema_version": "0.1.0"
+}
