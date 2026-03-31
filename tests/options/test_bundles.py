@@ -62,7 +62,6 @@ def test_mixed_option_keeps_normalized_contracts_distinct_while_assembling_share
     assert transport_option.policy_summary.business_approval_status == "approved"
     significance_signal = activity_option.significance_summary.overall_signal
     fit_signal = activity_option.fit_summary.overall_signal
-
     assert significance_signal is not None
     assert fit_signal is not None
     assert significance_signal == pytest.approx(0.95)
