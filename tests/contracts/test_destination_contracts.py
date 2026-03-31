@@ -1,7 +1,13 @@
 import json
 from pathlib import Path
 
-from trip_planner.contracts import Destination, PlaceContext, PlaceKind, RegionExpansionRef
+from trip_planner.contracts import (
+    Destination,
+    LodgingOption,
+    PlaceContext,
+    PlaceKind,
+    RegionExpansionRef,
+)
 
 
 def _fixture_path(name: str) -> Path:
@@ -36,3 +42,14 @@ def test_contracts_namespace_exposes_place_context_contracts() -> None:
 
     assert place_context.role == "micro_context"
     assert place_context.supporting_destination_ids[1] == "dest-neighborhood-gion"
+
+
+def test_contracts_namespace_exposes_lodging_contracts() -> None:
+    payload = json.loads(
+        Path("tests/fixtures/options/lodging/conference_hotel.json").read_text(encoding="utf-8")
+    )
+
+    lodging = LodgingOption.from_dict(payload)
+
+    assert lodging.room_summary.lodging_kind == "hotel"
+    assert lodging.feasibility.business_approval_status == "preferred"
