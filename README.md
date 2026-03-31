@@ -8,6 +8,7 @@
 ## Key Docs
 
 - [Implementation plan](docs/implementation-plan.md)
+- [Leisure preference epic plan](docs/leisure-preference-epic.md)
 - [Source ingestion epic plan](docs/source-ingestion-epic.md)
 - [Product and architecture brief](docs/product-architecture-brief.md)
 - [Leisure preference contract](docs/leisure-preference-contract.md)

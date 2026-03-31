@@ -15,6 +15,9 @@ The goal is to preserve the dependency order between planning layers instead of 
 - `#515` `BusinessTravelProfile`
 - `#517` source and provenance contracts
 
+Epic `#506` is the sequencing contract for the leisure preference foundation.
+See [leisure-preference-epic.md](leisure-preference-epic.md) for the dependency chain, shared design rules, and acceptance mapping spanning issues `#507` through `#512`.
+
 ### 2. Core Planning Engines
 
 - `#510` leisure preference resolution
