@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from . import schema
-from .evidence import ContradictionMarker, OptionEvidence, PreferenceEvidence
+from .evidence import ContradictionMarker, OPTION_KINDS, OptionEvidence, PreferenceEvidence
 from .models import LeisurePreferenceProfile
 
 REACTION_TYPES: tuple[str, ...] = (
@@ -17,6 +17,7 @@ REACTION_TYPES: tuple[str, ...] = (
     "requested_more_like_this",
     "requested_less_like_this",
 )
+REVEALED_PREFERENCE_FALLBACK_SEQUENCE = 10**6
 
 
 def _require_probability(value: float, field_name: str) -> None:
@@ -27,6 +28,28 @@ def _require_probability(value: float, field_name: str) -> None:
 def _require_axis(value: float, field_name: str) -> None:
     if not -1.0 <= value <= 1.0:
         raise ValueError(f"{field_name} must be between -1.0 and 1.0")
+
+
+def _profile_has_active_hard_constraints(profile: LeisurePreferenceProfile) -> bool:
+    constraints = profile.hard_constraints
+    return any(
+        (
+            constraints.date_window.start,
+            constraints.date_window.end,
+            constraints.duration_bounds.min_days is not None,
+            constraints.duration_bounds.max_days is not None,
+            constraints.budget_ceiling is not None,
+            constraints.must_include_places,
+            constraints.must_protect_experiences,
+            constraints.mobility_constraints,
+            constraints.lodging_constraints,
+            constraints.visa_border_constraints,
+        )
+    )
+
+
+def _profile_has_active_anchors(profile: LeisurePreferenceProfile) -> bool:
+    return any(profile.anchors[group] for group in schema.ANCHOR_GROUPS)
 
 
 @dataclass(slots=True)
@@ -53,14 +76,8 @@ class RevealedPreferenceSignal:
             raise ValueError("option_set_id is required")
         if not self.option_id:
             raise ValueError("option_id is required")
-        if self.option_kind not in {
-            "lodging",
-            "transport",
-            "activity",
-            "destination_bundle",
-            "mixed_bundle",
-        }:
-            raise ValueError("option_kind must be a supported option evidence kind")
+        if self.option_kind not in OPTION_KINDS:
+            raise ValueError(f"option_kind must be one of {OPTION_KINDS}")
         _require_probability(self.signal_strength, "signal_strength")
         invalid_dimensions = set(self.dimension_biases) - set(schema.TRADEOFF_DIMENSION_KEYS)
         if invalid_dimensions:
@@ -140,15 +157,9 @@ def build_revealed_preference_update(
                 f"{dimension_key} was protected because the reaction conflicts with a stable preference."
             )
 
-    if (
-        profile.hard_constraints.must_include_places
-        or profile.hard_constraints.must_protect_experiences
-    ):
+    if _profile_has_active_hard_constraints(profile):
         protected_targets.extend(["hard_constraints"])
-    if any(
-        profile.anchors[group]
-        for group in ("place_anchors", "experience_anchors", "calendar_anchors")
-    ):
+    if _profile_has_active_anchors(profile):
         protected_targets.extend(["anchors"])
     if protected_targets:
         notes.append(
@@ -169,7 +180,7 @@ def build_revealed_preference_update(
         signal_direction="contradiction" if blocked_overwrites else reaction_direction,
         confidence_hint=confidence_hint,
         salience_hint=salience_hint,
-        sequence=0,
+        sequence=REVEALED_PREFERENCE_FALLBACK_SEQUENCE,
         note=signal.summary or "Revealed preference update from concrete option feedback.",
         option_evidence=OptionEvidence(
             option_set_id=signal.option_set_id,

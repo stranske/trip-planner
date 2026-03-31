@@ -1,5 +1,6 @@
 from trip_planner.preferences.autonomy import (
     AutonomyFeedback,
+    AutonomyPreference,
     PlanningAutonomyProfile,
 )
 
@@ -63,3 +64,20 @@ def test_autonomy_profile_can_vary_by_stage() -> None:
         updated.preference_for_stage("initial_design").checkpoint_frequency
         < updated.preference_for_stage("in_trip_adjustment").checkpoint_frequency
     )
+
+
+def test_default_preference_backfills_missing_stage_preferences() -> None:
+    profile = PlanningAutonomyProfile(
+        default_preference=AutonomyPreference(
+            system_initiative=0.8,
+            checkpoint_frequency=0.2,
+            option_preview_timing=0.9,
+            exploration_depth=0.7,
+            explanation_depth=0.4,
+        ),
+        stage_preferences={"initial_design": AutonomyPreference(checkpoint_frequency=0.9)},
+    )
+
+    assert profile.preference_for_stage("inventory_selection").system_initiative == 0.8
+    assert profile.preference_for_stage("inventory_selection").option_preview_timing == 0.9
+    assert profile.preference_for_stage("initial_design").checkpoint_frequency == 0.9
