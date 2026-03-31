@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from trip_planner.contracts import (
+    ActivityOption,
     Destination,
     LodgingOption,
     PlaceContext,
@@ -53,3 +54,14 @@ def test_contracts_namespace_exposes_lodging_contracts() -> None:
 
     assert lodging.room_summary.lodging_kind == "hotel"
     assert lodging.feasibility.business_approval_status == "preferred"
+
+
+def test_contracts_namespace_exposes_activity_contracts() -> None:
+    payload = json.loads(
+        Path("tests/fixtures/options/activities/major_museum.json").read_text(encoding="utf-8")
+    )
+
+    activity = ActivityOption.from_dict(payload)
+
+    assert activity.activity_kind == "museum"
+    assert activity.significance_summary.anchor_worthy is True
