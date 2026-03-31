@@ -1,0 +1,102 @@
+{
+  "option_id": "transport-car-highland-loop",
+  "name": "Regional rental car loop",
+  "transport_kind": "car",
+  "origin_id": "dest-inverness",
+  "destination_id": "dest-skye",
+  "timing_summary": {
+    "departure_local": "2026-07-02T09:30:00+01:00",
+    "arrival_local": "2026-07-02T12:45:00+01:00",
+    "duration_minutes": 195,
+    "departure_timezone": "Europe/London",
+    "arrival_timezone": "Europe/London"
+  },
+  "segments": [
+    {
+      "segment_id": "seg-car-1",
+      "mode": "car",
+      "origin_label": "Inverness Rail Station",
+      "destination_label": "Portree",
+      "departure_local": "2026-07-02T09:30:00+01:00",
+      "arrival_local": "2026-07-02T12:45:00+01:00",
+      "carrier": "NorthRoad Rentals",
+      "service_number": "Compact automatic",
+      "duration_minutes": 195,
+      "self_navigation_required": true
+    }
+  ],
+  "transfer_burden": {
+    "transfer_count": 0,
+    "self_navigation_burden_signal": 0.74,
+    "baggage_complexity_signal": 0.18,
+    "schedule_protection_signal": 0.52,
+    "connection_risk_signal": 0.12,
+    "transfer_summary": "No mode changes, but all navigation and parking are self-managed."
+  },
+  "booking_terms": {
+    "booking_channel": "managed-travel",
+    "refundable": true,
+    "changeability_summary": "Reservation can be changed until pickup.",
+    "class_of_service": "standard",
+    "approved_channels": ["managed-travel"],
+    "comparable_reference_ids": ["cmp-rail-1"]
+  },
+  "cost_summary": {
+    "total": {
+      "currency": "USD",
+      "typical_amount": 118.0
+    },
+    "base_fare": {
+      "currency": "USD",
+      "typical_amount": 86.0
+    },
+    "ancillaries": {
+      "currency": "USD",
+      "typical_amount": 32.0
+    }
+  },
+  "experience_summary": {
+    "scenic_value_signal": 0.82,
+    "comfort_signal": 0.66,
+    "privacy_signal": 0.94,
+    "workability_signal": 0.05
+  },
+  "fit_summary": {
+    "overall_signal": 0.69,
+    "schedule_fit_signal": 0.72,
+    "friction_fit_signal": 0.41,
+    "experiential_fit_signal": 0.84,
+    "policy_fit_signal": 0.64
+  },
+  "policy_summary": {
+    "business_approval_status": "restricted",
+    "approval_required": true,
+    "approved_booking_channel": true,
+    "class_of_service": "standard",
+    "policy_notes": ["Rental car allowed only where public transport would break the site-visit schedule."]
+  },
+  "feasibility": {
+    "available": true,
+    "availability_status": "available",
+    "constraints": ["Left-side rural driving required.", "Parking must be reserved at the destination."]
+  },
+  "summary": "Cheapest option for remote regional coverage, but easiest only for confident drivers.",
+  "booking_links": ["https://example.com/regional-rental-car"],
+  "source_refs": [
+    {
+      "provenance_id": "prov-car-1",
+      "source_id": "northroad-rentals",
+      "source_category": "commercial_inventory",
+      "subject_kind": "option",
+      "subject_id": "transport-car-highland-loop",
+      "contribution_kind": "comparison",
+      "summary": "Rental search captured the compact automatic rate and inclusion details.",
+      "quality_value_fit": {
+        "quality_signal": 0.58,
+        "value_signal": 0.9,
+        "fit_signal": 0.69
+      }
+    }
+  ],
+  "tags": ["regional-access", "self-drive"]
+}
