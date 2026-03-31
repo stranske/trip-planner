@@ -19,7 +19,6 @@
 - [Preference roadmap](docs/preference-roadmap.md)
 - [Planning autonomy and revealed preference contracts](docs/contracts/planning-autonomy.md)
 - [Shared planning contracts](docs/shared-planning-contracts.md)
-- [Shared planning and business foundation epic](docs/shared-business-foundation-epic.md)
 - [Normalized inventory contracts epic](docs/normalized-inventory-contracts-epic.md)
 - [Business travel profile contract](docs/business-travel-profile-contract.md)
 - [Policy-facing proposal contracts](docs/contracts/trip-plan-proposal.md)
