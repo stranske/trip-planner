@@ -2,8 +2,24 @@
 
 from __future__ import annotations
 
-from importlib import import_module
-
+from .activities import (
+    ACTIVITY_FORMATS,
+    ACTIVITY_KINDS,
+    AVAILABILITY_STATUSES as ACTIVITY_AVAILABILITY_STATUSES,
+    EFFORT_LEVELS,
+    SCHEMA_VERSION as ACTIVITY_SCHEMA_VERSION,
+    ActivityBookingTerms,
+    ActivityCategory,
+    ActivityCostSummary,
+    ActivityEffortSummary,
+    ActivityFeasibility,
+    ActivityFitSummary,
+    ActivityOption,
+    ActivityQualitySummary,
+    ActivitySignificanceSummary,
+    ActivityTimingSummary,
+    ActivityValueSummary,
+)
 from .destinations import (
     ADJACENCY_KINDS,
     EXPERIENCE_SENTIMENTS,
@@ -37,6 +53,20 @@ from .destinations import (
     RegionExpansionRef,
     SeasonalSignal,
 )
+from .lodging import (
+    INVENTORY_STATUSES,
+    LOCATION_CONTEXTS,
+    LODGING_KINDS,
+    LodgingBookingTerms,
+    LodgingCostSummary,
+    LodgingFeasibility,
+    LodgingFitSummary,
+    LodgingLocationSummary,
+    LodgingOption,
+    LodgingQualitySummary,
+    LodgingRoomSummary,
+    LodgingValueSummary,
+)
 from .objectives import (
     BudgetProtection,
     CountRange,
@@ -64,48 +94,6 @@ from .trip import (
     TripArtifactRefs,
     TripFrameSummary,
 )
-
-_LAZY_IMPORTS = {
-    "ACTIVITY_AVAILABILITY_STATUSES": (".activities", "AVAILABILITY_STATUSES"),
-    "ACTIVITY_FORMATS": (".activities", "ACTIVITY_FORMATS"),
-    "ACTIVITY_KINDS": (".activities", "ACTIVITY_KINDS"),
-    "ACTIVITY_SCHEMA_VERSION": (".activities", "SCHEMA_VERSION"),
-    "ActivityBookingTerms": (".activities", "ActivityBookingTerms"),
-    "ActivityCategory": (".activities", "ActivityCategory"),
-    "ActivityCostSummary": (".activities", "ActivityCostSummary"),
-    "ActivityEffortSummary": (".activities", "ActivityEffortSummary"),
-    "ActivityFeasibility": (".activities", "ActivityFeasibility"),
-    "ActivityFitSummary": (".activities", "ActivityFitSummary"),
-    "ActivityOption": (".activities", "ActivityOption"),
-    "ActivityQualitySummary": (".activities", "ActivityQualitySummary"),
-    "ActivitySignificanceSummary": (".activities", "ActivitySignificanceSummary"),
-    "ActivityTimingSummary": (".activities", "ActivityTimingSummary"),
-    "ActivityValueSummary": (".activities", "ActivityValueSummary"),
-    "EFFORT_LEVELS": (".activities", "EFFORT_LEVELS"),
-    "INVENTORY_STATUSES": (".lodging", "INVENTORY_STATUSES"),
-    "LOCATION_CONTEXTS": (".lodging", "LOCATION_CONTEXTS"),
-    "LODGING_KINDS": (".lodging", "LODGING_KINDS"),
-    "LodgingBookingTerms": (".lodging", "LodgingBookingTerms"),
-    "LodgingCostSummary": (".lodging", "LodgingCostSummary"),
-    "LodgingFeasibility": (".lodging", "LodgingFeasibility"),
-    "LodgingFitSummary": (".lodging", "LodgingFitSummary"),
-    "LodgingLocationSummary": (".lodging", "LodgingLocationSummary"),
-    "LodgingOption": (".lodging", "LodgingOption"),
-    "LodgingQualitySummary": (".lodging", "LodgingQualitySummary"),
-    "LodgingRoomSummary": (".lodging", "LodgingRoomSummary"),
-    "LodgingValueSummary": (".lodging", "LodgingValueSummary"),
-}
-
-
-def __getattr__(name: str) -> object:
-    if name not in _LAZY_IMPORTS:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    module_name, attribute_name = _LAZY_IMPORTS[name]
-    module = import_module(module_name, __name__)
-    value = getattr(module, attribute_name)
-    globals()[name] = value
-    return value
-
 
 __all__ = [
     "ACTIVITY_AVAILABILITY_STATUSES",
