@@ -2,10 +2,13 @@
 
 from .destinations import (
     ADJACENCY_KINDS,
+    AdjacencyKind,
     EXPERIENCE_SENTIMENTS,
     MOBILITY_MODES,
     PLACE_KINDS,
     PLACE_RELATIONSHIP_KINDS,
+    PlaceKind,
+    PlaceRelationshipKind,
     SCHEMA_VERSION,
     SEASONS,
     SEASONAL_IMPACTS,
@@ -20,10 +23,13 @@ from .destinations import (
 
 __all__ = [
     "ADJACENCY_KINDS",
+    "AdjacencyKind",
     "EXPERIENCE_SENTIMENTS",
     "MOBILITY_MODES",
     "PLACE_KINDS",
     "PLACE_RELATIONSHIP_KINDS",
+    "PlaceKind",
+    "PlaceRelationshipKind",
     "SCHEMA_VERSION",
     "SEASONS",
     "SEASONAL_IMPACTS",

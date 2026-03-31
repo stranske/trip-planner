@@ -103,9 +103,9 @@ The two profiles may share some nested contract shapes, but they should not be o
   "mobility_profile": {
     "arrival_modes": [],
     "local_modes": [],
-    "walkability": 0.0,
-    "transit_coverage": 0.0,
-    "car_dependency": 0.0
+    "walkability": null,
+    "transit_coverage": null,
+    "car_dependency": null
   },
   "experience_signals": [],
   "adjacency_refs": [],

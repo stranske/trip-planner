@@ -72,3 +72,29 @@ def test_destination_rejects_invalid_geo_and_adjacency_values() -> None:
 def test_mobility_profile_rejects_unknown_modes() -> None:
     with pytest.raises(ValueError, match="arrival_modes"):
         MobilityProfile(arrival_modes=["camel"])
+
+
+def test_destination_from_dict_treats_null_mobility_profile_as_unknown() -> None:
+    payload = json.loads(_fixture_path("kyoto_city.json").read_text(encoding="utf-8"))
+    payload["mobility_profile"] = None
+
+    destination = Destination.from_dict(payload)
+
+    assert destination.mobility_profile == MobilityProfile()
+
+
+def test_destination_rejects_unexpected_schema_version() -> None:
+    payload = json.loads(_fixture_path("kyoto_city.json").read_text(encoding="utf-8"))
+    payload["schema_version"] = "9.9.9"
+
+    with pytest.raises(ValueError, match="schema_version"):
+        Destination.from_dict(payload)
+
+    with pytest.raises(ValueError, match="schema_version"):
+        Destination(
+            destination_id="dest-kyoto",
+            place_kind="city",
+            name="Kyoto",
+            geo=DestinationGeo(latitude=35.0116, longitude=135.7681, country_code="JP"),
+            schema_version="9.9.9",
+        )

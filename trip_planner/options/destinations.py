@@ -45,6 +45,20 @@ MOBILITY_MODES: tuple[str, ...] = (
 )
 
 PlaceKind: TypeAlias = Literal["city", "region", "neighborhood", "landscape", "site"]
+PlaceRelationshipKind: TypeAlias = Literal[
+    "parent_region",
+    "parent_city",
+    "parent_neighborhood",
+    "parent_landscape",
+    "parent_site",
+]
+AdjacencyKind: TypeAlias = Literal[
+    "adjacent_region",
+    "nearby_region",
+    "contiguous_region",
+    "day_trip",
+    "gateway",
+]
 
 
 def _require_months(months: list[int], field_name: str) -> None:
@@ -66,6 +80,15 @@ def _optional_list_field(payload: dict[str, Any], field_name: str) -> list[Any]:
     value = payload.get(field_name, [])
     if not isinstance(value, list):
         raise ValueError(f"{field_name} must be a list when provided")
+    return value
+
+
+def _optional_mapping_field(payload: dict[str, Any], field_name: str) -> dict[str, Any]:
+    value = payload.get(field_name, {})
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{field_name} must be a mapping when provided")
     return value
 
 
@@ -95,7 +118,7 @@ class DestinationGeo:
 @dataclass(slots=True)
 class PlaceHierarchyRef:
     destination_id: str
-    relationship_kind: str
+    relationship_kind: PlaceRelationshipKind
     label: str = ""
     notes: list[str] = field(default_factory=list)
 
@@ -177,7 +200,7 @@ class MobilityProfile:
 @dataclass(slots=True)
 class NearbyDestinationRef:
     destination_id: str
-    relationship_kind: str
+    relationship_kind: AdjacencyKind
     summary: str = ""
     transit_time_minutes: int | None = None
     notes: list[str] = field(default_factory=list)
@@ -198,7 +221,7 @@ class NearbyDestinationRef:
 @dataclass(slots=True)
 class Destination:
     destination_id: str
-    place_kind: str
+    place_kind: PlaceKind
     name: str
     geo: DestinationGeo
     summary: str = ""
@@ -256,7 +279,9 @@ class Destination:
             seasonal_signals=[
                 SeasonalSignal(**item) for item in _optional_list_field(payload, "seasonal_signals")
             ],
-            mobility_profile=MobilityProfile(**payload.get("mobility_profile", {})),
+            mobility_profile=MobilityProfile(
+                **_optional_mapping_field(payload, "mobility_profile")
+            ),
             experience_signals=[
                 ExperienceSignal(**item)
                 for item in _optional_list_field(payload, "experience_signals")
