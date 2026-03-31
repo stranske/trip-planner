@@ -166,8 +166,14 @@ class RawSnapshot:
             raise ValueError(f"handoff_status must be one of {schema.HANDOFF_STATUSES}")
         if not isinstance(self.query, SourceQuery):
             raise ValueError("query must be a SourceQuery")
+        if self.query.entity_scope != self.entity_scope:
+            raise ValueError("query.entity_scope must match snapshot entity_scope")
+        if self.query.option_kind != self.option_kind:
+            raise ValueError("query.option_kind must match snapshot option_kind")
         if any(not isinstance(item, RawSourceRecord) for item in self.records):
             raise ValueError("records must contain RawSourceRecord instances")
+        if any(record.entity_scope != self.entity_scope for record in self.records):
+            raise ValueError("all record.entity_scope values must match snapshot entity_scope")
         if any(not isinstance(item, AdapterIssue) for item in self.issues):
             raise ValueError("issues must contain AdapterIssue instances")
         require_optional_non_empty(self.expires_at or None, "expires_at")

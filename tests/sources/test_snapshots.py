@@ -109,3 +109,58 @@ def test_adapter_issue_rejects_invalid_stage() -> None:
         assert "stage" in str(exc)
     else:
         raise AssertionError("AdapterIssue should reject unsupported stages")
+
+
+def test_snapshot_requires_query_scope_and_kind_match() -> None:
+    try:
+        RawSnapshot(
+            snapshot_id="snapshot-mismatch",
+            adapter_id="fixture",
+            source_id="city-guide",
+            source_category="editorial",
+            entity_scope="destination",
+            option_kind="mixed",
+            fetched_at="2026-03-31T22:45:00Z",
+            query=SourceQuery(
+                query_id="query-mismatch",
+                entity_scope="transport",
+                option_kind="rail",
+                destination="Rome",
+            ),
+        )
+    except ValueError as exc:
+        assert "query.entity_scope" in str(exc) or "query.option_kind" in str(exc)
+    else:
+        raise AssertionError("RawSnapshot should reject inconsistent query scope or option kind")
+
+
+def test_snapshot_requires_record_scope_match() -> None:
+    try:
+        RawSnapshot(
+            snapshot_id="snapshot-record-mismatch",
+            adapter_id="fixture",
+            source_id="city-guide",
+            source_category="editorial",
+            entity_scope="destination",
+            option_kind="mixed",
+            fetched_at="2026-03-31T22:46:00Z",
+            query=SourceQuery(
+                query_id="query-record-match",
+                entity_scope="destination",
+                option_kind="mixed",
+                destination="Rome",
+            ),
+            records=[
+                RawSourceRecord(
+                    record_id="record-transport-1",
+                    entity_scope="transport",
+                    provider_entity_id="train-1",
+                    payload_type="json_document",
+                    payload={"headline": "Wrong scope"},
+                )
+            ],
+        )
+    except ValueError as exc:
+        assert "record.entity_scope" in str(exc)
+    else:
+        raise AssertionError("RawSnapshot should reject records with a mismatched entity_scope")
