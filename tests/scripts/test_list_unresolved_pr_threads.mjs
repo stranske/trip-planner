@@ -882,6 +882,79 @@ ${buildBlankInventoryTemplate(1)}`,
   assert.match(updatedDocument, /- Thread ID: THREAD_1/);
 });
 
+test("mergeInventoryIntoDocument preserves documented triage when no unresolved threads remain", () => {
+  const mergedDocument = mergeInventoryIntoDocument(
+    `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Existing fix triage should remain visible after the thread is resolved.
+- Content: reviewer: Please keep this branch explicit.
+- Outdated: no
+`,
+    []
+  );
+
+  assert.match(mergedDocument, /## Thread Inventory\n\nNo unresolved inline review threads found\./);
+  assert.match(mergedDocument, /## Resolved Thread Inventory/);
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Thread ID: THREAD_1/);
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Classification: fix/);
+  assert.match(
+    mergedDocument,
+    /### Thread 1[\s\S]*- Follow-up PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/
+  );
+  assert.match(
+    mergedDocument,
+    /### Thread 1[\s\S]*- Rationale: Existing fix triage should remain visible after the thread is resolved\./
+  );
+});
+
+test("writeInventoryDocument keeps resolved thread inventory when refreshing to zero unresolved threads", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "thread-inventory-zero-"));
+  const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
+  fs.writeFileSync(
+    docPath,
+    `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: disposition
+- Follow-up PR:
+- Rationale: The reviewer concern was handled in the original PR discussion.
+- Content: reviewer: Please keep this branch explicit.
+- Outdated: no
+`,
+    "utf8"
+  );
+
+  writeInventoryDocument(docPath, []);
+
+  const updatedDocument = fs.readFileSync(docPath, "utf8");
+  assert.match(updatedDocument, /No unresolved inline review threads found\./);
+  assert.match(updatedDocument, /## Resolved Thread Inventory/);
+  assert.match(updatedDocument, /### Thread 1[\s\S]*- Classification: disposition/);
+  assert.match(
+    updatedDocument,
+    /### Thread 1[\s\S]*- Rationale: The reviewer concern was handled in the original PR discussion\./
+  );
+});
+
 test("formatThreadContent condenses multiple comments into a single content field", () => {
   assert.equal(
     formatThreadContent([

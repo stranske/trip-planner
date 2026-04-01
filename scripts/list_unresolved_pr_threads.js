@@ -431,6 +431,25 @@ function buildMarkdownThreadSection(thread, index, existingEntry = null) {
   ];
 }
 
+function buildInventoryThreadSection(entry, index) {
+  return [
+    "",
+    `### Thread ${index + 1}`,
+    "",
+    formatOptionalMetadataLine("Thread ID", entry.threadId || ""),
+    formatOptionalMetadataLine("Original Thread URL", entry.originalThreadUrl || ""),
+    formatOptionalMetadataLine("Location", entry.location || ""),
+    formatOptionalMetadataLine("Classification", entry.classification || ""),
+    formatOptionalMetadataLine("Follow-up PR", entry.followUpPr || ""),
+    formatOptionalMetadataLine("Rationale", entry.rationale || ""),
+    formatOptionalMetadataLine("Content", entry.content || ""),
+    formatOptionalMetadataLine(
+      "Outdated",
+      typeof entry.outdated === "boolean" ? (entry.outdated ? "yes" : "no") : ""
+    ),
+  ];
+}
+
 function buildBlankMarkdownThreadSection(index) {
   return [
     "",
@@ -516,12 +535,18 @@ function validateExpectedCount(unresolvedThreads, expectedCount) {
 
 function mergeInventoryIntoDocument(existingDocument, unresolvedThreads) {
   const trimmedDocument = existingDocument.trimEnd();
-  const threadSectionHeading = /^## Thread (?:Template|Inventory)\s*$/m;
+  const threadSectionHeading = /^## (?:Thread Template|Thread Inventory|Resolved Thread Inventory)\s*$/m;
   const threadSection = ["## Thread Inventory"];
   const existingThreads = parseThreadInventory(existingDocument);
 
   if (unresolvedThreads.length === 0) {
     threadSection.push("", "No unresolved inline review threads found.");
+    if (existingThreads.length > 0) {
+      threadSection.push("", "## Resolved Thread Inventory");
+      existingThreads.forEach((thread, index) => {
+        threadSection.push(...buildInventoryThreadSection(thread, index));
+      });
+    }
   } else {
     unresolvedThreads.forEach((thread, index) => {
       const existingEntry = findExistingInventoryEntry(existingThreads, thread, index);
@@ -576,6 +601,7 @@ module.exports = {
   DEFAULT_REPOSITORY,
   buildBlankInventoryTemplate,
   buildBlankMarkdownThreadSection,
+  buildInventoryThreadSection,
   buildReviewThreadsQuery,
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
