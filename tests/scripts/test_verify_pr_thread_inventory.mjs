@@ -210,6 +210,31 @@ test("collectInventoryVerificationIssues reuses URL and section-order fallback m
   ]);
 });
 
+test("collectInventoryVerificationIssues allows a resolved-only inventory after all threads are closed", () => {
+  const documentedThreads = parseThreadInventory(`
+# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+No unresolved inline review threads found.
+
+## Resolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: disposition
+- Follow-up PR:
+- Rationale: The concern was handled in PR discussion before the thread was resolved.
+- Content: reviewer: Please keep this branch explicit.
+- Outdated: no
+`);
+
+  assert.deepEqual(collectInventoryVerificationIssues(documentedThreads, []), []);
+});
+
 test("formatInventoryVerificationReport summarizes passing verification", () => {
   const report = formatInventoryVerificationReport(
     {
@@ -411,5 +436,48 @@ test("buildInventoryVerificationReport fetches live review threads when no snaps
     }
   );
 
+  assert.match(report, /Verification: OK/);
+});
+
+test("buildInventoryVerificationReport accepts a resolved-only inventory when the snapshot has zero unresolved threads", async () => {
+  const report = await buildInventoryVerificationReport(
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      inputPath: "threads.json",
+      docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
+      expectDocCount: 1,
+      expectedCount: 0,
+      token: undefined,
+    },
+    {
+      loadThreadInventory: () =>
+        parseThreadInventory(`
+# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+No unresolved inline review threads found.
+
+## Resolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: The follow-up PR landed and the thread is now resolved.
+- Content: reviewer: Please keep this branch explicit.
+- Outdated: no
+`),
+      loadReviewThreadsFromFile: () => [],
+    }
+  );
+
+  assert.match(report, /Unresolved threads in snapshot: 0/);
+  assert.match(report, /Expected unresolved threads: 0/);
   assert.match(report, /Verification: OK/);
 });

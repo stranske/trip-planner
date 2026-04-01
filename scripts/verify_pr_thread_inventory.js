@@ -108,6 +108,7 @@ function findMatchedDocumentedThread(documentedThreads, matchedDocumentIndexes, 
 function collectInventoryVerificationIssues(documentedThreads, unresolvedThreads, options = {}) {
   const { expectDocCount = null } = options;
   const issues = collectThreadInventoryIssues(documentedThreads);
+  const allowResolvedInventoryOnly = unresolvedThreads.length === 0;
 
   if (expectDocCount !== null && documentedThreads.length !== expectDocCount) {
     issues.push(
@@ -159,7 +160,7 @@ function collectInventoryVerificationIssues(documentedThreads, unresolvedThreads
         : unresolvedThreadMatches.find((match) => match?.documentedIndex === matchedIndex)
             ?.unresolvedThread || null;
 
-    if (thread.threadId && unresolvedThreads.length > 0 && !matchedUnresolvedThread) {
+    if (thread.threadId && !allowResolvedInventoryOnly && !matchedUnresolvedThread) {
       issues.push(`Documented thread ${thread.threadId} is not unresolved in the provided snapshot.`);
       return;
     }
