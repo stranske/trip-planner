@@ -84,8 +84,80 @@ def test_render_report_preserves_manual_classification():
     )
 
     assert "# PR #569 Unresolved Review Threads" in rendered
+    assert "## Classification Criteria" in rendered
+    assert report.CLASSIFICATION_CRITERIA in rendered
     assert "- Classification: warranted fix" in rendered
     assert "- Justification: Potential runtime failure when the fixture is absent." in rendered
+
+
+def test_load_review_threads_accepts_supported_classifications(tmp_path):
+    payload = {
+        "pullRequest": {"number": 569},
+        "threads": [
+            {
+                "path": "scripts/example.py",
+                "line": 12,
+                "url": "https://github.com/stranske/trip-planner/pull/569#discussion_r2",
+                "summary": "Summary",
+                "technical_concern": "Concern",
+                "classification": "not-warranted disposition",
+                "justification": "Alternative implementation preference, not a functional defect.",
+            }
+        ],
+    }
+    input_path = tmp_path / "threads.json"
+    input_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    _, threads = report.load_review_threads(input_path)
+
+    assert threads[0].classification == "not-warranted disposition"
+    assert (
+        threads[0].justification
+        == "Alternative implementation preference, not a functional defect."
+    )
+
+
+def test_load_review_threads_rejects_unknown_classification(tmp_path):
+    payload = {
+        "pullRequest": {"number": 569},
+        "threads": [
+            {
+                "path": "scripts/example.py",
+                "line": 12,
+                "url": "https://github.com/stranske/trip-planner/pull/569#discussion_r2",
+                "summary": "Summary",
+                "technical_concern": "Concern",
+                "classification": "needs discussion",
+                "justification": "Not part of the supported classification criteria.",
+            }
+        ],
+    }
+    input_path = tmp_path / "threads.json"
+    input_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Classification must be one of"):
+        report.load_review_threads(input_path)
+
+
+def test_load_review_threads_requires_justification_for_classification(tmp_path):
+    payload = {
+        "pullRequest": {"number": 569},
+        "threads": [
+            {
+                "path": "scripts/example.py",
+                "line": 12,
+                "url": "https://github.com/stranske/trip-planner/pull/569#discussion_r2",
+                "summary": "Summary",
+                "technical_concern": "Concern",
+                "classification": "warranted fix",
+            }
+        ],
+    }
+    input_path = tmp_path / "threads.json"
+    input_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="includes a classification but no justification"):
+        report.load_review_threads(input_path)
 
 
 def test_main_fails_when_required_thread_count_is_wrong(tmp_path):

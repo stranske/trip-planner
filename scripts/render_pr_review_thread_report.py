@@ -8,6 +8,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+WARRANTED_FIX = "warranted fix"
+NOT_WARRANTED_DISPOSITION = "not-warranted disposition"
+ALLOWED_CLASSIFICATIONS = {WARRANTED_FIX, NOT_WARRANTED_DISPOSITION}
+CLASSIFICATION_CRITERIA = (
+    "Security issues and bugs are warranted fixes; style preferences and alternative "
+    "approaches are not-warranted dispositions."
+)
+
 
 @dataclass(frozen=True)
 class ReviewThread:
@@ -57,14 +65,25 @@ def _normalize_normalized_thread(raw_thread: dict[str, Any]) -> ReviewThread:
     if not concern:
         raise ValueError(f"Thread {url} is missing a technical concern.")
 
+    classification = _collapse_text(raw_thread.get("classification", "")).lower() or None
+    justification = _collapse_text(raw_thread.get("justification", "")) or None
+    if classification is not None and classification not in ALLOWED_CLASSIFICATIONS:
+        raise ValueError(
+            "Classification must be one of: " f"{WARRANTED_FIX}, {NOT_WARRANTED_DISPOSITION}."
+        )
+    if classification is not None and justification is None:
+        raise ValueError(f"Thread {url} includes a classification but no justification.")
+    if classification is None and justification is not None:
+        raise ValueError(f"Thread {url} includes a justification but no classification.")
+
     return ReviewThread(
         path=_collapse_text(raw_thread.get("path", "")) or "unknown-path",
         line=_coerce_line(raw_thread.get("line")),
         url=url,
         summary=_summarize_text(summary or concern),
         technical_concern=concern,
-        classification=_collapse_text(raw_thread.get("classification", "")) or None,
-        justification=_collapse_text(raw_thread.get("justification", "")) or None,
+        classification=classification,
+        justification=justification,
     )
 
 
@@ -153,6 +172,9 @@ def render_report(pr_number: int | None, threads: list[ReviewThread], source_nam
         f"# {title_suffix} Unresolved Review Threads",
         "",
         f"Generated from `{source_name}`.",
+        "",
+        "## Classification Criteria",
+        f"- {CLASSIFICATION_CRITERIA}",
         "",
     ]
 
