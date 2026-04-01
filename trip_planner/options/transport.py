@@ -102,9 +102,9 @@ def _parse_provenance_reference(payload: dict[str, Any]) -> ProvenanceReference:
         captured_at=payload.get("captured_at", ""),
         freshness_days_at_capture=payload.get("freshness_days_at_capture"),
         trust_snapshot=SourceTrustSignals(**trust_payload) if trust_payload else None,
-        quality_value_fit=QualityValueFitSummary(**quality_payload)
-        if quality_payload
-        else None,
+        quality_value_fit=(
+            QualityValueFitSummary(**quality_payload) if quality_payload else None
+        ),
         notes=_optional_list_field(payload, "notes"),
     )
 

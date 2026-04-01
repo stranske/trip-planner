@@ -14,7 +14,6 @@ from trip_planner.sources import (
     SourceQuery,
 )
 
-
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures/ingestion/destinations"
 
 
