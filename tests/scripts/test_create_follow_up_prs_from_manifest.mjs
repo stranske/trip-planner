@@ -1,0 +1,247 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import path from "node:path";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+const {
+  buildGhPrCreateArgs,
+  executeManifestGroups,
+  formatExecutionReport,
+  loadManifest,
+  parseCliArguments,
+  selectManifestGroups,
+  validateManifestGroup,
+} = require(path.join(repoRoot, "scripts/create_follow_up_prs_from_manifest.js"));
+
+test("parseCliArguments accepts manifest execution options", () => {
+  const options = parseCliArguments([
+    "--manifest",
+    ".tmp/generated/manifest.json",
+    "--execute",
+    "--format",
+    "json",
+    "--follow-up-pr",
+    "https://github.com/stranske/trip-planner/pull/581",
+    "--group-index",
+    "2",
+  ]);
+
+  assert.equal(options.manifestPath, path.resolve(".tmp/generated/manifest.json"));
+  assert.equal(options.execute, true);
+  assert.equal(options.outputFormat, "json");
+  assert.equal(options.followUpPr, "https://github.com/stranske/trip-planner/pull/581");
+  assert.equal(options.groupIndex, 2);
+});
+
+test("loadManifest rejects malformed manifests", () => {
+  assert.throws(
+    () =>
+      loadManifest("manifest.json", {
+        readFileSync: () => JSON.stringify({ artifactsDir: ".tmp" }),
+      }),
+    /must contain a "groups" array/
+  );
+});
+
+test("validateManifestGroup reports missing execution fields", () => {
+  assert.deepEqual(validateManifestGroup({}, 0), [
+    "Group 1 is missing followUpPr.",
+    "Group 1 is missing title.",
+    "Group 1 is missing baseBranch.",
+    "Group 1 is missing headBranch.",
+    "Group 1 is missing bodyFilePath.",
+  ]);
+});
+
+test("selectManifestGroups can isolate a specific follow-up PR", () => {
+  const groups = selectManifestGroups(
+    {
+      groups: [
+        { followUpPr: "https://github.com/stranske/trip-planner/pull/581" },
+        { followUpPr: "https://github.com/stranske/trip-planner/pull/582" },
+      ],
+    },
+    {
+      followUpPr: "https://github.com/stranske/trip-planner/pull/582",
+      groupIndex: null,
+    }
+  );
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].followUpPr, "https://github.com/stranske/trip-planner/pull/582");
+});
+
+test("buildGhPrCreateArgs returns a non-shell command argv list", () => {
+  assert.deepEqual(
+    buildGhPrCreateArgs({
+      baseBranch: "main",
+      headBranch: "codex/fix-thread-1",
+      title: "Address PR #178 fix threads for follow-up PR #581",
+      bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
+    }),
+    [
+      "pr",
+      "create",
+      "--base",
+      "main",
+      "--head",
+      "codex/fix-thread-1",
+      "--title",
+      "Address PR #178 fix threads for follow-up PR #581",
+      "--body-file",
+      ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
+    ]
+  );
+});
+
+test("executeManifestGroups supports dry-run mode without invoking gh", () => {
+  const report = executeManifestGroups(
+    {
+      manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+      execute: false,
+      followUpPr: null,
+      groupIndex: null,
+    },
+    {
+      readFileSync: () =>
+        JSON.stringify({
+          groups: [
+            {
+              followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+              title: "Address PR #178 fix threads for follow-up PR #581",
+              baseBranch: "main",
+              headBranch: "codex/fix-thread-1",
+              bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
+            },
+          ],
+        }),
+      statSync: () => ({ isFile: () => true }),
+      execFileSync: () => {
+        throw new Error("gh should not be called during dry run");
+      },
+    }
+  );
+
+  assert.equal(report.execute, false);
+  assert.equal(report.groupCount, 1);
+  assert.equal(report.results[0].mode, "dry-run");
+  assert.match(report.results[0].command, /^gh pr create --base main --head codex\/fix-thread-1/);
+});
+
+test("executeManifestGroups invokes gh for selected groups in execute mode", () => {
+  const calls = [];
+  const report = executeManifestGroups(
+    {
+      manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+      execute: true,
+      followUpPr: "https://github.com/stranske/trip-planner/pull/582",
+      groupIndex: null,
+    },
+    {
+      readFileSync: () =>
+        JSON.stringify({
+          groups: [
+            {
+              followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+              title: "Ignore me",
+              baseBranch: "main",
+              headBranch: "codex/fix-thread-1",
+              bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
+            },
+            {
+              followUpPr: "https://github.com/stranske/trip-planner/pull/582",
+              title: "Address PR #178 fix threads for follow-up PR #582",
+              baseBranch: "release/next",
+              headBranch: "codex/fix-thread-2",
+              bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-2-body.md",
+            },
+          ],
+        }),
+      statSync: () => ({ isFile: () => true }),
+      execFileSync: (command, args, execOptions) => {
+        calls.push({ command, args, execOptions });
+        return "https://github.com/stranske/trip-planner/pull/622\n";
+      },
+    }
+  );
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, "gh");
+  assert.deepEqual(calls[0].args, [
+    "pr",
+    "create",
+    "--base",
+    "release/next",
+    "--head",
+    "codex/fix-thread-2",
+    "--title",
+    "Address PR #178 fix threads for follow-up PR #582",
+    "--body-file",
+    ".tmp/pr-thread-payloads/pr-178-fix-group-2-body.md",
+  ]);
+  assert.deepEqual(calls[0].execOptions, { encoding: "utf8" });
+  assert.equal(report.results[0].output, "https://github.com/stranske/trip-planner/pull/622");
+});
+
+test("executeManifestGroups fails when the selected body file is missing", () => {
+  assert.throws(
+    () =>
+      executeManifestGroups(
+        {
+          manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+          execute: false,
+          followUpPr: null,
+          groupIndex: null,
+        },
+        {
+          readFileSync: () =>
+            JSON.stringify({
+              groups: [
+                {
+                  followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+                  title: "Address PR #178 fix threads for follow-up PR #581",
+                  baseBranch: "main",
+                  headBranch: "codex/fix-thread-1",
+                  bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
+                },
+              ],
+            }),
+          statSync: () => {
+            throw new Error("ENOENT");
+          },
+        }
+      ),
+    /body file does not exist/
+  );
+});
+
+test("formatExecutionReport emits readable dry-run output", () => {
+  const report = formatExecutionReport(
+    {
+      manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+      execute: false,
+      groupCount: 1,
+      results: [
+        {
+          groupNumber: 1,
+          followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+          mode: "dry-run",
+          baseBranch: "main",
+          headBranch: "codex/fix-thread-1",
+          bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
+          command:
+            "gh pr create --base main --head codex/fix-thread-1 --title example --body-file .tmp/body.md",
+          output: null,
+        },
+      ],
+    },
+    "text"
+  );
+
+  assert.match(report, /# Follow-up PR Dry Run/);
+  assert.match(report, /Selected Groups: 1/);
+  assert.match(report, /Mode: dry-run/);
+  assert.match(report, /Command: `gh pr create --base main --head codex\/fix-thread-1/);
+});

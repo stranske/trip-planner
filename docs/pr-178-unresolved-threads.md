@@ -45,6 +45,15 @@ node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md --fo
 
 That artifact directory now includes one `pr-178-fix-group-*-create.sh` script per follow-up PR group so the generated `gh pr create` invocation can be executed directly after the branch is ready.
 
+To dry-run or execute those grouped PR creations from the generated `manifest.json`, use:
+
+```bash
+node scripts/create_follow_up_prs_from_manifest.js --manifest .tmp/pr-thread-payloads/manifest.json
+node scripts/create_follow_up_prs_from_manifest.js --manifest .tmp/pr-thread-payloads/manifest.json --follow-up-pr https://github.com/stranske/trip-planner/pull/581 --execute
+```
+
+Additional usage notes are captured in `docs/pr-178-follow-up-pr-creation.md`.
+
 To generate a bounded checklist for any `disposition`-classified entries that still need a PR comment, run:
 
 ```bash
