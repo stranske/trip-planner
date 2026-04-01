@@ -1,0 +1,134 @@
+{
+  "bundle_id": "bundle:kyoto-low-friction",
+  "title": "Kyoto low-friction cultural base",
+  "bundle_context": "route_level",
+  "destinations": [
+    {
+      "destination_id": "dest-osaka",
+      "place_kind": "city",
+      "name": "Osaka",
+      "geo": {
+        "latitude": 34.6937,
+        "longitude": 135.5023,
+        "country_code": "JP",
+        "time_zone": "Asia/Tokyo"
+      }
+    },
+    {
+      "destination_id": "dest-kyoto",
+      "place_kind": "city",
+      "name": "Kyoto",
+      "geo": {
+        "latitude": 35.0116,
+        "longitude": 135.7681,
+        "country_code": "JP",
+        "time_zone": "Asia/Tokyo"
+      }
+    }
+  ],
+  "lodging_options": [
+    {
+      "option_id": "lodg-kyoto-central",
+      "name": "Kyoto Central Hotel",
+      "destination_id": "dest-kyoto",
+      "location_summary": {
+        "destination_id": "dest-kyoto",
+        "location_context": "urban_core",
+        "access_summary": "Short walk from Kyoto Station.",
+        "walk_minutes_to_anchor": 6,
+        "business_access_signal": 0.42
+      },
+      "room_summary": {
+        "lodging_kind": "hotel",
+        "comfort_signal": 0.83
+      },
+      "booking_terms": {
+        "checkin_window": "15:00-23:00",
+        "checkout_window": "06:00-11:00"
+      },
+      "fit_summary": {
+        "overall_signal": 0.82
+      },
+      "feasibility": {
+        "inventory_status": "available",
+        "available": true,
+        "business_approval_status": "approved"
+      }
+    }
+  ],
+  "transport_options": [
+    {
+      "option_id": "transport-osaka-kyoto-direct",
+      "name": "Direct rail to Kyoto",
+      "transport_kind": "rail",
+      "origin_id": "dest-osaka",
+      "destination_id": "dest-kyoto",
+      "timing_summary": {
+        "departure_local": "2026-04-08T09:00:00+09:00",
+        "arrival_local": "2026-04-08T09:32:00+09:00",
+        "duration_minutes": 32
+      },
+      "segments": [
+        {
+          "segment_id": "seg-osaka-kyoto",
+          "mode": "rail",
+          "origin_label": "Osaka Station",
+          "destination_label": "Kyoto Station"
+        }
+      ],
+      "transfer_burden": {
+        "transfer_count": 0,
+        "self_navigation_burden_signal": 0.1,
+        "baggage_complexity_signal": 0.12,
+        "schedule_protection_signal": 0.88
+      },
+      "fit_summary": {
+        "schedule_fit_signal": 0.84
+      },
+      "policy_summary": {
+        "business_approval_status": "approved"
+      },
+      "feasibility": {
+        "available": true,
+        "availability_status": "available"
+      }
+    }
+  ],
+  "activity_options": [
+    {
+      "option_id": "activity-kyoto-museum",
+      "name": "National Museum block",
+      "activity_kind": "museum",
+      "destination_id": "dest-kyoto",
+      "place_id": "place-kyoto-museum",
+      "category": {
+        "primary": "museum"
+      },
+      "timing_summary": {
+        "duration_minutes": 180,
+        "typical_start_window": "10:00-17:00"
+      },
+      "fit_summary": {
+        "overall_signal": 0.79
+      },
+      "feasibility": {
+        "available": true,
+        "availability_status": "available"
+      }
+    }
+  ],
+  "composition_summary": {
+    "assembly_role": "route_candidate",
+    "primary_destination_id": "dest-kyoto",
+    "component_option_ids": [
+      "lodg-kyoto-central",
+      "transport-osaka-kyoto-direct",
+      "activity-kyoto-museum"
+    ]
+  },
+  "feasibility": {
+    "available": true,
+    "internally_consistent": true
+  },
+  "tags": ["leisure_route"]
+}

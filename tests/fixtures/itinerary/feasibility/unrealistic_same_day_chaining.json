@@ -1,0 +1,125 @@
+{
+  "bundle_id": "bundle:unrealistic-same-day",
+  "title": "Unrealistic same-day chain",
+  "bundle_context": "route_level",
+  "destinations": [
+    {
+      "destination_id": "dest-flight-origin",
+      "place_kind": "city",
+      "name": "Origin City",
+      "geo": {
+        "latitude": 51.5,
+        "longitude": -0.1,
+        "country_code": "GB",
+        "time_zone": "Europe/London"
+      }
+    },
+    {
+      "destination_id": "dest-rome",
+      "place_kind": "city",
+      "name": "Rome",
+      "geo": {
+        "latitude": 41.9,
+        "longitude": 12.5,
+        "country_code": "IT",
+        "time_zone": "Europe/Rome"
+      }
+    }
+  ],
+  "lodging_options": [
+    {
+      "option_id": "lodg-rome-center",
+      "name": "Rome Center Hotel",
+      "destination_id": "dest-rome",
+      "location_summary": {
+        "destination_id": "dest-rome",
+        "location_context": "urban_core"
+      },
+      "room_summary": {
+        "lodging_kind": "hotel"
+      },
+      "booking_terms": {
+        "checkin_window": "15:00-22:00"
+      },
+      "feasibility": {
+        "inventory_status": "available",
+        "available": true,
+        "business_approval_status": "approved"
+      }
+    }
+  ],
+  "transport_options": [
+    {
+      "option_id": "transport-late-flight",
+      "name": "Late arrival flight",
+      "transport_kind": "flight",
+      "origin_id": "dest-flight-origin",
+      "destination_id": "dest-rome",
+      "timing_summary": {
+        "departure_local": "2026-06-12T15:10:00+01:00",
+        "arrival_local": "2026-06-12T20:55:00+02:00",
+        "duration_minutes": 225
+      },
+      "segments": [
+        {
+          "segment_id": "seg-flight",
+          "mode": "flight",
+          "origin_label": "LHR",
+          "destination_label": "FCO"
+        }
+      ],
+      "transfer_burden": {
+        "transfer_count": 1,
+        "self_navigation_burden_signal": 0.48,
+        "schedule_protection_signal": 0.38
+      },
+      "fit_summary": {
+        "schedule_fit_signal": 0.44
+      },
+      "policy_summary": {
+        "business_approval_status": "approved"
+      },
+      "feasibility": {
+        "available": true,
+        "availability_status": "available"
+      }
+    }
+  ],
+  "activity_options": [
+    {
+      "option_id": "activity-rome-night-tour",
+      "name": "Timed night tour",
+      "activity_kind": "tour",
+      "destination_id": "dest-rome",
+      "place_id": "place-rome-tour",
+      "category": {
+        "primary": "tour"
+      },
+      "timing_summary": {
+        "duration_minutes": 180,
+        "typical_start_window": "18:00-20:00"
+      },
+      "booking_terms": {
+        "activity_format": "timed_entry"
+      },
+      "feasibility": {
+        "available": true,
+        "availability_status": "available"
+      }
+    }
+  ],
+  "composition_summary": {
+    "assembly_role": "route_candidate",
+    "primary_destination_id": "dest-rome",
+    "component_option_ids": [
+      "lodg-rome-center",
+      "transport-late-flight",
+      "activity-rome-night-tour"
+    ]
+  },
+  "feasibility": {
+    "available": true,
+    "internally_consistent": true
+  },
+  "tags": ["business_route"]
+}
