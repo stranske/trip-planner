@@ -18,6 +18,12 @@ node scripts/list_unresolved_pr_threads.js stranske/trip-planner 178 --format ma
 node scripts/list_unresolved_pr_threads.js stranske/trip-planner 178 --input path/to/pr-178-review-threads.json --format markdown --expect-count 4
 ```
 
+After the inventory is populated, identify any `fix`-classified entries with:
+
+```bash
+node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md
+```
+
 After the fix/disposition work is complete, rerun the same command with `--expect-count 0` to verify the acceptance criterion.
 
 ## Thread Template
