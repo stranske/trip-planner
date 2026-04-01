@@ -1,0 +1,157 @@
+{
+  "snapshot": {
+    "snapshot_id": "snapshot-transport-conflicted",
+    "adapter_id": "fixture-transport-adapter",
+    "source_id": "rail-fixture",
+    "source_category": "official_operational",
+    "entity_scope": "transport",
+    "option_kind": "rail",
+    "fetched_at": "2026-04-01T01:13:00Z",
+    "query": {
+      "query_id": "query-transport-conflicted",
+      "entity_scope": "transport",
+      "option_kind": "rail",
+      "origin": "dest-paris",
+      "destination": "dest-amsterdam"
+    },
+    "issues": [
+      {
+        "issue_id": "transport-delay-warning",
+        "stage": "validation",
+        "severity": "warning",
+        "code": "partial_schedule_window",
+        "message": "One provider record omitted platform-level schedule protection details."
+      }
+    ],
+    "records": [
+      {
+        "record_id": "record-transport-a",
+        "entity_scope": "transport",
+        "provider_entity_id": "eurostar-paris-amsterdam-a",
+        "payload_type": "fixture",
+        "payload": {
+          "name": "Eurostar morning direct",
+          "transport_kind": "rail",
+          "origin_id": "dest-paris",
+          "destination_id": "dest-amsterdam",
+          "timing_summary": {
+            "departure_local": "2026-05-01T09:22:00+02:00",
+            "arrival_local": "2026-05-01T12:44:00+02:00",
+            "duration_minutes": 202
+          },
+          "segments": [
+            {
+              "segment_id": "segment-eurostar-a",
+              "mode": "rail",
+              "origin_label": "Paris Nord",
+              "destination_label": "Amsterdam Centraal"
+            }
+          ],
+          "transfer_burden": {"transfer_count": 0},
+          "booking_terms": {"booking_channel": "rail-fixture", "class_of_service": "standard"},
+          "cost_summary": {"total": {"currency": "USD", "typical_amount": 129.0}},
+          "fit_summary": {"overall_signal": 0.82},
+          "policy_summary": {"business_approval_status": "approved"},
+          "feasibility": {"available": true, "availability_status": "available"},
+          "summary": "Provider A timetable entry.",
+          "trust_signals": {"freshness_days": 1, "operational_reliability": 0.9},
+          "quality_value_fit": {"quality_signal": 0.76, "value_signal": 0.75, "fit_signal": 0.82}
+        }
+      },
+      {
+        "record_id": "record-transport-b",
+        "entity_scope": "transport",
+        "provider_entity_id": "eurostar-paris-amsterdam-b",
+        "payload_type": "fixture",
+        "payload": {
+          "name": "Eurostar morning direct",
+          "transport_kind": "rail",
+          "origin_id": "dest-paris",
+          "destination_id": "dest-amsterdam",
+          "timing_summary": {
+            "departure_local": "2026-05-01T09:28:00+02:00",
+            "arrival_local": "2026-05-01T12:49:00+02:00",
+            "duration_minutes": 201
+          },
+          "segments": [
+            {
+              "segment_id": "segment-eurostar-b",
+              "mode": "rail",
+              "origin_label": "Paris Nord",
+              "destination_label": "Amsterdam Centraal"
+            }
+          ],
+          "transfer_burden": {"transfer_count": 0},
+          "booking_terms": {"booking_channel": "rail-fixture", "class_of_service": "standard"},
+          "cost_summary": {"total": {"currency": "USD", "typical_amount": 131.0}},
+          "fit_summary": {"overall_signal": 0.79},
+          "policy_summary": {"business_approval_status": "approved"},
+          "feasibility": {"available": true, "availability_status": "available"},
+          "summary": "Provider B timetable entry.",
+          "normalization_warnings": ["Provider B omitted a schedule-protection score."],
+          "trust_signals": {"freshness_days": 2, "operational_reliability": 0.82},
+          "quality_value_fit": {"quality_signal": 0.73, "value_signal": 0.71, "fit_signal": 0.79}
+        }
+      }
+    ]
+  },
+  "resolutions": [
+    {
+      "resolution_id": "resolution-transport-1",
+      "entity_scope": "transport",
+      "option_kind": "rail",
+      "status": "ambiguous",
+      "canonical_entity_id": "transport-paris-amsterdam-eurostar",
+      "summary": "Two timetable records likely describe the same train but disagree on exact departure timing.",
+      "match_candidates": [
+        {
+          "candidate_id": "candidate-transport-1",
+          "entity_scope": "transport",
+          "option_kind": "rail",
+          "match_strategy": "route_signature",
+          "confidence": 0.73,
+          "source_record_ids": ["record-transport-a", "record-transport-b"],
+          "matched_fields": ["name", "origin_id", "destination_id"]
+        }
+      ],
+      "conflicts": [
+        {
+          "conflict_id": "conflict-transport-1",
+          "attribute_path": "timing_summary.departure_local",
+          "reason": "source_disagreement",
+          "status": "needs_review",
+          "values_by_source": {
+            "record-transport-a": "2026-05-01T09:22:00+02:00",
+            "record-transport-b": "2026-05-01T09:28:00+02:00"
+          }
+        }
+      ],
+      "review_required": true
+    }
+  ],
+  "dedup_decisions": [
+    {
+      "decision_id": "dedup-transport-1",
+      "entity_scope": "transport",
+      "option_kind": "rail",
+      "decision": "merge",
+      "canonical_entity_id": "transport-paris-amsterdam-eurostar",
+      "summary": "Keep one canonical train option while preserving timing disagreement for review.",
+      "duplicate_entity_ids": ["transport-paris-amsterdam-eurostar-b"],
+      "resolution_ids": ["resolution-transport-1"],
+      "preserved_conflicts": [
+        {
+          "conflict_id": "conflict-transport-1",
+          "attribute_path": "timing_summary.departure_local",
+          "reason": "source_disagreement",
+          "status": "needs_review",
+          "values_by_source": {
+            "record-transport-a": "2026-05-01T09:22:00+02:00",
+            "record-transport-b": "2026-05-01T09:28:00+02:00"
+          }
+        }
+      ],
+      "confidence": 0.73
+    }
+  ]
+}

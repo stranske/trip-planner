@@ -37,3 +37,5 @@ The planner should not let lodging, transport, destination, or policy code bind 
 - provenance and freshness explicit
 - partial failures visible
 - downstream normalization portable across commercial, editorial, and managed-travel sources
+
+The next boundary after adapters lives in [source-ingestion.md](source-ingestion.md), where category-specific pipelines turn snapshots plus resolution records into normalized options.

@@ -1,0 +1,155 @@
+{
+  "snapshot": {
+    "snapshot_id": "snapshot-lodging-duplicate",
+    "adapter_id": "fixture-lodging-adapter",
+    "source_id": "booking-fixture",
+    "source_category": "commercial_inventory",
+    "entity_scope": "lodging",
+    "option_kind": "lodging",
+    "fetched_at": "2026-04-01T01:11:00Z",
+    "query": {
+      "query_id": "query-lodging-duplicate",
+      "entity_scope": "lodging",
+      "option_kind": "lodging",
+      "destination": "dest-amsterdam"
+    },
+    "records": [
+      {
+        "record_id": "record-lodging-a",
+        "entity_scope": "lodging",
+        "provider_entity_id": "ams-canal-house-a",
+        "payload_type": "fixture",
+        "payload": {
+          "name": "Canal House Hotel",
+          "destination_id": "dest-amsterdam",
+          "location_summary": {
+            "destination_id": "dest-amsterdam",
+            "location_context": "urban_core",
+            "neighborhood": "Canal Belt",
+            "access_summary": "Eight minute walk to the central canal ring.",
+            "walk_minutes_to_anchor": 8,
+            "quiet_signal": 0.71,
+            "recovery_signal": 0.77
+          },
+          "room_summary": {
+            "lodging_kind": "hotel",
+            "room_type": "Deluxe canal room",
+            "bed_configuration": "1 queen bed",
+            "comfort_signal": 0.81,
+            "cleanliness_signal": 0.84,
+            "privacy_signal": 0.8
+          },
+          "cost_summary": {
+            "nightly": {"currency": "USD", "typical_amount": 210.0},
+            "total": {"currency": "USD", "typical_amount": 630.0}
+          },
+          "quality_summary": {"overall_signal": 0.8},
+          "value_summary": {"overall_signal": 0.69},
+          "fit_summary": {"overall_signal": 0.84},
+          "feasibility": {"inventory_status": "available"},
+          "summary": "Provider A description.",
+          "trust_signals": {"freshness_days": 1, "operational_reliability": 0.82},
+          "quality_value_fit": {"quality_signal": 0.8, "value_signal": 0.69, "fit_signal": 0.84}
+        }
+      },
+      {
+        "record_id": "record-lodging-b",
+        "entity_scope": "lodging",
+        "provider_entity_id": "ams-canal-house-b",
+        "payload_type": "fixture",
+        "payload": {
+          "name": "Canal House Amsterdam",
+          "destination_id": "dest-amsterdam",
+          "location_summary": {
+            "destination_id": "dest-amsterdam",
+            "location_context": "urban_core",
+            "neighborhood": "Canal Belt",
+            "access_summary": "Canal belt stay close to tram links.",
+            "walk_minutes_to_anchor": 7,
+            "quiet_signal": 0.68,
+            "recovery_signal": 0.74
+          },
+          "room_summary": {
+            "lodging_kind": "hotel",
+            "room_type": "Canal-view room",
+            "bed_configuration": "1 queen bed",
+            "comfort_signal": 0.79,
+            "cleanliness_signal": 0.82,
+            "privacy_signal": 0.78
+          },
+          "cost_summary": {
+            "nightly": {"currency": "USD", "typical_amount": 224.0},
+            "total": {"currency": "USD", "typical_amount": 672.0}
+          },
+          "quality_summary": {"overall_signal": 0.79},
+          "value_summary": {"overall_signal": 0.64},
+          "fit_summary": {"overall_signal": 0.8},
+          "feasibility": {"inventory_status": "limited"},
+          "summary": "Provider B description.",
+          "normalization_warnings": ["Provider B omits a refundable booking policy."],
+          "trust_signals": {"freshness_days": 3, "operational_reliability": 0.75},
+          "quality_value_fit": {"quality_signal": 0.79, "value_signal": 0.64, "fit_signal": 0.8}
+        }
+      }
+    ]
+  },
+  "resolutions": [
+    {
+      "resolution_id": "resolution-lodging-1",
+      "entity_scope": "lodging",
+      "option_kind": "lodging",
+      "status": "ambiguous",
+      "canonical_entity_id": "lodging-ams-canal-house",
+      "summary": "Two records appear to describe the same property but disagree on rate and refundability.",
+      "match_candidates": [
+        {
+          "candidate_id": "candidate-lodging-1",
+          "entity_scope": "lodging",
+          "option_kind": "lodging",
+          "match_strategy": "geo_text",
+          "confidence": 0.74,
+          "source_record_ids": ["record-lodging-a", "record-lodging-b"],
+          "matched_fields": ["name", "destination_id", "location_summary.neighborhood"]
+        }
+      ],
+      "conflicts": [
+        {
+          "conflict_id": "conflict-lodging-1",
+          "attribute_path": "booking_terms.refundable",
+          "reason": "source_disagreement",
+          "status": "needs_review",
+          "values_by_source": {
+            "record-lodging-a": "true",
+            "record-lodging-b": "unknown"
+          }
+        }
+      ],
+      "review_required": true
+    }
+  ],
+  "dedup_decisions": [
+    {
+      "decision_id": "dedup-lodging-1",
+      "entity_scope": "lodging",
+      "option_kind": "lodging",
+      "decision": "merge",
+      "canonical_entity_id": "lodging-ams-canal-house",
+      "summary": "Merge the duplicate hotel listings into one canonical lodging option.",
+      "duplicate_entity_ids": ["lodging-ams-canal-house-b"],
+      "resolution_ids": ["resolution-lodging-1"],
+      "preserved_conflicts": [
+        {
+          "conflict_id": "conflict-lodging-1",
+          "attribute_path": "booking_terms.refundable",
+          "reason": "source_disagreement",
+          "status": "needs_review",
+          "values_by_source": {
+            "record-lodging-a": "true",
+            "record-lodging-b": "unknown"
+          }
+        }
+      ],
+      "confidence": 0.74
+    }
+  ]
+}
