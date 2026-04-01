@@ -729,6 +729,73 @@ test("executeManifestThreads can write a post-resolution acceptance report", asy
   assert.match(acceptanceReport, /review-thread snapshot verifies 0 unresolved thread\(s\)/i);
 });
 
+test("executeManifestThreads derives the documented thread count for acceptance when older manifests omit it", async () => {
+  const manifest = {
+    repositoryOwner: "stranske",
+    repositoryName: "trip-planner",
+    prNumber: 178,
+    threads: [
+      {
+        threadId: "THREAD_1",
+        replyQuery: "mutation Reply",
+        replyVariables: { threadId: "THREAD_1", body: "Disposition" },
+        resolveQuery: "mutation Resolve",
+        resolveVariables: { threadId: "THREAD_1" },
+      },
+    ],
+  };
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-disposition-acceptance-fallback-"));
+  const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
+  const acceptanceReportPath = path.join(tempDir, "acceptance.txt");
+
+  fs.writeFileSync(
+    docPath,
+    `# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: src/file.js:10
+- Classification: disposition
+- Follow-up PR:
+- Rationale: The current behavior is intentional.
+- Content: reviewer: Keep the existing wording.
+- Outdated: no
+`,
+    "utf8"
+  );
+
+  const report = await executeManifestThreads(
+    {
+      manifestPath: path.join(tempDir, "manifest.json"),
+      execute: true,
+      docPath,
+      acceptanceReportPath,
+      outputFormat: "text",
+      githubUiConfirmed: true,
+    },
+    {
+      readFileSync: (targetPath) =>
+        targetPath === docPath ? fs.readFileSync(docPath, "utf8") : JSON.stringify(manifest),
+      writeFileSync: (targetPath, content) => fs.writeFileSync(targetPath, content, "utf8"),
+      mkdirSync: (targetPath, options) => fs.mkdirSync(targetPath, options),
+      spawnSync: () => ({
+        status: 0,
+        stdout: '{"data":{"ok":true}}',
+        stderr: "",
+      }),
+    }
+  );
+
+  const acceptanceReport = fs.readFileSync(acceptanceReportPath, "utf8");
+  assert.equal(report.acceptance.overallStatus, "pass");
+  assert.equal(report.acceptance.expectDocCount, 1);
+  assert.match(acceptanceReport, /records 1 complete thread entries/i);
+});
+
 test("executeManifestThreads rejects acceptance report output without execution and doc context", async () => {
   const manifestDir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-disposition-acceptance-invalid-"));
   const manifestPath = path.join(manifestDir, "manifest.json");

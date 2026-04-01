@@ -191,6 +191,7 @@ test("writeDispositionArtifacts writes executable scripts and a manifest", () =>
   const manifest = JSON.parse(fs.readFileSync(artifactInfo.manifestPath, "utf8"));
 
   assert.equal(manifest.count, 1);
+  assert.equal(manifest.expectDocCount, 1);
   assert.equal(manifest.threads[0].threadId, "THREAD_1");
   assert.match(manifest.threads[0].scriptPath, /pr-178-disposition-thread-1-thread-1-resolve\.sh$/);
   const scriptBody = fs.readFileSync(manifest.threads[0].scriptPath, "utf8");
@@ -328,7 +329,9 @@ test("buildDispositionThreadsReport can write gh-cli artifacts for actionable di
   assert.match(report, /Artifacts directory:/);
   assert.match(report, /Manifest:/);
   const manifestPath = path.join(artifactsDir, "manifest.json");
-  assert.equal(JSON.parse(fs.readFileSync(manifestPath, "utf8")).count, 1);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  assert.equal(manifest.count, 1);
+  assert.equal(manifest.expectDocCount, 1);
 });
 
 test("buildDispositionThreadsReport can require a complete inventory", () => {

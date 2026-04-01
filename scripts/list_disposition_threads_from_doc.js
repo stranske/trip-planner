@@ -277,12 +277,19 @@ function writeDispositionArtifacts(dispositionThreads, artifactsDir, dependencie
   const writeFileSync = dependencies.writeFileSync || fs.writeFileSync;
   const chmodSync = dependencies.chmodSync || fs.chmodSync;
   const resolvedArtifactsDir = path.resolve(artifactsDir);
+  const manifestMetadata =
+    dependencies.manifestMetadata && typeof dependencies.manifestMetadata === "object"
+      ? dependencies.manifestMetadata
+      : {};
 
   mkdirSync(resolvedArtifactsDir, { recursive: true });
 
   const manifest = {
     artifactsDir: resolvedArtifactsDir,
     count: dispositionThreads.length,
+    expectDocCount: Number.isInteger(manifestMetadata.expectDocCount)
+      ? manifestMetadata.expectDocCount
+      : dispositionThreads.length,
     threads: dispositionThreads.map((thread, index) => {
       const manifestEntry = buildDispositionManifestEntry(thread, index, resolvedArtifactsDir);
       const scriptBody = [
@@ -400,7 +407,12 @@ function buildDispositionThreadsReport(options = {}, dependencies = {}) {
       ? writeDispositionArtifacts(
           actionableDispositionThreads,
           writeArtifactsDir,
-          dependencies
+          {
+            ...dependencies,
+            manifestMetadata: {
+              expectDocCount: threads.length,
+            },
+          }
         )
       : null;
 

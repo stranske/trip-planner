@@ -493,6 +493,7 @@ async function executeManifestThreads(options = {}, dependencies = {}) {
       );
     }
 
+    const documentedThreads = loadThreadInventory(options.docPath, dependencies);
     const remainingThreads = loadThreadInventory(options.docPath, dependencies, {
       inventorySection: "unresolved",
     }).map(convertInventoryEntryToSnapshotThread);
@@ -504,8 +505,9 @@ async function executeManifestThreads(options = {}, dependencies = {}) {
         token: null,
         inputPath: report.remainingSnapshotPath || "<post-resolution inventory>",
         docPath: options.docPath,
-        expectDocCount:
-          Number.isInteger(manifest.expectDocCount) ? manifest.expectDocCount : null,
+        expectDocCount: Number.isInteger(manifest.expectDocCount)
+          ? manifest.expectDocCount
+          : documentedThreads.length,
         expectedCount: 0,
         githubUiConfirmed: Boolean(options.githubUiConfirmed),
         outputFormat: options.outputFormat || "text",
