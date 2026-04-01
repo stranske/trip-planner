@@ -169,6 +169,15 @@ function buildGhPrCreateArgs(group) {
   ];
 }
 
+function extractCreatedPullRequestUrl(output) {
+  const normalizedOutput = String(output || "").trim();
+  const match = normalizedOutput.match(
+    /https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+(?:[/?#][^\s]*)?/i
+  );
+
+  return match ? match[0] : null;
+}
+
 function resolveManifestRelativePath(manifestPath, targetPath) {
   if (!targetPath) {
     return targetPath;
@@ -229,10 +238,17 @@ function executeManifestGroups(options = {}, dependencies = {}) {
       command: ["gh", ...args].join(" "),
       mode: options.execute ? "execute" : "dry-run",
       output: null,
+      createdPullRequestUrl: null,
     };
 
     if (options.execute) {
       result.output = String(execFileSync("gh", args, { encoding: "utf8" })).trim();
+      result.createdPullRequestUrl = extractCreatedPullRequestUrl(result.output);
+      if (!result.createdPullRequestUrl) {
+        throw new Error(
+          `Group ${group.manifestGroupNumber} gh pr create output did not include a pull request URL.`
+        );
+      }
     }
 
     return result;
@@ -269,6 +285,9 @@ function formatExecutionReport(report, outputFormat = "text") {
     lines.push(`- Head Branch: \`${result.headBranch}\``);
     lines.push(`- Body File: \`${result.bodyFilePath}\``);
     lines.push(`- Command: \`${result.command}\``);
+    if (result.createdPullRequestUrl) {
+      lines.push(`- Created PR: ${result.createdPullRequestUrl}`);
+    }
     if (result.output) {
       lines.push(`- Output: ${result.output}`);
     }
@@ -295,6 +314,7 @@ if (require.main === module) {
 module.exports = {
   buildGhPrCreateArgs,
   executeManifestGroups,
+  extractCreatedPullRequestUrl,
   formatExecutionReport,
   loadManifest,
   main,

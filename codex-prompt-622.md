@@ -148,7 +148,7 @@ A coverage task is NOT complete just because you added tests. It is complete ONL
 ---
 ## PR Tasks and Acceptance Criteria
 
-**Progress:** 31/40 tasks complete, 9 remaining
+**Progress:** 33/40 tasks complete, 7 remaining
 
 ### ⚠️ IMPORTANT: Task Reconciliation Required
 
@@ -161,6 +161,10 @@ The previous iteration changed **5 file(s)** but did not update task checkboxes.
 4. Then continue with remaining tasks
 
 _Failure to update checkboxes means progress is not being tracked properly._
+
+Reconciliation note: reviewed recent commits `c8a817eb`, `508ef3d3`, `563a263e`, `64269a90`, and `1447014a`.
+Those changes added follow-up PR manifest tooling, but they did not populate `docs/pr-178-unresolved-threads.md` with the 4 real PR #178 threads, create a live follow-up PR in GitHub, or verify the live unresolved-thread count.
+No additional task checkbox can be marked complete yet without a verified PR #178 thread snapshot or live GitHub access.
 
 ### Scope
 Issue was closed while merged PR still has unresolved inline review thread(s).

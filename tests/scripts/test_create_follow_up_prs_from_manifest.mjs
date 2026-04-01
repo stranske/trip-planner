@@ -8,6 +8,7 @@ const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "
 const {
   buildGhPrCreateArgs,
   executeManifestGroups,
+  extractCreatedPullRequestUrl,
   formatExecutionReport,
   loadManifest,
   parseCliArguments,
@@ -106,6 +107,16 @@ test("buildGhPrCreateArgs returns a non-shell command argv list", () => {
       ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
     ]
   );
+});
+
+test("extractCreatedPullRequestUrl returns the created PR URL from gh output", () => {
+  assert.equal(
+    extractCreatedPullRequestUrl(
+      "Creating pull request for codex/fix-thread-1 into main in stranske/trip-planner\nhttps://github.com/stranske/trip-planner/pull/622\n"
+    ),
+    "https://github.com/stranske/trip-planner/pull/622"
+  );
+  assert.equal(extractCreatedPullRequestUrl("created successfully"), null);
 });
 
 test("resolveManifestRelativePath resolves paths relative to the manifest location", () => {
@@ -230,6 +241,10 @@ test("executeManifestGroups invokes gh for selected groups in execute mode", () 
   assert.deepEqual(calls[0].execOptions, { encoding: "utf8" });
   assert.equal(report.results[0].manifestGroupNumber, 2);
   assert.equal(report.results[0].output, "https://github.com/stranske/trip-planner/pull/622");
+  assert.equal(
+    report.results[0].createdPullRequestUrl,
+    "https://github.com/stranske/trip-planner/pull/622"
+  );
 });
 
 test("executeManifestGroups preserves manifest numbering after selecting a later group index", () => {
@@ -331,6 +346,37 @@ test("executeManifestGroups fails when the selected body path is not a regular f
   );
 });
 
+test("executeManifestGroups fails when gh output does not include a PR URL", () => {
+  assert.throws(
+    () =>
+      executeManifestGroups(
+        {
+          manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+          execute: true,
+          followUpPr: null,
+          groupIndex: null,
+        },
+        {
+          readFileSync: () =>
+            JSON.stringify({
+              groups: [
+                {
+                  followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+                  title: "Address PR #178 fix threads for follow-up PR #581",
+                  baseBranch: "main",
+                  headBranch: "codex/fix-thread-1",
+                  bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
+                },
+              ],
+            }),
+          statSync: () => ({ isFile: () => true }),
+          execFileSync: () => "created successfully\n",
+        }
+      ),
+    /did not include a pull request URL/
+  );
+});
+
 test("formatExecutionReport emits readable dry-run output", () => {
   const report = formatExecutionReport(
     {
@@ -360,4 +406,32 @@ test("formatExecutionReport emits readable dry-run output", () => {
   assert.match(report, /Manifest Group 3/);
   assert.match(report, /Mode: dry-run/);
   assert.match(report, /Command: `gh pr create --base main --head codex\/fix-thread-1/);
+});
+
+test("formatExecutionReport includes the created PR URL when available", () => {
+  const report = formatExecutionReport(
+    {
+      manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+      execute: true,
+      groupCount: 1,
+      results: [
+        {
+          groupNumber: 1,
+          manifestGroupNumber: 1,
+          followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+          mode: "execute",
+          baseBranch: "main",
+          headBranch: "codex/fix-thread-1",
+          bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
+          command:
+            "gh pr create --base main --head codex/fix-thread-1 --title example --body-file .tmp/body.md",
+          output: "https://github.com/stranske/trip-planner/pull/622",
+          createdPullRequestUrl: "https://github.com/stranske/trip-planner/pull/622",
+        },
+      ],
+    },
+    "text"
+  );
+
+  assert.match(report, /Created PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/622/);
 });

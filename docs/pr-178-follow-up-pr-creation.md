@@ -21,3 +21,5 @@ node scripts/create_follow_up_prs_from_manifest.js --manifest .tmp/pr-thread-pay
 ```
 
 The script validates each selected manifest group, checks that the generated PR body file exists, and only runs `gh pr create` when `--execute` is provided.
+When execution succeeds, the report now includes a `Created PR:` line extracted from the `gh pr create` output.
+If `gh` returns output without a GitHub pull request URL, the script fails so a partial or ambiguous run is not mistaken for a created follow-up PR.
