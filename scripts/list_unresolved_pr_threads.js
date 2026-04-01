@@ -412,6 +412,7 @@ function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThrea
 }
 
 function buildMarkdownThreadSection(thread, index, existingEntry = null) {
+  const originalThreadUrl = thread.originalThreadUrl || existingEntry?.originalThreadUrl || "";
   const classification = existingEntry?.classification || "";
   const followUpPr = existingEntry?.followUpPr || "";
   const rationale = existingEntry?.rationale || "";
@@ -421,7 +422,7 @@ function buildMarkdownThreadSection(thread, index, existingEntry = null) {
     `### Thread ${index + 1}`,
     "",
     `- Thread ID: ${thread.id}`,
-    `- Original Thread URL: ${thread.originalThreadUrl || ""}`,
+    `- Original Thread URL: ${originalThreadUrl}`,
     `- Location: ${thread.path}:${thread.line ?? "unknown"}`,
     formatOptionalMetadataLine("Classification", classification),
     formatOptionalMetadataLine("Follow-up PR", followUpPr),

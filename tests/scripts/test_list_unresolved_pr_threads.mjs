@@ -559,6 +559,47 @@ test("buildMarkdownThreadSection preserves existing triage metadata when availab
   );
 });
 
+test("buildMarkdownThreadSection preserves the documented original thread URL when a refresh omits comment URLs", () => {
+  assert.deepEqual(
+    buildMarkdownThreadSection(
+      {
+        id: "THREAD_1",
+        originalThreadUrl: null,
+        path: "trip_planner/example.py",
+        line: 17,
+        isOutdated: false,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please keep this branch explicit.",
+          },
+        ],
+      },
+      0,
+      {
+        threadId: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        classification: "fix",
+        followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+        rationale: "Existing manual triage should survive incomplete refresh data.",
+      }
+    ),
+    [
+      "",
+      "### Thread 1",
+      "",
+      "- Thread ID: THREAD_1",
+      "- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      "- Location: trip_planner/example.py:17",
+      "- Classification: fix",
+      "- Follow-up PR: https://github.com/stranske/trip-planner/pull/581",
+      "- Rationale: Existing manual triage should survive incomplete refresh data.",
+      "- Content: reviewer: Please keep this branch explicit.",
+      "- Outdated: no",
+    ]
+  );
+});
+
 test("buildBlankMarkdownThreadSection emits the verifier-compatible inventory shape", () => {
   assert.deepEqual(buildBlankMarkdownThreadSection(0), [
     "",
