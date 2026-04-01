@@ -1,0 +1,68 @@
+{
+  "snapshot": {
+    "snapshot_id": "snapshot-lodging-clean",
+    "adapter_id": "fixture-lodging-adapter",
+    "source_id": "booking-fixture",
+    "source_category": "commercial_inventory",
+    "entity_scope": "lodging",
+    "option_kind": "lodging",
+    "fetched_at": "2026-04-01T01:10:00Z",
+    "query": {
+      "query_id": "query-lodging-clean",
+      "entity_scope": "lodging",
+      "option_kind": "lodging",
+      "destination": "dest-amsterdam"
+    },
+    "records": [
+      {
+        "record_id": "record-lodging-clean",
+        "entity_scope": "lodging",
+        "provider_entity_id": "ams-canal-house",
+        "payload_type": "fixture",
+        "payload": {
+          "name": "Canal House Hotel",
+          "destination_id": "dest-amsterdam",
+          "location_summary": {
+            "destination_id": "dest-amsterdam",
+            "location_context": "urban_core",
+            "neighborhood": "Canal Belt",
+            "access_summary": "Walkable to the central canal ring.",
+            "walk_minutes_to_anchor": 8,
+            "quiet_signal": 0.72,
+            "recovery_signal": 0.78
+          },
+          "room_summary": {
+            "lodging_kind": "hotel",
+            "room_type": "Deluxe canal room",
+            "bed_configuration": "1 queen bed",
+            "workspace_signal": 0.63,
+            "comfort_signal": 0.82,
+            "cleanliness_signal": 0.84,
+            "privacy_signal": 0.8,
+            "amenities": ["wifi", "breakfast"]
+          },
+          "booking_terms": {
+            "cancellation_summary": "Free cancellation until 72 hours before arrival.",
+            "refundable": true,
+            "booking_channel": "booking-fixture"
+          },
+          "cost_summary": {
+            "nightly": {"currency": "USD", "typical_amount": 210.0},
+            "total": {"currency": "USD", "typical_amount": 630.0}
+          },
+          "quality_summary": {"overall_signal": 0.8, "sleep_quality_signal": 0.81},
+          "value_summary": {"overall_signal": 0.69, "location_value_signal": 0.73},
+          "fit_summary": {"overall_signal": 0.84, "quiet_recovery_signal": 0.79},
+          "feasibility": {"inventory_status": "available", "business_approval_status": "unknown"},
+          "summary": "Central hotel with quiet-enough canal rooms for a short city stay.",
+          "booking_links": ["https://example.com/canal-house"],
+          "tags": ["urban", "canal"],
+          "trust_signals": {"freshness_days": 2, "operational_reliability": 0.82},
+          "quality_value_fit": {"quality_signal": 0.8, "value_signal": 0.69, "fit_signal": 0.84}
+        }
+      }
+    ]
+  },
+  "resolutions": [],
+  "dedup_decisions": []
+}

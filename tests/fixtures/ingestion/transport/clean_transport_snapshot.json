@@ -1,0 +1,73 @@
+{
+  "snapshot": {
+    "snapshot_id": "snapshot-transport-clean",
+    "adapter_id": "fixture-transport-adapter",
+    "source_id": "rail-fixture",
+    "source_category": "official_operational",
+    "entity_scope": "transport",
+    "option_kind": "rail",
+    "fetched_at": "2026-04-01T01:12:00Z",
+    "query": {
+      "query_id": "query-transport-clean",
+      "entity_scope": "transport",
+      "option_kind": "rail",
+      "origin": "dest-paris",
+      "destination": "dest-amsterdam"
+    },
+    "records": [
+      {
+        "record_id": "record-transport-clean",
+        "entity_scope": "transport",
+        "provider_entity_id": "eurostar-paris-amsterdam",
+        "payload_type": "fixture",
+        "payload": {
+          "name": "Eurostar morning direct",
+          "transport_kind": "rail",
+          "origin_id": "dest-paris",
+          "destination_id": "dest-amsterdam",
+          "timing_summary": {
+            "departure_local": "2026-05-01T09:22:00+02:00",
+            "arrival_local": "2026-05-01T12:44:00+02:00",
+            "duration_minutes": 202
+          },
+          "segments": [
+            {
+              "segment_id": "segment-eurostar-1",
+              "mode": "rail",
+              "origin_label": "Paris Nord",
+              "destination_label": "Amsterdam Centraal",
+              "departure_local": "2026-05-01T09:22:00+02:00",
+              "arrival_local": "2026-05-01T12:44:00+02:00",
+              "carrier": "Eurostar",
+              "service_number": "ES9327",
+              "duration_minutes": 202
+            }
+          ],
+          "transfer_burden": {
+            "transfer_count": 0,
+            "schedule_protection_signal": 0.88
+          },
+          "booking_terms": {
+            "booking_channel": "rail-fixture",
+            "class_of_service": "standard",
+            "approved_channels": ["rail-fixture"]
+          },
+          "cost_summary": {
+            "total": {"currency": "USD", "typical_amount": 129.0}
+          },
+          "experience_summary": {"comfort_signal": 0.78, "workability_signal": 0.81},
+          "fit_summary": {"overall_signal": 0.87, "schedule_fit_signal": 0.84},
+          "policy_summary": {"business_approval_status": "approved"},
+          "feasibility": {"available": true, "availability_status": "available"},
+          "summary": "Direct day train with high workability and no transfers.",
+          "booking_links": ["https://example.com/eurostar"],
+          "tags": ["direct", "rail"],
+          "trust_signals": {"freshness_days": 1, "operational_reliability": 0.93},
+          "quality_value_fit": {"quality_signal": 0.78, "value_signal": 0.74, "fit_signal": 0.87}
+        }
+      }
+    ]
+  },
+  "resolutions": [],
+  "dedup_decisions": []
+}
