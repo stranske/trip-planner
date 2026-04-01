@@ -30,7 +30,10 @@ ANCHOR_GROUP_DIMENSIONS: dict[str, list[str]] = {
     "experience_anchors": ["breadth_vs_depth", "iconic_vs_discovery"],
     "mode_anchors": ["movement_vs_friction", "scenic_transit_vs_destination_time"],
     "rhythm_anchors": ["recovery_vs_intensity", "structure_vs_elasticity"],
-    "calendar_anchors": ["structure_vs_elasticity", "route_coherence_vs_eclectic_contrast"],
+    "calendar_anchors": [
+        "structure_vs_elasticity",
+        "route_coherence_vs_eclectic_contrast",
+    ],
     "quality_floor_anchors": [
         "movement_vs_friction",
         "self_reliance_vs_convenience",
@@ -43,7 +46,10 @@ ANCHOR_GROUP_DIMENSIONS: dict[str, list[str]] = {
 }
 EVIDENCE_STAGE_BOOSTS: dict[str, dict[str, float]] = {
     "direct_statement": {"initial_design": 0.15},
-    "hard_constraint_declaration": {"initial_design": 0.18, "inventory_selection": 0.08},
+    "hard_constraint_declaration": {
+        "initial_design": 0.18,
+        "inventory_selection": 0.08,
+    },
     "anchor_declaration": {"initial_design": 0.18, "daily_activity_design": 0.06},
     "forced_tradeoff_choice": {"initial_design": 0.16},
     "scenario_reaction": {"initial_design": 0.14, "inventory_selection": 0.08},
@@ -61,7 +67,9 @@ def _clamp_axis(value: float) -> float:
     return max(-1.0, min(1.0, value))
 
 
-def _sorted_evidence(evidence_records: list[PreferenceEvidence]) -> list[PreferenceEvidence]:
+def _sorted_evidence(
+    evidence_records: list[PreferenceEvidence],
+) -> list[PreferenceEvidence]:
     return sorted(
         evidence_records,
         key=lambda record: (
@@ -78,7 +86,8 @@ def _influence_weight(record: PreferenceEvidence, support_level: str) -> float:
         sum(marker.weakening_strength for marker in record.contradictions) * 0.12
     )
     return _clamp_probability(
-        support_weight * (0.5 + (record.confidence_hint * 0.3) + (record.salience_hint * 0.2))
+        support_weight
+        * (0.5 + (record.confidence_hint * 0.3) + (record.salience_hint * 0.2))
         - contradiction_penalty
     )
 
@@ -128,10 +137,12 @@ def resolve_leisure_profile(
 
     explanation = ResolutionExplanation(
         dimension_explanations={
-            key: _new_dimension_explanation(key, profile) for key in schema.TRADEOFF_DIMENSION_KEYS
+            key: _new_dimension_explanation(key, profile)
+            for key in schema.TRADEOFF_DIMENSION_KEYS
         },
         hybrid_factor_explanations={
-            key: _new_hybrid_explanation(key, profile) for key in schema.HYBRID_FACTOR_KEYS
+            key: _new_hybrid_explanation(key, profile)
+            for key in schema.HYBRID_FACTOR_KEYS
         },
     )
     ordered_evidence = _sorted_evidence(evidence_records)
@@ -172,22 +183,30 @@ def _apply_dimension_resolution(
                 source_kind="evidence",
                 source_id=record.id,
                 weight=weight,
-                summary=record.note or f"{record.evidence_type} affected {dimension_key}",
+                summary=record.note
+                or f"{record.evidence_type} affected {dimension_key}",
             )
-            explanation.dimension_explanations[dimension_key].influences.append(influence)
-            profile.evidence_summary.sources.setdefault(dimension_key, []).append(record.id)
+            explanation.dimension_explanations[dimension_key].influences.append(
+                influence
+            )
+            profile.evidence_summary.sources.setdefault(dimension_key, []).append(
+                record.id
+            )
             if record.signal_direction == "positive":
                 positive_support += weight
             elif record.signal_direction == "negative":
                 weakening_support += weight
             contradiction_support += sum(
-                marker.weakening_strength * weight * 0.65 for marker in record.contradictions
+                marker.weakening_strength * weight * 0.65
+                for marker in record.contradictions
             )
             if record.signal_direction == "contradiction":
                 contradiction_support += weight * 0.5
             salience_boost += weight * record.salience_hint * 0.45
             stability_bonus += weight * 0.12
-            for stage, boost in EVIDENCE_STAGE_BOOSTS.get(record.evidence_type, {}).items():
+            for stage, boost in EVIDENCE_STAGE_BOOSTS.get(
+                record.evidence_type, {}
+            ).items():
                 stage_boosts[stage] = max(stage_boosts[stage], boost)
 
         if base_direction != 0.0:
@@ -197,11 +216,17 @@ def _apply_dimension_resolution(
             value = _clamp_axis(base_direction * magnitude)
         else:
             value = 0.0
-            if positive_support > 0.0 or weakening_support > 0.0 or contradiction_support > 0.0:
+            if (
+                positive_support > 0.0
+                or weakening_support > 0.0
+                or contradiction_support > 0.0
+            ):
                 tension_id = f"{dimension_key}-needs-directional-seed"
                 flag = TensionFlag(
                     id=tension_id,
-                    severity=_clamp_probability(0.45 + positive_support + contradiction_support),
+                    severity=_clamp_probability(
+                        0.45 + positive_support + contradiction_support
+                    ),
                     description=(
                         f"{dimension_key} has evidence support but still needs directional seeding."
                     ),
@@ -210,9 +235,9 @@ def _apply_dimension_resolution(
                 explanation.tension_explanations[tension_id] = list(
                     explanation.dimension_explanations[dimension_key].influences
                 )
-                explanation.dimension_explanations[dimension_key].tension_flag_ids.append(
-                    tension_id
-                )
+                explanation.dimension_explanations[
+                    dimension_key
+                ].tension_flag_ids.append(tension_id)
                 profile.evidence_summary.confidence_notes.append(
                     f"{dimension_key} received evidence but remained at a zero-direction seed value."
                 )
@@ -226,7 +251,9 @@ def _apply_dimension_resolution(
             max(dimension.salience, 0.22) + salience_boost + (positive_support * 0.12)
         )
         dimension.stability = _clamp_probability(
-            max(dimension.stability, 0.2) + stability_bonus - (contradiction_support * 0.18)
+            max(dimension.stability, 0.2)
+            + stability_bonus
+            - (contradiction_support * 0.18)
         )
         for stage in schema.PLANNING_STAGES:
             dimension.trip_stage_sensitivity[stage] = _clamp_probability(
@@ -237,13 +264,17 @@ def _apply_dimension_resolution(
             flag = TensionFlag(
                 id=tension_id,
                 severity=_clamp_probability(0.45 + contradiction_support),
-                description=(f"Contradictory evidence remains unresolved for {dimension_key}."),
+                description=(
+                    f"Contradictory evidence remains unresolved for {dimension_key}."
+                ),
             )
             profile.tension_flags.append(flag)
             explanation.tension_explanations[tension_id] = list(
                 explanation.dimension_explanations[dimension_key].influences
             )
-            explanation.dimension_explanations[dimension_key].tension_flag_ids.append(tension_id)
+            explanation.dimension_explanations[dimension_key].tension_flag_ids.append(
+                tension_id
+            )
             profile.evidence_summary.confidence_notes.append(
                 f"{dimension_key} includes contradictory evidence that should remain visible downstream."
             )
@@ -270,18 +301,25 @@ def _apply_hybrid_resolution(
                     source_kind="evidence",
                     source_id=record.id,
                     weight=weight,
-                    summary=record.note or f"{record.evidence_type} affected {hybrid_key}",
+                    summary=record.note
+                    or f"{record.evidence_type} affected {hybrid_key}",
                 )
             )
-            profile.evidence_summary.sources.setdefault(hybrid_key, []).append(record.id)
+            profile.evidence_summary.sources.setdefault(hybrid_key, []).append(
+                record.id
+            )
             if record.signal_direction == "positive":
                 salience_boost += weight * 0.42
                 if factor.mode in {"anchor", "both"}:
                     anchor_boost += weight * 0.32
             else:
                 salience_boost -= weight * 0.12
-        factor.salience = _clamp_probability(max(factor.salience, 0.18) + salience_boost)
-        factor.anchor_strength = _clamp_probability(max(factor.anchor_strength, 0.0) + anchor_boost)
+        factor.salience = _clamp_probability(
+            max(factor.salience, 0.18) + salience_boost
+        )
+        factor.anchor_strength = _clamp_probability(
+            max(factor.anchor_strength, 0.0) + anchor_boost
+        )
 
 
 def _apply_anchor_and_constraint_precedence(
@@ -292,7 +330,9 @@ def _apply_anchor_and_constraint_precedence(
         if not anchors:
             continue
         average_strength = sum(anchor.strength for anchor in anchors) / len(anchors)
-        flexibility_discount = sum(anchor.flexibility for anchor in anchors) / len(anchors)
+        flexibility_discount = sum(anchor.flexibility for anchor in anchors) / len(
+            anchors
+        )
         effective_weight = _clamp_probability(
             average_strength * (1.0 - (flexibility_discount * 0.35))
         )
@@ -326,7 +366,9 @@ def _apply_anchor_and_constraint_precedence(
         dimension.value = max(dimension.value, 0.35)
         dimension.salience = max(dimension.salience, 0.66)
         dimension.confidence = max(dimension.confidence, 0.62)
-        explanation.dimension_explanations["self_reliance_vs_convenience"].influences.append(
+        explanation.dimension_explanations[
+            "self_reliance_vs_convenience"
+        ].influences.append(
             MaterialInfluence(
                 source_kind="quality_floor_guardrail",
                 source_id="quality_floor_protection",
@@ -359,7 +401,9 @@ def _finalize_explanations(
                     if tension_id != directional_seed_tension_id
                 ]
             explanation.tension_explanations.pop(directional_seed_tension_id, None)
-            confidence_notes = [note for note in confidence_notes if note != directional_seed_note]
+            confidence_notes = [
+                note for note in confidence_notes if note != directional_seed_note
+            ]
         detail.resolved_value = dimension.value
         detail.confidence = dimension.confidence
         detail.salience = dimension.salience
@@ -377,7 +421,10 @@ def _finalize_explanations(
             key = tension.id[: -len("-needs-directional-seed")]
         else:
             key = ""
-        if tension.id.endswith("-needs-directional-seed") and key in profile.tradeoff_dimensions:
+        if (
+            tension.id.endswith("-needs-directional-seed")
+            and key in profile.tradeoff_dimensions
+        ):
             if profile.tradeoff_dimensions[key].value != 0.0:
                 continue
         filtered_tension_flags.append(tension)

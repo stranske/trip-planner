@@ -63,8 +63,13 @@ class OptionEvidence:
         if self.option_kind not in OPTION_KINDS:
             raise ValueError(f"option_kind must be one of {OPTION_KINDS}")
         _require_strings(self.presented_option_ids, "presented_option_ids")
-        if self.presented_option_ids and self.option_id not in self.presented_option_ids:
-            raise ValueError("presented_option_ids must include option_id when provided")
+        if (
+            self.presented_option_ids
+            and self.option_id not in self.presented_option_ids
+        ):
+            raise ValueError(
+                "presented_option_ids must include option_id when provided"
+            )
         if len(self.presented_option_ids) != len(set(self.presented_option_ids)):
             raise ValueError("presented_option_ids cannot contain duplicates")
 
@@ -124,16 +129,26 @@ class PreferenceEvidence:
         _require_strings(self.affected_dimensions, "affected_dimensions")
         _require_strings(self.affected_hybrid_factors, "affected_hybrid_factors")
         _require_strings(self.anchor_groups, "anchor_groups")
-        invalid_dimensions = set(self.affected_dimensions) - set(schema.TRADEOFF_DIMENSION_KEYS)
+        invalid_dimensions = set(self.affected_dimensions) - set(
+            schema.TRADEOFF_DIMENSION_KEYS
+        )
         if invalid_dimensions:
             raise ValueError(f"unsupported dimensions: {sorted(invalid_dimensions)}")
-        invalid_hybrid = set(self.affected_hybrid_factors) - set(schema.HYBRID_FACTOR_KEYS)
+        invalid_hybrid = set(self.affected_hybrid_factors) - set(
+            schema.HYBRID_FACTOR_KEYS
+        )
         if invalid_hybrid:
             raise ValueError(f"unsupported hybrid factors: {sorted(invalid_hybrid)}")
         invalid_anchor_groups = set(self.anchor_groups) - set(schema.ANCHOR_GROUPS)
         if invalid_anchor_groups:
-            raise ValueError(f"unsupported anchor groups: {sorted(invalid_anchor_groups)}")
-        if not (self.affected_dimensions or self.affected_hybrid_factors or self.anchor_groups):
+            raise ValueError(
+                f"unsupported anchor groups: {sorted(invalid_anchor_groups)}"
+            )
+        if not (
+            self.affected_dimensions
+            or self.affected_hybrid_factors
+            or self.anchor_groups
+        ):
             raise ValueError("PreferenceEvidence must affect at least one target")
         if self.evidence_type in {"option_selection", "option_rejection"}:
             if self.option_evidence is None:
@@ -144,10 +159,19 @@ class PreferenceEvidence:
             raise ValueError(
                 "option_evidence is only allowed for option_selection and option_rejection"
             )
-        if self.evidence_type == "option_rejection" and self.signal_direction == "positive":
-            raise ValueError("option_rejection evidence cannot use a positive signal_direction")
-        if any(not isinstance(item, ContradictionMarker) for item in self.contradictions):
-            raise ValueError("contradictions must contain ContradictionMarker instances")
+        if (
+            self.evidence_type == "option_rejection"
+            and self.signal_direction == "positive"
+        ):
+            raise ValueError(
+                "option_rejection evidence cannot use a positive signal_direction"
+            )
+        if any(
+            not isinstance(item, ContradictionMarker) for item in self.contradictions
+        ):
+            raise ValueError(
+                "contradictions must contain ContradictionMarker instances"
+            )
         from .evidence_catalog import validate_evidence_support
 
         validate_evidence_support(self)

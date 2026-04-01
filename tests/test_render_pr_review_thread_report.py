@@ -31,7 +31,9 @@ def test_load_review_threads_supports_graphql_payload(tmp_path):
                                 "path": "ignored.py",
                                 "line": 1,
                                 "comments": {
-                                    "nodes": [{"url": "https://example.com", "body": "ignore"}]
+                                    "nodes": [
+                                        {"url": "https://example.com", "body": "ignore"}
+                                    ]
                                 },
                             },
                         ]
@@ -80,7 +82,10 @@ def test_render_report_preserves_manual_classification():
     assert "## Classification Criteria" in rendered
     assert report.CLASSIFICATION_CRITERIA in rendered
     assert "- Classification: warranted fix" in rendered
-    assert "- Justification: Potential runtime failure when the fixture is absent." in rendered
+    assert (
+        "- Justification: Potential runtime failure when the fixture is absent."
+        in rendered
+    )
 
 
 def test_load_review_threads_accepts_supported_classifications(tmp_path):
@@ -149,7 +154,9 @@ def test_load_review_threads_requires_justification_for_classification(tmp_path)
     input_path = tmp_path / "threads.json"
     input_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="includes a classification but no justification"):
+    with pytest.raises(
+        ValueError, match="includes a classification but no justification"
+    ):
         report.load_review_threads(input_path)
 
 

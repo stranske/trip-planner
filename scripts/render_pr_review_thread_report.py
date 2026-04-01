@@ -65,16 +65,23 @@ def _normalize_normalized_thread(raw_thread: dict[str, Any]) -> ReviewThread:
     if not concern:
         raise ValueError(f"Thread {url} is missing a technical concern.")
 
-    classification = _collapse_text(raw_thread.get("classification", "")).lower() or None
+    classification = (
+        _collapse_text(raw_thread.get("classification", "")).lower() or None
+    )
     justification = _collapse_text(raw_thread.get("justification", "")) or None
     if classification is not None and classification not in ALLOWED_CLASSIFICATIONS:
         raise ValueError(
-            "Classification must be one of: " f"{WARRANTED_FIX}, {NOT_WARRANTED_DISPOSITION}."
+            "Classification must be one of: "
+            f"{WARRANTED_FIX}, {NOT_WARRANTED_DISPOSITION}."
         )
     if classification is not None and justification is None:
-        raise ValueError(f"Thread {url} includes a classification but no justification.")
+        raise ValueError(
+            f"Thread {url} includes a classification but no justification."
+        )
     if classification is None and justification is not None:
-        raise ValueError(f"Thread {url} includes a justification but no classification.")
+        raise ValueError(
+            f"Thread {url} includes a justification but no classification."
+        )
 
     return ReviewThread(
         path=_collapse_text(raw_thread.get("path", "")) or "unknown-path",
@@ -92,7 +99,9 @@ def _normalize_graphql_thread(raw_thread: dict[str, Any]) -> ReviewThread:
     nodes = comments.get("nodes", []) if isinstance(comments, dict) else []
     first_comment = next((node for node in nodes if isinstance(node, dict)), None)
     if first_comment is None:
-        raise ValueError("Each GraphQL review thread must include at least one comment node.")
+        raise ValueError(
+            "Each GraphQL review thread must include at least one comment node."
+        )
 
     url = _collapse_text(first_comment.get("url", ""))
     if not url:
@@ -133,7 +142,9 @@ def _extract_threads(payload: dict[str, Any]) -> list[ReviewThread]:
 
     data = payload.get("data")
     if not isinstance(data, dict):
-        raise ValueError("Unsupported payload shape. Expected `threads` or GitHub GraphQL `data`.")
+        raise ValueError(
+            "Unsupported payload shape. Expected `threads` or GitHub GraphQL `data`."
+        )
 
     repository = data.get("repository")
     if not isinstance(repository, dict):
@@ -141,7 +152,9 @@ def _extract_threads(payload: dict[str, Any]) -> list[ReviewThread]:
 
     pull_request = repository.get("pullRequest")
     if not isinstance(pull_request, dict):
-        raise ValueError("GitHub GraphQL payload is missing `data.repository.pullRequest`.")
+        raise ValueError(
+            "GitHub GraphQL payload is missing `data.repository.pullRequest`."
+        )
 
     review_threads = pull_request.get("reviewThreads")
     if not isinstance(review_threads, dict):
@@ -166,7 +179,9 @@ def load_review_threads(path: str | Path) -> tuple[int | None, list[ReviewThread
     return _extract_pr_number(payload), _extract_threads(payload)
 
 
-def render_report(pr_number: int | None, threads: list[ReviewThread], source_name: str) -> str:
+def render_report(
+    pr_number: int | None, threads: list[ReviewThread], source_name: str
+) -> str:
     title_suffix = f"PR #{pr_number}" if pr_number is not None else "Pull Request"
     lines = [
         f"# {title_suffix} Unresolved Review Threads",
