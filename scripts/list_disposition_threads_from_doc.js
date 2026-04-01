@@ -132,6 +132,42 @@ function formatDispositionThreadsAsPlan(dispositionThreads, options = {}) {
   return `${lines.join("\n")}\n`;
 }
 
+function formatDispositionThreadsAsComments(dispositionThreads, options = {}) {
+  const { excludedOutdatedCount = 0 } = options;
+  const lines = ["# Disposition Comment Drafts", ""];
+
+  lines.push(`Actionable disposition threads: ${dispositionThreads.length}`);
+  if (excludedOutdatedCount > 0) {
+    lines.push(`Excluded outdated disposition threads: ${excludedOutdatedCount}`);
+  }
+
+  if (dispositionThreads.length === 0) {
+    lines.push("", "No actionable disposition threads found.");
+    return `${lines.join("\n")}\n`;
+  }
+
+  dispositionThreads.forEach((thread, index) => {
+    lines.push("");
+    lines.push(`## Disposition Thread ${index + 1}`);
+    lines.push("");
+    lines.push(`- Thread: ${thread.threadId || "<missing thread id>"}`);
+    lines.push(`- Original Thread URL: ${thread.originalThreadUrl || "<missing original thread URL>"}`);
+    lines.push(`- Location: ${thread.location || "<missing location>"}`);
+    lines.push("");
+    lines.push("```markdown");
+    lines.push(thread.rationale || "<missing rationale>");
+
+    if (thread.content) {
+      lines.push("");
+      lines.push(`Context from unresolved thread: ${thread.content}`);
+    }
+
+    lines.push("```");
+  });
+
+  return `${lines.join("\n")}\n`;
+}
+
 function formatDispositionThreadsOutput(dispositionThreads, outputFormat = "text", options = {}) {
   if (outputFormat === "json") {
     return formatDispositionThreadsAsJson(dispositionThreads, options);
@@ -143,6 +179,10 @@ function formatDispositionThreadsOutput(dispositionThreads, outputFormat = "text
 
   if (outputFormat === "plan") {
     return formatDispositionThreadsAsPlan(dispositionThreads, options);
+  }
+
+  if (outputFormat === "comments") {
+    return formatDispositionThreadsAsComments(dispositionThreads, options);
   }
 
   return formatDispositionThreadsReport(dispositionThreads, options);
@@ -220,9 +260,9 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
     options.docPath = path.resolve(argument);
   }
 
-  if (!["text", "json", "markdown", "plan"].includes(options.outputFormat)) {
+  if (!["text", "json", "markdown", "plan", "comments"].includes(options.outputFormat)) {
     throw new Error(
-      `Output format must be one of "text", "json", "markdown", or "plan"; received "${options.outputFormat}".`
+      `Output format must be one of "text", "json", "markdown", "plan", or "comments"; received "${options.outputFormat}".`
     );
   }
 
@@ -250,6 +290,7 @@ module.exports = {
   formatDispositionThreadsAsJson,
   formatDispositionThreadsAsMarkdown,
   formatDispositionThreadsAsPlan,
+  formatDispositionThreadsAsComments,
   formatDispositionThreadsOutput,
   formatDispositionThreadsReport,
   getCliConfiguration,

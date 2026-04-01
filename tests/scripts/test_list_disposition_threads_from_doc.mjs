@@ -7,6 +7,7 @@ const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const {
   buildDispositionThreadsReport,
+  formatDispositionThreadsAsComments,
   formatDispositionThreadsAsJson,
   formatDispositionThreadsAsMarkdown,
   formatDispositionThreadsAsPlan,
@@ -96,6 +97,25 @@ test("formatDispositionThreadsAsPlan emits resolution steps for PR comments", ()
   assert.match(report, /Next Step: Reply on PR #178 with the disposition rationale and resolve the thread\./);
 });
 
+test("formatDispositionThreadsAsComments emits ready-to-post disposition comment drafts", () => {
+  const report = formatDispositionThreadsAsComments([
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "docs/pr-178-unresolved-threads.md:12",
+      rationale: "The existing behavior is intentional.",
+      content: "reviewer: Please change the template wording.",
+      outdated: false,
+    },
+  ]);
+
+  assert.match(report, /# Disposition Comment Drafts/);
+  assert.match(report, /- Thread: THREAD_1/);
+  assert.match(report, /```markdown/);
+  assert.match(report, /The existing behavior is intentional\./);
+  assert.match(report, /Context from unresolved thread: reviewer: Please change the template wording\./);
+});
+
 test("formatDispositionThreadsAsJson includes the excluded outdated count", () => {
   const report = formatDispositionThreadsAsJson(
     [{ threadId: "THREAD_1", classification: "disposition", outdated: false }],
@@ -116,6 +136,9 @@ test("formatDispositionThreadsOutput dispatches to the requested formatter", () 
 
   const planReport = formatDispositionThreadsOutput([], "plan");
   assert.match(planReport, /No actionable disposition threads found\./);
+
+  const commentsReport = formatDispositionThreadsOutput([], "comments");
+  assert.match(commentsReport, /No actionable disposition threads found\./);
 });
 
 test("buildDispositionThreadsReport filters unresolved disposition threads from the inventory", () => {
@@ -224,7 +247,7 @@ test("getCliConfiguration rejects unknown options and extra positional arguments
   assert.throws(() => getCliConfiguration(["--unknown"]), /Unknown option: --unknown/);
   assert.throws(
     () => getCliConfiguration(["--format", "html"]),
-    /Output format must be one of "text", "json", "markdown", or "plan"/
+    /Output format must be one of "text", "json", "markdown", "plan", or "comments"/
   );
   assert.throws(
     () => getCliConfiguration(["docs/one.md", "docs/two.md"]),
