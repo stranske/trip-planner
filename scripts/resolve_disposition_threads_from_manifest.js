@@ -488,13 +488,13 @@ async function executeManifestThreads(options = {}, dependencies = {}) {
     writeRemainingSnapshot(report.remainingSnapshotPath, remainingThreads, dependencies);
   }
 
-  if (options.acceptanceReportPath) {
-    if (!options.execute || !options.docPath) {
-      throw new Error(
-        "The --write-acceptance-report flag requires both --execute and --doc so the inventory can be refreshed before acceptance is evaluated."
-      );
-    }
+  if (options.acceptanceReportPath && (!options.execute || !options.docPath)) {
+    throw new Error(
+      "The --write-acceptance-report flag requires both --execute and --doc so the inventory can be refreshed before acceptance is evaluated."
+    );
+  }
 
+  if (options.execute && options.docPath && (options.resultsPath || options.acceptanceReportPath)) {
     const documentedThreads = loadThreadInventory(options.docPath, dependencies);
     const remainingThreads = report.remainingThreadsSnapshot || [];
     const acceptanceResult = await evaluateAcceptance(
@@ -521,16 +521,19 @@ async function executeManifestThreads(options = {}, dependencies = {}) {
     );
 
     report.acceptance = acceptanceResult;
-    report.acceptanceReportPath = resolveManifestRelativePath(
-      options.manifestPath,
-      options.acceptanceReportPath
-    );
-    writeAcceptanceReport(
-      report.acceptanceReportPath,
-      acceptanceResult,
-      options.outputFormat || "text",
-      dependencies
-    );
+
+    if (options.acceptanceReportPath) {
+      report.acceptanceReportPath = resolveManifestRelativePath(
+        options.manifestPath,
+        options.acceptanceReportPath
+      );
+      writeAcceptanceReport(
+        report.acceptanceReportPath,
+        acceptanceResult,
+        options.outputFormat || "text",
+        dependencies
+      );
+    }
   }
 
   if (options.resultsPath) {

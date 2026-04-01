@@ -148,6 +148,43 @@ test("loadResolutionResultsReport reuses embedded snapshot threads when no snaps
   });
 });
 
+test("getAcceptanceConfiguration can reuse results-only acceptance metadata without a separate acceptance report file", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "acceptance-results-results-only-"));
+  const resultsPath = path.join(tempDir, "results.json");
+  const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
+
+  fs.writeFileSync(
+    resultsPath,
+    `${JSON.stringify(
+      {
+        inventoryUpdate: { docPath },
+        remainingThreadsSnapshot: [],
+        acceptance: {
+          repository: "stranske/trip-planner",
+          prNumber: 178,
+          expectDocCount: 4,
+          expectedCount: 0,
+          docPath,
+          inputPath: "<post-resolution inventory>",
+          githubUiConfirmed: true,
+          criteria: [{ id: "github_ui", status: "pass" }],
+        },
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  const configuration = getAcceptanceConfiguration(["--results", resultsPath], {});
+
+  assert.equal(configuration.inputPath, null);
+  assert.deepEqual(configuration.snapshotThreads, []);
+  assert.equal(configuration.docPath, docPath);
+  assert.equal(configuration.expectedCount, 0);
+  assert.equal(configuration.githubUiConfirmed, true);
+});
+
 test("getAcceptanceConfiguration can reuse a persisted resolution report", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "acceptance-results-config-"));
   const resultsPath = path.join(tempDir, "results.json");

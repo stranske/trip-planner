@@ -659,6 +659,83 @@ test("executeManifestThreads writes inventory update details into the persisted 
     remainingThreadCount: 0,
   });
   assert.deepEqual(persistedReport.remainingThreadsSnapshot, []);
+  assert.equal(report.acceptance.overallStatus, "manual");
+  assert.equal(report.acceptance.expectedCount, 0);
+  assert.equal(persistedReport.acceptance.overallStatus, "manual");
+  assert.equal(persistedReport.acceptance.expectedCount, 0);
+  assert.equal(persistedReport.acceptance.inputPath, "<post-resolution inventory>");
+});
+
+test("executeManifestThreads persists acceptance metadata in results without a separate acceptance report", async () => {
+  const manifest = {
+    repositoryOwner: "stranske",
+    repositoryName: "trip-planner",
+    prNumber: 178,
+    expectDocCount: 1,
+    threads: [
+      {
+        threadId: "THREAD_1",
+        replyQuery: "mutation Reply",
+        replyVariables: { threadId: "THREAD_1", body: "Disposition" },
+        resolveQuery: "mutation Resolve",
+        resolveVariables: { threadId: "THREAD_1" },
+      },
+    ],
+  };
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-disposition-results-acceptance-"));
+  const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
+  const resultsPath = path.join(tempDir, "results.json");
+
+  fs.writeFileSync(
+    docPath,
+    `# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: src/file.js:10
+- Classification: disposition
+- Follow-up PR:
+- Rationale: The current behavior is intentional.
+- Content: reviewer: Keep the existing wording.
+- Outdated: no
+`,
+    "utf8"
+  );
+
+  await executeManifestThreads(
+    {
+      manifestPath: path.join(tempDir, "manifest.json"),
+      execute: true,
+      docPath,
+      resultsPath,
+      outputFormat: "text",
+      githubUiConfirmed: true,
+    },
+    {
+      readFileSync: (targetPath) =>
+        targetPath === docPath ? fs.readFileSync(docPath, "utf8") : JSON.stringify(manifest),
+      writeFileSync: (targetPath, content) => fs.writeFileSync(targetPath, content, "utf8"),
+      mkdirSync: (targetPath, options) => fs.mkdirSync(targetPath, options),
+      spawnSync: () => ({
+        status: 0,
+        stdout: "{\"data\":{\"ok\":true}}",
+        stderr: "",
+      }),
+    }
+  );
+
+  const persistedReport = JSON.parse(fs.readFileSync(resultsPath, "utf8"));
+  assert.equal(persistedReport.acceptance.overallStatus, "pass");
+  assert.equal(persistedReport.acceptance.expectedCount, 0);
+  assert.equal(persistedReport.acceptance.docPath, docPath);
+  assert.equal(
+    persistedReport.acceptance.criteria.find((criterion) => criterion.id === "github_ui")?.status,
+    "pass"
+  );
 });
 
 test("executeManifestThreads can write a post-resolution acceptance report", async () => {
