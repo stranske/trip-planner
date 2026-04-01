@@ -178,6 +178,62 @@ test("parseThreadInventory folds wrapped rationale and content lines into the sa
   ]);
 });
 
+test("parseThreadInventory can isolate unresolved and resolved inventory sections", () => {
+  const markdown = `
+# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_ACTIVE
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: disposition
+- Rationale: Still unresolved.
+- Content: Reviewer requested a clarification.
+- Outdated: no
+
+## Resolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_RESOLVED
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2
+- Location: trip_planner/other.py:8
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Historical fix triage should stay archived.
+- Content: Reviewer requested a follow-up patch.
+- Outdated: yes
+`;
+
+  assert.deepEqual(parseThreadInventory(markdown, { inventorySection: "unresolved" }), [
+    {
+      threadId: "THREAD_ACTIVE",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/example.py:17",
+      classification: "disposition",
+      followUpPr: null,
+      rationale: "Still unresolved.",
+      content: "Reviewer requested a clarification.",
+      outdated: false,
+    },
+  ]);
+  assert.deepEqual(parseThreadInventory(markdown, { inventorySection: "resolved" }), [
+    {
+      threadId: "THREAD_RESOLVED",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+      location: "trip_planner/other.py:8",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale: "Historical fix triage should stay archived.",
+      content: "Reviewer requested a follow-up patch.",
+      outdated: true,
+    },
+  ]);
+});
+
 test("listFixClassifiedThreads returns only fix-classified entries", () => {
   const fixThreads = listFixClassifiedThreads([
     { threadId: "THREAD_1", classification: "fix" },
@@ -903,4 +959,40 @@ test("buildFixThreadsReport matches follow-up PR shorthand against canonicalized
   assert.equal(parsed.count, 1);
   assert.equal(parsed.fixThreads[0].threadId, "THREAD_2");
   assert.equal(parsed.followUpPrGroups[0].followUpPr, "https://github.com/stranske/trip-planner/pull/582");
+});
+
+test("buildFixThreadsReport excludes resolved-history fix threads from active follow-up scope", () => {
+  const report = buildFixThreadsReport(
+    {
+      docPath: "docs/resolved-only.md",
+      outputFormat: "json",
+      requireComplete: true,
+    },
+    {
+      readFileSync: () => `
+# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+No unresolved inline review threads found.
+
+## Resolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: The fix landed and the review thread is now historical only.
+- Content: Reviewer requested a bounds check.
+- Outdated: no
+`,
+    }
+  );
+
+  const parsed = JSON.parse(report);
+  assert.equal(parsed.count, 0);
+  assert.equal(parsed.followUpPrGroups.length, 0);
 });

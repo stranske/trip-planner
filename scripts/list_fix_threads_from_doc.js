@@ -10,63 +10,106 @@ const DEFAULT_REPOSITORY = "stranske/trip-planner";
 const GITHUB_PULL_BASE_URL = `https://github.com/${DEFAULT_REPOSITORY}/pull/`;
 const PLACEHOLDER_VALUES = new Set(["tbd", "todo", "pending", "unknown"]);
 
-function parseThreadInventory(markdown) {
-  const sections = markdown.split(/^###\s+Thread\s+\d+\s*$/m).slice(1);
+function parseThreadInventory(markdown, options = {}) {
+  const inventorySection = options.inventorySection || "all";
+  if (!["all", "unresolved", "resolved"].includes(inventorySection)) {
+    throw new Error(
+      `Inventory section must be one of "all", "unresolved", or "resolved"; received "${inventorySection}".`
+    );
+  }
 
-  return sections.map((section) => {
-    const thread = {
-      threadId: null,
-      originalThreadUrl: null,
-      location: null,
-      classification: null,
-      followUpPr: null,
-      rationale: null,
-      content: null,
-      outdated: null,
-    };
+  const threads = [];
+  let currentThread = null;
+  let currentField = null;
+  let currentSection = "unresolved";
 
-    let currentField = null;
+  const shouldIncludeThread = () =>
+    inventorySection === "all" || currentSection === inventorySection;
 
-    section.split("\n").forEach((rawLine) => {
-      const line = rawLine.trim();
+  const pushCurrentThread = () => {
+    if (currentThread && shouldIncludeThread()) {
+      threads.push(currentThread);
+    }
+  };
 
-      if (line === "") {
-        currentField = null;
-        return;
-      }
+  markdown.split("\n").forEach((rawLine) => {
+    const line = rawLine.trim();
 
-      if (line.startsWith("- Thread ID:")) {
-        thread.threadId = normalizeFieldValue(line.slice("- Thread ID:".length));
-        currentField = "threadId";
-      } else if (line.startsWith("- Original Thread URL:")) {
-        thread.originalThreadUrl = normalizeUrlFieldValue(line.slice("- Original Thread URL:".length));
-        currentField = "originalThreadUrl";
-      } else if (line.startsWith("- Location:")) {
-        thread.location = normalizeFieldValue(line.slice("- Location:".length));
-        currentField = "location";
-      } else if (line.startsWith("- Classification:")) {
-        const classification = normalizeFieldValue(line.slice("- Classification:".length));
-        thread.classification = classification ? classification.toLowerCase() : null;
-        currentField = "classification";
-      } else if (line.startsWith("- Follow-up PR:")) {
-        thread.followUpPr = normalizeFollowUpPrFieldValue(line.slice("- Follow-up PR:".length));
-        currentField = "followUpPr";
-      } else if (line.startsWith("- Rationale:")) {
-        thread.rationale = normalizeFieldValue(line.slice("- Rationale:".length));
-        currentField = "rationale";
-      } else if (line.startsWith("- Content:")) {
-        thread.content = normalizeFieldValue(line.slice("- Content:".length));
-        currentField = "content";
-      } else if (line.startsWith("- Outdated:")) {
-        thread.outdated = normalizeOutdatedFieldValue(line.slice("- Outdated:".length));
-        currentField = "outdated";
-      } else if (currentField) {
-        appendContinuationLine(thread, currentField, line);
-      }
-    });
+    if (line === "## Thread Inventory") {
+      pushCurrentThread();
+      currentThread = null;
+      currentSection = "unresolved";
+      currentField = null;
+      return;
+    }
 
-    return thread;
+    if (line === "## Resolved Thread Inventory") {
+      pushCurrentThread();
+      currentThread = null;
+      currentSection = "resolved";
+      currentField = null;
+      return;
+    }
+
+    if (/^###\s+Thread\s+\d+\s*$/.test(line)) {
+      pushCurrentThread();
+      currentThread = {
+        threadId: null,
+        originalThreadUrl: null,
+        location: null,
+        classification: null,
+        followUpPr: null,
+        rationale: null,
+        content: null,
+        outdated: null,
+      };
+      currentField = null;
+      return;
+    }
+
+    if (!currentThread) {
+      return;
+    }
+
+    if (line === "") {
+      currentField = null;
+      return;
+    }
+
+    if (line.startsWith("- Thread ID:")) {
+      currentThread.threadId = normalizeFieldValue(line.slice("- Thread ID:".length));
+      currentField = "threadId";
+    } else if (line.startsWith("- Original Thread URL:")) {
+      currentThread.originalThreadUrl = normalizeUrlFieldValue(
+        line.slice("- Original Thread URL:".length)
+      );
+      currentField = "originalThreadUrl";
+    } else if (line.startsWith("- Location:")) {
+      currentThread.location = normalizeFieldValue(line.slice("- Location:".length));
+      currentField = "location";
+    } else if (line.startsWith("- Classification:")) {
+      const classification = normalizeFieldValue(line.slice("- Classification:".length));
+      currentThread.classification = classification ? classification.toLowerCase() : null;
+      currentField = "classification";
+    } else if (line.startsWith("- Follow-up PR:")) {
+      currentThread.followUpPr = normalizeFollowUpPrFieldValue(line.slice("- Follow-up PR:".length));
+      currentField = "followUpPr";
+    } else if (line.startsWith("- Rationale:")) {
+      currentThread.rationale = normalizeFieldValue(line.slice("- Rationale:".length));
+      currentField = "rationale";
+    } else if (line.startsWith("- Content:")) {
+      currentThread.content = normalizeFieldValue(line.slice("- Content:".length));
+      currentField = "content";
+    } else if (line.startsWith("- Outdated:")) {
+      currentThread.outdated = normalizeOutdatedFieldValue(line.slice("- Outdated:".length));
+      currentField = "outdated";
+    } else if (currentField) {
+      appendContinuationLine(currentThread, currentField, line);
+    }
   });
+
+  pushCurrentThread();
+  return threads;
 }
 
 function appendContinuationLine(thread, fieldName, line) {
@@ -242,9 +285,9 @@ function formatThreadInventoryIssues(issues) {
   return `${lines.join("\n")}\n`;
 }
 
-function loadThreadInventory(docPath = DEFAULT_DOC_PATH, dependencies = {}) {
+function loadThreadInventory(docPath = DEFAULT_DOC_PATH, dependencies = {}, options = {}) {
   const readFileSync = dependencies.readFileSync || fs.readFileSync;
-  return parseThreadInventory(readFileSync(docPath, "utf8"));
+  return parseThreadInventory(readFileSync(docPath, "utf8"), options);
 }
 
 function listFixClassifiedThreads(threads) {
@@ -510,14 +553,17 @@ function buildFixThreadsReport(options = {}, dependencies = {}) {
     outputFormat = "text",
   } = options;
   const threads = loadThreadInventory(docPath, dependencies);
+  const activeThreads = loadThreadInventory(docPath, dependencies, {
+    inventorySection: "unresolved",
+  });
   const issues = collectThreadInventoryIssues(threads);
 
   if (requireComplete && issues.length > 0) {
     throw new Error(formatThreadInventoryIssues(issues).trimEnd());
   }
 
-  const allFixThreads = listFixClassifiedThreads(threads);
-  const actionableFixThreads = listActionableFixThreads(threads, { excludeOutdated });
+  const allFixThreads = listFixClassifiedThreads(activeThreads);
+  const actionableFixThreads = listActionableFixThreads(activeThreads, { excludeOutdated });
   const excludedOutdatedCount = allFixThreads.length - actionableFixThreads.length;
   const normalizedFollowUpPr = normalizeFollowUpPrFieldValue(followUpPr);
   const fixThreads = followUpPr
