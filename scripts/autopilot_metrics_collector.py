@@ -93,7 +93,9 @@ AUTOPILOT_METRICS_SCHEMA: dict[str, Any] = {
 
 STEP_REQUIRED_FIELDS = AUTOPILOT_METRICS_SCHEMA["record_types"]["step"]["required"]
 CYCLE_REQUIRED_FIELDS = AUTOPILOT_METRICS_SCHEMA["record_types"]["cycle"]["required"]
-ESCALATION_REQUIRED_FIELDS = AUTOPILOT_METRICS_SCHEMA["record_types"]["escalation"]["required"]
+ESCALATION_REQUIRED_FIELDS = AUTOPILOT_METRICS_SCHEMA["record_types"]["escalation"][
+    "required"
+]
 _CYCLE_OPTIONAL_FIELDS = ("max_cycles", "steps_attempted", "steps_completed")
 _TRACE_FIELDS = ("langsmith_trace_id", "langsmith_trace_url")
 LANGSMITH_TRACE_URL_BASE = "https://smith.langchain.com/r/"
@@ -173,7 +175,9 @@ def _validate_step(record: dict[str, Any]) -> None:
     if not _is_int(record["schema_version"]):
         raise ValidationError("schema_version must be an integer")
     if record["schema_version"] != AUTOPILOT_METRICS_SCHEMA_VERSION:
-        raise ValidationError(f"schema_version must be {AUTOPILOT_METRICS_SCHEMA_VERSION}")
+        raise ValidationError(
+            f"schema_version must be {AUTOPILOT_METRICS_SCHEMA_VERSION}"
+        )
     if not _is_int(record["issue_number"]):
         raise ValidationError("issue_number must be an integer")
     if not _is_int(record["cycle_count"]):
@@ -204,7 +208,9 @@ def _validate_cycle(record: dict[str, Any]) -> None:
     if not _is_int(record["schema_version"]):
         raise ValidationError("schema_version must be an integer")
     if record["schema_version"] != AUTOPILOT_METRICS_SCHEMA_VERSION:
-        raise ValidationError(f"schema_version must be {AUTOPILOT_METRICS_SCHEMA_VERSION}")
+        raise ValidationError(
+            f"schema_version must be {AUTOPILOT_METRICS_SCHEMA_VERSION}"
+        )
     if not _is_int(record["issue_number"]):
         raise ValidationError("issue_number must be an integer")
     if not _is_int(record["cycle_count"]):
@@ -227,12 +233,17 @@ def _validate_escalation(record: dict[str, Any]) -> None:
     if not _is_int(record["schema_version"]):
         raise ValidationError("schema_version must be an integer")
     if record["schema_version"] != AUTOPILOT_METRICS_SCHEMA_VERSION:
-        raise ValidationError(f"schema_version must be {AUTOPILOT_METRICS_SCHEMA_VERSION}")
+        raise ValidationError(
+            f"schema_version must be {AUTOPILOT_METRICS_SCHEMA_VERSION}"
+        )
     if not _is_int(record["issue_number"]):
         raise ValidationError("issue_number must be an integer")
     if not _is_int(record["cycle_count"]):
         raise ValidationError("cycle_count must be an integer")
-    if not isinstance(record["escalation_reason"], str) or not record["escalation_reason"].strip():
+    if (
+        not isinstance(record["escalation_reason"], str)
+        or not record["escalation_reason"].strip()
+    ):
         raise ValidationError("escalation_reason must be a non-empty string")
 
     _parse_timestamp(str(record["timestamp"]))
@@ -323,8 +334,12 @@ def build_record_from_args(args: argparse.Namespace) -> dict[str, Any]:
     if not metric_type:
         raise ValidationError("metric_type must be set")
 
-    trace_id = _env_or_value(getattr(args, "langsmith_trace_id", None), "LANGSMITH_TRACE_ID")
-    trace_url = _env_or_value(getattr(args, "langsmith_trace_url", None), "LANGSMITH_TRACE_URL")
+    trace_id = _env_or_value(
+        getattr(args, "langsmith_trace_id", None), "LANGSMITH_TRACE_ID"
+    )
+    trace_url = _env_or_value(
+        getattr(args, "langsmith_trace_url", None), "LANGSMITH_TRACE_URL"
+    )
     trace_url = _normalize_trace_url(trace_id, trace_url)
     record: dict[str, Any] = {
         "schema_version": AUTOPILOT_METRICS_SCHEMA_VERSION,
@@ -343,7 +358,9 @@ def build_record_from_args(args: argparse.Namespace) -> dict[str, Any]:
             raise ValidationError("step_name is required")
         started_at = _env_or_value(args.started_at, "AUTOPILOT_STEP_STARTED_AT")
         ended_at = _env_or_value(args.ended_at, "AUTOPILOT_STEP_ENDED_AT")
-        started_at_ms = _env_or_value(args.started_at_ms, "AUTOPILOT_STEP_STARTED_AT_MS")
+        started_at_ms = _env_or_value(
+            args.started_at_ms, "AUTOPILOT_STEP_STARTED_AT_MS"
+        )
         ended_at_ms = _env_or_value(args.ended_at_ms, "AUTOPILOT_STEP_ENDED_AT_MS")
         if started_at and started_at_ms:
             raise ValidationError("use only one of started_at or started_at_ms")
@@ -387,13 +404,19 @@ def build_record_from_args(args: argparse.Namespace) -> dict[str, Any]:
         if args.max_cycles is not None:
             record["max_cycles"] = _coerce_int(args.max_cycles, "max_cycles")
         if args.steps_attempted is not None:
-            record["steps_attempted"] = _coerce_int(args.steps_attempted, "steps_attempted")
+            record["steps_attempted"] = _coerce_int(
+                args.steps_attempted, "steps_attempted"
+            )
         if args.steps_completed is not None:
-            record["steps_completed"] = _coerce_int(args.steps_completed, "steps_completed")
+            record["steps_completed"] = _coerce_int(
+                args.steps_completed, "steps_completed"
+            )
         return record
 
     if metric_type == "escalation":
-        escalation_reason = _env_or_value(args.escalation_reason, "AUTOPILOT_ESCALATION_REASON")
+        escalation_reason = _env_or_value(
+            args.escalation_reason, "AUTOPILOT_ESCALATION_REASON"
+        )
         if escalation_reason is None or not str(escalation_reason).strip():
             raise ValidationError("escalation_reason must be a non-empty string")
         record["escalation_reason"] = str(escalation_reason).strip()
@@ -412,7 +435,9 @@ def load_record_from_json(payload: str) -> dict[str, Any]:
     if "metric_type" in record and record["metric_type"] is not None:
         record["metric_type"] = str(record["metric_type"]).strip().lower()
     schema_version = record.get("schema_version")
-    if schema_version is None or (isinstance(schema_version, str) and not schema_version.strip()):
+    if schema_version is None or (
+        isinstance(schema_version, str) and not schema_version.strip()
+    ):
         record["schema_version"] = AUTOPILOT_METRICS_SCHEMA_VERSION
     timestamp = record.get("timestamp")
     if timestamp is None or (isinstance(timestamp, str) and not timestamp.strip()):
@@ -486,7 +511,9 @@ def _write_failure_summary(
     metric_type = None
     if args is not None:
         metric_type = args.metric_type
-    error_category = "validation_error" if isinstance(error, ValidationError) else "exception"
+    error_category = (
+        "validation_error" if isinstance(error, ValidationError) else "exception"
+    )
     override_category = os.environ.get("AUTOPILOT_ERROR_CATEGORY")
     if override_category:
         error_category = override_category.strip()
@@ -539,8 +566,12 @@ def _write_runtime_summary(*, elapsed_ms: int, args: argparse.Namespace | None) 
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Append auto-pilot metrics record to NDJSON log.")
-    parser.add_argument("--path", default="autopilot-metrics.ndjson", help="NDJSON output path")
+    parser = argparse.ArgumentParser(
+        description="Append auto-pilot metrics record to NDJSON log."
+    )
+    parser.add_argument(
+        "--path", default="autopilot-metrics.ndjson", help="NDJSON output path"
+    )
     parser.add_argument("--record-json", help="JSON object payload for the record")
     parser.add_argument(
         "--print-schema",
@@ -557,15 +588,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--duration-ms", help="Step duration in milliseconds")
     parser.add_argument("--started-at", help="ISO 8601 step start timestamp (optional)")
     parser.add_argument("--ended-at", help="ISO 8601 step end timestamp (optional)")
-    parser.add_argument("--started-at-ms", help="Epoch milliseconds for step start (optional)")
-    parser.add_argument("--ended-at-ms", help="Epoch milliseconds for step end (optional)")
+    parser.add_argument(
+        "--started-at-ms", help="Epoch milliseconds for step start (optional)"
+    )
+    parser.add_argument(
+        "--ended-at-ms", help="Epoch milliseconds for step end (optional)"
+    )
     parser.add_argument("--success", help="Step success flag (true/false)")
     parser.add_argument("--failure-reason", help="Failure reason for step records")
     parser.add_argument("--max-cycles", help="Max cycles for cycle records")
     parser.add_argument("--steps-attempted", help="Steps attempted for cycle records")
     parser.add_argument("--steps-completed", help="Steps completed for cycle records")
-    parser.add_argument("--escalation-reason", help="Escalation reason for escalation records")
-    parser.add_argument("--langsmith-trace-id", help="LangSmith trace identifier (optional)")
+    parser.add_argument(
+        "--escalation-reason", help="Escalation reason for escalation records"
+    )
+    parser.add_argument(
+        "--langsmith-trace-id", help="LangSmith trace identifier (optional)"
+    )
     parser.add_argument("--langsmith-trace-url", help="LangSmith trace URL (optional)")
     return parser
 
