@@ -2,6 +2,7 @@
 
 "use strict";
 
+const fs = require("node:fs");
 const path = require("node:path");
 
 const {
@@ -9,6 +10,7 @@ const {
   DEFAULT_DOC_PATH,
   loadThreadInventory,
 } = require("./list_fix_threads_from_doc.js");
+const DEFAULT_ARTIFACTS_DIR = ".tmp/pr-thread-disposition";
 
 const ADD_PULL_REQUEST_REVIEW_THREAD_REPLY_MUTATION = [
   "mutation AddPullRequestReviewThreadReply($threadId: ID!, $body: String!) {",
@@ -204,13 +206,105 @@ function buildDispositionReplyBody(thread) {
   return lines.join("\n");
 }
 
+function buildDispositionGhCliCommands(thread) {
+  const threadId = thread.threadId || "<missing thread id>";
+  const replyBody = buildDispositionReplyBody(thread);
+  const replyCommand = [
+    "gh",
+    "api",
+    "graphql",
+    "-f",
+    `query=${shellQuote(ADD_PULL_REQUEST_REVIEW_THREAD_REPLY_MUTATION)}`,
+    "-F",
+    `threadId=${shellQuote(threadId)}`,
+    "-F",
+    `body=${shellQuote(replyBody)}`,
+  ].join(" ");
+  const resolveCommand = [
+    "gh",
+    "api",
+    "graphql",
+    "-f",
+    `query=${shellQuote(RESOLVE_REVIEW_THREAD_MUTATION)}`,
+    "-F",
+    `threadId=${shellQuote(threadId)}`,
+  ].join(" ");
+
+  return {
+    threadId,
+    replyBody,
+    replyCommand,
+    resolveCommand,
+  };
+}
+
+function getDispositionArtifactBasename(thread, index) {
+  const threadIdFragment = String(thread.threadId || `thread-${index + 1}`)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `pr-178-disposition-thread-${index + 1}-${threadIdFragment || "thread"}`;
+}
+
+function writeDispositionArtifacts(dispositionThreads, artifactsDir, dependencies = {}) {
+  const mkdirSync = dependencies.mkdirSync || fs.mkdirSync;
+  const writeFileSync = dependencies.writeFileSync || fs.writeFileSync;
+  const chmodSync = dependencies.chmodSync || fs.chmodSync;
+  const resolvedArtifactsDir = path.resolve(artifactsDir);
+
+  mkdirSync(resolvedArtifactsDir, { recursive: true });
+
+  const manifest = {
+    artifactsDir: resolvedArtifactsDir,
+    count: dispositionThreads.length,
+    threads: dispositionThreads.map((thread, index) => {
+      const commands = buildDispositionGhCliCommands(thread);
+      const basename = getDispositionArtifactBasename(thread, index);
+      const scriptPath = path.join(resolvedArtifactsDir, `${basename}-resolve.sh`);
+      const scriptBody = [
+        "#!/usr/bin/env bash",
+        "set -euo pipefail",
+        "",
+        commands.replyCommand,
+        commands.resolveCommand,
+        "",
+      ].join("\n");
+
+      writeFileSync(scriptPath, scriptBody, "utf8");
+      chmodSync(scriptPath, 0o755);
+
+      return {
+        threadId: commands.threadId,
+        originalThreadUrl: thread.originalThreadUrl || null,
+        location: thread.location || null,
+        scriptPath,
+        replyCommand: commands.replyCommand,
+        resolveCommand: commands.resolveCommand,
+      };
+    }),
+  };
+
+  const manifestPath = path.join(resolvedArtifactsDir, "manifest.json");
+  writeFileSync(`${manifestPath}`, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+  return {
+    artifactsDir: resolvedArtifactsDir,
+    manifestPath,
+  };
+}
+
 function formatDispositionThreadsAsGhCli(dispositionThreads, options = {}) {
-  const { excludedOutdatedCount = 0 } = options;
+  const { excludedOutdatedCount = 0, artifactInfo = null } = options;
   const lines = ["# Disposition Thread gh CLI Commands", ""];
 
   lines.push(`Actionable disposition threads: ${dispositionThreads.length}`);
   if (excludedOutdatedCount > 0) {
     lines.push(`Excluded outdated disposition threads: ${excludedOutdatedCount}`);
+  }
+  if (artifactInfo) {
+    lines.push(`Artifacts directory: ${artifactInfo.artifactsDir}`);
+    lines.push(`Manifest: ${artifactInfo.manifestPath}`);
   }
 
   if (dispositionThreads.length === 0) {
@@ -219,28 +313,7 @@ function formatDispositionThreadsAsGhCli(dispositionThreads, options = {}) {
   }
 
   dispositionThreads.forEach((thread, index) => {
-    const threadId = thread.threadId || "<missing thread id>";
-    const replyBody = buildDispositionReplyBody(thread);
-    const replyCommand = [
-      "gh",
-      "api",
-      "graphql",
-      "-f",
-      `query=${shellQuote(ADD_PULL_REQUEST_REVIEW_THREAD_REPLY_MUTATION)}`,
-      "-F",
-      `threadId=${shellQuote(threadId)}`,
-      "-F",
-      `body=${shellQuote(replyBody)}`,
-    ].join(" ");
-    const resolveCommand = [
-      "gh",
-      "api",
-      "graphql",
-      "-f",
-      `query=${shellQuote(RESOLVE_REVIEW_THREAD_MUTATION)}`,
-      "-F",
-      `threadId=${shellQuote(threadId)}`,
-    ].join(" ");
+    const { threadId, replyCommand, resolveCommand } = buildDispositionGhCliCommands(thread);
 
     lines.push("");
     lines.push(`## Disposition Thread ${index + 1}`);
@@ -288,6 +361,7 @@ function buildDispositionThreadsReport(options = {}, dependencies = {}) {
     excludeOutdated = false,
     outputFormat = "text",
     requireComplete = false,
+    writeArtifactsDir = null,
   } = options;
   const loadInventory = dependencies.loadThreadInventory || loadThreadInventory;
   const threads = loadInventory(docPath, dependencies);
@@ -305,9 +379,18 @@ function buildDispositionThreadsReport(options = {}, dependencies = {}) {
     excludeOutdated,
   });
   const excludedOutdatedCount = allDispositionThreads.length - actionableDispositionThreads.length;
+  const artifactInfo =
+    outputFormat === "gh-cli" && writeArtifactsDir
+      ? writeDispositionArtifacts(
+          actionableDispositionThreads,
+          writeArtifactsDir,
+          dependencies
+        )
+      : null;
 
   return formatDispositionThreadsOutput(actionableDispositionThreads, outputFormat, {
     excludedOutdatedCount,
+    artifactInfo,
   });
 }
 
@@ -317,6 +400,7 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
     excludeOutdated: false,
     outputFormat: "text",
     requireComplete: false,
+    writeArtifactsDir: null,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -343,6 +427,17 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
       continue;
     }
 
+    if (argument === "--write-artifacts-dir") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --write-artifacts-dir flag requires a directory path.");
+      }
+
+      options.writeArtifactsDir = path.resolve(value);
+      index += 1;
+      continue;
+    }
+
     if (argument.startsWith("--")) {
       throw new Error(`Unknown option: ${argument}`);
     }
@@ -360,13 +455,24 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
     );
   }
 
+  if (options.writeArtifactsDir && options.outputFormat !== "gh-cli") {
+    throw new Error('The --write-artifacts-dir flag requires "--format gh-cli".');
+  }
+
   return options;
 }
 
 function main(argv = process.argv.slice(2)) {
-  const { docPath, excludeOutdated, outputFormat, requireComplete } = getCliConfiguration(argv);
+  const { docPath, excludeOutdated, outputFormat, requireComplete, writeArtifactsDir } =
+    getCliConfiguration(argv);
   process.stdout.write(
-    buildDispositionThreadsReport({ docPath, excludeOutdated, outputFormat, requireComplete })
+    buildDispositionThreadsReport({
+      docPath,
+      excludeOutdated,
+      outputFormat,
+      requireComplete,
+      writeArtifactsDir,
+    })
   );
 }
 
@@ -391,4 +497,7 @@ module.exports = {
   getCliConfiguration,
   listDispositionClassifiedThreads,
   buildDispositionReplyBody,
+  buildDispositionGhCliCommands,
+  writeDispositionArtifacts,
+  DEFAULT_ARTIFACTS_DIR,
 };

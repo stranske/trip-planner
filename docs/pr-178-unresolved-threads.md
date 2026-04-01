@@ -72,6 +72,12 @@ To generate shell-ready `gh api graphql` commands for posting each disposition r
 node scripts/list_disposition_threads_from_doc.js docs/pr-178-unresolved-threads.md --format gh-cli --exclude-outdated
 ```
 
+To also write executable helper scripts plus a `manifest.json` for those disposition replies/resolutions, run:
+
+```bash
+node scripts/list_disposition_threads_from_doc.js docs/pr-178-unresolved-threads.md --format gh-cli --exclude-outdated --write-artifacts-dir .tmp/pr-thread-disposition
+```
+
 To verify that the populated inventory matches an exported review-thread snapshot before classifying or resolving items, run:
 
 ```bash

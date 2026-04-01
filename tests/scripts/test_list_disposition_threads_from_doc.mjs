@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 
@@ -7,7 +9,9 @@ const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const {
   buildDispositionThreadsReport,
+  buildDispositionGhCliCommands,
   buildDispositionReplyBody,
+  DEFAULT_ARTIFACTS_DIR,
   formatDispositionThreadsAsComments,
   formatDispositionThreadsAsGhCli,
   formatDispositionThreadsAsJson,
@@ -17,6 +21,7 @@ const {
   formatDispositionThreadsOutput,
   getCliConfiguration,
   listDispositionClassifiedThreads,
+  writeDispositionArtifacts,
 } = require(path.join(repoRoot, "scripts/list_disposition_threads_from_doc.js"));
 
 test("listDispositionClassifiedThreads returns only disposition entries", () => {
@@ -132,6 +137,20 @@ test("buildDispositionReplyBody combines rationale with thread context", () => {
   );
 });
 
+test("buildDispositionGhCliCommands returns paired reply and resolve commands", () => {
+  const commands = buildDispositionGhCliCommands({
+    threadId: "THREAD_1",
+    rationale: "The existing behavior is intentional.",
+    content: "reviewer: Please change the template wording.",
+  });
+
+  assert.equal(commands.threadId, "THREAD_1");
+  assert.match(commands.replyCommand, /mutation AddPullRequestReviewThreadReply/);
+  assert.match(commands.replyCommand, /-F threadId='THREAD_1'/);
+  assert.match(commands.resolveCommand, /mutation ResolveReviewThread/);
+  assert.match(commands.resolveCommand, /-F threadId='THREAD_1'/);
+});
+
 test("formatDispositionThreadsAsGhCli emits reply and resolve commands", () => {
   const report = formatDispositionThreadsAsGhCli([
     {
@@ -152,6 +171,32 @@ test("formatDispositionThreadsAsGhCli emits reply and resolve commands", () => {
   assert.match(report, /-F body='The existing behavior is intentional\./);
   assert.match(report, /Context from unresolved thread: reviewer: Please change the template wording\.'/);
   assert.match(report, /gh api graphql -f query='mutation ResolveReviewThread/);
+});
+
+test("writeDispositionArtifacts writes executable scripts and a manifest", () => {
+  const artifactsDir = fs.mkdtempSync(path.join(os.tmpdir(), "disposition-artifacts-"));
+  const artifactInfo = writeDispositionArtifacts(
+    [
+      {
+        threadId: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        location: "docs/pr-178-unresolved-threads.md:12",
+        rationale: "The existing behavior is intentional.",
+        content: "reviewer: Please change the template wording.",
+      },
+    ],
+    artifactsDir
+  );
+
+  const manifest = JSON.parse(fs.readFileSync(artifactInfo.manifestPath, "utf8"));
+
+  assert.equal(manifest.count, 1);
+  assert.equal(manifest.threads[0].threadId, "THREAD_1");
+  assert.match(manifest.threads[0].scriptPath, /pr-178-disposition-thread-1-thread-1-resolve\.sh$/);
+  const scriptBody = fs.readFileSync(manifest.threads[0].scriptPath, "utf8");
+  assert.match(scriptBody, /set -euo pipefail/);
+  assert.match(scriptBody, /mutation AddPullRequestReviewThreadReply/);
+  assert.match(scriptBody, /mutation ResolveReviewThread/);
 });
 
 test("formatDispositionThreadsAsJson includes the excluded outdated count", () => {
@@ -240,6 +285,52 @@ test("buildDispositionThreadsReport filters unresolved disposition threads from 
   assert.equal(parsed.dispositionThreads[0].threadId, "THREAD_1");
 });
 
+test("buildDispositionThreadsReport can write gh-cli artifacts for actionable disposition threads", () => {
+  const artifactsDir = fs.mkdtempSync(path.join(os.tmpdir(), "disposition-report-artifacts-"));
+  const report = buildDispositionThreadsReport(
+    {
+      docPath: "/tmp/inventory.md",
+      excludeOutdated: true,
+      outputFormat: "gh-cli",
+      writeArtifactsDir: artifactsDir,
+    },
+    {
+      loadThreadInventory: (_docPath, _dependencies, options = {}) => {
+        if (options.inventorySection === "unresolved") {
+          return [
+            {
+              threadId: "THREAD_1",
+              classification: "disposition",
+              outdated: false,
+              originalThreadUrl: "https://github.com/example/repo/pull/178#discussion_r1",
+              location: "src/file.js:10",
+              rationale: "Still intentional.",
+              content: "reviewer: Clarify this.",
+            },
+          ];
+        }
+
+        return [
+          {
+            threadId: "THREAD_1",
+            classification: "disposition",
+            outdated: false,
+            originalThreadUrl: "https://github.com/example/repo/pull/178#discussion_r1",
+            location: "src/file.js:10",
+            rationale: "Still intentional.",
+            content: "reviewer: Clarify this.",
+          },
+        ];
+      },
+    }
+  );
+
+  assert.match(report, /Artifacts directory:/);
+  assert.match(report, /Manifest:/);
+  const manifestPath = path.join(artifactsDir, "manifest.json");
+  assert.equal(JSON.parse(fs.readFileSync(manifestPath, "utf8")).count, 1);
+});
+
 test("buildDispositionThreadsReport can require a complete inventory", () => {
   assert.throws(
     () =>
@@ -272,14 +363,17 @@ test("getCliConfiguration parses completeness validation, doc path, and output f
       "--require-complete",
       "--exclude-outdated",
       "--format",
-      "plan",
+      "gh-cli",
+      "--write-artifacts-dir",
+      ".tmp/disposition",
       "docs/pr-178-unresolved-threads.md",
     ]),
     {
       docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
       excludeOutdated: true,
-      outputFormat: "plan",
+      outputFormat: "gh-cli",
       requireComplete: true,
+      writeArtifactsDir: path.resolve(".tmp/disposition"),
     }
   );
 });
@@ -293,5 +387,9 @@ test("getCliConfiguration rejects unknown options and extra positional arguments
   assert.throws(
     () => getCliConfiguration(["docs/one.md", "docs/two.md"]),
     /Unexpected argument: docs\/two\.md/
+  );
+  assert.throws(
+    () => getCliConfiguration(["--write-artifacts-dir", DEFAULT_ARTIFACTS_DIR]),
+    /requires "--format gh-cli"/
   );
 });
