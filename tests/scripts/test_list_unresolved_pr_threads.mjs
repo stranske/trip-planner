@@ -23,6 +23,7 @@ const {
   loadReviewThreadsFromFile,
   mergeInventoryIntoDocument,
   normalizeBody,
+  normalizeSnapshotThreadCollection,
   parseCommandLineArguments,
   validateExpectedCount,
   writeInventoryDocument,
@@ -284,6 +285,36 @@ test("extractThreadsFromSnapshot supports pullRequest reviewThreads node collect
   );
 });
 
+test("extractThreadsFromSnapshot supports repository pullRequest node collections", () => {
+  assert.deepEqual(
+    extractThreadsFromSnapshot({
+      repository: {
+        pullRequest: {
+          reviewThreads: {
+            nodes: [{ id: "THREAD_1" }, { id: "THREAD_2" }],
+          },
+        },
+      },
+    }),
+    [{ id: "THREAD_1" }, { id: "THREAD_2" }]
+  );
+});
+
+test("extractThreadsFromSnapshot supports GraphQL node reviewThreads collections", () => {
+  assert.deepEqual(
+    extractThreadsFromSnapshot({
+      data: {
+        node: {
+          reviewThreads: {
+            edges: [{ node: { id: "THREAD_1" } }, { node: { id: "THREAD_2" } }],
+          },
+        },
+      },
+    }),
+    [{ id: "THREAD_1" }, { id: "THREAD_2" }]
+  );
+});
+
 test("extractThreadsFromSnapshot supports GraphQL edge collections", () => {
   assert.deepEqual(
     extractThreadsFromSnapshot({
@@ -299,6 +330,16 @@ test("extractThreadsFromSnapshot supports GraphQL edge collections", () => {
     }),
     [{ id: "THREAD_1" }, { id: "THREAD_2" }]
   );
+});
+
+test("normalizeSnapshotThreadCollection returns node payloads and filters empty edges", () => {
+  assert.deepEqual(
+    normalizeSnapshotThreadCollection({
+      edges: [{ node: { id: "THREAD_1" } }, { node: null }, {}],
+    }),
+    [{ id: "THREAD_1" }]
+  );
+  assert.equal(normalizeSnapshotThreadCollection({ reviewThreads: [] }), null);
 });
 
 test("loadReviewThreadsFromFile wraps JSON parsing failures with the input path", () => {

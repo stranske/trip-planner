@@ -259,47 +259,43 @@ async function fetchAllReviewThreads(configuration, dependencies = {}) {
 }
 
 function extractThreadsFromSnapshot(snapshot) {
-  if (Array.isArray(snapshot)) {
-    return snapshot;
-  }
+  const supportedCollections = [
+    snapshot,
+    snapshot?.threads,
+    snapshot?.reviewThreads,
+    snapshot?.pullRequest?.reviewThreads,
+    snapshot?.repository?.pullRequest?.reviewThreads,
+    snapshot?.node?.reviewThreads,
+    snapshot?.data?.node?.reviewThreads,
+    snapshot?.data?.repository?.pullRequest?.reviewThreads,
+  ];
 
-  if (Array.isArray(snapshot?.threads)) {
-    return snapshot.threads;
-  }
-
-  if (Array.isArray(snapshot?.reviewThreads?.nodes)) {
-    return snapshot.reviewThreads.nodes;
-  }
-
-  if (Array.isArray(snapshot?.reviewThreads?.edges)) {
-    return snapshot.reviewThreads.edges
-      .map((edge) => edge?.node)
-      .filter(Boolean);
-  }
-
-  if (Array.isArray(snapshot?.pullRequest?.reviewThreads?.nodes)) {
-    return snapshot.pullRequest.reviewThreads.nodes;
-  }
-
-  if (Array.isArray(snapshot?.pullRequest?.reviewThreads?.edges)) {
-    return snapshot.pullRequest.reviewThreads.edges
-      .map((edge) => edge?.node)
-      .filter(Boolean);
-  }
-
-  const graphqlThreads = snapshot?.data?.repository?.pullRequest?.reviewThreads?.nodes;
-  if (Array.isArray(graphqlThreads)) {
-    return graphqlThreads;
-  }
-
-  const graphqlThreadEdges = snapshot?.data?.repository?.pullRequest?.reviewThreads?.edges;
-  if (Array.isArray(graphqlThreadEdges)) {
-    return graphqlThreadEdges
-      .map((edge) => edge?.node)
-      .filter(Boolean);
+  for (const collection of supportedCollections) {
+    const threads = normalizeSnapshotThreadCollection(collection);
+    if (threads) {
+      return threads;
+    }
   }
 
   throw new Error("Review thread snapshot did not contain a supported thread collection.");
+}
+
+function normalizeSnapshotThreadCollection(collection) {
+  if (Array.isArray(collection)) {
+    return collection;
+  }
+
+  if (Array.isArray(collection?.nodes)) {
+    return collection.nodes;
+  }
+
+  if (Array.isArray(collection?.edges)) {
+    return collection.edges
+      .map((edge) => edge?.node)
+      .filter(Boolean);
+  }
+
+  return null;
 }
 
 function loadReviewThreadsFromFile(inputPath, dependencies = {}) {
@@ -547,6 +543,7 @@ module.exports = {
   formatUnresolvedThreadsReport,
   getConfiguration,
   loadReviewThreadsFromFile,
+  normalizeSnapshotThreadCollection,
   normalizeBody,
   parseCommandLineArguments,
   mergeInventoryIntoDocument,
