@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
+
 from trip_planner.candidates import CandidateSeed, CandidateSet
 from trip_planner.contracts import (
     BudgetProtection,
@@ -30,6 +32,13 @@ from trip_planner.options import (
 from trip_planner.preferences import LeisurePreferenceProfile
 from trip_planner.ranking import LeisureRankingEngine
 from tests.preferences.fixture_corpus import build_profile_from_overrides
+
+RANKING_FIXTURE_NAMES = (
+    "depth_oriented_urban_trip.json",
+    "scenic_transit_route.json",
+    "discovery_heavy_wanderer_route.json",
+    "quality_floor_sensitive_trip.json",
+)
 
 
 def _fixture_path(*parts: str) -> Path:
@@ -276,6 +285,27 @@ def _objectives_from_fixture(name: str) -> ItineraryObjectives:
 def _expected_rank_order(name: str) -> list[str]:
     fixture = _load_ranking_fixture(name)
     return cast(list[str], fixture["expected_rank_order"])
+
+
+def test_leisure_ranking_fixture_set_is_complete() -> None:
+    fixture_dir = _fixture_path("ranking", "leisure")
+
+    assert sorted(path.name for path in fixture_dir.glob("*.json")) == sorted(RANKING_FIXTURE_NAMES)
+
+
+@pytest.mark.parametrize("fixture_name", RANKING_FIXTURE_NAMES)
+def test_fixture_profiles_produce_expected_rank_order(fixture_name: str) -> None:
+    engine = LeisureRankingEngine()
+
+    ranked = engine.rank_candidate_set(
+        _profile_from_fixture(fixture_name),
+        _objectives_from_fixture(fixture_name),
+        _candidate_set(),
+    )
+
+    assert [_result_option_id(result) for result in ranked.results] == _expected_rank_order(
+        fixture_name
+    )
 
 
 def test_depth_oriented_profile_ranks_urban_culture_first() -> None:

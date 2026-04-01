@@ -48,7 +48,7 @@
   },
   "expected_rank_order": [
     "candidate:bundle:quiet-recovery",
-    "candidate:bundle:urban-culture",
-    "candidate:bundle:scenic-wanderer"
+    "candidate:bundle:scenic-wanderer",
+    "candidate:bundle:urban-culture"
   ]
 }
