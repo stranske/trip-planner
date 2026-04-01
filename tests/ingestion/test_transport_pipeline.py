@@ -121,3 +121,22 @@ def test_transport_pipeline_keeps_separate_decisions_as_individual_options() -> 
         "transport-paris-amsterdam-eurostar",
         "transport-paris-amsterdam-eurostar",
     ]
+
+
+def test_transport_pipeline_suppresses_records_from_suppressed_decisions() -> None:
+    fixture = _load_fixture("conflicted_transport_snapshot.json")
+    decision = _build_decision(fixture["dedup_decisions"][0])
+    decision.decision = "suppress"
+
+    result = ingest_transport_snapshot(
+        _build_snapshot(fixture["snapshot"]),
+        resolutions=[_build_resolution(item) for item in fixture["resolutions"]],
+        dedup_decisions=[decision],
+    )
+
+    assert result.handoff is not None
+    assert result.handoff.status == "blocked"
+    assert result.summary.emitted_options == 0
+    assert result.summary.filtered_record_ids == ["record-transport-a", "record-transport-b"]
+    assert len(result.unresolved_conflicts) == 1
+    assert {warning.code for warning in result.warnings} == {"partial_schedule_window"}

@@ -85,14 +85,17 @@ def ingest_lodging_snapshot(
     for decision in dedup_decisions:
         if decision.entity_scope != "lodging" or decision.option_kind != snapshot.option_kind:
             continue
+        record_ids = _record_ids_for_decision(decision, resolution_map)
         preserved_conflicts.extend(unresolved_conflicts(decision.preserved_conflicts))
         if decision.decision == "suppress":
-            emitted_ids.update(_record_ids_for_decision(decision, resolution_map))
+            emitted_ids.update(record_ids)
             filtered_record_ids.extend(
                 record_id
-                for record_id in _record_ids_for_decision(decision, resolution_map)
+                for record_id in record_ids
                 if record_id not in filtered_record_ids
             )
+            continue
+        if decision.decision in {"keep_separate", "needs_review"}:
             continue
         if decision.decision != "merge":
             continue

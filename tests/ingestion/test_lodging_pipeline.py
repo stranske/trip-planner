@@ -95,3 +95,42 @@ def test_lodging_pipeline_merges_duplicates_and_keeps_conflicts_visible() -> Non
     assert len(result.lodging_options[0].source_refs) == 2
     assert result.unresolved_conflicts[0].attribute_path == "booking_terms.refundable"
     assert result.warnings[0].code == "normalization_warning"
+
+
+def test_lodging_pipeline_keeps_separate_decisions_as_individual_options() -> None:
+    fixture = _load_fixture("duplicate_lodging_snapshot.json")
+    decision = _build_decision(fixture["dedup_decisions"][0])
+    decision.decision = "keep_separate"
+
+    result = ingest_lodging_snapshot(
+        _build_snapshot(fixture["snapshot"]),
+        resolutions=[_build_resolution(item) for item in fixture["resolutions"]],
+        dedup_decisions=[decision],
+    )
+
+    assert result.handoff is not None
+    assert result.summary.emitted_options == 2
+    assert result.summary.filtered_record_ids == []
+    assert len(result.unresolved_conflicts) == 1
+    assert sorted(option.option_id for option in result.lodging_options) == [
+        "lodging-ams-canal-house",
+        "lodging-ams-canal-house",
+    ]
+
+
+def test_lodging_pipeline_suppresses_records_from_suppressed_decisions() -> None:
+    fixture = _load_fixture("duplicate_lodging_snapshot.json")
+    decision = _build_decision(fixture["dedup_decisions"][0])
+    decision.decision = "suppress"
+
+    result = ingest_lodging_snapshot(
+        _build_snapshot(fixture["snapshot"]),
+        resolutions=[_build_resolution(item) for item in fixture["resolutions"]],
+        dedup_decisions=[decision],
+    )
+
+    assert result.handoff is not None
+    assert result.handoff.status == "blocked"
+    assert result.summary.emitted_options == 0
+    assert result.summary.filtered_record_ids == ["record-lodging-a", "record-lodging-b"]
+    assert len(result.unresolved_conflicts) == 1
