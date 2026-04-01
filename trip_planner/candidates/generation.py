@@ -41,6 +41,16 @@ def generate_candidate_set(
     max_source_freshness_days: int = 30,
     policy_constraints: PolicyConstraintSet | None = None,
 ) -> CandidateSet:
+    if selection_limit <= 0:
+        raise ValueError(
+            f"selection_limit must be a positive integer; got {selection_limit!r}"
+        )
+    if max_source_freshness_days < 0:
+        raise ValueError(
+            "max_source_freshness_days must be a non-negative integer; "
+            f"got {max_source_freshness_days!r}"
+        )
+
     destination_map = {item.destination_id: item for item in destinations}
     exclusions: list[CandidateExclusion] = []
     included_lodging: list[LodgingOption] = []
@@ -409,8 +419,21 @@ def _evaluate_lodging(
         isinstance(max_nightly, (int, float))
         and nightly is not None
         and nightly.typical_amount is not None
-        and nightly.typical_amount > float(max_nightly)
     ):
+        if nightly.currency != "USD":
+            return CandidateExclusion(
+                option_id=option.option_id,
+                option_kind="lodging",
+                reason_code="policy_rate_cap",
+                message=(
+                    "Lodging nightly estimate must be denominated in USD to compare "
+                    "against the configured business-policy cap."
+                ),
+                destination_ids=[option.destination_id],
+                source_ref_ids=[item.provenance_id for item in option.source_refs],
+            )
+        if nightly.typical_amount <= float(max_nightly):
+            return None
         return CandidateExclusion(
             option_id=option.option_id,
             option_kind="lodging",

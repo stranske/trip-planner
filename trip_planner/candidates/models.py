@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from trip_planner._validators import require_non_empty, require_non_negative, require_strings
+from trip_planner._validators import (
+    require_non_empty,
+    require_non_negative,
+    require_strings,
+)
 from trip_planner.contracts.options import (
     OPTION_SET_PURPOSES,
     ComparisonAxis,
@@ -16,6 +20,7 @@ from trip_planner.contracts.options import (
     OptionSet,
 )
 from trip_planner.options import InventoryBundle
+from trip_planner.options.bundles import _dedupe_strings
 
 SCHEMA_VERSION = "0.1.0"
 CANDIDATE_FILTER_REASON_CODES: tuple[str, ...] = (
@@ -30,10 +35,6 @@ CANDIDATE_FILTER_REASON_CODES: tuple[str, ...] = (
 
 def _optional_money_range(total: MoneyRange | None) -> dict[str, Any] | None:
     return total.to_dict() if total is not None else None
-
-
-def _dedupe_strings(values: list[str]) -> list[str]:
-    return list(dict.fromkeys(values))
 
 
 @dataclass(slots=True)
@@ -77,9 +78,13 @@ class CandidateSeed:
         if not isinstance(self.bundle, InventoryBundle):
             raise ValueError("bundle must be an InventoryBundle")
         require_strings(self.supported_purposes, "supported_purposes")
-        invalid = [item for item in self.supported_purposes if item not in OPTION_SET_PURPOSES]
+        invalid = [
+            item for item in self.supported_purposes if item not in OPTION_SET_PURPOSES
+        ]
         if invalid:
-            raise ValueError(f"supported_purposes must contain only {OPTION_SET_PURPOSES}")
+            raise ValueError(
+                f"supported_purposes must contain only {OPTION_SET_PURPOSES}"
+            )
         require_strings(self.inclusion_reasons, "inclusion_reasons")
         require_strings(self.unresolved_risks, "unresolved_risks")
         require_strings(self.notes, "notes")
@@ -89,7 +94,9 @@ class CandidateSeed:
         total = 0.0
         seen = False
         for lodging_option in self.bundle.lodging_options:
-            nightly = lodging_option.cost_summary.total or lodging_option.cost_summary.nightly
+            nightly = (
+                lodging_option.cost_summary.total or lodging_option.cost_summary.nightly
+            )
             if nightly is None or nightly.typical_amount is None:
                 continue
             currency = currency or nightly.currency
@@ -107,7 +114,10 @@ class CandidateSeed:
             total += amount.typical_amount
             seen = True
         for activity_option in self.bundle.activity_options:
-            amount = activity_option.cost_summary.total or activity_option.cost_summary.per_person
+            amount = (
+                activity_option.cost_summary.total
+                or activity_option.cost_summary.per_person
+            )
             if amount is None or amount.typical_amount is None:
                 continue
             currency = currency or amount.currency
@@ -209,7 +219,9 @@ class CandidateSet:
     purpose: str
     seeds: list[CandidateSeed]
     exclusions: list[CandidateExclusion] = field(default_factory=list)
-    filter_summary: CandidateFilterSummary = field(default_factory=CandidateFilterSummary)
+    filter_summary: CandidateFilterSummary = field(
+        default_factory=CandidateFilterSummary
+    )
     comparison_axes: list[ComparisonAxis] = field(default_factory=list)
     explanation: list[str] = field(default_factory=list)
     source_refs: list[str] = field(default_factory=list)
