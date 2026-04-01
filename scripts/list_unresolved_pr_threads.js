@@ -5,6 +5,7 @@
 const fs = require("node:fs");
 const https = require("node:https");
 const path = require("node:path");
+const { parseThreadInventory } = require("./list_fix_threads_from_doc.js");
 
 const DEFAULT_REPOSITORY = "stranske/trip-planner";
 const DEFAULT_PR_NUMBER = 178;
@@ -365,7 +366,7 @@ function formatUnresolvedThreadsAsJson(repository, prNumber, unresolvedThreads) 
   )}\n`;
 }
 
-function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThreads) {
+function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThreads, existingThreads = []) {
   const lines = [
     `# PR #${prNumber} Unresolved Thread Inventory`,
     "",
@@ -380,13 +381,18 @@ function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThrea
   }
 
   unresolvedThreads.forEach((thread, index) => {
-    lines.push(...buildMarkdownThreadSection(thread, index));
+    const existingEntry = existingThreads.find((candidate) => candidate.threadId === thread.id) || null;
+    lines.push(...buildMarkdownThreadSection(thread, index, existingEntry));
   });
 
   return `${lines.join("\n")}\n`;
 }
 
-function buildMarkdownThreadSection(thread, index) {
+function buildMarkdownThreadSection(thread, index, existingEntry = null) {
+  const classification = existingEntry?.classification || "";
+  const followUpPr = existingEntry?.followUpPr || "";
+  const rationale = existingEntry?.rationale || "";
+
   return [
     "",
     `### Thread ${index + 1}`,
@@ -394,12 +400,16 @@ function buildMarkdownThreadSection(thread, index) {
     `- Thread ID: ${thread.id}`,
     `- Original Thread URL: ${thread.originalThreadUrl || ""}`,
     `- Location: ${thread.path}:${thread.line ?? "unknown"}`,
-    "- Classification:",
-    "- Follow-up PR:",
-    "- Rationale:",
+    formatOptionalMetadataLine("Classification", classification),
+    formatOptionalMetadataLine("Follow-up PR", followUpPr),
+    formatOptionalMetadataLine("Rationale", rationale),
     `- Content: ${formatThreadContent(thread.comments)}`,
     `- Outdated: ${thread.isOutdated ? "yes" : "no"}`,
   ];
+}
+
+function formatOptionalMetadataLine(label, value) {
+  return value ? `- ${label}: ${value}` : `- ${label}:`;
 }
 
 function formatThreadContent(comments) {
@@ -440,12 +450,15 @@ function mergeInventoryIntoDocument(existingDocument, unresolvedThreads) {
   const trimmedDocument = existingDocument.trimEnd();
   const threadSectionHeading = /^## Thread (?:Template|Inventory)\s*$/m;
   const threadSection = ["## Thread Inventory"];
+  const existingThreads = parseThreadInventory(existingDocument);
 
   if (unresolvedThreads.length === 0) {
     threadSection.push("", "No unresolved inline review threads found.");
   } else {
     unresolvedThreads.forEach((thread, index) => {
-      threadSection.push(...buildMarkdownThreadSection(thread, index));
+      const existingEntry =
+        existingThreads.find((candidate) => candidate.threadId === thread.id) || null;
+      threadSection.push(...buildMarkdownThreadSection(thread, index, existingEntry));
     });
   }
 
@@ -497,6 +510,7 @@ module.exports = {
   buildReviewThreadsQuery,
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
+  formatOptionalMetadataLine,
   formatOutput,
   buildMarkdownThreadSection,
   formatThreadContent,

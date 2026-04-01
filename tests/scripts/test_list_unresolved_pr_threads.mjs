@@ -425,6 +425,46 @@ test("buildMarkdownThreadSection emits a template-ready thread block", () => {
   );
 });
 
+test("buildMarkdownThreadSection preserves existing triage metadata when available", () => {
+  assert.deepEqual(
+    buildMarkdownThreadSection(
+      {
+        id: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        path: "trip_planner/example.py",
+        line: 17,
+        isOutdated: false,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please keep this branch explicit.",
+          },
+        ],
+      },
+      0,
+      {
+        threadId: "THREAD_1",
+        classification: "fix",
+        followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+        rationale: "A follow-up patch is already in flight.",
+      }
+    ),
+    [
+      "",
+      "### Thread 1",
+      "",
+      "- Thread ID: THREAD_1",
+      "- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      "- Location: trip_planner/example.py:17",
+      "- Classification: fix",
+      "- Follow-up PR: https://github.com/stranske/trip-planner/pull/581",
+      "- Rationale: A follow-up patch is already in flight.",
+      "- Content: reviewer: Please keep this branch explicit.",
+      "- Outdated: no",
+    ]
+  );
+});
+
 test("formatUnresolvedThreadsAsMarkdown emits a doc-ready inventory skeleton", () => {
   const report = formatUnresolvedThreadsAsMarkdown("stranske/trip-planner", 178, [
     {
@@ -532,6 +572,55 @@ Intro paragraph.
   assert.match(mergedDocument, /## Thread Inventory/);
   assert.doesNotMatch(mergedDocument, /## Thread Template/);
   assert.match(mergedDocument, /- Thread ID: THREAD_1/);
+});
+
+test("mergeInventoryIntoDocument preserves manual classifications and follow-up PR links", () => {
+  const mergedDocument = mergeInventoryIntoDocument(
+    `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: old/path.py:10
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Existing manual triage should survive snapshot refreshes.
+- Content: reviewer: stale text
+- Outdated: no
+`,
+    [
+      {
+        id: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        path: "trip_planner/example.py",
+        line: 17,
+        isOutdated: false,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please keep this branch explicit.",
+          },
+        ],
+      },
+    ]
+  );
+
+  assert.match(mergedDocument, /- Classification: fix/);
+  assert.match(
+    mergedDocument,
+    /- Follow-up PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/
+  );
+  assert.match(
+    mergedDocument,
+    /- Rationale: Existing manual triage should survive snapshot refreshes\./
+  );
+  assert.match(mergedDocument, /- Location: trip_planner\/example\.py:17/);
+  assert.match(mergedDocument, /- Content: reviewer: Please keep this branch explicit\./);
 });
 
 test("writeInventoryDocument updates a doc file in place", () => {
