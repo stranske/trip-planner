@@ -11,6 +11,9 @@ const {
   formatAcceptanceReport,
   getAcceptanceConfiguration,
 } = require(path.join(repoRoot, "scripts/check_pr_thread_acceptance.js"));
+const {
+  parseThreadInventory,
+} = require(path.join(repoRoot, "scripts/list_fix_threads_from_doc.js"));
 
 test("getAcceptanceConfiguration parses acceptance-specific options", () => {
   const configuration = getAcceptanceConfiguration(
@@ -81,6 +84,26 @@ test("evaluateAcceptance reports blocked snapshot verification when no token or 
 });
 
 test("evaluateAcceptance passes repo-local verification when the inventory and snapshot match zero unresolved threads", async () => {
+  const resolvedOnlyInventory = `
+# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+No unresolved inline review threads found.
+
+## Resolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: The follow-up PR landed and the thread is resolved.
+- Content: reviewer: Please rework this helper.
+- Outdated: no
+`;
   const result = await evaluateAcceptance(
     {
       owner: "stranske",
@@ -95,18 +118,8 @@ test("evaluateAcceptance passes repo-local verification when the inventory and s
       outputFormat: "text",
     },
     {
-      loadThreadInventory: () => [
-        {
-          threadId: "THREAD_1",
-          originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
-          location: "trip_planner/example.py:17",
-          classification: "fix",
-          followUpPr: "https://github.com/stranske/trip-planner/pull/581",
-          rationale: "The follow-up PR landed and the thread is resolved.",
-          content: "reviewer: Please rework this helper.",
-          outdated: false,
-        },
-      ],
+      loadThreadInventory: (_docPath, _dependencies, options = {}) =>
+        parseThreadInventory(resolvedOnlyInventory, options),
       loadReviewThreadsFromFile: () => [],
     }
   );
@@ -119,7 +132,84 @@ test("evaluateAcceptance passes repo-local verification when the inventory and s
   assert.equal(result.criteria[3].status, "manual");
 });
 
+test("evaluateAcceptance fails repo-local verification when zero unresolved threads are reported but the active inventory section still contains entries", async () => {
+  const result = await evaluateAcceptance(
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      token: null,
+      inputPath: "threads.json",
+      docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
+      expectDocCount: 1,
+      expectedCount: 0,
+      githubUiConfirmed: false,
+      outputFormat: "text",
+    },
+    {
+      loadThreadInventory: (_docPath, _dependencies, options = {}) => {
+        if (options.inventorySection === "unresolved") {
+          return [
+            {
+              threadId: "THREAD_1",
+              originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+              location: "trip_planner/example.py:17",
+              classification: "fix",
+              followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+              rationale: "The follow-up PR landed, but the inventory was not moved yet.",
+              content: "reviewer: Please rework this helper.",
+              outdated: false,
+            },
+          ];
+        }
+
+        return [
+          {
+            threadId: "THREAD_1",
+            originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+            location: "trip_planner/example.py:17",
+            classification: "fix",
+            followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+            rationale: "The follow-up PR landed, but the inventory was not moved yet.",
+            content: "reviewer: Please rework this helper.",
+            outdated: false,
+          },
+        ];
+      },
+      loadReviewThreadsFromFile: () => [],
+    }
+  );
+
+  assert.equal(result.overallStatus, "fail");
+  assert.equal(result.unresolvedThreadCount, 0);
+  assert.equal(result.criteria[2].status, "fail");
+  assert.match(
+    result.criteria[2].issues.join("\n"),
+    /Documented unresolved inventory must be empty when the snapshot has zero unresolved thread\(s\); found 1 active thread entry\./
+  );
+});
+
 test("evaluateAcceptance passes when snapshot verification succeeds and GitHub UI confirmation is supplied", async () => {
+  const resolvedOnlyInventory = `
+# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+No unresolved inline review threads found.
+
+## Resolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: The follow-up PR landed and the thread is resolved.
+- Content: reviewer: Please rework this helper.
+- Outdated: no
+`;
   const result = await evaluateAcceptance(
     {
       owner: "stranske",
@@ -134,18 +224,8 @@ test("evaluateAcceptance passes when snapshot verification succeeds and GitHub U
       outputFormat: "text",
     },
     {
-      loadThreadInventory: () => [
-        {
-          threadId: "THREAD_1",
-          originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
-          location: "trip_planner/example.py:17",
-          classification: "fix",
-          followUpPr: "https://github.com/stranske/trip-planner/pull/581",
-          rationale: "The follow-up PR landed and the thread is resolved.",
-          content: "reviewer: Please rework this helper.",
-          outdated: false,
-        },
-      ],
+      loadThreadInventory: (_docPath, _dependencies, options = {}) =>
+        parseThreadInventory(resolvedOnlyInventory, options),
       loadReviewThreadsFromFile: () => [],
     }
   );

@@ -161,6 +161,9 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
 
   const repository = `${configuration.owner}/${configuration.repo}`;
   const documentedThreads = loadInventory(configuration.docPath);
+  const activeDocumentedThreads = loadInventory(configuration.docPath, {}, {
+    inventorySection: "unresolved",
+  });
   const docIssues = collectThreadInventoryIssues(documentedThreads);
   const fixThreads = listFixClassifiedThreads(documentedThreads);
   const fixThreadsMissingOrInvalidFollowUpPr = fixThreads.filter(
@@ -214,6 +217,7 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
       unresolvedThreads,
       {
         expectDocCount: configuration.expectDocCount,
+        activeDocumentedThreads,
       }
     );
 

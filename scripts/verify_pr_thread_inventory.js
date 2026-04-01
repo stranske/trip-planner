@@ -106,13 +106,25 @@ function findMatchedDocumentedThread(documentedThreads, matchedDocumentIndexes, 
 }
 
 function collectInventoryVerificationIssues(documentedThreads, unresolvedThreads, options = {}) {
-  const { expectDocCount = null } = options;
+  const { expectDocCount = null, activeDocumentedThreads = null } = options;
   const issues = collectThreadInventoryIssues(documentedThreads);
   const allowResolvedInventoryOnly = unresolvedThreads.length === 0;
 
   if (expectDocCount !== null && documentedThreads.length !== expectDocCount) {
     issues.push(
       `Expected ${expectDocCount} documented thread(s), found ${documentedThreads.length}.`
+    );
+  }
+
+  if (
+    allowResolvedInventoryOnly &&
+    Array.isArray(activeDocumentedThreads) &&
+    activeDocumentedThreads.length > 0
+  ) {
+    issues.push(
+      `Documented unresolved inventory must be empty when the snapshot has zero unresolved thread(s); found ${activeDocumentedThreads.length} active thread entr${
+        activeDocumentedThreads.length === 1 ? "y" : "ies"
+      }.`
     );
   }
 
@@ -242,6 +254,9 @@ function buildInventoryVerificationReport(configuration, dependencies = {}) {
   const loadThreads = dependencies.loadReviewThreadsFromFile || loadReviewThreadsFromFile;
   const fetchThreads = dependencies.fetchAllReviewThreads || fetchAllReviewThreads;
   const documentedThreads = loadInventory(configuration.docPath);
+  const activeDocumentedThreads = loadInventory(configuration.docPath, {}, {
+    inventorySection: "unresolved",
+  });
   const resolveRawThreads = configuration.inputPath
     ? Promise.resolve(loadThreads(configuration.inputPath))
     : Promise.resolve(fetchThreads(configuration));
@@ -250,6 +265,7 @@ function buildInventoryVerificationReport(configuration, dependencies = {}) {
     const unresolvedThreads = extractUnresolvedThreads(rawThreads);
     const issues = collectInventoryVerificationIssues(documentedThreads, unresolvedThreads, {
       expectDocCount: configuration.expectDocCount,
+      activeDocumentedThreads,
     });
     let expectedCountError = null;
 

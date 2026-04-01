@@ -235,6 +235,31 @@ No unresolved inline review threads found.
   assert.deepEqual(collectInventoryVerificationIssues(documentedThreads, []), []);
 });
 
+test("collectInventoryVerificationIssues requires the active inventory section to be empty when all threads are resolved", () => {
+  const documentedThreads = parseThreadInventory(`
+# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: disposition
+- Follow-up PR:
+- Rationale: This entry should have been moved into resolved history.
+- Content: reviewer: Please keep this branch explicit.
+- Outdated: no
+`);
+
+  assert.deepEqual(collectInventoryVerificationIssues(documentedThreads, [], {
+    activeDocumentedThreads: documentedThreads,
+  }), [
+    "Documented unresolved inventory must be empty when the snapshot has zero unresolved thread(s); found 1 active thread entry.",
+  ]);
+});
+
 test("formatInventoryVerificationReport summarizes passing verification", () => {
   const report = formatInventoryVerificationReport(
     {
@@ -440,20 +465,7 @@ test("buildInventoryVerificationReport fetches live review threads when no snaps
 });
 
 test("buildInventoryVerificationReport accepts a resolved-only inventory when the snapshot has zero unresolved threads", async () => {
-  const report = await buildInventoryVerificationReport(
-    {
-      owner: "stranske",
-      repo: "trip-planner",
-      prNumber: 178,
-      inputPath: "threads.json",
-      docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
-      expectDocCount: 1,
-      expectedCount: 0,
-      token: undefined,
-    },
-    {
-      loadThreadInventory: () =>
-        parseThreadInventory(`
+  const resolvedOnlyInventory = `
 # PR #178 Unresolved Thread Inventory
 
 ## Thread Inventory
@@ -472,7 +484,21 @@ No unresolved inline review threads found.
 - Rationale: The follow-up PR landed and the thread is now resolved.
 - Content: reviewer: Please keep this branch explicit.
 - Outdated: no
-`),
+`;
+  const report = await buildInventoryVerificationReport(
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      inputPath: "threads.json",
+      docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
+      expectDocCount: 1,
+      expectedCount: 0,
+      token: undefined,
+    },
+    {
+      loadThreadInventory: (_docPath, _dependencies, options = {}) =>
+        parseThreadInventory(resolvedOnlyInventory, options),
       loadReviewThreadsFromFile: () => [],
     }
   );
@@ -480,4 +506,47 @@ No unresolved inline review threads found.
   assert.match(report, /Unresolved threads in snapshot: 0/);
   assert.match(report, /Expected unresolved threads: 0/);
   assert.match(report, /Verification: OK/);
+});
+
+test("buildInventoryVerificationReport fails when active unresolved entries remain after the snapshot reaches zero", async () => {
+  const report = await buildInventoryVerificationReport(
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      inputPath: "threads.json",
+      docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
+      expectDocCount: 1,
+      expectedCount: 0,
+      token: undefined,
+    },
+    {
+      loadThreadInventory: (_docPath, _dependencies, options = {}) => {
+        const markdown = `
+# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: disposition
+- Follow-up PR:
+- Rationale: This entry still sits in the active inventory.
+- Content: reviewer: Please keep this branch explicit.
+- Outdated: no
+`;
+        return parseThreadInventory(markdown, options);
+      },
+      loadReviewThreadsFromFile: () => [],
+    }
+  );
+
+  assert.match(report, /Verification: FAILED/);
+  assert.match(
+    report,
+    /Documented unresolved inventory must be empty when the snapshot has zero unresolved thread\(s\); found 1 active thread entry\./
+  );
 });
