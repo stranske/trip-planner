@@ -81,9 +81,7 @@ class SourceRecord:
     base_url: str = ""
     default_locale: str = ""
     trust_signals: SourceTrustSignals = field(default_factory=SourceTrustSignals)
-    quality_summary: QualityValueFitSummary = field(
-        default_factory=QualityValueFitSummary
-    )
+    quality_summary: QualityValueFitSummary = field(default_factory=QualityValueFitSummary)
     business_approval_status: str = "unknown"
     business_approval_notes: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
@@ -116,8 +114,7 @@ class SourceRecord:
             raise ValueError("quality_summary must be a QualityValueFitSummary")
         if self.business_approval_status not in schema.BUSINESS_APPROVAL_STATUSES:
             raise ValueError(
-                "business_approval_status must be one of "
-                f"{schema.BUSINESS_APPROVAL_STATUSES}"
+                "business_approval_status must be one of " f"{schema.BUSINESS_APPROVAL_STATUSES}"
             )
 
     def to_dict(self) -> dict[str, Any]:

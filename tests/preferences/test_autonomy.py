@@ -75,13 +75,9 @@ def test_default_preference_backfills_missing_stage_preferences() -> None:
             exploration_depth=0.7,
             explanation_depth=0.4,
         ),
-        stage_preferences={
-            "initial_design": AutonomyPreference(checkpoint_frequency=0.9)
-        },
+        stage_preferences={"initial_design": AutonomyPreference(checkpoint_frequency=0.9)},
     )
 
     assert profile.preference_for_stage("inventory_selection").system_initiative == 0.8
-    assert (
-        profile.preference_for_stage("inventory_selection").option_preview_timing == 0.9
-    )
+    assert profile.preference_for_stage("inventory_selection").option_preview_timing == 0.9
     assert profile.preference_for_stage("initial_design").checkpoint_frequency == 0.9

@@ -78,12 +78,8 @@ def test_business_and_leisure_profiles_remain_separate_contracts() -> None:
         trip_frame=TripFrame(duration_days=7),
         hard_constraints=HardConstraints(),
         budget_model=BudgetModel(),
-        tradeoff_dimensions={
-            key: TradeoffDimension() for key in TRADEOFF_DIMENSION_KEYS
-        },
-        hybrid_factors={
-            key: HybridFactor(mode="tradeoff") for key in HYBRID_FACTOR_KEYS
-        },
+        tradeoff_dimensions={key: TradeoffDimension() for key in TRADEOFF_DIMENSION_KEYS},
+        hybrid_factors={key: HybridFactor(mode="tradeoff") for key in HYBRID_FACTOR_KEYS},
     )
 
     assert business_profile.profile_kind == "business"

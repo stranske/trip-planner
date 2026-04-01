@@ -90,9 +90,7 @@ def test_trip_rejects_duplicate_option_set_refs() -> None:
     except ValueError as exc:
         assert "option_set_ids" in str(exc)
     else:
-        raise AssertionError(
-            "TripArtifactRefs should reject duplicate option set references"
-        )
+        raise AssertionError("TripArtifactRefs should reject duplicate option set references")
 
 
 def test_trip_rejects_policy_state_for_leisure_mode() -> None:
@@ -109,6 +107,4 @@ def test_trip_rejects_policy_state_for_leisure_mode() -> None:
     except ValueError as exc:
         assert "policy_state_id" in str(exc)
     else:
-        raise AssertionError(
-            "Leisure trip should reject business-only policy state references"
-        )
+        raise AssertionError("Leisure trip should reject business-only policy state references")

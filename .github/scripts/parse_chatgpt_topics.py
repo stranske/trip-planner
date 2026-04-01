@@ -25,9 +25,7 @@ ALLOW_FALLBACK = os.environ.get("ALLOW_SINGLE_TOPIC", "0") in {"1", "true", "Tru
 def _load_text() -> str:
     try:
         text = INPUT_PATH.read_text(encoding="utf-8").strip()
-    except (
-        FileNotFoundError
-    ) as exc:  # pragma: no cover - guardrail for workflow execution
+    except FileNotFoundError as exc:  # pragma: no cover - guardrail for workflow execution
         raise SystemExit("No input.txt found to parse.") from exc
     if not text:
         raise SystemExit("No topic content provided.")
@@ -46,9 +44,7 @@ def _split_numbered_items(text: str) -> list[dict[str, str | list[str] | bool]]:
     Each returned item dict includes:
       title, lines, enumerator, continuity_break (bool)
     """
-    pattern = re.compile(
-        r"^\s*(?P<enum>(?:\d+|[A-Za-z]\d+|[A-Za-z]))[\).:\-]\s+(?P<title>.+)$"
-    )
+    pattern = re.compile(r"^\s*(?P<enum>(?:\d+|[A-Za-z]\d+|[A-Za-z]))[\).:\-]\s+(?P<title>.+)$")
     items: list[dict[str, str | list[str] | bool]] = []
     current: dict[str, str | list[str] | bool] | None = None
     style: str | None = None  # 'numeric' | 'alpha' | 'alphanum'
@@ -181,9 +177,7 @@ def _join_section(lines: list[str]) -> str:
     return "\n".join(lines).strip()
 
 
-def parse_text(
-    text: str, *, allow_single_fallback: bool = False
-) -> list[dict[str, object]]:
+def parse_text(text: str, *, allow_single_fallback: bool = False) -> list[dict[str, object]]:
     """Parse raw *text* into topic dictionaries.
 
     Parameters

@@ -102,12 +102,7 @@ def build_langsmith_metadata(
     ``langsmith_project`` entry so traces group correctly.
     """
     repo = repo or os.environ.get("GITHUB_REPOSITORY", "unknown")
-    run_id = (
-        run_id
-        or os.environ.get("GITHUB_RUN_ID")
-        or os.environ.get("RUN_ID")
-        or "unknown"
-    )
+    run_id = run_id or os.environ.get("GITHUB_RUN_ID") or os.environ.get("RUN_ID") or "unknown"
 
     if issue_or_pr_number is None:
         if pr_number is not None:
@@ -118,9 +113,7 @@ def build_langsmith_metadata(
             env_pr = os.environ.get("PR_NUMBER", "")
             env_issue = os.environ.get("ISSUE_NUMBER", "")
             issue_or_pr_number = (
-                env_pr
-                if env_pr.isdigit()
-                else env_issue if env_issue.isdigit() else "unknown"
+                env_pr if env_pr.isdigit() else env_issue if env_issue.isdigit() else "unknown"
             )
 
     _ensure_langsmith_enabled()
@@ -135,9 +128,7 @@ def build_langsmith_metadata(
     }
 
     if _ensure_langsmith_enabled():
-        metadata["langsmith_project"] = os.environ.get(
-            "LANGCHAIN_PROJECT", "workflows-agents"
-        )
+        metadata["langsmith_project"] = os.environ.get("LANGCHAIN_PROJECT", "workflows-agents")
 
     tags = [
         "workflows-agents",
@@ -216,12 +207,8 @@ def _is_token_limit_error(error: Exception) -> bool:
     """Check if error is a token limit (413) error from GitHub Models."""
     error_str = str(error).lower()
     # Check for 413 status code (both with and without colon separators)
-    has_413 = "413" in error_str and (
-        "error code" in error_str or "status code" in error_str
-    )
-    has_token_message = (
-        "tokens_limit_reached" in error_str or "request body too large" in error_str
-    )
+    has_413 = "413" in error_str and ("error code" in error_str or "status code" in error_str)
+    has_token_message = "tokens_limit_reached" in error_str or "request body too large" in error_str
     return has_413 and has_token_message
 
 
@@ -436,9 +423,7 @@ class GitHubModelsProvider(LLMProvider):
             )
             # Short text means limited evidence - cap confidence
             confidence = min(confidence, SHORT_ANALYSIS_CONFIDENCE_CAP)
-            logger.warning(
-                f"Short analysis text: {quality_context.analysis_text_length} chars"
-            )
+            logger.warning(f"Short analysis text: {quality_context.analysis_text_length} chars")
 
         # BS Detection Rule 3: Zero tasks + high effort score = something's wrong
         if (
@@ -459,9 +444,7 @@ class GitHubModelsProvider(LLMProvider):
             any(phrase in reasoning_lower for phrase in no_evidence_phrases)
             and quality_context.has_work_evidence
         ):
-            warnings.append(
-                "LLM claims 'no evidence' but session has file changes/commands"
-            )
+            warnings.append("LLM claims 'no evidence' but session has file changes/commands")
             confidence = min(confidence, 0.35)
 
         # BS Detection Rule 5: Data quality impacts confidence ceiling
@@ -568,9 +551,7 @@ Be conservative - if unsure, don't mark as completed."""
                 reasoning=reasoning,
                 provider_used=self.name,
                 model_name="gpt-4.1",  # Actual model used by GitHubModelsProvider
-                raw_confidence=(
-                    raw_confidence if adjusted_confidence != raw_confidence else None
-                ),
+                raw_confidence=(raw_confidence if adjusted_confidence != raw_confidence else None),
                 confidence_adjusted=adjusted_confidence != raw_confidence,
                 quality_warnings=warnings if warnings else None,
             )
@@ -809,8 +790,7 @@ class RegexFallbackProvider(LLMProvider):
             is_blocked = any(
                 word in output_lower
                 and any(
-                    p in output_lower
-                    for p in ["blocked", "stuck", "failed", "error", "cannot"]
+                    p in output_lower for p in ["blocked", "stuck", "failed", "error", "cannot"]
                 )
                 for word in task_words
                 if len(word) > 3
@@ -932,9 +912,7 @@ class FallbackChainProvider(LLMProvider):
         context: str | None,
         quality_context: SessionQualityContext | None,
     ) -> CompletionAnalysis:
-        if quality_context is not None and self._provider_supports_quality_context(
-            provider
-        ):
+        if quality_context is not None and self._provider_supports_quality_context(provider):
             try:
                 return provider.analyze_completion(
                     session_output=session_output,
@@ -1030,9 +1008,7 @@ def get_quality_context_support_table() -> dict[str, bool]:
         GitHubModelsProvider(),
         RegexFallbackProvider(),
     ]
-    return {
-        provider.name: _supports_quality_context(provider) for provider in providers
-    }
+    return {provider.name: _supports_quality_context(provider) for provider in providers}
 
 
 def get_quality_context_capable_providers() -> list[str]:

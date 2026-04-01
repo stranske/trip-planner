@@ -42,8 +42,7 @@ class TravelerContext:
             raise ValueError(f"employee_type must be one of {schema.EMPLOYEE_TYPES}")
         if self.traveler_experience not in schema.TRAVELER_EXPERIENCE_LEVELS:
             raise ValueError(
-                "traveler_experience must be one of "
-                f"{schema.TRAVELER_EXPERIENCE_LEVELS}"
+                "traveler_experience must be one of " f"{schema.TRAVELER_EXPERIENCE_LEVELS}"
             )
         require_non_empty(self.home_airport, "home_airport")
         require_strings(self.loyalty_programs, "loyalty_programs")
@@ -57,9 +56,7 @@ class TravelerContext:
 class TripPurpose:
     purpose_type: str
     business_justification: str
-    required_presence_windows: list[RequiredPresenceWindow] = field(
-        default_factory=list
-    )
+    required_presence_windows: list[RequiredPresenceWindow] = field(default_factory=list)
     trip_criticality: str = "medium"
 
     def __post_init__(self) -> None:
@@ -67,9 +64,7 @@ class TripPurpose:
             raise ValueError(f"purpose_type must be one of {schema.PURPOSE_TYPES}")
         require_non_empty(self.business_justification, "business_justification")
         if self.trip_criticality not in schema.TRIP_CRITICALITY_LEVELS:
-            raise ValueError(
-                f"trip_criticality must be one of {schema.TRIP_CRITICALITY_LEVELS}"
-            )
+            raise ValueError(f"trip_criticality must be one of {schema.TRIP_CRITICALITY_LEVELS}")
         if any(
             not isinstance(window, RequiredPresenceWindow)
             for window in self.required_presence_windows
@@ -116,9 +111,7 @@ class VendorConstraints:
         require_strings(self.preferred_vendors, "preferred_vendors")
         require_strings(self.approved_vendors, "approved_vendors")
         require_strings(self.disallowed_vendors, "disallowed_vendors")
-        if any(
-            not isinstance(key, str) or not key for key in self.comparison_requirements
-        ):
+        if any(not isinstance(key, str) or not key for key in self.comparison_requirements):
             raise ValueError("comparison_requirements must use non-empty string keys")
         for key, value in self.comparison_requirements.items():
             if value <= 0:
@@ -138,12 +131,9 @@ class ScheduleRequirements:
     def __post_init__(self) -> None:
         if self.arrival_buffer_preference not in schema.ARRIVAL_BUFFER_PREFERENCES:
             raise ValueError(
-                "arrival_buffer_preference must be one of "
-                f"{schema.ARRIVAL_BUFFER_PREFERENCES}"
+                "arrival_buffer_preference must be one of " f"{schema.ARRIVAL_BUFFER_PREFERENCES}"
             )
-        require_probability(
-            self.meeting_protection_priority, "meeting_protection_priority"
-        )
+        require_probability(self.meeting_protection_priority, "meeting_protection_priority")
         require_probability(self.same_day_return_tolerance, "same_day_return_tolerance")
         require_probability(self.red_eye_tolerance, "red_eye_tolerance")
 
@@ -160,12 +150,8 @@ class CostControls:
 
     def __post_init__(self) -> None:
         require_probability(self.overall_cost_priority, "overall_cost_priority")
-        require_probability(
-            self.policy_compliance_priority, "policy_compliance_priority"
-        )
-        require_probability(
-            self.employee_convenience_priority, "employee_convenience_priority"
-        )
+        require_probability(self.policy_compliance_priority, "policy_compliance_priority")
+        require_probability(self.employee_convenience_priority, "employee_convenience_priority")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -225,9 +211,7 @@ class ExceptionStrategy:
 
     def __post_init__(self) -> None:
         if self.fallback_mode not in schema.EXCEPTION_FALLBACK_MODES:
-            raise ValueError(
-                f"fallback_mode must be one of {schema.EXCEPTION_FALLBACK_MODES}"
-            )
+            raise ValueError(f"fallback_mode must be one of {schema.EXCEPTION_FALLBACK_MODES}")
         require_strings(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
@@ -291,24 +275,16 @@ class BusinessTravelProfile:
             traveler_context=TravelerContext(**payload["traveler_context"]),
             trip_purpose=TripPurpose(
                 purpose_type=payload["trip_purpose"]["purpose_type"],
-                business_justification=payload["trip_purpose"][
-                    "business_justification"
-                ],
+                business_justification=payload["trip_purpose"]["business_justification"],
                 required_presence_windows=[
                     RequiredPresenceWindow(**item)
-                    for item in payload["trip_purpose"].get(
-                        "required_presence_windows", []
-                    )
+                    for item in payload["trip_purpose"].get("required_presence_windows", [])
                 ],
-                trip_criticality=payload["trip_purpose"].get(
-                    "trip_criticality", "medium"
-                ),
+                trip_criticality=payload["trip_purpose"].get("trip_criticality", "medium"),
             ),
             policy_constraints=PolicyConstraints(**payload["policy_constraints"]),
             vendor_constraints=VendorConstraints(**payload["vendor_constraints"]),
-            schedule_requirements=ScheduleRequirements(
-                **payload["schedule_requirements"]
-            ),
+            schedule_requirements=ScheduleRequirements(**payload["schedule_requirements"]),
             cost_controls=CostControls(**payload["cost_controls"]),
             comfort_floors=ComfortFloors(**payload["comfort_floors"]),
             documentation_requirements=DocumentationRequirements(
