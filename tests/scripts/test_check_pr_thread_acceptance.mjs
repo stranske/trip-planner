@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 
@@ -11,6 +13,7 @@ const {
   formatAcceptanceReport,
   formatVerificationMode,
   getAcceptanceConfiguration,
+  loadResolutionResultsReport,
 } = require(path.join(repoRoot, "scripts/check_pr_thread_acceptance.js"));
 const {
   parseThreadInventory,
@@ -55,6 +58,102 @@ test("getAcceptanceConfiguration accepts --write-inventory-doc", () => {
   );
 
   assert.equal(configuration.writeInventoryDoc, true);
+});
+
+test("loadResolutionResultsReport derives reusable verification defaults from a resolution report", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "acceptance-results-report-"));
+  const resultsPath = path.join(tempDir, "results.json");
+
+  fs.writeFileSync(
+    resultsPath,
+    `${JSON.stringify(
+      {
+        remainingSnapshotPath: path.join(tempDir, "remaining.json"),
+        inventoryUpdate: {
+          docPath: path.join(tempDir, "pr-178-unresolved-threads.md"),
+        },
+        acceptance: {
+          repository: "stranske/trip-planner",
+          prNumber: 178,
+          expectDocCount: 4,
+          expectedCount: 0,
+          docPath: path.join(tempDir, "fallback-doc.md"),
+          inputPath: "<post-resolution inventory>",
+          criteria: [{ id: "github_ui", status: "pass" }],
+        },
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  assert.deepEqual(loadResolutionResultsReport(resultsPath), {
+    repository: "stranske/trip-planner",
+    prNumber: "178",
+    docPath: path.join(tempDir, "pr-178-unresolved-threads.md"),
+    expectDocCount: 4,
+    expectedCount: 0,
+    inputPath: path.join(tempDir, "remaining.json"),
+    githubUiConfirmed: true,
+  });
+});
+
+test("getAcceptanceConfiguration can reuse a persisted resolution report", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "acceptance-results-config-"));
+  const resultsPath = path.join(tempDir, "results.json");
+  const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
+  const snapshotPath = path.join(tempDir, "remaining.json");
+
+  fs.writeFileSync(
+    resultsPath,
+    `${JSON.stringify(
+      {
+        remainingSnapshotPath: snapshotPath,
+        inventoryUpdate: { docPath },
+        acceptance: {
+          repository: "stranske/trip-planner",
+          prNumber: 178,
+          expectDocCount: 4,
+          expectedCount: 0,
+          criteria: [{ id: "github_ui", status: "manual" }],
+        },
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  const configuration = getAcceptanceConfiguration(["--results", resultsPath], {});
+
+  assert.equal(configuration.owner, "stranske");
+  assert.equal(configuration.repo, "trip-planner");
+  assert.equal(configuration.prNumber, 178);
+  assert.equal(configuration.inputPath, snapshotPath);
+  assert.equal(configuration.docPath, docPath);
+  assert.equal(configuration.expectDocCount, 4);
+  assert.equal(configuration.expectedCount, 0);
+  assert.equal(configuration.githubUiConfirmed, false);
+  assert.equal(configuration.resultsPath, resultsPath);
+});
+
+test("loadResolutionResultsReport rejects invalid resolution report payloads", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "acceptance-results-invalid-"));
+  const missingAcceptancePath = path.join(tempDir, "missing-acceptance.json");
+  const malformedPath = path.join(tempDir, "malformed.json");
+
+  fs.writeFileSync(missingAcceptancePath, `${JSON.stringify({ threadCount: 0 })}\n`, "utf8");
+  fs.writeFileSync(malformedPath, "{not-json}\n", "utf8");
+
+  assert.throws(
+    () => loadResolutionResultsReport(missingAcceptancePath),
+    /must contain an "acceptance" object/
+  );
+  assert.throws(
+    () => loadResolutionResultsReport(malformedPath),
+    /Could not parse results report/
+  );
 });
 
 test("getAcceptanceConfiguration rejects ambiguous or incomplete live verification options", () => {

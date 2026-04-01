@@ -2,6 +2,7 @@
 
 "use strict";
 
+const fs = require("node:fs");
 const path = require("node:path");
 
 const {
@@ -34,6 +35,7 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
     githubUiConfirmed: false,
     live: false,
     outputFormat: "text",
+    resultsPath: null,
     writeInventoryDoc: false,
   };
 
@@ -79,6 +81,17 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
       continue;
     }
 
+    if (argument === "--results") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --results flag requires a file path.");
+      }
+
+      options.resultsPath = path.resolve(value);
+      index += 1;
+      continue;
+    }
+
     if (argument === "--github-ui-confirmed") {
       options.githubUiConfirmed = true;
       continue;
@@ -109,15 +122,32 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
     );
   }
 
+  const resultsReport = options.resultsPath ? loadResolutionResultsReport(options.resultsPath) : null;
   const parsedArguments = parseCommandLineArguments(passthroughArguments);
-  const repository = parsedArguments.positional[0] || env.GITHUB_REPOSITORY || DEFAULT_REPOSITORY;
+  const repository =
+    parsedArguments.positional[0] ||
+    resultsReport?.repository ||
+    env.GITHUB_REPOSITORY ||
+    DEFAULT_REPOSITORY;
   const prNumberRaw =
-    parsedArguments.positional[1] || env.PR_NUMBER || String(DEFAULT_PR_NUMBER);
+    parsedArguments.positional[1] ||
+    resultsReport?.prNumber ||
+    env.PR_NUMBER ||
+    String(DEFAULT_PR_NUMBER);
   const prNumber = Number.parseInt(prNumberRaw, 10);
-  const inputPath = parsedArguments.inputPath || env.REVIEW_THREADS_FILE || null;
+  const inputPath =
+    parsedArguments.inputPath || resultsReport?.inputPath || env.REVIEW_THREADS_FILE || null;
   const token = options.live ? env.GITHUB_TOKEN : null;
-  const expectDocCount = Number.parseInt(String(options.expectDocCount), 10);
-  const expectUnresolvedCount = Number.parseInt(String(options.expectUnresolvedCount), 10);
+  const expectDocCount = Number.parseInt(
+    String(resultsReport?.expectDocCount ?? options.expectDocCount),
+    10
+  );
+  const expectUnresolvedCount = Number.parseInt(
+    String(resultsReport?.expectedCount ?? options.expectUnresolvedCount),
+    10
+  );
+  const githubUiConfirmed = options.githubUiConfirmed || Boolean(resultsReport?.githubUiConfirmed);
+  const docPath = resultsReport?.docPath || options.docPath;
 
   if (!repository.includes("/")) {
     throw new Error(
@@ -156,13 +186,62 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
     prNumber,
     token,
     inputPath,
-    docPath: options.docPath,
+    docPath,
     expectDocCount,
     expectedCount: expectUnresolvedCount,
     outputFormat: options.outputFormat,
-    githubUiConfirmed: options.githubUiConfirmed,
+    githubUiConfirmed,
     live: options.live,
+    resultsPath: options.resultsPath,
     writeInventoryDoc: options.writeInventoryDoc,
+  };
+}
+
+function loadResolutionResultsReport(resultsPath, dependencies = {}) {
+  const readFileSync = dependencies.readFileSync || fs.readFileSync;
+  let parsedReport;
+
+  try {
+    parsedReport = JSON.parse(readFileSync(resultsPath, "utf8"));
+  } catch (error) {
+    throw new Error(
+      `Could not parse results report "${resultsPath}": ${error.message}`
+    );
+  }
+
+  if (!parsedReport || typeof parsedReport !== "object") {
+    throw new Error(`Results report "${resultsPath}" must contain a JSON object.`);
+  }
+
+  const acceptance = parsedReport.acceptance;
+  if (!acceptance || typeof acceptance !== "object") {
+    throw new Error(
+      `Results report "${resultsPath}" must contain an "acceptance" object.`
+    );
+  }
+
+  const docPath = parsedReport.inventoryUpdate?.docPath || acceptance.docPath || DEFAULT_DOC_PATH;
+  const repository = acceptance.repository || null;
+  const prNumber = acceptance.prNumber ? String(acceptance.prNumber) : null;
+  const expectDocCount = acceptance.expectDocCount;
+  const expectedCount = acceptance.expectedCount;
+  const inputPath =
+    parsedReport.remainingSnapshotPath ||
+    (acceptance.inputPath && !String(acceptance.inputPath).startsWith("<")
+      ? acceptance.inputPath
+      : null);
+  const githubUiCriterion = Array.isArray(acceptance.criteria)
+    ? acceptance.criteria.find((criterion) => criterion.id === "github_ui")
+    : null;
+
+  return {
+    repository,
+    prNumber,
+    docPath,
+    expectDocCount,
+    expectedCount,
+    inputPath,
+    githubUiConfirmed: githubUiCriterion?.status === "pass",
   };
 }
 
@@ -415,6 +494,7 @@ module.exports = {
   formatVerificationMode,
   formatAcceptanceReport,
   getAcceptanceConfiguration,
+  loadResolutionResultsReport,
   main,
   DEFAULT_DOC_PATH,
   DEFAULT_PR_NUMBER,
