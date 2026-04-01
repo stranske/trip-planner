@@ -11,7 +11,6 @@ from trip_planner.sources import (
     ProvenanceReference,
 )
 
-
 FIXTURE_ROOT = (
     Path(__file__).resolve().parents[1] / "fixtures" / "sources" / "resolution"
 )

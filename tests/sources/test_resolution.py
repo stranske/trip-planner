@@ -12,7 +12,6 @@ from trip_planner.sources import (
     ProvenanceReference,
 )
 
-
 FIXTURE_ROOT = (
     Path(__file__).resolve().parents[1] / "fixtures" / "sources" / "resolution"
 )
@@ -40,16 +39,18 @@ def build_provenance(
             ProvenanceReference(
                 provenance_id=f"prov-{canonical_entity_id}",
                 source_id="fixture-source",
-                source_category="commercial_inventory"
-                if entity_scope != "destination"
-                else "editorial",
-                subject_kind="destination"
-                if entity_scope == "destination"
-                else "option",
+                source_category=(
+                    "commercial_inventory"
+                    if entity_scope != "destination"
+                    else "editorial"
+                ),
+                subject_kind=(
+                    "destination" if entity_scope == "destination" else "option"
+                ),
                 subject_id=canonical_entity_id,
-                contribution_kind="inventory"
-                if entity_scope != "destination"
-                else "editorial",
+                contribution_kind=(
+                    "inventory" if entity_scope != "destination" else "editorial"
+                ),
                 summary="Fixture provenance survives resolution.",
                 captured_at="2026-04-01T00:05:00Z",
             )
