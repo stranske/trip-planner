@@ -188,6 +188,53 @@ test("getAcceptanceConfiguration can reuse a persisted resolution report", () =>
   assert.equal(configuration.resultsPath, resultsPath);
 });
 
+test("getAcceptanceConfiguration lets explicit CLI overrides win over a persisted resolution report", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "acceptance-results-cli-overrides-"));
+  const resultsPath = path.join(tempDir, "results.json");
+  const reportDocPath = path.join(tempDir, "report-doc.md");
+  const overrideDocPath = path.join(tempDir, "override-doc.md");
+  const snapshotPath = path.join(tempDir, "remaining.json");
+
+  fs.writeFileSync(
+    resultsPath,
+    `${JSON.stringify(
+      {
+        remainingSnapshotPath: snapshotPath,
+        inventoryUpdate: { docPath: reportDocPath },
+        acceptance: {
+          repository: "stranske/trip-planner",
+          prNumber: 178,
+          expectDocCount: 4,
+          expectedCount: 0,
+          criteria: [{ id: "github_ui", status: "manual" }],
+        },
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  const configuration = getAcceptanceConfiguration(
+    [
+      "--results",
+      resultsPath,
+      "--doc",
+      overrideDocPath,
+      "--expect-doc-count",
+      "2",
+      "--expect-count",
+      "1",
+    ],
+    {}
+  );
+
+  assert.equal(configuration.docPath, path.resolve(overrideDocPath));
+  assert.equal(configuration.expectDocCount, 2);
+  assert.equal(configuration.expectedCount, 1);
+  assert.equal(configuration.inputPath, snapshotPath);
+});
+
 test("getAcceptanceConfiguration reuses embedded snapshot threads from a persisted resolution report", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "acceptance-results-config-embedded-"));
   const resultsPath = path.join(tempDir, "results.json");

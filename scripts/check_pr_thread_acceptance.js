@@ -32,6 +32,9 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
     docPath: DEFAULT_DOC_PATH,
     expectDocCount: 4,
     expectUnresolvedCount: 0,
+    hasExplicitDocPath: false,
+    hasExplicitExpectDocCount: false,
+    hasExplicitExpectUnresolvedCount: false,
     githubUiConfirmed: false,
     live: false,
     outputFormat: "text",
@@ -49,6 +52,7 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
       }
 
       options.docPath = path.resolve(value);
+      options.hasExplicitDocPath = true;
       index += 1;
       continue;
     }
@@ -60,6 +64,7 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
       }
 
       options.expectDocCount = value;
+      options.hasExplicitExpectDocCount = true;
       index += 1;
       continue;
     }
@@ -71,6 +76,7 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
       }
 
       options.expectUnresolvedCount = value;
+      options.hasExplicitExpectUnresolvedCount = true;
       passthroughArguments.push(argument, value);
       index += 1;
       continue;
@@ -140,15 +146,21 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
   const snapshotThreads = parsedArguments.inputPath ? null : resultsReport?.snapshotThreads || null;
   const token = options.live ? env.GITHUB_TOKEN : null;
   const expectDocCount = Number.parseInt(
-    String(resultsReport?.expectDocCount ?? options.expectDocCount),
+    String(
+      options.hasExplicitExpectDocCount ? options.expectDocCount : resultsReport?.expectDocCount ?? options.expectDocCount
+    ),
     10
   );
   const expectUnresolvedCount = Number.parseInt(
-    String(resultsReport?.expectedCount ?? options.expectUnresolvedCount),
+    String(
+      options.hasExplicitExpectUnresolvedCount
+        ? options.expectUnresolvedCount
+        : resultsReport?.expectedCount ?? options.expectUnresolvedCount
+    ),
     10
   );
   const githubUiConfirmed = options.githubUiConfirmed || Boolean(resultsReport?.githubUiConfirmed);
-  const docPath = resultsReport?.docPath || options.docPath;
+  const docPath = options.hasExplicitDocPath ? options.docPath : resultsReport?.docPath || options.docPath;
 
   if (!repository.includes("/")) {
     throw new Error(
