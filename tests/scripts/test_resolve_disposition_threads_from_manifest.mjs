@@ -415,6 +415,71 @@ test("executeManifestThreads updates the inventory document after successful exe
   assert.match(updatedDocument, /## Resolved Thread Inventory[\s\S]*THREAD_1/);
 });
 
+test("executeManifestThreads writes inventory update details into the persisted results report", () => {
+  const manifest = {
+    threads: [
+      {
+        threadId: "THREAD_1",
+        replyQuery: "mutation Reply",
+        replyVariables: { threadId: "THREAD_1", body: "Disposition" },
+        resolveQuery: "mutation Resolve",
+        resolveVariables: { threadId: "THREAD_1" },
+      },
+    ],
+  };
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-disposition-results-"));
+  const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
+  const resultsPath = path.join(tempDir, "results.json");
+
+  fs.writeFileSync(
+    docPath,
+    `# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: src/file.js:10
+- Classification: disposition
+- Follow-up PR:
+- Rationale: The current behavior is intentional.
+- Content: reviewer: Keep the existing wording.
+- Outdated: no
+`,
+    "utf8"
+  );
+
+  const report = executeManifestThreads(
+    {
+      manifestPath: path.join(tempDir, "manifest.json"),
+      execute: true,
+      docPath,
+      resultsPath,
+    },
+    {
+      readFileSync: (targetPath) =>
+        targetPath === docPath ? fs.readFileSync(docPath, "utf8") : JSON.stringify(manifest),
+      writeFileSync: (targetPath, content) => fs.writeFileSync(targetPath, content, "utf8"),
+      mkdirSync: (targetPath, options) => fs.mkdirSync(targetPath, options),
+      spawnSync: () => ({
+        status: 0,
+        stdout: "ok",
+        stderr: "",
+      }),
+    }
+  );
+
+  const persistedReport = JSON.parse(fs.readFileSync(resultsPath, "utf8"));
+  assert.equal(report.inventoryUpdate.resolvedThreadCount, 1);
+  assert.deepEqual(persistedReport.inventoryUpdate, {
+    docPath,
+    resolvedThreadCount: 1,
+    remainingThreadCount: 0,
+  });
+});
+
 test("formatExecutionReport renders thread-level dry-run details", () => {
   const report = formatExecutionReport(
     {

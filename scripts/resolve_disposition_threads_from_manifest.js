@@ -394,17 +394,17 @@ function executeManifestThreads(options = {}, dependencies = {}) {
     results,
   };
 
-  if (options.resultsPath) {
-    report.resultsPath = resolveManifestRelativePath(options.manifestPath, options.resultsPath);
-    writeExecutionResults(report, report.resultsPath, dependencies);
-  }
-
   if (options.execute && options.docPath) {
     report.inventoryUpdate = updateInventoryDocumentAfterResolution(
       options.docPath,
       results.map((result) => result.threadId),
       dependencies
     );
+  }
+
+  if (options.resultsPath) {
+    report.resultsPath = resolveManifestRelativePath(options.manifestPath, options.resultsPath);
+    writeExecutionResults(report, report.resultsPath, dependencies);
   }
 
   return report;
