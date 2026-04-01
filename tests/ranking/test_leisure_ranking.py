@@ -392,6 +392,29 @@ def test_ranked_results_emit_breakdowns_and_explanation_records() -> None:
     assert ranked.results[0].target_option.explanation
 
 
+def test_leisure_ranking_outputs_round_trip_through_canonical_result_contract() -> None:
+    engine = LeisureRankingEngine()
+    ranked = engine.rank_candidate_set(
+        _profile_from_fixture("scenic_transit_route.json"),
+        _objectives_from_fixture("scenic_transit_route.json"),
+        _candidate_set(),
+    )
+
+    payload = ranked.to_dict()
+    restored = type(ranked).from_dict(payload)
+
+    assert restored.result_set_id == ranked.result_set_id
+    assert restored.explanation == ranked.explanation
+    assert [axis.key for axis in restored.comparison_axes] == [
+        axis.key for axis in ranked.comparison_axes
+    ]
+    assert [_result_option_id(result) for result in restored.results] == [
+        _result_option_id(result) for result in ranked.results
+    ]
+    assert restored.results[0].score_breakdown.final_score == ranked.results[0].score
+    assert restored.results[0].explanation_records[0].record_type == "summary"
+
+
 def test_quality_floor_sensitive_profile_ranks_recovery_bundle_first() -> None:
     engine = LeisureRankingEngine()
     ranked = engine.rank_candidate_set(
@@ -452,6 +475,33 @@ def test_identical_profile_reorders_when_objectives_change() -> None:
     ]
     assert _result_option_id(depth_ranked.results[0]) == "candidate:bundle:urban-culture"
     assert _result_option_id(scenic_ranked.results[0]) == "candidate:bundle:scenic-wanderer"
+
+
+def test_rank_bundles_reorders_same_inventory_for_different_profiles() -> None:
+    engine = LeisureRankingEngine()
+    bundles = [seed.bundle for seed in _candidate_set().seeds]
+
+    depth_ranked = engine.rank_bundles(
+        _profile_from_fixture("depth_oriented_urban_trip.json"),
+        _objectives_from_fixture("depth_oriented_urban_trip.json"),
+        bundles,
+        trip_id="trip-test-leisure",
+        purpose="profile_learning",
+    )
+    discovery_ranked = engine.rank_bundles(
+        _profile_from_fixture("discovery_heavy_wanderer_route.json"),
+        _objectives_from_fixture("discovery_heavy_wanderer_route.json"),
+        bundles,
+        trip_id="trip-test-leisure",
+        purpose="profile_learning",
+    )
+
+    assert depth_ranked.explanation[0].startswith("Leisure ranking remains downstream")
+    assert _result_option_id(depth_ranked.results[0]) == "bundle:urban-culture"
+    assert _result_option_id(discovery_ranked.results[0]) == "bundle:scenic-wanderer"
+    assert [_result_option_id(result) for result in depth_ranked.results] != [
+        _result_option_id(result) for result in discovery_ranked.results
+    ]
 
 
 def test_tension_flags_and_low_confidence_reduce_ranking_confidence() -> None:
