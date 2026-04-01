@@ -5,6 +5,7 @@ from .explanations import (
     EXPLANATION_TARGET_KINDS,
     ExplanationRecord,
 )
+from .leisure import rank_leisure_candidates
 from .models import (
     ADJUSTMENT_KINDS,
     RANK_RESULT_KINDS,
@@ -27,6 +28,7 @@ __all__ = [
     "RISK_SEVERITIES",
     "SCHEMA_VERSION",
     "ExplanationRecord",
+    "rank_leisure_candidates",
     "RankedResult",
     "RankedResultSet",
     "RiskFlag",

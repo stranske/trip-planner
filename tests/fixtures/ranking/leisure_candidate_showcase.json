@@ -1,0 +1,223 @@
+{
+  "trip_id": "trip-leisure-ranking-showcase",
+  "candidates": [
+    {
+      "candidate_id": "candidate:urban-depth",
+      "bundle_id": "bundle:urban-depth",
+      "title": "Urban depth museum stay",
+      "summary": "Single-base urban stay built around a major museum anchor and easy neighborhood movement.",
+      "bundle_context": "mixed",
+      "tags": ["urban", "museum", "walkable", "depth"],
+      "strengths": [
+        "Strong museum anchor with easy central access.",
+        "Single-base layout keeps urban exploration compact."
+      ],
+      "tradeoffs": [
+        "Less discovery-forward than the wandering bundle.",
+        "Scenic transit is not the main value driver."
+      ],
+      "notes": ["Optimized for deeper city immersion over route breadth."],
+      "destinations": [
+        {"path": "tests/fixtures/options/destinations/kyoto_city.json"},
+        {"path": "tests/fixtures/options/destinations/gion_neighborhood.json"}
+      ],
+      "lodging_options": [
+        {"path": "tests/fixtures/options/lodging/central_urban_hotel.json"}
+      ],
+      "transport_options": [
+        {
+          "path": "tests/fixtures/options/transport/downtown_local_ground.json",
+          "overrides": {
+            "option_id": "transport-kyoto-gion-hop",
+            "name": "Central Kyoto to Gion local hop",
+            "origin_id": "dest-city-kyoto",
+            "destination_id": "dest-neighborhood-gion",
+            "fit_summary": {
+              "overall_signal": 0.74,
+              "schedule_fit_signal": 0.83,
+              "friction_fit_signal": 0.8,
+              "experiential_fit_signal": 0.4,
+              "policy_fit_signal": 0.9
+            },
+            "tags": ["urban-transfer", "museum-hop"]
+          }
+        }
+      ],
+      "activity_options": [
+        {
+          "path": "tests/fixtures/options/activities/major_museum.json",
+          "overrides": {
+            "destination_id": "dest-city-kyoto",
+            "place_id": "place-kyoto-national-museum"
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "candidate:scenic-corridor",
+      "bundle_id": "bundle:scenic-corridor",
+      "title": "Scenic corridor rail loop",
+      "summary": "A scenic-transit-first bundle that turns movement into part of the trip rather than a pure cost.",
+      "bundle_context": "mixed",
+      "tags": ["scenic", "rail", "route", "outdoors"],
+      "strengths": [
+        "Scenic rail is itself a meaningful part of the experience.",
+        "Pairs movement with a high-scenic-value outdoor anchor."
+      ],
+      "tradeoffs": [
+        "Travel time is higher than the single-base bundles.",
+        "Recovery posture is weaker than the comfort-focused option."
+      ],
+      "notes": ["Designed to reward profiles that treat transit and scenery as part of the trip."],
+      "destinations": [
+        {"path": "tests/fixtures/options/destinations/kansai_region.json"},
+        {"path": "tests/fixtures/options/destinations/kyoto_city.json"},
+        {"path": "tests/fixtures/options/destinations/fushimi_inari_site.json"}
+      ],
+      "lodging_options": [
+        {
+          "path": "tests/fixtures/options/lodging/vacation_rental.json",
+          "overrides": {
+            "destination_id": "dest-city-kyoto",
+            "tags": ["machiya", "scenic-base", "walkable"]
+          }
+        }
+      ],
+      "transport_options": [
+        {
+          "path": "tests/fixtures/options/transport/scenic_rail.json",
+          "overrides": {
+            "option_id": "transport-kansai-scenic-rail",
+            "origin_id": "dest-region-kansai",
+            "destination_id": "dest-city-kyoto"
+          }
+        },
+        {
+          "path": "tests/fixtures/options/transport/downtown_local_ground.json",
+          "overrides": {
+            "option_id": "transport-kyoto-fushimi-link",
+            "name": "Kyoto to Fushimi local link",
+            "origin_id": "dest-city-kyoto",
+            "destination_id": "dest-site-fushimi-inari",
+            "fit_summary": {
+              "overall_signal": 0.72,
+              "schedule_fit_signal": 0.78,
+              "friction_fit_signal": 0.68,
+              "experiential_fit_signal": 0.41,
+              "policy_fit_signal": 0.92
+            }
+          }
+        }
+      ],
+      "activity_options": [
+        {
+          "path": "tests/fixtures/options/activities/landscape_hike.json",
+          "overrides": {
+            "destination_id": "dest-site-fushimi-inari",
+            "place_id": "place-fushimi-ridge-overlook",
+            "timing_summary": {
+              "duration_minutes": 210,
+              "typical_start_window": "10:00-15:30",
+              "timing_sensitivity_signal": 0.72,
+              "closure_risk_signal": 0.27,
+              "crowd_pressure_signal": 0.36,
+              "weather_dependency_signal": 0.88,
+              "daylight_dependency": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "candidate:discovery-drift",
+      "bundle_id": "bundle:discovery-drift",
+      "title": "Discovery-forward neighborhood drift",
+      "summary": "Open-ended wandering bundle that favors elastic discovery over heavy anchors or route complexity.",
+      "bundle_context": "mixed",
+      "tags": ["wander", "district", "open-ended", "discovery"],
+      "strengths": [
+        "Open-ended district time works well for discovery-first profiles.",
+        "Low booking overhead preserves elastic planning room."
+      ],
+      "tradeoffs": [
+        "Less iconic than the museum-centered candidate.",
+        "Quality-floor travelers may prefer a stronger lodging or anchor signal."
+      ],
+      "notes": ["Built to surface discovery fit explicitly rather than as accidental leftover time."],
+      "destinations": [
+        {"path": "tests/fixtures/options/destinations/kyoto_city.json"},
+        {"path": "tests/fixtures/options/destinations/gion_neighborhood.json"}
+      ],
+      "lodging_options": [
+        {
+          "path": "tests/fixtures/options/lodging/vacation_rental.json",
+          "overrides": {
+            "destination_id": "dest-city-kyoto",
+            "tags": ["machiya", "quiet", "wander-base"]
+          }
+        }
+      ],
+      "transport_options": [
+        {
+          "path": "tests/fixtures/options/transport/downtown_local_ground.json",
+          "overrides": {
+            "option_id": "transport-kyoto-gion-drift-link",
+            "name": "Kyoto to Gion drift link",
+            "origin_id": "dest-city-kyoto",
+            "destination_id": "dest-neighborhood-gion",
+            "fit_summary": {
+              "overall_signal": 0.77,
+              "schedule_fit_signal": 0.75,
+              "friction_fit_signal": 0.81,
+              "experiential_fit_signal": 0.38,
+              "policy_fit_signal": 0.9
+            }
+          }
+        }
+      ],
+      "activity_options": [
+        {
+          "path": "tests/fixtures/options/activities/wandering_district.json",
+          "overrides": {
+            "destination_id": "dest-neighborhood-gion",
+            "place_id": "place-gion-laneway-quarter"
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "candidate:comfort-floor",
+      "bundle_id": "bundle:comfort-floor",
+      "title": "Comfort floor protected stay",
+      "summary": "Quiet, recovery-friendly stay that protects lodging quality and minimizes fragile logistics.",
+      "bundle_context": "mixed",
+      "tags": ["quiet", "recovery", "quality-floor", "single-base"],
+      "strengths": [
+        "Quiet lodging and strong recovery posture protect quality floors.",
+        "Minimal movement keeps logistics resilient."
+      ],
+      "tradeoffs": [
+        "Less scenic transit upside than the corridor route.",
+        "Less open-ended wandering room than the discovery bundle."
+      ],
+      "notes": ["Designed for profiles that will spend more to avoid fragile or noisy plans."],
+      "destinations": [
+        {"path": "tests/fixtures/options/destinations/kyoto_city.json"}
+      ],
+      "lodging_options": [
+        {"path": "tests/fixtures/options/lodging/quiet_outer_area_hotel.json"}
+      ],
+      "transport_options": [],
+      "activity_options": [
+        {
+          "path": "tests/fixtures/options/activities/ticketed_event.json",
+          "overrides": {
+            "destination_id": "dest-city-kyoto",
+            "place_id": "place-kyoto-evening-performance",
+            "tags": ["performance", "structured", "quality-floor"]
+          }
+        }
+      ]
+    }
+  ]
+}
