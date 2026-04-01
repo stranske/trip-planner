@@ -371,6 +371,27 @@ def test_scenic_discovery_profile_ranks_scenic_bundle_first() -> None:
     assert ranked.results[0].score_breakdown.bonuses[0].reason_code == "transit_is_feature"
 
 
+def test_ranked_results_emit_breakdowns_and_explanation_records() -> None:
+    engine = LeisureRankingEngine()
+    ranked = engine.rank_candidate_set(
+        _profile_from_fixture("scenic_transit_route.json"),
+        _objectives_from_fixture("scenic_transit_route.json"),
+        _candidate_set(),
+    )
+
+    top_result = ranked.results[0]
+
+    assert top_result.score_breakdown.component_contributions
+    assert top_result.explanation_records
+    assert any(record.record_type == "summary" for record in top_result.explanation_records)
+    assert top_result.explanation_records[0].target_id == top_result.target_option.option_id
+    assert top_result.explanation_records[0].factor_keys
+    assert top_result.explanation_records[0].machine_context
+    assert top_result.explanation_records[0].human_summary
+    assert ranked.results[0].target_option is not None
+    assert ranked.results[0].target_option.explanation
+
+
 def test_quality_floor_sensitive_profile_ranks_recovery_bundle_first() -> None:
     engine = LeisureRankingEngine()
     ranked = engine.rank_candidate_set(
@@ -408,6 +429,29 @@ def test_identical_candidates_reorder_between_depth_and_discovery_profiles() -> 
     ]
     assert _result_option_id(depth_ranked.results[0]) == "candidate:bundle:urban-culture"
     assert _result_option_id(discovery_ranked.results[0]) == "candidate:bundle:scenic-wanderer"
+
+
+def test_identical_profile_reorders_when_objectives_change() -> None:
+    engine = LeisureRankingEngine()
+    candidate_set = _candidate_set()
+    profile = _profile_from_fixture("depth_oriented_urban_trip.json")
+
+    depth_ranked = engine.rank_candidate_set(
+        profile,
+        _objectives_from_fixture("depth_oriented_urban_trip.json"),
+        candidate_set,
+    )
+    scenic_ranked = engine.rank_candidate_set(
+        profile,
+        _objectives_from_fixture("scenic_transit_route.json"),
+        candidate_set,
+    )
+
+    assert [_result_option_id(result) for result in depth_ranked.results] != [
+        _result_option_id(result) for result in scenic_ranked.results
+    ]
+    assert _result_option_id(depth_ranked.results[0]) == "candidate:bundle:urban-culture"
+    assert _result_option_id(scenic_ranked.results[0]) == "candidate:bundle:scenic-wanderer"
 
 
 def test_tension_flags_and_low_confidence_reduce_ranking_confidence() -> None:
