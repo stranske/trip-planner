@@ -74,7 +74,6 @@ def ingest_lodging_snapshot(
     resolutions = resolutions or []
     dedup_decisions = dedup_decisions or []
     warnings = [warning_from_issue(issue) for issue in snapshot.issues]
-    decision_map = {decision.decision_id: decision for decision in dedup_decisions}
     resolution_map = {resolution.resolution_id: resolution for resolution in resolutions}
     emitted_ids: set[str] = set()
     filtered_record_ids: list[str] = []
@@ -84,7 +83,18 @@ def ingest_lodging_snapshot(
     provenance_refs: list[ProvenanceReference] = []
 
     for decision in dedup_decisions:
-        if decision.entity_scope != "lodging":
+        if decision.entity_scope != "lodging" or decision.option_kind != snapshot.option_kind:
+            continue
+        preserved_conflicts.extend(unresolved_conflicts(decision.preserved_conflicts))
+        if decision.decision == "suppress":
+            emitted_ids.update(_record_ids_for_decision(decision, resolution_map))
+            filtered_record_ids.extend(
+                record_id
+                for record_id in _record_ids_for_decision(decision, resolution_map)
+                if record_id not in filtered_record_ids
+            )
+            continue
+        if decision.decision != "merge":
             continue
         candidate_records = _records_for_decision(snapshot.records, decision, resolution_map)
         if not candidate_records:
@@ -122,7 +132,6 @@ def ingest_lodging_snapshot(
         filtered_record_ids.extend(
             record.record_id for record in candidate_records[1:]
         )
-        preserved_conflicts.extend(unresolved_conflicts(decision.preserved_conflicts))
         provenance_refs.extend(option.source_refs)
 
     for record in snapshot.records:
@@ -154,6 +163,7 @@ def ingest_lodging_snapshot(
         lodging_options.append(option)
         provenance_refs.extend(option.source_refs)
 
+    preserved_conflicts = _dedupe_conflicts(preserved_conflicts)
     handoff_status = "ready"
     if warnings or preserved_conflicts:
         handoff_status = "partial"
@@ -194,6 +204,17 @@ def _records_for_decision(
     decision: DeduplicationDecision,
     resolution_map: dict[str, EntityResolution],
 ) -> list[RawSourceRecord]:
+    ordered_ids = _record_ids_for_decision(decision, resolution_map)
+    if not ordered_ids:
+        return []
+    by_id = {record.record_id: record for record in records}
+    return [by_id[record_id] for record_id in ordered_ids if record_id in by_id]
+
+
+def _record_ids_for_decision(
+    decision: DeduplicationDecision,
+    resolution_map: dict[str, EntityResolution],
+) -> list[str]:
     record_ids: list[str] = []
     for resolution_id in decision.resolution_ids:
         resolution = resolution_map.get(resolution_id)
@@ -201,11 +222,7 @@ def _records_for_decision(
             continue
         for candidate in resolution.match_candidates:
             record_ids.extend(candidate.source_record_ids)
-    ordered_ids = list(dict.fromkeys(record_ids))
-    if not ordered_ids:
-        return []
-    by_id = {record.record_id: record for record in records}
-    return [by_id[record_id] for record_id in ordered_ids if record_id in by_id]
+    return list(dict.fromkeys(record_ids))
 
 
 def _lodging_option_from_records(
@@ -263,3 +280,10 @@ def _lowest_match_confidence(resolution: EntityResolution) -> float:
     if not resolution.match_candidates:
         return 1.0
     return min(candidate.confidence for candidate in resolution.match_candidates)
+
+
+def _dedupe_conflicts(conflicts: list[AttributeConflict]) -> list[AttributeConflict]:
+    deduped: dict[str, AttributeConflict] = {}
+    for conflict in conflicts:
+        deduped[conflict.conflict_id] = conflict
+    return list(deduped.values())

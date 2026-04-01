@@ -14,7 +14,7 @@ from trip_planner.sources import (
 )
 
 
-FIXTURE_ROOT = Path("tests/fixtures/ingestion/lodging")
+FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures/ingestion/lodging"
 
 
 def _load_fixture(name: str) -> dict[str, Any]:

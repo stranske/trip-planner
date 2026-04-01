@@ -15,7 +15,7 @@ from trip_planner.sources import (
 )
 
 
-FIXTURE_ROOT = Path("tests/fixtures/ingestion/transport")
+FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures/ingestion/transport"
 
 
 def _load_fixture(name: str) -> dict[str, Any]:
@@ -100,3 +100,24 @@ def test_transport_pipeline_merges_duplicates_and_retains_review_gaps() -> None:
         "partial_schedule_window",
         "normalization_warning",
     }
+
+
+def test_transport_pipeline_keeps_separate_decisions_as_individual_options() -> None:
+    fixture = _load_fixture("conflicted_transport_snapshot.json")
+    decision = _build_decision(fixture["dedup_decisions"][0])
+    decision.decision = "keep_separate"
+
+    result = ingest_transport_snapshot(
+        _build_snapshot(fixture["snapshot"]),
+        resolutions=[_build_resolution(item) for item in fixture["resolutions"]],
+        dedup_decisions=[decision],
+    )
+
+    assert result.handoff is not None
+    assert result.summary.emitted_options == 2
+    assert result.summary.filtered_record_ids == []
+    assert len(result.unresolved_conflicts) == 1
+    assert sorted(option.option_id for option in result.transport_options) == [
+        "transport-paris-amsterdam-eurostar",
+        "transport-paris-amsterdam-eurostar",
+    ]
