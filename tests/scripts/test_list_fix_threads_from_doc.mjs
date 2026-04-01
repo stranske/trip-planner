@@ -9,6 +9,8 @@ const {
   buildFixThreadsReport,
   DEFAULT_DOC_PATH,
   collectThreadInventoryIssues,
+  formatFixThreadsAsJson,
+  formatFixThreadsOutput,
   formatFixThreadsReport,
   formatThreadInventoryIssues,
   getCliConfiguration,
@@ -132,6 +134,47 @@ test("formatFixThreadsReport summarizes the filtered fix list", () => {
   assert.match(report, /Location: trip_planner\/example\.py:17/);
   assert.match(report, /Follow-up PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/);
   assert.match(report, /Outdated: no/);
+});
+
+test("formatFixThreadsAsJson emits machine-readable fix-thread metadata", () => {
+  const report = formatFixThreadsAsJson([
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/example.py:17",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale: "Code path still drops the final stop.",
+      content: "Reviewer requested a bounds check.",
+      outdated: false,
+    },
+  ]);
+
+  const parsed = JSON.parse(report);
+  assert.equal(parsed.count, 1);
+  assert.equal(parsed.fixThreads[0].threadId, "THREAD_1");
+  assert.equal(
+    parsed.fixThreads[0].followUpPr,
+    "https://github.com/stranske/trip-planner/pull/581"
+  );
+});
+
+test("formatFixThreadsOutput dispatches to the requested formatter", () => {
+  const fixThreads = [
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/example.py:17",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale: "Code path still drops the final stop.",
+      content: "Reviewer requested a bounds check.",
+      outdated: false,
+    },
+  ];
+
+  assert.match(formatFixThreadsOutput(fixThreads, "text"), /Fix-classified threads: 1/);
+  assert.doesNotThrow(() => JSON.parse(formatFixThreadsOutput(fixThreads, "json")));
 });
 
 test("collectThreadInventoryIssues flags missing metadata and placeholder entries", () => {
@@ -268,15 +311,20 @@ test("formatThreadInventoryIssues summarizes completeness problems", () => {
   assert.match(report, /2\. THREAD_2: invalid classification "follow-up"/);
 });
 
-test("getCliConfiguration parses completeness validation flag and doc path", () => {
-  assert.deepEqual(getCliConfiguration(["docs/custom.md", "--require-complete"]), {
+test("getCliConfiguration parses completeness validation, doc path, and output format", () => {
+  assert.deepEqual(getCliConfiguration(["docs/custom.md", "--require-complete", "--format", "json"]), {
     docPath: path.resolve("docs/custom.md"),
+    outputFormat: "json",
     requireComplete: true,
   });
 });
 
 test("getCliConfiguration rejects unknown options and extra positional arguments", () => {
   assert.throws(() => getCliConfiguration(["--unknown"]), /Unknown option: --unknown/);
+  assert.throws(
+    () => getCliConfiguration(["--format", "markdown"]),
+    /Output format must be one of "text" or "json"/
+  );
   assert.throws(
     () => getCliConfiguration(["docs/one.md", "docs/two.md"]),
     /Unexpected argument: docs\/two\.md/

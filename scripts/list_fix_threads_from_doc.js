@@ -214,8 +214,27 @@ function formatFixThreadsReport(fixThreads) {
   return `${lines.join("\n")}\n`;
 }
 
+function formatFixThreadsAsJson(fixThreads) {
+  return `${JSON.stringify(
+    {
+      fixThreads,
+      count: fixThreads.length,
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function formatFixThreadsOutput(fixThreads, outputFormat = "text") {
+  if (outputFormat === "json") {
+    return formatFixThreadsAsJson(fixThreads);
+  }
+
+  return formatFixThreadsReport(fixThreads);
+}
+
 function buildFixThreadsReport(options = {}, dependencies = {}) {
-  const { docPath = DEFAULT_DOC_PATH, requireComplete = false } = options;
+  const { docPath = DEFAULT_DOC_PATH, requireComplete = false, outputFormat = "text" } = options;
   const threads = loadThreadInventory(docPath, dependencies);
   const issues = collectThreadInventoryIssues(threads);
 
@@ -224,12 +243,13 @@ function buildFixThreadsReport(options = {}, dependencies = {}) {
   }
 
   const fixThreads = listFixClassifiedThreads(threads);
-  return formatFixThreadsReport(fixThreads);
+  return formatFixThreadsOutput(fixThreads, outputFormat);
 }
 
 function getCliConfiguration(argv = process.argv.slice(2)) {
   const options = {
     docPath: DEFAULT_DOC_PATH,
+    outputFormat: "text",
     requireComplete: false,
   };
 
@@ -238,6 +258,17 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
 
     if (argument === "--require-complete") {
       options.requireComplete = true;
+      continue;
+    }
+
+    if (argument === "--format") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --format flag requires a value.");
+      }
+
+      options.outputFormat = value;
+      index += 1;
       continue;
     }
 
@@ -252,12 +283,18 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
     options.docPath = path.resolve(argument);
   }
 
+  if (!["text", "json"].includes(options.outputFormat)) {
+    throw new Error(
+      `Output format must be one of "text" or "json"; received "${options.outputFormat}".`
+    );
+  }
+
   return options;
 }
 
 function main(argv = process.argv.slice(2)) {
-  const { docPath, requireComplete } = getCliConfiguration(argv);
-  process.stdout.write(buildFixThreadsReport({ docPath, requireComplete }));
+  const { docPath, outputFormat, requireComplete } = getCliConfiguration(argv);
+  process.stdout.write(buildFixThreadsReport({ docPath, outputFormat, requireComplete }));
 }
 
 if (require.main === module) {
@@ -273,6 +310,8 @@ module.exports = {
   buildFixThreadsReport,
   DEFAULT_DOC_PATH,
   collectThreadInventoryIssues,
+  formatFixThreadsAsJson,
+  formatFixThreadsOutput,
   formatFixThreadsReport,
   formatThreadInventoryIssues,
   getCliConfiguration,
