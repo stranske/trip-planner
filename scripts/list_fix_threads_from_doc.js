@@ -20,6 +20,7 @@ function parseThreadInventory(markdown) {
       followUpPr: null,
       rationale: null,
       content: null,
+      outdated: null,
     };
 
     section
@@ -43,6 +44,8 @@ function parseThreadInventory(markdown) {
           thread.rationale = normalizeFieldValue(line.slice("- Rationale:".length));
         } else if (line.startsWith("- Content:")) {
           thread.content = normalizeFieldValue(line.slice("- Content:".length));
+        } else if (line.startsWith("- Outdated:")) {
+          thread.outdated = normalizeOutdatedFieldValue(line.slice("- Outdated:".length));
         }
       });
 
@@ -73,6 +76,23 @@ function normalizeUrlFieldValue(value) {
   const autoLinkMatch = normalized.match(/^<(https?:\/\/[^>\s]+)>$/i);
   if (autoLinkMatch) {
     return autoLinkMatch[1];
+  }
+
+  return normalized;
+}
+
+function normalizeOutdatedFieldValue(value) {
+  const normalized = normalizeFieldValue(value);
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized === "yes") {
+    return true;
+  }
+
+  if (normalized === "no") {
+    return false;
   }
 
   return normalized;
@@ -135,6 +155,12 @@ function collectThreadInventoryIssues(threads) {
     if (!thread.content) {
       issues.push(`${threadLabel}: missing content`);
     }
+
+    if (thread.outdated === null) {
+      issues.push(`${threadLabel}: missing outdated status`);
+    } else if (typeof thread.outdated !== "boolean") {
+      issues.push(`${threadLabel}: invalid outdated status "${thread.outdated}"`);
+    }
   });
 
   return issues;
@@ -174,6 +200,15 @@ function formatFixThreadsReport(fixThreads) {
     lines.push(`   Follow-up PR: ${thread.followUpPr || "<missing follow-up PR>"}`);
     lines.push(`   Rationale: ${thread.rationale || "<missing rationale>"}`);
     lines.push(`   Content: ${thread.content || "<missing content>"}`);
+    lines.push(
+      `   Outdated: ${
+        thread.outdated === null
+          ? "<missing outdated status>"
+          : thread.outdated
+            ? "yes"
+            : "no"
+      }`
+    );
   });
 
   return `${lines.join("\n")}\n`;
@@ -244,6 +279,7 @@ module.exports = {
   listFixClassifiedThreads,
   loadThreadInventory,
   normalizeFieldValue,
+  normalizeOutdatedFieldValue,
   normalizeUrlFieldValue,
   parseThreadInventory,
   isPlaceholderValue,

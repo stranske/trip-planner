@@ -528,6 +528,7 @@ test("formatUnresolvedThreadsAsMarkdown output can be parsed by the inventory to
       followUpPr: null,
       rationale: null,
       content: "reviewer-a: Please keep this branch explicit.",
+      outdated: false,
     },
   ]);
 });

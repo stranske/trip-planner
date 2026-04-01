@@ -130,6 +130,15 @@ function collectInventoryVerificationIssues(documentedThreads, unresolvedThreads
         `Documented thread ${thread.threadId} content does not match the snapshot.`
       );
     }
+
+    if (
+      typeof thread.outdated === "boolean" &&
+      thread.outdated !== Boolean(unresolvedThread.isOutdated)
+    ) {
+      issues.push(
+        `Documented thread ${thread.threadId} outdated status does not match the snapshot.`
+      );
+    }
   });
 
   return issues;

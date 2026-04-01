@@ -15,6 +15,7 @@ const {
   isPlaceholderValue,
   listFixClassifiedThreads,
   loadThreadInventory,
+  normalizeOutdatedFieldValue,
   normalizeUrlFieldValue,
   parseThreadInventory,
 } = require(path.join(repoRoot, "scripts/list_fix_threads_from_doc.js"));
@@ -32,6 +33,7 @@ test("parseThreadInventory reads structured thread metadata from markdown", () =
 - Follow-up PR: https://github.com/stranske/trip-planner/pull/581
 - Rationale: Code path still drops the final stop.
 - Content: Reviewer requested a bounds check.
+- Outdated: no
 
 ### Thread 2
 
@@ -41,6 +43,7 @@ test("parseThreadInventory reads structured thread metadata from markdown", () =
 - Classification: disposition
 - Rationale: Existing behavior is intentional.
 - Content: Reviewer asked for a change that would regress issue #176.
+- Outdated: yes
 `);
 
   assert.deepEqual(threads, [
@@ -52,6 +55,7 @@ test("parseThreadInventory reads structured thread metadata from markdown", () =
       followUpPr: "https://github.com/stranske/trip-planner/pull/581",
       rationale: "Code path still drops the final stop.",
       content: "Reviewer requested a bounds check.",
+      outdated: false,
     },
     {
       threadId: "THREAD_2",
@@ -61,6 +65,7 @@ test("parseThreadInventory reads structured thread metadata from markdown", () =
       followUpPr: null,
       rationale: "Existing behavior is intentional.",
       content: "Reviewer asked for a change that would regress issue #176.",
+      outdated: true,
     },
   ]);
 });
@@ -78,6 +83,7 @@ test("parseThreadInventory normalizes markdown links for URL fields", () => {
 - Follow-up PR: <https://github.com/stranske/trip-planner/pull/581>
 - Rationale: Code path still drops the final stop.
 - Content: Reviewer requested a bounds check.
+- Outdated: no
 `);
 
   assert.deepEqual(threads, [
@@ -89,6 +95,7 @@ test("parseThreadInventory normalizes markdown links for URL fields", () => {
       followUpPr: "https://github.com/stranske/trip-planner/pull/581",
       rationale: "Code path still drops the final stop.",
       content: "Reviewer requested a bounds check.",
+      outdated: false,
     },
   ]);
 });
@@ -112,6 +119,7 @@ test("formatFixThreadsReport summarizes the filtered fix list", () => {
       followUpPr: "https://github.com/stranske/trip-planner/pull/581",
       rationale: "Code path still drops the final stop.",
       content: "Reviewer requested a bounds check.",
+      outdated: false,
     },
   ]);
 
@@ -123,6 +131,7 @@ test("formatFixThreadsReport summarizes the filtered fix list", () => {
   );
   assert.match(report, /Location: trip_planner\/example\.py:17/);
   assert.match(report, /Follow-up PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/);
+  assert.match(report, /Outdated: no/);
 });
 
 test("collectThreadInventoryIssues flags missing metadata and placeholder entries", () => {
@@ -134,6 +143,7 @@ test("collectThreadInventoryIssues flags missing metadata and placeholder entrie
       followUpPr: null,
       rationale: null,
       content: null,
+      outdated: null,
     },
     {
       threadId: "THREAD_2",
@@ -143,6 +153,7 @@ test("collectThreadInventoryIssues flags missing metadata and placeholder entrie
       classification: "follow-up",
       rationale: "Need product clarification.",
       content: "Reviewer requested a new classification.",
+      outdated: "later",
     },
     {
       threadId: "THREAD_3",
@@ -152,6 +163,7 @@ test("collectThreadInventoryIssues flags missing metadata and placeholder entrie
       followUpPr: null,
       rationale: "Code update is required.",
       content: "Reviewer requested a follow-up patch.",
+      outdated: false,
     },
   ]);
 
@@ -162,7 +174,9 @@ test("collectThreadInventoryIssues flags missing metadata and placeholder entrie
     "Thread 1: missing classification",
     "Thread 1: missing rationale",
     "Thread 1: missing content",
+    "Thread 1: missing outdated status",
     'THREAD_2: invalid classification "follow-up"',
+    'THREAD_2: invalid outdated status "later"',
     "THREAD_3: missing follow-up PR",
   ]);
 });
@@ -177,6 +191,7 @@ test("collectThreadInventoryIssues rejects duplicate thread IDs and original thr
       followUpPr: null,
       rationale: "First inventory entry.",
       content: "Reviewer requested a clarification.",
+      outdated: false,
     },
     {
       threadId: "THREAD_1",
@@ -186,6 +201,7 @@ test("collectThreadInventoryIssues rejects duplicate thread IDs and original thr
       followUpPr: "https://github.com/stranske/trip-planner/pull/581",
       rationale: "Second entry accidentally copied the first thread metadata.",
       content: "Reviewer requested a follow-up patch.",
+      outdated: true,
     },
   ]);
 
@@ -213,6 +229,13 @@ test("normalizeUrlFieldValue unwraps markdown and autolink URLs", () => {
   assert.equal(normalizeUrlFieldValue("TBD"), null);
 });
 
+test("normalizeOutdatedFieldValue parses yes/no values and preserves invalid input for validation", () => {
+  assert.equal(normalizeOutdatedFieldValue("yes"), true);
+  assert.equal(normalizeOutdatedFieldValue("no"), false);
+  assert.equal(normalizeOutdatedFieldValue("later"), "later");
+  assert.equal(normalizeOutdatedFieldValue("TBD"), null);
+});
+
 test("collectThreadInventoryIssues treats placeholder text as incomplete metadata", () => {
   const issues = collectThreadInventoryIssues([
     {
@@ -223,6 +246,7 @@ test("collectThreadInventoryIssues treats placeholder text as incomplete metadat
       followUpPr: null,
       rationale: null,
       content: "Reviewer requested a bounds check.",
+      outdated: false,
     },
   ]);
 
@@ -263,8 +287,8 @@ test("the checked-in PR #178 inventory is still incomplete until real threads ar
   const threads = loadThreadInventory(DEFAULT_DOC_PATH);
   const issues = collectThreadInventoryIssues(threads);
 
-  assert.equal(issues.length, 24);
-  assert.match(formatThreadInventoryIssues(issues), /Thread inventory issues: 24/);
+  assert.equal(issues.length, 28);
+  assert.match(formatThreadInventoryIssues(issues), /Thread inventory issues: 28/);
 });
 
 test("the checked-in PR #178 inventory currently contains no fix-classified threads", () => {
@@ -287,6 +311,7 @@ test("fix-classified entries with follow-up PR links satisfy completeness checks
 - Follow-up PR: https://github.com/stranske/trip-planner/pull/581
 - Rationale: Code path still drops the final stop.
 - Content: Reviewer requested a bounds check.
+- Outdated: no
 `);
 
   assert.deepEqual(collectThreadInventoryIssues(threads), []);
@@ -304,6 +329,7 @@ test("disposition-only entries do not require a follow-up PR to be complete", ()
 - Classification: disposition
 - Rationale: The requested change would regress the documented behavior.
 - Content: Reviewer asked for a change that is intentionally out of scope.
+- Outdated: no
 `);
 
   assert.deepEqual(collectThreadInventoryIssues(threads), []);
@@ -322,6 +348,7 @@ test("buildFixThreadsReport enforces completeness checks before returning fix th
 - Follow-up PR: https://github.com/stranske/trip-planner/pull/581
 - Rationale: Code path still drops the final stop.
 - Content: Reviewer requested a bounds check.
+- Outdated: no
 `;
 
   const report = buildFixThreadsReport(
@@ -353,9 +380,10 @@ test("buildFixThreadsReport surfaces completeness issues when --require-complete
 - Follow-up PR:
 - Rationale:
 - Content:
+- Outdated:
 `,
         }
       ),
-    /Thread inventory issues: 6/
+    /Thread inventory issues: 7/
   );
 });

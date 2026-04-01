@@ -53,6 +53,7 @@ test("collectInventoryVerificationIssues reports doc completeness and snapshot m
 - Follow-up PR: https://github.com/stranske/trip-planner/pull/581
 - Rationale: Code update is required.
 - Content: Reviewer requested a fix.
+- Outdated: no
 
 ### Thread 2
 
@@ -63,14 +64,17 @@ test("collectInventoryVerificationIssues reports doc completeness and snapshot m
 - Follow-up PR:
 - Rationale: Existing behavior is intentional.
 - Content: Reviewer requested an out-of-scope change.
+- Outdated: yes
 `);
   const unresolvedThreads = [
     {
       id: "THREAD_1",
+      isOutdated: false,
       comments: [],
     },
     {
       id: "THREAD_3",
+      isOutdated: false,
       comments: [],
     },
   ];
@@ -102,10 +106,12 @@ test("collectInventoryVerificationIssues validates documented thread metadata ag
 - Classification: disposition
 - Rationale: Existing behavior is intentional.
 - Content: reviewer: Stale paraphrase.
+- Outdated: yes
 `);
   const unresolvedThreads = [
     {
       id: "THREAD_1",
+      isOutdated: false,
       originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
       path: "trip_planner/example.py",
       line: 17,
@@ -122,6 +128,7 @@ test("collectInventoryVerificationIssues validates documented thread metadata ag
     "Documented thread THREAD_1 location does not match the snapshot (trip_planner/example.py:17).",
     "Documented thread THREAD_1 original thread URL does not match the snapshot.",
     "Documented thread THREAD_1 content does not match the snapshot.",
+    "Documented thread THREAD_1 outdated status does not match the snapshot.",
   ]);
 });
 
@@ -197,6 +204,7 @@ test("buildInventoryVerificationReport accepts a complete matching document and 
 - Follow-up PR:
 - Rationale: Reviewed and left as-is for fixture validation.
 - Content: reviewer-a: Please keep this branch explicit.
+- Outdated: no
 
 ### Thread 2
 
@@ -207,6 +215,7 @@ test("buildInventoryVerificationReport accepts a complete matching document and 
 - Follow-up PR: https://github.com/stranske/trip-planner/pull/581
 - Rationale: Fixture thread stands in for a code-fix follow-up.
 - Content: reviewer-b: Can this use fixture input too?
+- Outdated: yes
 `;
 
   const passingReport = buildInventoryVerificationReport({
@@ -252,6 +261,7 @@ test("buildInventoryVerificationReport includes unresolved count mismatches in t
 - Follow-up PR:
 - Rationale: Inventory is complete.
 - Content: Reviewer note.
+- Outdated: no
 `),
       loadReviewThreadsFromFile: () => [
         {
