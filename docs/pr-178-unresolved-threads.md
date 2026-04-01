@@ -81,9 +81,11 @@ To summarize the local repo state against the acceptance criteria before doing a
 ```bash
 node scripts/check_pr_thread_acceptance.js --doc docs/pr-178-unresolved-threads.md
 node scripts/check_pr_thread_acceptance.js --doc docs/pr-178-unresolved-threads.md --input path/to/pr-178-review-threads.json
+node scripts/check_pr_thread_acceptance.js --doc docs/pr-178-unresolved-threads.md --input path/to/pr-178-review-threads.json --github-ui-confirmed
 ```
 
 The acceptance checker fails loudly when the inventory is still incomplete, and it only performs live GitHub API verification when you opt in with `--live`.
+Use `--github-ui-confirmed` only after manually confirming in the PR #178 GitHub UI that no unresolved inline review threads remain.
 
 ## Thread Template
 

@@ -25,6 +25,7 @@ test("getAcceptanceConfiguration parses acceptance-specific options", () => {
       "6",
       "--expect-count",
       "0",
+      "--github-ui-confirmed",
       "--format",
       "json",
     ],
@@ -38,6 +39,7 @@ test("getAcceptanceConfiguration parses acceptance-specific options", () => {
   assert.equal(configuration.docPath, path.resolve("docs/custom.md"));
   assert.equal(configuration.expectDocCount, 6);
   assert.equal(configuration.expectedCount, 0);
+  assert.equal(configuration.githubUiConfirmed, true);
   assert.equal(configuration.outputFormat, "json");
 });
 
@@ -52,6 +54,7 @@ test("evaluateAcceptance reports blocked snapshot verification when no token or 
       docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
       expectDocCount: 1,
       expectedCount: 0,
+      githubUiConfirmed: false,
       outputFormat: "text",
     },
     {
@@ -88,6 +91,7 @@ test("evaluateAcceptance passes repo-local verification when the inventory and s
       docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
       expectDocCount: 1,
       expectedCount: 0,
+      githubUiConfirmed: false,
       outputFormat: "text",
     },
     {
@@ -115,6 +119,46 @@ test("evaluateAcceptance passes repo-local verification when the inventory and s
   assert.equal(result.criteria[3].status, "manual");
 });
 
+test("evaluateAcceptance passes when snapshot verification succeeds and GitHub UI confirmation is supplied", async () => {
+  const result = await evaluateAcceptance(
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      token: null,
+      inputPath: "threads.json",
+      docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
+      expectDocCount: 1,
+      expectedCount: 0,
+      githubUiConfirmed: true,
+      outputFormat: "text",
+    },
+    {
+      loadThreadInventory: () => [
+        {
+          threadId: "THREAD_1",
+          originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+          location: "trip_planner/example.py:17",
+          classification: "fix",
+          followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+          rationale: "The follow-up PR landed and the thread is resolved.",
+          content: "reviewer: Please rework this helper.",
+          outdated: false,
+        },
+      ],
+      loadReviewThreadsFromFile: () => [],
+    }
+  );
+
+  assert.equal(result.overallStatus, "pass");
+  assert.equal(result.unresolvedThreadCount, 0);
+  assert.equal(result.criteria[0].status, "pass");
+  assert.equal(result.criteria[1].status, "pass");
+  assert.equal(result.criteria[2].status, "pass");
+  assert.equal(result.criteria[3].status, "pass");
+  assert.match(result.criteria[3].details, /explicitly confirmed/);
+});
+
 test("evaluateAcceptance fails when fix threads are missing follow-up PR links or snapshot state diverges", async () => {
   const result = await evaluateAcceptance(
     {
@@ -126,6 +170,7 @@ test("evaluateAcceptance fails when fix threads are missing follow-up PR links o
       docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
       expectDocCount: 1,
       expectedCount: 0,
+      githubUiConfirmed: false,
       outputFormat: "text",
     },
     {
@@ -182,6 +227,7 @@ test("evaluateAcceptance fails when a fix thread uses a non-PR follow-up link", 
       docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
       expectDocCount: 1,
       expectedCount: 0,
+      githubUiConfirmed: false,
       outputFormat: "text",
     },
     {

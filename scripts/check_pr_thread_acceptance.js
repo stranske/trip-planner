@@ -30,6 +30,7 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
     docPath: DEFAULT_DOC_PATH,
     expectDocCount: 4,
     expectUnresolvedCount: 0,
+    githubUiConfirmed: false,
     live: false,
     outputFormat: "text",
   };
@@ -73,6 +74,11 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
 
     if (argument === "--live") {
       options.live = true;
+      continue;
+    }
+
+    if (argument === "--github-ui-confirmed") {
+      options.githubUiConfirmed = true;
       continue;
     }
 
@@ -139,6 +145,7 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
     expectDocCount,
     expectedCount: expectUnresolvedCount,
     outputFormat: options.outputFormat,
+    githubUiConfirmed: options.githubUiConfirmed,
     live: options.live,
   };
 }
@@ -240,8 +247,10 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
   criteria.push({
     id: "github_ui",
     label: "GitHub UI shows no unresolved inline review threads",
-    status: "manual",
-    details: "Repo-local tooling cannot verify the live GitHub UI state.",
+    status: configuration.githubUiConfirmed ? "pass" : "manual",
+    details: configuration.githubUiConfirmed
+      ? "Manual GitHub UI verification was explicitly confirmed for this run."
+      : "Repo-local tooling cannot verify the live GitHub UI state without explicit confirmation.",
     issues: [],
   });
 
