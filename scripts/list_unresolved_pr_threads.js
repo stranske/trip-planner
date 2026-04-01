@@ -340,7 +340,9 @@ function formatUnresolvedThreadsAsJson(repository, prNumber, unresolvedThreads) 
 
 function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThreads) {
   const lines = [
-    `# ${repository} PR #${prNumber} Unresolved Threads`,
+    "# PR #178 Unresolved Thread Inventory",
+    "",
+    `Generated from \`${repository}\` PR #${prNumber} review threads.`,
     "",
     `Unresolved review threads: ${unresolvedThreads.length}`,
   ];
@@ -352,26 +354,28 @@ function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThrea
 
   unresolvedThreads.forEach((thread, index) => {
     lines.push("");
-    lines.push(`## Thread ${index + 1}`);
+    lines.push(`### Thread ${index + 1}`);
     lines.push("");
     lines.push(`- Thread ID: ${thread.id}`);
     lines.push(`- Location: ${thread.path}:${thread.line ?? "unknown"}`);
-    lines.push(`- Outdated: ${thread.isOutdated ? "yes" : "no"}`);
     lines.push("- Classification:");
     lines.push("- Rationale:");
-    lines.push("- Content:");
+    lines.push(`- Content: ${formatThreadContent(thread.comments)}`);
+    lines.push(`- Outdated: ${thread.isOutdated ? "yes" : "no"}`);
 
-    if (thread.comments.length === 0) {
-      lines.push("  - No thread comments returned by the API.");
-      return;
-    }
-
-    thread.comments.forEach((comment) => {
-      lines.push(`  - ${comment.author}: ${comment.body || "<empty>"}`);
-    });
   });
 
   return `${lines.join("\n")}\n`;
+}
+
+function formatThreadContent(comments) {
+  if (comments.length === 0) {
+    return "No thread comments returned by the API.";
+  }
+
+  return comments
+    .map((comment) => `${comment.author}: ${comment.body || "<empty>"}`)
+    .join(" | ");
 }
 
 function formatOutput(repository, prNumber, unresolvedThreads, outputFormat = "text") {
@@ -425,6 +429,7 @@ module.exports = {
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
   formatOutput,
+  formatThreadContent,
   formatUnresolvedThreadsAsJson,
   formatUnresolvedThreadsAsMarkdown,
   fetchAllReviewThreads,

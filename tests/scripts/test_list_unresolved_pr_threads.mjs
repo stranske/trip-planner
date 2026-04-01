@@ -12,6 +12,7 @@ const {
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
   formatOutput,
+  formatThreadContent,
   formatUnresolvedThreadsAsJson,
   formatUnresolvedThreadsAsMarkdown,
   formatUnresolvedThreadsReport,
@@ -21,6 +22,7 @@ const {
   parseCommandLineArguments,
   validateExpectedCount,
 } = require(path.join(repoRoot, "scripts/list_unresolved_pr_threads.js"));
+const { parseThreadInventory } = require(path.join(repoRoot, "scripts/list_fix_threads_from_doc.js"));
 
 test("getConfiguration applies defaults and parses explicit repository/PR inputs", () => {
   const configuration = getConfiguration(
@@ -258,12 +260,52 @@ test("formatUnresolvedThreadsAsMarkdown emits a doc-ready inventory skeleton", (
     },
   ]);
 
-  assert.match(report, /# stranske\/trip-planner PR #178 Unresolved Threads/);
+  assert.match(report, /# PR #178 Unresolved Thread Inventory/);
   assert.match(report, /- Thread ID: THREAD_1/);
   assert.match(report, /- Location: scripts\/list_unresolved_pr_threads\.js:99/);
   assert.match(report, /- Classification:/);
   assert.match(report, /- Rationale:/);
-  assert.match(report, /- reviewer: Please handle pagination\./);
+  assert.match(report, /- Content: reviewer: Please handle pagination\./);
+  assert.match(report, /- Outdated: yes/);
+});
+
+test("formatUnresolvedThreadsAsMarkdown output can be parsed by the inventory tooling", () => {
+  const report = formatUnresolvedThreadsAsMarkdown("stranske/trip-planner", 178, [
+    {
+      id: "THREAD_1",
+      isOutdated: false,
+      path: "trip_planner/example.py",
+      line: 17,
+      comments: [
+        {
+          author: "reviewer-a",
+          body: "Please keep this branch explicit.",
+        },
+      ],
+    },
+  ]);
+
+  assert.deepEqual(parseThreadInventory(report), [
+    {
+      threadId: "THREAD_1",
+      location: "trip_planner/example.py:17",
+      classification: null,
+      rationale: null,
+      content: "reviewer-a: Please keep this branch explicit.",
+    },
+  ]);
+});
+
+test("formatThreadContent condenses multiple comments into a single content field", () => {
+  assert.equal(
+    formatThreadContent([
+      { author: "reviewer-a", body: "First note." },
+      { author: "reviewer-b", body: "Second note." },
+    ]),
+    "reviewer-a: First note. | reviewer-b: Second note."
+  );
+
+  assert.equal(formatThreadContent([]), "No thread comments returned by the API.");
 });
 
 test("formatOutput dispatches to the requested formatter", () => {
@@ -283,7 +325,7 @@ test("formatOutput dispatches to the requested formatter", () => {
   );
   assert.match(
     formatOutput("stranske/trip-planner", 178, unresolvedThreads, "markdown"),
-    /## Thread 1/
+    /### Thread 1/
   );
 });
 
