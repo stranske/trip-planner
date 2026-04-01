@@ -25,6 +25,12 @@ After the inventory is populated, identify any `fix`-classified entries with:
 node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md
 ```
 
+To generate a bounded checklist for any `disposition`-classified entries that still need a PR comment, run:
+
+```bash
+node scripts/list_disposition_threads_from_doc.js docs/pr-178-unresolved-threads.md --format plan --exclude-outdated
+```
+
 To verify that the populated inventory matches an exported review-thread snapshot before classifying or resolving items, run:
 
 ```bash
