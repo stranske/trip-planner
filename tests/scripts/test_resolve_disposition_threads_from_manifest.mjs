@@ -9,12 +9,17 @@ const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const {
   buildGhGraphqlArgs,
+  convertInventoryEntryToSnapshotThread,
+  DEFAULT_DOC_PATH,
   DEFAULT_MANIFEST_PATH,
   executeManifestThreads,
   formatExecutionReport,
   loadManifest,
+  parseInventoryContent,
+  parseInventoryLocation,
   parseCliArguments,
   selectManifestThreads,
+  updateInventoryDocumentAfterResolution,
   validateManifestThread,
 } = require(path.join(repoRoot, "scripts/resolve_disposition_threads_from_manifest.js"));
 const {
@@ -54,6 +59,8 @@ test("parseCliArguments parses execution, filtering, and result output options",
       "--manifest",
       "tmp/manifest.json",
       "--execute",
+      "--doc",
+      "docs/pr-178-unresolved-threads.md",
       "--thread-id",
       "THREAD_2",
       "--thread-index",
@@ -68,6 +75,7 @@ test("parseCliArguments parses execution, filtering, and result output options",
       execute: true,
       outputFormat: "json",
       resultsPath: "tmp/results.json",
+      docPath: DEFAULT_DOC_PATH,
       threadId: "THREAD_2",
       threadIndex: 3,
     }
@@ -131,6 +139,57 @@ test("buildGhGraphqlArgs converts GraphQL variables into gh api args", () => {
     "-F",
     "body=hello",
   ]);
+});
+
+test("inventory helpers preserve location and comment metadata when rebuilding active threads", () => {
+  assert.deepEqual(parseInventoryLocation("src/file.js:10"), {
+    path: "src/file.js",
+    line: 10,
+  });
+  assert.deepEqual(parseInventoryLocation("src/file.js:unknown"), {
+    path: "src/file.js",
+    line: null,
+  });
+  assert.deepEqual(parseInventoryContent("reviewer: First note | author-two: Second note"), [
+    {
+      id: "inventory-comment-1",
+      author: "reviewer",
+      body: "First note",
+    },
+    {
+      id: "inventory-comment-2",
+      author: "author-two",
+      body: "Second note",
+    },
+  ]);
+  assert.deepEqual(
+    convertInventoryEntryToSnapshotThread({
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "src/file.js:10",
+      content: "reviewer: First note | author-two: Second note",
+      outdated: false,
+    }),
+    {
+      id: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      path: "src/file.js",
+      line: 10,
+      isOutdated: false,
+      comments: [
+        {
+          id: "inventory-comment-1",
+          author: "reviewer",
+          body: "First note",
+        },
+        {
+          id: "inventory-comment-2",
+          author: "author-two",
+          body: "Second note",
+        },
+      ],
+    }
+  );
 });
 
 test("executeManifestThreads returns a dry-run report with resolved script paths", () => {
@@ -223,6 +282,48 @@ test("executeManifestThreads can execute reply and resolve commands in sequence"
   assert.equal(report.results[0].resolveExitStatus, 0);
 });
 
+test("updateInventoryDocumentAfterResolution moves resolved threads out of the active inventory", () => {
+  const docPath = path.join(os.tmpdir(), "pr-178-thread-inventory-update.md");
+  const initialDocument = `# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: src/file.js:10
+- Classification: disposition
+- Follow-up PR:
+- Rationale: The current behavior is intentional.
+- Content: reviewer: Keep the existing wording.
+- Outdated: no
+
+### Thread 2
+
+- Thread ID: THREAD_2
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2
+- Location: src/other.js:20
+- Classification: disposition
+- Follow-up PR:
+- Rationale: The documented tradeoff is sufficient.
+- Content: reviewer: Please add more context.
+- Outdated: no
+`;
+
+  fs.writeFileSync(docPath, initialDocument, "utf8");
+
+  const update = updateInventoryDocumentAfterResolution(docPath, ["THREAD_1"]);
+  const updatedDocument = fs.readFileSync(docPath, "utf8");
+  const [activeSection, resolvedSection = ""] = updatedDocument.split("## Resolved Thread Inventory");
+
+  assert.equal(update.resolvedThreadCount, 1);
+  assert.equal(update.remainingThreadCount, 1);
+  assert.match(activeSection, /## Thread Inventory[\s\S]*THREAD_2/);
+  assert.doesNotMatch(activeSection, /THREAD_1/);
+  assert.match(resolvedSection, /THREAD_1/);
+});
+
 test("executeManifestThreads fails when reply execution fails", () => {
   const manifest = {
     threads: [
@@ -256,6 +357,64 @@ test("executeManifestThreads fails when reply execution fails", () => {
   );
 });
 
+test("executeManifestThreads updates the inventory document after successful execution when --doc is provided", () => {
+  const manifest = {
+    threads: [
+      {
+        threadId: "THREAD_1",
+        replyQuery: "mutation Reply",
+        replyVariables: { threadId: "THREAD_1", body: "Disposition" },
+        resolveQuery: "mutation Resolve",
+        resolveVariables: { threadId: "THREAD_1" },
+      },
+    ],
+  };
+  const docPath = path.join(os.tmpdir(), "pr-178-thread-exec-update.md");
+  fs.writeFileSync(
+    docPath,
+    `# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: src/file.js:10
+- Classification: disposition
+- Follow-up PR:
+- Rationale: The current behavior is intentional.
+- Content: reviewer: Keep the existing wording.
+- Outdated: no
+`,
+    "utf8"
+  );
+
+  const report = executeManifestThreads(
+    {
+      manifestPath: "/tmp/manifest.json",
+      execute: true,
+      docPath,
+    },
+    {
+      readFileSync: (targetPath) =>
+        targetPath === docPath ? fs.readFileSync(docPath, "utf8") : JSON.stringify(manifest),
+      writeFileSync: (targetPath, content) => fs.writeFileSync(targetPath, content, "utf8"),
+      spawnSync: () => ({
+        status: 0,
+        stdout: "ok",
+        stderr: "",
+      }),
+    }
+  );
+
+  const updatedDocument = fs.readFileSync(docPath, "utf8");
+  assert.equal(report.inventoryUpdate.resolvedThreadCount, 1);
+  assert.equal(report.inventoryUpdate.remainingThreadCount, 0);
+  assert.match(updatedDocument, /No unresolved inline review threads found\./);
+  assert.match(updatedDocument, /## Resolved Thread Inventory[\s\S]*THREAD_1/);
+});
+
 test("formatExecutionReport renders thread-level dry-run details", () => {
   const report = formatExecutionReport(
     {
@@ -287,4 +446,40 @@ test("formatExecutionReport renders thread-level dry-run details", () => {
   assert.match(report, /- Script Path: `\/tmp\/thread-2\.sh`/);
   assert.match(report, /- Reply Command: `gh api graphql -f query=reply`/);
   assert.match(report, /- Resolve Command: `gh api graphql -f query=resolve`/);
+});
+
+test("formatExecutionReport renders inventory update details when present", () => {
+  const report = formatExecutionReport(
+    {
+      manifestPath: "/tmp/manifest.json",
+      execute: true,
+      threadCount: 1,
+      inventoryUpdate: {
+        docPath: "/tmp/pr-178-unresolved-threads.md",
+        resolvedThreadCount: 1,
+        remainingThreadCount: 0,
+      },
+      results: [
+        {
+          threadNumber: 1,
+          manifestThreadNumber: 1,
+          threadId: "THREAD_1",
+          originalThreadUrl: null,
+          location: null,
+          scriptPath: null,
+          mode: "execute",
+          replyCommand: "gh api graphql -f query=reply",
+          resolveCommand: "gh api graphql -f query=resolve",
+          replyExitStatus: 0,
+          resolveExitStatus: 0,
+          replyOutput: "ok",
+          resolveOutput: "ok",
+        },
+      ],
+    }
+  );
+
+  assert.match(report, /Inventory Doc Updated: `\/tmp\/pr-178-unresolved-threads\.md`/);
+  assert.match(report, /Resolved Threads Moved: 1/);
+  assert.match(report, /Remaining Active Threads: 0/);
 });

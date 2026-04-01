@@ -5,6 +5,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const childProcess = require("node:child_process");
+const {
+  mergeInventoryIntoDocument,
+} = require("./list_unresolved_pr_threads.js");
+const {
+  DEFAULT_DOC_PATH,
+  loadThreadInventory,
+} = require("./list_fix_threads_from_doc.js");
 
 const DEFAULT_MANIFEST_PATH = path.resolve(".tmp/pr-thread-disposition/manifest.json");
 
@@ -14,6 +21,7 @@ function parseCliArguments(argv = process.argv.slice(2)) {
     execute: false,
     outputFormat: "text",
     resultsPath: null,
+    docPath: null,
     threadId: null,
     threadIndex: null,
   };
@@ -59,6 +67,17 @@ function parseCliArguments(argv = process.argv.slice(2)) {
       continue;
     }
 
+    if (argument === "--doc") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --doc flag requires a file path.");
+      }
+
+      options.docPath = path.resolve(value);
+      index += 1;
+      continue;
+    }
+
     if (argument === "--thread-id") {
       const value = argv[index + 1];
       if (!value) {
@@ -96,6 +115,89 @@ function parseCliArguments(argv = process.argv.slice(2)) {
   }
 
   return options;
+}
+
+function parseInventoryLocation(location) {
+  const normalizedLocation = String(location || "").trim();
+  const match = normalizedLocation.match(/^(.*):([^:]*)$/);
+
+  if (!match) {
+    return {
+      path: normalizedLocation || "unknown",
+      line: null,
+    };
+  }
+
+  const parsedLine = Number.parseInt(match[2], 10);
+  return {
+    path: match[1] || "unknown",
+    line: Number.isInteger(parsedLine) ? parsedLine : null,
+  };
+}
+
+function parseInventoryContent(content) {
+  const normalizedContent = String(content || "").trim();
+  if (!normalizedContent) {
+    return [];
+  }
+
+  return normalizedContent.split(" | ").map((segment, index) => {
+    const separatorIndex = segment.indexOf(": ");
+    if (separatorIndex === -1) {
+      return {
+        id: `inventory-comment-${index + 1}`,
+        author: "unknown",
+        body: segment,
+      };
+    }
+
+    return {
+      id: `inventory-comment-${index + 1}`,
+      author: segment.slice(0, separatorIndex) || "unknown",
+      body: segment.slice(separatorIndex + 2),
+    };
+  });
+}
+
+function convertInventoryEntryToSnapshotThread(entry) {
+  const location = parseInventoryLocation(entry.location);
+
+  return {
+    id: entry.threadId,
+    originalThreadUrl: entry.originalThreadUrl || null,
+    path: location.path,
+    line: location.line,
+    isOutdated: Boolean(entry.outdated),
+    comments: parseInventoryContent(entry.content),
+  };
+}
+
+function updateInventoryDocumentAfterResolution(docPath, resolvedThreadIds, dependencies = {}) {
+  const resolvedThreadIdSet = new Set((resolvedThreadIds || []).filter(Boolean));
+  if (resolvedThreadIdSet.size === 0) {
+    return null;
+  }
+
+  const readFileSync = dependencies.readFileSync || fs.readFileSync;
+  const writeFileSync = dependencies.writeFileSync || fs.writeFileSync;
+  const loadInventory = dependencies.loadThreadInventory || loadThreadInventory;
+
+  const existingDocument = readFileSync(docPath, "utf8");
+  const activeThreads = loadInventory(docPath, dependencies, {
+    inventorySection: "unresolved",
+  });
+  const remainingThreads = activeThreads
+    .filter((thread) => !resolvedThreadIdSet.has(thread.threadId))
+    .map(convertInventoryEntryToSnapshotThread);
+  const nextDocument = mergeInventoryIntoDocument(existingDocument, remainingThreads);
+
+  writeFileSync(docPath, nextDocument, "utf8");
+
+  return {
+    docPath,
+    resolvedThreadCount: activeThreads.length - remainingThreads.length,
+    remainingThreadCount: remainingThreads.length,
+  };
 }
 
 function loadManifest(manifestPath, dependencies = {}) {
@@ -297,6 +399,14 @@ function executeManifestThreads(options = {}, dependencies = {}) {
     writeExecutionResults(report, report.resultsPath, dependencies);
   }
 
+  if (options.execute && options.docPath) {
+    report.inventoryUpdate = updateInventoryDocumentAfterResolution(
+      options.docPath,
+      results.map((result) => result.threadId),
+      dependencies
+    );
+  }
+
   return report;
 }
 
@@ -314,6 +424,11 @@ function formatExecutionReport(report, outputFormat = "text") {
 
   if (report.resultsPath) {
     lines.push(`Results File: \`${report.resultsPath}\``);
+  }
+  if (report.inventoryUpdate) {
+    lines.push(`Inventory Doc Updated: \`${report.inventoryUpdate.docPath}\``);
+    lines.push(`Resolved Threads Moved: ${report.inventoryUpdate.resolvedThreadCount}`);
+    lines.push(`Remaining Active Threads: ${report.inventoryUpdate.remainingThreadCount}`);
   }
 
   report.results.forEach((result) => {
@@ -365,14 +480,19 @@ if (require.main === module) {
 module.exports = {
   buildGhGraphqlArgs,
   combineCommandOutput,
+  convertInventoryEntryToSnapshotThread,
   DEFAULT_MANIFEST_PATH,
+  DEFAULT_DOC_PATH,
   executeManifestThreads,
   formatExecutionReport,
   loadManifest,
   parseCliArguments,
+  parseInventoryContent,
+  parseInventoryLocation,
   resolveManifestRelativePath,
   runGhGraphql,
   selectManifestThreads,
+  updateInventoryDocumentAfterResolution,
   validateManifestThread,
   writeExecutionResults,
 };
