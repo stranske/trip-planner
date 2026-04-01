@@ -37,11 +37,13 @@ To generate a shell-ready `gh pr create` command plus the matching markdown body
 node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md --format gh-cli --exclude-outdated
 ```
 
-To also write the referenced PR body files plus a `manifest.json` that captures the exact grouped `gh pr create` commands, run:
+To also write the referenced PR body files, executable `gh pr create` helper scripts, plus a `manifest.json` that captures the exact grouped `gh pr create` commands, run:
 
 ```bash
 node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md --format gh-cli --exclude-outdated --write-artifacts-dir .tmp/pr-thread-payloads
 ```
+
+That artifact directory now includes one `pr-178-fix-group-*-create.sh` script per follow-up PR group so the generated `gh pr create` invocation can be executed directly after the branch is ready.
 
 To generate a bounded checklist for any `disposition`-classified entries that still need a PR comment, run:
 

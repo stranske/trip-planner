@@ -8,6 +8,7 @@ const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "
 const {
   buildPullRequestArtifactManifest,
   buildPullRequestCreationCommand,
+  buildPullRequestCreationScript,
   buildPullRequestPayload,
   buildSuggestedBranchName,
   buildFixThreadsReport,
@@ -553,6 +554,10 @@ test("buildPullRequestCreationCommand creates a gh pr create command with body f
   assert.equal(commandPayload.baseBranch, "release/next");
   assert.equal(commandPayload.headBranch, "pr-178-fix/trip-planner-example-py-17-thread-1");
   assert.equal(commandPayload.bodyFilePath, ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md");
+  assert.equal(
+    commandPayload.commandScriptPath,
+    ".tmp/pr-thread-payloads/pr-178-fix-group-1-create.sh"
+  );
   assert.match(commandPayload.command, /^gh pr create --base 'release\/next'/);
   assert.match(
     commandPayload.command,
@@ -562,6 +567,33 @@ test("buildPullRequestCreationCommand creates a gh pr create command with body f
     commandPayload.command,
     /--body-file '\.tmp\/pr-thread-payloads\/pr-178-fix-group-1-body\.md'/
   );
+});
+
+test("buildPullRequestCreationScript wraps the gh command in an executable shell script", () => {
+  const scriptPayload = buildPullRequestCreationScript(
+    {
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      threadCount: 1,
+      threads: [
+        {
+          threadId: "THREAD_1",
+          originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+          location: "trip_planner/example.py:17",
+          suggestedBranch: "pr-178-fix/trip-planner-example-py-17-thread-1",
+          rationale: "Code path still drops the final stop.",
+          content: "Reviewer requested a bounds check.",
+        },
+      ],
+    },
+    0
+  );
+
+  assert.equal(
+    scriptPayload.commandScriptPath,
+    ".tmp/pr-thread-payloads/pr-178-fix-group-1-create.sh"
+  );
+  assert.match(scriptPayload.script, /^#!\/usr\/bin\/env bash\nset -euo pipefail\n\n/);
+  assert.match(scriptPayload.script, /gh pr create --base 'main'/);
 });
 
 test("buildPullRequestArtifactManifest assigns body files and a manifest per follow-up group", () => {
@@ -592,12 +624,17 @@ test("buildPullRequestArtifactManifest assigns body files and a manifest per fol
     manifest.groups[0].bodyFilePath,
     ".tmp/generated-pr-payloads/pr-178-fix-group-1-body.md"
   );
+  assert.equal(
+    manifest.groups[0].commandScriptPath,
+    ".tmp/generated-pr-payloads/pr-178-fix-group-1-create.sh"
+  );
   assert.match(manifest.groups[0].command, /--base 'release\/next'/);
 });
 
 test("writePullRequestArtifacts persists body files and a manifest for actionable fix threads", () => {
   const writes = [];
   const createdDirectories = [];
+  const chmodCalls = [];
   const manifest = writePullRequestArtifacts(
     [
       {
@@ -622,6 +659,9 @@ test("writePullRequestArtifacts persists body files and a manifest for actionabl
       writeFileSync: (targetPath, contents, encoding) => {
         writes.push({ targetPath, contents, encoding });
       },
+      chmodSync: (targetPath, mode) => {
+        chmodCalls.push({ targetPath, mode });
+      },
       resolvePath: (targetPath) => `/abs/${targetPath}`,
     }
   );
@@ -633,17 +673,33 @@ test("writePullRequestArtifacts persists body files and a manifest for actionabl
       options: { recursive: true },
     },
   ]);
-  assert.equal(writes.length, 2);
+  assert.equal(writes.length, 3);
   assert.equal(
     writes[0].targetPath,
     "/abs/.tmp/custom-pr-payloads/pr-178-fix-group-1-body.md"
   );
   assert.equal(writes[0].encoding, "utf8");
   assert.match(writes[0].contents, /## Summary/);
-  assert.equal(writes[1].targetPath, "/abs/.tmp/custom-pr-payloads/manifest.json");
+  assert.equal(
+    writes[1].targetPath,
+    "/abs/.tmp/custom-pr-payloads/pr-178-fix-group-1-create.sh"
+  );
   assert.equal(writes[1].encoding, "utf8");
-  const persistedManifest = JSON.parse(writes[1].contents);
+  assert.match(writes[1].contents, /^#!\/usr\/bin\/env bash\nset -euo pipefail\n\n/);
+  assert.equal(writes[2].targetPath, "/abs/.tmp/custom-pr-payloads/manifest.json");
+  assert.equal(writes[2].encoding, "utf8");
+  const persistedManifest = JSON.parse(writes[2].contents);
   assert.equal(persistedManifest.groups[0].headBranch, "pr-178-fix/trip-planner-example-py-17-thread-1");
+  assert.equal(
+    persistedManifest.groups[0].commandScriptPath,
+    ".tmp/custom-pr-payloads/pr-178-fix-group-1-create.sh"
+  );
+  assert.deepEqual(chmodCalls, [
+    {
+      targetPath: "/abs/.tmp/custom-pr-payloads/pr-178-fix-group-1-create.sh",
+      mode: 0o755,
+    },
+  ]);
 });
 
 test("formatFixThreadsAsPullRequestPayloads renders each follow-up PR group as a reusable payload", () => {
@@ -703,6 +759,10 @@ test("formatFixThreadsAsGhCliCommands renders gh pr create guidance for each fol
   assert.match(report, /Artifact Manifest: `\.tmp\/pr-thread-payloads\/manifest\.json`/);
   assert.match(report, /Suggested Branch: `pr-178-fix\/trip-planner-example-py-17-thread-1`/);
   assert.match(report, /Suggested Body File: `\.tmp\/pr-thread-payloads\/pr-178-fix-group-1-body\.md`/);
+  assert.match(
+    report,
+    /Suggested Command Script: `\.tmp\/pr-thread-payloads\/pr-178-fix-group-1-create\.sh`/
+  );
   assert.match(report, /```bash/);
   assert.match(report, /gh pr create --base 'main'/);
   assert.match(report, /```markdown/);
@@ -1317,6 +1377,7 @@ test("buildFixThreadsReport can render gh CLI creation commands for a bounded fo
 
 test("buildFixThreadsReport can write follow-up PR artifacts while rendering gh CLI guidance", () => {
   const writes = [];
+  const chmodCalls = [];
   const report = buildFixThreadsReport(
     {
       docPath: "docs/mixed.md",
@@ -1343,16 +1404,29 @@ test("buildFixThreadsReport can write follow-up PR artifacts while rendering gh 
       writeFileSync: (targetPath, contents) => {
         writes.push({ targetPath, contents });
       },
+      chmodSync: (targetPath, mode) => {
+        chmodCalls.push({ targetPath, mode });
+      },
       resolvePath: (targetPath) => `/abs/${targetPath}`,
     }
   );
 
-  assert.equal(writes.length, 2);
+  assert.equal(writes.length, 3);
   assert.equal(
     writes[0].targetPath,
     "/abs/.tmp/generated-payloads/pr-178-fix-group-1-body.md"
   );
-  assert.equal(writes[1].targetPath, "/abs/.tmp/generated-payloads/manifest.json");
+  assert.equal(
+    writes[1].targetPath,
+    "/abs/.tmp/generated-payloads/pr-178-fix-group-1-create.sh"
+  );
+  assert.equal(writes[2].targetPath, "/abs/.tmp/generated-payloads/manifest.json");
+  assert.deepEqual(chmodCalls, [
+    {
+      targetPath: "/abs/.tmp/generated-payloads/pr-178-fix-group-1-create.sh",
+      mode: 0o755,
+    },
+  ]);
   assert.match(report, /Artifacts Directory: `\.tmp\/generated-payloads`/);
   assert.match(report, /Artifact Manifest: `\.tmp\/generated-payloads\/manifest\.json`/);
 });

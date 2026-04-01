@@ -592,6 +592,9 @@ function buildPullRequestCreationCommand(group, groupIndex, options = {}) {
   const bodyFilePath =
     options.bodyFilePath ||
     path.join(DEFAULT_ARTIFACTS_DIR, `pr-178-fix-group-${groupIndex + 1}-body.md`);
+  const commandScriptPath =
+    options.commandScriptPath ||
+    path.join(DEFAULT_ARTIFACTS_DIR, `pr-178-fix-group-${groupIndex + 1}-create.sh`);
   const headBranch =
     options.headBranch ||
     group.threads[0]?.suggestedBranch ||
@@ -615,7 +618,24 @@ function buildPullRequestCreationCommand(group, groupIndex, options = {}) {
     baseBranch,
     headBranch,
     bodyFilePath,
+    commandScriptPath,
     command,
+  };
+}
+
+function buildPullRequestCreationScript(group, groupIndex, options = {}) {
+  const payload = buildPullRequestCreationCommand(group, groupIndex, options);
+  const script = [
+    "#!/usr/bin/env bash",
+    "set -euo pipefail",
+    "",
+    payload.command,
+    "",
+  ].join("\n");
+
+  return {
+    ...payload,
+    script,
   };
 }
 
@@ -632,6 +652,10 @@ function buildPullRequestArtifactManifest(fixThreads, options = {}) {
           artifactsDir,
           `pr-178-fix-group-${groupIndex + 1}-body.md`
         ),
+        commandScriptPath: path.join(
+          artifactsDir,
+          `pr-178-fix-group-${groupIndex + 1}-create.sh`
+        ),
       })
     ),
   };
@@ -643,14 +667,31 @@ function buildPullRequestArtifactManifest(fixThreads, options = {}) {
 function writePullRequestArtifacts(fixThreads, options = {}, dependencies = {}) {
   const mkdirSync = dependencies.mkdirSync || fs.mkdirSync;
   const writeFileSync = dependencies.writeFileSync || fs.writeFileSync;
+  const chmodSync = dependencies.chmodSync || fs.chmodSync;
   const resolvePath = dependencies.resolvePath || path.resolve;
   const manifest = buildPullRequestArtifactManifest(fixThreads, options);
   const outputDirectory = resolvePath(manifest.artifactsDir);
 
   mkdirSync(outputDirectory, { recursive: true });
 
-  manifest.groups.forEach((group) => {
+  manifest.groups.forEach((group, groupIndex) => {
     writeFileSync(resolvePath(group.bodyFilePath), `${group.body}\n`, "utf8");
+    const scriptPayload = buildPullRequestCreationScript(
+      {
+        followUpPr: group.followUpPr,
+        threadCount: group.threads.length,
+        threads: group.threads,
+      },
+      groupIndex,
+      {
+        baseBranch: group.baseBranch,
+        bodyFilePath: group.bodyFilePath,
+        commandScriptPath: group.commandScriptPath,
+        headBranch: group.headBranch,
+      }
+    );
+    writeFileSync(resolvePath(group.commandScriptPath), scriptPayload.script, "utf8");
+    chmodSync(resolvePath(group.commandScriptPath), 0o755);
   });
 
   writeFileSync(resolvePath(manifest.manifestPath), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
@@ -725,6 +766,7 @@ function formatFixThreadsAsGhCliCommands(fixThreads, options = {}) {
     lines.push("");
     lines.push(`Suggested Branch: \`${payload.headBranch}\``);
     lines.push(`Suggested Body File: \`${payload.bodyFilePath}\``);
+    lines.push(`Suggested Command Script: \`${payload.commandScriptPath}\``);
     lines.push(`Base Branch: \`${payload.baseBranch}\``);
     lines.push("");
     lines.push("Command:");
@@ -940,6 +982,7 @@ module.exports = {
   DEFAULT_DOC_PATH,
   DEFAULT_ARTIFACTS_DIR,
   buildPullRequestCreationCommand,
+  buildPullRequestCreationScript,
   buildPullRequestArtifactManifest,
   collectThreadInventoryIssues,
   formatFixThreadsAsGhCliCommands,
