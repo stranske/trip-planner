@@ -7,7 +7,13 @@ from trip_planner.ranking import RankedResultSet
 
 
 def _fixture_path(name: str) -> Path:
-    return Path("tests/fixtures/ranking/results") / name
+    return (
+        Path(__file__).resolve().parent.parent
+        / "fixtures"
+        / "ranking"
+        / "results"
+        / name
+    )
 
 
 def _load_result_set(name: str) -> RankedResultSet:
@@ -65,6 +71,18 @@ def test_ranked_result_requires_route_sequence_for_route_results() -> None:
     payload["results"][0]["route_sequence"] = []
 
     with pytest.raises(ValueError, match="route_sequence"):
+        RankedResultSet.from_dict(payload)
+
+
+def test_ranked_result_rejects_target_option_for_route_results() -> None:
+    payload = json.loads(_fixture_path("route_bundle_result.json").read_text())
+    payload["results"][0]["target_option"] = {
+        "option_id": "candidate:route-shadow",
+        "kind": "activity",
+        "label": "Shadow option",
+    }
+
+    with pytest.raises(ValueError, match="target_option"):
         RankedResultSet.from_dict(payload)
 
 
