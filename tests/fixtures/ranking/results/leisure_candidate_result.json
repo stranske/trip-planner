@@ -1,0 +1,176 @@
+{
+  "result_set_id": "ranked-results:trip-leisure:profile_learning",
+  "trip_id": "trip-leisure",
+  "purpose": "profile_learning",
+  "scope": "mixed",
+  "title": "Leisure candidate ranking",
+  "comparison_axes": [
+    {
+      "key": "enjoyment",
+      "label": "Enjoyment",
+      "direction": "higher_better",
+      "notes": "Normalized preference fit."
+    },
+    {
+      "key": "crowding",
+      "label": "Crowding risk",
+      "direction": "lower_better",
+      "notes": "High crowding should be penalized."
+    }
+  ],
+  "explanation": [
+    "Leisure ranking remains explainable and component-based."
+  ],
+  "source_refs": [
+    "candidate-set:trip-leisure:profile_learning"
+  ],
+  "results": [
+    {
+      "result_id": "ranked:item:kyoto-museum-day",
+      "result_kind": "item",
+      "rank": 1,
+      "score": 0.69,
+      "target_option": {
+        "option_id": "candidate:kyoto-museum-day",
+        "kind": "mixed",
+        "label": "Kyoto museum day",
+        "summary": "Walkable museum-heavy Kyoto bundle.",
+        "fit_signals": {
+          "enjoyment": 0.84,
+          "crowding": 0.31
+        },
+        "cost_summary": {
+          "total": {
+            "currency": "USD",
+            "typical_amount": 680.0
+          },
+          "notes": [
+            "Represents the expected bundle total."
+          ]
+        },
+        "quality_summary": {
+          "quality_signal": 0.8,
+          "value_signal": 0.72,
+          "fit_signal": 0.78,
+          "notes": [
+            "Derived from candidate generation."
+          ]
+        },
+        "drawbacks": [
+          "Peak-hour museum crowding remains possible."
+        ],
+        "booking_links": [
+          "https://example.test/kyoto-museum"
+        ],
+        "source_refs": [
+          "src:kyoto-museum-day"
+        ],
+        "supporting_place_ids": [
+          "dest-kyoto"
+        ],
+        "explanation": [
+          "Strong cultural fit and walkability."
+        ]
+      },
+      "supporting_option_ids": [
+        "lodg-kyoto-central",
+        "activity-museum-pass"
+      ],
+      "supporting_destination_ids": [
+        "dest-kyoto"
+      ],
+      "score_breakdown": {
+        "baseline_score": 0.4,
+        "component_contributions": [
+          {
+            "contribution_id": "interest-match",
+            "label": "Interest match",
+            "axis_key": "enjoyment",
+            "direction": "higher_better",
+            "raw_value": 4.2,
+            "normalized_signal": 0.84,
+            "weighted_impact": 0.21,
+            "summary": "Interests align strongly with museums and quiet walking.",
+            "evidence_refs": [
+              "objective:quiet-culture"
+            ]
+          },
+          {
+            "contribution_id": "walkability",
+            "label": "Walkability",
+            "axis_key": "enjoyment",
+            "direction": "higher_better",
+            "raw_value": 0.76,
+            "normalized_signal": 0.76,
+            "weighted_impact": 0.12,
+            "summary": "Low-transfer itinerary shape improves ease of use."
+          }
+        ],
+        "penalties": [
+          {
+            "adjustment_id": "crowding-penalty",
+            "label": "Crowding penalty",
+            "kind": "penalty",
+            "amount": 0.04,
+            "reason_code": "peak_crowding",
+            "summary": "Museum district congestion reduces comfort.",
+            "affected_factor_keys": [
+              "crowding"
+            ]
+          }
+        ],
+        "bonuses": [],
+        "missing_data_penalties": [],
+        "final_score": 0.69,
+        "notes": [
+          "Explained without route search."
+        ]
+      },
+      "confidence_summary": {
+        "overall_confidence": 0.83,
+        "input_coverage": 0.92,
+        "data_freshness": 0.76,
+        "scoring_stability": 0.8,
+        "low_confidence_flags": [],
+        "missing_data_fields": []
+      },
+      "explanation_records": [
+        {
+          "explanation_id": "summary:kyoto-museum-day",
+          "record_type": "summary",
+          "target_kind": "item",
+          "target_id": "candidate:kyoto-museum-day",
+          "headline": "Cultural fit with low-friction movement",
+          "summary": "The bundle ranks first because it combines strong museum fit with easy local movement.",
+          "factor_keys": [
+            "interest-match",
+            "walkability"
+          ],
+          "machine_context": {
+            "primary_axis": "enjoyment",
+            "penalty_code": "peak_crowding"
+          },
+          "human_summary": [
+            "Strong cultural fit",
+            "Simple day shape",
+            "Minor crowding risk"
+          ],
+          "source_refs": [
+            "src:kyoto-museum-day"
+          ]
+        }
+      ],
+      "unresolved_risks": [
+        {
+          "risk_id": "risk:crowding",
+          "code": "peak_crowding",
+          "severity": "warning",
+          "summary": "Crowding may degrade the midday museum block."
+        }
+      ],
+      "source_refs": [
+        "src:kyoto-museum-day"
+      ]
+    }
+  ]
+}

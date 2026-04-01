@@ -79,6 +79,7 @@ Use these documents together when implementing the child issues:
 - [Core domain contracts](domain-contracts.md)
 - [Implementation plan](implementation-plan.md)
 - [Shared planning contracts](shared-planning-contracts.md)
+- [Ranking result contracts](contracts/ranking-results.md)
 - [Leisure itinerary-objective derivation boundary](itinerary-objective-derivation-boundary.md)
 - [Business objective derivation boundary](business-objective-derivation-boundary.md)
 - [Normalized inventory contracts epic](normalized-inventory-contracts-epic.md)
