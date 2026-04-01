@@ -23,34 +23,70 @@ function parseThreadInventory(markdown) {
       outdated: null,
     };
 
-    section
-      .split("\n")
-      .map((line) => line.trim())
-      .forEach((line) => {
-        if (line.startsWith("- Thread ID:")) {
-          thread.threadId = normalizeFieldValue(line.slice("- Thread ID:".length));
-        } else if (line.startsWith("- Original Thread URL:")) {
-          thread.originalThreadUrl = normalizeUrlFieldValue(
-            line.slice("- Original Thread URL:".length)
-          );
-        } else if (line.startsWith("- Location:")) {
-          thread.location = normalizeFieldValue(line.slice("- Location:".length));
-        } else if (line.startsWith("- Classification:")) {
-          const classification = normalizeFieldValue(line.slice("- Classification:".length));
-          thread.classification = classification ? classification.toLowerCase() : null;
-        } else if (line.startsWith("- Follow-up PR:")) {
-          thread.followUpPr = normalizeUrlFieldValue(line.slice("- Follow-up PR:".length));
-        } else if (line.startsWith("- Rationale:")) {
-          thread.rationale = normalizeFieldValue(line.slice("- Rationale:".length));
-        } else if (line.startsWith("- Content:")) {
-          thread.content = normalizeFieldValue(line.slice("- Content:".length));
-        } else if (line.startsWith("- Outdated:")) {
-          thread.outdated = normalizeOutdatedFieldValue(line.slice("- Outdated:".length));
-        }
-      });
+    let currentField = null;
+
+    section.split("\n").forEach((rawLine) => {
+      const line = rawLine.trim();
+
+      if (line === "") {
+        currentField = null;
+        return;
+      }
+
+      if (line.startsWith("- Thread ID:")) {
+        thread.threadId = normalizeFieldValue(line.slice("- Thread ID:".length));
+        currentField = "threadId";
+      } else if (line.startsWith("- Original Thread URL:")) {
+        thread.originalThreadUrl = normalizeUrlFieldValue(line.slice("- Original Thread URL:".length));
+        currentField = "originalThreadUrl";
+      } else if (line.startsWith("- Location:")) {
+        thread.location = normalizeFieldValue(line.slice("- Location:".length));
+        currentField = "location";
+      } else if (line.startsWith("- Classification:")) {
+        const classification = normalizeFieldValue(line.slice("- Classification:".length));
+        thread.classification = classification ? classification.toLowerCase() : null;
+        currentField = "classification";
+      } else if (line.startsWith("- Follow-up PR:")) {
+        thread.followUpPr = normalizeUrlFieldValue(line.slice("- Follow-up PR:".length));
+        currentField = "followUpPr";
+      } else if (line.startsWith("- Rationale:")) {
+        thread.rationale = normalizeFieldValue(line.slice("- Rationale:".length));
+        currentField = "rationale";
+      } else if (line.startsWith("- Content:")) {
+        thread.content = normalizeFieldValue(line.slice("- Content:".length));
+        currentField = "content";
+      } else if (line.startsWith("- Outdated:")) {
+        thread.outdated = normalizeOutdatedFieldValue(line.slice("- Outdated:".length));
+        currentField = "outdated";
+      } else if (currentField) {
+        appendContinuationLine(thread, currentField, line);
+      }
+    });
 
     return thread;
   });
+}
+
+function appendContinuationLine(thread, fieldName, line) {
+  const currentValue = thread[fieldName];
+  const joinedValue = [currentValue, line].filter(Boolean).join(" ");
+
+  if (fieldName === "classification") {
+    thread.classification = normalizeFieldValue(joinedValue)?.toLowerCase() || null;
+    return;
+  }
+
+  if (fieldName === "originalThreadUrl" || fieldName === "followUpPr") {
+    thread[fieldName] = normalizeUrlFieldValue(joinedValue);
+    return;
+  }
+
+  if (fieldName === "outdated") {
+    thread.outdated = normalizeOutdatedFieldValue(joinedValue);
+    return;
+  }
+
+  thread[fieldName] = normalizeFieldValue(joinedValue);
 }
 
 function normalizeFieldValue(value) {

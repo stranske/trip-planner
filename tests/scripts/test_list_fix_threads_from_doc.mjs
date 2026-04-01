@@ -103,6 +103,40 @@ test("parseThreadInventory normalizes markdown links for URL fields", () => {
   ]);
 });
 
+test("parseThreadInventory folds wrapped rationale and content lines into the same field", () => {
+  const threads = parseThreadInventory(`
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Code path still drops the final stop when the
+  final segment arrives without a cached bounds object.
+- Content: Reviewer requested a bounds check before appending
+  the last stop to the itinerary response.
+- Outdated: no
+`);
+
+  assert.deepEqual(threads, [
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/example.py:17",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale:
+        "Code path still drops the final stop when the final segment arrives without a cached bounds object.",
+      content:
+        "Reviewer requested a bounds check before appending the last stop to the itinerary response.",
+      outdated: false,
+    },
+  ]);
+});
+
 test("listFixClassifiedThreads returns only fix-classified entries", () => {
   const fixThreads = listFixClassifiedThreads([
     { threadId: "THREAD_1", classification: "fix" },
