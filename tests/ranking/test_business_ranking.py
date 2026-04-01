@@ -26,7 +26,7 @@ from trip_planner.ranking import BusinessRankingEngine
 
 
 def _fixture_path(*parts: str) -> Path:
-    return Path("tests/fixtures") / Path(*parts)
+    return Path(__file__).resolve().parents[1].joinpath("fixtures", *parts)
 
 
 def _load_json(*parts: str) -> dict[str, Any]:
