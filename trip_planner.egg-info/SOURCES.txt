@@ -94,6 +94,7 @@ trip_planner/preferences/revealed_preference.py
 trip_planner/preferences/schema.py
 trip_planner/ranking/__init__.py
 trip_planner/ranking/explanations.py
+trip_planner/ranking/leisure.py
 trip_planner/ranking/models.py
 trip_planner/sources/__init__.py
 trip_planner/sources/dedup.py

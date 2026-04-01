@@ -19,3 +19,6 @@ Issue #512 introduces a deterministic handoff layer between resolved leisure pre
 `LeisurePreferenceProfile` + evidence -> `ResolvedLeisureProfile` -> `ItineraryObjectives` -> ranking/search layer
 
 The derivation layer owns objective shaping only; ranking owns optimization and final option ordering.
+`trip_planner/ranking/leisure.py` must stay downstream from both leisure preference resolution and
+itinerary-objective derivation, consuming `LeisurePreferenceProfile` and `ItineraryObjectives`
+instead of bypassing them with direct ranking heuristics.

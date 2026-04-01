@@ -40,22 +40,13 @@ class TransportIngestionResult:
     def __post_init__(self) -> None:
         require_non_empty(self.pipeline_id, "pipeline_id")
         require_non_empty(self.snapshot_id, "snapshot_id")
-        if any(
-            not isinstance(item, TransportOption) for item in self.transport_options
-        ):
+        if any(not isinstance(item, TransportOption) for item in self.transport_options):
             raise ValueError("transport_options must contain TransportOption instances")
-        if any(
-            not isinstance(item, AttributeConflict)
-            for item in self.unresolved_conflicts
-        ):
-            raise ValueError(
-                "unresolved_conflicts must contain AttributeConflict instances"
-            )
+        if any(not isinstance(item, AttributeConflict) for item in self.unresolved_conflicts):
+            raise ValueError("unresolved_conflicts must contain AttributeConflict instances")
         if any(not isinstance(item, IngestionWarning) for item in self.warnings):
             raise ValueError("warnings must contain IngestionWarning instances")
-        if self.handoff is not None and not isinstance(
-            self.handoff, NormalizationHandoff
-        ):
+        if self.handoff is not None and not isinstance(self.handoff, NormalizationHandoff):
             raise ValueError("handoff must be a NormalizationHandoff when provided")
         if not isinstance(self.summary, IngestionSummary):
             raise ValueError("summary must be an IngestionSummary")
@@ -79,9 +70,7 @@ def ingest_transport_snapshot(
     resolutions = resolutions or []
     dedup_decisions = dedup_decisions or []
     warnings = [warning_from_issue(issue) for issue in snapshot.issues]
-    resolution_map = {
-        resolution.resolution_id: resolution for resolution in resolutions
-    }
+    resolution_map = {resolution.resolution_id: resolution for resolution in resolutions}
     emitted_ids: set[str] = set()
     filtered_record_ids: list[str] = []
     low_confidence_option_ids: list[str] = []
@@ -90,19 +79,14 @@ def ingest_transport_snapshot(
     provenance_refs = []
 
     for decision in dedup_decisions:
-        if (
-            decision.entity_scope != "transport"
-            or decision.option_kind != snapshot.option_kind
-        ):
+        if decision.entity_scope != "transport" or decision.option_kind != snapshot.option_kind:
             continue
         record_ids = _record_ids_for_decision(decision, resolution_map)
         preserved_conflicts.extend(unresolved_conflicts(decision.preserved_conflicts))
         if decision.decision == "suppress":
             emitted_ids.update(record_ids)
             filtered_record_ids.extend(
-                record_id
-                for record_id in record_ids
-                if record_id not in filtered_record_ids
+                record_id for record_id in record_ids if record_id not in filtered_record_ids
             )
             continue
         if decision.decision in {"keep_separate", "needs_review"}:
@@ -120,9 +104,7 @@ def ingest_transport_snapshot(
                 )
             )
             continue
-        option = _transport_option_from_records(
-            records, snapshot, decision.canonical_entity_id
-        )
+        option = _transport_option_from_records(records, snapshot, decision.canonical_entity_id)
         option.notes.extend([f"dedup_decision:{decision.decision_id}", *decision.notes])
         option.feasibility.constraints.extend(
             [
@@ -158,21 +140,13 @@ def ingest_transport_snapshot(
             [record], snapshot, _canonical_option_id(record, resolution)
         )
         if resolution is not None:
-            option.notes.extend(
-                [f"resolution:{resolution.resolution_id}", *resolution.notes]
-            )
+            option.notes.extend([f"resolution:{resolution.resolution_id}", *resolution.notes])
             unresolved = unresolved_conflicts(resolution.conflicts)
             preserved_conflicts.extend(unresolved)
             option.feasibility.constraints.extend(
-                [
-                    f"{conflict.attribute_path}:{conflict.reason}"
-                    for conflict in unresolved
-                ]
+                [f"{conflict.attribute_path}:{conflict.reason}" for conflict in unresolved]
             )
-            if (
-                resolution.review_required
-                or _lowest_match_confidence(resolution) < 0.75
-            ):
+            if resolution.review_required or _lowest_match_confidence(resolution) < 0.75:
                 low_confidence_option_ids.append(option.option_id)
         record_warnings = record.payload.get("normalization_warnings", [])
         if record_warnings:
@@ -214,9 +188,7 @@ def ingest_transport_snapshot(
             warning.warning_id for warning in warnings if warning.severity == "error"
         ],
         provenance_refs=provenance_refs,
-        notes=[
-            "Transport ingestion scaffolding emitted normalized options from raw snapshots."
-        ],
+        notes=["Transport ingestion scaffolding emitted normalized options from raw snapshots."],
     )
     return TransportIngestionResult(
         pipeline_id=f"transport-ingestion:{snapshot.snapshot_id}",
@@ -299,9 +271,7 @@ def _resolution_for_record(
     return None
 
 
-def _canonical_option_id(
-    record: RawSourceRecord, resolution: EntityResolution | None
-) -> str:
+def _canonical_option_id(record: RawSourceRecord, resolution: EntityResolution | None) -> str:
     if resolution is not None:
         return resolution.canonical_entity_id
     return f"transport-{record.provider_entity_id}"
