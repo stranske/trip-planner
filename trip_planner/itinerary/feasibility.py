@@ -19,14 +19,20 @@ from .move_costs import MoveCostSummary, TravelTimeEstimate, build_move_cost_sum
 def _dt(value: str) -> datetime | None:
     if not value:
         return None
-    return datetime.fromisoformat(value)
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 def _parse_window(value: str) -> tuple[time, time] | None:
     if not value or "-" not in value:
         return None
     start_text, end_text = [piece.strip() for piece in value.split("-", 1)]
-    return time.fromisoformat(start_text), time.fromisoformat(end_text)
+    try:
+        return time.fromisoformat(start_text), time.fromisoformat(end_text)
+    except ValueError:
+        return None
 
 
 def _clamp_probability(value: float) -> float:
@@ -238,24 +244,6 @@ def _activity_timing_conflicts(
     return conflicts, sorted(set(missing_data_fields))
 
 
-def _daily_density_conflicts(bundle: InventoryBundle) -> list[TimingConflict]:
-    conflicts: list[TimingConflict] = []
-    activity_minutes = sum(item.timing_summary.duration_minutes for item in bundle.activity_options)
-    travel_minutes = sum(item.timing_summary.duration_minutes for item in bundle.transport_options)
-    if activity_minutes and travel_minutes and activity_minutes + travel_minutes >= 900:
-        conflicts.append(
-            TimingConflict(
-                conflict_id=f"timing:{bundle.bundle_id}:density",
-                code="unrealistic_same_day_chaining",
-                severity="critical",
-                summary="Combined travel and activity load exceeds a realistic same-day threshold.",
-                blocking=True,
-                related_option_ids=bundle.option_ids,
-            )
-        )
-    return conflicts
-
-
 def _route_warnings(bundle: InventoryBundle, move_costs: list[MoveCostSummary]) -> list[RouteContinuityWarning]:
     warnings: list[RouteContinuityWarning] = []
     destination_sequence = [item.origin_id for item in bundle.transport_options]
@@ -290,6 +278,40 @@ def _route_warnings(bundle: InventoryBundle, move_costs: list[MoveCostSummary]) 
     return warnings
 
 
+def _representative_travel_totals(
+    bundle: InventoryBundle,
+    travel_estimates: list[TravelTimeEstimate],
+    move_costs: list[MoveCostSummary],
+) -> tuple[int, int, list[str]]:
+    if not travel_estimates:
+        return 0, 0, []
+
+    if bundle.composition_summary.assembly_role == "candidate_seed":
+        ranked_pairs = sorted(
+            zip(move_costs, travel_estimates, strict=True),
+            key=lambda pair: (
+                pair[0].hard_blocking,
+                pair[0].friction_penalty,
+                pair[1].duration_minutes,
+                pair[1].transfer_count,
+            ),
+        )
+        _, estimate = ranked_pairs[0]
+        return (
+            estimate.duration_minutes,
+            estimate.transfer_count,
+            [
+                "Aggregate travel totals reflect the lowest-friction transport option in this candidate seed."
+            ],
+        )
+
+    return (
+        sum(item.duration_minutes for item in travel_estimates),
+        sum(item.transfer_count for item in travel_estimates),
+        [],
+    )
+
+
 def evaluate_bundle_feasibility(bundle: InventoryBundle) -> FeasibilityAssessment:
     schedule_protection_required = _schedule_protection_required(bundle)
     travel_estimates, move_costs = build_move_cost_summaries(
@@ -303,7 +325,6 @@ def evaluate_bundle_feasibility(bundle: InventoryBundle) -> FeasibilityAssessmen
         schedule_protection_required=schedule_protection_required,
     )
     timing_conflicts.extend(activity_conflicts)
-    timing_conflicts.extend(_daily_density_conflicts(bundle))
 
     blocking_reasons = list(bundle.feasibility.blocking_reasons)
     blocking_reasons.extend(
@@ -322,6 +343,11 @@ def evaluate_bundle_feasibility(bundle: InventoryBundle) -> FeasibilityAssessmen
 
     route_warnings = _route_warnings(bundle, move_costs)
     friction_penalty_total = round(sum(item.friction_penalty for item in move_costs), 4)
+    total_travel_minutes, total_transfer_count, aggregate_notes = _representative_travel_totals(
+        bundle,
+        travel_estimates,
+        move_costs,
+    )
     warning_pressure = (
         len([conflict for conflict in timing_conflicts if not conflict.blocking])
         + len(route_warnings)
@@ -340,6 +366,7 @@ def evaluate_bundle_feasibility(bundle: InventoryBundle) -> FeasibilityAssessmen
     ]
     if schedule_protection_required:
         notes.append("Business-style schedule protection thresholds were applied.")
+    notes.extend(aggregate_notes)
 
     return FeasibilityAssessment(
         assessment_id=f"feasibility:{bundle.bundle_id}",
@@ -347,8 +374,8 @@ def evaluate_bundle_feasibility(bundle: InventoryBundle) -> FeasibilityAssessmen
         feasible=not blocking_reasons,
         recommended_for_ranking=not blocking_reasons,
         schedule_protection_required=schedule_protection_required,
-        total_travel_minutes=sum(item.duration_minutes for item in travel_estimates),
-        total_transfer_count=sum(item.transfer_count for item in travel_estimates),
+        total_travel_minutes=total_travel_minutes,
+        total_transfer_count=total_transfer_count,
         friction_penalty_total=friction_penalty_total,
         confidence_signal=confidence_signal,
         missing_data_fields=missing_data_fields,

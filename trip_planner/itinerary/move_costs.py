@@ -17,7 +17,10 @@ from trip_planner.options import InventoryBundle, TransportOption
 def _dt(value: str) -> datetime | None:
     if not value:
         return None
-    return datetime.fromisoformat(value)
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 def _mean(values: list[float | None]) -> float | None:
