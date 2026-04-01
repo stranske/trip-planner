@@ -233,7 +233,9 @@ def _lodging_option_from_records(
     primary = records[0]
     payload = dict(primary.payload)
     payload["option_id"] = option_id
-    payload.setdefault("destination_id", payload["location_summary"]["destination_id"])
+    if "destination_id" not in payload:
+        location_summary = payload.get("location_summary") or {}
+        payload["destination_id"] = location_summary.get("destination_id")
     payload.setdefault("source_refs", [])
     payload["source_refs"] = [
         build_provenance_reference(
