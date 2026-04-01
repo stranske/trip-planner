@@ -11,6 +11,7 @@ const {
   formatExecutionReport,
   loadManifest,
   parseCliArguments,
+  resolveManifestRelativePath,
   selectManifestGroups,
   validateManifestGroup,
 } = require(path.join(repoRoot, "scripts/create_follow_up_prs_from_manifest.js"));
@@ -107,6 +108,23 @@ test("buildGhPrCreateArgs returns a non-shell command argv list", () => {
   );
 });
 
+test("resolveManifestRelativePath resolves paths relative to the manifest location", () => {
+  assert.equal(
+    resolveManifestRelativePath(
+      path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+      "pr-178-fix-group-1-body.md"
+    ),
+    path.resolve(".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md")
+  );
+  assert.equal(
+    resolveManifestRelativePath(
+      path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+      "/tmp/pr-178-fix-group-1-body.md"
+    ),
+    "/tmp/pr-178-fix-group-1-body.md"
+  );
+});
+
 test("executeManifestGroups supports dry-run mode without invoking gh", () => {
   const report = executeManifestGroups(
     {
@@ -124,11 +142,17 @@ test("executeManifestGroups supports dry-run mode without invoking gh", () => {
               title: "Address PR #178 fix threads for follow-up PR #581",
               baseBranch: "main",
               headBranch: "codex/fix-thread-1",
-              bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
+              bodyFilePath: "pr-178-fix-group-1-body.md",
             },
           ],
         }),
-      statSync: () => ({ isFile: () => true }),
+      statSync: (bodyFilePath) => {
+        assert.equal(
+          bodyFilePath,
+          path.resolve(".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md")
+        );
+        return { isFile: () => true };
+      },
       execFileSync: () => {
         throw new Error("gh should not be called during dry run");
       },
@@ -139,6 +163,10 @@ test("executeManifestGroups supports dry-run mode without invoking gh", () => {
   assert.equal(report.groupCount, 1);
   assert.equal(report.results[0].manifestGroupNumber, 1);
   assert.equal(report.results[0].mode, "dry-run");
+  assert.equal(
+    report.results[0].bodyFilePath,
+    path.resolve(".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md")
+  );
   assert.match(report.results[0].command, /^gh pr create --base main --head codex\/fix-thread-1/);
 });
 
@@ -160,18 +188,24 @@ test("executeManifestGroups invokes gh for selected groups in execute mode", () 
               title: "Ignore me",
               baseBranch: "main",
               headBranch: "codex/fix-thread-1",
-              bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
+              bodyFilePath: "pr-178-fix-group-1-body.md",
             },
             {
               followUpPr: "https://github.com/stranske/trip-planner/pull/582",
               title: "Address PR #178 fix threads for follow-up PR #582",
               baseBranch: "release/next",
               headBranch: "codex/fix-thread-2",
-              bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-2-body.md",
+              bodyFilePath: "pr-178-fix-group-2-body.md",
             },
           ],
         }),
-      statSync: () => ({ isFile: () => true }),
+      statSync: (bodyFilePath) => {
+        assert.equal(
+          bodyFilePath,
+          path.resolve(".tmp/pr-thread-payloads/pr-178-fix-group-2-body.md")
+        );
+        return { isFile: () => true };
+      },
       execFileSync: (command, args, execOptions) => {
         calls.push({ command, args, execOptions });
         return "https://github.com/stranske/trip-planner/pull/622\n";
@@ -191,7 +225,7 @@ test("executeManifestGroups invokes gh for selected groups in execute mode", () 
     "--title",
     "Address PR #178 fix threads for follow-up PR #582",
     "--body-file",
-    ".tmp/pr-thread-payloads/pr-178-fix-group-2-body.md",
+    path.resolve(".tmp/pr-thread-payloads/pr-178-fix-group-2-body.md"),
   ]);
   assert.deepEqual(calls[0].execOptions, { encoding: "utf8" });
   assert.equal(report.results[0].manifestGroupNumber, 2);

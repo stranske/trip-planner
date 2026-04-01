@@ -169,6 +169,18 @@ function buildGhPrCreateArgs(group) {
   ];
 }
 
+function resolveManifestRelativePath(manifestPath, targetPath) {
+  if (!targetPath) {
+    return targetPath;
+  }
+
+  if (path.isAbsolute(targetPath)) {
+    return targetPath;
+  }
+
+  return path.resolve(path.dirname(manifestPath), targetPath);
+}
+
 function executeManifestGroups(options = {}, dependencies = {}) {
   const manifest = loadManifest(options.manifestPath, dependencies);
   const statSync = dependencies.statSync || fs.statSync;
@@ -183,22 +195,29 @@ function executeManifestGroups(options = {}, dependencies = {}) {
   }
 
   const results = groups.map((group, index) => {
+    const resolvedBodyFilePath = resolveManifestRelativePath(
+      options.manifestPath,
+      group.bodyFilePath
+    );
     let bodyFileStat;
     try {
-      bodyFileStat = statSync(group.bodyFilePath);
+      bodyFileStat = statSync(resolvedBodyFilePath);
     } catch (error) {
       throw new Error(
-        `Group ${group.manifestGroupNumber} body file does not exist: ${group.bodyFilePath}`
+        `Group ${group.manifestGroupNumber} body file does not exist: ${resolvedBodyFilePath}`
       );
     }
 
     if (typeof bodyFileStat?.isFile === "function" && !bodyFileStat.isFile()) {
       throw new Error(
-        `Group ${group.manifestGroupNumber} body file is not a regular file: ${group.bodyFilePath}`
+        `Group ${group.manifestGroupNumber} body file is not a regular file: ${resolvedBodyFilePath}`
       );
     }
 
-    const args = buildGhPrCreateArgs(group);
+    const args = buildGhPrCreateArgs({
+      ...group,
+      bodyFilePath: resolvedBodyFilePath,
+    });
     const result = {
       groupNumber: index + 1,
       manifestGroupNumber: group.manifestGroupNumber,
@@ -206,7 +225,7 @@ function executeManifestGroups(options = {}, dependencies = {}) {
       title: group.title,
       baseBranch: group.baseBranch,
       headBranch: group.headBranch,
-      bodyFilePath: group.bodyFilePath,
+      bodyFilePath: resolvedBodyFilePath,
       command: ["gh", ...args].join(" "),
       mode: options.execute ? "execute" : "dry-run",
       output: null,
@@ -280,6 +299,7 @@ module.exports = {
   loadManifest,
   main,
   parseCliArguments,
+  resolveManifestRelativePath,
   selectManifestGroups,
   validateManifestGroup,
 };
