@@ -225,9 +225,47 @@ function formatFixThreadsAsJson(fixThreads) {
   )}\n`;
 }
 
+function formatFixThreadsAsMarkdown(fixThreads) {
+  const lines = ["# Fix-Classified Thread Scope", ""];
+
+  if (fixThreads.length === 0) {
+    lines.push("No fix-classified threads found.");
+    return `${lines.join("\n")}\n`;
+  }
+
+  lines.push(`Fix-classified threads: ${fixThreads.length}`);
+
+  fixThreads.forEach((thread, index) => {
+    lines.push("");
+    lines.push(`## Fix Thread ${index + 1}`);
+    lines.push("");
+    lines.push(`- [ ] Address thread \`${thread.threadId || "<missing thread id>"}\``);
+    lines.push(`- Original Thread URL: ${thread.originalThreadUrl || "<missing original thread URL>"}`);
+    lines.push(`- Location: ${thread.location || "<missing location>"}`);
+    lines.push(`- Follow-up PR: ${thread.followUpPr || "<missing follow-up PR>"}`);
+    lines.push(`- Rationale: ${thread.rationale || "<missing rationale>"}`);
+    lines.push(`- Content: ${thread.content || "<missing content>"}`);
+    lines.push(
+      `- Outdated: ${
+        thread.outdated === null
+          ? "<missing outdated status>"
+          : thread.outdated
+            ? "yes"
+            : "no"
+      }`
+    );
+  });
+
+  return `${lines.join("\n")}\n`;
+}
+
 function formatFixThreadsOutput(fixThreads, outputFormat = "text") {
   if (outputFormat === "json") {
     return formatFixThreadsAsJson(fixThreads);
+  }
+
+  if (outputFormat === "markdown") {
+    return formatFixThreadsAsMarkdown(fixThreads);
   }
 
   return formatFixThreadsReport(fixThreads);
@@ -283,9 +321,9 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
     options.docPath = path.resolve(argument);
   }
 
-  if (!["text", "json"].includes(options.outputFormat)) {
+  if (!["text", "json", "markdown"].includes(options.outputFormat)) {
     throw new Error(
-      `Output format must be one of "text" or "json"; received "${options.outputFormat}".`
+      `Output format must be one of "text", "json", or "markdown"; received "${options.outputFormat}".`
     );
   }
 
@@ -311,6 +349,7 @@ module.exports = {
   DEFAULT_DOC_PATH,
   collectThreadInventoryIssues,
   formatFixThreadsAsJson,
+  formatFixThreadsAsMarkdown,
   formatFixThreadsOutput,
   formatFixThreadsReport,
   formatThreadInventoryIssues,

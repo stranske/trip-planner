@@ -10,6 +10,7 @@ const {
   DEFAULT_DOC_PATH,
   collectThreadInventoryIssues,
   formatFixThreadsAsJson,
+  formatFixThreadsAsMarkdown,
   formatFixThreadsOutput,
   formatFixThreadsReport,
   formatThreadInventoryIssues,
@@ -159,6 +160,35 @@ test("formatFixThreadsAsJson emits machine-readable fix-thread metadata", () => 
   );
 });
 
+test("formatFixThreadsAsMarkdown emits an actionable fix scope checklist", () => {
+  const report = formatFixThreadsAsMarkdown([
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/example.py:17",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale: "Code path still drops the final stop.",
+      content: "Reviewer requested a bounds check.",
+      outdated: false,
+    },
+  ]);
+
+  assert.match(report, /# Fix-Classified Thread Scope/);
+  assert.match(report, /Fix-classified threads: 1/);
+  assert.match(report, /## Fix Thread 1/);
+  assert.match(report, /- \[ \] Address thread `THREAD_1`/);
+  assert.match(
+    report,
+    /- Original Thread URL: https:\/\/github\.com\/stranske\/trip-planner\/pull\/178#discussion_r1/
+  );
+  assert.match(report, /- Location: trip_planner\/example\.py:17/);
+  assert.match(report, /- Follow-up PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/);
+  assert.match(report, /- Rationale: Code path still drops the final stop\./);
+  assert.match(report, /- Content: Reviewer requested a bounds check\./);
+  assert.match(report, /- Outdated: no/);
+});
+
 test("formatFixThreadsOutput dispatches to the requested formatter", () => {
   const fixThreads = [
     {
@@ -175,6 +205,7 @@ test("formatFixThreadsOutput dispatches to the requested formatter", () => {
 
   assert.match(formatFixThreadsOutput(fixThreads, "text"), /Fix-classified threads: 1/);
   assert.doesNotThrow(() => JSON.parse(formatFixThreadsOutput(fixThreads, "json")));
+  assert.match(formatFixThreadsOutput(fixThreads, "markdown"), /# Fix-Classified Thread Scope/);
 });
 
 test("collectThreadInventoryIssues flags missing metadata and placeholder entries", () => {
@@ -319,11 +350,19 @@ test("getCliConfiguration parses completeness validation, doc path, and output f
   });
 });
 
+test("getCliConfiguration accepts markdown output", () => {
+  assert.deepEqual(getCliConfiguration(["--format", "markdown"]), {
+    docPath: DEFAULT_DOC_PATH,
+    outputFormat: "markdown",
+    requireComplete: false,
+  });
+});
+
 test("getCliConfiguration rejects unknown options and extra positional arguments", () => {
   assert.throws(() => getCliConfiguration(["--unknown"]), /Unknown option: --unknown/);
   assert.throws(
-    () => getCliConfiguration(["--format", "markdown"]),
-    /Output format must be one of "text" or "json"/
+    () => getCliConfiguration(["--format", "html"]),
+    /Output format must be one of "text", "json", or "markdown"/
   );
   assert.throws(
     () => getCliConfiguration(["docs/one.md", "docs/two.md"]),
