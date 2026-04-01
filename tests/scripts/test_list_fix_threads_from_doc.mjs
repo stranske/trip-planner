@@ -142,6 +142,14 @@ test("getCliConfiguration parses completeness validation flag and doc path", () 
   });
 });
 
+test("getCliConfiguration rejects unknown options and extra positional arguments", () => {
+  assert.throws(() => getCliConfiguration(["--unknown"]), /Unknown option: --unknown/);
+  assert.throws(
+    () => getCliConfiguration(["docs/one.md", "docs/two.md"]),
+    /Unexpected argument: docs\/two\.md/
+  );
+});
+
 test("the checked-in PR #178 inventory is still incomplete until real threads are recorded", () => {
   const threads = loadThreadInventory(DEFAULT_DOC_PATH);
   const issues = collectThreadInventoryIssues(threads);
@@ -169,6 +177,22 @@ test("fix-classified entries with follow-up PR links satisfy completeness checks
 - Follow-up PR: https://github.com/stranske/trip-planner/pull/581
 - Rationale: Code path still drops the final stop.
 - Content: Reviewer requested a bounds check.
+`);
+
+  assert.deepEqual(collectThreadInventoryIssues(threads), []);
+});
+
+test("disposition-only entries do not require a follow-up PR to be complete", () => {
+  const threads = parseThreadInventory(`
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Location: trip_planner/example.py:17
+- Classification: disposition
+- Rationale: The requested change would regress the documented behavior.
+- Content: Reviewer asked for a change that is intentionally out of scope.
 `);
 
   assert.deepEqual(collectThreadInventoryIssues(threads), []);

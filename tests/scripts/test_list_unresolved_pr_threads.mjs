@@ -11,6 +11,7 @@ const {
   DEFAULT_REPOSITORY,
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
+  fetchAllReviewThreads,
   formatOutput,
   formatThreadContent,
   formatUnresolvedThreadsAsJson,
@@ -205,10 +206,106 @@ test("loadReviewThreadsFromFile supports GraphQL snapshot payloads", () => {
   assert.equal(threads[2].id, "THREAD_C");
 });
 
+test("loadReviewThreadsFromFile wraps JSON parsing failures with the input path", () => {
+  assert.throws(
+    () =>
+      loadReviewThreadsFromFile("broken-review-threads.json", {
+        readFileSync: () => "{not valid json",
+      }),
+    /Unable to load review threads from "broken-review-threads\.json":/
+  );
+});
+
 test("extractThreadsFromSnapshot rejects unsupported snapshot shapes", () => {
   assert.throws(
     () => extractThreadsFromSnapshot({ data: { repository: {} } }),
     /supported thread collection/
+  );
+});
+
+test("fetchAllReviewThreads paginates until GitHub reports no additional pages", async () => {
+  const requests = [];
+  const threads = await fetchAllReviewThreads(
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      token: "token-value",
+    },
+    {
+      requestGraphql: async ({ variables }) => {
+        requests.push(variables);
+
+        if (variables.after === null) {
+          return {
+            repository: {
+              pullRequest: {
+                reviewThreads: {
+                  nodes: [{ id: "THREAD_1" }],
+                  pageInfo: {
+                    hasNextPage: true,
+                    endCursor: "cursor-1",
+                  },
+                },
+              },
+            },
+          };
+        }
+
+        assert.equal(variables.after, "cursor-1");
+        return {
+          repository: {
+            pullRequest: {
+              reviewThreads: {
+                nodes: [{ id: "THREAD_2" }],
+                pageInfo: {
+                  hasNextPage: false,
+                  endCursor: null,
+                },
+              },
+            },
+          },
+        };
+      },
+    }
+  );
+
+  assert.deepEqual(threads, [{ id: "THREAD_1" }, { id: "THREAD_2" }]);
+  assert.deepEqual(requests, [
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      after: null,
+    },
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      after: "cursor-1",
+    },
+  ]);
+});
+
+test("fetchAllReviewThreads fails when GitHub returns no pull request node", async () => {
+  await assert.rejects(
+    () =>
+      fetchAllReviewThreads(
+        {
+          owner: "stranske",
+          repo: "trip-planner",
+          prNumber: 178,
+          token: "token-value",
+        },
+        {
+          requestGraphql: async () => ({
+            repository: {
+              pullRequest: null,
+            },
+          }),
+        }
+      ),
+    /Pull request #178 was not found in stranske\/trip-planner\./
   );
 });
 
