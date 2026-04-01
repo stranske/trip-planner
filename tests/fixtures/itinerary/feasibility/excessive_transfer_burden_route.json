@@ -1,0 +1,115 @@
+{
+  "bundle_id": "bundle:transfer-heavy-route",
+  "title": "Transfer-heavy route",
+  "bundle_context": "route_level",
+  "destinations": [
+    {
+      "destination_id": "dest-airport",
+      "place_kind": "site",
+      "name": "Metro Airport",
+      "geo": {
+        "latitude": 41.0,
+        "longitude": -87.9,
+        "country_code": "US",
+        "time_zone": "America/Chicago"
+      }
+    },
+    {
+      "destination_id": "dest-downtown",
+      "place_kind": "city",
+      "name": "Downtown",
+      "geo": {
+        "latitude": 41.88,
+        "longitude": -87.63,
+        "country_code": "US",
+        "time_zone": "America/Chicago"
+      }
+    }
+  ],
+  "lodging_options": [
+    {
+      "option_id": "lodg-downtown",
+      "name": "Downtown Hotel",
+      "destination_id": "dest-downtown",
+      "location_summary": {
+        "destination_id": "dest-downtown",
+        "location_context": "urban_core"
+      },
+      "room_summary": {
+        "lodging_kind": "hotel"
+      },
+      "booking_terms": {
+        "checkin_window": "15:00-23:30"
+      },
+      "feasibility": {
+        "inventory_status": "available",
+        "available": true,
+        "business_approval_status": "approved"
+      }
+    }
+  ],
+  "transport_options": [
+    {
+      "option_id": "transport-airport-shuttle-chain",
+      "name": "Airport shuttle and commuter chain",
+      "transport_kind": "rail",
+      "origin_id": "dest-airport",
+      "destination_id": "dest-downtown",
+      "timing_summary": {
+        "departure_local": "2026-05-02T11:00:00-05:00",
+        "arrival_local": "2026-05-02T14:35:00-05:00",
+        "duration_minutes": 215
+      },
+      "segments": [
+        {
+          "segment_id": "seg-airport-shuttle",
+          "mode": "shuttle",
+          "origin_label": "Terminal",
+          "destination_label": "Regional station"
+        },
+        {
+          "segment_id": "seg-regional-rail",
+          "mode": "rail",
+          "origin_label": "Regional station",
+          "destination_label": "City station"
+        },
+        {
+          "segment_id": "seg-city-transit",
+          "mode": "transit",
+          "origin_label": "City station",
+          "destination_label": "Downtown stop"
+        }
+      ],
+      "transfer_burden": {
+        "transfer_count": 3,
+        "self_navigation_burden_signal": 0.72,
+        "baggage_complexity_signal": 0.78,
+        "connection_risk_signal": 0.66,
+        "schedule_protection_signal": 0.41
+      },
+      "fit_summary": {
+        "schedule_fit_signal": 0.46
+      },
+      "policy_summary": {
+        "business_approval_status": "approved"
+      },
+      "feasibility": {
+        "available": true,
+        "availability_status": "available"
+      }
+    }
+  ],
+  "composition_summary": {
+    "assembly_role": "route_candidate",
+    "primary_destination_id": "dest-downtown",
+    "component_option_ids": [
+      "lodg-downtown",
+      "transport-airport-shuttle-chain"
+    ]
+  },
+  "feasibility": {
+    "available": true,
+    "internally_consistent": true
+  },
+  "tags": ["business_route"]
+}

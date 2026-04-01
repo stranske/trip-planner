@@ -1,0 +1,132 @@
+{
+  "bundle_id": "bundle:business-tight-protection",
+  "title": "Business route with tight schedule protection",
+  "bundle_context": "transport_lodging",
+  "destinations": [
+    {
+      "destination_id": "dest-airport",
+      "place_kind": "site",
+      "name": "Conference Airport",
+      "geo": {
+        "latitude": 37.62,
+        "longitude": -122.38,
+        "country_code": "US",
+        "time_zone": "America/Los_Angeles"
+      }
+    },
+    {
+      "destination_id": "dest-conference",
+      "place_kind": "city",
+      "name": "Conference District",
+      "geo": {
+        "latitude": 37.78,
+        "longitude": -122.4,
+        "country_code": "US",
+        "time_zone": "America/Los_Angeles"
+      }
+    }
+  ],
+  "lodging_options": [
+    {
+      "option_id": "lodg-conference-hotel",
+      "name": "Conference Hotel",
+      "destination_id": "dest-conference",
+      "location_summary": {
+        "destination_id": "dest-conference",
+        "location_context": "urban_core",
+        "business_access_signal": 0.95
+      },
+      "room_summary": {
+        "lodging_kind": "hotel",
+        "workspace_signal": 0.88
+      },
+      "booking_terms": {
+        "checkin_window": "15:00-23:00"
+      },
+      "feasibility": {
+        "inventory_status": "available",
+        "available": true,
+        "business_approval_status": "preferred"
+      }
+    }
+  ],
+  "transport_options": [
+    {
+      "option_id": "transport-airport-conference",
+      "name": "Airport rail with connector",
+      "transport_kind": "rail",
+      "origin_id": "dest-airport",
+      "destination_id": "dest-conference",
+      "timing_summary": {
+        "departure_local": "2026-05-18T08:20:00-07:00",
+        "arrival_local": "2026-05-18T09:10:00-07:00",
+        "duration_minutes": 50
+      },
+      "segments": [
+        {
+          "segment_id": "seg-bart",
+          "mode": "rail",
+          "origin_label": "Airport",
+          "destination_label": "Downtown"
+        },
+        {
+          "segment_id": "seg-walk",
+          "mode": "walk",
+          "origin_label": "Downtown",
+          "destination_label": "Conference hotel"
+        }
+      ],
+      "transfer_burden": {
+        "transfer_count": 1,
+        "self_navigation_burden_signal": 0.34,
+        "baggage_complexity_signal": 0.42,
+        "schedule_protection_signal": 0.28
+      },
+      "fit_summary": {
+        "schedule_fit_signal": 0.52
+      },
+      "policy_summary": {
+        "business_approval_status": "preferred"
+      },
+      "feasibility": {
+        "available": true,
+        "availability_status": "available"
+      }
+    }
+  ],
+  "activity_options": [
+    {
+      "option_id": "activity-client-briefing",
+      "name": "Client briefing",
+      "activity_kind": "event",
+      "destination_id": "dest-conference",
+      "place_id": "place-client-briefing",
+      "category": {
+        "primary": "event"
+      },
+      "timing_summary": {
+        "duration_minutes": 45,
+        "typical_start_window": "09:30-10:00",
+        "timing_sensitivity_signal": 0.95
+      },
+      "feasibility": {
+        "available": true,
+        "availability_status": "available"
+      }
+    }
+  ],
+  "composition_summary": {
+    "assembly_role": "business_arrival_bundle",
+    "primary_destination_id": "dest-conference",
+    "component_option_ids": [
+      "lodg-conference-hotel",
+      "transport-airport-conference",
+      "activity-client-briefing"
+    ]
+  },
+  "feasibility": {
+    "available": true,
+    "internally_consistent": true
+  },
+  "tags": ["business_route", "business_trip"]
+}
