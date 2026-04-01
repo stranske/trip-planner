@@ -52,3 +52,8 @@ This keeps explanations auditable without forcing every downstream object to dup
 Use [Source channel strategy](../source-channel-strategy.md) for the initial operating shortlist and market rationale.
 
 Use these contracts for the code-level representation of those sources once the planner begins ingesting or normalizing them.
+
+Issue `#526` extends this layer with raw source adapter and snapshot boundaries. See
+[Source Adapter And Raw Snapshot Contracts](source-adapters.md) for the canonical
+fetch, degradation, and normalization-handoff contracts that sit in front of
+`ProvenanceReference`.

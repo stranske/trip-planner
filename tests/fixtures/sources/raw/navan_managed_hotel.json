@@ -1,0 +1,15 @@
+{
+  "policy_result_id": "navan-hotel-allowance-2026-04",
+  "property_id": "nyc-midtown-conference",
+  "property_name": "Midtown Conference Hotel",
+  "approval_status": "preferred",
+  "rate_cap_status": "within_cap",
+  "policy_notes": [
+    "Traveler is inside preferred booking channel.",
+    "Hotel meets conference proximity rule."
+  ],
+  "nightly_rate": {
+    "amount": "285.00",
+    "currency": "USD"
+  }
+}
