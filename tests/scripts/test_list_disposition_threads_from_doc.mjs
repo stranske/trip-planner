@@ -7,7 +7,9 @@ const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const {
   buildDispositionThreadsReport,
+  buildDispositionReplyBody,
   formatDispositionThreadsAsComments,
+  formatDispositionThreadsAsGhCli,
   formatDispositionThreadsAsJson,
   formatDispositionThreadsAsMarkdown,
   formatDispositionThreadsAsPlan,
@@ -116,6 +118,42 @@ test("formatDispositionThreadsAsComments emits ready-to-post disposition comment
   assert.match(report, /Context from unresolved thread: reviewer: Please change the template wording\./);
 });
 
+test("buildDispositionReplyBody combines rationale with thread context", () => {
+  assert.equal(
+    buildDispositionReplyBody({
+      rationale: "The existing behavior is intentional.",
+      content: "reviewer: Please change the template wording.",
+    }),
+    [
+      "The existing behavior is intentional.",
+      "",
+      "Context from unresolved thread: reviewer: Please change the template wording.",
+    ].join("\n")
+  );
+});
+
+test("formatDispositionThreadsAsGhCli emits reply and resolve commands", () => {
+  const report = formatDispositionThreadsAsGhCli([
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "docs/pr-178-unresolved-threads.md:12",
+      rationale: "The existing behavior is intentional.",
+      content: "reviewer: Please change the template wording.",
+      outdated: false,
+    },
+  ]);
+
+  assert.match(report, /# Disposition Thread gh CLI Commands/);
+  assert.match(report, /Actionable disposition threads: 1/);
+  assert.match(report, /- Thread: THREAD_1/);
+  assert.match(report, /gh api graphql -f query='mutation AddPullRequestReviewThreadReply/);
+  assert.match(report, /-F threadId='THREAD_1'/);
+  assert.match(report, /-F body='The existing behavior is intentional\./);
+  assert.match(report, /Context from unresolved thread: reviewer: Please change the template wording\.'/);
+  assert.match(report, /gh api graphql -f query='mutation ResolveReviewThread/);
+});
+
 test("formatDispositionThreadsAsJson includes the excluded outdated count", () => {
   const report = formatDispositionThreadsAsJson(
     [{ threadId: "THREAD_1", classification: "disposition", outdated: false }],
@@ -139,6 +177,9 @@ test("formatDispositionThreadsOutput dispatches to the requested formatter", () 
 
   const commentsReport = formatDispositionThreadsOutput([], "comments");
   assert.match(commentsReport, /No actionable disposition threads found\./);
+
+  const ghCliReport = formatDispositionThreadsOutput([], "gh-cli");
+  assert.match(ghCliReport, /No actionable disposition threads found\./);
 });
 
 test("buildDispositionThreadsReport filters unresolved disposition threads from the inventory", () => {
@@ -247,7 +288,7 @@ test("getCliConfiguration rejects unknown options and extra positional arguments
   assert.throws(() => getCliConfiguration(["--unknown"]), /Unknown option: --unknown/);
   assert.throws(
     () => getCliConfiguration(["--format", "html"]),
-    /Output format must be one of "text", "json", "markdown", "plan", or "comments"/
+    /Output format must be one of "text", "json", "markdown", "plan", "comments", or "gh-cli"/
   );
   assert.throws(
     () => getCliConfiguration(["docs/one.md", "docs/two.md"]),

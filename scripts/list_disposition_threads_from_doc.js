@@ -10,6 +10,28 @@ const {
   loadThreadInventory,
 } = require("./list_fix_threads_from_doc.js");
 
+const ADD_PULL_REQUEST_REVIEW_THREAD_REPLY_MUTATION = [
+  "mutation AddPullRequestReviewThreadReply($threadId: ID!, $body: String!) {",
+  "  addPullRequestReviewThreadReply(",
+  "    input: { pullRequestReviewThreadId: $threadId, body: $body }",
+  "  ) {",
+  "    comment {",
+  "      url",
+  "    }",
+  "  }",
+  "}",
+].join("\n");
+
+const RESOLVE_REVIEW_THREAD_MUTATION = [
+  "mutation ResolveReviewThread($threadId: ID!) {",
+  "  resolveReviewThread(input: { threadId: $threadId }) {",
+  "    thread {",
+  "      isResolved",
+  "    }",
+  "  }",
+  "}",
+].join("\n");
+
 function listDispositionClassifiedThreads(threads, options = {}) {
   const { excludeOutdated = false } = options;
   const dispositionThreads = threads.filter((thread) => thread.classification === "disposition");
@@ -168,6 +190,74 @@ function formatDispositionThreadsAsComments(dispositionThreads, options = {}) {
   return `${lines.join("\n")}\n`;
 }
 
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\"'\"'`)}'`;
+}
+
+function buildDispositionReplyBody(thread) {
+  const lines = [thread.rationale || "<missing rationale>"];
+
+  if (thread.content) {
+    lines.push("", `Context from unresolved thread: ${thread.content}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatDispositionThreadsAsGhCli(dispositionThreads, options = {}) {
+  const { excludedOutdatedCount = 0 } = options;
+  const lines = ["# Disposition Thread gh CLI Commands", ""];
+
+  lines.push(`Actionable disposition threads: ${dispositionThreads.length}`);
+  if (excludedOutdatedCount > 0) {
+    lines.push(`Excluded outdated disposition threads: ${excludedOutdatedCount}`);
+  }
+
+  if (dispositionThreads.length === 0) {
+    lines.push("", "No actionable disposition threads found.");
+    return `${lines.join("\n")}\n`;
+  }
+
+  dispositionThreads.forEach((thread, index) => {
+    const threadId = thread.threadId || "<missing thread id>";
+    const replyBody = buildDispositionReplyBody(thread);
+    const replyCommand = [
+      "gh",
+      "api",
+      "graphql",
+      "-f",
+      `query=${shellQuote(ADD_PULL_REQUEST_REVIEW_THREAD_REPLY_MUTATION)}`,
+      "-F",
+      `threadId=${shellQuote(threadId)}`,
+      "-F",
+      `body=${shellQuote(replyBody)}`,
+    ].join(" ");
+    const resolveCommand = [
+      "gh",
+      "api",
+      "graphql",
+      "-f",
+      `query=${shellQuote(RESOLVE_REVIEW_THREAD_MUTATION)}`,
+      "-F",
+      `threadId=${shellQuote(threadId)}`,
+    ].join(" ");
+
+    lines.push("");
+    lines.push(`## Disposition Thread ${index + 1}`);
+    lines.push("");
+    lines.push(`- Thread: ${threadId}`);
+    lines.push(`- Original Thread URL: ${thread.originalThreadUrl || "<missing original thread URL>"}`);
+    lines.push(`- Location: ${thread.location || "<missing location>"}`);
+    lines.push("");
+    lines.push("```bash");
+    lines.push(replyCommand);
+    lines.push(resolveCommand);
+    lines.push("```");
+  });
+
+  return `${lines.join("\n")}\n`;
+}
+
 function formatDispositionThreadsOutput(dispositionThreads, outputFormat = "text", options = {}) {
   if (outputFormat === "json") {
     return formatDispositionThreadsAsJson(dispositionThreads, options);
@@ -183,6 +273,10 @@ function formatDispositionThreadsOutput(dispositionThreads, outputFormat = "text
 
   if (outputFormat === "comments") {
     return formatDispositionThreadsAsComments(dispositionThreads, options);
+  }
+
+  if (outputFormat === "gh-cli") {
+    return formatDispositionThreadsAsGhCli(dispositionThreads, options);
   }
 
   return formatDispositionThreadsReport(dispositionThreads, options);
@@ -260,9 +354,9 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
     options.docPath = path.resolve(argument);
   }
 
-  if (!["text", "json", "markdown", "plan", "comments"].includes(options.outputFormat)) {
+  if (!["text", "json", "markdown", "plan", "comments", "gh-cli"].includes(options.outputFormat)) {
     throw new Error(
-      `Output format must be one of "text", "json", "markdown", "plan", or "comments"; received "${options.outputFormat}".`
+      `Output format must be one of "text", "json", "markdown", "plan", "comments", or "gh-cli"; received "${options.outputFormat}".`
     );
   }
 
@@ -291,8 +385,10 @@ module.exports = {
   formatDispositionThreadsAsMarkdown,
   formatDispositionThreadsAsPlan,
   formatDispositionThreadsAsComments,
+  formatDispositionThreadsAsGhCli,
   formatDispositionThreadsOutput,
   formatDispositionThreadsReport,
   getCliConfiguration,
   listDispositionClassifiedThreads,
+  buildDispositionReplyBody,
 };

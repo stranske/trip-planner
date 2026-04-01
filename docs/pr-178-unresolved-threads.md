@@ -66,6 +66,12 @@ To generate ready-to-post disposition comment drafts for those unresolved thread
 node scripts/list_disposition_threads_from_doc.js docs/pr-178-unresolved-threads.md --format comments --exclude-outdated
 ```
 
+To generate shell-ready `gh api graphql` commands for posting each disposition reply and resolving the matching review thread once GitHub write access is available, run:
+
+```bash
+node scripts/list_disposition_threads_from_doc.js docs/pr-178-unresolved-threads.md --format gh-cli --exclude-outdated
+```
+
 To verify that the populated inventory matches an exported review-thread snapshot before classifying or resolving items, run:
 
 ```bash
