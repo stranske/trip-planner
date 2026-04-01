@@ -2,16 +2,48 @@
 
 "use strict";
 
+const fs = require("node:fs");
 const https = require("node:https");
 
 const DEFAULT_REPOSITORY = "stranske/trip-planner";
 const DEFAULT_PR_NUMBER = 178;
 const GITHUB_GRAPHQL_ENDPOINT = "https://api.github.com/graphql";
 
+function parseCommandLineArguments(argv = process.argv.slice(2)) {
+  const positional = [];
+  let inputPath = null;
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+
+    if (argument === "--input") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --input flag requires a file path.");
+      }
+
+      inputPath = value;
+      index += 1;
+      continue;
+    }
+
+    positional.push(argument);
+  }
+
+  return {
+    inputPath,
+    positional,
+  };
+}
+
 function getConfiguration(argv = process.argv.slice(2), env = process.env) {
-  const repository = argv[0] || env.GITHUB_REPOSITORY || DEFAULT_REPOSITORY;
-  const prNumberRaw = argv[1] || env.PR_NUMBER || String(DEFAULT_PR_NUMBER);
+  const parsedArguments = parseCommandLineArguments(argv);
+  const repository =
+    parsedArguments.positional[0] || env.GITHUB_REPOSITORY || DEFAULT_REPOSITORY;
+  const prNumberRaw =
+    parsedArguments.positional[1] || env.PR_NUMBER || String(DEFAULT_PR_NUMBER);
   const token = env.GITHUB_TOKEN;
+  const inputPath = parsedArguments.inputPath || env.REVIEW_THREADS_FILE || null;
   const prNumber = Number.parseInt(prNumberRaw, 10);
 
   if (!repository.includes("/")) {
@@ -24,12 +56,12 @@ function getConfiguration(argv = process.argv.slice(2), env = process.env) {
     throw new Error(`Pull request number must be a positive integer; received "${prNumberRaw}".`);
   }
 
-  if (!token) {
+  if (!token && !inputPath) {
     throw new Error("GITHUB_TOKEN is required to query GitHub review threads.");
   }
 
   const [owner, repo] = repository.split("/", 2);
-  return { owner, repo, prNumber, token };
+  return { owner, repo, prNumber, token, inputPath };
 }
 
 function buildReviewThreadsQuery() {
@@ -158,6 +190,36 @@ async function fetchAllReviewThreads(configuration, dependencies = {}) {
   }
 }
 
+function extractThreadsFromSnapshot(snapshot) {
+  if (Array.isArray(snapshot)) {
+    return snapshot;
+  }
+
+  if (Array.isArray(snapshot?.threads)) {
+    return snapshot.threads;
+  }
+
+  const graphqlThreads = snapshot?.data?.repository?.pullRequest?.reviewThreads?.nodes;
+  if (Array.isArray(graphqlThreads)) {
+    return graphqlThreads;
+  }
+
+  throw new Error("Review thread snapshot did not contain a supported thread collection.");
+}
+
+function loadReviewThreadsFromFile(inputPath, dependencies = {}) {
+  const readFileSync = dependencies.readFileSync || fs.readFileSync;
+  let parsedSnapshot;
+
+  try {
+    parsedSnapshot = JSON.parse(readFileSync(inputPath, "utf8"));
+  } catch (error) {
+    throw new Error(`Unable to load review threads from "${inputPath}": ${error.message}`);
+  }
+
+  return extractThreadsFromSnapshot(parsedSnapshot);
+}
+
 function normalizeBody(body) {
   return String(body || "")
     .replace(/\r\n/g, "\n")
@@ -224,7 +286,9 @@ function formatUnresolvedThreadsReport(repository, prNumber, unresolvedThreads) 
 
 async function main() {
   const configuration = getConfiguration();
-  const threads = await fetchAllReviewThreads(configuration);
+  const threads = configuration.inputPath
+    ? loadReviewThreadsFromFile(configuration.inputPath)
+    : await fetchAllReviewThreads(configuration);
   const unresolvedThreads = extractUnresolvedThreads(threads);
   const repository = `${configuration.owner}/${configuration.repo}`;
   const report = formatUnresolvedThreadsReport(
@@ -248,9 +312,12 @@ module.exports = {
   DEFAULT_REPOSITORY,
   buildReviewThreadsQuery,
   extractUnresolvedThreads,
+  extractThreadsFromSnapshot,
   fetchAllReviewThreads,
   formatUnresolvedThreadsReport,
   getConfiguration,
+  loadReviewThreadsFromFile,
   normalizeBody,
+  parseCommandLineArguments,
   requestGraphql,
 };

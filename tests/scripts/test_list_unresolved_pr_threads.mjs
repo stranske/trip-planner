@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 
@@ -9,9 +10,12 @@ const {
   DEFAULT_PR_NUMBER,
   DEFAULT_REPOSITORY,
   extractUnresolvedThreads,
+  extractThreadsFromSnapshot,
   formatUnresolvedThreadsReport,
   getConfiguration,
+  loadReviewThreadsFromFile,
   normalizeBody,
+  parseCommandLineArguments,
 } = require(path.join(repoRoot, "scripts/list_unresolved_pr_threads.js"));
 
 test("getConfiguration applies defaults and parses explicit repository/PR inputs", () => {
@@ -25,11 +29,22 @@ test("getConfiguration applies defaults and parses explicit repository/PR inputs
     repo: "repo",
     prNumber: 42,
     token: "token-value",
+    inputPath: null,
   });
 
   const defaults = getConfiguration([], { GITHUB_TOKEN: "token-value" });
   assert.equal(`${defaults.owner}/${defaults.repo}`, DEFAULT_REPOSITORY);
   assert.equal(defaults.prNumber, DEFAULT_PR_NUMBER);
+});
+
+test("getConfiguration accepts --input without requiring a GitHub token", () => {
+  const configuration = getConfiguration(
+    ["octo/repo", "178", "--input", "tests/fixtures/scripts/review_threads_snapshot.json"],
+    {}
+  );
+
+  assert.equal(configuration.inputPath, "tests/fixtures/scripts/review_threads_snapshot.json");
+  assert.equal(configuration.token, undefined);
 });
 
 test("extractUnresolvedThreads keeps unresolved threads and normalizes comment text", () => {
@@ -104,4 +119,49 @@ test("formatUnresolvedThreadsReport renders thread identifiers and content", () 
   assert.match(report, /Unresolved review threads: 1/);
   assert.match(report, /1\. THREAD_1 \(scripts\/list_unresolved_pr_threads\.js:99, outdated\)/);
   assert.match(report, /reviewer: Please handle pagination\./);
+});
+
+test("parseCommandLineArguments separates positional values from the --input flag", () => {
+  assert.deepEqual(
+    parseCommandLineArguments(["octo/repo", "178", "--input", "threads.json"]),
+    {
+      inputPath: "threads.json",
+      positional: ["octo/repo", "178"],
+    }
+  );
+});
+
+test("loadReviewThreadsFromFile supports GraphQL snapshot payloads", () => {
+  const snapshotPath = path.join(
+    repoRoot,
+    "tests/fixtures/scripts/review_threads_snapshot.json"
+  );
+
+  const threads = loadReviewThreadsFromFile(snapshotPath);
+
+  assert.equal(threads.length, 3);
+  assert.equal(threads[0].id, "THREAD_A");
+  assert.equal(threads[2].id, "THREAD_C");
+});
+
+test("extractThreadsFromSnapshot rejects unsupported snapshot shapes", () => {
+  assert.throws(
+    () => extractThreadsFromSnapshot({ data: { repository: {} } }),
+    /supported thread collection/
+  );
+});
+
+test("snapshot fixtures can drive the unresolved thread report offline", () => {
+  const snapshotPath = path.join(
+    repoRoot,
+    "tests/fixtures/scripts/review_threads_snapshot.json"
+  );
+  const snapshot = JSON.parse(fs.readFileSync(snapshotPath, "utf8"));
+  const unresolvedThreads = extractUnresolvedThreads(extractThreadsFromSnapshot(snapshot));
+  const report = formatUnresolvedThreadsReport("stranske/trip-planner", 178, unresolvedThreads);
+
+  assert.match(report, /Unresolved review threads: 2/);
+  assert.match(report, /THREAD_A \(trip_planner\/example\.py:17\)/);
+  assert.match(report, /THREAD_C \(scripts\/list_unresolved_pr_threads\.js:121, outdated\)/);
+  assert.match(report, /reviewer-b: Can this use fixture input too\?/);
 });

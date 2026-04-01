@@ -1,0 +1,63 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "nodes": [
+            {
+              "id": "THREAD_A",
+              "isResolved": false,
+              "isOutdated": false,
+              "path": "trip_planner/example.py",
+              "line": 17,
+              "originalLine": 17,
+              "comments": {
+                "nodes": [
+                  {
+                    "id": "COMMENT_A1",
+                    "body": "Please keep this branch explicit.",
+                    "createdAt": "2025-01-02T00:00:00Z",
+                    "author": {
+                      "login": "reviewer-a"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "THREAD_B",
+              "isResolved": true,
+              "isOutdated": false,
+              "path": "trip_planner/ignore.py",
+              "line": 8,
+              "originalLine": 8,
+              "comments": {
+                "nodes": []
+              }
+            },
+            {
+              "id": "THREAD_C",
+              "isResolved": false,
+              "isOutdated": true,
+              "path": "scripts/list_unresolved_pr_threads.js",
+              "line": 121,
+              "originalLine": 120,
+              "comments": {
+                "nodes": [
+                  {
+                    "id": "COMMENT_C1",
+                    "body": "Can this use fixture input too?",
+                    "createdAt": "2025-01-03T00:00:00Z",
+                    "author": {
+                      "login": "reviewer-b"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
