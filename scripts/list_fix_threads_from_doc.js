@@ -6,6 +6,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const DEFAULT_DOC_PATH = path.resolve(__dirname, "..", "docs", "pr-178-unresolved-threads.md");
+const DEFAULT_REPOSITORY = "stranske/trip-planner";
+const GITHUB_PULL_BASE_URL = `https://github.com/${DEFAULT_REPOSITORY}/pull/`;
 const PLACEHOLDER_VALUES = new Set(["tbd", "todo", "pending", "unknown"]);
 
 function parseThreadInventory(markdown) {
@@ -47,7 +49,7 @@ function parseThreadInventory(markdown) {
         thread.classification = classification ? classification.toLowerCase() : null;
         currentField = "classification";
       } else if (line.startsWith("- Follow-up PR:")) {
-        thread.followUpPr = normalizeUrlFieldValue(line.slice("- Follow-up PR:".length));
+        thread.followUpPr = normalizeFollowUpPrFieldValue(line.slice("- Follow-up PR:".length));
         currentField = "followUpPr";
       } else if (line.startsWith("- Rationale:")) {
         thread.rationale = normalizeFieldValue(line.slice("- Rationale:".length));
@@ -77,7 +79,10 @@ function appendContinuationLine(thread, fieldName, line) {
   }
 
   if (fieldName === "originalThreadUrl" || fieldName === "followUpPr") {
-    thread[fieldName] = normalizeUrlFieldValue(joinedValue);
+    thread[fieldName] =
+      fieldName === "followUpPr"
+        ? normalizeFollowUpPrFieldValue(joinedValue)
+        : normalizeUrlFieldValue(joinedValue);
     return;
   }
 
@@ -112,6 +117,29 @@ function normalizeUrlFieldValue(value) {
   const autoLinkMatch = normalized.match(/^<(https?:\/\/[^>\s]+)>$/i);
   if (autoLinkMatch) {
     return autoLinkMatch[1];
+  }
+
+  return normalized;
+}
+
+function normalizeFollowUpPrFieldValue(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const normalized = normalizeUrlFieldValue(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const prNumberMatch =
+    normalized.match(/^#(\d+)$/) ||
+    normalized.match(/^pr\s*#(\d+)$/i) ||
+    normalized.match(/^pull\/(\d+)$/i) ||
+    normalized.match(/^\/pull\/(\d+)$/i);
+
+  if (prNumberMatch) {
+    return `${GITHUB_PULL_BASE_URL}${prNumberMatch[1]}`;
   }
 
   return normalized;
@@ -491,8 +519,9 @@ function buildFixThreadsReport(options = {}, dependencies = {}) {
   const allFixThreads = listFixClassifiedThreads(threads);
   const actionableFixThreads = listActionableFixThreads(threads, { excludeOutdated });
   const excludedOutdatedCount = allFixThreads.length - actionableFixThreads.length;
+  const normalizedFollowUpPr = normalizeFollowUpPrFieldValue(followUpPr);
   const fixThreads = followUpPr
-    ? actionableFixThreads.filter((thread) => thread.followUpPr === followUpPr)
+    ? actionableFixThreads.filter((thread) => thread.followUpPr === normalizedFollowUpPr)
     : actionableFixThreads;
   return formatFixThreadsOutput(fixThreads, outputFormat, { excludedOutdatedCount });
 }
@@ -525,7 +554,7 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
         throw new Error("The --follow-up-pr flag requires a value.");
       }
 
-      options.followUpPr = normalizeUrlFieldValue(value);
+      options.followUpPr = normalizeFollowUpPrFieldValue(value);
       if (!options.followUpPr) {
         throw new Error(`The --follow-up-pr flag requires a non-placeholder URL; received "${value}".`);
       }
@@ -599,6 +628,7 @@ module.exports = {
   listFixClassifiedThreads,
   loadThreadInventory,
   normalizeFieldValue,
+  normalizeFollowUpPrFieldValue,
   normalizeOutdatedFieldValue,
   normalizeUrlFieldValue,
   parseThreadInventory,

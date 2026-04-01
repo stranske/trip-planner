@@ -23,6 +23,7 @@ const {
   listFixClassifiedThreads,
   loadThreadInventory,
   normalizeOutdatedFieldValue,
+  normalizeFollowUpPrFieldValue,
   normalizeUrlFieldValue,
   parseThreadInventory,
 } = require(path.join(repoRoot, "scripts/list_fix_threads_from_doc.js"));
@@ -105,6 +106,42 @@ test("parseThreadInventory normalizes markdown links for URL fields", () => {
       outdated: false,
     },
   ]);
+});
+
+test("parseThreadInventory canonicalizes follow-up PR number shorthand", () => {
+  const threads = parseThreadInventory(`
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: PR #581
+- Rationale: Code path still drops the final stop.
+- Content: Reviewer requested a bounds check.
+- Outdated: no
+
+### Thread 2
+
+- Thread ID: THREAD_2
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2
+- Location: trip_planner/other.py:8
+- Classification: fix
+- Follow-up PR: pull/582
+- Rationale: Secondary code path needs the same patch.
+- Content: Reviewer requested parity with the primary branch.
+- Outdated: no
+`);
+
+  assert.deepEqual(
+    threads.map((thread) => thread.followUpPr),
+    [
+      "https://github.com/stranske/trip-planner/pull/581",
+      "https://github.com/stranske/trip-planner/pull/582",
+    ]
+  );
 });
 
 test("parseThreadInventory folds wrapped rationale and content lines into the same field", () => {
@@ -513,6 +550,26 @@ test("normalizeUrlFieldValue unwraps markdown and autolink URLs", () => {
   assert.equal(normalizeUrlFieldValue("TBD"), null);
 });
 
+test("normalizeFollowUpPrFieldValue canonicalizes PR number shorthand", () => {
+  assert.equal(
+    normalizeFollowUpPrFieldValue("#581"),
+    "https://github.com/stranske/trip-planner/pull/581"
+  );
+  assert.equal(
+    normalizeFollowUpPrFieldValue("PR #582"),
+    "https://github.com/stranske/trip-planner/pull/582"
+  );
+  assert.equal(
+    normalizeFollowUpPrFieldValue("pull/583"),
+    "https://github.com/stranske/trip-planner/pull/583"
+  );
+  assert.equal(
+    normalizeFollowUpPrFieldValue("https://github.com/stranske/trip-planner/pull/584"),
+    "https://github.com/stranske/trip-planner/pull/584"
+  );
+  assert.equal(normalizeFollowUpPrFieldValue("TBD"), null);
+});
+
 test("normalizeOutdatedFieldValue parses yes/no values and preserves invalid input for validation", () => {
   assert.equal(normalizeOutdatedFieldValue("yes"), true);
   assert.equal(normalizeOutdatedFieldValue("no"), false);
@@ -559,7 +616,7 @@ test("getCliConfiguration parses completeness validation, doc path, and output f
       "--require-complete",
       "--exclude-outdated",
       "--follow-up-pr",
-      "https://github.com/stranske/trip-planner/pull/581",
+      "#581",
       "--format",
       "json",
     ]),
@@ -802,5 +859,48 @@ test("buildFixThreadsReport can isolate a single bounded follow-up PR scope", ()
   assert.equal(parsed.count, 1);
   assert.equal(parsed.fixThreads[0].threadId, "THREAD_2");
   assert.equal(parsed.followUpPrGroups.length, 1);
+  assert.equal(parsed.followUpPrGroups[0].followUpPr, "https://github.com/stranske/trip-planner/pull/582");
+});
+
+test("buildFixThreadsReport matches follow-up PR shorthand against canonicalized inventory values", () => {
+  const report = buildFixThreadsReport(
+    {
+      docPath: "docs/mixed.md",
+      followUpPr: "PR #582",
+      outputFormat: "json",
+      requireComplete: true,
+    },
+    {
+      readFileSync: () => `
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: #581
+- Rationale: Code path still drops the final stop.
+- Content: Reviewer requested a bounds check.
+- Outdated: no
+
+### Thread 2
+
+- Thread ID: THREAD_2
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2
+- Location: trip_planner/other.py:8
+- Classification: fix
+- Follow-up PR: pull/582
+- Rationale: Separate code path needs the same guard.
+- Content: Reviewer requested parity with the primary branch.
+- Outdated: no
+`,
+    }
+  );
+
+  const parsed = JSON.parse(report);
+  assert.equal(parsed.count, 1);
+  assert.equal(parsed.fixThreads[0].threadId, "THREAD_2");
   assert.equal(parsed.followUpPrGroups[0].followUpPr, "https://github.com/stranske/trip-planner/pull/582");
 });
