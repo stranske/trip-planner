@@ -47,6 +47,15 @@ The verifier now checks that each documented thread ID, original thread URL, loc
 
 After the fix/disposition work is complete, rerun the same command with `--expect-count 0` to verify the acceptance criterion.
 
+To summarize the local repo state against the acceptance criteria before doing any GitHub UI follow-up, run:
+
+```bash
+node scripts/check_pr_thread_acceptance.js --doc docs/pr-178-unresolved-threads.md
+node scripts/check_pr_thread_acceptance.js --doc docs/pr-178-unresolved-threads.md --input path/to/pr-178-review-threads.json
+```
+
+The acceptance checker fails loudly when the inventory is still incomplete, and it only performs live GitHub API verification when you opt in with `--live`.
+
 ## Thread Template
 
 ### Thread 1
