@@ -828,6 +828,10 @@ def _low_confidence_flags(resolved_profile: ResolvedLeisureProfile) -> list[str]
     return _dedupe_strings(flags)
 
 
+def _non_empty_strings(*values: str) -> list[str]:
+    return [value for value in values if value]
+
+
 def _explanations_for_result(
     *,
     seed: CandidateSeed,
@@ -861,11 +865,11 @@ def _explanations_for_result(
                 "top_positive": top_positive.axis_key,
                 "top_negative": top_negative.axis_key,
             },
-            human_summary=[
-                bundle.summary,
+            human_summary=_non_empty_strings(
+                bundle.summary or bundle.title,
                 top_positive.summary,
                 top_negative.summary,
-            ],
+            ),
             source_refs=list(bundle.provenance_summary.source_refs),
         ),
         ExplanationRecord(
@@ -879,7 +883,10 @@ def _explanations_for_result(
             machine_context={
                 "normalized_signal": f"{top_positive.normalized_signal or 0.0:.2f}"
             },
-            human_summary=list(bundle.explanation.strengths[:2]) or [bundle.summary],
+            human_summary=_non_empty_strings(
+                *bundle.explanation.strengths[:2],
+                bundle.summary or bundle.title,
+            ),
             source_refs=list(bundle.provenance_summary.source_refs),
         ),
         ExplanationRecord(

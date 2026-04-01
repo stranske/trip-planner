@@ -3,8 +3,6 @@ from copy import deepcopy
 from pathlib import Path
 
 from trip_planner.candidates import CandidateSeed, CandidateSet
-from trip_planner.candidates.generation import _aggregate_booking_links, _aggregate_source_refs
-from trip_planner.candidates.generation import _mean_or_none as _candidate_mean_or_none
 from trip_planner.itinerary import derive_itinerary_objectives
 from trip_planner.options import (
     ActivityOption,
@@ -52,17 +50,56 @@ def _load_entry(entry: dict, parser):
 
 
 def _mean_or_none(values: list[float | None]) -> float | None:
-    return _candidate_mean_or_none(values)
+    numeric = [value for value in values if value is not None]
+    if not numeric:
+        return None
+    return round(sum(numeric) / len(numeric), 4)
+
+
+def _aggregate_source_refs(*collections) -> list[str]:
+    seen: set[str] = set()
+    refs: list[str] = []
+    for collection in collections:
+        for option in collection:
+            for source_ref in option.source_refs:
+                provenance_id = getattr(source_ref, "provenance_id", "")
+                if provenance_id and provenance_id not in seen:
+                    seen.add(provenance_id)
+                    refs.append(provenance_id)
+    return refs
+
+
+def _aggregate_booking_links(*collections) -> list[str]:
+    seen: set[str] = set()
+    links: list[str] = []
+    for collection in collections:
+        for option in collection:
+            for link in option.booking_links:
+                if link and link not in seen:
+                    seen.add(link)
+                    links.append(link)
+    return links
 
 
 def _load_candidate_set(name: str) -> CandidateSet:
     payload = _load_json(_fixture_path(name))
     seeds: list[CandidateSeed] = []
     for index, item in enumerate(payload["candidates"]):
-        destinations = [_load_entry(entry, Destination.from_dict) for entry in item["destinations"]]
-        lodging_options = [_load_entry(entry, LodgingOption.from_dict) for entry in item["lodging_options"]]
-        transport_options = [_load_entry(entry, TransportOption.from_dict) for entry in item["transport_options"]]
-        activity_options = [_load_entry(entry, ActivityOption.from_dict) for entry in item["activity_options"]]
+        destinations = [
+            _load_entry(entry, Destination.from_dict) for entry in item["destinations"]
+        ]
+        lodging_options = [
+            _load_entry(entry, LodgingOption.from_dict)
+            for entry in item["lodging_options"]
+        ]
+        transport_options = [
+            _load_entry(entry, TransportOption.from_dict)
+            for entry in item["transport_options"]
+        ]
+        activity_options = [
+            _load_entry(entry, ActivityOption.from_dict)
+            for entry in item["activity_options"]
+        ]
         bundle = InventoryBundle(
             bundle_id=item["bundle_id"],
             title=item["title"],
@@ -96,19 +133,37 @@ def _load_candidate_set(name: str) -> CandidateSet:
             ),
             quality_value_fit=BundleQualityValueFitSummary(
                 quality_signal=_mean_or_none(
-                    [option.quality_summary.overall_signal for option in lodging_options]
-                    + [option.quality_summary.overall_signal for option in activity_options]
-                    + [option.experience_summary.comfort_signal for option in transport_options]
+                    [
+                        option.quality_summary.overall_signal
+                        for option in lodging_options
+                    ]
+                    + [
+                        option.quality_summary.overall_signal
+                        for option in activity_options
+                    ]
+                    + [
+                        option.experience_summary.comfort_signal
+                        for option in transport_options
+                    ]
                 ),
                 value_signal=_mean_or_none(
                     [option.value_summary.overall_signal for option in lodging_options]
-                    + [option.value_summary.overall_signal for option in activity_options]
-                    + [option.fit_summary.policy_fit_signal for option in transport_options]
+                    + [
+                        option.value_summary.overall_signal
+                        for option in activity_options
+                    ]
+                    + [
+                        option.fit_summary.policy_fit_signal
+                        for option in transport_options
+                    ]
                 ),
                 fit_signal=_mean_or_none(
                     [option.fit_summary.overall_signal for option in lodging_options]
                     + [option.fit_summary.overall_signal for option in activity_options]
-                    + [option.fit_summary.overall_signal for option in transport_options]
+                    + [
+                        option.fit_summary.overall_signal
+                        for option in transport_options
+                    ]
                 ),
             ),
             feasibility=BundleFeasibility(
@@ -140,7 +195,9 @@ def _load_candidate_set(name: str) -> CandidateSet:
         trip_id=payload["trip_id"],
         purpose="profile_learning",
         seeds=seeds,
-        explanation=["Representative candidate showcase for deterministic leisure ranking tests."],
+        explanation=[
+            "Representative candidate showcase for deterministic leisure ranking tests."
+        ],
         source_refs=[
             source_ref
             for seed in seeds
@@ -172,7 +229,9 @@ def test_rank_leisure_candidates_emits_bundle_rankings_with_explanations() -> No
     assert result_set.results[0].score_breakdown.component_contributions
 
 
-def test_rank_leisure_candidates_reorders_same_candidates_for_different_profiles() -> None:
+def test_rank_leisure_candidates_reorders_same_candidates_for_different_profiles() -> (
+    None
+):
     candidate_set = _load_candidate_set("leisure_candidate_showcase.json")
     fixtures = load_fixture_map()
 
@@ -198,7 +257,10 @@ def test_rank_leisure_candidates_reorders_same_candidates_for_different_profiles
 
     assert urban_ranked.results[0].target_bundle_id == "bundle:discovery-drift"
     assert quality_ranked.results[0].target_bundle_id == "bundle:comfort-floor"
-    assert urban_ranked.results[0].target_bundle_id != quality_ranked.results[0].target_bundle_id
+    assert (
+        urban_ranked.results[0].target_bundle_id
+        != quality_ranked.results[0].target_bundle_id
+    )
 
 
 def test_rank_leisure_candidates_keeps_tension_and_low_confidence_visible() -> None:
@@ -218,7 +280,9 @@ def test_rank_leisure_candidates_keeps_tension_and_low_confidence_visible() -> N
         penalty.reason_code == "preference_tension"
         for penalty in first_result.score_breakdown.penalties
     )
-    assert any(risk.code == "preference_tension" for risk in first_result.unresolved_risks)
+    assert any(
+        risk.code == "preference_tension" for risk in first_result.unresolved_risks
+    )
 
 
 def test_rank_leisure_candidates_accepts_raw_bundles() -> None:
@@ -234,4 +298,26 @@ def test_rank_leisure_candidates_accepts_raw_bundles() -> None:
 
     assert len(result_set.results) == len(candidate_set.seeds)
     assert result_set.results[0].target_bundle_id is not None
-    assert result_set.results[0].score == result_set.results[0].score_breakdown.final_score
+    assert (
+        result_set.results[0].score == result_set.results[0].score_breakdown.final_score
+    )
+
+
+def test_rank_leisure_candidates_filters_empty_human_summary_entries() -> None:
+    candidate_set = _load_candidate_set("leisure_candidate_showcase.json")
+    first_bundle = candidate_set.seeds[0].bundle
+    first_bundle.summary = ""
+    first_bundle.explanation.strengths = []
+
+    fixture = load_fixture_map()["discovery-wanderer"]
+    resolved = resolve_leisure_profile(fixture.profile, fixture.evidence)
+
+    result_set = rank_leisure_candidates(
+        trip_id=candidate_set.trip_id,
+        resolved_profile=resolved,
+        candidate_set=candidate_set,
+    )
+
+    for record in result_set.results[0].explanation_records:
+        assert record.human_summary
+        assert all(item for item in record.human_summary)
