@@ -11,7 +11,7 @@ from trip_planner._validators import (
     require_probability,
     require_strings,
 )
-from trip_planner.options import ActivityOption, InventoryBundle, LodgingOption
+from trip_planner.options import InventoryBundle
 
 from .move_costs import MoveCostSummary, TravelTimeEstimate, build_move_cost_summaries
 
