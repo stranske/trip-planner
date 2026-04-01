@@ -7,10 +7,10 @@ tasks:
     title: Create `trip_planner/ranking/leisure.py` implementing a deterministic leisure
       ranking engine that consumes `LeisurePreferenceProfile`, `ItineraryObjectives`,
       feasibility outputs, and candidate sets/bundles.
-    status: doing
+    status: done
     started_at: '2026-04-01T11:33:15Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-04-01T11:33:30Z'
+    commit: 7531909996ff4b8b54462bbb3a2f547ed5f4d6cf
     notes: []
   - id: task-02
     title: 'Define scope for: Create the `trip_planner/ranking/leisure.py` module
