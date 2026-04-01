@@ -155,8 +155,7 @@ def build_profile_from_overrides(overrides: dict[str, Any]) -> LeisurePreference
     unknown_date_window_keys = set(date_window) - {"start", "end"}
     if unknown_date_window_keys:
         raise ValueError(
-            "unsupported date_window override keys: "
-            f"{sorted(unknown_date_window_keys)}"
+            f"unsupported date_window override keys: {sorted(unknown_date_window_keys)}"
         )
     duration_bounds = {
         **profile_payload["hard_constraints"]["duration_bounds"],
