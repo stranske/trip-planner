@@ -15,6 +15,7 @@ function parseThreadInventory(markdown) {
       threadId: null,
       location: null,
       classification: null,
+      followUpPr: null,
       rationale: null,
       content: null,
     };
@@ -30,6 +31,8 @@ function parseThreadInventory(markdown) {
         } else if (line.startsWith("- Classification:")) {
           const classification = normalizeFieldValue(line.slice("- Classification:".length));
           thread.classification = classification ? classification.toLowerCase() : null;
+        } else if (line.startsWith("- Follow-up PR:")) {
+          thread.followUpPr = normalizeFieldValue(line.slice("- Follow-up PR:".length));
         } else if (line.startsWith("- Rationale:")) {
           thread.rationale = normalizeFieldValue(line.slice("- Rationale:".length));
         } else if (line.startsWith("- Content:")) {
@@ -64,6 +67,8 @@ function collectThreadInventoryIssues(threads) {
       issues.push(`${threadLabel}: missing classification`);
     } else if (!["fix", "disposition"].includes(thread.classification)) {
       issues.push(`${threadLabel}: invalid classification "${thread.classification}"`);
+    } else if (thread.classification === "fix" && !thread.followUpPr) {
+      issues.push(`${threadLabel}: missing follow-up PR`);
     }
 
     if (!thread.rationale) {
@@ -108,6 +113,7 @@ function formatFixThreadsReport(fixThreads) {
   fixThreads.forEach((thread, index) => {
     lines.push(`${index + 1}. ${thread.threadId || "<missing thread id>"}`);
     lines.push(`   Location: ${thread.location || "<missing location>"}`);
+    lines.push(`   Follow-up PR: ${thread.followUpPr || "<missing follow-up PR>"}`);
     lines.push(`   Rationale: ${thread.rationale || "<missing rationale>"}`);
     lines.push(`   Content: ${thread.content || "<missing content>"}`);
   });

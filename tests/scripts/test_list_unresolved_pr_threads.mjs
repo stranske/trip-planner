@@ -290,6 +290,7 @@ test("formatUnresolvedThreadsAsMarkdown output can be parsed by the inventory to
       threadId: "THREAD_1",
       location: "trip_planner/example.py:17",
       classification: null,
+      followUpPr: null,
       rationale: null,
       content: "reviewer-a: Please keep this branch explicit.",
     },

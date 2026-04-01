@@ -33,6 +33,7 @@ After the fix/disposition work is complete, rerun the same command with `--expec
 - Thread ID:
 - Location:
 - Classification:
+- Follow-up PR:
 - Rationale:
 - Content:
 
@@ -41,6 +42,7 @@ After the fix/disposition work is complete, rerun the same command with `--expec
 - Thread ID:
 - Location:
 - Classification:
+- Follow-up PR:
 - Rationale:
 - Content:
 
@@ -49,6 +51,7 @@ After the fix/disposition work is complete, rerun the same command with `--expec
 - Thread ID:
 - Location:
 - Classification:
+- Follow-up PR:
 - Rationale:
 - Content:
 
@@ -57,5 +60,6 @@ After the fix/disposition work is complete, rerun the same command with `--expec
 - Thread ID:
 - Location:
 - Classification:
+- Follow-up PR:
 - Rationale:
 - Content:

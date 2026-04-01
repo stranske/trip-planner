@@ -25,6 +25,7 @@ test("parseThreadInventory reads structured thread metadata from markdown", () =
 - Thread ID: THREAD_1
 - Location: trip_planner/example.py:17
 - Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
 - Rationale: Code path still drops the final stop.
 - Content: Reviewer requested a bounds check.
 
@@ -42,6 +43,7 @@ test("parseThreadInventory reads structured thread metadata from markdown", () =
       threadId: "THREAD_1",
       location: "trip_planner/example.py:17",
       classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
       rationale: "Code path still drops the final stop.",
       content: "Reviewer requested a bounds check.",
     },
@@ -49,6 +51,7 @@ test("parseThreadInventory reads structured thread metadata from markdown", () =
       threadId: "THREAD_2",
       location: "trip_planner/other.py:8",
       classification: "disposition",
+      followUpPr: null,
       rationale: "Existing behavior is intentional.",
       content: "Reviewer asked for a change that would regress issue #176.",
     },
@@ -70,6 +73,7 @@ test("formatFixThreadsReport summarizes the filtered fix list", () => {
     {
       threadId: "THREAD_1",
       location: "trip_planner/example.py:17",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
       rationale: "Code path still drops the final stop.",
       content: "Reviewer requested a bounds check.",
     },
@@ -78,6 +82,7 @@ test("formatFixThreadsReport summarizes the filtered fix list", () => {
   assert.match(report, /Fix-classified threads: 1/);
   assert.match(report, /1\. THREAD_1/);
   assert.match(report, /Location: trip_planner\/example\.py:17/);
+  assert.match(report, /Follow-up PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/);
 });
 
 test("collectThreadInventoryIssues flags missing metadata and placeholder entries", () => {
@@ -86,15 +91,25 @@ test("collectThreadInventoryIssues flags missing metadata and placeholder entrie
       threadId: null,
       location: null,
       classification: null,
+      followUpPr: null,
       rationale: null,
       content: null,
     },
     {
       threadId: "THREAD_2",
       location: "trip_planner/other.py:8",
+      followUpPr: null,
       classification: "follow-up",
       rationale: "Need product clarification.",
       content: "Reviewer requested a new classification.",
+    },
+    {
+      threadId: "THREAD_3",
+      location: "trip_planner/fix.py:5",
+      classification: "fix",
+      followUpPr: null,
+      rationale: "Code update is required.",
+      content: "Reviewer requested a follow-up patch.",
     },
   ]);
 
@@ -105,6 +120,7 @@ test("collectThreadInventoryIssues flags missing metadata and placeholder entrie
     "Thread 1: missing rationale",
     "Thread 1: missing content",
     'THREAD_2: invalid classification "follow-up"',
+    "THREAD_3: missing follow-up PR",
   ]);
 });
 
@@ -139,4 +155,21 @@ test("the checked-in PR #178 inventory currently contains no fix-classified thre
   const fixThreads = listFixClassifiedThreads(threads);
 
   assert.equal(fixThreads.length, 0);
+});
+
+test("fix-classified entries with follow-up PR links satisfy completeness checks", () => {
+  const threads = parseThreadInventory(`
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Code path still drops the final stop.
+- Content: Reviewer requested a bounds check.
+`);
+
+  assert.deepEqual(collectThreadInventoryIssues(threads), []);
 });
