@@ -267,9 +267,36 @@ function extractThreadsFromSnapshot(snapshot) {
     return snapshot.threads;
   }
 
+  if (Array.isArray(snapshot?.reviewThreads?.nodes)) {
+    return snapshot.reviewThreads.nodes;
+  }
+
+  if (Array.isArray(snapshot?.reviewThreads?.edges)) {
+    return snapshot.reviewThreads.edges
+      .map((edge) => edge?.node)
+      .filter(Boolean);
+  }
+
+  if (Array.isArray(snapshot?.pullRequest?.reviewThreads?.nodes)) {
+    return snapshot.pullRequest.reviewThreads.nodes;
+  }
+
+  if (Array.isArray(snapshot?.pullRequest?.reviewThreads?.edges)) {
+    return snapshot.pullRequest.reviewThreads.edges
+      .map((edge) => edge?.node)
+      .filter(Boolean);
+  }
+
   const graphqlThreads = snapshot?.data?.repository?.pullRequest?.reviewThreads?.nodes;
   if (Array.isArray(graphqlThreads)) {
     return graphqlThreads;
+  }
+
+  const graphqlThreadEdges = snapshot?.data?.repository?.pullRequest?.reviewThreads?.edges;
+  if (Array.isArray(graphqlThreadEdges)) {
+    return graphqlThreadEdges
+      .map((edge) => edge?.node)
+      .filter(Boolean);
   }
 
   throw new Error("Review thread snapshot did not contain a supported thread collection.");

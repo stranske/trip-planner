@@ -256,6 +256,51 @@ test("loadReviewThreadsFromFile supports GraphQL snapshot payloads", () => {
   assert.equal(threads[2].id, "THREAD_C");
 });
 
+test("extractThreadsFromSnapshot supports reviewThreads edge collections", () => {
+  assert.deepEqual(
+    extractThreadsFromSnapshot({
+      reviewThreads: {
+        edges: [
+          { node: { id: "THREAD_1" } },
+          { node: { id: "THREAD_2" } },
+          { node: null },
+        ],
+      },
+    }),
+    [{ id: "THREAD_1" }, { id: "THREAD_2" }]
+  );
+});
+
+test("extractThreadsFromSnapshot supports pullRequest reviewThreads node collections", () => {
+  assert.deepEqual(
+    extractThreadsFromSnapshot({
+      pullRequest: {
+        reviewThreads: {
+          nodes: [{ id: "THREAD_1" }, { id: "THREAD_2" }],
+        },
+      },
+    }),
+    [{ id: "THREAD_1" }, { id: "THREAD_2" }]
+  );
+});
+
+test("extractThreadsFromSnapshot supports GraphQL edge collections", () => {
+  assert.deepEqual(
+    extractThreadsFromSnapshot({
+      data: {
+        repository: {
+          pullRequest: {
+            reviewThreads: {
+              edges: [{ node: { id: "THREAD_1" } }, { node: { id: "THREAD_2" } }],
+            },
+          },
+        },
+      },
+    }),
+    [{ id: "THREAD_1" }, { id: "THREAD_2" }]
+  );
+});
+
 test("loadReviewThreadsFromFile wraps JSON parsing failures with the input path", () => {
   assert.throws(
     () =>
