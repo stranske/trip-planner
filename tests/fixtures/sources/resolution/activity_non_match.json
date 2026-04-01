@@ -1,0 +1,18 @@
+{
+    "canonical_entity_id": "activity-river-cruise-separate",
+    "entity_scope": "activity",
+    "option_kind": "activity",
+    "decision": "keep_separate",
+    "confidence": 0.23,
+    "duplicate_entity_ids": ["activity-sunset-cruise"],
+    "resolution_ids": ["resolution-activity-river-cruise"],
+    "conflict": {
+        "attribute_path": "activity.duration_minutes",
+        "reason": "low_confidence",
+        "status": "needs_review",
+        "values_by_source": {
+            "source:river-cruise": "60",
+            "source:sunset-cruise": "180"
+        }
+    }
+}
