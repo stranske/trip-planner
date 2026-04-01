@@ -10,6 +10,7 @@ from trip_planner._validators import (
     require_non_negative,
     require_strings,
 )
+from trip_planner._option_contracts import OPTION_SET_PURPOSES
 from trip_planner.contracts import MoneyRange
 from trip_planner.ranking import ExplanationRecord
 
@@ -123,7 +124,8 @@ class ScenarioSearchResult:
     def __post_init__(self) -> None:
         require_non_empty(self.search_id, "search_id")
         require_non_empty(self.trip_id, "trip_id")
-        require_non_empty(self.purpose, "purpose")
+        if self.purpose not in OPTION_SET_PURPOSES:
+            raise ValueError(f"purpose must be one of {OPTION_SET_PURPOSES}")
         require_non_empty(self.title, "title")
         require_non_empty(self.source_result_set_id, "source_result_set_id")
         if self.scope != "route":

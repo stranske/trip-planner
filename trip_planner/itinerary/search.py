@@ -123,7 +123,7 @@ def _route_sequence(result: RankedResult, bundle: InventoryBundle) -> list[str]:
 
 def _tradeoff_from_risk_flag(risk: RiskFlag) -> ScenarioTradeoff:
     return ScenarioTradeoff(
-        tradeoff_id=f"risk:{risk.risk_id}",
+        tradeoff_id=risk.risk_id,
         code=risk.code,
         summary=risk.summary,
         severity=risk.severity,
@@ -138,10 +138,10 @@ def _build_tradeoffs(
 ) -> list[ScenarioTradeoff]:
     tradeoffs = [_tradeoff_from_risk_flag(risk) for risk in result.unresolved_risks]
 
-    for reason in assessment.blocking_reasons:
+    for index, reason in enumerate(assessment.blocking_reasons, start=1):
         tradeoffs.append(
             ScenarioTradeoff(
-                tradeoff_id=f"blocking:{assessment.bundle_id}:{reason}",
+                tradeoff_id=f"blocking:{assessment.bundle_id}:{index}",
                 code="blocking_reason",
                 summary=reason,
                 severity="critical",
@@ -251,8 +251,10 @@ def assemble_itinerary_scenarios(
             tradeoffs=tradeoffs,
         )
         route_sequence = _route_sequence(result, bundle)
-        coherence_passed = bundle.feasibility.internally_consistent and not any(
-            item.blocking for item in tradeoffs
+        coherence_passed = (
+            assessment.feasible
+            and bundle.feasibility.internally_consistent
+            and not any(item.blocking for item in tradeoffs)
         )
 
         summary_notes = list(bundle.explanation.tradeoffs)

@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
+
 from trip_planner.business import (
     BusinessPlanningObjectives,
     BusinessTravelProfile,
@@ -23,6 +25,7 @@ from trip_planner.contracts import (
 )
 from trip_planner.itinerary import assemble_itinerary_scenarios
 from trip_planner.itinerary.feasibility import FeasibilityAssessment
+from trip_planner.itinerary.scenarios import ScenarioSearchResult
 from trip_planner.options import (
     ActivityOption,
     BundleCompositionSummary,
@@ -479,3 +482,57 @@ def test_assemble_itinerary_scenarios_supports_business_primary_and_fallback() -
     assert result.explanation[0] == "objective_mode:business"
     assert result.scenarios[0].scenario_summary.recommended_for_selection is True
     assert result.scenarios[1].scenario_summary.recommended_for_selection is False
+    assert result.scenarios[1].unresolved_tradeoffs[0].tradeoff_id == "risk:policy-exception"
+    assert result.scenarios[1].unresolved_tradeoffs[1].tradeoff_id == "blocking:bundle:exception-business:1"
+
+
+def test_assemble_itinerary_scenarios_marks_infeasible_results_as_not_coherent() -> None:
+    candidate_set = _leisure_candidate_set()
+    ranked_results = _leisure_ranked_results(candidate_set)
+    lead_bundle = candidate_set.seeds[0].bundle
+
+    result = assemble_itinerary_scenarios(
+        ranked_results,
+        candidate_set=candidate_set,
+        objectives=_leisure_objectives(),
+        feasibility_outputs={
+            lead_bundle.bundle_id: FeasibilityAssessment(
+                assessment_id=f"assessment:{lead_bundle.bundle_id}",
+                bundle_id=lead_bundle.bundle_id,
+                feasible=False,
+                recommended_for_ranking=True,
+                schedule_protection_required=False,
+                total_travel_minutes=65,
+                total_transfer_count=1,
+                friction_penalty_total=0.12,
+            )
+        },
+        max_scenarios=1,
+    )
+
+    assert result.scenarios[0].scenario_summary.feasible is False
+    assert result.scenarios[0].scenario_summary.coherence_passed is False
+
+
+def test_scenario_search_result_validates_purpose_against_shared_vocab() -> None:
+    candidate_set = _leisure_candidate_set()
+    ranked_results = _leisure_ranked_results(candidate_set)
+    result = assemble_itinerary_scenarios(
+        ranked_results,
+        candidate_set=candidate_set,
+        objectives=_leisure_objectives(),
+        max_scenarios=1,
+    )
+
+    scenario = result.scenarios[0]
+    with pytest.raises(ValueError, match="purpose must be one of"):
+        ScenarioSearchResult(
+            search_id=result.search_id,
+            trip_id=result.trip_id,
+            purpose="ad_hoc",
+            title=result.title,
+            source_result_set_id=result.source_result_set_id,
+            scenarios=[scenario],
+            explanation=list(result.explanation),
+            source_refs=list(result.source_refs),
+        )
