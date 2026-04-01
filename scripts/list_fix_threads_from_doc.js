@@ -189,6 +189,16 @@ function normalizeFollowUpPrFieldValue(value) {
   return normalized;
 }
 
+function isValidFollowUpPrLink(followUpPr) {
+  if (!followUpPr) {
+    return false;
+  }
+
+  return /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+(?:[/?#][^\s]*)?$/i.test(
+    followUpPr
+  );
+}
+
 function normalizeOutdatedFieldValue(value) {
   const normalized = normalizeFieldValue(value);
   if (!normalized) {
@@ -254,6 +264,8 @@ function collectThreadInventoryIssues(threads) {
       issues.push(`${threadLabel}: invalid classification "${thread.classification}"`);
     } else if (thread.classification === "fix" && !thread.followUpPr) {
       issues.push(`${threadLabel}: missing follow-up PR`);
+    } else if (thread.classification === "fix" && !isValidFollowUpPrLink(thread.followUpPr)) {
+      issues.push(`${threadLabel}: invalid follow-up PR "${thread.followUpPr}"`);
     }
 
     if (!thread.rationale) {
@@ -950,6 +962,7 @@ module.exports = {
   normalizeFollowUpPrFieldValue,
   normalizeOutdatedFieldValue,
   normalizeUrlFieldValue,
+  isValidFollowUpPrLink,
   parseThreadInventory,
   shellQuote,
   isPlaceholderValue,

@@ -171,6 +171,42 @@ test("evaluateAcceptance fails when fix threads are missing follow-up PR links o
   assert.match(result.criteria[2].issues.join("\n"), /Expected 0 unresolved review thread\(s\), found 1\./);
 });
 
+test("evaluateAcceptance fails when a fix thread uses a non-PR follow-up link", async () => {
+  const result = await evaluateAcceptance(
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      token: null,
+      inputPath: null,
+      docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
+      expectDocCount: 1,
+      expectedCount: 0,
+      outputFormat: "text",
+    },
+    {
+      loadThreadInventory: () => [
+        {
+          threadId: "THREAD_1",
+          originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+          location: "trip_planner/example.py:17",
+          classification: "fix",
+          followUpPr: "https://github.com/stranske/trip-planner/issues/581",
+          rationale: "Code changes were tracked, but the stored link points to an issue.",
+          content: "reviewer: Please rework this helper.",
+          outdated: false,
+        },
+      ],
+    }
+  );
+
+  assert.equal(result.overallStatus, "fail");
+  assert.equal(result.criteria[0].status, "fail");
+  assert.match(result.criteria[0].issues[0], /invalid follow-up PR/);
+  assert.equal(result.criteria[1].status, "fail");
+  assert.match(result.criteria[1].issues[0], /invalid follow-up PR/);
+});
+
 test("formatAcceptanceReport renders criterion statuses and issue details", () => {
   const report = formatAcceptanceReport(
     {

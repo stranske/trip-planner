@@ -26,6 +26,7 @@ const {
   getCliConfiguration,
   groupFixThreadsByFollowUpPr,
   isPlaceholderValue,
+  isValidFollowUpPrLink,
   listActionableFixThreads,
   listFixClassifiedThreads,
   loadThreadInventory,
@@ -874,6 +875,19 @@ test("normalizeFollowUpPrFieldValue canonicalizes PR number shorthand", () => {
   assert.equal(normalizeFollowUpPrFieldValue("TBD"), null);
 });
 
+test("isValidFollowUpPrLink accepts canonical GitHub pull request URLs only", () => {
+  assert.equal(
+    isValidFollowUpPrLink("https://github.com/stranske/trip-planner/pull/581"),
+    true
+  );
+  assert.equal(
+    isValidFollowUpPrLink("https://github.com/stranske/trip-planner/issues/581"),
+    false
+  );
+  assert.equal(isValidFollowUpPrLink("pull/581"), false);
+  assert.equal(isValidFollowUpPrLink(null), false);
+});
+
 test("normalizeOutdatedFieldValue parses yes/no values and preserves invalid input for validation", () => {
   assert.equal(normalizeOutdatedFieldValue("yes"), true);
   assert.equal(normalizeOutdatedFieldValue("no"), false);
@@ -899,6 +913,25 @@ test("collectThreadInventoryIssues treats placeholder text as incomplete metadat
     "THREAD_1: missing original thread URL",
     "THREAD_1: missing follow-up PR",
     "THREAD_1: missing rationale",
+  ]);
+});
+
+test("collectThreadInventoryIssues rejects malformed follow-up PR links for fix threads", () => {
+  const issues = collectThreadInventoryIssues([
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/example.py:17",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/issues/581",
+      rationale: "Code update is required.",
+      content: "Reviewer requested a bounds check.",
+      outdated: false,
+    },
+  ]);
+
+  assert.deepEqual(issues, [
+    'THREAD_1: invalid follow-up PR "https://github.com/stranske/trip-planner/issues/581"',
   ]);
 });
 

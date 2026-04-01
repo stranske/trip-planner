@@ -7,6 +7,7 @@ const path = require("node:path");
 const {
   DEFAULT_DOC_PATH,
   collectThreadInventoryIssues,
+  isValidFollowUpPrLink,
   listFixClassifiedThreads,
   loadThreadInventory,
 } = require("./list_fix_threads_from_doc.js");
@@ -155,7 +156,9 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
   const documentedThreads = loadInventory(configuration.docPath);
   const docIssues = collectThreadInventoryIssues(documentedThreads);
   const fixThreads = listFixClassifiedThreads(documentedThreads);
-  const fixThreadsMissingFollowUpPr = fixThreads.filter((thread) => !thread.followUpPr);
+  const fixThreadsMissingOrInvalidFollowUpPr = fixThreads.filter(
+    (thread) => !isValidFollowUpPrLink(thread.followUpPr)
+  );
 
   const criteria = [
     {
@@ -174,15 +177,20 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
     {
       id: "fix_follow_up_prs",
       label: "fix-classified threads have follow-up PR links",
-      status: fixThreadsMissingFollowUpPr.length === 0 ? "pass" : "fail",
+      status: fixThreadsMissingOrInvalidFollowUpPr.length === 0 ? "pass" : "fail",
       details:
         fixThreads.length === 0
           ? "No fix-classified threads are currently documented."
-          : fixThreadsMissingFollowUpPr.length === 0
+          : fixThreadsMissingOrInvalidFollowUpPr.length === 0
             ? `All ${fixThreads.length} fix-classified thread(s) include follow-up PR links.`
-            : `${fixThreadsMissingFollowUpPr.length} of ${fixThreads.length} fix-classified thread(s) are missing follow-up PR links.`,
-      issues: fixThreadsMissingFollowUpPr.map(
-        (thread) => `${thread.threadId || "<missing thread id>"}: missing follow-up PR`
+            : `${fixThreadsMissingOrInvalidFollowUpPr.length} of ${fixThreads.length} fix-classified thread(s) are missing valid follow-up PR links.`,
+      issues: fixThreadsMissingOrInvalidFollowUpPr.map(
+        (thread) =>
+          `${thread.threadId || "<missing thread id>"}: ${
+            thread.followUpPr
+              ? `invalid follow-up PR "${thread.followUpPr}"`
+              : "missing follow-up PR"
+          }`
       ),
     },
   ];
