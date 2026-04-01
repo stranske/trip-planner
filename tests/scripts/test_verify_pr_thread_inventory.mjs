@@ -15,7 +15,6 @@ const {
   parseThreadInventory,
 } = require(path.join(repoRoot, "scripts/list_fix_threads_from_doc.js"));
 const {
-  extractThreadsFromSnapshot,
   extractUnresolvedThreads,
 } = require(path.join(repoRoot, "scripts/list_unresolved_pr_threads.js"));
 
@@ -83,9 +82,47 @@ test("collectInventoryVerificationIssues reports doc completeness and snapshot m
     [
       "Expected 4 documented thread(s), found 2.",
       "Unresolved thread THREAD_3 is missing from the inventory document.",
+      "Documented thread THREAD_1 location does not match the snapshot (unknown:unknown).",
+      "Documented thread THREAD_1 original thread URL does not match the snapshot.",
+      "Documented thread THREAD_1 content does not match the snapshot.",
       "Documented thread THREAD_2 is not unresolved in the provided snapshot.",
     ]
   );
+});
+
+test("collectInventoryVerificationIssues validates documented thread metadata against the snapshot", () => {
+  const documentedThreads = parseThreadInventory(`
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r999
+- Location: trip_planner/example.py:99
+- Classification: disposition
+- Rationale: Existing behavior is intentional.
+- Content: reviewer: Stale paraphrase.
+`);
+  const unresolvedThreads = [
+    {
+      id: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      path: "trip_planner/example.py",
+      line: 17,
+      comments: [
+        {
+          author: "reviewer",
+          body: "Please keep this branch explicit.",
+        },
+      ],
+    },
+  ];
+
+  assert.deepEqual(collectInventoryVerificationIssues(documentedThreads, unresolvedThreads), [
+    "Documented thread THREAD_1 location does not match the snapshot (trip_planner/example.py:17).",
+    "Documented thread THREAD_1 original thread URL does not match the snapshot.",
+    "Documented thread THREAD_1 content does not match the snapshot.",
+  ]);
 });
 
 test("formatInventoryVerificationReport summarizes passing verification", () => {
@@ -111,15 +148,43 @@ test("formatInventoryVerificationReport summarizes passing verification", () => 
 });
 
 test("buildInventoryVerificationReport accepts a complete matching document and snapshot", () => {
-  const snapshotPath = path.join(
-    repoRoot,
-    "tests/fixtures/scripts/review_threads_snapshot.json"
-  );
-  const unresolvedThreads = extractUnresolvedThreads(
-    extractThreadsFromSnapshot(
-      require(path.join(repoRoot, "tests/fixtures/scripts/review_threads_snapshot.json"))
-    )
-  );
+  const rawThreads = [
+    {
+      id: "THREAD_A",
+      isResolved: false,
+      isOutdated: false,
+      path: "trip_planner/example.py",
+      line: 17,
+      comments: {
+        nodes: [
+          {
+            id: "COMMENT_A1",
+            body: "Please keep this branch explicit.",
+            url: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+            author: { login: "reviewer-a" },
+          },
+        ],
+      },
+    },
+    {
+      id: "THREAD_C",
+      isResolved: false,
+      isOutdated: true,
+      path: "scripts/list_unresolved_pr_threads.js",
+      line: 121,
+      comments: {
+        nodes: [
+          {
+            id: "COMMENT_C1",
+            body: "Can this use fixture input too?",
+            url: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+            author: { login: "reviewer-b" },
+          },
+        ],
+      },
+    },
+  ];
+  const unresolvedThreads = extractUnresolvedThreads(rawThreads);
   const markdown = `
 # PR #178 Unresolved Thread Inventory
 
@@ -148,13 +213,14 @@ test("buildInventoryVerificationReport accepts a complete matching document and 
     owner: "stranske",
     repo: "trip-planner",
     prNumber: 178,
-    inputPath: snapshotPath,
+    inputPath: "inline-snapshot.json",
     docPath: path.resolve("docs/fixture-thread-inventory.md"),
     expectDocCount: 2,
     expectedCount: 2,
     token: undefined,
   }, {
     loadThreadInventory: () => parseThreadInventory(markdown),
+    loadReviewThreadsFromFile: () => rawThreads,
   });
 
   assert.match(passingReport, /Verification: OK/);

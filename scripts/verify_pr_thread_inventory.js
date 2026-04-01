@@ -79,6 +79,11 @@ function collectInventoryVerificationIssues(documentedThreads, unresolvedThreads
 
   const documentedIds = new Set(documentedThreads.map((thread) => thread.threadId).filter(Boolean));
   const unresolvedIds = new Set(unresolvedThreads.map((thread) => thread.id).filter(Boolean));
+  const unresolvedThreadsById = new Map(
+    unresolvedThreads
+      .filter((thread) => thread?.id)
+      .map((thread) => [thread.id, thread])
+  );
 
   unresolvedThreads.forEach((thread) => {
     if (!documentedIds.has(thread.id)) {
@@ -89,6 +94,41 @@ function collectInventoryVerificationIssues(documentedThreads, unresolvedThreads
   documentedThreads.forEach((thread) => {
     if (thread.threadId && unresolvedThreads.length > 0 && !unresolvedIds.has(thread.threadId)) {
       issues.push(`Documented thread ${thread.threadId} is not unresolved in the provided snapshot.`);
+      return;
+    }
+
+    if (!thread.threadId) {
+      return;
+    }
+
+    const unresolvedThread = unresolvedThreadsById.get(thread.threadId);
+    if (!unresolvedThread) {
+      return;
+    }
+
+    const expectedLocation = `${unresolvedThread.path || "unknown"}:${
+      unresolvedThread.line ?? "unknown"
+    }`;
+    if (thread.location && thread.location !== expectedLocation) {
+      issues.push(
+        `Documented thread ${thread.threadId} location does not match the snapshot (${expectedLocation}).`
+      );
+    }
+
+    const expectedOriginalThreadUrl = unresolvedThread.originalThreadUrl || null;
+    if (thread.originalThreadUrl && thread.originalThreadUrl !== expectedOriginalThreadUrl) {
+      issues.push(
+        `Documented thread ${thread.threadId} original thread URL does not match the snapshot.`
+      );
+    }
+
+    const expectedContent = unresolvedThread.comments
+      .map((comment) => `${comment.author}: ${comment.body || "<empty>"}`)
+      .join(" | ") || "No thread comments returned by the API.";
+    if (thread.content && thread.content !== expectedContent) {
+      issues.push(
+        `Documented thread ${thread.threadId} content does not match the snapshot.`
+      );
     }
   });
 

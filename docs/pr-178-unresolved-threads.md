@@ -30,6 +30,8 @@ To verify that the populated inventory matches an exported review-thread snapsho
 node scripts/verify_pr_thread_inventory.js stranske/trip-planner 178 --doc docs/pr-178-unresolved-threads.md --input path/to/pr-178-review-threads.json --expect-doc-count 4 --expect-count 4
 ```
 
+The verifier now checks that each documented thread ID, original thread URL, location, and content match the unresolved-thread snapshot, so copy the generated markdown carefully before adding classifications and rationales.
+
 After the fix/disposition work is complete, rerun the same command with `--expect-count 0` to verify the acceptance criterion.
 
 ## Thread Template
