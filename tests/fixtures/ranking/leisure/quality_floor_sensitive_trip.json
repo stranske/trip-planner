@@ -1,0 +1,54 @@
+{
+  "id": "quality-floor-sensitive-trip",
+  "summary": "Traveler who protects quiet sleep and higher comfort floors before density or novelty.",
+  "profile_overrides": {
+    "hard_constraints": {
+      "budget_ceiling": 1700.0
+    },
+    "anchors": {
+      "quality_floor_anchors": [
+        {
+          "type": "quiet",
+          "label": "quiet sleep",
+          "strength": 0.98,
+          "flexibility": 0.1
+        }
+      ]
+    },
+    "tradeoff_dimensions": {
+      "recovery_vs_intensity": {
+        "value": 0.88,
+        "confidence": 0.83,
+        "salience": 0.9
+      },
+      "route_coherence_vs_eclectic_contrast": {
+        "value": 0.6,
+        "confidence": 0.8,
+        "salience": 0.74
+      }
+    },
+    "budget_model": {
+      "total_budget_sensitivity": 0.74,
+      "quality_floors": {
+        "lodging": "high",
+        "sleep_recovery": "high"
+      }
+    }
+  },
+  "objectives": {
+    "route_shape": "hub_and_spoke",
+    "discovery_style": "balanced",
+    "protect_open_blocks": false,
+    "recovery_priority": 0.9,
+    "required_quality": [
+      "lodging",
+      "sleep_recovery"
+    ],
+    "transit_is_feature": false
+  },
+  "expected_rank_order": [
+    "candidate:bundle:quiet-recovery",
+    "candidate:bundle:urban-culture",
+    "candidate:bundle:scenic-wanderer"
+  ]
+}

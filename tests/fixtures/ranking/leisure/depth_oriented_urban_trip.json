@@ -1,0 +1,65 @@
+{
+  "id": "depth-oriented-urban-trip",
+  "summary": "Urban cultural traveler who wants depth, museums, and coherent city flow.",
+  "profile_overrides": {
+    "hard_constraints": {
+      "budget_ceiling": 1400.0
+    },
+    "anchors": {
+      "experience_anchors": [
+        {
+          "type": "museum",
+          "label": "museum day",
+          "strength": 0.95,
+          "flexibility": 0.2
+        }
+      ],
+      "place_anchors": [
+        {
+          "type": "city",
+          "label": "Kyoto",
+          "strength": 0.8,
+          "flexibility": 0.4
+        }
+      ]
+    },
+    "tradeoff_dimensions": {
+      "iconic_vs_discovery": {
+        "value": 0.75,
+        "confidence": 0.86,
+        "salience": 0.84
+      },
+      "breadth_vs_depth": {
+        "value": 0.7,
+        "confidence": 0.8,
+        "salience": 0.75
+      },
+      "route_coherence_vs_eclectic_contrast": {
+        "value": 0.65,
+        "confidence": 0.82,
+        "salience": 0.7
+      }
+    },
+    "budget_model": {
+      "total_budget_sensitivity": 0.62,
+      "quality_floors": {
+        "lodging": "mid_high"
+      }
+    }
+  },
+  "objectives": {
+    "route_shape": "hub_and_spoke",
+    "discovery_style": "iconic",
+    "protect_open_blocks": false,
+    "recovery_priority": 0.45,
+    "required_quality": [
+      "lodging"
+    ],
+    "transit_is_feature": false
+  },
+  "expected_rank_order": [
+    "candidate:bundle:urban-culture",
+    "candidate:bundle:quiet-recovery",
+    "candidate:bundle:scenic-wanderer"
+  ]
+}

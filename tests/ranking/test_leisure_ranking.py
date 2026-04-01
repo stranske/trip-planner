@@ -35,6 +35,10 @@ def _fixture_path(*parts: str) -> Path:
     return Path("tests/fixtures") / Path(*parts)
 
 
+def _load_ranking_fixture(name: str) -> dict[str, object]:
+    return json.loads(_fixture_path("ranking", "leisure", name).read_text(encoding="utf-8"))
+
+
 def _load_destination(name: str) -> Destination:
     return Destination.from_dict(
         json.loads(_fixture_path("options", "destinations", name).read_text(encoding="utf-8"))
@@ -244,145 +248,47 @@ def _make_objectives(
     )
 
 
-def _depth_profile() -> LeisurePreferenceProfile:
-    return build_profile_from_overrides(
-        {
-            "hard_constraints": {"budget_ceiling": 1400.0},
-            "anchors": {
-                "experience_anchors": [
-                    {
-                        "type": "museum",
-                        "label": "museum day",
-                        "strength": 0.95,
-                        "flexibility": 0.2,
-                    }
-                ],
-                "place_anchors": [
-                    {
-                        "type": "city",
-                        "label": "Kyoto",
-                        "strength": 0.8,
-                        "flexibility": 0.4,
-                    }
-                ],
-            },
-            "tradeoff_dimensions": {
-                "iconic_vs_discovery": {"value": 0.75, "confidence": 0.86, "salience": 0.84},
-                "breadth_vs_depth": {"value": 0.7, "confidence": 0.8, "salience": 0.75},
-                "route_coherence_vs_eclectic_contrast": {
-                    "value": 0.65,
-                    "confidence": 0.82,
-                    "salience": 0.7,
-                },
-            },
-            "budget_model": {
-                "total_budget_sensitivity": 0.62,
-                "quality_floors": {"lodging": "mid_high"},
-            },
-        }
+def _profile_from_fixture(name: str) -> LeisurePreferenceProfile:
+    fixture = _load_ranking_fixture(name)
+    return build_profile_from_overrides(fixture["profile_overrides"])
+
+
+def _objectives_from_fixture(name: str) -> ItineraryObjectives:
+    fixture = _load_ranking_fixture(name)
+    objective_payload = fixture["objectives"]
+    return _make_objectives(
+        route_shape=objective_payload["route_shape"],
+        discovery_style=objective_payload["discovery_style"],
+        protect_open_blocks=objective_payload["protect_open_blocks"],
+        recovery_priority=objective_payload["recovery_priority"],
+        required_quality=objective_payload["required_quality"],
+        transit_is_feature=objective_payload["transit_is_feature"],
     )
 
 
-def _discovery_profile() -> LeisurePreferenceProfile:
-    return build_profile_from_overrides(
-        {
-            "hard_constraints": {"budget_ceiling": 1500.0},
-            "anchors": {
-                "experience_anchors": [
-                    {
-                        "type": "wandering",
-                        "label": "wandering district",
-                        "strength": 0.95,
-                        "flexibility": 0.15,
-                    }
-                ],
-                "mode_anchors": [
-                    {
-                        "type": "rail",
-                        "label": "scenic rail",
-                        "strength": 0.9,
-                        "flexibility": 0.25,
-                    }
-                ],
-            },
-            "tradeoff_dimensions": {
-                "iconic_vs_discovery": {"value": -0.85, "confidence": 0.88, "salience": 0.88},
-                "structure_vs_elasticity": {"value": -0.7, "confidence": 0.78, "salience": 0.78},
-                "scenic_transit_vs_destination_time": {
-                    "value": 0.85,
-                    "confidence": 0.81,
-                    "salience": 0.74,
-                },
-            },
-            "budget_model": {"total_budget_sensitivity": 0.45},
-        }
-    )
-
-
-def _quality_floor_profile() -> LeisurePreferenceProfile:
-    return build_profile_from_overrides(
-        {
-            "hard_constraints": {"budget_ceiling": 1700.0},
-            "anchors": {
-                "quality_floor_anchors": [
-                    {
-                        "type": "quiet",
-                        "label": "quiet sleep",
-                        "strength": 0.98,
-                        "flexibility": 0.1,
-                    }
-                ]
-            },
-            "tradeoff_dimensions": {
-                "recovery_vs_intensity": {"value": 0.88, "confidence": 0.83, "salience": 0.9},
-                "route_coherence_vs_eclectic_contrast": {
-                    "value": 0.6,
-                    "confidence": 0.8,
-                    "salience": 0.74,
-                },
-            },
-            "budget_model": {
-                "total_budget_sensitivity": 0.74,
-                "quality_floors": {"lodging": "high", "sleep_recovery": "high"},
-            },
-        }
-    )
+def _expected_rank_order(name: str) -> list[str]:
+    fixture = _load_ranking_fixture(name)
+    return list(fixture["expected_rank_order"])
 
 
 def test_depth_oriented_profile_ranks_urban_culture_first() -> None:
     engine = LeisureRankingEngine()
     ranked = engine.rank_candidate_set(
-        _depth_profile(),
-        _make_objectives(
-            route_shape="hub_and_spoke",
-            discovery_style="iconic",
-            protect_open_blocks=False,
-            recovery_priority=0.45,
-            required_quality=["lodging"],
-            transit_is_feature=False,
-        ),
+        _profile_from_fixture("depth_oriented_urban_trip.json"),
+        _objectives_from_fixture("depth_oriented_urban_trip.json"),
         _candidate_set(),
     )
 
-    assert [result.target_option.option_id for result in ranked.results] == [
-        "candidate:bundle:urban-culture",
-        "candidate:bundle:quiet-recovery",
-        "candidate:bundle:scenic-wanderer",
-    ]
+    assert [result.target_option.option_id for result in ranked.results] == _expected_rank_order(
+        "depth_oriented_urban_trip.json"
+    )
 
 
 def test_scenic_discovery_profile_ranks_scenic_bundle_first() -> None:
     engine = LeisureRankingEngine()
     ranked = engine.rank_candidate_set(
-        _discovery_profile(),
-        _make_objectives(
-            route_shape="mixed",
-            discovery_style="discovery_forward",
-            protect_open_blocks=True,
-            recovery_priority=0.35,
-            required_quality=[],
-            transit_is_feature=True,
-        ),
+        _profile_from_fixture("scenic_transit_route.json"),
+        _objectives_from_fixture("scenic_transit_route.json"),
         _candidate_set(),
     )
 
@@ -393,15 +299,8 @@ def test_scenic_discovery_profile_ranks_scenic_bundle_first() -> None:
 def test_quality_floor_sensitive_profile_ranks_recovery_bundle_first() -> None:
     engine = LeisureRankingEngine()
     ranked = engine.rank_candidate_set(
-        _quality_floor_profile(),
-        _make_objectives(
-            route_shape="hub_and_spoke",
-            discovery_style="balanced",
-            protect_open_blocks=False,
-            recovery_priority=0.9,
-            required_quality=["lodging", "sleep_recovery"],
-            transit_is_feature=False,
-        ),
+        _profile_from_fixture("quality_floor_sensitive_trip.json"),
+        _objectives_from_fixture("quality_floor_sensitive_trip.json"),
         _candidate_set(),
     )
 
@@ -419,27 +318,13 @@ def test_identical_candidates_reorder_between_depth_and_discovery_profiles() -> 
     candidate_set = _candidate_set()
 
     depth_ranked = engine.rank_candidate_set(
-        _depth_profile(),
-        _make_objectives(
-            route_shape="hub_and_spoke",
-            discovery_style="iconic",
-            protect_open_blocks=False,
-            recovery_priority=0.45,
-            required_quality=["lodging"],
-            transit_is_feature=False,
-        ),
+        _profile_from_fixture("depth_oriented_urban_trip.json"),
+        _objectives_from_fixture("depth_oriented_urban_trip.json"),
         candidate_set,
     )
     discovery_ranked = engine.rank_candidate_set(
-        _discovery_profile(),
-        _make_objectives(
-            route_shape="mixed",
-            discovery_style="discovery_forward",
-            protect_open_blocks=True,
-            recovery_priority=0.35,
-            required_quality=[],
-            transit_is_feature=True,
-        ),
+        _profile_from_fixture("discovery_heavy_wanderer_route.json"),
+        _objectives_from_fixture("discovery_heavy_wanderer_route.json"),
         candidate_set,
     )
 

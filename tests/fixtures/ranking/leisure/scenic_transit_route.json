@@ -1,0 +1,60 @@
+{
+  "id": "scenic-transit-route",
+  "summary": "Traveler who treats scenic rail movement as a core part of the trip.",
+  "profile_overrides": {
+    "hard_constraints": {
+      "budget_ceiling": 1500.0
+    },
+    "anchors": {
+      "experience_anchors": [
+        {
+          "type": "wandering",
+          "label": "wandering district",
+          "strength": 0.95,
+          "flexibility": 0.15
+        }
+      ],
+      "mode_anchors": [
+        {
+          "type": "rail",
+          "label": "scenic rail",
+          "strength": 0.9,
+          "flexibility": 0.25
+        }
+      ]
+    },
+    "tradeoff_dimensions": {
+      "iconic_vs_discovery": {
+        "value": -0.85,
+        "confidence": 0.88,
+        "salience": 0.88
+      },
+      "structure_vs_elasticity": {
+        "value": -0.7,
+        "confidence": 0.78,
+        "salience": 0.78
+      },
+      "scenic_transit_vs_destination_time": {
+        "value": 0.85,
+        "confidence": 0.81,
+        "salience": 0.74
+      }
+    },
+    "budget_model": {
+      "total_budget_sensitivity": 0.45
+    }
+  },
+  "objectives": {
+    "route_shape": "mixed",
+    "discovery_style": "discovery_forward",
+    "protect_open_blocks": true,
+    "recovery_priority": 0.35,
+    "required_quality": [],
+    "transit_is_feature": true
+  },
+  "expected_rank_order": [
+    "candidate:bundle:scenic-wanderer",
+    "candidate:bundle:urban-culture",
+    "candidate:bundle:quiet-recovery"
+  ]
+}
