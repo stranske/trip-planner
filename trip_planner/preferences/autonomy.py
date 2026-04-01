@@ -15,15 +15,16 @@ AUTONOMY_FEEDBACK_KINDS: tuple[str, ...] = (
     "explain_more",
     "explain_less",
 )
+AUTONOMY_FEEDBACK_DELTA_MULTIPLIER = 0.25
+CHECKPOINT_FREQUENCY_CONFIRMATION_THRESHOLD = 0.65
+OPTION_PREVIEW_EARLY_THRESHOLD = 0.65
+EXPLANATION_DENSITY_DETAILED_THRESHOLD = 0.72
+EXPLANATION_DENSITY_LEAN_THRESHOLD = 0.35
 
 
 def _require_probability(value: float, field_name: str) -> None:
     if not 0.0 <= value <= 1.0:
         raise ValueError(f"{field_name} must be between 0.0 and 1.0")
-
-
-def _default_stage_preferences() -> dict[str, "AutonomyPreference"]:
-    return {stage: AutonomyPreference() for stage in schema.PLANNING_STAGES}
 
 
 @dataclass(slots=True)
@@ -107,22 +108,24 @@ class PlannerBehaviorMetadata:
 @dataclass(slots=True)
 class PlanningAutonomyProfile:
     default_preference: AutonomyPreference = field(default_factory=AutonomyPreference)
-    stage_preferences: dict[str, AutonomyPreference] = field(
-        default_factory=_default_stage_preferences
-    )
+    stage_preferences: dict[str, AutonomyPreference] = field(default_factory=dict)
     guardrails: AutonomyGuardrails = field(default_factory=AutonomyGuardrails)
     feedback_history: list[AutonomyFeedback] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        if set(self.stage_preferences) != set(schema.PLANNING_STAGES):
-            raise ValueError(
-                f"stage_preferences must define every stage in {schema.PLANNING_STAGES}"
-            )
+        if not isinstance(self.default_preference, AutonomyPreference):
+            raise ValueError("default_preference must be an AutonomyPreference")
+        invalid_stages = set(self.stage_preferences) - set(schema.PLANNING_STAGES)
+        if invalid_stages:
+            raise ValueError(f"unsupported stage_preferences keys: {sorted(invalid_stages)}")
         if any(
             not isinstance(preference, AutonomyPreference)
             for preference in self.stage_preferences.values()
         ):
             raise ValueError("stage_preferences must contain AutonomyPreference instances")
+        self.stage_preferences = {
+            stage: replace(self.default_preference) for stage in schema.PLANNING_STAGES
+        } | self.stage_preferences
         if any(not isinstance(item, AutonomyFeedback) for item in self.feedback_history):
             raise ValueError("feedback_history must contain AutonomyFeedback instances")
 
@@ -148,18 +151,20 @@ class PlanningAutonomyProfile:
             1,
             round(2 + ((1.0 - preference.option_preview_timing) * 4)),
         )
-        if preference.explanation_depth >= 0.72:
+        if preference.explanation_depth >= EXPLANATION_DENSITY_DETAILED_THRESHOLD:
             explanation_density = "detailed"
-        elif preference.explanation_depth <= 0.35:
+        elif preference.explanation_depth <= EXPLANATION_DENSITY_LEAN_THRESHOLD:
             explanation_density = "lean"
         else:
             explanation_density = "standard"
         return PlannerBehaviorMetadata(
             trip_stage=trip_stage,
-            ask_before_next_major_change=preference.checkpoint_frequency >= 0.65,
+            ask_before_next_major_change=(
+                preference.checkpoint_frequency >= CHECKPOINT_FREQUENCY_CONFIRMATION_THRESHOLD
+            ),
             target_research_passes=target_research_passes,
             target_options_before_checkpoint=target_options_before_checkpoint,
-            surface_options_early=preference.option_preview_timing >= 0.65,
+            surface_options_early=preference.option_preview_timing >= OPTION_PREVIEW_EARLY_THRESHOLD,
             explanation_density=explanation_density,
         )
 
@@ -172,7 +177,7 @@ class PlanningAutonomyProfile:
             feedback_history=[*self.feedback_history, feedback],
         )
         preference = updated.stage_preferences[feedback.trip_stage]
-        delta = feedback.strength * 0.25
+        delta = feedback.strength * AUTONOMY_FEEDBACK_DELTA_MULTIPLIER
 
         if feedback.feedback_kind == "do_more_before_asking":
             preference.system_initiative = min(1.0, preference.system_initiative + delta)
