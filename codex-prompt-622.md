@@ -101,167 +101,54 @@ You should assume you're running in `agent-standard` unless explicitly told othe
 
 ## Task Prompt
 
-# Fix Merge Conflicts
+## Keepalive Next Task
 
-This PR has **merge conflicts** that must be resolved before CI can run or the PR can be merged.
+Your objective is to satisfy the **Acceptance Criteria** by completing each **Task** within the defined **Scope**.
 
-## Your Task
+**This round you MUST:**
+1. Implement actual code or test changes that advance at least one incomplete task toward acceptance.
+2. Commit meaningful source code (.py, .yml, .js, etc.)—not just status/docs updates.
+3. Mark a task checkbox complete ONLY after verifying the implementation works.
+4. Focus on the FIRST unchecked task unless blocked, then move to the next.
 
-Resolve all merge conflicts by integrating changes from the base branch with this PR's changes.
+**Guidelines:**
+- Keep edits scoped to the current task rather than reshaping the entire PR.
+- Use repository instructions, conventions, and tests to validate work.
+- Prefer small, reviewable commits; leave clear notes when follow-up is required.
+- Do NOT work on unrelated improvements until all PR tasks are complete.
 
-## CRITICAL: You MUST attempt the merge
+## Pre-Commit Formatting Gate (Black)
 
-**Do NOT check `git status` first and exit if clean!** The conflicts only appear DURING the merge operation.
+Before you commit or push any Python (`.py`) changes, you MUST:
+1. Run Black to format the relevant files (line length 100).
+2. Verify formatting passes CI by running:
+   `black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .`
+3. If the check fails, do NOT commit/push; format again until it passes.
 
-You must ALWAYS run `git merge origin/{{base_branch}}` to surface the conflicts, even if the working tree appears clean initially.
-After the merge attempt, you can use `git status` to confirm the conflict state.
+**COVERAGE TASKS - SPECIAL RULES:**
+If a task mentions "coverage" or a percentage target (e.g., "≥95%", "to 95%"), you MUST:
+1. After adding tests, run TARGETED coverage verification to avoid timeouts:
+   - For a specific script like `scripts/foo.py`, run:
+     `pytest tests/scripts/test_foo.py --cov=scripts/foo --cov-report=term-missing -m "not slow"`
+   - If no matching test file exists, run:
+     `pytest tests/ --cov=scripts/foo --cov-report=term-missing -m "not slow" -x`
+2. Find the specific script in the coverage output table
+3. Verify the `Cover` column shows the target percentage or higher
+4. Only mark the task complete if the actual coverage meets the target
+5. If coverage is below target, add more tests until it meets the target
 
-## Conflict Detection
+IMPORTANT: Always use `-m "not slow"` to skip slow integration tests that may timeout.
+IMPORTANT: Use targeted `--cov=scripts/specific_module` instead of `--cov=scripts` for faster feedback.
 
-{{#if conflict_files}}
-**Potentially conflicting files:**
-{{#each conflict_files}}
-- `{{this}}`
-{{/each}}
-{{else}}
-Check `git status` to identify files with conflicts.
-{{/if}}
+A coverage task is NOT complete just because you added tests. It is complete ONLY when the coverage command output confirms the target is met.
 
-## Resolution Steps
-
-1. **Fetch latest base branch:**
-   ```bash
-   git fetch origin {{base_branch}}
-   ```
-   > Note: Replace `{{base_branch}}` with the actual base branch name (e.g., `main` or `master`)
-
-2. **Attempt merge:**
-   ```bash
-   git merge origin/{{base_branch}}
-   ```
-
-   If this succeeds without conflicts, you're done - just push the merge commit.
-
-3. **For each conflicting file:**
-   - Look for conflict markers: `<<<<<<<`, `=======`, `>>>>>>>`
-   - Understand what each side (HEAD vs incoming) intended
-   - Combine the changes intelligently:
-     - If changes are to different parts: keep both
-     - If changes conflict: prefer the newer/more complete version
-     - If changes are incompatible: adapt the PR's code to work with new base
-   - Remove all conflict markers
-
-4. **Verify resolution:**
-   ```bash
-   # Check no conflict markers remain
-   git diff --check
-
-   # Run the project's test suite (language-specific)
-   # For Python: pytest
-   # For JavaScript: npm test
-   # For other: check the project's README or CI config
-   ```
-
-5. **Commit the resolution:**
-   ```bash
-   git add .
-   git commit -m "fix: resolve merge conflicts with {{base_branch}}"
-   ```
-
-## Resolution Guidelines
-
-### When to prefer PR changes:
-- PR adds new functionality not in main
-- PR fixes a bug that main doesn't address
-- PR has more complete implementation
-
-### When to prefer main changes:
-- Base branch has breaking API changes PR must adapt to
-- Base branch has bug fixes PR should incorporate
-- Base branch renamed/moved files PR still references
-
-### When to combine:
-- Both sides add different functions/methods
-- Both sides add different imports
-- Both sides modify different parts of the same function
-
-## Common Conflict Patterns
-
-### Special Files - Auto-Resolve with "Ours"
-
-These files have `.gitattributes` merge=ours strategy and should keep the PR branch version:
-
-- **`pr_body.md`** - PR-specific content, always keep ours:
-  ```bash
-  git checkout --ours pr_body.md
-  git add pr_body.md
-  ```
-
-- **`ci/autofix/history.json`** - Branch-specific history:
-  ```bash
-  git checkout --ours ci/autofix/history.json
-  git add ci/autofix/history.json
-  ```
-
-These files are .gitignored and should be resolved by keeping the current branch's version.
-
-### Import conflicts (Python example):
-```python
-from module import foo, bar
-from module import foo, baz
-```
-**Resolution:** Combine imports: `from module import foo, bar, baz`
-
-### Type annotation conflicts (Python):
-```python
-def process(data: dict[str, Any]) -> Result:
-def process(data: dict[str, Any], config: Config) -> Result:
-```
-**Resolution:** Keep the signature with more parameters (main's version) and ensure caller sites are updated.
-
-### Dependency conflicts (pyproject.toml / package.json):
-Keep both dependencies unless they're duplicate versions of the same package.
-For version conflicts, prefer the newer/higher version.
-
-### Function modification conflicts:
-Keep the more complete/correct version, or merge logic if both changes are needed.
-
-### Test file conflicts:
-Usually keep both sets of tests unless they're duplicates. Ensure test names don't collide.
-
-### Documentation conflicts:
-Combine content from both sides, ensuring accurate and up-to-date information.
-
-## Exit Criteria
-
-- All conflict markers removed from all files
-- Code compiles/parses without syntax errors
-- Tests pass (at least the ones that were passing before)
-- Changes committed with descriptive message
-
-## Verification Commands
-
-After resolving conflicts, verify:
-```bash
-# Ensure no conflict markers remain
-grep -rn "<<<<<<< HEAD\|=======\|>>>>>>>" . --include="*.py" --include="*.js" --include="*.ts" || echo "No conflict markers found"
-
-# For Python projects
-python -m py_compile $(find . -name "*.py" -not -path "./.venv/*") 2>&1 | head -20
-
-# Run tests
-pytest -x -q 2>&1 | tail -20 || npm test 2>&1 | tail -20
-```
-
----
-
-**Focus solely on resolving conflicts. Do not add new features or refactor code beyond what's needed for resolution.**
+**The Tasks and Acceptance Criteria are provided in the appendix below.** Work through them in order.
 
 ## Run context
 ---
 ## PR Tasks and Acceptance Criteria
 
-**Progress:** 30/40 tasks complete, 10 remaining
+**Progress:** 31/40 tasks complete, 9 remaining
 
 ### ⚠️ IMPORTANT: Task Reconciliation Required
 
@@ -289,7 +176,7 @@ Issue was closed while merged PR still has unresolved inline review thread(s).
 ### Tasks
 Complete these in order. Mark checkbox done ONLY after implementation is verified:
 
-- [x] Add a script (e.g., `scripts/list_unresolved_pr_threads.js`) that lists unresolved inline review threads for PR #178 via the GitHub API
+- [ ] Add a script (e.g., `scripts/list_unresolved_pr_threads.js`) that lists unresolved inline review threads for PR #178 via the GitHub API
   - [x] Create the file `scripts/list_unresolved_pr_threads.js` with basic structure (verify: confirm completion in repo)
   - [x] Create the file `scripts/list_unresolved_pr_threads.js` with imports (verify: confirm completion in repo)
   - [x] Implement GitHub API authentication (verify: confirm completion in repo) connection logic in the script (verify: confirm completion in repo)
@@ -297,21 +184,21 @@ Complete these in order. Mark checkbox done ONLY after implementation is verifie
   - [x] Filter the fetched threads to identify only unresolved inline review comments (verify: confirm completion in repo)
   - [x] Format and output the unresolved threads list with thread IDs (verify: formatter passes)
   - [x] Format and output the unresolved threads list with content (verify: formatter passes)
-  - [x] Define scope for: Test the script manually against PR #178 to verify it returns 4 unresolved threads
-  - [x] Implement focused slice for: Test the script manually against PR #178 to verify it returns 4 unresolved threads
-  - [x] Validate focused slice for: Test the script manually against PR #178 to verify it returns 4 unresolved threads
-- [x] Create `docs/pr-178-unresolved-threads.md` enumerating the 4 unresolved threads and classifying each as `fix` or `disposition`
+  - [ ] Define scope for: Test the script manually against PR #178 to verify it returns 4 unresolved threads
+  - [ ] Implement focused slice for: Test the script manually against PR #178 to verify it returns 4 unresolved threads
+  - [ ] Validate focused slice for: Test the script manually against PR #178 to verify it returns 4 unresolved threads
+- [ ] Create `docs/pr-178-unresolved-threads.md` enumerating the 4 unresolved threads and classifying each as `fix` or `disposition`
   - [x] Create the file `docs/pr-178-unresolved-threads.md` with a header (verify: docs updated)
   - [x] Create the file `docs/pr-178-unresolved-threads.md` with structure template (verify: docs updated)
-  - [x] Document each of the 4 unresolved threads with their content (verify: confirm completion in repo)
-  - [x] Document each of the 4 unresolved threads with location (verify: confirm completion in repo)
-  - [x] Define scope for: Review each thread to determine if it requires a code fix or just disposition (verify: confirm completion in repo)
-  - [x] Implement focused slice for: Review each thread to determine if it requires a code fix or just disposition (verify: confirm completion in repo)
-  - [x] Validate focused slice for: Review each thread to determine if it requires a code fix or just disposition (verify: confirm completion in repo)
-  - [x] Add classification labels of either `fix` or `disposition` to each documented thread (verify: confirm completion in repo)
-  - [x] Write a brief rationale explaining why each thread received its classification (verify: confirm completion in repo)
+  - [ ] Document each of the 4 unresolved threads with their content (verify: confirm completion in repo)
+  - [ ] Document each of the 4 unresolved threads with location (verify: confirm completion in repo)
+  - [ ] Define scope for: Review each thread to determine if it requires a code fix or just disposition (verify: confirm completion in repo)
+  - [ ] Implement focused slice for: Review each thread to determine if it requires a code fix or just disposition (verify: confirm completion in repo)
+  - [ ] Validate focused slice for: Review each thread to determine if it requires a code fix or just disposition (verify: confirm completion in repo)
+  - [ ] Add classification labels of either `fix` or `disposition` to each documented thread (verify: confirm completion in repo)
+  - [ ] Write a brief rationale explaining why each thread received its classification (verify: confirm completion in repo)
 - [ ] Implement code changes required to address any `fix`-classified threads and open bounded follow-up PR(s)
-  - [x] Identify all threads classified as `fix` from the documentation file (verify: docs updated)
+  - [ ] Identify all threads classified as `fix` from the documentation file (verify: docs updated)
   - [x] Define scope for: Implement code changes to address each fix-classified thread on a feature branch (verify: confirm completion in repo)
   - [ ] Implement focused slice for: Implement code changes to address each fix-classified thread on a feature branch (verify: confirm completion in repo)
   - [ ] Validate focused slice for: Implement code changes to address each fix-classified thread on a feature branch (verify: confirm completion in repo)
@@ -320,10 +207,10 @@ Complete these in order. Mark checkbox done ONLY after implementation is verifie
   - [x] Validate focused slice for: Write or update tests to cover the code changes made for fix threads (verify: tests pass)
   - [ ] Create a pull request with the implemented fixes (verify: confirm completion in repo)
   - [ ] Create a pull request with reference the original threads (verify: confirm completion in repo)
-  - [x] Define scope for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md` (verify: docs updated)
-  - [x] Implement focused slice for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md` (verify: docs updated)
-  - [x] Validate focused slice for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md` (verify: docs updated)
-- [x] Update `docs/pr-178-unresolved-threads.md` with the follow-up PR link(s) and a disposition rationale for each non-fix thread
+  - [ ] Define scope for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md` (verify: docs updated)
+  - [ ] Implement focused slice for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md` (verify: docs updated)
+  - [ ] Validate focused slice for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md` (verify: docs updated)
+- [ ] Update `docs/pr-178-unresolved-threads.md` with the follow-up PR link(s) and a disposition rationale for each non-fix thread
 - [ ] Update/verify PR #178 has no unresolved threads remaining (all resolved or explicitly dispositioned in PR comments)
 
 ### Acceptance Criteria

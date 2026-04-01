@@ -73,6 +73,38 @@ function getVerifierConfiguration(argv = process.argv.slice(2), env = process.en
   };
 }
 
+function findMatchedDocumentedThread(documentedThreads, matchedDocumentIndexes, unresolvedThread, index) {
+  const unmatchedById = documentedThreads.findIndex(
+    (candidate, candidateIndex) =>
+      !matchedDocumentIndexes.has(candidateIndex) && candidate.threadId === unresolvedThread.id
+  );
+  if (unmatchedById !== -1) {
+    return unmatchedById;
+  }
+
+  const unmatchedByOriginalThreadUrl = documentedThreads.findIndex(
+    (candidate, candidateIndex) =>
+      !matchedDocumentIndexes.has(candidateIndex) &&
+      !candidate.threadId &&
+      candidate.originalThreadUrl &&
+      unresolvedThread.originalThreadUrl &&
+      candidate.originalThreadUrl === unresolvedThread.originalThreadUrl
+  );
+  if (unmatchedByOriginalThreadUrl !== -1) {
+    return unmatchedByOriginalThreadUrl;
+  }
+
+  if (
+    index < documentedThreads.length &&
+    !matchedDocumentIndexes.has(index) &&
+    !documentedThreads[index].threadId
+  ) {
+    return index;
+  }
+
+  return -1;
+}
+
 function collectInventoryVerificationIssues(documentedThreads, unresolvedThreads, options = {}) {
   const { expectDocCount = null } = options;
   const issues = collectThreadInventoryIssues(documentedThreads);
@@ -83,66 +115,90 @@ function collectInventoryVerificationIssues(documentedThreads, unresolvedThreads
     );
   }
 
-  const documentedIds = new Set(documentedThreads.map((thread) => thread.threadId).filter(Boolean));
-  const unresolvedIds = new Set(unresolvedThreads.map((thread) => thread.id).filter(Boolean));
-  const unresolvedThreadsById = new Map(
-    unresolvedThreads
-      .filter((thread) => thread?.id)
-      .map((thread) => [thread.id, thread])
+  const matchedDocumentIndexes = new Set();
+  const unresolvedThreadMatches = unresolvedThreads.map((thread, index) => {
+    const documentedIndex = findMatchedDocumentedThread(
+      documentedThreads,
+      matchedDocumentIndexes,
+      thread,
+      index
+    );
+
+    if (documentedIndex === -1) {
+      return null;
+    }
+
+    matchedDocumentIndexes.add(documentedIndex);
+    return {
+      documentedIndex,
+      documentedThread: documentedThreads[documentedIndex],
+      unresolvedThread: thread,
+    };
+  });
+  const matchedDocumentIndexesByThreadId = new Map(
+    unresolvedThreadMatches
+      .filter(Boolean)
+      .filter(({ documentedThread }) => documentedThread.threadId)
+      .map(({ documentedThread, documentedIndex }) => [documentedThread.threadId, documentedIndex])
   );
 
-  unresolvedThreads.forEach((thread) => {
-    if (!documentedIds.has(thread.id)) {
+  unresolvedThreadMatches.forEach((match, index) => {
+    if (!match) {
+      const thread = unresolvedThreads[index];
       issues.push(`Unresolved thread ${thread.id} is missing from the inventory document.`);
     }
   });
 
-  documentedThreads.forEach((thread) => {
-    if (thread.threadId && unresolvedThreads.length > 0 && !unresolvedIds.has(thread.threadId)) {
+  documentedThreads.forEach((thread, documentedIndex) => {
+    const threadLabel = thread.threadId || `Thread ${documentedIndex + 1}`;
+    const matchedIndex = matchedDocumentIndexesByThreadId.get(thread.threadId);
+    const matchedUnresolvedThread =
+      matchedIndex === undefined
+        ? unresolvedThreadMatches.find((match) => match?.documentedIndex === documentedIndex)
+            ?.unresolvedThread || null
+        : unresolvedThreadMatches.find((match) => match?.documentedIndex === matchedIndex)
+            ?.unresolvedThread || null;
+
+    if (thread.threadId && unresolvedThreads.length > 0 && !matchedUnresolvedThread) {
       issues.push(`Documented thread ${thread.threadId} is not unresolved in the provided snapshot.`);
       return;
     }
 
-    if (!thread.threadId) {
+    if (!matchedUnresolvedThread) {
       return;
     }
 
-    const unresolvedThread = unresolvedThreadsById.get(thread.threadId);
-    if (!unresolvedThread) {
-      return;
-    }
-
-    const expectedLocation = `${unresolvedThread.path || "unknown"}:${
-      unresolvedThread.line ?? "unknown"
+    const expectedLocation = `${matchedUnresolvedThread.path || "unknown"}:${
+      matchedUnresolvedThread.line ?? "unknown"
     }`;
     if (thread.location && thread.location !== expectedLocation) {
       issues.push(
-        `Documented thread ${thread.threadId} location does not match the snapshot (${expectedLocation}).`
+        `Documented thread ${threadLabel} location does not match the snapshot (${expectedLocation}).`
       );
     }
 
-    const expectedOriginalThreadUrl = unresolvedThread.originalThreadUrl || null;
+    const expectedOriginalThreadUrl = matchedUnresolvedThread.originalThreadUrl || null;
     if (thread.originalThreadUrl && thread.originalThreadUrl !== expectedOriginalThreadUrl) {
       issues.push(
-        `Documented thread ${thread.threadId} original thread URL does not match the snapshot.`
+        `Documented thread ${threadLabel} original thread URL does not match the snapshot.`
       );
     }
 
-    const expectedContent = unresolvedThread.comments
+    const expectedContent = matchedUnresolvedThread.comments
       .map((comment) => `${comment.author}: ${comment.body || "<empty>"}`)
       .join(" | ") || "No thread comments returned by the API.";
     if (thread.content && thread.content !== expectedContent) {
       issues.push(
-        `Documented thread ${thread.threadId} content does not match the snapshot.`
+        `Documented thread ${threadLabel} content does not match the snapshot.`
       );
     }
 
     if (
       typeof thread.outdated === "boolean" &&
-      thread.outdated !== Boolean(unresolvedThread.isOutdated)
+      thread.outdated !== Boolean(matchedUnresolvedThread.isOutdated)
     ) {
       issues.push(
-        `Documented thread ${thread.threadId} outdated status does not match the snapshot.`
+        `Documented thread ${threadLabel} outdated status does not match the snapshot.`
       );
     }
   });
@@ -235,6 +291,7 @@ if (require.main === module) {
 module.exports = {
   buildInventoryVerificationReport,
   collectInventoryVerificationIssues,
+  findMatchedDocumentedThread,
   formatInventoryVerificationReport,
   getVerifierConfiguration,
   main,

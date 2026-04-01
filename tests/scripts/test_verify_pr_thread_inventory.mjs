@@ -149,6 +149,67 @@ test("collectInventoryVerificationIssues validates documented thread metadata ag
   ]);
 });
 
+test("collectInventoryVerificationIssues reuses URL and section-order fallback matching before thread ids are recorded", () => {
+  const documentedThreads = parseThreadInventory(`
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID:
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: disposition
+- Rationale: Triage happened before thread ids were copied over.
+- Content: reviewer: Please keep this branch explicit.
+- Outdated: no
+
+### Thread 2
+
+- Thread ID:
+- Original Thread URL:
+- Location: trip_planner/other.py:22
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Section-order fallback should preserve this match.
+- Content: reviewer: Please extract a helper.
+- Outdated: yes
+`);
+  const unresolvedThreads = [
+    {
+      id: "THREAD_1",
+      isOutdated: false,
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      path: "trip_planner/example.py",
+      line: 17,
+      comments: [
+        {
+          author: "reviewer",
+          body: "Please keep this branch explicit.",
+        },
+      ],
+    },
+    {
+      id: "THREAD_2",
+      isOutdated: true,
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+      path: "trip_planner/other.py",
+      line: 22,
+      comments: [
+        {
+          author: "reviewer",
+          body: "Please extract a helper.",
+        },
+      ],
+    },
+  ];
+
+  assert.deepEqual(collectInventoryVerificationIssues(documentedThreads, unresolvedThreads), [
+    "Thread 1: missing thread ID",
+    "Thread 2: missing thread ID",
+    "Thread 2: missing original thread URL",
+  ]);
+});
+
 test("formatInventoryVerificationReport summarizes passing verification", () => {
   const report = formatInventoryVerificationReport(
     {
