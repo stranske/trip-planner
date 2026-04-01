@@ -6,7 +6,6 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from trip_planner._validators import require_non_empty, require_strings
-from trip_planner.contracts import MoneyRange as _MoneyRange
 from trip_planner.options.transport import TransportOption
 from trip_planner.sources import (
     AttributeConflict,
@@ -25,9 +24,6 @@ from ._common import (
     unresolved_conflicts,
     warning_from_issue,
 )
-
-assert _MoneyRange
-
 
 @dataclass(slots=True)
 class TransportIngestionResult:
