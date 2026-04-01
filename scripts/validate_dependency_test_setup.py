@@ -102,7 +102,9 @@ def check_metadata_serialization() -> Tuple[bool, List[str]]:
         if "validated.metadata.model_dump(mode=" in content:
             print("✓ load_and_validate_upload serializes metadata to dict")
         else:
-            issues.append("load_and_validate_upload may not be serializing metadata properly")
+            issues.append(
+                "load_and_validate_upload may not be serializing metadata properly"
+            )
 
     # Check attach_metadata serializes
     market_data_path = Path("src/trend_analysis/io/market_data.py")
@@ -145,10 +147,14 @@ def check_test_expectations() -> Tuple[bool, List[str]]:
 
         # Check for problematic patterns
         if re.search(r"\.attrs\[.*\]\.mode(?!\[)", content):
-            issues.append(f"{test_file.name}: Uses .mode attribute access instead of dict access")
+            issues.append(
+                f"{test_file.name}: Uses .mode attribute access instead of dict access"
+            )
 
         if 'assert meta["metadata"] is ' in content and "is metadata" in content:
-            issues.append(f"{test_file.name}: Uses 'is' identity check instead of equality")
+            issues.append(
+                f"{test_file.name}: Uses 'is' identity check instead of equality"
+            )
 
     if not issues:
         print("✓ Tests expect dict-based metadata")

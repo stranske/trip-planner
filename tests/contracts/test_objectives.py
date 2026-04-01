@@ -54,7 +54,9 @@ def test_itinerary_objectives_serialize_for_leisure_trip() -> None:
             avoid_modes=["short_haul_flight"],
             transit_is_feature=True,
         ),
-        explanations=["Preference engine resolved toward elastic discovery with route coherence."],
+        explanations=[
+            "Preference engine resolved toward elastic discovery with route coherence."
+        ],
     )
 
     payload = objectives.to_dict()
@@ -66,11 +68,15 @@ def test_itinerary_objectives_serialize_for_leisure_trip() -> None:
 
 def test_itinerary_objectives_reject_invalid_route_shape() -> None:
     try:
-        ItineraryObjectives(objective_id="obj-2", trip_id="trip-leisure-2", route_shape="starfish")
+        ItineraryObjectives(
+            objective_id="obj-2", trip_id="trip-leisure-2", route_shape="starfish"
+        )
     except ValueError as exc:
         assert "route_shape" in str(exc)
     else:
-        raise AssertionError("ItineraryObjectives should reject unsupported route shapes")
+        raise AssertionError(
+            "ItineraryObjectives should reject unsupported route shapes"
+        )
 
 
 def test_count_range_rejects_inverted_bounds() -> None:

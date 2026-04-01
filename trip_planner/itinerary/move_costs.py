@@ -137,7 +137,10 @@ def _estimate_from_transport(option: TransportOption) -> TravelTimeEstimate:
 
 def _continuity_signal(bundle: InventoryBundle, option: TransportOption) -> float:
     destination_ids = set(bundle.destination_ids)
-    if option.origin_id not in destination_ids or option.destination_id not in destination_ids:
+    if (
+        option.origin_id not in destination_ids
+        or option.destination_id not in destination_ids
+    ):
         return 0.0
     if option.origin_id == option.destination_id:
         return 0.35
@@ -171,7 +174,10 @@ def build_move_cost_summaries(
             (estimate.duration_minutes / 600.0)
             + (estimate.transfer_count * 0.12)
             + ((burden_signal or 0.0) * 0.45)
-            + ((schedule_pressure or 0.0) * (0.35 if schedule_protection_required else 0.2)),
+            + (
+                (schedule_pressure or 0.0)
+                * (0.35 if schedule_protection_required else 0.2)
+            ),
             4,
         )
 

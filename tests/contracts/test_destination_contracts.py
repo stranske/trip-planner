@@ -47,7 +47,9 @@ def test_contracts_namespace_exposes_place_context_contracts() -> None:
 
 def test_contracts_namespace_exposes_lodging_contracts() -> None:
     payload = json.loads(
-        Path("tests/fixtures/options/lodging/conference_hotel.json").read_text(encoding="utf-8")
+        Path("tests/fixtures/options/lodging/conference_hotel.json").read_text(
+            encoding="utf-8"
+        )
     )
 
     lodging = LodgingOption.from_dict(payload)
@@ -58,7 +60,9 @@ def test_contracts_namespace_exposes_lodging_contracts() -> None:
 
 def test_contracts_namespace_exposes_activity_contracts() -> None:
     payload = json.loads(
-        Path("tests/fixtures/options/activities/major_museum.json").read_text(encoding="utf-8")
+        Path("tests/fixtures/options/activities/major_museum.json").read_text(
+            encoding="utf-8"
+        )
     )
 
     activity = ActivityOption.from_dict(payload)

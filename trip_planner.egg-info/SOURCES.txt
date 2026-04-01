@@ -11,6 +11,7 @@ scripts/ci_metrics.py
 scripts/coverage_history_append.py
 scripts/generate_itins.py
 scripts/generate_segments.py
+scripts/render_pr_review_thread_report.py
 scripts/sync_dev_dependencies.py
 scripts/sync_test_dependencies.py
 scripts/validate_dependency_test_setup.py
@@ -37,6 +38,7 @@ tests/test_complexity.py
 tests/test_dependency_version_alignment.py
 tests/test_generate_segments.py
 tests/test_penalty.py
+tests/test_render_pr_review_thread_report.py
 trip_planner/__init__.py
 trip_planner/_option_contracts.py
 trip_planner/_validators.py

@@ -131,7 +131,9 @@ def test_snapshot_requires_query_scope_and_kind_match() -> None:
     except ValueError as exc:
         assert "query.entity_scope" in str(exc) or "query.option_kind" in str(exc)
     else:
-        raise AssertionError("RawSnapshot should reject inconsistent query scope or option kind")
+        raise AssertionError(
+            "RawSnapshot should reject inconsistent query scope or option kind"
+        )
 
 
 def test_snapshot_requires_record_scope_match() -> None:
@@ -163,4 +165,6 @@ def test_snapshot_requires_record_scope_match() -> None:
     except ValueError as exc:
         assert "record.entity_scope" in str(exc)
     else:
-        raise AssertionError("RawSnapshot should reject records with a mismatched entity_scope")
+        raise AssertionError(
+            "RawSnapshot should reject records with a mismatched entity_scope"
+        )

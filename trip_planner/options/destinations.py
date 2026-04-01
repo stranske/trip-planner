@@ -44,8 +44,20 @@ MOBILITY_MODES: tuple[str, ...] = (
     "rideshare",
     "shuttle",
 )
-TAG_SCOPES: tuple[str, ...] = ("identity", "routing", "experience", "seasonal", "operational")
-PROVENANCE_ROLES: tuple[str, ...] = ("identity", "seasonal", "operational", "experience", "routing")
+TAG_SCOPES: tuple[str, ...] = (
+    "identity",
+    "routing",
+    "experience",
+    "seasonal",
+    "operational",
+)
+PROVENANCE_ROLES: tuple[str, ...] = (
+    "identity",
+    "seasonal",
+    "operational",
+    "experience",
+    "routing",
+)
 OPERATIONAL_NOTE_KINDS: tuple[str, ...] = (
     "access",
     "crowding",
@@ -161,7 +173,9 @@ class PlaceHierarchyRef:
     def __post_init__(self) -> None:
         require_non_empty(self.destination_id, "destination_id")
         if self.relationship_kind not in PLACE_RELATIONSHIP_KINDS:
-            raise ValueError(f"relationship_kind must be one of {PLACE_RELATIONSHIP_KINDS}")
+            raise ValueError(
+                f"relationship_kind must be one of {PLACE_RELATIONSHIP_KINDS}"
+            )
         require_optional_non_empty(self.label or None, "label")
         require_strings(self.notes, "notes")
 
@@ -277,17 +291,26 @@ class DestinationSourceRef:
             raise ValueError(f"role must be one of {PROVENANCE_ROLES}")
         require_optional_non_empty(self.source_id or None, "source_id")
         require_optional_non_empty(self.source_category or None, "source_category")
-        if self.source_category and self.source_category not in source_schema.SOURCE_CATEGORIES:
-            raise ValueError(f"source_category must be one of {source_schema.SOURCE_CATEGORIES}")
+        if (
+            self.source_category
+            and self.source_category not in source_schema.SOURCE_CATEGORIES
+        ):
+            raise ValueError(
+                f"source_category must be one of {source_schema.SOURCE_CATEGORIES}"
+            )
         require_optional_non_empty(self.contribution_kind or None, "contribution_kind")
         if (
             self.contribution_kind
             and self.contribution_kind not in source_schema.CONTRIBUTION_KINDS
         ):
-            raise ValueError(f"contribution_kind must be one of {source_schema.CONTRIBUTION_KINDS}")
+            raise ValueError(
+                f"contribution_kind must be one of {source_schema.CONTRIBUTION_KINDS}"
+            )
         require_optional_non_empty(self.summary or None, "summary")
         if self.freshness_days_at_capture is not None:
-            require_non_negative(self.freshness_days_at_capture, "freshness_days_at_capture")
+            require_non_negative(
+                self.freshness_days_at_capture, "freshness_days_at_capture"
+            )
         require_strings(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
@@ -400,15 +423,30 @@ class Destination:
             raise ValueError("seasonal_signals must contain SeasonalSignal instances")
         if not isinstance(self.mobility_profile, MobilityProfile):
             raise ValueError("mobility_profile must be a MobilityProfile")
-        if any(not isinstance(item, ExperienceSignal) for item in self.experience_signals):
-            raise ValueError("experience_signals must contain ExperienceSignal instances")
-        if any(not isinstance(item, NearbyDestinationRef) for item in self.adjacency_refs):
-            raise ValueError("adjacency_refs must contain NearbyDestinationRef instances")
-        if any(not isinstance(item, RegionExpansionRef) for item in self.region_expansion_refs):
-            raise ValueError("region_expansion_refs must contain RegionExpansionRef instances")
+        if any(
+            not isinstance(item, ExperienceSignal) for item in self.experience_signals
+        ):
+            raise ValueError(
+                "experience_signals must contain ExperienceSignal instances"
+            )
+        if any(
+            not isinstance(item, NearbyDestinationRef) for item in self.adjacency_refs
+        ):
+            raise ValueError(
+                "adjacency_refs must contain NearbyDestinationRef instances"
+            )
+        if any(
+            not isinstance(item, RegionExpansionRef)
+            for item in self.region_expansion_refs
+        ):
+            raise ValueError(
+                "region_expansion_refs must contain RegionExpansionRef instances"
+            )
         if any(not isinstance(item, DestinationSourceRef) for item in self.source_refs):
             raise ValueError("source_refs must contain DestinationSourceRef instances")
-        if any(not isinstance(item, OperationalNote) for item in self.operational_notes):
+        if any(
+            not isinstance(item, OperationalNote) for item in self.operational_notes
+        ):
             raise ValueError("operational_notes must contain OperationalNote instances")
 
     def to_dict(self) -> dict[str, Any]:
@@ -423,11 +461,15 @@ class Destination:
             geo=DestinationGeo(**payload["geo"]),
             summary=payload.get("summary", ""),
             parent_refs=[
-                PlaceHierarchyRef(**item) for item in _optional_list_field(payload, "parent_refs")
+                PlaceHierarchyRef(**item)
+                for item in _optional_list_field(payload, "parent_refs")
             ],
-            tags=[DestinationTag(**item) for item in _optional_list_field(payload, "tags")],
+            tags=[
+                DestinationTag(**item) for item in _optional_list_field(payload, "tags")
+            ],
             seasonal_signals=[
-                SeasonalSignal(**item) for item in _optional_list_field(payload, "seasonal_signals")
+                SeasonalSignal(**item)
+                for item in _optional_list_field(payload, "seasonal_signals")
             ],
             mobility_profile=MobilityProfile(
                 **_optional_mapping_field(payload, "mobility_profile")
@@ -505,7 +547,9 @@ class PlaceContext:
             boundary_mode=payload.get("boundary_mode", "district"),
             summary=payload.get("summary", ""),
             parent_context_ids=_optional_list_field(payload, "parent_context_ids"),
-            supporting_destination_ids=_optional_list_field(payload, "supporting_destination_ids"),
+            supporting_destination_ids=_optional_list_field(
+                payload, "supporting_destination_ids"
+            ),
             tag_keys=_optional_list_field(payload, "tag_keys"),
             source_ref_ids=_optional_list_field(payload, "source_ref_ids"),
             notes=_optional_list_field(payload, "notes"),
@@ -540,7 +584,8 @@ class PlaceContext:
             boundary_mode=boundary_mode,
             summary=summary or destination.summary,
             parent_context_ids=parent_context_ids or [],
-            supporting_destination_ids=supporting_destination_ids or [destination.destination_id],
+            supporting_destination_ids=supporting_destination_ids
+            or [destination.destination_id],
             tag_keys=tag_keys or [tag.key for tag in destination.tags],
             source_ref_ids=source_ref_ids
             or [source.provenance_id for source in destination.source_refs],

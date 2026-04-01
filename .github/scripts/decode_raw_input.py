@@ -19,7 +19,9 @@ OUT_FILE = Path("input.txt")
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Decode or normalize topic input")
-    parser.add_argument("--passthrough", action="store_true", help="Read plain text from --in file")
+    parser.add_argument(
+        "--passthrough", action="store_true", help="Read plain text from --in file"
+    )
     parser.add_argument("--in", dest="in_file", help="Input file for passthrough mode")
     parser.add_argument(
         "--source",
@@ -32,7 +34,9 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
     text: str = ""
-    source_used = args.source_tag or ("passthrough" if args.passthrough else "raw_input")
+    source_used = args.source_tag or (
+        "passthrough" if args.passthrough else "raw_input"
+    )
     if args.passthrough:
         if not args.in_file:
             return
@@ -115,7 +119,9 @@ def main() -> None:
         rebuilt = s
         for m in markers:
             # replace occurrences not already preceded by newline
-            rebuilt = re.sub(rf"(?<!\n){re.escape(m)}", "\n" + m.strip() + "\n", rebuilt)
+            rebuilt = re.sub(
+                rf"(?<!\n){re.escape(m)}", "\n" + m.strip() + "\n", rebuilt
+            )
         if rebuilt != s:
             applied.append("sections")
         return rebuilt
@@ -165,7 +171,9 @@ def main() -> None:
     if text.strip():
         OUT_FILE.write_text(text + "\n", encoding="utf-8")
     # Always write diagnostics when debug artifact collection might happen
-    Path("decode_debug.json").write_text(json.dumps(diagnostics, indent=2), encoding="utf-8")
+    Path("decode_debug.json").write_text(
+        json.dumps(diagnostics, indent=2), encoding="utf-8"
+    )
 
 
 if __name__ == "__main__":
