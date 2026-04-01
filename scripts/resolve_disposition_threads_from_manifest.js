@@ -466,6 +466,10 @@ async function executeManifestThreads(options = {}, dependencies = {}) {
       results.map((result) => result.threadId),
       dependencies
     );
+
+    report.remainingThreadsSnapshot = loadThreadInventory(options.docPath, dependencies, {
+      inventorySection: "unresolved",
+    }).map(convertInventoryEntryToSnapshotThread);
   }
 
   if (options.remainingSnapshotPath) {
@@ -475,9 +479,7 @@ async function executeManifestThreads(options = {}, dependencies = {}) {
       );
     }
 
-    const remainingThreads = loadThreadInventory(options.docPath, dependencies, {
-      inventorySection: "unresolved",
-    }).map(convertInventoryEntryToSnapshotThread);
+    const remainingThreads = report.remainingThreadsSnapshot || [];
     report.remainingSnapshotPath = resolveManifestRelativePath(
       options.manifestPath,
       options.remainingSnapshotPath
@@ -494,9 +496,7 @@ async function executeManifestThreads(options = {}, dependencies = {}) {
     }
 
     const documentedThreads = loadThreadInventory(options.docPath, dependencies);
-    const remainingThreads = loadThreadInventory(options.docPath, dependencies, {
-      inventorySection: "unresolved",
-    }).map(convertInventoryEntryToSnapshotThread);
+    const remainingThreads = report.remainingThreadsSnapshot || [];
     const acceptanceResult = await evaluateAcceptance(
       {
         owner: manifest.repositoryOwner || "stranske",

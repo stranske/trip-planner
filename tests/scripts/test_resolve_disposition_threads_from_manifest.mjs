@@ -652,11 +652,13 @@ test("executeManifestThreads writes inventory update details into the persisted 
 
   const persistedReport = JSON.parse(fs.readFileSync(resultsPath, "utf8"));
   assert.equal(report.inventoryUpdate.resolvedThreadCount, 1);
+  assert.deepEqual(report.remainingThreadsSnapshot, []);
   assert.deepEqual(persistedReport.inventoryUpdate, {
     docPath,
     resolvedThreadCount: 1,
     remainingThreadCount: 0,
   });
+  assert.deepEqual(persistedReport.remainingThreadsSnapshot, []);
 });
 
 test("executeManifestThreads can write a post-resolution acceptance report", async () => {
@@ -727,6 +729,76 @@ test("executeManifestThreads can write a post-resolution acceptance report", asy
   assert.equal(report.acceptanceReportPath, acceptanceReportPath);
   assert.match(acceptanceReport, /Overall status: PASS/);
   assert.match(acceptanceReport, /review-thread snapshot verifies 0 unresolved thread\(s\)/i);
+});
+
+test("executeManifestThreads persists an embedded remaining-thread snapshot for later acceptance reruns", async () => {
+  const manifest = {
+    repositoryOwner: "stranske",
+    repositoryName: "trip-planner",
+    prNumber: 178,
+    expectDocCount: 1,
+    threads: [
+      {
+        threadId: "THREAD_1",
+        replyQuery: "mutation Reply",
+        replyVariables: { threadId: "THREAD_1", body: "Disposition" },
+        resolveQuery: "mutation Resolve",
+        resolveVariables: { threadId: "THREAD_1" },
+      },
+    ],
+  };
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-disposition-embedded-results-"));
+  const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
+  const resultsPath = path.join(tempDir, "results.json");
+  const acceptanceReportPath = path.join(tempDir, "acceptance.txt");
+
+  fs.writeFileSync(
+    docPath,
+    `# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: src/file.js:10
+- Classification: disposition
+- Follow-up PR:
+- Rationale: The current behavior is intentional.
+- Content: reviewer: Keep the existing wording.
+- Outdated: no
+`,
+    "utf8"
+  );
+
+  const report = await executeManifestThreads(
+    {
+      manifestPath: path.join(tempDir, "manifest.json"),
+      execute: true,
+      docPath,
+      resultsPath,
+      acceptanceReportPath,
+      outputFormat: "text",
+      githubUiConfirmed: true,
+    },
+    {
+      readFileSync: (targetPath) =>
+        targetPath === docPath ? fs.readFileSync(docPath, "utf8") : JSON.stringify(manifest),
+      writeFileSync: (targetPath, content) => fs.writeFileSync(targetPath, content, "utf8"),
+      mkdirSync: (targetPath, options) => fs.mkdirSync(targetPath, options),
+      spawnSync: () => ({
+        status: 0,
+        stdout: '{"data":{"ok":true}}',
+        stderr: "",
+      }),
+    }
+  );
+
+  const persistedReport = JSON.parse(fs.readFileSync(resultsPath, "utf8"));
+  assert.deepEqual(report.remainingThreadsSnapshot, []);
+  assert.deepEqual(persistedReport.remainingThreadsSnapshot, []);
+  assert.equal(persistedReport.acceptance.inputPath, "<post-resolution inventory>");
 });
 
 test("executeManifestThreads derives the documented thread count for acceptance when older manifests omit it", async () => {

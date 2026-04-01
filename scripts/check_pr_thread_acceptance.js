@@ -137,6 +137,7 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
   const prNumber = Number.parseInt(prNumberRaw, 10);
   const inputPath =
     parsedArguments.inputPath || resultsReport?.inputPath || env.REVIEW_THREADS_FILE || null;
+  const snapshotThreads = parsedArguments.inputPath ? null : resultsReport?.snapshotThreads || null;
   const token = options.live ? env.GITHUB_TOKEN : null;
   const expectDocCount = Number.parseInt(
     String(resultsReport?.expectDocCount ?? options.expectDocCount),
@@ -175,6 +176,10 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
     throw new Error("The --live and --input options are mutually exclusive.");
   }
 
+  if (options.live && snapshotThreads) {
+    throw new Error("The --live and --results options are mutually exclusive when embedded snapshot threads are present.");
+  }
+
   if (options.live && !token) {
     throw new Error("GITHUB_TOKEN is required when --live is specified.");
   }
@@ -186,6 +191,7 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
     prNumber,
     token,
     inputPath,
+    snapshotThreads,
     docPath,
     expectDocCount,
     expectedCount: expectUnresolvedCount,
@@ -230,6 +236,9 @@ function loadResolutionResultsReport(resultsPath, dependencies = {}) {
     (acceptance.inputPath && !String(acceptance.inputPath).startsWith("<")
       ? acceptance.inputPath
       : null);
+  const snapshotThreads = Array.isArray(parsedReport.remainingThreadsSnapshot)
+    ? parsedReport.remainingThreadsSnapshot
+    : null;
   const githubUiCriterion = Array.isArray(acceptance.criteria)
     ? acceptance.criteria.find((criterion) => criterion.id === "github_ui")
     : null;
@@ -241,6 +250,7 @@ function loadResolutionResultsReport(resultsPath, dependencies = {}) {
     expectDocCount,
     expectedCount,
     inputPath,
+    snapshotThreads,
     githubUiConfirmed: githubUiCriterion?.status === "pass",
   };
 }
@@ -256,7 +266,7 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
   const syncInventoryDocument = dependencies.writeInventoryDocument || writeInventoryDocument;
 
   const repository = `${configuration.owner}/${configuration.repo}`;
-  const verificationMode = configuration.inputPath
+  const verificationMode = configuration.inputPath || configuration.snapshotThreads
     ? "snapshot"
     : configuration.token
       ? "live"
@@ -309,9 +319,11 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
   let unresolvedThreads = null;
   let inventoryDocumentUpdated = false;
 
-  if (configuration.inputPath || configuration.token) {
+  if (configuration.inputPath || configuration.snapshotThreads || configuration.token) {
     const rawThreads = configuration.inputPath
       ? loadThreads(configuration.inputPath)
+      : configuration.snapshotThreads
+        ? configuration.snapshotThreads
       : await fetchThreads(configuration);
     unresolvedThreads = extractUnresolvedThreads(rawThreads);
 
@@ -421,6 +433,7 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
     docPath: configuration.docPath,
     verificationMode,
     inputPath: configuration.inputPath,
+    snapshotThreads: configuration.snapshotThreads || null,
     expectDocCount: configuration.expectDocCount,
     expectedCount: configuration.expectedCount,
     documentedThreadCount: documentedThreads.length,
@@ -462,6 +475,10 @@ function formatAcceptanceReport(result, outputFormat = "text") {
 
 function formatVerificationMode(result) {
   if (result.verificationMode === "snapshot") {
+    if (!result.inputPath) {
+      return "SNAPSHOT (embedded results report)";
+    }
+
     return `SNAPSHOT (${result.inputPath})`;
   }
 

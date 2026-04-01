@@ -95,7 +95,56 @@ test("loadResolutionResultsReport derives reusable verification defaults from a 
     expectDocCount: 4,
     expectedCount: 0,
     inputPath: path.join(tempDir, "remaining.json"),
+    snapshotThreads: null,
     githubUiConfirmed: true,
+  });
+});
+
+test("loadResolutionResultsReport reuses embedded snapshot threads when no snapshot file was written", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "acceptance-results-embedded-"));
+  const resultsPath = path.join(tempDir, "results.json");
+  const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
+  const remainingThreadsSnapshot = [
+    {
+      id: "THREAD_2",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+      path: "src/file.js",
+      line: 12,
+      isOutdated: false,
+      comments: [{ id: "COMMENT_2", author: "reviewer", body: "Keep this open." }],
+    },
+  ];
+
+  fs.writeFileSync(
+    resultsPath,
+    `${JSON.stringify(
+      {
+        inventoryUpdate: { docPath },
+        remainingThreadsSnapshot,
+        acceptance: {
+          repository: "stranske/trip-planner",
+          prNumber: 178,
+          expectDocCount: 4,
+          expectedCount: 1,
+          inputPath: "<post-resolution inventory>",
+          criteria: [{ id: "github_ui", status: "manual" }],
+        },
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  assert.deepEqual(loadResolutionResultsReport(resultsPath), {
+    repository: "stranske/trip-planner",
+    prNumber: "178",
+    docPath,
+    expectDocCount: 4,
+    expectedCount: 1,
+    inputPath: null,
+    snapshotThreads: remainingThreadsSnapshot,
+    githubUiConfirmed: false,
   });
 });
 
@@ -131,11 +180,62 @@ test("getAcceptanceConfiguration can reuse a persisted resolution report", () =>
   assert.equal(configuration.repo, "trip-planner");
   assert.equal(configuration.prNumber, 178);
   assert.equal(configuration.inputPath, snapshotPath);
+  assert.equal(configuration.snapshotThreads, null);
   assert.equal(configuration.docPath, docPath);
   assert.equal(configuration.expectDocCount, 4);
   assert.equal(configuration.expectedCount, 0);
   assert.equal(configuration.githubUiConfirmed, false);
   assert.equal(configuration.resultsPath, resultsPath);
+});
+
+test("getAcceptanceConfiguration reuses embedded snapshot threads from a persisted resolution report", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "acceptance-results-config-embedded-"));
+  const resultsPath = path.join(tempDir, "results.json");
+  const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
+  const snapshotThreads = [
+    {
+      id: "THREAD_2",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+      path: "src/file.js",
+      line: 12,
+      isOutdated: false,
+      comments: [
+        {
+          id: "COMMENT_2",
+          author: "reviewer",
+          body: "Keep this open.",
+          url: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+        },
+      ],
+    },
+  ];
+
+  fs.writeFileSync(
+    resultsPath,
+    `${JSON.stringify(
+      {
+        inventoryUpdate: { docPath },
+        remainingThreadsSnapshot: snapshotThreads,
+        acceptance: {
+          repository: "stranske/trip-planner",
+          prNumber: 178,
+          expectDocCount: 4,
+          expectedCount: 1,
+          criteria: [{ id: "github_ui", status: "manual" }],
+        },
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  const configuration = getAcceptanceConfiguration(["--results", resultsPath], {});
+
+  assert.equal(configuration.inputPath, null);
+  assert.deepEqual(configuration.snapshotThreads, snapshotThreads);
+  assert.equal(configuration.docPath, docPath);
+  assert.equal(configuration.expectedCount, 1);
 });
 
 test("loadResolutionResultsReport rejects invalid resolution report payloads", () => {
@@ -316,6 +416,68 @@ No unresolved inline review threads found.
   assert.equal(result.criteria[2].status, "pass");
   assert.equal(result.criteria[3].status, "manual");
   assert.match(result.criteria[3].details, /cannot verify the live GitHub UI state/i);
+});
+
+test("evaluateAcceptance can verify embedded snapshot threads from a persisted results report", async () => {
+  const activeInventory = `
+# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_2
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2
+- Location: src/file.js:12
+- Classification: disposition
+- Follow-up PR:
+- Rationale: The disposition reply is still pending.
+- Content: reviewer: Keep this open.
+- Outdated: no
+`;
+  const snapshotThreads = [
+    {
+      id: "THREAD_2",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+      path: "src/file.js",
+      line: 12,
+      isOutdated: false,
+      comments: [
+        {
+          id: "COMMENT_2",
+          author: "reviewer",
+          body: "Keep this open.",
+          url: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+        },
+      ],
+    },
+  ];
+
+  const result = await evaluateAcceptance(
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      token: null,
+      inputPath: null,
+      snapshotThreads,
+      docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
+      expectDocCount: 1,
+      expectedCount: 1,
+      githubUiConfirmed: false,
+      outputFormat: "text",
+    },
+    {
+      loadThreadInventory: (_docPath, _dependencies, options = {}) =>
+        parseThreadInventory(activeInventory, options),
+    }
+  );
+
+  assert.equal(result.verificationMode, "snapshot");
+  assert.equal(result.inputPath, null);
+  assert.deepEqual(result.snapshotThreads, snapshotThreads);
+  assert.equal(result.unresolvedThreadCount, 1);
+  assert.equal(result.criteria[2].status, "pass");
 });
 
 test("evaluateAcceptance can sync the inventory document before verifying a zero-thread snapshot", async () => {
@@ -652,6 +814,10 @@ test("formatVerificationMode describes snapshot, live, and missing verification 
   assert.equal(
     formatVerificationMode({ verificationMode: "snapshot", inputPath: "tmp/threads.json" }),
     "SNAPSHOT (tmp/threads.json)"
+  );
+  assert.equal(
+    formatVerificationMode({ verificationMode: "snapshot", inputPath: null }),
+    "SNAPSHOT (embedded results report)"
   );
   assert.equal(formatVerificationMode({ verificationMode: "live", inputPath: null }), "LIVE API");
   assert.equal(formatVerificationMode({ verificationMode: "none", inputPath: null }), "NOT RUN");
