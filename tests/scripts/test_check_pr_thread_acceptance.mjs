@@ -93,6 +93,64 @@ test("evaluateAcceptance reports blocked snapshot verification when no token or 
   assert.equal(result.criteria[3].status, "manual");
 });
 
+test("evaluateAcceptance does not count blank thread templates as documented entries", async () => {
+  const templateOnlyInventory = `
+# PR #178 Unresolved Thread Inventory
+
+## Status
+
+The exact 4 unresolved threads for PR #178 are still not available in this environment.
+
+## Thread Template
+
+### Thread 1
+
+- Thread ID:
+- Original Thread URL:
+- Location:
+- Classification:
+- Follow-up PR:
+- Rationale:
+- Content:
+- Outdated:
+
+### Thread 2
+
+- Thread ID:
+- Original Thread URL:
+- Location:
+- Classification:
+- Follow-up PR:
+- Rationale:
+- Content:
+- Outdated:
+`;
+  const result = await evaluateAcceptance(
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      token: null,
+      inputPath: null,
+      docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
+      expectDocCount: 4,
+      expectedCount: 0,
+      githubUiConfirmed: false,
+      outputFormat: "text",
+    },
+    {
+      loadThreadInventory: (_docPath, _dependencies, options = {}) =>
+        parseThreadInventory(templateOnlyInventory, options),
+    }
+  );
+
+  assert.equal(result.overallStatus, "fail");
+  assert.equal(result.documentedThreadCount, 0);
+  assert.equal(result.criteria[0].status, "fail");
+  assert.match(result.criteria[0].details, /Found 0 documented thread entries/);
+  assert.deepEqual(result.criteria[0].issues, []);
+});
+
 test("evaluateAcceptance passes repo-local verification when the inventory and snapshot match zero unresolved threads", async () => {
   const resolvedOnlyInventory = `
 # PR #178 Unresolved Thread Inventory

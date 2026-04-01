@@ -28,7 +28,7 @@ function parseThreadInventory(markdown, options = {}) {
     inventorySection === "all" || currentSection === inventorySection;
 
   const pushCurrentThread = () => {
-    if (currentThread && shouldIncludeThread()) {
+    if (currentThread && shouldIncludeThread() && !isEmptyInventoryThread(currentThread)) {
       threads.push(currentThread);
     }
   };
@@ -111,6 +111,10 @@ function parseThreadInventory(markdown, options = {}) {
 
   pushCurrentThread();
   return threads;
+}
+
+function isEmptyInventoryThread(thread) {
+  return Object.values(thread).every((value) => value === null);
 }
 
 function appendContinuationLine(thread, fieldName, line) {
@@ -998,6 +1002,7 @@ module.exports = {
   buildPullRequestPayload,
   extractPullRequestNumber,
   groupFixThreadsByFollowUpPr,
+  isEmptyInventoryThread,
   listActionableFixThreads,
   listFixClassifiedThreads,
   loadThreadInventory,

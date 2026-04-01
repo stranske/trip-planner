@@ -245,6 +245,31 @@ test("parseThreadInventory can isolate unresolved and resolved inventory section
   ]);
 });
 
+test("parseThreadInventory ignores empty thread templates", () => {
+  const threads = parseThreadInventory(`
+# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+No unresolved inline review threads found.
+
+## Thread Template
+
+### Thread 1
+
+- Thread ID:
+- Original Thread URL:
+- Location:
+- Classification:
+- Follow-up PR:
+- Rationale:
+- Content:
+- Outdated:
+`);
+
+  assert.deepEqual(threads, []);
+});
+
 test("listFixClassifiedThreads returns only fix-classified entries", () => {
   const fixThreads = listFixClassifiedThreads([
     { threadId: "THREAD_1", classification: "fix" },
@@ -1108,12 +1133,12 @@ test("getCliConfiguration rejects unknown options and extra positional arguments
   );
 });
 
-test("the checked-in PR #178 inventory is still incomplete until real threads are recorded", () => {
+test("the checked-in PR #178 inventory only contains an empty template until real threads are recorded", () => {
   const threads = loadThreadInventory(DEFAULT_DOC_PATH);
   const issues = collectThreadInventoryIssues(threads);
 
-  assert.equal(issues.length, 28);
-  assert.match(formatThreadInventoryIssues(issues), /Thread inventory issues: 28/);
+  assert.equal(threads.length, 0);
+  assert.equal(issues.length, 0);
 });
 
 test("the checked-in PR #178 inventory currently contains no fix-classified threads", () => {
@@ -1198,10 +1223,10 @@ test("buildFixThreadsReport surfaces completeness issues when --require-complete
 
 ### Thread 1
 
-- Thread ID:
+- Thread ID: THREAD_1
 - Original Thread URL:
 - Location:
-- Classification:
+- Classification: fix
 - Follow-up PR:
 - Rationale:
 - Content:
@@ -1209,7 +1234,7 @@ test("buildFixThreadsReport surfaces completeness issues when --require-complete
 `,
         }
       ),
-    /Thread inventory issues: 7/
+    /Thread inventory issues: 6/
   );
 });
 
