@@ -385,6 +385,7 @@ def test_ranked_results_emit_breakdowns_and_explanation_records() -> None:
     assert top_result.score_breakdown.component_contributions
     assert top_result.explanation_records
     assert any(record.record_type == "summary" for record in top_result.explanation_records)
+    assert any(record.record_type == "promotion" for record in top_result.explanation_records)
     assert target_option is not None
     assert top_result.explanation_records[0].target_id == target_option.option_id
     assert top_result.explanation_records[0].factor_keys
@@ -567,3 +568,5 @@ def test_tension_flags_and_low_confidence_reduce_ranking_confidence() -> None:
     assert any(
         penalty.reason_code == "preference_tension" for penalty in result.score_breakdown.penalties
     )
+    assert any(record.record_type == "confidence" for record in result.explanation_records)
+    assert any(record.record_type == "risk" for record in result.explanation_records)

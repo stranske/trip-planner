@@ -396,14 +396,16 @@ class LeisureRankingEngine:
             ],
         )
         confidence_summary = self._confidence_summary(profile, assessment)
+        unresolved_risks = self._risk_flags(profile, assessment)
         explanation_records = self._explanation_records(
             candidate,
             contributions,
             penalties,
+            bonuses,
             missing_data_penalties,
             confidence_summary,
+            unresolved_risks,
         )
-        unresolved_risks = self._risk_flags(profile, assessment)
 
         return RankedResult(
             result_id=f"ranked:item:{candidate.candidate_id}",
@@ -822,8 +824,10 @@ class LeisureRankingEngine:
         candidate: _RankableCandidate,
         contributions: list[ScoreContribution],
         penalties: list[ScoreAdjustment],
+        bonuses: list[ScoreAdjustment],
         missing_data_penalties: list[ScoreAdjustment],
         confidence_summary: ScoreConfidenceSummary,
+        unresolved_risks: list[RiskFlag],
     ) -> list[ExplanationRecord]:
         dominant = sorted(
             contributions,
@@ -850,6 +854,21 @@ class LeisureRankingEngine:
                 source_refs=candidate.source_refs[:3],
             )
         ]
+        for bonus in bonuses[:2]:
+            records.append(
+                ExplanationRecord(
+                    explanation_id=f"promotion:{candidate.candidate_id}:{bonus.adjustment_id}",
+                    record_type="promotion",
+                    target_kind="item",
+                    target_id=candidate.target_option.option_id,
+                    headline=bonus.label,
+                    summary=bonus.summary,
+                    factor_keys=list(bonus.affected_factor_keys),
+                    machine_context={"reason_code": bonus.reason_code},
+                    human_summary=[bonus.label, bonus.summary],
+                    source_refs=candidate.source_refs[:2],
+                )
+            )
         for penalty in penalties[:2]:
             records.append(
                 ExplanationRecord(
@@ -885,6 +904,21 @@ class LeisureRankingEngine:
                     },
                     human_summary=confidence_summary.low_confidence_flags[:3]
                     or ["Missing data penalty applied"],
+                    source_refs=candidate.source_refs[:2],
+                )
+            )
+        for risk in unresolved_risks[:2]:
+            records.append(
+                ExplanationRecord(
+                    explanation_id=f"risk:{candidate.candidate_id}:{risk.risk_id}",
+                    record_type="risk",
+                    target_kind="item",
+                    target_id=candidate.target_option.option_id,
+                    headline=risk.code,
+                    summary=risk.summary,
+                    factor_keys=[risk.code],
+                    machine_context={"severity": risk.severity},
+                    human_summary=[risk.summary],
                     source_refs=candidate.source_refs[:2],
                 )
             )
