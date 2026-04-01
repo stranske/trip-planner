@@ -595,6 +595,38 @@ function collectResolvedInventoryEntries(existingThreads, unresolvedThreads) {
   return existingThreads.filter((_, index) => !matchedIndexes.has(index));
 }
 
+function deduplicateInventoryEntries(entries) {
+  const deduplicatedEntries = [];
+  const seenThreadIds = new Set();
+  const seenOriginalThreadUrls = new Set();
+
+  entries.forEach((entry) => {
+    if (!entry) {
+      return;
+    }
+
+    if (entry.threadId && seenThreadIds.has(entry.threadId)) {
+      return;
+    }
+
+    if (entry.originalThreadUrl && seenOriginalThreadUrls.has(entry.originalThreadUrl)) {
+      return;
+    }
+
+    deduplicatedEntries.push(entry);
+
+    if (entry.threadId) {
+      seenThreadIds.add(entry.threadId);
+    }
+
+    if (entry.originalThreadUrl) {
+      seenOriginalThreadUrls.add(entry.originalThreadUrl);
+    }
+  });
+
+  return deduplicatedEntries;
+}
+
 function validateExpectedCount(unresolvedThreads, expectedCount) {
   if (expectedCount === null) {
     return;
@@ -649,14 +681,17 @@ function mergeInventoryIntoDocument(existingDocument, unresolvedThreads) {
   const inventoryState = extractInventoryDocumentState(existingDocument);
   const existingThreads = inventoryState.currentThreads;
   const historicalResolvedThreads = inventoryState.resolvedThreads;
-  const resolvedThreads = [
+  const resolvedThreads = deduplicateInventoryEntries([
     ...collectResolvedInventoryEntries(existingThreads, unresolvedThreads),
     ...historicalResolvedThreads,
-  ];
+  ]);
 
   if (unresolvedThreads.length === 0) {
     threadSection.push("", "No unresolved inline review threads found.");
-    const threadsToPreserve = [...existingThreads, ...historicalResolvedThreads];
+    const threadsToPreserve = deduplicateInventoryEntries([
+      ...existingThreads,
+      ...historicalResolvedThreads,
+    ]);
     if (threadsToPreserve.length > 0) {
       threadSection.push("", "## Resolved Thread Inventory");
       threadsToPreserve.forEach((thread, index) => {
@@ -745,6 +780,7 @@ module.exports = {
   formatUnresolvedThreadsAsMarkdown,
   fetchAllReviewThreads,
   formatUnresolvedThreadsReport,
+  deduplicateInventoryEntries,
   getConfiguration,
   loadReviewThreadsFromFile,
   normalizeSnapshotThreadCollection,

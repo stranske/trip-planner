@@ -14,6 +14,7 @@ const {
   buildBlankMarkdownThreadSection,
   buildMarkdownThreadSection,
   collectResolvedInventoryEntries,
+  deduplicateInventoryEntries,
   extractUnresolvedThreads,
   extractInventoryDocumentState,
   extractThreadsFromSnapshot,
@@ -1051,6 +1052,28 @@ test("collectResolvedInventoryEntries returns documented threads that are no lon
   assert.deepEqual(resolvedThreads, [existingThreads[1]]);
 });
 
+test("deduplicateInventoryEntries keeps the first copy of repeated thread metadata", () => {
+  const entries = [
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      classification: "fix",
+    },
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      classification: "disposition",
+    },
+    {
+      threadId: "THREAD_2",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+      classification: "disposition",
+    },
+  ];
+
+  assert.deepEqual(deduplicateInventoryEntries(entries), [entries[0], entries[2]]);
+});
+
 test("writeInventoryDocument keeps resolved thread inventory when refreshing to zero unresolved threads", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "thread-inventory-zero-"));
   const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
@@ -1325,6 +1348,121 @@ Intro paragraph.
   );
   assert.match(mergedDocument, /## Resolved Thread Inventory/);
   assert.match(mergedDocument, /THREAD_OLD/);
+});
+
+test("mergeInventoryIntoDocument deduplicates repeated resolved entries when no unresolved threads remain", () => {
+  const mergedDocument = mergeInventoryIntoDocument(
+    `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Keep the active-thread version of this triage.
+- Content: reviewer: Please keep this branch explicit.
+- Outdated: no
+
+## Resolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: stale/path.py:99
+- Classification: disposition
+- Follow-up PR:
+- Rationale: Older resolved copy should not be duplicated.
+- Content: reviewer: stale duplicate
+- Outdated: yes
+`,
+    []
+  );
+
+  const threadIdMatches = mergedDocument.match(/- Thread ID: THREAD_1/g) || [];
+
+  assert.equal(threadIdMatches.length, 1);
+  assert.match(
+    mergedDocument,
+    /### Thread 1[\s\S]*- Rationale: Keep the active-thread version of this triage\./
+  );
+  assert.doesNotMatch(mergedDocument, /Older resolved copy should not be duplicated\./);
+});
+
+test("mergeInventoryIntoDocument deduplicates historical resolved entries that were already moved out of the current inventory", () => {
+  const mergedDocument = mergeInventoryIntoDocument(
+    `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: This thread is still unresolved.
+- Content: reviewer: Please keep this branch explicit.
+- Outdated: no
+
+### Thread 2
+
+- Thread ID: THREAD_2
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2
+- Location: trip_planner/other.py:22
+- Classification: disposition
+- Follow-up PR:
+- Rationale: This thread should be moved to resolved history once it drops out of the snapshot.
+- Content: reviewer: Please extract a helper.
+- Outdated: yes
+
+## Resolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_2
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2
+- Location: stale/other.py:20
+- Classification: disposition
+- Follow-up PR:
+- Rationale: Older resolved copy should not be retained twice.
+- Content: reviewer: stale duplicate
+- Outdated: yes
+`,
+    [
+      {
+        id: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        path: "trip_planner/example.py",
+        line: 17,
+        isOutdated: false,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please keep this branch explicit.",
+          },
+        ],
+      },
+    ]
+  );
+
+  const threadIdMatches = mergedDocument.match(/- Thread ID: THREAD_2/g) || [];
+
+  assert.equal(threadIdMatches.length, 1);
+  assert.match(
+    mergedDocument,
+    /## Resolved Thread Inventory[\s\S]*- Rationale: This thread should be moved to resolved history once it drops out of the snapshot\./
+  );
+  assert.doesNotMatch(mergedDocument, /Older resolved copy should not be retained twice\./);
 });
 
 test("formatThreadContent condenses multiple comments into a single content field", () => {
