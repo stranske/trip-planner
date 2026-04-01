@@ -12,7 +12,7 @@ from trip_planner._validators import (
     require_probability,
     require_strings,
 )
-from trip_planner.contracts.options import MoneyRange
+from trip_planner._option_contracts import MoneyRange
 from trip_planner.sources import ProvenanceReference, QualityValueFitSummary, SourceTrustSignals
 from trip_planner.sources import schema as source_schema
 

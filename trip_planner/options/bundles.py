@@ -12,7 +12,7 @@ from trip_planner._validators import (
     require_probability,
     require_strings,
 )
-from trip_planner.contracts.options import (
+from trip_planner._option_contracts import (
     OPTION_SET_PURPOSES,
     MoneyRange,
     Option,

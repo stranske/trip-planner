@@ -12,7 +12,7 @@ from trip_planner._validators import (
     require_string_mapping,
     require_strings,
 )
-from trip_planner.contracts.options import MoneyRange
+from trip_planner._option_contracts import MoneyRange
 
 from .profile import TravelerContext
 

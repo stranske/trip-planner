@@ -1,0 +1,190 @@
+{
+  "snapshot": {
+    "snapshot_id": "snapshot-destination-conflicted",
+    "adapter_id": "fixture-destination-adapter",
+    "source_id": "kyoto-mixed-fixture",
+    "source_category": "editorial",
+    "entity_scope": "destination",
+    "option_kind": "mixed",
+    "fetched_at": "2026-04-01T03:31:00Z",
+    "query": {
+      "query_id": "query-destination-conflicted",
+      "entity_scope": "destination",
+      "option_kind": "mixed",
+      "destination": "dest-city-kyoto"
+    },
+    "issues": [
+      {
+        "issue_id": "destination-operational-warning",
+        "stage": "validation",
+        "severity": "warning",
+        "code": "partial_operational_context",
+        "message": "One source summarized crowding risk without month-specific severity."
+      }
+    ],
+    "records": [
+      {
+        "record_id": "record-destination-a",
+        "entity_scope": "destination",
+        "provider_entity_id": "kyoto-editorial-shell",
+        "payload_type": "fixture",
+        "payload": {
+          "destination_id": "dest-city-kyoto",
+          "place_kind": "city",
+          "name": "Kyoto",
+          "summary": "Editorial destination shell focused on cultural density and neighborhood identity.",
+          "geo": {
+            "latitude": 35.0116,
+            "longitude": 135.7681,
+            "country_code": "JP",
+            "region_code": "JP-26",
+            "time_zone": "Asia/Tokyo",
+            "locality_hint": "Historic city core"
+          },
+          "tags": [
+            {
+              "key": "culture",
+              "label": "Culture",
+              "scope": "experience",
+              "weight": 0.94
+            }
+          ],
+          "experience_signals": [
+            {
+              "key": "culture_density",
+              "label": "Culture density",
+              "sentiment": "positive",
+              "strength": 0.94
+            }
+          ],
+          "trust_signals": {
+            "freshness_days": 14,
+            "editorial_independence": 0.87,
+            "operational_reliability": 0.55
+          },
+          "quality_value_fit": {
+            "quality_signal": 0.89,
+            "value_signal": 0.8,
+            "fit_signal": 0.85
+          }
+        }
+      },
+      {
+        "record_id": "record-destination-b",
+        "entity_scope": "destination",
+        "provider_entity_id": "kyoto-operational-shell",
+        "payload_type": "fixture",
+        "payload": {
+          "destination_id": "dest-city-kyoto",
+          "place_kind": "city",
+          "name": "Kyoto",
+          "summary": "Operational context for high-demand crowding windows.",
+          "geo": {
+            "latitude": 35.0116,
+            "longitude": 135.7681,
+            "country_code": "JP",
+            "region_code": "JP-26",
+            "time_zone": "Asia/Tokyo",
+            "locality_hint": "Historic city core"
+          },
+          "seasonal_signals": [
+            {
+              "season": "autumn",
+              "summary": "Leaf season creates crowding around temple corridors and early-morning transit peaks.",
+              "impact": "mixed",
+              "peak_months": [11],
+              "source_ref_ids": ["snapshot-destination-conflicted:record-destination-b"]
+            }
+          ],
+          "operational_notes": [
+            {
+              "kind": "crowding",
+              "summary": "Bus crowding can make cross-town moves slower than map distance suggests.",
+              "impact": "medium",
+              "applies_in_months": [11],
+              "source_ref_ids": ["snapshot-destination-conflicted:record-destination-b"]
+            }
+          ],
+          "mobility_profile": {
+            "arrival_modes": ["rail", "shuttle"],
+            "local_modes": ["walk", "transit", "bike"],
+            "transit_coverage": 0.8,
+            "notes": ["Use rail or walking loops where possible during demand peaks."]
+          },
+          "normalization_warnings": [
+            "Operational source does not quantify shoulder-season crowding separately."
+          ],
+          "trust_signals": {
+            "freshness_days": 2,
+            "editorial_independence": 0.41,
+            "operational_reliability": 0.94
+          },
+          "quality_value_fit": {
+            "quality_signal": 0.7,
+            "value_signal": 0.65,
+            "fit_signal": 0.74
+          }
+        }
+      }
+    ]
+  },
+  "resolutions": [
+    {
+      "resolution_id": "resolution-destination-1",
+      "entity_scope": "destination",
+      "option_kind": "mixed",
+      "status": "ambiguous",
+      "canonical_entity_id": "dest-city-kyoto",
+      "summary": "Editorial and operational records describe the same city shell but disagree on crowding severity precision.",
+      "match_candidates": [
+        {
+          "candidate_id": "candidate-destination-1",
+          "entity_scope": "destination",
+          "option_kind": "mixed",
+          "match_strategy": "geo_text",
+          "confidence": 0.71,
+          "source_record_ids": ["record-destination-a", "record-destination-b"],
+          "matched_fields": ["destination_id", "name", "geo"]
+        }
+      ],
+      "conflicts": [
+        {
+          "conflict_id": "conflict-destination-1",
+          "attribute_path": "operational_notes[0].impact",
+          "reason": "source_disagreement",
+          "status": "needs_review",
+          "values_by_source": {
+            "record-destination-a": "unspecified",
+            "record-destination-b": "medium"
+          }
+        }
+      ],
+      "review_required": true
+    }
+  ],
+  "dedup_decisions": [
+    {
+      "decision_id": "dedup-destination-1",
+      "entity_scope": "destination",
+      "option_kind": "mixed",
+      "decision": "merge",
+      "canonical_entity_id": "dest-city-kyoto",
+      "summary": "Merge the city shell while keeping operational uncertainty explicit.",
+      "duplicate_entity_ids": ["dest-city-kyoto-operational"],
+      "resolution_ids": ["resolution-destination-1"],
+      "preserved_conflicts": [
+        {
+          "conflict_id": "conflict-destination-1",
+          "attribute_path": "operational_notes[0].impact",
+          "reason": "source_disagreement",
+          "status": "needs_review",
+          "values_by_source": {
+            "record-destination-a": "unspecified",
+            "record-destination-b": "medium"
+          }
+        }
+      ],
+      "confidence": 0.71
+    }
+  ]
+}

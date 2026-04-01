@@ -73,6 +73,7 @@ def build_provenance_reference(
     *,
     subject_id: str,
     summary: str,
+    subject_kind: str = "option",
     contribution_kind: str = "inventory",
 ) -> ProvenanceReference:
     payload = record.payload
@@ -82,7 +83,7 @@ def build_provenance_reference(
         provenance_id=f"{snapshot.snapshot_id}:{record.record_id}",
         source_id=snapshot.source_id,
         source_category=snapshot.source_category,
-        subject_kind="option",
+        subject_kind=subject_kind,
         subject_id=subject_id,
         contribution_kind=contribution_kind,
         summary=summary,
