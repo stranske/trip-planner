@@ -1,0 +1,164 @@
+{
+  "result_set_id": "ranked-results:trip-business:policy_comparison",
+  "trip_id": "trip-business",
+  "purpose": "policy_comparison",
+  "scope": "mixed",
+  "title": "Business ranking",
+  "comparison_axes": [
+    {
+      "key": "policy_fit",
+      "label": "Policy fit",
+      "direction": "higher_better"
+    },
+    {
+      "key": "schedule_reliability",
+      "label": "Schedule reliability",
+      "direction": "higher_better"
+    }
+  ],
+  "results": [
+    {
+      "result_id": "ranked:item:chicago-conference-core",
+      "result_kind": "item",
+      "rank": 1,
+      "score": 0.63,
+      "target_option": {
+        "option_id": "candidate:chicago-conference-core",
+        "kind": "mixed",
+        "label": "Chicago conference core",
+        "summary": "Business-focused bundle with reliable arrival windows.",
+        "fit_signals": {
+          "policy_fit": 0.82,
+          "schedule_reliability": 0.71
+        },
+        "cost_summary": {
+          "total": {
+            "currency": "USD",
+            "typical_amount": 910.0
+          }
+        },
+        "quality_summary": {
+          "quality_signal": 0.74,
+          "value_signal": 0.63,
+          "fit_signal": 0.77
+        },
+        "drawbacks": [
+          "Hotel tax data is incomplete."
+        ],
+        "booking_links": [
+          "https://example.test/chicago-business"
+        ],
+        "source_refs": [
+          "src:chicago-conference-core"
+        ],
+        "supporting_place_ids": [
+          "dest-chicago"
+        ],
+        "explanation": [
+          "High policy fit with a small missing-data discount."
+        ]
+      },
+      "supporting_option_ids": [
+        "transport-ord-direct",
+        "lodg-conference-core"
+      ],
+      "supporting_destination_ids": [
+        "dest-chicago"
+      ],
+      "score_breakdown": {
+        "baseline_score": 0.35,
+        "component_contributions": [
+          {
+            "contribution_id": "policy-fit",
+            "label": "Policy fit",
+            "axis_key": "policy_fit",
+            "direction": "higher_better",
+            "raw_value": 0.82,
+            "normalized_signal": 0.82,
+            "weighted_impact": 0.18,
+            "summary": "Vendor channel and room rate remain within policy."
+          },
+          {
+            "contribution_id": "arrival-window",
+            "label": "Arrival window reliability",
+            "axis_key": "schedule_reliability",
+            "direction": "higher_better",
+            "raw_value": 0.71,
+            "normalized_signal": 0.71,
+            "weighted_impact": 0.15,
+            "summary": "Direct flight improves presentation-day reliability."
+          }
+        ],
+        "penalties": [],
+        "bonuses": [],
+        "missing_data_penalties": [
+          {
+            "adjustment_id": "missing-hotel-tax",
+            "label": "Missing hotel tax estimate",
+            "kind": "missing_data",
+            "amount": 0.05,
+            "reason_code": "missing_tax_estimate",
+            "summary": "The lodging source omitted a final tax estimate.",
+            "affected_factor_keys": [
+              "policy-fit"
+            ]
+          }
+        ],
+        "final_score": 0.63,
+        "notes": [
+          "Missing-data penalties stay explicit instead of being hidden in one score."
+        ]
+      },
+      "confidence_summary": {
+        "overall_confidence": 0.68,
+        "input_coverage": 0.79,
+        "data_freshness": 0.87,
+        "scoring_stability": 0.74,
+        "low_confidence_flags": [
+          "missing_tax_estimate"
+        ],
+        "missing_data_fields": [
+          "lodging.tax_summary"
+        ]
+      },
+      "explanation_records": [
+        {
+          "explanation_id": "summary:chicago-conference-core",
+          "record_type": "summary",
+          "target_kind": "item",
+          "target_id": "candidate:chicago-conference-core",
+          "headline": "Policy-ready with an explicit missing-data discount",
+          "summary": "The candidate remains preferred because policy and schedule fit are strong, but confidence is reduced by incomplete lodging tax data.",
+          "factor_keys": [
+            "policy-fit",
+            "arrival-window",
+            "missing-hotel-tax"
+          ],
+          "machine_context": {
+            "missing_field": "lodging.tax_summary",
+            "policy_status": "within_policy"
+          },
+          "human_summary": [
+            "Within policy",
+            "Reliable arrival",
+            "Missing final tax estimate"
+          ],
+          "source_refs": [
+            "src:chicago-conference-core"
+          ]
+        }
+      ],
+      "unresolved_risks": [
+        {
+          "risk_id": "risk:tax-estimate",
+          "code": "missing_tax_estimate",
+          "severity": "warning",
+          "summary": "Total trip cost may rise slightly once tax is confirmed."
+        }
+      ],
+      "source_refs": [
+        "src:chicago-conference-core"
+      ]
+    }
+  ]
+}

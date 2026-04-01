@@ -1,0 +1,127 @@
+{
+  "result_set_id": "ranked-results:trip-route:final_selection",
+  "trip_id": "trip-route",
+  "purpose": "final_selection",
+  "scope": "route",
+  "title": "Route-level ranking",
+  "comparison_axes": [
+    {
+      "key": "coherence",
+      "label": "Route coherence",
+      "direction": "higher_better"
+    },
+    {
+      "key": "transfer_load",
+      "label": "Transfer load",
+      "direction": "lower_better"
+    }
+  ],
+  "results": [
+    {
+      "result_id": "ranked:route:jp-loop-lite",
+      "result_kind": "route",
+      "rank": 1,
+      "score": 0.57,
+      "target_bundle_id": "bundle:jp-loop-lite",
+      "supporting_option_ids": [
+        "transport-kix-kyoto",
+        "lodg-kyoto-central",
+        "activity-arashiyama-day"
+      ],
+      "supporting_destination_ids": [
+        "dest-osaka",
+        "dest-kyoto"
+      ],
+      "route_sequence": [
+        "dest-osaka",
+        "dest-kyoto"
+      ],
+      "score_breakdown": {
+        "baseline_score": 0.3,
+        "component_contributions": [
+          {
+            "contribution_id": "route-coherence",
+            "label": "Route coherence",
+            "axis_key": "coherence",
+            "direction": "higher_better",
+            "raw_value": 0.78,
+            "normalized_signal": 0.78,
+            "weighted_impact": 0.19,
+            "summary": "The destination order minimizes backtracking."
+          },
+          {
+            "contribution_id": "transfer-load",
+            "label": "Transfer load",
+            "axis_key": "transfer_load",
+            "direction": "lower_better",
+            "raw_value": 1.0,
+            "normalized_signal": 0.62,
+            "weighted_impact": 0.12,
+            "summary": "Only one meaningful transfer is required."
+          }
+        ],
+        "penalties": [
+          {
+            "adjustment_id": "late-arrival-risk",
+            "label": "Late arrival risk",
+            "kind": "penalty",
+            "amount": 0.04,
+            "reason_code": "tight_evening_connection",
+            "summary": "The first evening connection keeps recovery time thin."
+          }
+        ],
+        "bonuses": [],
+        "missing_data_penalties": [],
+        "final_score": 0.57
+      },
+      "confidence_summary": {
+        "overall_confidence": 0.72,
+        "input_coverage": 0.81,
+        "data_freshness": 0.73,
+        "scoring_stability": 0.69,
+        "low_confidence_flags": [
+          "transfer_time_estimate"
+        ],
+        "missing_data_fields": []
+      },
+      "explanation_records": [
+        {
+          "explanation_id": "summary:jp-loop-lite",
+          "record_type": "summary",
+          "target_kind": "route",
+          "target_id": "bundle:jp-loop-lite",
+          "headline": "Compact route with one thin connection",
+          "summary": "The route ranks well because it stays geographically coherent, but an evening transfer remains slightly fragile.",
+          "factor_keys": [
+            "route-coherence",
+            "transfer-load",
+            "late-arrival-risk"
+          ],
+          "machine_context": {
+            "route_shape": "two_stop_loop",
+            "fragile_leg": "osaka_to_kyoto_evening"
+          },
+          "human_summary": [
+            "Minimal backtracking",
+            "One transfer",
+            "Thin evening buffer"
+          ],
+          "source_refs": [
+            "route:jp-loop-lite"
+          ]
+        }
+      ],
+      "unresolved_risks": [
+        {
+          "risk_id": "risk:evening-transfer",
+          "code": "tight_evening_connection",
+          "severity": "warning",
+          "summary": "The route depends on one tight evening movement window."
+        }
+      ],
+      "source_refs": [
+        "route:jp-loop-lite"
+      ]
+    }
+  ]
+}
