@@ -12,6 +12,7 @@ const GITHUB_GRAPHQL_ENDPOINT = "https://api.github.com/graphql";
 function parseCommandLineArguments(argv = process.argv.slice(2)) {
   const positional = [];
   let inputPath = null;
+  let expectedCount = null;
   let outputFormat = "text";
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -39,10 +40,22 @@ function parseCommandLineArguments(argv = process.argv.slice(2)) {
       continue;
     }
 
+    if (argument === "--expect-count") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --expect-count flag requires an integer value.");
+      }
+
+      expectedCount = value;
+      index += 1;
+      continue;
+    }
+
     positional.push(argument);
   }
 
   return {
+    expectedCount,
     inputPath,
     outputFormat,
     positional,
@@ -58,7 +71,10 @@ function getConfiguration(argv = process.argv.slice(2), env = process.env) {
   const token = env.GITHUB_TOKEN;
   const inputPath = parsedArguments.inputPath || env.REVIEW_THREADS_FILE || null;
   const outputFormat = parsedArguments.outputFormat || "text";
+  const expectedCountRaw = parsedArguments.expectedCount ?? env.EXPECT_UNRESOLVED_COUNT ?? null;
   const prNumber = Number.parseInt(prNumberRaw, 10);
+  const expectedCount =
+    expectedCountRaw === null ? null : Number.parseInt(String(expectedCountRaw), 10);
 
   if (!repository.includes("/")) {
     throw new Error(
@@ -80,8 +96,14 @@ function getConfiguration(argv = process.argv.slice(2), env = process.env) {
     );
   }
 
+  if (expectedCountRaw !== null && (!Number.isInteger(expectedCount) || expectedCount < 0)) {
+    throw new Error(
+      `Expected unresolved thread count must be a non-negative integer; received "${expectedCountRaw}".`
+    );
+  }
+
   const [owner, repo] = repository.split("/", 2);
-  return { owner, repo, prNumber, token, inputPath, outputFormat };
+  return { owner, repo, prNumber, token, inputPath, outputFormat, expectedCount };
 }
 
 function buildReviewThreadsQuery() {
@@ -364,6 +386,18 @@ function formatOutput(repository, prNumber, unresolvedThreads, outputFormat = "t
   return formatUnresolvedThreadsReport(repository, prNumber, unresolvedThreads);
 }
 
+function validateExpectedCount(unresolvedThreads, expectedCount) {
+  if (expectedCount === null) {
+    return;
+  }
+
+  if (unresolvedThreads.length !== expectedCount) {
+    throw new Error(
+      `Expected ${expectedCount} unresolved review thread(s), found ${unresolvedThreads.length}.`
+    );
+  }
+}
+
 async function main() {
   const configuration = getConfiguration();
   const threads = configuration.inputPath
@@ -371,6 +405,7 @@ async function main() {
     : await fetchAllReviewThreads(configuration);
   const unresolvedThreads = extractUnresolvedThreads(threads);
   const repository = `${configuration.owner}/${configuration.repo}`;
+  validateExpectedCount(unresolvedThreads, configuration.expectedCount);
   process.stdout.write(
     formatOutput(repository, configuration.prNumber, unresolvedThreads, configuration.outputFormat)
   );
@@ -399,4 +434,5 @@ module.exports = {
   normalizeBody,
   parseCommandLineArguments,
   requestGraphql,
+  validateExpectedCount,
 };

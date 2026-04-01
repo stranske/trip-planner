@@ -19,6 +19,7 @@ const {
   loadReviewThreadsFromFile,
   normalizeBody,
   parseCommandLineArguments,
+  validateExpectedCount,
 } = require(path.join(repoRoot, "scripts/list_unresolved_pr_threads.js"));
 
 test("getConfiguration applies defaults and parses explicit repository/PR inputs", () => {
@@ -34,6 +35,7 @@ test("getConfiguration applies defaults and parses explicit repository/PR inputs
     token: "token-value",
     inputPath: null,
     outputFormat: "text",
+    expectedCount: null,
   });
 
   const defaults = getConfiguration([], { GITHUB_TOKEN: "token-value" });
@@ -50,6 +52,7 @@ test("getConfiguration accepts --input without requiring a GitHub token", () => 
   assert.equal(configuration.inputPath, "tests/fixtures/scripts/review_threads_snapshot.json");
   assert.equal(configuration.token, undefined);
   assert.equal(configuration.outputFormat, "text");
+  assert.equal(configuration.expectedCount, null);
 });
 
 test("getConfiguration accepts structured output formats", () => {
@@ -59,6 +62,15 @@ test("getConfiguration accepts structured output formats", () => {
   );
 
   assert.equal(configuration.outputFormat, "markdown");
+});
+
+test("getConfiguration parses an expected unresolved thread count", () => {
+  const configuration = getConfiguration(
+    ["octo/repo", "178", "--input", "threads.json", "--expect-count", "4"],
+    {}
+  );
+
+  assert.equal(configuration.expectedCount, 4);
 });
 
 test("extractUnresolvedThreads keeps unresolved threads and normalizes comment text", () => {
@@ -139,6 +151,7 @@ test("parseCommandLineArguments separates positional values from the --input fla
   assert.deepEqual(
     parseCommandLineArguments(["octo/repo", "178", "--input", "threads.json"]),
     {
+      expectedCount: null,
       inputPath: "threads.json",
       outputFormat: "text",
       positional: ["octo/repo", "178"],
@@ -150,8 +163,28 @@ test("parseCommandLineArguments accepts an explicit output format", () => {
   assert.deepEqual(
     parseCommandLineArguments(["octo/repo", "178", "--input", "threads.json", "--format", "json"]),
     {
+      expectedCount: null,
       inputPath: "threads.json",
       outputFormat: "json",
+      positional: ["octo/repo", "178"],
+    }
+  );
+});
+
+test("parseCommandLineArguments accepts an explicit expected count", () => {
+  assert.deepEqual(
+    parseCommandLineArguments([
+      "octo/repo",
+      "178",
+      "--input",
+      "threads.json",
+      "--expect-count",
+      "0",
+    ]),
+    {
+      expectedCount: "0",
+      inputPath: "threads.json",
+      outputFormat: "text",
       positional: ["octo/repo", "178"],
     }
   );
@@ -251,5 +284,26 @@ test("formatOutput dispatches to the requested formatter", () => {
   assert.match(
     formatOutput("stranske/trip-planner", 178, unresolvedThreads, "markdown"),
     /## Thread 1/
+  );
+});
+
+test("validateExpectedCount enforces the requested unresolved thread count", () => {
+  assert.doesNotThrow(() =>
+    validateExpectedCount(
+      [
+        { id: "THREAD_1", comments: [] },
+        { id: "THREAD_2", comments: [] },
+      ],
+      2
+    )
+  );
+
+  assert.throws(
+    () =>
+      validateExpectedCount(
+        [{ id: "THREAD_1", comments: [] }],
+        0
+      ),
+    /Expected 0 unresolved review thread\(s\), found 1\./
   );
 });
