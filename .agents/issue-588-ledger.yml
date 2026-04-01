@@ -6,10 +6,10 @@ tasks:
   - id: task-01
     title: 'Add a markdown file `pr-569-unresolved-threads.md` enumerating the 5 unresolved
       inline review threads on PR #569 (include direct links and short summaries)'
-    status: doing
+    status: done
     started_at: '2026-04-01T11:39:21Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-04-01T11:39:35Z'
+    commit: 4bf0c0f9a9b79da6ae040bf9e2098151259d2cd6
     notes: []
   - id: task-02
     title: Review each unresolved thread and document the technical concern raised
