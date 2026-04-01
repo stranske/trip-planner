@@ -624,6 +624,7 @@ test("formatExecutionReport emits readable dry-run output", () => {
 
 test("writeExecutionResults persists the execution report as JSON", () => {
   const writes = [];
+  const mkdirs = [];
   const report = {
     manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
     execute: true,
@@ -639,11 +640,20 @@ test("writeExecutionResults persists the execution report as JSON", () => {
   };
 
   writeExecutionResults(report, report.resultsPath, {
+    mkdirSync: (directoryPath, options) => {
+      mkdirs.push({ directoryPath, options });
+    },
     writeFileSync: (filePath, content, encoding) => {
       writes.push({ filePath, content, encoding });
     },
   });
 
+  assert.deepEqual(mkdirs, [
+    {
+      directoryPath: path.resolve(".tmp/pr-thread-payloads"),
+      options: { recursive: true },
+    },
+  ]);
   assert.equal(writes.length, 1);
   assert.equal(writes[0].filePath, report.resultsPath);
   assert.equal(writes[0].encoding, "utf8");

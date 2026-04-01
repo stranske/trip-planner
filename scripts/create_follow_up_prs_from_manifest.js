@@ -256,7 +256,9 @@ function resolveManifestRelativePath(manifestPath, targetPath) {
 }
 
 function writeExecutionResults(report, resultsPath, dependencies = {}) {
+  const mkdirSync = dependencies.mkdirSync || fs.mkdirSync;
   const writeFileSync = dependencies.writeFileSync || fs.writeFileSync;
+  mkdirSync(path.dirname(resultsPath), { recursive: true });
   writeFileSync(resultsPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 }
 
