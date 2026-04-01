@@ -110,14 +110,23 @@ class FeasibilityAssessment:
         require_strings(self.missing_data_fields, "missing_data_fields")
         require_strings(self.blocking_reasons, "blocking_reasons")
         require_strings(self.notes, "notes")
-        if any(not isinstance(item, TravelTimeEstimate) for item in self.travel_time_estimates):
-            raise ValueError("travel_time_estimates must contain TravelTimeEstimate instances")
+        if any(
+            not isinstance(item, TravelTimeEstimate)
+            for item in self.travel_time_estimates
+        ):
+            raise ValueError(
+                "travel_time_estimates must contain TravelTimeEstimate instances"
+            )
         if any(not isinstance(item, MoveCostSummary) for item in self.move_costs):
             raise ValueError("move_costs must contain MoveCostSummary instances")
         if any(not isinstance(item, TimingConflict) for item in self.timing_conflicts):
             raise ValueError("timing_conflicts must contain TimingConflict instances")
-        if any(not isinstance(item, RouteContinuityWarning) for item in self.route_warnings):
-            raise ValueError("route_warnings must contain RouteContinuityWarning instances")
+        if any(
+            not isinstance(item, RouteContinuityWarning) for item in self.route_warnings
+        ):
+            raise ValueError(
+                "route_warnings must contain RouteContinuityWarning instances"
+            )
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -127,7 +136,8 @@ def _schedule_protection_required(bundle: InventoryBundle) -> bool:
     if any("business" in tag for tag in bundle.tags):
         return True
     if any(
-        lodging.location_summary.business_access_signal and lodging.location_summary.business_access_signal >= 0.8
+        lodging.location_summary.business_access_signal
+        and lodging.location_summary.business_access_signal >= 0.8
         for lodging in bundle.lodging_options
     ):
         return True
@@ -144,7 +154,9 @@ def _arrival_conflicts(bundle: InventoryBundle) -> list[TimingConflict]:
         if arrival is None:
             continue
         matching_lodging = [
-            lodging for lodging in bundle.lodging_options if lodging.destination_id == transport.destination_id
+            lodging
+            for lodging in bundle.lodging_options
+            if lodging.destination_id == transport.destination_id
         ]
         for lodging in matching_lodging:
             window = _parse_window(lodging.booking_terms.checkin_window)
@@ -211,7 +223,10 @@ def _activity_timing_conflicts(
             continue
         available_minutes = max(
             0,
-            (datetime.combine(arrival.date(), end_time, arrival.tzinfo) - arrival).seconds // 60,
+            (
+                datetime.combine(arrival.date(), end_time, arrival.tzinfo) - arrival
+            ).seconds
+            // 60,
         )
         if available_minutes < activity.timing_summary.duration_minutes:
             conflicts.append(
@@ -227,7 +242,10 @@ def _activity_timing_conflicts(
                     related_option_ids=[activity.option_id],
                 )
             )
-        elif schedule_protection_required and available_minutes - activity.timing_summary.duration_minutes < 90:
+        elif (
+            schedule_protection_required
+            and available_minutes - activity.timing_summary.duration_minutes < 90
+        ):
             conflicts.append(
                 TimingConflict(
                     conflict_id=f"timing:{activity.option_id}:buffer",
@@ -244,10 +262,14 @@ def _activity_timing_conflicts(
     return conflicts, sorted(set(missing_data_fields))
 
 
-def _route_warnings(bundle: InventoryBundle, move_costs: list[MoveCostSummary]) -> list[RouteContinuityWarning]:
+def _route_warnings(
+    bundle: InventoryBundle, move_costs: list[MoveCostSummary]
+) -> list[RouteContinuityWarning]:
     warnings: list[RouteContinuityWarning] = []
     destination_sequence = [item.origin_id for item in bundle.transport_options]
-    destination_sequence.extend(item.destination_id for item in bundle.transport_options)
+    destination_sequence.extend(
+        item.destination_id for item in bundle.transport_options
+    )
     backtracking = any(
         destination_sequence[index] == destination_sequence[index + 2]
         for index in range(len(destination_sequence) - 2)
@@ -328,9 +350,7 @@ def evaluate_bundle_feasibility(bundle: InventoryBundle) -> FeasibilityAssessmen
 
     blocking_reasons = list(bundle.feasibility.blocking_reasons)
     blocking_reasons.extend(
-        reason
-        for move_cost in move_costs
-        for reason in move_cost.blocking_reasons
+        reason for move_cost in move_costs for reason in move_cost.blocking_reasons
     )
     blocking_reasons.extend(
         conflict.code for conflict in timing_conflicts if conflict.blocking
@@ -343,10 +363,12 @@ def evaluate_bundle_feasibility(bundle: InventoryBundle) -> FeasibilityAssessmen
 
     route_warnings = _route_warnings(bundle, move_costs)
     friction_penalty_total = round(sum(item.friction_penalty for item in move_costs), 4)
-    total_travel_minutes, total_transfer_count, aggregate_notes = _representative_travel_totals(
-        bundle,
-        travel_estimates,
-        move_costs,
+    total_travel_minutes, total_transfer_count, aggregate_notes = (
+        _representative_travel_totals(
+            bundle,
+            travel_estimates,
+            move_costs,
+        )
     )
     warning_pressure = (
         len([conflict for conflict in timing_conflicts if not conflict.blocking])
