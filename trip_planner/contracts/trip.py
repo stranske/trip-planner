@@ -8,7 +8,14 @@ from typing import Any
 from ._validators import require_non_empty, require_strings
 
 TRIP_MODES: tuple[str, ...] = ("leisure", "business")
-TRIP_STATUSES: tuple[str, ...] = ("draft", "active", "booked", "in_trip", "completed", "archived")
+TRIP_STATUSES: tuple[str, ...] = (
+    "draft",
+    "active",
+    "booked",
+    "in_trip",
+    "completed",
+    "archived",
+)
 TRAVELER_PARTY_KINDS: tuple[str, ...] = ("solo", "pair", "family", "friends", "team")
 
 

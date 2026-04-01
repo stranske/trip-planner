@@ -18,7 +18,11 @@ PURPOSE_TYPES: Final[tuple[str, ...]] = (
     "other",
 )
 TRIP_CRITICALITY_LEVELS: Final[tuple[str, ...]] = ("low", "medium", "high")
-ARRIVAL_BUFFER_PREFERENCES: Final[tuple[str, ...]] = ("tight", "moderate", "conservative")
+ARRIVAL_BUFFER_PREFERENCES: Final[tuple[str, ...]] = (
+    "tight",
+    "moderate",
+    "conservative",
+)
 EXCEPTION_FALLBACK_MODES: Final[tuple[str, ...]] = (
     "nearest_compliant",
     "document_exception_candidate",

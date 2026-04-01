@@ -93,15 +93,27 @@ def main(args: list[str] | None = None) -> int:
     parser.add_argument("--coverage-xml", type=Path, help="Path to coverage.xml")
     parser.add_argument("--coverage-json", type=Path, help="Path to coverage.json")
     parser.add_argument("--baseline", type=Path, help="Path to baseline JSON")
-    parser.add_argument("--summary-path", type=Path, help="Path to output summary markdown")
-    parser.add_argument("--job-summary", type=Path, help="Path to GITHUB_STEP_SUMMARY")
-    parser.add_argument("--artifact-path", type=Path, help="Path to output trend artifact")
-    parser.add_argument("--github-output", type=Path, help="Path to write env file")
-    parser.add_argument("--minimum", type=float, default=70.0, help="Minimum coverage threshold")
-    parser.add_argument("--hotspot-limit", type=int, default=15, help="Max hotspot files to show")
-    parser.add_argument("--low-threshold", type=float, default=50.0, help="Low coverage threshold")
     parser.add_argument(
-        "--soft", action="store_true", help="Soft gate mode - report only, always exit 0"
+        "--summary-path", type=Path, help="Path to output summary markdown"
+    )
+    parser.add_argument("--job-summary", type=Path, help="Path to GITHUB_STEP_SUMMARY")
+    parser.add_argument(
+        "--artifact-path", type=Path, help="Path to output trend artifact"
+    )
+    parser.add_argument("--github-output", type=Path, help="Path to write env file")
+    parser.add_argument(
+        "--minimum", type=float, default=70.0, help="Minimum coverage threshold"
+    )
+    parser.add_argument(
+        "--hotspot-limit", type=int, default=15, help="Max hotspot files to show"
+    )
+    parser.add_argument(
+        "--low-threshold", type=float, default=50.0, help="Low coverage threshold"
+    )
+    parser.add_argument(
+        "--soft",
+        action="store_true",
+        help="Soft gate mode - report only, always exit 0",
     )
     parsed = parser.parse_args(args)
 
@@ -149,7 +161,9 @@ def main(args: list[str] | None = None) -> int:
             "hotspots": hotspots,
             "low_coverage_files": low_coverage,
         }
-        parsed.artifact_path.write_text(json.dumps(artifact_data, indent=2), encoding="utf-8")
+        parsed.artifact_path.write_text(
+            json.dumps(artifact_data, indent=2), encoding="utf-8"
+        )
 
     status = "✅ Pass" if passes_minimum else "❌ Below minimum"
     summary = f"""## Coverage Trend
@@ -166,7 +180,9 @@ def main(args: list[str] | None = None) -> int:
 
     # Add hotspot tables if we have coverage data
     if hotspots:
-        summary += _format_hotspot_table(hotspots, "Top Coverage Hotspots (lowest coverage)")
+        summary += _format_hotspot_table(
+            hotspots, "Top Coverage Hotspots (lowest coverage)"
+        )
 
     if low_coverage:
         summary += _format_hotspot_table(
