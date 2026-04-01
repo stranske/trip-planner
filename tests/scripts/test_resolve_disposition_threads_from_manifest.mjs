@@ -590,6 +590,8 @@ test("executeManifestThreads updates the inventory document after successful exe
   const updatedDocument = fs.readFileSync(docPath, "utf8");
   assert.equal(report.inventoryUpdate.resolvedThreadCount, 1);
   assert.equal(report.inventoryUpdate.remainingThreadCount, 0);
+  assert.equal(report.acceptance.overallStatus, "manual");
+  assert.equal(report.acceptance.unresolvedThreadCount, 0);
   assert.match(updatedDocument, /No unresolved inline review threads found\./);
   assert.match(updatedDocument, /## Resolved Thread Inventory[\s\S]*THREAD_1/);
 });
@@ -1045,4 +1047,36 @@ test("formatExecutionReport renders inventory update details when present", () =
   assert.match(report, /Inventory Doc Updated: `\/tmp\/pr-178-unresolved-threads\.md`/);
   assert.match(report, /Resolved Threads Moved: 1/);
   assert.match(report, /Remaining Active Threads: 0/);
+});
+
+test("formatExecutionReport renders acceptance status without requiring a separate report file", () => {
+  const report = formatExecutionReport(
+    {
+      manifestPath: "/tmp/manifest.json",
+      execute: true,
+      threadCount: 1,
+      acceptance: {
+        overallStatus: "manual",
+      },
+      results: [
+        {
+          threadNumber: 1,
+          manifestThreadNumber: 1,
+          threadId: "THREAD_1",
+          originalThreadUrl: null,
+          location: null,
+          scriptPath: null,
+          mode: "execute",
+          replyCommand: "gh api graphql -f query=reply",
+          resolveCommand: "gh api graphql -f query=resolve",
+          replyExitStatus: 0,
+          resolveExitStatus: 0,
+          replyOutput: "ok",
+          resolveOutput: "ok",
+        },
+      ],
+    }
+  );
+
+  assert.match(report, /Acceptance Status: MANUAL/);
 });

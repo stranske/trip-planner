@@ -494,7 +494,7 @@ async function executeManifestThreads(options = {}, dependencies = {}) {
     );
   }
 
-  if (options.execute && options.docPath && (options.resultsPath || options.acceptanceReportPath)) {
+  if (options.execute && options.docPath) {
     const documentedThreads = loadThreadInventory(options.docPath, dependencies);
     const remainingThreads = report.remainingThreadsSnapshot || [];
     const acceptanceResult = await evaluateAcceptance(
@@ -568,11 +568,11 @@ function formatExecutionReport(report, outputFormat = "text") {
     lines.push(`Remaining Snapshot File: \`${report.remainingSnapshotPath}\``);
     lines.push(`Remaining Snapshot Threads: ${report.remainingSnapshotThreadCount}`);
   }
+  if (report.acceptance) {
+    lines.push(`Acceptance Status: ${String(report.acceptance.overallStatus).toUpperCase()}`);
+  }
   if (report.acceptanceReportPath) {
     lines.push(`Acceptance Report File: \`${report.acceptanceReportPath}\``);
-    if (report.acceptance) {
-      lines.push(`Acceptance Status: ${String(report.acceptance.overallStatus).toUpperCase()}`);
-    }
   }
 
   report.results.forEach((result) => {
