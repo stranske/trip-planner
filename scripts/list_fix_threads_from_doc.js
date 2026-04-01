@@ -84,16 +84,36 @@ function isPlaceholderValue(value) {
 
 function collectThreadInventoryIssues(threads) {
   const issues = [];
+  const seenThreadIds = new Map();
+  const seenOriginalThreadUrls = new Map();
 
   threads.forEach((thread, index) => {
     const threadLabel = thread.threadId || `Thread ${index + 1}`;
 
     if (!thread.threadId) {
       issues.push(`${threadLabel}: missing thread ID`);
+    } else {
+      const firstSeenIndex = seenThreadIds.get(thread.threadId);
+      if (firstSeenIndex !== undefined) {
+        issues.push(
+          `${threadLabel}: duplicate thread ID also used by Thread ${firstSeenIndex + 1}`
+        );
+      } else {
+        seenThreadIds.set(thread.threadId, index);
+      }
     }
 
     if (!thread.originalThreadUrl) {
       issues.push(`${threadLabel}: missing original thread URL`);
+    } else {
+      const firstSeenIndex = seenOriginalThreadUrls.get(thread.originalThreadUrl);
+      if (firstSeenIndex !== undefined) {
+        issues.push(
+          `${threadLabel}: duplicate original thread URL also used by Thread ${firstSeenIndex + 1}`
+        );
+      } else {
+        seenOriginalThreadUrls.set(thread.originalThreadUrl, index);
+      }
     }
 
     if (!thread.location) {

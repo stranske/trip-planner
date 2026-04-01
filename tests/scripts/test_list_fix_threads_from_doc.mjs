@@ -167,6 +167,34 @@ test("collectThreadInventoryIssues flags missing metadata and placeholder entrie
   ]);
 });
 
+test("collectThreadInventoryIssues rejects duplicate thread IDs and original thread URLs", () => {
+  const issues = collectThreadInventoryIssues([
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/example.py:17",
+      classification: "disposition",
+      followUpPr: null,
+      rationale: "First inventory entry.",
+      content: "Reviewer requested a clarification.",
+    },
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/other.py:22",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale: "Second entry accidentally copied the first thread metadata.",
+      content: "Reviewer requested a follow-up patch.",
+    },
+  ]);
+
+  assert.deepEqual(issues, [
+    "THREAD_1: duplicate thread ID also used by Thread 1",
+    "THREAD_1: duplicate original thread URL also used by Thread 1",
+  ]);
+});
+
 test("placeholder helper recognizes common incomplete values", () => {
   assert.equal(isPlaceholderValue("TBD"), true);
   assert.equal(isPlaceholderValue(" pending "), true);
