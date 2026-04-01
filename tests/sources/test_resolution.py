@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -12,19 +13,29 @@ from trip_planner.sources import (
 )
 
 
-FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "sources" / "resolution"
+FIXTURE_ROOT = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "sources" / "resolution"
+)
 
 
-def load_fixture(name: str) -> dict[str, object]:
+def load_fixture(name: str) -> dict[str, Any]:
     return json.loads((FIXTURE_ROOT / name).read_text())
 
 
-def build_provenance(canonical_entity_id: str, entity_scope: str) -> MergedEntityProvenance:
+def build_provenance(
+    canonical_entity_id: str, entity_scope: str
+) -> MergedEntityProvenance:
     return MergedEntityProvenance(
         canonical_entity_id=canonical_entity_id,
         entity_scope=entity_scope,
-        source_record_ids=[f"{canonical_entity_id}-record-a", f"{canonical_entity_id}-record-b"],
-        source_snapshot_ids=[f"{canonical_entity_id}-snapshot-a", f"{canonical_entity_id}-snapshot-b"],
+        source_record_ids=[
+            f"{canonical_entity_id}-record-a",
+            f"{canonical_entity_id}-record-b",
+        ],
+        source_snapshot_ids=[
+            f"{canonical_entity_id}-snapshot-a",
+            f"{canonical_entity_id}-snapshot-b",
+        ],
         provenance_refs=[
             ProvenanceReference(
                 provenance_id=f"prov-{canonical_entity_id}",
@@ -32,9 +43,13 @@ def build_provenance(canonical_entity_id: str, entity_scope: str) -> MergedEntit
                 source_category="commercial_inventory"
                 if entity_scope != "destination"
                 else "editorial",
-                subject_kind="destination" if entity_scope == "destination" else "option",
+                subject_kind="destination"
+                if entity_scope == "destination"
+                else "option",
                 subject_id=canonical_entity_id,
-                contribution_kind="inventory" if entity_scope != "destination" else "editorial",
+                contribution_kind="inventory"
+                if entity_scope != "destination"
+                else "editorial",
                 summary="Fixture provenance survives resolution.",
                 captured_at="2026-04-01T00:05:00Z",
             )
@@ -60,7 +75,10 @@ def test_entity_resolution_supports_confident_lodging_match() -> None:
     payload = resolution.to_dict()
 
     assert payload["status"] == "match"
-    assert payload["match_candidates"][0]["score_breakdown"]["provider_id_alignment"] == 1.0
+    assert (
+        payload["match_candidates"][0]["score_breakdown"]["provider_id_alignment"]
+        == 1.0
+    )
 
 
 def test_entity_resolution_preserves_ambiguous_destination_conflict() -> None:
@@ -78,7 +96,9 @@ def test_entity_resolution_preserves_ambiguous_destination_conflict() -> None:
         summary="The neighborhood likely matches, but parent-city labeling conflicts stay explicit.",
         match_candidates=[candidate],
         conflicts=[conflict],
-        merged_provenance=build_provenance("destination-rome-trastevere", "destination"),
+        merged_provenance=build_provenance(
+            "destination-rome-trastevere", "destination"
+        ),
         review_required=True,
     )
 
@@ -92,7 +112,9 @@ def test_entity_resolution_preserves_ambiguous_destination_conflict() -> None:
 def test_entity_resolution_requires_review_flag_for_ambiguous_matches() -> None:
     fixture = load_fixture("ambiguous_destination_match.json")
     canonical_entity_id = str(fixture["canonical_entity_id"])
-    conflict = AttributeConflict(conflict_id="conflict-destination-2", **fixture["conflict"])
+    conflict = AttributeConflict(
+        conflict_id="conflict-destination-2", **fixture["conflict"]
+    )
 
     with pytest.raises(ValueError, match="review_required"):
         EntityResolution(
@@ -103,7 +125,9 @@ def test_entity_resolution_requires_review_flag_for_ambiguous_matches() -> None:
             canonical_entity_id=canonical_entity_id,
             summary="Ambiguous matches must stay reviewable.",
             conflicts=[conflict],
-            merged_provenance=build_provenance("destination-rome-trastevere", "destination"),
+            merged_provenance=build_provenance(
+                "destination-rome-trastevere", "destination"
+            ),
         )
 
 

@@ -1,29 +1,16 @@
 {
-  "canonical_entity_id": "lodging-canal-house",
-  "entity_scope": "lodging",
-  "option_kind": "lodging",
-  "match_strategy": "provider_id",
-  "confidence": 0.96,
-  "source_record_ids": [
-    "booking-canal-house",
-    "expedia-canal-house"
-  ],
-  "source_snapshot_ids": [
-    "snapshot-booking-amsterdam",
-    "snapshot-expedia-amsterdam"
-  ],
-  "matched_fields": [
-    "provider_property_id",
-    "name",
-    "coordinates"
-  ],
-  "compared_entity_ids": [
-    "booking:ch-100",
-    "expedia:ch-100"
-  ],
-  "score_breakdown": {
-    "name_similarity": 0.98,
-    "location_distance": 0.95,
-    "provider_id_alignment": 1.0
-  }
+    "canonical_entity_id": "lodging-canal-house",
+    "entity_scope": "lodging",
+    "option_kind": "lodging",
+    "match_strategy": "provider_id",
+    "confidence": 0.96,
+    "source_record_ids": ["booking-canal-house", "expedia-canal-house"],
+    "source_snapshot_ids": ["snapshot-booking-amsterdam", "snapshot-expedia-amsterdam"],
+    "matched_fields": ["provider_property_id", "name", "coordinates"],
+    "compared_entity_ids": ["booking:ch-100", "expedia:ch-100"],
+    "score_breakdown": {
+        "name_similarity": 0.98,
+        "location_distance": 0.95,
+        "provider_id_alignment": 1.0
+    }
 }

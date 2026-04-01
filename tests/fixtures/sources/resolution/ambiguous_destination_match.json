@@ -1,37 +1,25 @@
 {
-  "canonical_entity_id": "destination-rome-trastevere",
-  "entity_scope": "destination",
-  "option_kind": "mixed",
-  "match_strategy": "geo_text",
-  "confidence": 0.58,
-  "source_record_ids": [
-    "guide-trastevere",
-    "maps-trastevere"
-  ],
-  "source_snapshot_ids": [
-    "snapshot-guide-rome",
-    "snapshot-maps-rome"
-  ],
-  "matched_fields": [
-    "name",
-    "coordinates"
-  ],
-  "compared_entity_ids": [
-    "guide:trastevere",
-    "maps:roma-trastevere"
-  ],
-  "score_breakdown": {
-    "name_similarity": 0.67,
-    "location_distance": 0.71,
-    "taxonomy_alignment": 0.36
-  },
-  "conflict": {
-    "attribute_path": "destination.parent_city",
-    "reason": "source_disagreement",
-    "status": "preserved",
-    "values_by_source": {
-      "guide:trastevere": "Rome",
-      "maps:roma-trastevere": "Roma municipality"
+    "canonical_entity_id": "destination-rome-trastevere",
+    "entity_scope": "destination",
+    "option_kind": "mixed",
+    "match_strategy": "geo_text",
+    "confidence": 0.58,
+    "source_record_ids": ["guide-trastevere", "maps-trastevere"],
+    "source_snapshot_ids": ["snapshot-guide-rome", "snapshot-maps-rome"],
+    "matched_fields": ["name", "coordinates"],
+    "compared_entity_ids": ["guide:trastevere", "maps:roma-trastevere"],
+    "score_breakdown": {
+        "name_similarity": 0.67,
+        "location_distance": 0.71,
+        "taxonomy_alignment": 0.36
+    },
+    "conflict": {
+        "attribute_path": "destination.parent_city",
+        "reason": "source_disagreement",
+        "status": "preserved",
+        "values_by_source": {
+            "guide:trastevere": "Rome",
+            "maps:roma-trastevere": "Roma municipality"
+        }
     }
-  }
 }
