@@ -24,6 +24,12 @@ After the inventory is populated, identify any `fix`-classified entries with:
 node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md
 ```
 
+To verify that the populated inventory matches an exported review-thread snapshot before classifying or resolving items, run:
+
+```bash
+node scripts/verify_pr_thread_inventory.js stranske/trip-planner 178 --doc docs/pr-178-unresolved-threads.md --input path/to/pr-178-review-threads.json --expect-doc-count 4 --expect-count 4
+```
+
 After the fix/disposition work is complete, rerun the same command with `--expect-count 0` to verify the acceptance criterion.
 
 ## Thread Template
