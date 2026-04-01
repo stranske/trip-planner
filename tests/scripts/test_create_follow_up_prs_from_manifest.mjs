@@ -7,14 +7,17 @@ const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const {
   buildGhPrCreateArgs,
+  combineCommandOutput,
   doesCreatedPullRequestMatchFollowUpPr,
   executeManifestGroups,
   extractCreatedPullRequestUrl,
   formatExecutionReport,
+  isExistingPullRequestOutcome,
   loadManifest,
   normalizePullRequestUrl,
   parseCliArguments,
   resolveManifestRelativePath,
+  runGhPrCreate,
   selectManifestGroups,
   validateManifestGroup,
   writeExecutionResults,
@@ -117,6 +120,27 @@ test("buildGhPrCreateArgs returns a non-shell command argv list", () => {
   );
 });
 
+test("runGhPrCreate captures stdout, stderr, and exit status from spawnSync", () => {
+  const result = runGhPrCreate(["pr", "create"], {
+    spawnSync: (command, args, options) => {
+      assert.equal(command, "gh");
+      assert.deepEqual(args, ["pr", "create"]);
+      assert.deepEqual(options, { encoding: "utf8" });
+      return {
+        status: 1,
+        stdout: "stdout line\n",
+        stderr: "stderr line\n",
+      };
+    },
+  });
+
+  assert.deepEqual(result, {
+    status: 1,
+    stdout: "stdout line",
+    stderr: "stderr line",
+  });
+});
+
 test("extractCreatedPullRequestUrl returns the created PR URL from gh output", () => {
   assert.equal(
     extractCreatedPullRequestUrl(
@@ -125,6 +149,11 @@ test("extractCreatedPullRequestUrl returns the created PR URL from gh output", (
     "https://github.com/stranske/trip-planner/pull/622"
   );
   assert.equal(extractCreatedPullRequestUrl("created successfully"), null);
+});
+
+test("combineCommandOutput joins stdout and stderr without blank lines", () => {
+  assert.equal(combineCommandOutput("created", "warning"), "created\nwarning");
+  assert.equal(combineCommandOutput("", "warning"), "warning");
 });
 
 test("normalizePullRequestUrl trims whitespace and trailing slashes", () => {
@@ -153,6 +182,25 @@ test("doesCreatedPullRequestMatchFollowUpPr compares normalized PR URLs", () => 
   assert.equal(
     doesCreatedPullRequestMatchFollowUpPr(null, "https://github.com/stranske/trip-planner/pull/622"),
     null
+  );
+});
+
+test("isExistingPullRequestOutcome recognizes already-existing PR output with a URL", () => {
+  assert.equal(
+    isExistingPullRequestOutcome(
+      1,
+      "a pull request already exists for branch\nhttps://github.com/stranske/trip-planner/pull/622",
+      "https://github.com/stranske/trip-planner/pull/622"
+    ),
+    true
+  );
+  assert.equal(
+    isExistingPullRequestOutcome(
+      1,
+      "a pull request already exists for branch",
+      null
+    ),
+    false
   );
 });
 
@@ -264,9 +312,13 @@ test("executeManifestGroups invokes gh for selected groups in execute mode", () 
         );
         return { isFile: () => true };
       },
-      execFileSync: (command, args, execOptions) => {
+      spawnSync: (command, args, execOptions) => {
         calls.push({ command, args, execOptions });
-        return "https://github.com/stranske/trip-planner/pull/622\n";
+        return {
+          status: 0,
+          stdout: "https://github.com/stranske/trip-planner/pull/622\n",
+          stderr: "",
+        };
       },
     }
   );
@@ -418,10 +470,86 @@ test("executeManifestGroups fails when gh output does not include a PR URL", () 
               ],
             }),
           statSync: () => ({ isFile: () => true }),
-          execFileSync: () => "created successfully\n",
+          spawnSync: () => ({
+            status: 0,
+            stdout: "created successfully\n",
+            stderr: "",
+          }),
         }
       ),
     /did not include a pull request URL/
+  );
+});
+
+test("executeManifestGroups accepts an already-existing PR URL reported on stderr", () => {
+  const report = executeManifestGroups(
+    {
+      manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+      execute: true,
+      followUpPr: null,
+      groupIndex: null,
+    },
+    {
+      readFileSync: () =>
+        JSON.stringify({
+          groups: [
+            {
+              followUpPr: "https://github.com/stranske/trip-planner/pull/622",
+              title: "Address PR #178 fix threads for follow-up PR #622",
+              baseBranch: "main",
+              headBranch: "codex/fix-thread-1",
+              bodyFilePath: "pr-178-fix-group-1-body.md",
+            },
+          ],
+        }),
+      statSync: () => ({ isFile: () => true }),
+      spawnSync: () => ({
+        status: 1,
+        stdout: "",
+        stderr:
+          "a pull request already exists for branch \"codex/fix-thread-1\"\nhttps://github.com/stranske/trip-planner/pull/622\n",
+      }),
+    }
+  );
+
+  assert.equal(report.results[0].createdPullRequestUrl, "https://github.com/stranske/trip-planner/pull/622");
+  assert.equal(report.results[0].createdPullRequestAlreadyExisted, true);
+  assert.equal(report.results[0].commandExitStatus, 1);
+  assert.equal(report.results[0].createdPullRequestMatchesFollowUpPr, true);
+});
+
+test("executeManifestGroups fails on nonzero gh exit status without an existing PR URL", () => {
+  assert.throws(
+    () =>
+      executeManifestGroups(
+        {
+          manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+          execute: true,
+          followUpPr: null,
+          groupIndex: null,
+        },
+        {
+          readFileSync: () =>
+            JSON.stringify({
+              groups: [
+                {
+                  followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+                  title: "Address PR #178 fix threads for follow-up PR #581",
+                  baseBranch: "main",
+                  headBranch: "codex/fix-thread-1",
+                  bodyFilePath: "pr-178-fix-group-1-body.md",
+                },
+              ],
+            }),
+          statSync: () => ({ isFile: () => true }),
+          spawnSync: () => ({
+            status: 1,
+            stdout: "",
+            stderr: "HTTP 422: Validation Failed\n",
+          }),
+        }
+      ),
+    /gh pr create failed with exit code 1/
   );
 });
 
@@ -450,7 +578,11 @@ test("executeManifestGroups can enforce that the created PR matches the follow-u
               ],
             }),
           statSync: () => ({ isFile: () => true }),
-          execFileSync: () => "https://github.com/stranske/trip-planner/pull/622\n",
+          spawnSync: () => ({
+            status: 0,
+            stdout: "https://github.com/stranske/trip-planner/pull/622\n",
+            stderr: "",
+          }),
         }
       ),
     /does not match follow-up PR/
@@ -537,6 +669,8 @@ test("formatExecutionReport includes the created PR URL when available", () => {
             "gh pr create --base main --head codex/fix-thread-1 --title example --body-file .tmp/body.md",
           output: "https://github.com/stranske/trip-planner/pull/622",
           createdPullRequestUrl: "https://github.com/stranske/trip-planner/pull/622",
+          createdPullRequestAlreadyExisted: true,
+          commandExitStatus: 1,
           createdPullRequestMatchesFollowUpPr: false,
         },
       ],
@@ -545,5 +679,7 @@ test("formatExecutionReport includes the created PR URL when available", () => {
   );
 
   assert.match(report, /Created PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/622/);
+  assert.match(report, /Created PR Already Existed: yes/);
+  assert.match(report, /Command Exit Status: 1/);
   assert.match(report, /Created PR Matches Follow-up PR: no/);
 });

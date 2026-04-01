@@ -34,6 +34,8 @@ node scripts/create_follow_up_prs_from_manifest.js --manifest .tmp/pr-thread-pay
 
 The script validates each selected manifest group, checks that the generated PR body file exists, and only runs `gh pr create` when `--execute` is provided.
 When execution succeeds, the report now includes a `Created PR:` line extracted from the `gh pr create` output.
+The executor now inspects both `stdout` and `stderr`, so it can still capture the PR URL when `gh` reports that the branch already has an open pull request.
+That existing-PR case is surfaced as `Created PR Already Existed: yes` along with the `gh` exit status, instead of being misreported as a generic failure.
 When the output includes a created PR URL, the report also records whether it matches the `followUpPr` URL tracked in the manifest, and `--enforce-created-pr-match` converts that mismatch into a hard failure.
 When `--write-results` is provided, the same execution report is also written to JSON relative to the manifest so the created PR URL(s) can be reused when updating `docs/pr-178-unresolved-threads.md` or other follow-up notes.
 If `gh` returns output without a GitHub pull request URL, the script fails so a partial or ambiguous run is not mistaken for a created follow-up PR.

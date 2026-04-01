@@ -187,6 +187,33 @@ function buildGhPrCreateArgs(group) {
   ];
 }
 
+function runGhPrCreate(args, dependencies = {}) {
+  if (dependencies.spawnSync) {
+    const result = dependencies.spawnSync("gh", args, { encoding: "utf8" });
+
+    if (result?.error) {
+      throw result.error;
+    }
+
+    if (result?.signal) {
+      throw new Error(`gh pr create terminated by signal ${result.signal}.`);
+    }
+
+    return {
+      status: Number.isInteger(result?.status) ? result.status : 0,
+      stdout: String(result?.stdout || "").trim(),
+      stderr: String(result?.stderr || "").trim(),
+    };
+  }
+
+  const execFileSync = dependencies.execFileSync || childProcess.execFileSync;
+  return {
+    status: 0,
+    stdout: String(execFileSync("gh", args, { encoding: "utf8" })).trim(),
+    stderr: "",
+  };
+}
+
 function extractCreatedPullRequestUrl(output) {
   const normalizedOutput = String(output || "").trim();
   const match = normalizedOutput.match(
@@ -233,10 +260,21 @@ function writeExecutionResults(report, resultsPath, dependencies = {}) {
   writeFileSync(resultsPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 }
 
+function combineCommandOutput(stdout, stderr) {
+  return [stdout, stderr].filter(Boolean).join("\n").trim();
+}
+
+function isExistingPullRequestOutcome(exitStatus, output, createdPullRequestUrl) {
+  return (
+    exitStatus !== 0 &&
+    Boolean(createdPullRequestUrl) &&
+    /\balready exists\b/i.test(String(output || ""))
+  );
+}
+
 function executeManifestGroups(options = {}, dependencies = {}) {
   const manifest = loadManifest(options.manifestPath, dependencies);
   const statSync = dependencies.statSync || fs.statSync;
-  const execFileSync = dependencies.execFileSync || childProcess.execFileSync;
   const groups = selectManifestGroups(manifest, options);
 
   const validationIssues = groups.flatMap((group, index) =>
@@ -286,13 +324,29 @@ function executeManifestGroups(options = {}, dependencies = {}) {
     };
 
     if (options.execute) {
-      result.output = String(execFileSync("gh", args, { encoding: "utf8" })).trim();
+      const commandResult = runGhPrCreate(args, dependencies);
+      result.output = combineCommandOutput(commandResult.stdout, commandResult.stderr);
+      result.commandExitStatus = commandResult.status;
       result.createdPullRequestUrl = extractCreatedPullRequestUrl(result.output);
+      const existingPullRequestOutcome = isExistingPullRequestOutcome(
+        commandResult.status,
+        result.output,
+        result.createdPullRequestUrl
+      );
+
+      if (commandResult.status !== 0 && !existingPullRequestOutcome) {
+        const outputSummary = result.output || "<no output>";
+        throw new Error(
+          `Group ${group.manifestGroupNumber} gh pr create failed with exit code ${commandResult.status}: ${outputSummary}`
+        );
+      }
+
       if (!result.createdPullRequestUrl) {
         throw new Error(
           `Group ${group.manifestGroupNumber} gh pr create output did not include a pull request URL.`
         );
       }
+      result.createdPullRequestAlreadyExisted = existingPullRequestOutcome;
       result.createdPullRequestMatchesFollowUpPr = doesCreatedPullRequestMatchFollowUpPr(
         group.followUpPr,
         result.createdPullRequestUrl
@@ -352,6 +406,12 @@ function formatExecutionReport(report, outputFormat = "text") {
     if (result.createdPullRequestUrl) {
       lines.push(`- Created PR: ${result.createdPullRequestUrl}`);
     }
+    if (result.createdPullRequestAlreadyExisted) {
+      lines.push(`- Created PR Already Existed: yes`);
+    }
+    if (result.commandExitStatus !== undefined && result.commandExitStatus !== null) {
+      lines.push(`- Command Exit Status: ${result.commandExitStatus}`);
+    }
     if (result.createdPullRequestMatchesFollowUpPr !== null) {
       lines.push(
         `- Created PR Matches Follow-up PR: ${
@@ -384,15 +444,18 @@ if (require.main === module) {
 
 module.exports = {
   buildGhPrCreateArgs,
+  combineCommandOutput,
   executeManifestGroups,
   doesCreatedPullRequestMatchFollowUpPr,
   extractCreatedPullRequestUrl,
   formatExecutionReport,
+  isExistingPullRequestOutcome,
   loadManifest,
   main,
   normalizePullRequestUrl,
   parseCliArguments,
   resolveManifestRelativePath,
+  runGhPrCreate,
   selectManifestGroups,
   validateManifestGroup,
   writeExecutionResults,
