@@ -79,6 +79,8 @@ class AttributeConflict:
                 f"{schema.RESOLUTION_CONFLICT_STATUSES}"
             )
         require_string_mapping(self.values_by_source, "values_by_source")
+        for source_id, value in self.values_by_source.items():
+            require_non_empty(value, f"values_by_source[{source_id}]")
         require_optional_non_empty(self.selected_value or None, "selected_value")
         require_strings(self.notes, "notes")
         if len(self.values_by_source) < 2:

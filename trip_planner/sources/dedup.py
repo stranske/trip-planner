@@ -18,12 +18,12 @@ class DeduplicationDecision:
     option_kind: str
     decision: str
     canonical_entity_id: str
+    summary: str
     duplicate_entity_ids: list[str] = field(default_factory=list)
     resolution_ids: list[str] = field(default_factory=list)
     preserved_conflicts: list[AttributeConflict] = field(default_factory=list)
     merged_provenance: MergedEntityProvenance | None = None
     confidence: float = 0.0
-    summary: str = ""
     notes: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:

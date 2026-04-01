@@ -105,3 +105,17 @@ def test_entity_resolution_requires_review_flag_for_ambiguous_matches() -> None:
             conflicts=[conflict],
             merged_provenance=build_provenance("destination-rome-trastevere", "destination"),
         )
+
+
+def test_attribute_conflict_requires_non_empty_string_values() -> None:
+    with pytest.raises(ValueError, match="values_by_source\\[source:ota-a\\]"):
+        AttributeConflict(
+            conflict_id="conflict-destination-invalid-value",
+            attribute_path="destination.parent_city",
+            reason="source_disagreement",
+            status="preserved",
+            values_by_source={
+                "source:ota-a": "",
+                "source:ota-b": "Rome",
+            },
+        )

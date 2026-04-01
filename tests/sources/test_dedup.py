@@ -80,7 +80,7 @@ def test_deduplication_merge_supports_transport_and_activity_contracts() -> None
     assert activity_decision.to_dict()["entity_scope"] == "activity"
 
 
-def test_deduplication_can_keep_destination_records_separate() -> None:
+def test_deduplication_can_keep_activity_records_separate() -> None:
     fixture = load_fixture("activity_non_match.json")
     conflict = AttributeConflict(conflict_id="conflict-activity-1", **fixture["conflict"])
     decision = DeduplicationDecision(
@@ -114,4 +114,18 @@ def test_deduplication_merge_requires_duplicates() -> None:
             merged_provenance=build_provenance("lodging-canal-house", "lodging"),
             confidence=0.91,
             summary="Merges must name the duplicate ids they collapse.",
+        )
+
+
+def test_deduplication_requires_summary_at_construction_time() -> None:
+    with pytest.raises(TypeError, match="summary"):
+        DeduplicationDecision(  # type: ignore[call-arg]
+            decision_id="decision-lodging-missing-summary",
+            entity_scope="lodging",
+            option_kind="lodging",
+            decision="merge",
+            canonical_entity_id="lodging-canal-house",
+            duplicate_entity_ids=["lodging-canal-house-duplicate"],
+            merged_provenance=build_provenance("lodging-canal-house", "lodging"),
+            confidence=0.91,
         )
