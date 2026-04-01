@@ -1,0 +1,379 @@
+version: 1
+issue: 589
+base: main
+branch: codex/issue-589
+tasks:
+  - id: task-01
+    title: 'Add a script (e.g., `scripts/list_unresolved_pr_threads.js`) that lists
+      unresolved inline review threads for PR #178 via the GitHub API'
+    status: doing
+    started_at: '2026-04-01T11:33:37Z'
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-02
+    title: 'Create the file `scripts/list_unresolved_pr_threads.js` with basic structure
+      (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: 'Create the file `scripts/list_unresolved_pr_threads.js` with imports (verify:
+      confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: 'Implement GitHub API authentication (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: 'connection logic in the script (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: 'Add functionality to fetch all review threads for a given PR number (verify:
+      confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: 'Filter the fetched threads to identify only unresolved inline review comments
+      (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: 'Format and output the unresolved threads list with thread IDs (verify:
+      formatter passes)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: 'Format and output the unresolved threads list with content (verify: formatter
+      passes)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: 'Define scope for: Test the script manually against PR #178 to verify it
+      returns 4 unresolved threads'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: 'Implement focused slice for: Test the script manually against PR #178
+      to verify it returns 4 unresolved threads'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: 'Validate focused slice for: Test the script manually against PR #178 to
+      verify it returns 4 unresolved threads'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: Create `docs/pr-178-unresolved-threads.md` enumerating the 4 unresolved
+      threads and classifying each as `fix` or `disposition`
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: 'Create the file `docs/pr-178-unresolved-threads.md` with a header (verify:
+      docs updated)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: 'Create the file `docs/pr-178-unresolved-threads.md` with structure template
+      (verify: docs updated)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-16
+    title: 'Document each of the 4 unresolved threads with their content (verify:
+      confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-17
+    title: 'Document each of the 4 unresolved threads with location (verify: confirm
+      completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-18
+    title: 'Define scope for: Review each thread to determine if it requires a code
+      fix or just disposition (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-19
+    title: 'Implement focused slice for: Review each thread to determine if it requires
+      a code fix or just disposition (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-20
+    title: 'Validate focused slice for: Review each thread to determine if it requires
+      a code fix or just disposition (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-21
+    title: 'Add classification labels of either `fix` or `disposition` to each documented
+      thread (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-22
+    title: 'Write a brief rationale explaining why each thread received its classification
+      (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-23
+    title: Implement code changes required to address any `fix`-classified threads
+      and open bounded follow-up PR(s)
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-24
+    title: 'Identify all threads classified as `fix` from the documentation file (verify:
+      docs updated)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-25
+    title: 'Define scope for: Implement code changes to address each fix-classified
+      thread on a feature branch (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-26
+    title: 'Implement focused slice for: Implement code changes to address each fix-classified
+      thread on a feature branch (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-27
+    title: 'Validate focused slice for: Implement code changes to address each fix-classified
+      thread on a feature branch (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-28
+    title: 'Define scope for: Write or update tests to cover the code changes made
+      for fix threads (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-29
+    title: 'Implement focused slice for: Write or update tests to cover the code changes
+      made for fix threads (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-30
+    title: 'Validate focused slice for: Write or update tests to cover the code changes
+      made for fix threads (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-31
+    title: 'Create a pull request with the implemented fixes (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-32
+    title: 'Create a pull request with reference the original threads (verify: confirm
+      completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-33
+    title: 'Define scope for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md`
+      (verify: docs updated)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-34
+    title: 'Implement focused slice for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md`
+      (verify: docs updated)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-35
+    title: 'Validate focused slice for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md`
+      (verify: docs updated)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-36
+    title: Update `docs/pr-178-unresolved-threads.md` with the follow-up PR link(s)
+      and a disposition rationale for each non-fix thread
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-37
+    title: 'Update/verify PR #178 has no unresolved threads remaining (all resolved
+      or explicitly dispositioned in PR comments)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-38
+    title: '`docs/pr-178-unresolved-threads.md` exists and lists all 4 threads with
+      a `fix` or `disposition` classification and rationale per thread'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-39
+    title: If any thread is classified as `fix`, follow-up PR link(s) are present
+      in `docs/pr-178-unresolved-threads.md`
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-40
+    title: 'Running `node scripts/list_unresolved_pr_threads.js` reports zero unresolved
+      threads for PR #178'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-41
+    title: 'PR #178 shows no unresolved inline review threads in the GitHub UI'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-42
+    title: 'Enumerate unresolved review threads on PR #178'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-43
+    title: 'Classify each thread: warranted fix vs not-warranted disposition'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-44
+    title: If warranted, implement bounded follow-up PR(s)
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-45
+    title: Post a PR comment documenting disposition for every unresolved thread
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-46
+    title: Confirm thread count is reduced to zero (or explicitly dispositioned)
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-47
+    title: All unresolved inline comments are addressed or dispositioned with rationale
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-48
+    title: Follow-up fix PR(s), if any, are linked from the source PR
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
