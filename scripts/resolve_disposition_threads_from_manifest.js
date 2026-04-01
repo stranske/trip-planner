@@ -12,6 +12,10 @@ const {
   DEFAULT_DOC_PATH,
   loadThreadInventory,
 } = require("./list_fix_threads_from_doc.js");
+const {
+  evaluateAcceptance,
+  formatAcceptanceReport,
+} = require("./check_pr_thread_acceptance.js");
 
 const DEFAULT_MANIFEST_PATH = path.resolve(".tmp/pr-thread-disposition/manifest.json");
 
@@ -22,9 +26,11 @@ function parseCliArguments(argv = process.argv.slice(2)) {
     outputFormat: "text",
     resultsPath: null,
     remainingSnapshotPath: null,
+    acceptanceReportPath: null,
     docPath: null,
     threadId: null,
     threadIndex: null,
+    githubUiConfirmed: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -79,6 +85,17 @@ function parseCliArguments(argv = process.argv.slice(2)) {
       continue;
     }
 
+    if (argument === "--write-acceptance-report") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --write-acceptance-report flag requires a file path.");
+      }
+
+      options.acceptanceReportPath = value;
+      index += 1;
+      continue;
+    }
+
     if (argument === "--doc") {
       const value = argv[index + 1];
       if (!value) {
@@ -114,6 +131,11 @@ function parseCliArguments(argv = process.argv.slice(2)) {
 
       options.threadIndex = parsedValue;
       index += 1;
+      continue;
+    }
+
+    if (argument === "--github-ui-confirmed") {
+      options.githubUiConfirmed = true;
       continue;
     }
 
@@ -362,7 +384,19 @@ function writeRemainingSnapshot(snapshotPath, remainingThreads, dependencies = {
   );
 }
 
-function executeManifestThreads(options = {}, dependencies = {}) {
+function writeAcceptanceReport(reportPath, acceptanceResult, outputFormat, dependencies = {}) {
+  const mkdirSync = dependencies.mkdirSync || fs.mkdirSync;
+  const writeFileSync = dependencies.writeFileSync || fs.writeFileSync;
+
+  mkdirSync(path.dirname(reportPath), { recursive: true });
+  writeFileSync(
+    reportPath,
+    formatAcceptanceReport(acceptanceResult, outputFormat),
+    "utf8"
+  );
+}
+
+async function executeManifestThreads(options = {}, dependencies = {}) {
   const manifest = loadManifest(options.manifestPath, dependencies);
   const threads = selectManifestThreads(manifest, options);
   const validationIssues = threads.flatMap((thread, index) =>
@@ -452,6 +486,51 @@ function executeManifestThreads(options = {}, dependencies = {}) {
     writeRemainingSnapshot(report.remainingSnapshotPath, remainingThreads, dependencies);
   }
 
+  if (options.acceptanceReportPath) {
+    if (!options.execute || !options.docPath) {
+      throw new Error(
+        "The --write-acceptance-report flag requires both --execute and --doc so the inventory can be refreshed before acceptance is evaluated."
+      );
+    }
+
+    const remainingThreads = loadThreadInventory(options.docPath, dependencies, {
+      inventorySection: "unresolved",
+    }).map(convertInventoryEntryToSnapshotThread);
+    const acceptanceResult = await evaluateAcceptance(
+      {
+        owner: manifest.repositoryOwner || "stranske",
+        repo: manifest.repositoryName || "trip-planner",
+        prNumber: manifest.prNumber || 178,
+        token: null,
+        inputPath: report.remainingSnapshotPath || "<post-resolution inventory>",
+        docPath: options.docPath,
+        expectDocCount:
+          Number.isInteger(manifest.expectDocCount) ? manifest.expectDocCount : null,
+        expectedCount: 0,
+        githubUiConfirmed: Boolean(options.githubUiConfirmed),
+        outputFormat: options.outputFormat || "text",
+        writeInventoryDoc: false,
+      },
+      {
+        loadThreadInventory: (docPath, nestedDependencies, inventoryOptions = {}) =>
+          loadThreadInventory(docPath, { ...dependencies, ...nestedDependencies }, inventoryOptions),
+        loadReviewThreadsFromFile: () => remainingThreads,
+      }
+    );
+
+    report.acceptance = acceptanceResult;
+    report.acceptanceReportPath = resolveManifestRelativePath(
+      options.manifestPath,
+      options.acceptanceReportPath
+    );
+    writeAcceptanceReport(
+      report.acceptanceReportPath,
+      acceptanceResult,
+      options.outputFormat || "text",
+      dependencies
+    );
+  }
+
   if (options.resultsPath) {
     report.resultsPath = resolveManifestRelativePath(options.manifestPath, options.resultsPath);
     writeExecutionResults(report, report.resultsPath, dependencies);
@@ -483,6 +562,12 @@ function formatExecutionReport(report, outputFormat = "text") {
   if (report.remainingSnapshotPath) {
     lines.push(`Remaining Snapshot File: \`${report.remainingSnapshotPath}\``);
     lines.push(`Remaining Snapshot Threads: ${report.remainingSnapshotThreadCount}`);
+  }
+  if (report.acceptanceReportPath) {
+    lines.push(`Acceptance Report File: \`${report.acceptanceReportPath}\``);
+    if (report.acceptance) {
+      lines.push(`Acceptance Status: ${String(report.acceptance.overallStatus).toUpperCase()}`);
+    }
   }
 
   report.results.forEach((result) => {
@@ -516,19 +601,17 @@ function formatExecutionReport(report, outputFormat = "text") {
   return `${lines.join("\n")}\n`;
 }
 
-function main(argv = process.argv.slice(2)) {
+async function main(argv = process.argv.slice(2)) {
   const options = parseCliArguments(argv);
-  const report = executeManifestThreads(options);
+  const report = await executeManifestThreads(options);
   process.stdout.write(formatExecutionReport(report, options.outputFormat));
 }
 
 if (require.main === module) {
-  try {
-    main();
-  } catch (error) {
+  main().catch((error) => {
     console.error(error.message);
     process.exitCode = 1;
-  }
+  });
 }
 
 module.exports = {
@@ -548,6 +631,7 @@ module.exports = {
   selectManifestThreads,
   updateInventoryDocumentAfterResolution,
   validateManifestThread,
+  writeAcceptanceReport,
   writeExecutionResults,
   writeRemainingSnapshot,
 };

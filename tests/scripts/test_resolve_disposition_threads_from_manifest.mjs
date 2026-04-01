@@ -64,12 +64,15 @@ test("parseCliArguments parses execution, filtering, and result output options",
       "docs/pr-178-unresolved-threads.md",
       "--write-remaining-snapshot",
       "tmp/remaining-threads.json",
+      "--write-acceptance-report",
+      "tmp/acceptance.txt",
       "--thread-id",
       "THREAD_2",
       "--thread-index",
       "3",
       "--write-results",
       "tmp/results.json",
+      "--github-ui-confirmed",
       "--format",
       "json",
     ]),
@@ -79,9 +82,11 @@ test("parseCliArguments parses execution, filtering, and result output options",
       outputFormat: "json",
       resultsPath: "tmp/results.json",
       remainingSnapshotPath: "tmp/remaining-threads.json",
+      acceptanceReportPath: "tmp/acceptance.txt",
       docPath: DEFAULT_DOC_PATH,
       threadId: "THREAD_2",
       threadIndex: 3,
+      githubUiConfirmed: true,
     }
   );
 
@@ -196,7 +201,7 @@ test("inventory helpers preserve location and comment metadata when rebuilding a
   );
 });
 
-test("executeManifestThreads returns a dry-run report with resolved script paths", () => {
+test("executeManifestThreads returns a dry-run report with resolved script paths", async () => {
   const manifestDir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-disposition-dry-run-"));
   const manifestPath = path.join(manifestDir, "manifest.json");
   fs.writeFileSync(
@@ -221,7 +226,7 @@ test("executeManifestThreads returns a dry-run report with resolved script paths
     )}\n`
   );
 
-  const report = executeManifestThreads({ manifestPath, execute: false });
+  const report = await executeManifestThreads({ manifestPath, execute: false });
 
   assert.equal(report.threadCount, 1);
   assert.equal(report.results[0].mode, "dry-run");
@@ -230,7 +235,7 @@ test("executeManifestThreads returns a dry-run report with resolved script paths
   assert.match(report.results[0].resolveCommand, /^gh api graphql -f query=mutation Resolve/);
 });
 
-test("executeManifestThreads can execute reply and resolve commands in sequence", () => {
+test("executeManifestThreads can execute reply and resolve commands in sequence", async () => {
   const manifest = {
     threads: [
       {
@@ -245,7 +250,7 @@ test("executeManifestThreads can execute reply and resolve commands in sequence"
     ],
   };
   const spawnCalls = [];
-  const report = executeManifestThreads(
+  const report = await executeManifestThreads(
     {
       manifestPath: "/tmp/manifest.json",
       execute: true,
@@ -327,7 +332,7 @@ test("writeRemainingSnapshot writes a list_unresolved_pr_threads compatible payl
   });
 });
 
-test("executeManifestThreads can write a remaining unresolved-thread snapshot after execution", () => {
+test("executeManifestThreads can write a remaining unresolved-thread snapshot after execution", async () => {
   const manifestDir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-disposition-snapshot-"));
   const manifestPath = path.join(manifestDir, "manifest.json");
   const docPath = path.join(manifestDir, "pr-178-unresolved-threads.md");
@@ -384,7 +389,7 @@ test("executeManifestThreads can write a remaining unresolved-thread snapshot af
   );
 
   const commands = [];
-  const report = executeManifestThreads(
+  const report = await executeManifestThreads(
     {
       manifestPath,
       execute: true,
@@ -423,7 +428,7 @@ test("executeManifestThreads can write a remaining unresolved-thread snapshot af
   });
 });
 
-test("executeManifestThreads rejects remaining snapshot output without execution and doc context", () => {
+test("executeManifestThreads rejects remaining snapshot output without execution and doc context", async () => {
   const manifestDir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-disposition-invalid-"));
   const manifestPath = path.join(manifestDir, "manifest.json");
   fs.writeFileSync(
@@ -445,7 +450,7 @@ test("executeManifestThreads rejects remaining snapshot output without execution
     )}\n`
   );
 
-  assert.throws(
+  await assert.rejects(
     () =>
       executeManifestThreads({
         manifestPath,
@@ -498,7 +503,7 @@ test("updateInventoryDocumentAfterResolution moves resolved threads out of the a
   assert.match(resolvedSection, /THREAD_1/);
 });
 
-test("executeManifestThreads fails when reply execution fails", () => {
+test("executeManifestThreads fails when reply execution fails", async () => {
   const manifest = {
     threads: [
       {
@@ -511,7 +516,7 @@ test("executeManifestThreads fails when reply execution fails", () => {
     ],
   };
 
-  assert.throws(
+  await assert.rejects(
     () =>
       executeManifestThreads(
         {
@@ -531,7 +536,7 @@ test("executeManifestThreads fails when reply execution fails", () => {
   );
 });
 
-test("executeManifestThreads updates the inventory document after successful execution when --doc is provided", () => {
+test("executeManifestThreads updates the inventory document after successful execution when --doc is provided", async () => {
   const manifest = {
     threads: [
       {
@@ -564,7 +569,7 @@ test("executeManifestThreads updates the inventory document after successful exe
     "utf8"
   );
 
-  const report = executeManifestThreads(
+  const report = await executeManifestThreads(
     {
       manifestPath: "/tmp/manifest.json",
       execute: true,
@@ -589,7 +594,7 @@ test("executeManifestThreads updates the inventory document after successful exe
   assert.match(updatedDocument, /## Resolved Thread Inventory[\s\S]*THREAD_1/);
 });
 
-test("executeManifestThreads writes inventory update details into the persisted results report", () => {
+test("executeManifestThreads writes inventory update details into the persisted results report", async () => {
   const manifest = {
     threads: [
       {
@@ -625,7 +630,7 @@ test("executeManifestThreads writes inventory update details into the persisted 
     "utf8"
   );
 
-  const report = executeManifestThreads(
+  const report = await executeManifestThreads(
     {
       manifestPath: path.join(tempDir, "manifest.json"),
       execute: true,
@@ -652,6 +657,109 @@ test("executeManifestThreads writes inventory update details into the persisted 
     resolvedThreadCount: 1,
     remainingThreadCount: 0,
   });
+});
+
+test("executeManifestThreads can write a post-resolution acceptance report", async () => {
+  const manifest = {
+    repositoryOwner: "stranske",
+    repositoryName: "trip-planner",
+    prNumber: 178,
+    expectDocCount: 1,
+    threads: [
+      {
+        threadId: "THREAD_1",
+        replyQuery: "mutation Reply",
+        replyVariables: { threadId: "THREAD_1", body: "Disposition" },
+        resolveQuery: "mutation Resolve",
+        resolveVariables: { threadId: "THREAD_1" },
+      },
+    ],
+  };
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-disposition-acceptance-"));
+  const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
+  const acceptanceReportPath = path.join(tempDir, "acceptance.txt");
+
+  fs.writeFileSync(
+    docPath,
+    `# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: src/file.js:10
+- Classification: disposition
+- Follow-up PR:
+- Rationale: The current behavior is intentional.
+- Content: reviewer: Keep the existing wording.
+- Outdated: no
+`,
+    "utf8"
+  );
+
+  const report = await executeManifestThreads(
+    {
+      manifestPath: path.join(tempDir, "manifest.json"),
+      execute: true,
+      docPath,
+      acceptanceReportPath,
+      outputFormat: "text",
+      githubUiConfirmed: true,
+    },
+    {
+      readFileSync: (targetPath) =>
+        targetPath === docPath ? fs.readFileSync(docPath, "utf8") : JSON.stringify(manifest),
+      writeFileSync: (targetPath, content) => fs.writeFileSync(targetPath, content, "utf8"),
+      mkdirSync: (targetPath, options) => fs.mkdirSync(targetPath, options),
+      spawnSync: () => ({
+        status: 0,
+        stdout: '{"data":{"ok":true}}',
+        stderr: "",
+      }),
+    }
+  );
+
+  const acceptanceReport = fs.readFileSync(acceptanceReportPath, "utf8");
+  assert.equal(report.acceptance.overallStatus, "pass");
+  assert.equal(report.acceptance.unresolvedThreadCount, 0);
+  assert.equal(report.acceptanceReportPath, acceptanceReportPath);
+  assert.match(acceptanceReport, /Overall status: PASS/);
+  assert.match(acceptanceReport, /review-thread snapshot verifies 0 unresolved thread\(s\)/i);
+});
+
+test("executeManifestThreads rejects acceptance report output without execution and doc context", async () => {
+  const manifestDir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-disposition-acceptance-invalid-"));
+  const manifestPath = path.join(manifestDir, "manifest.json");
+  fs.writeFileSync(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        threads: [
+          {
+            threadId: "THREAD_1",
+            replyQuery: "mutation Reply",
+            replyVariables: { threadId: "THREAD_1", body: "Disposition" },
+            resolveQuery: "mutation Resolve",
+            resolveVariables: { threadId: "THREAD_1" },
+          },
+        ],
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  await assert.rejects(
+    () =>
+      executeManifestThreads({
+        manifestPath,
+        execute: false,
+        acceptanceReportPath: "artifacts/acceptance.txt",
+      }),
+    /requires both --execute and --doc/
+  );
 });
 
 test("formatExecutionReport renders thread-level dry-run details", () => {
