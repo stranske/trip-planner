@@ -54,9 +54,7 @@ def test_activity_examples_keep_significance_and_fit_distinct() -> None:
 
     assert museum.significance_summary.overall_signal is not None
     assert museum.fit_summary.overall_signal is not None
-    assert (
-        museum.significance_summary.overall_signal > museum.fit_summary.overall_signal
-    )
+    assert museum.significance_summary.overall_signal > museum.fit_summary.overall_signal
     assert hike.significance_summary.anchor_worthy is True
     assert district.category.open_ended is True
 
@@ -122,9 +120,7 @@ def test_activity_round_trips_nested_contracts_and_provenance() -> None:
             available=True,
             availability_status="available",
             indoor_outdoor="mixed",
-            accessibility_notes=[
-                "Mostly flat route with occasional crowd bottlenecks."
-            ],
+            accessibility_notes=["Mostly flat route with occasional crowd bottlenecks."],
         ),
         booking_links=["https://example.com/night-market-tour"],
         source_refs=[
@@ -186,18 +182,14 @@ def test_activity_rejects_invalid_nested_values() -> None:
     with pytest.raises(ValueError, match="effort_level"):
         ActivityEffortSummary(effort_level="extreme")
 
-    payload = json.loads(
-        _fixture_path("ticketed_event.json").read_text(encoding="utf-8")
-    )
+    payload = json.loads(_fixture_path("ticketed_event.json").read_text(encoding="utf-8"))
     payload["source_refs"][0]["source_category"] = "unsupported"
     with pytest.raises(ValueError, match="source_category"):
         ActivityOption.from_dict(payload)
 
 
 def test_activity_requires_non_empty_list_fields() -> None:
-    payload = json.loads(
-        _fixture_path("wandering_district.json").read_text(encoding="utf-8")
-    )
+    payload = json.loads(_fixture_path("wandering_district.json").read_text(encoding="utf-8"))
     payload["booking_links"] = "https://example.com/not-a-list"
     with pytest.raises(ValueError, match="booking_links must be a list"):
         ActivityOption.from_dict(payload)

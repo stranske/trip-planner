@@ -66,9 +66,7 @@ def test_site_destination_carries_operational_notes_and_source_refs() -> None:
     assert payload["operational_notes"][0]["summary"].startswith("Expect early")
     assert payload["source_refs"][0]["provenance_id"] == "prov-site-editorial"
     assert payload["source_refs"][1]["source_category"] == "specialist_non_commercial"
-    assert payload["operational_notes"][0]["source_ref_ids"] == [
-        "prov-site-operational"
-    ]
+    assert payload["operational_notes"][0]["source_ref_ids"] == ["prov-site-operational"]
     assert payload["parent_refs"][0]["destination_id"] == "dest-city-kyoto"
 
 
@@ -106,9 +104,7 @@ def test_destination_supporting_records_round_trip() -> None:
                 impact="high",
                 applies_in_months=[3, 4, 11],
                 source_ref_ids=["prov-arashiyama-editorial"],
-                notes=[
-                    "Crowding pressure spikes during spring and autumn demand peaks."
-                ],
+                notes=["Crowding pressure spikes during spring and autumn demand peaks."],
             )
         ],
     )
@@ -119,9 +115,7 @@ def test_destination_supporting_records_round_trip() -> None:
     assert payload["source_refs"][0]["role"] == "experience"
     assert payload["source_refs"][0]["source_id"] == "arashiyama-guide"
     assert payload["operational_notes"][0]["impact"] == "high"
-    assert payload["operational_notes"][0]["source_ref_ids"] == [
-        "prov-arashiyama-editorial"
-    ]
+    assert payload["operational_notes"][0]["source_ref_ids"] == ["prov-arashiyama-editorial"]
 
 
 def test_place_context_can_be_derived_from_destination() -> None:
@@ -213,9 +207,7 @@ def test_destination_rejects_invalid_geo_and_adjacency_values() -> None:
         Destination.from_dict(payload)
 
 
-def test_destination_rejects_invalid_tag_provenance_and_operational_note_values() -> (
-    None
-):
+def test_destination_rejects_invalid_tag_provenance_and_operational_note_values() -> None:
     with pytest.raises(ValueError, match="scope"):
         DestinationTag(key="culture", label="Culture", scope="ranking")
 

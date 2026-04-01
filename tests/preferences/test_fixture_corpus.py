@@ -63,9 +63,7 @@ def test_tension_cases_surface_real_conflicts() -> None:
         "Cappadocia",
     ]
     assert anchor_case.profile.anchors["calendar_anchors"]
-    assert (
-        anchor_case.profile.tradeoff_dimensions["structure_vs_elasticity"].value > 0.0
-    )
+    assert anchor_case.profile.tradeoff_dimensions["structure_vs_elasticity"].value > 0.0
 
     assert budget_case.profile.hard_constraints.budget_ceiling == 5200.0
     assert budget_case.profile.anchors["quality_floor_anchors"]
@@ -134,9 +132,7 @@ def test_fixture_corpus_rejects_missing_qualitative_summary(tmp_path: Path) -> N
     except ValueError as exc:
         assert "qualitative_summary" in str(exc)
     else:
-        raise AssertionError(
-            "Fixture corpus should reject missing qualitative summaries"
-        )
+        raise AssertionError("Fixture corpus should reject missing qualitative summaries")
 
 
 def test_fixture_corpus_rejects_non_object_fixture_entries(tmp_path: Path) -> None:
@@ -155,9 +151,7 @@ def test_fixture_corpus_rejects_non_object_fixture_entries(tmp_path: Path) -> No
 
 def test_fixture_corpus_rejects_unknown_hard_constraint_keys(tmp_path: Path) -> None:
     payload = json.loads(fixture_corpus_path().read_text(encoding="utf-8"))
-    payload["fixtures"][8]["profile_overrides"]["hard_constraints"][
-        "budget_ceiling_typo"
-    ] = 1000
+    payload["fixtures"][8]["profile_overrides"]["hard_constraints"]["budget_ceiling_typo"] = 1000
     path = tmp_path / "bad-hard-constraints.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -166,6 +160,4 @@ def test_fixture_corpus_rejects_unknown_hard_constraint_keys(tmp_path: Path) -> 
     except ValueError as exc:
         assert "hard constraint override keys" in str(exc)
     else:
-        raise AssertionError(
-            "Fixture corpus should reject unknown hard constraint override keys"
-        )
+        raise AssertionError("Fixture corpus should reject unknown hard constraint override keys")

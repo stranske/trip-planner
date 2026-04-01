@@ -58,9 +58,7 @@ def test_transport_examples_keep_cheapest_easiest_and_best_fit_distinct() -> Non
     assert flight.cost_summary.total.typical_amount is not None
     assert rail.fit_summary.overall_signal is not None
     assert flight.fit_summary.overall_signal is not None
-    assert (
-        car.cost_summary.total.typical_amount < flight.cost_summary.total.typical_amount
-    )
+    assert car.cost_summary.total.typical_amount < flight.cost_summary.total.typical_amount
     assert flight.transfer_burden.transfer_count < rail.transfer_burden.transfer_count
     assert rail.fit_summary.overall_signal > flight.fit_summary.overall_signal
 
@@ -194,9 +192,7 @@ def test_transport_rejects_invalid_kind_segment_and_schema_values() -> None:
             destination_label="B",
         )
 
-    payload = json.loads(
-        _fixture_path("coastal_flight.json").read_text(encoding="utf-8")
-    )
+    payload = json.loads(_fixture_path("coastal_flight.json").read_text(encoding="utf-8"))
     payload["schema_version"] = "9.9.9"
     with pytest.raises(ValueError, match="schema_version"):
         TransportOption.from_dict(payload)
@@ -220,9 +216,7 @@ def test_transport_rejects_invalid_nested_values() -> None:
 
 
 def test_transport_normalizes_legacy_rental_car_kind() -> None:
-    payload = json.loads(
-        _fixture_path("regional_rental_car.json").read_text(encoding="utf-8")
-    )
+    payload = json.loads(_fixture_path("regional_rental_car.json").read_text(encoding="utf-8"))
     payload["transport_kind"] = "rental_car"
 
     option = TransportOption.from_dict(payload)
@@ -247,9 +241,7 @@ def test_transport_requires_non_empty_segments_and_list_fields() -> None:
             segments=[],
         )
 
-    payload = json.loads(
-        _fixture_path("regional_rental_car.json").read_text(encoding="utf-8")
-    )
+    payload = json.loads(_fixture_path("regional_rental_car.json").read_text(encoding="utf-8"))
     payload["booking_links"] = "https://example.com/not-a-list"
     with pytest.raises(ValueError, match="booking_links must be a list"):
         TransportOption.from_dict(payload)
