@@ -267,6 +267,36 @@ test("executeManifestGroups fails when the selected body file is missing", () =>
   );
 });
 
+test("executeManifestGroups fails when the selected body path is not a regular file", () => {
+  assert.throws(
+    () =>
+      executeManifestGroups(
+        {
+          manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+          execute: false,
+          followUpPr: null,
+          groupIndex: null,
+        },
+        {
+          readFileSync: () =>
+            JSON.stringify({
+              groups: [
+                {
+                  followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+                  title: "Address PR #178 fix threads for follow-up PR #581",
+                  baseBranch: "main",
+                  headBranch: "codex/fix-thread-1",
+                  bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
+                },
+              ],
+            }),
+          statSync: () => ({ isFile: () => false }),
+        }
+      ),
+    /body file is not a regular file/
+  );
+});
+
 test("formatExecutionReport emits readable dry-run output", () => {
   const report = formatExecutionReport(
     {

@@ -183,11 +183,18 @@ function executeManifestGroups(options = {}, dependencies = {}) {
   }
 
   const results = groups.map((group, index) => {
+    let bodyFileStat;
     try {
-      statSync(group.bodyFilePath);
+      bodyFileStat = statSync(group.bodyFilePath);
     } catch (error) {
       throw new Error(
         `Group ${group.manifestGroupNumber} body file does not exist: ${group.bodyFilePath}`
+      );
+    }
+
+    if (typeof bodyFileStat?.isFile === "function" && !bodyFileStat.isFile()) {
+      throw new Error(
+        `Group ${group.manifestGroupNumber} body file is not a regular file: ${group.bodyFilePath}`
       );
     }
 
