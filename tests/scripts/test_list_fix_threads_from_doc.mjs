@@ -16,6 +16,7 @@ const {
   formatFixThreadsReport,
   formatThreadInventoryIssues,
   getCliConfiguration,
+  groupFixThreadsByFollowUpPr,
   isPlaceholderValue,
   listActionableFixThreads,
   listFixClassifiedThreads,
@@ -162,6 +163,59 @@ test("listActionableFixThreads can exclude outdated fix-classified entries", () 
   assert.deepEqual(fixThreads, [{ threadId: "THREAD_1", classification: "fix", outdated: false }]);
 });
 
+test("groupFixThreadsByFollowUpPr preserves bounded follow-up PR scope", () => {
+  const groups = groupFixThreadsByFollowUpPr([
+    {
+      threadId: "THREAD_1",
+      location: "trip_planner/example.py:17",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+    },
+    {
+      threadId: "THREAD_2",
+      location: "trip_planner/other.py:8",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+    },
+    {
+      threadId: "THREAD_3",
+      location: "trip_planner/third.py:4",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/582",
+    },
+  ]);
+
+  assert.deepEqual(groups, [
+    {
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      threadCount: 2,
+      threads: [
+        {
+          threadId: "THREAD_1",
+          location: "trip_planner/example.py:17",
+          followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+          suggestedBranch: "pr-178-fix/trip-planner-example-py-17-thread-1",
+        },
+        {
+          threadId: "THREAD_2",
+          location: "trip_planner/other.py:8",
+          followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+          suggestedBranch: "pr-178-fix/trip-planner-other-py-8-thread-2",
+        },
+      ],
+    },
+    {
+      followUpPr: "https://github.com/stranske/trip-planner/pull/582",
+      threadCount: 1,
+      threads: [
+        {
+          threadId: "THREAD_3",
+          location: "trip_planner/third.py:4",
+          followUpPr: "https://github.com/stranske/trip-planner/pull/582",
+          suggestedBranch: "pr-178-fix/trip-planner-third-py-4-thread-3",
+        },
+      ],
+    },
+  ]);
+});
+
 test("formatFixThreadsReport summarizes the filtered fix list", () => {
   const report = formatFixThreadsReport([
     {
@@ -185,6 +239,11 @@ test("formatFixThreadsReport summarizes the filtered fix list", () => {
   assert.match(report, /Location: trip_planner\/example\.py:17/);
   assert.match(report, /Follow-up PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/);
   assert.match(report, /Outdated: no/);
+  assert.match(report, /Follow-up PR groups: 1/);
+  assert.match(
+    report,
+    /1\. https:\/\/github\.com\/stranske\/trip-planner\/pull\/581 \(1 thread\)/
+  );
 });
 
 test("formatFixThreadsReport includes excluded outdated fix-thread counts when provided", () => {
@@ -219,6 +278,11 @@ test("formatFixThreadsAsJson emits machine-readable fix-thread metadata", () => 
     parsed.fixThreads[0].followUpPr,
     "https://github.com/stranske/trip-planner/pull/581"
   );
+  assert.equal(parsed.followUpPrGroups.length, 1);
+  assert.equal(
+    parsed.followUpPrGroups[0].threads[0].suggestedBranch,
+    "pr-178-fix/trip-planner-example-py-17-thread-1"
+  );
   assert.equal(parsed.excludedOutdatedCount, 0);
 });
 
@@ -250,6 +314,16 @@ test("formatFixThreadsAsMarkdown emits an actionable fix scope checklist", () =>
   assert.match(report, /- Rationale: Code path still drops the final stop\./);
   assert.match(report, /- Content: Reviewer requested a bounds check\./);
   assert.match(report, /- Outdated: no/);
+  assert.match(report, /## Follow-up PR Groups/);
+  assert.match(
+    report,
+    /### Follow-up PR Group 1: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/
+  );
+  assert.match(report, /- Thread Count: 1/);
+  assert.match(
+    report,
+    /- \[ \] THREAD_1 via `pr-178-fix\/trip-planner-example-py-17-thread-1`/
+  );
 });
 
 test("formatFixThreadsAsMarkdown reports excluded outdated fix threads", () => {

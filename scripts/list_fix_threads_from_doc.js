@@ -249,8 +249,57 @@ function buildSuggestedBranchName(thread, index) {
   return `pr-178-fix/${locationSegment}-${idSegment}`;
 }
 
+function groupFixThreadsByFollowUpPr(fixThreads) {
+  const groups = new Map();
+
+  fixThreads.forEach((thread, index) => {
+    const followUpPr = thread.followUpPr || null;
+    const groupKey = followUpPr || "__missing__";
+    const existingGroup = groups.get(groupKey);
+    const threadWithBranch = {
+      ...thread,
+      suggestedBranch: buildSuggestedBranchName(thread, index),
+    };
+
+    if (existingGroup) {
+      existingGroup.threads.push(threadWithBranch);
+      return;
+    }
+
+    groups.set(groupKey, {
+      followUpPr,
+      threadCount: 1,
+      threads: [threadWithBranch],
+    });
+  });
+
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    threadCount: group.threads.length,
+  }));
+}
+
+function appendFollowUpPrGroupSummary(lines, followUpPrGroups, prefix = "") {
+  if (followUpPrGroups.length === 0) {
+    return;
+  }
+
+  lines.push(`${prefix}Follow-up PR groups: ${followUpPrGroups.length}`);
+  followUpPrGroups.forEach((group, groupIndex) => {
+    lines.push(
+      `${prefix}${groupIndex + 1}. ${group.followUpPr || "<missing follow-up PR>"} (${group.threadCount} thread${group.threadCount === 1 ? "" : "s"})`
+    );
+    group.threads.forEach((thread) => {
+      lines.push(
+        `${prefix}   - ${thread.threadId || "<missing thread id>"} -> ${thread.suggestedBranch}`
+      );
+    });
+  });
+}
+
 function formatFixThreadsReport(fixThreads, options = {}) {
   const { excludedOutdatedCount = 0 } = options;
+  const followUpPrGroups = groupFixThreadsByFollowUpPr(fixThreads);
   if (fixThreads.length === 0) {
     const lines = ["Fix-classified threads: 0"];
     if (excludedOutdatedCount > 0) {
@@ -282,17 +331,22 @@ function formatFixThreadsReport(fixThreads, options = {}) {
     );
   });
 
+  lines.push("");
+  appendFollowUpPrGroupSummary(lines, followUpPrGroups);
+
   return `${lines.join("\n")}\n`;
 }
 
 function formatFixThreadsAsJson(fixThreads, options = {}) {
   const { excludedOutdatedCount = 0 } = options;
+  const followUpPrGroups = groupFixThreadsByFollowUpPr(fixThreads);
   return `${JSON.stringify(
     {
       fixThreads: fixThreads.map((thread, index) => ({
         ...thread,
         suggestedBranch: buildSuggestedBranchName(thread, index),
       })),
+      followUpPrGroups,
       count: fixThreads.length,
       excludedOutdatedCount,
     },
@@ -304,6 +358,7 @@ function formatFixThreadsAsJson(fixThreads, options = {}) {
 function formatFixThreadsAsMarkdown(fixThreads, options = {}) {
   const { excludedOutdatedCount = 0 } = options;
   const lines = ["# Fix-Classified Thread Scope", ""];
+  const followUpPrGroups = groupFixThreadsByFollowUpPr(fixThreads);
 
   if (fixThreads.length === 0) {
     if (excludedOutdatedCount > 0) {
@@ -339,6 +394,26 @@ function formatFixThreadsAsMarkdown(fixThreads, options = {}) {
       }`
     );
   });
+
+  lines.push("", "## Follow-up PR Groups", "");
+  if (followUpPrGroups.length === 0) {
+    lines.push("No follow-up PR groups identified.");
+  } else {
+    followUpPrGroups.forEach((group, groupIndex) => {
+      lines.push(
+        `### Follow-up PR Group ${groupIndex + 1}: ${group.followUpPr || "<missing follow-up PR>"}`
+      );
+      lines.push("");
+      lines.push(`- Thread Count: ${group.threadCount}`);
+      group.threads.forEach((thread) => {
+        lines.push(
+          `- [ ] ${thread.threadId || "<missing thread id>"} via \`${thread.suggestedBranch}\``
+        );
+      });
+      lines.push("");
+    });
+    lines.pop();
+  }
 
   return `${lines.join("\n")}\n`;
 }
@@ -454,6 +529,7 @@ module.exports = {
   formatThreadInventoryIssues,
   getCliConfiguration,
   buildSuggestedBranchName,
+  groupFixThreadsByFollowUpPr,
   listActionableFixThreads,
   listFixClassifiedThreads,
   loadThreadInventory,
