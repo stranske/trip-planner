@@ -481,6 +481,58 @@ function buildBlankInventoryTemplate(threadCount = 4) {
   return `${lines.join("\n")}\n`;
 }
 
+function findSectionBounds(document, heading) {
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const headingPattern = new RegExp(`^${escapedHeading}\\s*$`, "m");
+  const match = headingPattern.exec(document);
+
+  if (!match) {
+    return null;
+  }
+
+  const start = match.index;
+  const contentStart = start + match[0].length;
+  const afterHeading = document.slice(contentStart);
+  const nextHeadingMatch = /^## .+$/m.exec(afterHeading);
+  const end =
+    nextHeadingMatch && nextHeadingMatch.index !== undefined
+      ? contentStart + nextHeadingMatch.index
+      : document.length;
+
+  return { start, end };
+}
+
+function isPopulatedInventoryEntry(entry) {
+  return Boolean(
+    entry?.threadId ||
+      entry?.originalThreadUrl ||
+      entry?.location ||
+      entry?.classification ||
+      entry?.followUpPr ||
+      entry?.rationale ||
+      entry?.content ||
+      typeof entry?.outdated === "boolean"
+  );
+}
+
+function extractInventoryDocumentState(existingDocument) {
+  const currentSectionBounds = findSectionBounds(existingDocument, "## Thread Inventory");
+  const resolvedSectionBounds = findSectionBounds(existingDocument, "## Resolved Thread Inventory");
+  const currentThreads = currentSectionBounds
+    ? parseThreadInventory(existingDocument.slice(currentSectionBounds.start, currentSectionBounds.end))
+        .filter(isPopulatedInventoryEntry)
+    : [];
+  const resolvedThreads = resolvedSectionBounds
+    ? parseThreadInventory(existingDocument.slice(resolvedSectionBounds.start, resolvedSectionBounds.end))
+        .filter(isPopulatedInventoryEntry)
+    : [];
+
+  return {
+    currentThreads,
+    resolvedThreads,
+  };
+}
+
 function formatOptionalMetadataLine(label, value) {
   return value ? `- ${label}: ${value}` : `- ${label}:`;
 }
@@ -594,14 +646,20 @@ function findInventorySectionRange(document) {
 function mergeInventoryIntoDocument(existingDocument, unresolvedThreads) {
   const trimmedDocument = existingDocument.trimEnd();
   const threadSection = ["## Thread Inventory"];
-  const existingThreads = parseThreadInventory(existingDocument);
-  const resolvedThreads = collectResolvedInventoryEntries(existingThreads, unresolvedThreads);
+  const inventoryState = extractInventoryDocumentState(existingDocument);
+  const existingThreads = inventoryState.currentThreads;
+  const historicalResolvedThreads = inventoryState.resolvedThreads;
+  const resolvedThreads = [
+    ...collectResolvedInventoryEntries(existingThreads, unresolvedThreads),
+    ...historicalResolvedThreads,
+  ];
 
   if (unresolvedThreads.length === 0) {
     threadSection.push("", "No unresolved inline review threads found.");
-    if (existingThreads.length > 0) {
+    const threadsToPreserve = [...existingThreads, ...historicalResolvedThreads];
+    if (threadsToPreserve.length > 0) {
       threadSection.push("", "## Resolved Thread Inventory");
-      existingThreads.forEach((thread, index) => {
+      threadsToPreserve.forEach((thread, index) => {
         threadSection.push(...buildInventoryThreadSection(thread, index));
       });
     }
@@ -673,8 +731,10 @@ module.exports = {
   buildInventoryThreadSection,
   buildReviewThreadsQuery,
   extractUnresolvedThreads,
+  extractInventoryDocumentState,
   extractThreadsFromSnapshot,
   findInventorySectionRange,
+  findSectionBounds,
   findExistingInventoryEntry,
   formatOptionalMetadataLine,
   formatOutput,

@@ -15,9 +15,11 @@ const {
   buildMarkdownThreadSection,
   collectResolvedInventoryEntries,
   extractUnresolvedThreads,
+  extractInventoryDocumentState,
   extractThreadsFromSnapshot,
   fetchAllReviewThreads,
   findExistingInventoryEntry,
+  findSectionBounds,
   formatOutput,
   formatThreadContent,
   formatUnresolvedThreadsAsJson,
@@ -702,6 +704,79 @@ This section should stay below the generated inventory.
   });
 });
 
+test("findSectionBounds isolates a named inventory subsection", () => {
+  const document = `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+
+## Resolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_OLD
+`;
+
+  assert.deepEqual(findSectionBounds(document, "## Thread Inventory"), {
+    start: document.indexOf("## Thread Inventory"),
+    end: document.indexOf("## Resolved Thread Inventory"),
+  });
+  assert.deepEqual(findSectionBounds(document, "## Resolved Thread Inventory"), {
+    start: document.indexOf("## Resolved Thread Inventory"),
+    end: document.length,
+  });
+});
+
+test("extractInventoryDocumentState ignores blank template placeholders and keeps resolved history separate", () => {
+  const state = extractInventoryDocumentState(`# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID:
+- Original Thread URL:
+- Location:
+- Classification:
+- Follow-up PR:
+- Rationale:
+- Content:
+- Outdated:
+
+### Thread 2
+
+- Thread ID: THREAD_2
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2
+- Location: trip_planner/other.py:23
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Existing triage should remain visible.
+- Content: reviewer: Please extract a helper.
+- Outdated: no
+
+## Resolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_OLD
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: disposition
+- Follow-up PR:
+- Rationale: Historical resolution should stay separate.
+- Content: reviewer: This thread was already resolved.
+- Outdated: no
+`);
+
+  assert.deepEqual(state.currentThreads.map((thread) => thread.threadId), ["THREAD_2"]);
+  assert.deepEqual(state.resolvedThreads.map((thread) => thread.threadId), ["THREAD_OLD"]);
+});
+
 test("mergeInventoryIntoDocument preserves manual classifications and follow-up PR links", () => {
   const mergedDocument = mergeInventoryIntoDocument(
     `# PR #178 Unresolved Thread Inventory
@@ -1119,7 +1194,90 @@ Intro paragraph.
   );
 });
 
-test("mergeInventoryIntoDocument replaces a resolved-thread-only section when unresolved threads return", () => {
+test("mergeInventoryIntoDocument does not reuse resolved-only entries as fallback matches for active unresolved threads", () => {
+  const mergedDocument = mergeInventoryIntoDocument(
+    `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Thread Inventory
+
+No unresolved inline review threads found.
+
+## Resolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_OLD
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: old/path.py:10
+- Classification: disposition
+- Follow-up PR:
+- Rationale: Historical resolved triage should not bleed into new unresolved threads.
+- Content: reviewer: stale resolved content
+- Outdated: no
+`,
+    [
+      {
+        id: "THREAD_NEW",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+        path: "scripts/list_unresolved_pr_threads.js",
+        line: 121,
+        isOutdated: false,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please handle the latest unresolved case.",
+          },
+        ],
+      },
+    ]
+  );
+
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Thread ID: THREAD_NEW/);
+  const [unresolvedSection] = mergedDocument.split("## Resolved Thread Inventory");
+  assert.match(unresolvedSection, /### Thread 1[\s\S]*- Classification:\s*$/m);
+  assert.match(
+    unresolvedSection,
+    /### Thread 1[\s\S]*- Content: reviewer: Please handle the latest unresolved case\./
+  );
+  assert.match(mergedDocument, /## Resolved Thread Inventory/);
+  assert.match(mergedDocument, /THREAD_OLD/);
+  assert.doesNotMatch(
+    unresolvedSection,
+    /### Thread 1[\s\S]*Historical resolved triage should not bleed into new unresolved threads\./
+  );
+});
+
+test("mergeInventoryIntoDocument does not preserve blank template entries as resolved history", () => {
+  const mergedDocument = mergeInventoryIntoDocument(
+    `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+${buildBlankInventoryTemplate(4)}`,
+    [
+      {
+        id: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        path: "trip_planner/example.py",
+        line: 17,
+        isOutdated: false,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please keep this branch explicit.",
+          },
+        ],
+      },
+    ]
+  );
+
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Thread ID: THREAD_1/);
+  assert.doesNotMatch(mergedDocument, /## Resolved Thread Inventory/);
+});
+
+test("mergeInventoryIntoDocument preserves resolved-only history when unresolved threads return", () => {
   const mergedDocument = mergeInventoryIntoDocument(
     `# PR #178 Unresolved Thread Inventory
 
@@ -1165,8 +1323,8 @@ Intro paragraph.
     mergedDocument,
     /### Thread 1[\s\S]*- Content: reviewer: Please handle the latest unresolved case\./
   );
-  assert.doesNotMatch(mergedDocument, /## Resolved Thread Inventory/);
-  assert.doesNotMatch(mergedDocument, /THREAD_OLD/);
+  assert.match(mergedDocument, /## Resolved Thread Inventory/);
+  assert.match(mergedDocument, /THREAD_OLD/);
 });
 
 test("formatThreadContent condenses multiple comments into a single content field", () => {
