@@ -223,6 +223,21 @@ function listFixClassifiedThreads(threads) {
   return threads.filter((thread) => thread.classification === "fix");
 }
 
+function sanitizeBranchSegment(value, fallback) {
+  const normalized = (value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalized || fallback;
+}
+
+function buildSuggestedBranchName(thread, index) {
+  const locationSegment = sanitizeBranchSegment(thread.location, `thread-${index + 1}`);
+  const idSegment = sanitizeBranchSegment(thread.threadId, `thread-${index + 1}`);
+  return `pr-178-fix/${locationSegment}-${idSegment}`;
+}
+
 function formatFixThreadsReport(fixThreads) {
   if (fixThreads.length === 0) {
     return "Fix-classified threads: 0\n";
@@ -231,6 +246,7 @@ function formatFixThreadsReport(fixThreads) {
   const lines = [`Fix-classified threads: ${fixThreads.length}`];
   fixThreads.forEach((thread, index) => {
     lines.push(`${index + 1}. ${thread.threadId || "<missing thread id>"}`);
+    lines.push(`   Suggested Branch: ${buildSuggestedBranchName(thread, index)}`);
     lines.push(`   Original Thread URL: ${thread.originalThreadUrl || "<missing original thread URL>"}`);
     lines.push(`   Location: ${thread.location || "<missing location>"}`);
     lines.push(`   Follow-up PR: ${thread.followUpPr || "<missing follow-up PR>"}`);
@@ -253,7 +269,10 @@ function formatFixThreadsReport(fixThreads) {
 function formatFixThreadsAsJson(fixThreads) {
   return `${JSON.stringify(
     {
-      fixThreads,
+      fixThreads: fixThreads.map((thread, index) => ({
+        ...thread,
+        suggestedBranch: buildSuggestedBranchName(thread, index),
+      })),
       count: fixThreads.length,
     },
     null,
@@ -276,6 +295,7 @@ function formatFixThreadsAsMarkdown(fixThreads) {
     lines.push(`## Fix Thread ${index + 1}`);
     lines.push("");
     lines.push(`- [ ] Address thread \`${thread.threadId || "<missing thread id>"}\``);
+    lines.push(`- Suggested Branch: \`${buildSuggestedBranchName(thread, index)}\``);
     lines.push(`- Original Thread URL: ${thread.originalThreadUrl || "<missing original thread URL>"}`);
     lines.push(`- Location: ${thread.location || "<missing location>"}`);
     lines.push(`- Follow-up PR: ${thread.followUpPr || "<missing follow-up PR>"}`);
@@ -390,6 +410,7 @@ module.exports = {
   formatFixThreadsReport,
   formatThreadInventoryIssues,
   getCliConfiguration,
+  buildSuggestedBranchName,
   listFixClassifiedThreads,
   loadThreadInventory,
   normalizeFieldValue,

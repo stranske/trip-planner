@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const {
+  buildSuggestedBranchName,
   buildFixThreadsReport,
   DEFAULT_DOC_PATH,
   collectThreadInventoryIssues,
@@ -162,6 +163,7 @@ test("formatFixThreadsReport summarizes the filtered fix list", () => {
 
   assert.match(report, /Fix-classified threads: 1/);
   assert.match(report, /1\. THREAD_1/);
+  assert.match(report, /Suggested Branch: pr-178-fix\/trip-planner-example-py-17-thread-1/);
   assert.match(
     report,
     /Original Thread URL: https:\/\/github\.com\/stranske\/trip-planner\/pull\/178#discussion_r1/
@@ -189,6 +191,10 @@ test("formatFixThreadsAsJson emits machine-readable fix-thread metadata", () => 
   assert.equal(parsed.count, 1);
   assert.equal(parsed.fixThreads[0].threadId, "THREAD_1");
   assert.equal(
+    parsed.fixThreads[0].suggestedBranch,
+    "pr-178-fix/trip-planner-example-py-17-thread-1"
+  );
+  assert.equal(
     parsed.fixThreads[0].followUpPr,
     "https://github.com/stranske/trip-planner/pull/581"
   );
@@ -212,6 +218,7 @@ test("formatFixThreadsAsMarkdown emits an actionable fix scope checklist", () =>
   assert.match(report, /Fix-classified threads: 1/);
   assert.match(report, /## Fix Thread 1/);
   assert.match(report, /- \[ \] Address thread `THREAD_1`/);
+  assert.match(report, /- Suggested Branch: `pr-178-fix\/trip-planner-example-py-17-thread-1`/);
   assert.match(
     report,
     /- Original Thread URL: https:\/\/github\.com\/stranske\/trip-planner\/pull\/178#discussion_r1/
@@ -240,6 +247,30 @@ test("formatFixThreadsOutput dispatches to the requested formatter", () => {
   assert.match(formatFixThreadsOutput(fixThreads, "text"), /Fix-classified threads: 1/);
   assert.doesNotThrow(() => JSON.parse(formatFixThreadsOutput(fixThreads, "json")));
   assert.match(formatFixThreadsOutput(fixThreads, "markdown"), /# Fix-Classified Thread Scope/);
+});
+
+test("buildSuggestedBranchName derives a stable feature branch from location and thread id", () => {
+  assert.equal(
+    buildSuggestedBranchName(
+      {
+        threadId: "THREAD_1",
+        location: "trip_planner/example.py:17",
+      },
+      0
+    ),
+    "pr-178-fix/trip-planner-example-py-17-thread-1"
+  );
+
+  assert.equal(
+    buildSuggestedBranchName(
+      {
+        threadId: null,
+        location: null,
+      },
+      1
+    ),
+    "pr-178-fix/thread-2-thread-2"
+  );
 });
 
 test("collectThreadInventoryIssues flags missing metadata and placeholder entries", () => {
