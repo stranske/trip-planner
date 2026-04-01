@@ -12,6 +12,7 @@ const GITHUB_GRAPHQL_ENDPOINT = "https://api.github.com/graphql";
 function parseCommandLineArguments(argv = process.argv.slice(2)) {
   const positional = [];
   let inputPath = null;
+  let outputFormat = "text";
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -27,11 +28,23 @@ function parseCommandLineArguments(argv = process.argv.slice(2)) {
       continue;
     }
 
+    if (argument === "--format") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --format flag requires a value.");
+      }
+
+      outputFormat = value;
+      index += 1;
+      continue;
+    }
+
     positional.push(argument);
   }
 
   return {
     inputPath,
+    outputFormat,
     positional,
   };
 }
@@ -44,6 +57,7 @@ function getConfiguration(argv = process.argv.slice(2), env = process.env) {
     parsedArguments.positional[1] || env.PR_NUMBER || String(DEFAULT_PR_NUMBER);
   const token = env.GITHUB_TOKEN;
   const inputPath = parsedArguments.inputPath || env.REVIEW_THREADS_FILE || null;
+  const outputFormat = parsedArguments.outputFormat || "text";
   const prNumber = Number.parseInt(prNumberRaw, 10);
 
   if (!repository.includes("/")) {
@@ -60,8 +74,14 @@ function getConfiguration(argv = process.argv.slice(2), env = process.env) {
     throw new Error("GITHUB_TOKEN is required to query GitHub review threads.");
   }
 
+  if (!["text", "json", "markdown"].includes(outputFormat)) {
+    throw new Error(
+      `Output format must be one of "text", "json", or "markdown"; received "${outputFormat}".`
+    );
+  }
+
   const [owner, repo] = repository.split("/", 2);
-  return { owner, repo, prNumber, token, inputPath };
+  return { owner, repo, prNumber, token, inputPath, outputFormat };
 }
 
 function buildReviewThreadsQuery() {
@@ -284,6 +304,66 @@ function formatUnresolvedThreadsReport(repository, prNumber, unresolvedThreads) 
   return `${lines.join("\n")}\n`;
 }
 
+function formatUnresolvedThreadsAsJson(repository, prNumber, unresolvedThreads) {
+  return `${JSON.stringify(
+    {
+      repository,
+      prNumber,
+      unresolvedThreads,
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThreads) {
+  const lines = [
+    `# ${repository} PR #${prNumber} Unresolved Threads`,
+    "",
+    `Unresolved review threads: ${unresolvedThreads.length}`,
+  ];
+
+  if (unresolvedThreads.length === 0) {
+    lines.push("", "No unresolved inline review threads found.");
+    return `${lines.join("\n")}\n`;
+  }
+
+  unresolvedThreads.forEach((thread, index) => {
+    lines.push("");
+    lines.push(`## Thread ${index + 1}`);
+    lines.push("");
+    lines.push(`- Thread ID: ${thread.id}`);
+    lines.push(`- Location: ${thread.path}:${thread.line ?? "unknown"}`);
+    lines.push(`- Outdated: ${thread.isOutdated ? "yes" : "no"}`);
+    lines.push("- Classification:");
+    lines.push("- Rationale:");
+    lines.push("- Content:");
+
+    if (thread.comments.length === 0) {
+      lines.push("  - No thread comments returned by the API.");
+      return;
+    }
+
+    thread.comments.forEach((comment) => {
+      lines.push(`  - ${comment.author}: ${comment.body || "<empty>"}`);
+    });
+  });
+
+  return `${lines.join("\n")}\n`;
+}
+
+function formatOutput(repository, prNumber, unresolvedThreads, outputFormat = "text") {
+  if (outputFormat === "json") {
+    return formatUnresolvedThreadsAsJson(repository, prNumber, unresolvedThreads);
+  }
+
+  if (outputFormat === "markdown") {
+    return formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThreads);
+  }
+
+  return formatUnresolvedThreadsReport(repository, prNumber, unresolvedThreads);
+}
+
 async function main() {
   const configuration = getConfiguration();
   const threads = configuration.inputPath
@@ -291,13 +371,9 @@ async function main() {
     : await fetchAllReviewThreads(configuration);
   const unresolvedThreads = extractUnresolvedThreads(threads);
   const repository = `${configuration.owner}/${configuration.repo}`;
-  const report = formatUnresolvedThreadsReport(
-    repository,
-    configuration.prNumber,
-    unresolvedThreads
+  process.stdout.write(
+    formatOutput(repository, configuration.prNumber, unresolvedThreads, configuration.outputFormat)
   );
-
-  process.stdout.write(report);
 }
 
 if (require.main === module) {
@@ -313,6 +389,9 @@ module.exports = {
   buildReviewThreadsQuery,
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
+  formatOutput,
+  formatUnresolvedThreadsAsJson,
+  formatUnresolvedThreadsAsMarkdown,
   fetchAllReviewThreads,
   formatUnresolvedThreadsReport,
   getConfiguration,

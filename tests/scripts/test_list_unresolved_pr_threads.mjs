@@ -11,6 +11,9 @@ const {
   DEFAULT_REPOSITORY,
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
+  formatOutput,
+  formatUnresolvedThreadsAsJson,
+  formatUnresolvedThreadsAsMarkdown,
   formatUnresolvedThreadsReport,
   getConfiguration,
   loadReviewThreadsFromFile,
@@ -30,6 +33,7 @@ test("getConfiguration applies defaults and parses explicit repository/PR inputs
     prNumber: 42,
     token: "token-value",
     inputPath: null,
+    outputFormat: "text",
   });
 
   const defaults = getConfiguration([], { GITHUB_TOKEN: "token-value" });
@@ -45,6 +49,16 @@ test("getConfiguration accepts --input without requiring a GitHub token", () => 
 
   assert.equal(configuration.inputPath, "tests/fixtures/scripts/review_threads_snapshot.json");
   assert.equal(configuration.token, undefined);
+  assert.equal(configuration.outputFormat, "text");
+});
+
+test("getConfiguration accepts structured output formats", () => {
+  const configuration = getConfiguration(
+    ["octo/repo", "178", "--input", "threads.json", "--format", "markdown"],
+    {}
+  );
+
+  assert.equal(configuration.outputFormat, "markdown");
 });
 
 test("extractUnresolvedThreads keeps unresolved threads and normalizes comment text", () => {
@@ -126,6 +140,18 @@ test("parseCommandLineArguments separates positional values from the --input fla
     parseCommandLineArguments(["octo/repo", "178", "--input", "threads.json"]),
     {
       inputPath: "threads.json",
+      outputFormat: "text",
+      positional: ["octo/repo", "178"],
+    }
+  );
+});
+
+test("parseCommandLineArguments accepts an explicit output format", () => {
+  assert.deepEqual(
+    parseCommandLineArguments(["octo/repo", "178", "--input", "threads.json", "--format", "json"]),
+    {
+      inputPath: "threads.json",
+      outputFormat: "json",
       positional: ["octo/repo", "178"],
     }
   );
@@ -164,4 +190,66 @@ test("snapshot fixtures can drive the unresolved thread report offline", () => {
   assert.match(report, /THREAD_A \(trip_planner\/example\.py:17\)/);
   assert.match(report, /THREAD_C \(scripts\/list_unresolved_pr_threads\.js:121, outdated\)/);
   assert.match(report, /reviewer-b: Can this use fixture input too\?/);
+});
+
+test("formatUnresolvedThreadsAsJson emits machine-readable unresolved thread data", () => {
+  const report = formatUnresolvedThreadsAsJson("stranske/trip-planner", 178, [
+    {
+      id: "THREAD_1",
+      isOutdated: false,
+      path: "scripts/list_unresolved_pr_threads.js",
+      line: 99,
+      comments: [],
+    },
+  ]);
+
+  const parsed = JSON.parse(report);
+  assert.equal(parsed.repository, "stranske/trip-planner");
+  assert.equal(parsed.prNumber, 178);
+  assert.equal(parsed.unresolvedThreads[0].id, "THREAD_1");
+});
+
+test("formatUnresolvedThreadsAsMarkdown emits a doc-ready inventory skeleton", () => {
+  const report = formatUnresolvedThreadsAsMarkdown("stranske/trip-planner", 178, [
+    {
+      id: "THREAD_1",
+      isOutdated: true,
+      path: "scripts/list_unresolved_pr_threads.js",
+      line: 99,
+      comments: [
+        {
+          author: "reviewer",
+          body: "Please handle pagination.",
+        },
+      ],
+    },
+  ]);
+
+  assert.match(report, /# stranske\/trip-planner PR #178 Unresolved Threads/);
+  assert.match(report, /- Thread ID: THREAD_1/);
+  assert.match(report, /- Location: scripts\/list_unresolved_pr_threads\.js:99/);
+  assert.match(report, /- Classification:/);
+  assert.match(report, /- Rationale:/);
+  assert.match(report, /- reviewer: Please handle pagination\./);
+});
+
+test("formatOutput dispatches to the requested formatter", () => {
+  const unresolvedThreads = [
+    {
+      id: "THREAD_1",
+      isOutdated: false,
+      path: "scripts/list_unresolved_pr_threads.js",
+      line: 99,
+      comments: [],
+    },
+  ];
+
+  assert.match(formatOutput("stranske/trip-planner", 178, unresolvedThreads, "text"), /THREAD_1/);
+  assert.doesNotThrow(() =>
+    JSON.parse(formatOutput("stranske/trip-planner", 178, unresolvedThreads, "json"))
+  );
+  assert.match(
+    formatOutput("stranske/trip-planner", 178, unresolvedThreads, "markdown"),
+    /## Thread 1/
+  );
 });
