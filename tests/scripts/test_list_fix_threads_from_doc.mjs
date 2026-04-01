@@ -6,13 +6,16 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const {
+  buildPullRequestPayload,
   buildSuggestedBranchName,
   buildFixThreadsReport,
   DEFAULT_DOC_PATH,
   collectThreadInventoryIssues,
+  extractPullRequestNumber,
   formatFixThreadsAsJson,
   formatFixThreadsAsPlan,
   formatFixThreadsAsMarkdown,
+  formatFixThreadsAsPullRequestPayloads,
   formatFixThreadsOutput,
   formatFixThreadsReport,
   formatThreadInventoryIssues,
@@ -467,6 +470,92 @@ test("formatFixThreadsAsPlan emits a bounded follow-up PR execution plan", () =>
   );
 });
 
+test("extractPullRequestNumber reads the numeric suffix from a follow-up PR URL", () => {
+  assert.equal(
+    extractPullRequestNumber("https://github.com/stranske/trip-planner/pull/581"),
+    "581"
+  );
+  assert.equal(extractPullRequestNumber(null), null);
+  assert.equal(extractPullRequestNumber("https://example.com/not-a-pr"), null);
+});
+
+test("buildPullRequestPayload creates a PR-ready title and body for a bounded thread group", () => {
+  const payload = buildPullRequestPayload(
+    {
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      threadCount: 2,
+      threads: [
+        {
+          threadId: "THREAD_1",
+          originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+          location: "trip_planner/example.py:17",
+          rationale: "Code path still drops the final stop.",
+          content: "Reviewer requested a bounds check.",
+        },
+        {
+          threadId: "THREAD_2",
+          originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+          location: "trip_planner/other.py:8",
+          rationale: "Separate code path needs the same guard.",
+          content: "Reviewer requested parity with the primary branch.",
+        },
+      ],
+    },
+    0
+  );
+
+  assert.equal(payload.followUpPrNumber, "581");
+  assert.equal(payload.title, "Address PR #178 fix threads for follow-up PR #581");
+  assert.match(payload.body, /## Summary/);
+  assert.match(payload.body, /Address 2 fix-classified review threads carried from PR #178\./);
+  assert.match(payload.body, /## Original Review Threads/);
+  assert.match(payload.body, /- THREAD_1 \(trip_planner\/example\.py:17\)/);
+  assert.match(
+    payload.body,
+    /- Original Thread URL: https:\/\/github\.com\/stranske\/trip-planner\/pull\/178#discussion_r1/
+  );
+  assert.match(payload.body, /- Requested Change: Reviewer requested a bounds check\./);
+  assert.match(payload.body, /## Validation/);
+});
+
+test("formatFixThreadsAsPullRequestPayloads renders each follow-up PR group as a reusable payload", () => {
+  const report = formatFixThreadsAsPullRequestPayloads([
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/example.py:17",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale: "Code path still drops the final stop.",
+      content: "Reviewer requested a bounds check.",
+      outdated: false,
+    },
+    {
+      threadId: "THREAD_2",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+      location: "trip_planner/other.py:8",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/582",
+      rationale: "Secondary code path needs the same patch.",
+      content: "Reviewer requested parity with the primary branch.",
+      outdated: false,
+    },
+  ]);
+
+  assert.match(report, /# Follow-up PR Payloads/);
+  assert.match(
+    report,
+    /## Follow-up PR Group 1: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/
+  );
+  assert.match(report, /Title: Address PR #178 fix threads for follow-up PR #581/);
+  assert.match(report, /```markdown/);
+  assert.match(report, /## Original Review Threads/);
+  assert.match(
+    report,
+    /## Follow-up PR Group 2: https:\/\/github\.com\/stranske\/trip-planner\/pull\/582/
+  );
+});
+
 test("formatFixThreadsOutput dispatches to the requested formatter", () => {
   const fixThreads = [
     {
@@ -485,6 +574,10 @@ test("formatFixThreadsOutput dispatches to the requested formatter", () => {
   assert.doesNotThrow(() => JSON.parse(formatFixThreadsOutput(fixThreads, "json")));
   assert.match(formatFixThreadsOutput(fixThreads, "markdown"), /# Fix-Classified Thread Scope/);
   assert.match(formatFixThreadsOutput(fixThreads, "plan"), /# Follow-up PR Execution Plan/);
+  assert.match(
+    formatFixThreadsOutput(fixThreads, "pr-payload"),
+    /# Follow-up PR Payloads/
+  );
 });
 
 test("buildSuggestedBranchName derives a stable feature branch from location and thread id", () => {
@@ -718,7 +811,7 @@ test("getCliConfiguration rejects unknown options and extra positional arguments
   );
   assert.throws(
     () => getCliConfiguration(["--format", "html"]),
-    /Output format must be one of "text", "json", "markdown", or "plan"/
+    /Output format must be one of "text", "json", "markdown", "plan", or "pr-payload"/
   );
   assert.throws(
     () => getCliConfiguration(["docs/one.md", "docs/two.md"]),

@@ -320,6 +320,15 @@ function buildSuggestedBranchName(thread, index) {
   return `pr-178-fix/${locationSegment}-${idSegment}`;
 }
 
+function extractPullRequestNumber(followUpPr) {
+  if (!followUpPr) {
+    return null;
+  }
+
+  const pullRequestMatch = followUpPr.match(/\/pull\/(\d+)(?:\/|$)/i);
+  return pullRequestMatch ? pullRequestMatch[1] : null;
+}
+
 function groupFixThreadsByFollowUpPr(fixThreads) {
   const groups = new Map();
 
@@ -528,6 +537,75 @@ function formatFixThreadsAsPlan(fixThreads, options = {}) {
   return `${lines.join("\n")}\n`;
 }
 
+function buildPullRequestPayload(group, groupIndex) {
+  const pullRequestNumber = extractPullRequestNumber(group.followUpPr);
+  const groupLabel = pullRequestNumber ? `#${pullRequestNumber}` : `group ${groupIndex + 1}`;
+  const title = `Address PR #178 fix threads for follow-up PR ${groupLabel}`;
+  const bodyLines = [
+    "## Summary",
+    "",
+    `- Address ${group.threadCount} fix-classified review thread${group.threadCount === 1 ? "" : "s"} carried from PR #178.`,
+    `- Follow-up PR: ${group.followUpPr || "<missing follow-up PR>"}`,
+    "",
+    "## Original Review Threads",
+    "",
+  ];
+
+  group.threads.forEach((thread) => {
+    bodyLines.push(`- ${thread.threadId || "<missing thread id>"} (${thread.location || "<missing location>"})`);
+    bodyLines.push(`  - Original Thread URL: ${thread.originalThreadUrl || "<missing original thread URL>"}`);
+    bodyLines.push(`  - Rationale: ${thread.rationale || "<missing rationale>"}`);
+    bodyLines.push(`  - Requested Change: ${thread.content || "<missing content>"}`);
+  });
+
+  bodyLines.push("", "## Validation", "", "- [ ] Targeted tests added or updated", "- [ ] Review thread reply posted with implementation details");
+
+  return {
+    followUpPr: group.followUpPr,
+    followUpPrNumber: pullRequestNumber,
+    title,
+    body: bodyLines.join("\n"),
+    threads: group.threads,
+  };
+}
+
+function formatFixThreadsAsPullRequestPayloads(fixThreads, options = {}) {
+  const { excludedOutdatedCount = 0 } = options;
+  const followUpPrGroups = groupFixThreadsByFollowUpPr(fixThreads);
+  const lines = ["# Follow-up PR Payloads", ""];
+
+  if (fixThreads.length === 0) {
+    if (excludedOutdatedCount > 0) {
+      lines.push(`Excluded outdated fix threads: ${excludedOutdatedCount}`, "");
+    }
+    lines.push("No actionable fix-classified threads found.");
+    return `${lines.join("\n")}\n`;
+  }
+
+  if (excludedOutdatedCount > 0) {
+    lines.push(`Excluded outdated fix threads: ${excludedOutdatedCount}`, "");
+  }
+
+  followUpPrGroups.forEach((group, groupIndex) => {
+    const payload = buildPullRequestPayload(group, groupIndex);
+    lines.push(`## Follow-up PR Group ${groupIndex + 1}: ${group.followUpPr || "<missing follow-up PR>"}`);
+    lines.push("");
+    lines.push(`Title: ${payload.title}`);
+    lines.push("");
+    lines.push("Body:");
+    lines.push("```markdown");
+    lines.push(payload.body);
+    lines.push("```");
+    lines.push("");
+  });
+
+  if (lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 function formatFixThreadsOutput(fixThreads, outputFormat = "text", options = {}) {
   if (outputFormat === "json") {
     return formatFixThreadsAsJson(fixThreads, options);
@@ -539,6 +617,10 @@ function formatFixThreadsOutput(fixThreads, outputFormat = "text", options = {})
 
   if (outputFormat === "plan") {
     return formatFixThreadsAsPlan(fixThreads, options);
+  }
+
+  if (outputFormat === "pr-payload") {
+    return formatFixThreadsAsPullRequestPayloads(fixThreads, options);
   }
 
   return formatFixThreadsReport(fixThreads, options);
@@ -631,9 +713,9 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
     options.docPath = path.resolve(argument);
   }
 
-  if (!["text", "json", "markdown", "plan"].includes(options.outputFormat)) {
+  if (!["text", "json", "markdown", "plan", "pr-payload"].includes(options.outputFormat)) {
     throw new Error(
-      `Output format must be one of "text", "json", "markdown", or "plan"; received "${options.outputFormat}".`
+      `Output format must be one of "text", "json", "markdown", "plan", or "pr-payload"; received "${options.outputFormat}".`
     );
   }
 
@@ -664,11 +746,14 @@ module.exports = {
   formatFixThreadsAsJson,
   formatFixThreadsAsPlan,
   formatFixThreadsAsMarkdown,
+  formatFixThreadsAsPullRequestPayloads,
   formatFixThreadsOutput,
   formatFixThreadsReport,
   formatThreadInventoryIssues,
   getCliConfiguration,
   buildSuggestedBranchName,
+  buildPullRequestPayload,
+  extractPullRequestNumber,
   groupFixThreadsByFollowUpPr,
   listActionableFixThreads,
   listFixClassifiedThreads,

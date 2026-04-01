@@ -25,6 +25,12 @@ After the inventory is populated, identify any `fix`-classified entries with:
 node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md
 ```
 
+To generate a bounded follow-up PR title/body payload for each `fix`-classified PR group, run:
+
+```bash
+node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md --format pr-payload --exclude-outdated
+```
+
 To generate a bounded checklist for any `disposition`-classified entries that still need a PR comment, run:
 
 ```bash
