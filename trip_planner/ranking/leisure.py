@@ -13,7 +13,7 @@ from trip_planner._option_contracts import (
     OptionCostSummary,
     OptionQualitySummary,
 )
-from trip_planner.candidates import CandidateSeed, CandidateSet
+from trip_planner.candidates import CandidateSet
 from trip_planner.contracts import ItineraryObjectives
 from trip_planner.itinerary import evaluate_bundle_feasibility
 from trip_planner.itinerary.feasibility import FeasibilityAssessment
@@ -729,7 +729,10 @@ class LeisureRankingEngine:
                     amount=_round(min(0.1, 0.02 * len(assessment.missing_data_fields))),
                     reason_code="missing_feasibility_data",
                     summary="Incomplete timing or travel detail lowers ranking confidence.",
-                    affected_factor_keys=["movement_friction_fit", "recovery_protection"],
+                    affected_factor_keys=[
+                        "movement_friction_fit",
+                        "recovery_protection",
+                    ],
                     notes=assessment.missing_data_fields[:4],
                 )
             )
@@ -948,7 +951,8 @@ class LeisureRankingEngine:
                 value_signal=value_signal,
                 fit_signal=fit_signal,
             ),
-            drawbacks=list(bundle.explanation.tradeoffs) + list(bundle.feasibility.blocking_reasons),
+            drawbacks=list(bundle.explanation.tradeoffs)
+            + list(bundle.feasibility.blocking_reasons),
             booking_links=list(bundle.provenance_summary.booking_links),
             source_refs=list(bundle.provenance_summary.source_refs),
             supporting_place_ids=list(bundle.destination_ids),

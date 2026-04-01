@@ -127,7 +127,8 @@ def _schedule_protection_required(bundle: InventoryBundle) -> bool:
     if any("business" in tag for tag in bundle.tags):
         return True
     if any(
-        lodging.location_summary.business_access_signal and lodging.location_summary.business_access_signal >= 0.8
+        lodging.location_summary.business_access_signal
+        and lodging.location_summary.business_access_signal >= 0.8
         for lodging in bundle.lodging_options
     ):
         return True
@@ -144,7 +145,9 @@ def _arrival_conflicts(bundle: InventoryBundle) -> list[TimingConflict]:
         if arrival is None:
             continue
         matching_lodging = [
-            lodging for lodging in bundle.lodging_options if lodging.destination_id == transport.destination_id
+            lodging
+            for lodging in bundle.lodging_options
+            if lodging.destination_id == transport.destination_id
         ]
         for lodging in matching_lodging:
             window = _parse_window(lodging.booking_terms.checkin_window)
@@ -186,9 +189,7 @@ def _activity_timing_conflicts(
     for activity in bundle.activity_options:
         window = _parse_window(activity.timing_summary.typical_start_window)
         if window is None:
-            missing_data_fields.append(
-                f"activity:{activity.option_id}:typical_start_window"
-            )
+            missing_data_fields.append(f"activity:{activity.option_id}:typical_start_window")
             continue
         arrival = arrival_by_destination.get(activity.destination_id)
         if arrival is None:
@@ -227,7 +228,10 @@ def _activity_timing_conflicts(
                     related_option_ids=[activity.option_id],
                 )
             )
-        elif schedule_protection_required and available_minutes - activity.timing_summary.duration_minutes < 90:
+        elif (
+            schedule_protection_required
+            and available_minutes - activity.timing_summary.duration_minutes < 90
+        ):
             conflicts.append(
                 TimingConflict(
                     conflict_id=f"timing:{activity.option_id}:buffer",
@@ -244,7 +248,9 @@ def _activity_timing_conflicts(
     return conflicts, sorted(set(missing_data_fields))
 
 
-def _route_warnings(bundle: InventoryBundle, move_costs: list[MoveCostSummary]) -> list[RouteContinuityWarning]:
+def _route_warnings(
+    bundle: InventoryBundle, move_costs: list[MoveCostSummary]
+) -> list[RouteContinuityWarning]:
     warnings: list[RouteContinuityWarning] = []
     destination_sequence = [item.origin_id for item in bundle.transport_options]
     destination_sequence.extend(item.destination_id for item in bundle.transport_options)
@@ -328,13 +334,9 @@ def evaluate_bundle_feasibility(bundle: InventoryBundle) -> FeasibilityAssessmen
 
     blocking_reasons = list(bundle.feasibility.blocking_reasons)
     blocking_reasons.extend(
-        reason
-        for move_cost in move_costs
-        for reason in move_cost.blocking_reasons
+        reason for move_cost in move_costs for reason in move_cost.blocking_reasons
     )
-    blocking_reasons.extend(
-        conflict.code for conflict in timing_conflicts if conflict.blocking
-    )
+    blocking_reasons.extend(conflict.code for conflict in timing_conflicts if conflict.blocking)
     if not bundle.feasibility.available:
         blocking_reasons.append("bundle_unavailable")
     if not bundle.feasibility.internally_consistent:

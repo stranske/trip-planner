@@ -81,7 +81,12 @@ class MoveCostSummary:
     notes: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        for field_name in ("move_id", "origin_id", "destination_id", "transport_option_id"):
+        for field_name in (
+            "move_id",
+            "origin_id",
+            "destination_id",
+            "transport_option_id",
+        ):
             require_non_empty(getattr(self, field_name), field_name)
         require_non_negative(self.travel_minutes, "travel_minutes")
         require_non_negative(self.transfer_count, "transfer_count")
@@ -108,9 +113,11 @@ def _estimate_from_transport(option: TransportOption) -> TravelTimeEstimate:
         [
             option.fit_summary.schedule_fit_signal,
             option.transfer_burden.schedule_protection_signal,
-            1.0 - option.transfer_burden.connection_risk_signal
-            if option.transfer_burden.connection_risk_signal is not None
-            else None,
+            (
+                1.0 - option.transfer_burden.connection_risk_signal
+                if option.transfer_burden.connection_risk_signal is not None
+                else None
+            ),
         ]
     )
     return TravelTimeEstimate(
@@ -158,9 +165,7 @@ def build_move_cost_summaries(
         )
         schedule_pressure = None
         if option.transfer_burden.schedule_protection_signal is not None:
-            schedule_pressure = round(
-                1.0 - option.transfer_burden.schedule_protection_signal, 4
-            )
+            schedule_pressure = round(1.0 - option.transfer_burden.schedule_protection_signal, 4)
         continuity = _continuity_signal(bundle, option)
         friction_penalty = round(
             (estimate.duration_minutes / 600.0)

@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any, cast
 
 from trip_planner.candidates import CandidateSeed, CandidateSet
 from trip_planner.contracts import (
@@ -37,6 +38,12 @@ def _fixture_path(*parts: str) -> Path:
 
 def _load_ranking_fixture(name: str) -> dict[str, object]:
     return json.loads(_fixture_path("ranking", "leisure", name).read_text(encoding="utf-8"))
+
+
+def _result_option_id(result: object) -> str:
+    target_option = cast(Any, result).target_option
+    assert target_option is not None
+    return cast(str, target_option.option_id)
 
 
 def _load_destination(name: str) -> Destination:
@@ -250,12 +257,12 @@ def _make_objectives(
 
 def _profile_from_fixture(name: str) -> LeisurePreferenceProfile:
     fixture = _load_ranking_fixture(name)
-    return build_profile_from_overrides(fixture["profile_overrides"])
+    return build_profile_from_overrides(cast(dict[str, Any], fixture["profile_overrides"]))
 
 
 def _objectives_from_fixture(name: str) -> ItineraryObjectives:
     fixture = _load_ranking_fixture(name)
-    objective_payload = fixture["objectives"]
+    objective_payload = cast(dict[str, Any], fixture["objectives"])
     return _make_objectives(
         route_shape=objective_payload["route_shape"],
         discovery_style=objective_payload["discovery_style"],
@@ -268,7 +275,7 @@ def _objectives_from_fixture(name: str) -> ItineraryObjectives:
 
 def _expected_rank_order(name: str) -> list[str]:
     fixture = _load_ranking_fixture(name)
-    return list(fixture["expected_rank_order"])
+    return cast(list[str], fixture["expected_rank_order"])
 
 
 def test_depth_oriented_profile_ranks_urban_culture_first() -> None:
@@ -279,7 +286,7 @@ def test_depth_oriented_profile_ranks_urban_culture_first() -> None:
         _candidate_set(),
     )
 
-    assert [result.target_option.option_id for result in ranked.results] == _expected_rank_order(
+    assert [_result_option_id(result) for result in ranked.results] == _expected_rank_order(
         "depth_oriented_urban_trip.json"
     )
 
@@ -292,7 +299,7 @@ def test_scenic_discovery_profile_ranks_scenic_bundle_first() -> None:
         _candidate_set(),
     )
 
-    assert ranked.results[0].target_option.option_id == "candidate:bundle:scenic-wanderer"
+    assert _result_option_id(ranked.results[0]) == "candidate:bundle:scenic-wanderer"
     assert ranked.results[0].score_breakdown.bonuses[0].reason_code == "transit_is_feature"
 
 
@@ -304,7 +311,7 @@ def test_quality_floor_sensitive_profile_ranks_recovery_bundle_first() -> None:
         _candidate_set(),
     )
 
-    assert ranked.results[0].target_option.option_id == "candidate:bundle:quiet-recovery"
+    assert _result_option_id(ranked.results[0]) == "candidate:bundle:quiet-recovery"
     assert any(
         contribution.contribution_id == "quality_floor_fit"
         and contribution.normalized_signal is not None
@@ -328,11 +335,11 @@ def test_identical_candidates_reorder_between_depth_and_discovery_profiles() -> 
         candidate_set,
     )
 
-    assert [result.target_option.option_id for result in depth_ranked.results] != [
-        result.target_option.option_id for result in discovery_ranked.results
+    assert [_result_option_id(result) for result in depth_ranked.results] != [
+        _result_option_id(result) for result in discovery_ranked.results
     ]
-    assert depth_ranked.results[0].target_option.option_id == "candidate:bundle:urban-culture"
-    assert discovery_ranked.results[0].target_option.option_id == "candidate:bundle:scenic-wanderer"
+    assert _result_option_id(depth_ranked.results[0]) == "candidate:bundle:urban-culture"
+    assert _result_option_id(discovery_ranked.results[0]) == "candidate:bundle:scenic-wanderer"
 
 
 def test_tension_flags_and_low_confidence_reduce_ranking_confidence() -> None:
@@ -386,7 +393,7 @@ def test_tension_flags_and_low_confidence_reduce_ranking_confidence() -> None:
     result = next(
         item
         for item in ranked.results
-        if item.target_option.option_id == "candidate:bundle:urban-culture"
+        if _result_option_id(item) == "candidate:bundle:urban-culture"
     )
     assert "tension:pace-vs-depth" in result.confidence_summary.low_confidence_flags
     assert "low_confidence:iconic_vs_discovery" in result.confidence_summary.low_confidence_flags
