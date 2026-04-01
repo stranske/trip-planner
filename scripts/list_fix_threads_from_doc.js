@@ -477,6 +477,7 @@ function buildFixThreadsReport(options = {}, dependencies = {}) {
   const {
     docPath = DEFAULT_DOC_PATH,
     excludeOutdated = false,
+    followUpPr = null,
     requireComplete = false,
     outputFormat = "text",
   } = options;
@@ -488,8 +489,11 @@ function buildFixThreadsReport(options = {}, dependencies = {}) {
   }
 
   const allFixThreads = listFixClassifiedThreads(threads);
-  const fixThreads = listActionableFixThreads(threads, { excludeOutdated });
-  const excludedOutdatedCount = allFixThreads.length - fixThreads.length;
+  const actionableFixThreads = listActionableFixThreads(threads, { excludeOutdated });
+  const excludedOutdatedCount = allFixThreads.length - actionableFixThreads.length;
+  const fixThreads = followUpPr
+    ? actionableFixThreads.filter((thread) => thread.followUpPr === followUpPr)
+    : actionableFixThreads;
   return formatFixThreadsOutput(fixThreads, outputFormat, { excludedOutdatedCount });
 }
 
@@ -497,6 +501,7 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
   const options = {
     docPath: DEFAULT_DOC_PATH,
     excludeOutdated: false,
+    followUpPr: null,
     outputFormat: "text",
     requireComplete: false,
   };
@@ -511,6 +516,21 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
 
     if (argument === "--exclude-outdated") {
       options.excludeOutdated = true;
+      continue;
+    }
+
+    if (argument === "--follow-up-pr") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --follow-up-pr flag requires a value.");
+      }
+
+      options.followUpPr = normalizeUrlFieldValue(value);
+      if (!options.followUpPr) {
+        throw new Error(`The --follow-up-pr flag requires a non-placeholder URL; received "${value}".`);
+      }
+
+      index += 1;
       continue;
     }
 
@@ -546,9 +566,10 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
 }
 
 function main(argv = process.argv.slice(2)) {
-  const { docPath, excludeOutdated, outputFormat, requireComplete } = getCliConfiguration(argv);
+  const { docPath, excludeOutdated, followUpPr, outputFormat, requireComplete } =
+    getCliConfiguration(argv);
   process.stdout.write(
-    buildFixThreadsReport({ docPath, excludeOutdated, outputFormat, requireComplete })
+    buildFixThreadsReport({ docPath, excludeOutdated, followUpPr, outputFormat, requireComplete })
   );
 }
 

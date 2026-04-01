@@ -554,10 +554,19 @@ test("formatThreadInventoryIssues summarizes completeness problems", () => {
 
 test("getCliConfiguration parses completeness validation, doc path, and output format", () => {
   assert.deepEqual(
-    getCliConfiguration(["docs/custom.md", "--require-complete", "--exclude-outdated", "--format", "json"]),
+    getCliConfiguration([
+      "docs/custom.md",
+      "--require-complete",
+      "--exclude-outdated",
+      "--follow-up-pr",
+      "https://github.com/stranske/trip-planner/pull/581",
+      "--format",
+      "json",
+    ]),
     {
       docPath: path.resolve("docs/custom.md"),
       excludeOutdated: true,
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
       outputFormat: "json",
       requireComplete: true,
     }
@@ -568,6 +577,7 @@ test("getCliConfiguration accepts markdown output", () => {
   assert.deepEqual(getCliConfiguration(["--format", "markdown"]), {
     docPath: DEFAULT_DOC_PATH,
     excludeOutdated: false,
+    followUpPr: null,
     outputFormat: "markdown",
     requireComplete: false,
   });
@@ -577,6 +587,7 @@ test("getCliConfiguration accepts plan output", () => {
   assert.deepEqual(getCliConfiguration(["--format", "plan"]), {
     docPath: DEFAULT_DOC_PATH,
     excludeOutdated: false,
+    followUpPr: null,
     outputFormat: "plan",
     requireComplete: false,
   });
@@ -584,6 +595,14 @@ test("getCliConfiguration accepts plan output", () => {
 
 test("getCliConfiguration rejects unknown options and extra positional arguments", () => {
   assert.throws(() => getCliConfiguration(["--unknown"]), /Unknown option: --unknown/);
+  assert.throws(
+    () => getCliConfiguration(["--follow-up-pr"]),
+    /The --follow-up-pr flag requires a value\./
+  );
+  assert.throws(
+    () => getCliConfiguration(["--follow-up-pr", "TBD"]),
+    /The --follow-up-pr flag requires a non-placeholder URL/
+  );
   assert.throws(
     () => getCliConfiguration(["--format", "html"]),
     /Output format must be one of "text", "json", "markdown", or "plan"/
@@ -740,4 +759,48 @@ test("buildFixThreadsReport can exclude outdated fix-classified threads from the
   assert.equal(parsed.count, 1);
   assert.equal(parsed.excludedOutdatedCount, 1);
   assert.equal(parsed.fixThreads[0].threadId, "THREAD_1");
+});
+
+test("buildFixThreadsReport can isolate a single bounded follow-up PR scope", () => {
+  const report = buildFixThreadsReport(
+    {
+      docPath: "docs/mixed.md",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/582",
+      outputFormat: "json",
+      requireComplete: true,
+    },
+    {
+      readFileSync: () => `
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Code path still drops the final stop.
+- Content: Reviewer requested a bounds check.
+- Outdated: no
+
+### Thread 2
+
+- Thread ID: THREAD_2
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2
+- Location: trip_planner/other.py:8
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/582
+- Rationale: Separate code path needs the same guard.
+- Content: Reviewer requested parity with the primary branch.
+- Outdated: no
+`,
+    }
+  );
+
+  const parsed = JSON.parse(report);
+  assert.equal(parsed.count, 1);
+  assert.equal(parsed.fixThreads[0].threadId, "THREAD_2");
+  assert.equal(parsed.followUpPrGroups.length, 1);
+  assert.equal(parsed.followUpPrGroups[0].followUpPr, "https://github.com/stranske/trip-planner/pull/582");
 });
