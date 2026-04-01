@@ -5,6 +5,7 @@ from .explanations import (
     EXPLANATION_TARGET_KINDS,
     ExplanationRecord,
 )
+from .business import BusinessRankingEngine
 from .leisure import LeisureRankingEngine
 from .models import (
     ADJUSTMENT_KINDS,
@@ -24,6 +25,7 @@ __all__ = [
     "ADJUSTMENT_KINDS",
     "EXPLANATION_RECORD_TYPES",
     "EXPLANATION_TARGET_KINDS",
+    "BusinessRankingEngine",
     "RANK_RESULT_KINDS",
     "RISK_SEVERITIES",
     "SCHEMA_VERSION",
