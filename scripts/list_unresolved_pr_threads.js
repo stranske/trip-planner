@@ -404,7 +404,7 @@ function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThrea
   }
 
   unresolvedThreads.forEach((thread, index) => {
-    const existingEntry = existingThreads.find((candidate) => candidate.threadId === thread.id) || null;
+    const existingEntry = findExistingInventoryEntry(existingThreads, thread, index);
     lines.push(...buildMarkdownThreadSection(thread, index, existingEntry));
   });
 
@@ -488,6 +488,20 @@ function formatOutput(repository, prNumber, unresolvedThreads, outputFormat = "t
   return formatUnresolvedThreadsReport(repository, prNumber, unresolvedThreads);
 }
 
+function findExistingInventoryEntry(existingThreads, thread, index) {
+  return (
+    existingThreads.find((candidate) => candidate.threadId === thread.id) ||
+    existingThreads.find(
+      (candidate) =>
+        candidate.originalThreadUrl &&
+        thread.originalThreadUrl &&
+        candidate.originalThreadUrl === thread.originalThreadUrl
+    ) ||
+    existingThreads[index] ||
+    null
+  );
+}
+
 function validateExpectedCount(unresolvedThreads, expectedCount) {
   if (expectedCount === null) {
     return;
@@ -510,8 +524,7 @@ function mergeInventoryIntoDocument(existingDocument, unresolvedThreads) {
     threadSection.push("", "No unresolved inline review threads found.");
   } else {
     unresolvedThreads.forEach((thread, index) => {
-      const existingEntry =
-        existingThreads.find((candidate) => candidate.threadId === thread.id) || null;
+      const existingEntry = findExistingInventoryEntry(existingThreads, thread, index);
       threadSection.push(...buildMarkdownThreadSection(thread, index, existingEntry));
     });
   }
@@ -566,6 +579,7 @@ module.exports = {
   buildReviewThreadsQuery,
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
+  findExistingInventoryEntry,
   formatOptionalMetadataLine,
   formatOutput,
   buildMarkdownThreadSection,

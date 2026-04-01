@@ -16,6 +16,7 @@ const {
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
   fetchAllReviewThreads,
+  findExistingInventoryEntry,
   formatOutput,
   formatThreadContent,
   formatUnresolvedThreadsAsJson,
@@ -724,6 +725,127 @@ Intro paragraph.
   );
   assert.match(mergedDocument, /- Location: trip_planner\/example\.py:17/);
   assert.match(mergedDocument, /- Content: reviewer: Please keep this branch explicit\./);
+});
+
+test("findExistingInventoryEntry falls back to matching original thread URL and section order", () => {
+  const existingThreads = [
+    {
+      threadId: null,
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "docs/old.md:10",
+      classification: "disposition",
+      followUpPr: null,
+      rationale: "URL match should survive even before thread IDs are filled in.",
+      content: "reviewer: stale text",
+      outdated: false,
+    },
+    {
+      threadId: null,
+      originalThreadUrl: null,
+      location: "docs/second.md:20",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale: "Index fallback should preserve this section.",
+      content: "reviewer: another stale text",
+      outdated: false,
+    },
+  ];
+
+  assert.equal(
+    findExistingInventoryEntry(
+      existingThreads,
+      {
+        id: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      },
+      0
+    ),
+    existingThreads[0]
+  );
+  assert.equal(
+    findExistingInventoryEntry(
+      existingThreads,
+      {
+        id: "THREAD_2",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+      },
+      1
+    ),
+    existingThreads[1]
+  );
+});
+
+test("mergeInventoryIntoDocument preserves manual triage before thread IDs are recorded", () => {
+  const mergedDocument = mergeInventoryIntoDocument(
+    `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID:
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: old/path.py:10
+- Classification: disposition
+- Follow-up PR:
+- Rationale: URL matching should preserve this triage.
+- Content: reviewer: stale text
+- Outdated: no
+
+### Thread 2
+
+- Thread ID:
+- Original Thread URL:
+- Location: old/other.py:20
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Index fallback should preserve this triage.
+- Content: reviewer: older text
+- Outdated: yes
+`,
+    [
+      {
+        id: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        path: "trip_planner/example.py",
+        line: 17,
+        isOutdated: false,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please keep this branch explicit.",
+          },
+        ],
+      },
+      {
+        id: "THREAD_2",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+        path: "trip_planner/other.py",
+        line: 23,
+        isOutdated: false,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please extract a helper.",
+          },
+        ],
+      },
+    ]
+  );
+
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Thread ID: THREAD_1/);
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Classification: disposition/);
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Rationale: URL matching should preserve this triage\./);
+  assert.match(mergedDocument, /### Thread 2[\s\S]*- Thread ID: THREAD_2/);
+  assert.match(mergedDocument, /### Thread 2[\s\S]*- Classification: fix/);
+  assert.match(
+    mergedDocument,
+    /### Thread 2[\s\S]*- Follow-up PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/
+  );
+  assert.match(mergedDocument, /### Thread 2[\s\S]*- Rationale: Index fallback should preserve this triage\./);
+  assert.match(mergedDocument, /### Thread 2[\s\S]*- Content: reviewer: Please extract a helper\./);
 });
 
 test("writeInventoryDocument updates a doc file in place", () => {
