@@ -141,6 +141,14 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
     );
   }
 
+  if (options.live && inputPath) {
+    throw new Error("The --live and --input options are mutually exclusive.");
+  }
+
+  if (options.live && !token) {
+    throw new Error("GITHUB_TOKEN is required when --live is specified.");
+  }
+
   const [owner, repo] = repository.split("/", 2);
   return {
     owner,
@@ -169,6 +177,11 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
   const syncInventoryDocument = dependencies.writeInventoryDocument || writeInventoryDocument;
 
   const repository = `${configuration.owner}/${configuration.repo}`;
+  const verificationMode = configuration.inputPath
+    ? "snapshot"
+    : configuration.token
+      ? "live"
+      : "none";
   let documentedThreads = loadInventory(configuration.docPath);
   let activeDocumentedThreads = loadInventory(configuration.docPath, {}, {
     inventorySection: "unresolved",
@@ -327,6 +340,8 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
     repository,
     prNumber: configuration.prNumber,
     docPath: configuration.docPath,
+    verificationMode,
+    inputPath: configuration.inputPath,
     expectDocCount: configuration.expectDocCount,
     expectedCount: configuration.expectedCount,
     documentedThreadCount: documentedThreads.length,
@@ -346,6 +361,7 @@ function formatAcceptanceReport(result, outputFormat = "text") {
     `Repository: ${result.repository}`,
     `Pull request: #${result.prNumber}`,
     `Inventory document: ${result.docPath}`,
+    `Review-thread verification: ${formatVerificationMode(result)}`,
     `Overall status: ${result.overallStatus.toUpperCase()}`,
     "",
     "Acceptance criteria:",
@@ -363,6 +379,18 @@ function formatAcceptanceReport(result, outputFormat = "text") {
   });
 
   return `${lines.join("\n")}\n`;
+}
+
+function formatVerificationMode(result) {
+  if (result.verificationMode === "snapshot") {
+    return `SNAPSHOT (${result.inputPath})`;
+  }
+
+  if (result.verificationMode === "live") {
+    return "LIVE API";
+  }
+
+  return "NOT RUN";
 }
 
 async function main(argv = process.argv.slice(2), env = process.env) {
@@ -384,6 +412,7 @@ if (require.main === module) {
 
 module.exports = {
   evaluateAcceptance,
+  formatVerificationMode,
   formatAcceptanceReport,
   getAcceptanceConfiguration,
   main,

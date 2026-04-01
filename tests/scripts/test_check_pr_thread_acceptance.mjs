@@ -9,6 +9,7 @@ const {
   DEFAULT_DOC_PATH,
   evaluateAcceptance,
   formatAcceptanceReport,
+  formatVerificationMode,
   getAcceptanceConfiguration,
 } = require(path.join(repoRoot, "scripts/check_pr_thread_acceptance.js"));
 const {
@@ -56,6 +57,21 @@ test("getAcceptanceConfiguration accepts --write-inventory-doc", () => {
   assert.equal(configuration.writeInventoryDoc, true);
 });
 
+test("getAcceptanceConfiguration rejects ambiguous or incomplete live verification options", () => {
+  assert.throws(
+    () => getAcceptanceConfiguration(["octo/repo", "178", "--live"], {}),
+    /GITHUB_TOKEN is required when --live is specified/
+  );
+  assert.throws(
+    () =>
+      getAcceptanceConfiguration(
+        ["octo/repo", "178", "--live", "--input", "threads.json"],
+        { GITHUB_TOKEN: "token-value" }
+      ),
+    /--live and --input options are mutually exclusive/
+  );
+});
+
 test("evaluateAcceptance reports blocked snapshot verification when no token or snapshot is provided", async () => {
   const result = await evaluateAcceptance(
     {
@@ -87,6 +103,7 @@ test("evaluateAcceptance reports blocked snapshot verification when no token or 
   );
 
   assert.equal(result.overallStatus, "blocked");
+  assert.equal(result.verificationMode, "none");
   assert.equal(result.criteria[0].status, "pass");
   assert.equal(result.criteria[1].status, "pass");
   assert.equal(result.criteria[2].status, "blocked");
@@ -193,6 +210,7 @@ No unresolved inline review threads found.
   );
 
   assert.equal(result.overallStatus, "manual");
+  assert.equal(result.verificationMode, "snapshot");
   assert.equal(result.unresolvedThreadCount, 0);
   assert.equal(result.criteria[0].status, "pass");
   assert.equal(result.criteria[1].status, "pass");
@@ -481,6 +499,8 @@ test("formatAcceptanceReport renders criterion statuses and issue details", () =
       repository: "stranske/trip-planner",
       prNumber: 178,
       docPath: DEFAULT_DOC_PATH,
+      verificationMode: "snapshot",
+      inputPath: "threads.json",
       inventoryDocumentUpdated: true,
       overallStatus: "fail",
       criteria: [
@@ -495,6 +515,7 @@ test("formatAcceptanceReport renders criterion statuses and issue details", () =
   );
 
   assert.match(report, /Overall status: FAIL/);
+  assert.match(report, /Review-thread verification: SNAPSHOT \(threads\.json\)/);
   assert.match(report, /Inventory document sync: UPDATED/);
   assert.match(report, /- \[FAIL\] Criterion one: First failure/);
   assert.match(report, /  - Missing metadata/);
@@ -506,6 +527,8 @@ test("formatAcceptanceReport renders manual overall status", () => {
       repository: "stranske/trip-planner",
       prNumber: 178,
       docPath: DEFAULT_DOC_PATH,
+      verificationMode: "none",
+      inputPath: null,
       overallStatus: "manual",
       criteria: [
         {
@@ -519,8 +542,18 @@ test("formatAcceptanceReport renders manual overall status", () => {
   );
 
   assert.match(report, /Overall status: MANUAL/);
+  assert.match(report, /Review-thread verification: NOT RUN/);
   assert.match(
     report,
     /- \[MANUAL\] GitHub UI shows no unresolved inline review threads: Manual verification is still required\./
   );
+});
+
+test("formatVerificationMode describes snapshot, live, and missing verification inputs", () => {
+  assert.equal(
+    formatVerificationMode({ verificationMode: "snapshot", inputPath: "tmp/threads.json" }),
+    "SNAPSHOT (tmp/threads.json)"
+  );
+  assert.equal(formatVerificationMode({ verificationMode: "live", inputPath: null }), "LIVE API");
+  assert.equal(formatVerificationMode({ verificationMode: "none", inputPath: null }), "NOT RUN");
 });
