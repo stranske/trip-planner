@@ -1,0 +1,256 @@
+#!/usr/bin/env node
+
+"use strict";
+
+const https = require("node:https");
+
+const DEFAULT_REPOSITORY = "stranske/trip-planner";
+const DEFAULT_PR_NUMBER = 178;
+const GITHUB_GRAPHQL_ENDPOINT = "https://api.github.com/graphql";
+
+function getConfiguration(argv = process.argv.slice(2), env = process.env) {
+  const repository = argv[0] || env.GITHUB_REPOSITORY || DEFAULT_REPOSITORY;
+  const prNumberRaw = argv[1] || env.PR_NUMBER || String(DEFAULT_PR_NUMBER);
+  const token = env.GITHUB_TOKEN;
+  const prNumber = Number.parseInt(prNumberRaw, 10);
+
+  if (!repository.includes("/")) {
+    throw new Error(
+      `Repository must be in OWNER/REPO format; received "${repository}".`
+    );
+  }
+
+  if (!Number.isInteger(prNumber) || prNumber <= 0) {
+    throw new Error(`Pull request number must be a positive integer; received "${prNumberRaw}".`);
+  }
+
+  if (!token) {
+    throw new Error("GITHUB_TOKEN is required to query GitHub review threads.");
+  }
+
+  const [owner, repo] = repository.split("/", 2);
+  return { owner, repo, prNumber, token };
+}
+
+function buildReviewThreadsQuery() {
+  return `
+    query ReviewThreads($owner: String!, $repo: String!, $prNumber: Int!, $after: String) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $prNumber) {
+          reviewThreads(first: 100, after: $after) {
+            nodes {
+              id
+              isResolved
+              isOutdated
+              path
+              line
+              originalLine
+              comments(first: 20) {
+                nodes {
+                  id
+                  body
+                  createdAt
+                  author {
+                    login
+                  }
+                }
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      }
+    }
+  `;
+}
+
+function requestGraphql({ query, variables, token, request = https.request }) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({ query, variables });
+    const req = request(
+      GITHUB_GRAPHQL_ENDPOINT,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "Content-Length": Buffer.byteLength(payload),
+          "Content-Type": "application/json",
+          "User-Agent": "trip-planner-review-thread-audit",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      },
+      (res) => {
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => {
+          body += chunk;
+        });
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 400) {
+            reject(new Error(`GitHub GraphQL request failed (${res.statusCode}): ${body}`));
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(body);
+            if (parsed.errors?.length) {
+              reject(
+                new Error(
+                  `GitHub GraphQL returned errors: ${parsed.errors
+                    .map((error) => error.message)
+                    .join("; ")}`
+                )
+              );
+              return;
+            }
+
+            resolve(parsed.data);
+          } catch (error) {
+            reject(new Error(`Unable to parse GitHub GraphQL response: ${error.message}`));
+          }
+        });
+      }
+    );
+
+    req.on("error", reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+async function fetchAllReviewThreads(configuration, dependencies = {}) {
+  const query = buildReviewThreadsQuery();
+  const executeGraphql = dependencies.requestGraphql || requestGraphql;
+  const threads = [];
+  let after = null;
+
+  while (true) {
+    const data = await executeGraphql({
+      query,
+      variables: {
+        owner: configuration.owner,
+        repo: configuration.repo,
+        prNumber: configuration.prNumber,
+        after,
+      },
+      token: configuration.token,
+    });
+
+    const pullRequest = data?.repository?.pullRequest;
+    if (!pullRequest) {
+      throw new Error(
+        `Pull request #${configuration.prNumber} was not found in ${configuration.owner}/${configuration.repo}.`
+      );
+    }
+
+    const reviewThreads = pullRequest.reviewThreads;
+    threads.push(...(reviewThreads?.nodes || []));
+
+    if (!reviewThreads?.pageInfo?.hasNextPage) {
+      return threads;
+    }
+
+    after = reviewThreads.pageInfo.endCursor;
+  }
+}
+
+function normalizeBody(body) {
+  return String(body || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractUnresolvedThreads(threads) {
+  return threads
+    .filter((thread) => thread && !thread.isResolved)
+    .map((thread) => {
+      const comments = (thread.comments?.nodes || []).map((comment) => ({
+        id: comment.id,
+        author: comment.author?.login || "unknown",
+        body: normalizeBody(comment.body),
+        createdAt: comment.createdAt,
+      }));
+
+      return {
+        id: thread.id,
+        isOutdated: Boolean(thread.isOutdated),
+        path: thread.path || "unknown",
+        line: thread.line ?? thread.originalLine ?? null,
+        comments,
+      };
+    });
+}
+
+function formatUnresolvedThreadsReport(repository, prNumber, unresolvedThreads) {
+  const lines = [
+    `Repository: ${repository}`,
+    `Pull request: #${prNumber}`,
+    `Unresolved review threads: ${unresolvedThreads.length}`,
+  ];
+
+  if (unresolvedThreads.length === 0) {
+    lines.push("No unresolved inline review threads found.");
+    return `${lines.join("\n")}\n`;
+  }
+
+  unresolvedThreads.forEach((thread, index) => {
+    lines.push("");
+    lines.push(
+      `${index + 1}. ${thread.id} (${thread.path}:${thread.line ?? "unknown"}${
+        thread.isOutdated ? ", outdated" : ""
+      })`
+    );
+
+    if (thread.comments.length === 0) {
+      lines.push("   - No thread comments returned by the API.");
+      return;
+    }
+
+    thread.comments.forEach((comment) => {
+      lines.push(`   - ${comment.author}: ${comment.body || "<empty>"}`);
+    });
+  });
+
+  return `${lines.join("\n")}\n`;
+}
+
+async function main() {
+  const configuration = getConfiguration();
+  const threads = await fetchAllReviewThreads(configuration);
+  const unresolvedThreads = extractUnresolvedThreads(threads);
+  const repository = `${configuration.owner}/${configuration.repo}`;
+  const report = formatUnresolvedThreadsReport(
+    repository,
+    configuration.prNumber,
+    unresolvedThreads
+  );
+
+  process.stdout.write(report);
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = {
+  DEFAULT_PR_NUMBER,
+  DEFAULT_REPOSITORY,
+  buildReviewThreadsQuery,
+  extractUnresolvedThreads,
+  fetchAllReviewThreads,
+  formatUnresolvedThreadsReport,
+  getConfiguration,
+  normalizeBody,
+  requestGraphql,
+};
