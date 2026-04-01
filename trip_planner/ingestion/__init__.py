@@ -2,7 +2,10 @@
 
 from ._common import IngestionSummary, IngestionWarning
 from .activity_pipeline import ActivityIngestionResult, ingest_activity_snapshot
-from .destination_pipeline import DestinationIngestionResult, ingest_destination_snapshot
+from .destination_pipeline import (
+    DestinationIngestionResult,
+    ingest_destination_snapshot,
+)
 from .lodging_pipeline import LodgingIngestionResult, ingest_lodging_snapshot
 from .transport_pipeline import TransportIngestionResult, ingest_transport_snapshot
 

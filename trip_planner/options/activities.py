@@ -13,7 +13,11 @@ from trip_planner._validators import (
     require_strings,
 )
 from trip_planner._option_contracts import MoneyRange
-from trip_planner.sources import ProvenanceReference, QualityValueFitSummary, SourceTrustSignals
+from trip_planner.sources import (
+    ProvenanceReference,
+    QualityValueFitSummary,
+    SourceTrustSignals,
+)
 
 SCHEMA_VERSION = "0.1.0"
 
@@ -66,7 +70,9 @@ def _optional_mapping_field(payload: dict[str, Any], field_name: str) -> dict[st
     return value
 
 
-def _parse_money_range(payload: dict[str, Any] | None, field_name: str) -> MoneyRange | None:
+def _parse_money_range(
+    payload: dict[str, Any] | None, field_name: str
+) -> MoneyRange | None:
     if payload is None:
         return None
     if not isinstance(payload, dict):
@@ -89,7 +95,9 @@ def _parse_provenance_reference(payload: dict[str, Any]) -> ProvenanceReference:
         captured_at=payload.get("captured_at", ""),
         freshness_days_at_capture=payload.get("freshness_days_at_capture"),
         trust_snapshot=SourceTrustSignals(**trust_payload) if trust_payload else None,
-        quality_value_fit=QualityValueFitSummary(**quality_payload) if quality_payload else None,
+        quality_value_fit=QualityValueFitSummary(**quality_payload)
+        if quality_payload
+        else None,
         notes=_optional_list_field(payload, "notes"),
     )
 
@@ -123,7 +131,9 @@ class ActivityTimingSummary:
 
     def __post_init__(self) -> None:
         require_non_negative(self.duration_minutes, "duration_minutes")
-        require_optional_non_empty(self.typical_start_window or None, "typical_start_window")
+        require_optional_non_empty(
+            self.typical_start_window or None, "typical_start_window"
+        )
         for field_name in (
             "timing_sensitivity_signal",
             "closure_risk_signal",
@@ -210,9 +220,13 @@ class ActivityBookingTerms:
     def __post_init__(self) -> None:
         if self.activity_format not in ACTIVITY_FORMATS:
             raise ValueError(f"activity_format must be one of {ACTIVITY_FORMATS}")
-        require_optional_non_empty(self.cancellation_summary or None, "cancellation_summary")
+        require_optional_non_empty(
+            self.cancellation_summary or None, "cancellation_summary"
+        )
         require_optional_non_empty(self.booking_channel or None, "booking_channel")
-        require_optional_non_empty(self.reservation_cutoff or None, "reservation_cutoff")
+        require_optional_non_empty(
+            self.reservation_cutoff or None, "reservation_cutoff"
+        )
         _require_string_list(self.approved_channels, "approved_channels")
         _require_string_list(self.notes, "notes")
 
@@ -325,8 +339,12 @@ class ActivityFeasibility:
 
     def __post_init__(self) -> None:
         if self.availability_status not in AVAILABILITY_STATUSES:
-            raise ValueError(f"availability_status must be one of {AVAILABILITY_STATUSES}")
-        require_optional_non_empty(self.seasonality_summary or None, "seasonality_summary")
+            raise ValueError(
+                f"availability_status must be one of {AVAILABILITY_STATUSES}"
+            )
+        require_optional_non_empty(
+            self.seasonality_summary or None, "seasonality_summary"
+        )
         require_optional_non_empty(self.indoor_outdoor or None, "indoor_outdoor")
         _require_string_list(self.constraints, "constraints")
         _require_string_list(self.accessibility_notes, "accessibility_notes")
@@ -351,7 +369,9 @@ class ActivityOption:
     effort_summary: ActivityEffortSummary = field(default_factory=ActivityEffortSummary)
     booking_terms: ActivityBookingTerms = field(default_factory=ActivityBookingTerms)
     cost_summary: ActivityCostSummary = field(default_factory=ActivityCostSummary)
-    quality_summary: ActivityQualitySummary = field(default_factory=ActivityQualitySummary)
+    quality_summary: ActivityQualitySummary = field(
+        default_factory=ActivityQualitySummary
+    )
     value_summary: ActivityValueSummary = field(default_factory=ActivityValueSummary)
     fit_summary: ActivityFitSummary = field(default_factory=ActivityFitSummary)
     feasibility: ActivityFeasibility = field(default_factory=ActivityFeasibility)
@@ -376,7 +396,9 @@ class ActivityOption:
         if not isinstance(self.timing_summary, ActivityTimingSummary):
             raise ValueError("timing_summary must be an ActivityTimingSummary")
         if not isinstance(self.significance_summary, ActivitySignificanceSummary):
-            raise ValueError("significance_summary must be an ActivitySignificanceSummary")
+            raise ValueError(
+                "significance_summary must be an ActivitySignificanceSummary"
+            )
         if not isinstance(self.effort_summary, ActivityEffortSummary):
             raise ValueError("effort_summary must be an ActivityEffortSummary")
         if not isinstance(self.booking_terms, ActivityBookingTerms):
@@ -417,22 +439,34 @@ class ActivityOption:
             effort_summary=ActivityEffortSummary(
                 **_optional_mapping_field(payload, "effort_summary")
             ),
-            booking_terms=ActivityBookingTerms(**_optional_mapping_field(payload, "booking_terms")),
+            booking_terms=ActivityBookingTerms(
+                **_optional_mapping_field(payload, "booking_terms")
+            ),
             cost_summary=ActivityCostSummary(
-                total=_parse_money_range(cost_payload.get("total"), "cost_summary.total"),
+                total=_parse_money_range(
+                    cost_payload.get("total"), "cost_summary.total"
+                ),
                 per_person=_parse_money_range(
                     cost_payload.get("per_person"),
                     "cost_summary.per_person",
                 ),
-                extras=_parse_money_range(cost_payload.get("extras"), "cost_summary.extras"),
+                extras=_parse_money_range(
+                    cost_payload.get("extras"), "cost_summary.extras"
+                ),
                 notes=cost_payload.get("notes", []),
             ),
             quality_summary=ActivityQualitySummary(
                 **_optional_mapping_field(payload, "quality_summary")
             ),
-            value_summary=ActivityValueSummary(**_optional_mapping_field(payload, "value_summary")),
-            fit_summary=ActivityFitSummary(**_optional_mapping_field(payload, "fit_summary")),
-            feasibility=ActivityFeasibility(**_optional_mapping_field(payload, "feasibility")),
+            value_summary=ActivityValueSummary(
+                **_optional_mapping_field(payload, "value_summary")
+            ),
+            fit_summary=ActivityFitSummary(
+                **_optional_mapping_field(payload, "fit_summary")
+            ),
+            feasibility=ActivityFeasibility(
+                **_optional_mapping_field(payload, "feasibility")
+            ),
             summary=payload.get("summary", ""),
             booking_links=_optional_list_field(payload, "booking_links"),
             source_refs=[

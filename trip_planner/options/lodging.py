@@ -13,7 +13,11 @@ from trip_planner._validators import (
     require_strings,
 )
 from trip_planner._option_contracts import MoneyRange
-from trip_planner.sources import ProvenanceReference, QualityValueFitSummary, SourceTrustSignals
+from trip_planner.sources import (
+    ProvenanceReference,
+    QualityValueFitSummary,
+    SourceTrustSignals,
+)
 from trip_planner.sources import schema as source_schema
 
 SCHEMA_VERSION = "0.1.0"
@@ -34,7 +38,12 @@ LOCATION_CONTEXTS: tuple[str, ...] = (
     "airport",
     "resort_area",
 )
-INVENTORY_STATUSES: tuple[str, ...] = ("available", "limited", "request_only", "sold_out")
+INVENTORY_STATUSES: tuple[str, ...] = (
+    "available",
+    "limited",
+    "request_only",
+    "sold_out",
+)
 
 
 def _require_string_list(values: Any, field_name: str) -> None:
@@ -59,7 +68,9 @@ def _optional_mapping_field(payload: dict[str, Any], field_name: str) -> dict[st
     return value
 
 
-def _parse_money_range(payload: dict[str, Any] | None, field_name: str) -> MoneyRange | None:
+def _parse_money_range(
+    payload: dict[str, Any] | None, field_name: str
+) -> MoneyRange | None:
     if payload is None:
         return None
     if not isinstance(payload, dict):
@@ -82,7 +93,9 @@ def _parse_provenance_reference(payload: dict[str, Any]) -> ProvenanceReference:
         captured_at=payload.get("captured_at", ""),
         freshness_days_at_capture=payload.get("freshness_days_at_capture"),
         trust_snapshot=SourceTrustSignals(**trust_payload) if trust_payload else None,
-        quality_value_fit=QualityValueFitSummary(**quality_payload) if quality_payload else None,
+        quality_value_fit=QualityValueFitSummary(**quality_payload)
+        if quality_payload
+        else None,
         notes=_optional_list_field(payload, "notes"),
     )
 
@@ -169,10 +182,14 @@ class LodgingBookingTerms:
     notes: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        require_optional_non_empty(self.cancellation_summary or None, "cancellation_summary")
+        require_optional_non_empty(
+            self.cancellation_summary or None, "cancellation_summary"
+        )
         if self.min_stay_nights is not None:
             if not isinstance(self.min_stay_nights, int) or self.min_stay_nights < 1:
-                raise ValueError("min_stay_nights must be a positive integer when provided")
+                raise ValueError(
+                    "min_stay_nights must be a positive integer when provided"
+                )
         require_optional_non_empty(self.booking_channel or None, "booking_channel")
         require_optional_non_empty(self.checkin_window or None, "checkin_window")
         require_optional_non_empty(self.checkout_window or None, "checkout_window")
@@ -286,7 +303,10 @@ class LodgingFeasibility:
     def __post_init__(self) -> None:
         if self.inventory_status not in INVENTORY_STATUSES:
             raise ValueError(f"inventory_status must be one of {INVENTORY_STATUSES}")
-        if self.business_approval_status not in source_schema.BUSINESS_APPROVAL_STATUSES:
+        if (
+            self.business_approval_status
+            not in source_schema.BUSINESS_APPROVAL_STATUSES
+        ):
             raise ValueError(
                 "business_approval_status must be one of "
                 f"{source_schema.BUSINESS_APPROVAL_STATUSES}"
@@ -308,7 +328,9 @@ class LodgingOption:
     room_summary: LodgingRoomSummary
     booking_terms: LodgingBookingTerms = field(default_factory=LodgingBookingTerms)
     cost_summary: LodgingCostSummary = field(default_factory=LodgingCostSummary)
-    quality_summary: LodgingQualitySummary = field(default_factory=LodgingQualitySummary)
+    quality_summary: LodgingQualitySummary = field(
+        default_factory=LodgingQualitySummary
+    )
     value_summary: LodgingValueSummary = field(default_factory=LodgingValueSummary)
     fit_summary: LodgingFitSummary = field(default_factory=LodgingFitSummary)
     feasibility: LodgingFeasibility = field(default_factory=LodgingFeasibility)
@@ -329,7 +351,8 @@ class LodgingOption:
             raise ValueError("location_summary must be a LodgingLocationSummary")
         if self.location_summary.destination_id != self.destination_id:
             raise ValueError(
-                "destination_id on LodgingOption must match " "location_summary.destination_id"
+                "destination_id on LodgingOption must match "
+                "location_summary.destination_id"
             )
         if not isinstance(self.room_summary, LodgingRoomSummary):
             raise ValueError("room_summary must be a LodgingRoomSummary")
@@ -363,7 +386,9 @@ class LodgingOption:
             destination_id=payload["destination_id"],
             location_summary=LodgingLocationSummary(**payload["location_summary"]),
             room_summary=LodgingRoomSummary(**payload["room_summary"]),
-            booking_terms=LodgingBookingTerms(**_optional_mapping_field(payload, "booking_terms")),
+            booking_terms=LodgingBookingTerms(
+                **_optional_mapping_field(payload, "booking_terms")
+            ),
             cost_summary=LodgingCostSummary(
                 nightly=_parse_money_range(
                     cost_payload.get("nightly"),
@@ -386,9 +411,15 @@ class LodgingOption:
             quality_summary=LodgingQualitySummary(
                 **_optional_mapping_field(payload, "quality_summary")
             ),
-            value_summary=LodgingValueSummary(**_optional_mapping_field(payload, "value_summary")),
-            fit_summary=LodgingFitSummary(**_optional_mapping_field(payload, "fit_summary")),
-            feasibility=LodgingFeasibility(**_optional_mapping_field(payload, "feasibility")),
+            value_summary=LodgingValueSummary(
+                **_optional_mapping_field(payload, "value_summary")
+            ),
+            fit_summary=LodgingFitSummary(
+                **_optional_mapping_field(payload, "fit_summary")
+            ),
+            feasibility=LodgingFeasibility(
+                **_optional_mapping_field(payload, "feasibility")
+            ),
             summary=payload.get("summary", ""),
             booking_links=_optional_list_field(payload, "booking_links"),
             source_refs=[

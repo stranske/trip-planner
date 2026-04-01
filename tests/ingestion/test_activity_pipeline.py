@@ -45,7 +45,9 @@ def _build_resolution(payload: dict[str, Any]) -> EntityResolution:
         status=payload["status"],
         canonical_entity_id=payload["canonical_entity_id"],
         summary=payload["summary"],
-        match_candidates=[MatchCandidate(**item) for item in payload.get("match_candidates", [])],
+        match_candidates=[
+            MatchCandidate(**item) for item in payload.get("match_candidates", [])
+        ],
         conflicts=[AttributeConflict(**item) for item in payload.get("conflicts", [])],
         review_required=payload.get("review_required", False),
         notes=payload.get("notes", []),
@@ -138,6 +140,9 @@ def test_activity_pipeline_suppresses_records_from_suppressed_decisions() -> Non
     assert result.handoff is not None
     assert result.handoff.status == "blocked"
     assert result.summary.emitted_options == 0
-    assert result.summary.filtered_record_ids == ["record-activity-a", "record-activity-b"]
+    assert result.summary.filtered_record_ids == [
+        "record-activity-a",
+        "record-activity-b",
+    ]
     assert len(result.unresolved_conflicts) == 1
     assert {warning.code for warning in result.warnings} == {"partial_ticket_window"}

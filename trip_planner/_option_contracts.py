@@ -19,8 +19,22 @@ OPTION_SET_PURPOSES: tuple[str, ...] = (
     "final_selection",
     "policy_comparison",
 )
-OPTION_SET_SCOPES: tuple[str, ...] = ("route", "lodging", "transport", "activity", "mixed")
-OPTION_KINDS: tuple[str, ...] = ("route", "lodging", "flight", "rail", "car", "activity", "mixed")
+OPTION_SET_SCOPES: tuple[str, ...] = (
+    "route",
+    "lodging",
+    "transport",
+    "activity",
+    "mixed",
+)
+OPTION_KINDS: tuple[str, ...] = (
+    "route",
+    "lodging",
+    "flight",
+    "rail",
+    "car",
+    "activity",
+    "mixed",
+)
 COMPARISON_DIRECTIONS: tuple[str, ...] = ("higher_better", "lower_better", "contextual")
 
 

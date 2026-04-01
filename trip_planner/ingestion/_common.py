@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from trip_planner._validators import require_non_empty, require_non_negative, require_strings
+from trip_planner._validators import (
+    require_non_empty,
+    require_non_negative,
+    require_strings,
+)
 from trip_planner.sources import (
     AdapterIssue,
     AttributeConflict,
@@ -89,9 +93,13 @@ def build_provenance_reference(
         summary=summary,
         locator=record.payload_locator or payload.get("booking_url", ""),
         captured_at=record.captured_at or snapshot.fetched_at,
-        freshness_days_at_capture=trust_payload.get("freshness_days", payload.get("freshness_days")),
+        freshness_days_at_capture=trust_payload.get(
+            "freshness_days", payload.get("freshness_days")
+        ),
         trust_snapshot=SourceTrustSignals(**trust_payload) if trust_payload else None,
-        quality_value_fit=QualityValueFitSummary(**quality_payload) if quality_payload else None,
+        quality_value_fit=QualityValueFitSummary(**quality_payload)
+        if quality_payload
+        else None,
         notes=payload.get("provenance_notes", []),
     )
 
