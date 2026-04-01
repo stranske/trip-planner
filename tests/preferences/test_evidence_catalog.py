@@ -52,7 +52,9 @@ def test_validate_evidence_support_rejects_invalid_dimension_combo() -> None:
     except ValueError as exc:
         assert "not valid evidence for dimension" in str(exc)
     else:
-        raise AssertionError("Invalid dimension evidence combinations should fail clearly")
+        raise AssertionError(
+            "Invalid dimension evidence combinations should fail clearly"
+        )
 
 
 def test_validate_evidence_support_rejects_invalid_hybrid_combo() -> None:

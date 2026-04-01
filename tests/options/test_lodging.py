@@ -104,7 +104,9 @@ def test_lodging_round_trips_nested_contracts_and_provenance() -> None:
             ),
             total=MoneyRange(currency="USD", typical_amount=660.0),
         ),
-        quality_summary=LodgingQualitySummary(overall_signal=0.77, sleep_quality_signal=0.82),
+        quality_summary=LodgingQualitySummary(
+            overall_signal=0.77, sleep_quality_signal=0.82
+        ),
         value_summary=LodgingValueSummary(overall_signal=0.86, space_value_signal=0.91),
         fit_summary=LodgingFitSummary(overall_signal=0.9, quiet_recovery_signal=0.92),
         feasibility=LodgingFeasibility(
@@ -153,7 +155,9 @@ def test_lodging_rejects_invalid_kind_approval_and_schema_values() -> None:
     with pytest.raises(ValueError, match="business_approval_status"):
         LodgingFeasibility(business_approval_status="escalate")
 
-    payload = json.loads(_fixture_path("central_urban_hotel.json").read_text(encoding="utf-8"))
+    payload = json.loads(
+        _fixture_path("central_urban_hotel.json").read_text(encoding="utf-8")
+    )
     payload["schema_version"] = "9.9.9"
     with pytest.raises(ValueError, match="schema_version"):
         LodgingOption.from_dict(payload)
@@ -167,7 +171,9 @@ def test_lodging_rejects_invalid_nested_values() -> None:
             walk_minutes_to_anchor=-1,
         )
 
-    payload = json.loads(_fixture_path("conference_hotel.json").read_text(encoding="utf-8"))
+    payload = json.loads(
+        _fixture_path("conference_hotel.json").read_text(encoding="utf-8")
+    )
     payload["source_refs"][0]["source_category"] = "unsupported"
     with pytest.raises(ValueError, match="source_category"):
         LodgingOption.from_dict(payload)
@@ -204,7 +210,9 @@ def test_lodging_rejects_plain_strings_for_list_fields() -> None:
             booking_links="https://example.com/not-a-list",  # type: ignore[arg-type]
         )
 
-    payload = json.loads(_fixture_path("central_urban_hotel.json").read_text(encoding="utf-8"))
+    payload = json.loads(
+        _fixture_path("central_urban_hotel.json").read_text(encoding="utf-8")
+    )
     payload["cost_summary"]["notes"] = "not-a-list"
     with pytest.raises(ValueError, match="notes must be a list"):
         LodgingOption.from_dict(payload)

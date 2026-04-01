@@ -101,7 +101,9 @@ def _move_density(
     interaction_biases: dict[str, float],
 ) -> MoveDensityTarget:
     baseline_moves = max(1, round(duration_days / 7))
-    move_adjustment = round(movement * 2.0) - round(max(0.0, recovery_vs_intensity) * 1.0)
+    move_adjustment = round(movement * 2.0) - round(
+        max(0.0, recovery_vs_intensity) * 1.0
+    )
     if interaction_biases.get("protect_recovery_blocks", 0.0) >= 0.9:
         move_adjustment -= 1
     if interaction_biases.get("alternate_social_and_recovery_days", 0.0) >= 0.9:
@@ -113,10 +115,14 @@ def _move_density(
         f"Recovery adjustment uses recovery_vs_intensity={recovery_vs_intensity:.2f}.",
     ]
     if interaction_biases.get("protect_recovery_blocks", 0.0) >= 0.9:
-        notes.append("Interaction bias keeps recovery blocks intact by lowering move density.")
+        notes.append(
+            "Interaction bias keeps recovery blocks intact by lowering move density."
+        )
     if interaction_biases.get("alternate_social_and_recovery_days", 0.0) >= 0.9:
         notes.append("Interaction bias reserves slower pacing between social peaks.")
-    return MoveDensityTarget(max_moves=max_moves, cadence_days=cadence_days, notes=notes)
+    return MoveDensityTarget(
+        max_moves=max_moves, cadence_days=cadence_days, notes=notes
+    )
 
 
 def _recovery_expectations(
@@ -171,12 +177,17 @@ def _discovery_strategy(
         style = "balanced"
     protect_open_blocks = style == "discovery_forward" or structure_vs_elasticity < 0.0
     notes = [f"Derived from iconic_vs_discovery={iconic_vs_discovery:.2f}."]
-    if interaction_biases.get("favor_wandering_zones", 0.0) >= 0.9 and style == "balanced":
+    if (
+        interaction_biases.get("favor_wandering_zones", 0.0) >= 0.9
+        and style == "balanced"
+    ):
         style = "discovery_forward"
     if interaction_biases.get("keep_daily_skeleton_light", 0.0) >= 0.8:
         protect_open_blocks = True
         notes.append("Interaction bias keeps the daily skeleton intentionally light.")
-    return DiscoveryStrategy(style=style, protect_open_blocks=protect_open_blocks, notes=notes)
+    return DiscoveryStrategy(
+        style=style, protect_open_blocks=protect_open_blocks, notes=notes
+    )
 
 
 def _budget_protection(
@@ -184,7 +195,9 @@ def _budget_protection(
     interaction_biases: dict[str, float],
 ) -> BudgetProtection:
     priorities = resolved.profile.budget_model.spending_priorities
-    protected_categories = sorted(key for key, value in priorities.items() if value >= 0.45)
+    protected_categories = sorted(
+        key for key, value in priorities.items() if value >= 0.45
+    )
     if not protected_categories:
         protected_categories = [
             key
@@ -193,7 +206,9 @@ def _budget_protection(
                 key=lambda item: (-item[1], item[0]),
             )[:2]
         ]
-    sensitivity = _clamp(resolved.profile.budget_model.total_budget_sensitivity, 0.0, 1.0)
+    sensitivity = _clamp(
+        resolved.profile.budget_model.total_budget_sensitivity, 0.0, 1.0
+    )
     notes = [f"Derived from budget sensitivity={sensitivity:.2f}."]
     if resolved.profile.hard_constraints.budget_ceiling is not None:
         notes.append(
@@ -202,7 +217,9 @@ def _budget_protection(
     if interaction_biases.get("protect_quality_floors", 0.0) >= 0.9:
         if not any(category.startswith("lodging") for category in protected_categories):
             protected_categories.append("lodging")
-        notes.append("Interaction bias protects quality floors before relaxing comfort targets.")
+        notes.append(
+            "Interaction bias protects quality floors before relaxing comfort targets."
+        )
     return BudgetProtection(
         protected_categories=protected_categories,
         sensitivity=sensitivity,
@@ -213,7 +230,9 @@ def _budget_protection(
 def _quality_floor(resolved: ResolvedLeisureProfile) -> QualityFloorProtection:
     categories: set[str] = set()
     categories.update(
-        key for key, value in resolved.profile.budget_model.quality_floors.items() if value
+        key
+        for key, value in resolved.profile.budget_model.quality_floors.items()
+        if value
     )
     if resolved.profile.anchors.get("quality_floor_anchors"):
         categories.update(("lodging", "sleep_recovery"))
@@ -244,7 +263,9 @@ def _lodging_strategy(
     if interaction_biases.get("compress_route_before_downgrading_lodging", 0.0) >= 0.9:
         base_style = "few_bases" if base_style == "multi_base" else base_style
         arrival_buffer_priority = _clamp(arrival_buffer_priority + 0.15, 0.0, 1.0)
-        notes.append("Interaction bias contracts route scope before lowering lodging standards.")
+        notes.append(
+            "Interaction bias contracts route scope before lowering lodging standards."
+        )
     return LodgingStrategy(
         base_style=base_style,
         arrival_buffer_priority=arrival_buffer_priority,
@@ -346,11 +367,15 @@ def derive_itinerary_objectives(
     return ItineraryObjectives(
         objective_id=derived_objective_id,
         trip_id=trip_id,
-        route_shape=_route_shape(coherence, breadth_vs_depth, movement, interaction_biases),
+        route_shape=_route_shape(
+            coherence, breadth_vs_depth, movement, interaction_biases
+        ),
         target_base_count=_target_base_count(
             duration_days,
             breadth_vs_depth,
-            must_include_places=len(resolved.profile.hard_constraints.must_include_places),
+            must_include_places=len(
+                resolved.profile.hard_constraints.must_include_places
+            ),
             interaction_biases=interaction_biases,
         ),
         move_density=_move_density(

@@ -84,12 +84,18 @@ class RevealedPreferenceSignal:
         if self.option_kind not in OPTION_KINDS:
             raise ValueError(f"option_kind must be one of {OPTION_KINDS}")
         _require_probability(self.signal_strength, "signal_strength")
-        invalid_dimensions = set(self.dimension_biases) - set(schema.TRADEOFF_DIMENSION_KEYS)
+        invalid_dimensions = set(self.dimension_biases) - set(
+            schema.TRADEOFF_DIMENSION_KEYS
+        )
         if invalid_dimensions:
-            raise ValueError(f"unsupported dimension_biases keys: {sorted(invalid_dimensions)}")
+            raise ValueError(
+                f"unsupported dimension_biases keys: {sorted(invalid_dimensions)}"
+            )
         invalid_hybrid = set(self.hybrid_biases) - set(schema.HYBRID_FACTOR_KEYS)
         if invalid_hybrid:
-            raise ValueError(f"unsupported hybrid_biases keys: {sorted(invalid_hybrid)}")
+            raise ValueError(
+                f"unsupported hybrid_biases keys: {sorted(invalid_hybrid)}"
+            )
         for key, value in self.dimension_biases.items():
             _require_axis(value, f"dimension_biases[{key}]")
         for key, value in self.hybrid_biases.items():
@@ -109,8 +115,12 @@ class RevealedPreferenceUpdate:
     notes: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        if any(not isinstance(item, PreferenceEvidence) for item in self.emitted_evidence):
-            raise ValueError("emitted_evidence must contain PreferenceEvidence instances")
+        if any(
+            not isinstance(item, PreferenceEvidence) for item in self.emitted_evidence
+        ):
+            raise ValueError(
+                "emitted_evidence must contain PreferenceEvidence instances"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -132,10 +142,15 @@ def build_revealed_preference_update(
         "ignored": "negative",
     }[signal.reaction_type]
     transient = (
-        signal.reaction_type in {"ignored", "saved_for_later"} or signal.signal_strength < 0.45
+        signal.reaction_type in {"ignored", "saved_for_later"}
+        or signal.signal_strength < 0.45
     )
-    confidence_hint = min(1.0, max(0.1, signal.signal_strength * (0.45 if transient else 0.85)))
-    salience_hint = min(1.0, max(0.1, signal.signal_strength * (0.4 if transient else 0.8)))
+    confidence_hint = min(
+        1.0, max(0.1, signal.signal_strength * (0.45 if transient else 0.85))
+    )
+    salience_hint = min(
+        1.0, max(0.1, signal.signal_strength * (0.4 if transient else 0.8))
+    )
 
     contradictions: list[ContradictionMarker] = []
     blocked_overwrites: list[str] = []
@@ -148,7 +163,9 @@ def build_revealed_preference_update(
             current_dimension.salience >= 0.75
             and current_dimension.stability >= 0.75
             and current_dimension.value != 0.0
-            and (current_dimension.value < 0 < bias or current_dimension.value > 0 > bias)
+            and (
+                current_dimension.value < 0 < bias or current_dimension.value > 0 > bias
+            )
         ):
             blocked_overwrites.append(dimension_key)
             contradictions.append(
@@ -173,7 +190,8 @@ def build_revealed_preference_update(
 
     evidence_type = (
         "option_selection"
-        if signal.reaction_type in {"selected", "saved_for_later", "requested_more_like_this"}
+        if signal.reaction_type
+        in {"selected", "saved_for_later", "requested_more_like_this"}
         else "option_rejection"
     )
     emitted = PreferenceEvidence(
@@ -186,7 +204,8 @@ def build_revealed_preference_update(
         confidence_hint=confidence_hint,
         salience_hint=salience_hint,
         sequence=REVEALED_PREFERENCE_FALLBACK_SEQUENCE,
-        note=signal.summary or "Revealed preference update from concrete option feedback.",
+        note=signal.summary
+        or "Revealed preference update from concrete option feedback.",
         option_evidence=OptionEvidence(
             option_set_id=signal.option_set_id,
             option_id=signal.option_id,

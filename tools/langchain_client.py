@@ -30,7 +30,9 @@ PROVIDER_OPENAI = "openai"
 PROVIDER_ANTHROPIC = "anthropic"
 PROVIDER_GITHUB = "github-models"
 
-DEFAULT_SLOT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "llm_slots.json"
+DEFAULT_SLOT_CONFIG_PATH = (
+    Path(__file__).resolve().parent.parent / "config" / "llm_slots.json"
+)
 
 
 def _env_int(name: str, default: int) -> int:
@@ -79,7 +81,9 @@ def _normalize_provider(value: str | None) -> str | None:
     return None
 
 
-def _resolve_provider(provider: str | None, *, force_openai: bool) -> tuple[str | None, bool]:
+def _resolve_provider(
+    provider: str | None, *, force_openai: bool
+) -> tuple[str | None, bool]:
     if force_openai:
         return PROVIDER_OPENAI, True
     if provider:
@@ -233,7 +237,9 @@ def build_chat_client(
     selected_timeout = DEFAULT_TIMEOUT if timeout is None else timeout
     selected_retries = DEFAULT_MAX_RETRIES if max_retries is None else max_retries
 
-    selected_provider, provider_explicit = _resolve_provider(provider, force_openai=force_openai)
+    selected_provider, provider_explicit = _resolve_provider(
+        provider, force_openai=force_openai
+    )
     if provider_explicit and selected_provider is None:
         return None
 
@@ -248,7 +254,9 @@ def build_chat_client(
                 timeout=selected_timeout,
                 max_retries=selected_retries,
             )
-            return ClientInfo(client=client, provider=PROVIDER_GITHUB, model=selected_model)
+            return ClientInfo(
+                client=client, provider=PROVIDER_GITHUB, model=selected_model
+            )
         except Exception:
             return None
 
@@ -263,7 +271,9 @@ def build_chat_client(
                 timeout=selected_timeout,
                 max_retries=selected_retries,
             )
-            return ClientInfo(client=client, provider=PROVIDER_OPENAI, model=selected_model)
+            return ClientInfo(
+                client=client, provider=PROVIDER_OPENAI, model=selected_model
+            )
         except Exception:
             return None
 
@@ -278,7 +288,9 @@ def build_chat_client(
                 timeout=selected_timeout,
                 max_retries=selected_retries,
             )
-            return ClientInfo(client=client, provider=PROVIDER_ANTHROPIC, model=selected_model)
+            return ClientInfo(
+                client=client, provider=PROVIDER_ANTHROPIC, model=selected_model
+            )
         except Exception:
             return None
 
@@ -287,7 +299,9 @@ def build_chat_client(
     model_override = model or os.environ.get(ENV_MODEL)
     used_override = False
     for slot in slots:
-        slot_model = model_override if model_override and not used_override else slot.model
+        slot_model = (
+            model_override if model_override and not used_override else slot.model
+        )
         if slot.provider == PROVIDER_OPENAI and openai_token:
             with contextlib.suppress(Exception):
                 client = _build_openai_client(
@@ -298,7 +312,9 @@ def build_chat_client(
                     max_retries=selected_retries,
                 )
                 used_override = True
-                return ClientInfo(client=client, provider=PROVIDER_OPENAI, model=slot_model)
+                return ClientInfo(
+                    client=client, provider=PROVIDER_OPENAI, model=slot_model
+                )
         if slot.provider == PROVIDER_ANTHROPIC and anthropic_token and ChatAnthropic:
             with contextlib.suppress(Exception):
                 client = _build_anthropic_client(
@@ -309,7 +325,9 @@ def build_chat_client(
                     max_retries=selected_retries,
                 )
                 used_override = True
-                return ClientInfo(client=client, provider=PROVIDER_ANTHROPIC, model=slot_model)
+                return ClientInfo(
+                    client=client, provider=PROVIDER_ANTHROPIC, model=slot_model
+                )
         if slot.provider == PROVIDER_GITHUB and github_token:
             with contextlib.suppress(Exception):
                 client = _build_github_client(
@@ -320,7 +338,9 @@ def build_chat_client(
                     max_retries=selected_retries,
                 )
                 used_override = True
-                return ClientInfo(client=client, provider=PROVIDER_GITHUB, model=slot_model)
+                return ClientInfo(
+                    client=client, provider=PROVIDER_GITHUB, model=slot_model
+                )
 
     return None
 
@@ -355,7 +375,9 @@ def build_chat_clients(
     first_model = _resolve_model(model1)
     second_model = model2 or model1 or os.environ.get(ENV_MODEL) or DEFAULT_MODEL
 
-    selected_provider, provider_explicit = _resolve_provider(provider, force_openai=False)
+    selected_provider, provider_explicit = _resolve_provider(
+        provider, force_openai=False
+    )
     if provider_explicit and selected_provider is None:
         return []
 
@@ -422,7 +444,11 @@ def build_chat_clients(
                             model=second_model,
                         )
                     )
-        elif selected_provider == PROVIDER_ANTHROPIC and anthropic_token and ChatAnthropic:
+        elif (
+            selected_provider == PROVIDER_ANTHROPIC
+            and anthropic_token
+            and ChatAnthropic
+        ):
             with contextlib.suppress(Exception):
                 clients.append(
                     ClientInfo(
@@ -461,7 +487,9 @@ def build_chat_clients(
         if any(
             (
                 slot.provider == PROVIDER_OPENAI and openai_token,
-                slot.provider == PROVIDER_ANTHROPIC and anthropic_token and ChatAnthropic,
+                slot.provider == PROVIDER_ANTHROPIC
+                and anthropic_token
+                and ChatAnthropic,
                 slot.provider == PROVIDER_GITHUB and github_token,
             )
         ):

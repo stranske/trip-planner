@@ -1,0 +1,6 @@
+{
+  "profile_fixture": "client_meeting_profile.json",
+  "constraint_fixture": null,
+  "expected_top_result_id": "candidate:bundle:schedule-protected",
+  "title": "Schedule-sensitive client trip"
+}

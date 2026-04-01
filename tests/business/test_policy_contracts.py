@@ -56,7 +56,9 @@ def test_policy_round_trip_exception_case() -> None:
 
 def test_policy_constraint_set_rejects_missing_policy_id() -> None:
     try:
-        PolicyConstraintSet(policy_id="", organization_id="org", policy_version="2026.1")
+        PolicyConstraintSet(
+            policy_id="", organization_id="org", policy_version="2026.1"
+        )
     except ValueError as exc:
         assert "policy_id" in str(exc)
     else:
@@ -121,7 +123,9 @@ def test_policy_evaluation_result_rejects_invalid_status() -> None:
     except ValueError as exc:
         assert "status" in str(exc)
     else:
-        raise AssertionError("PolicyEvaluationResult should reject unsupported statuses")
+        raise AssertionError(
+            "PolicyEvaluationResult should reject unsupported statuses"
+        )
 
 
 def test_policy_evaluation_result_rejects_non_list_exception_guidance() -> None:
@@ -133,12 +137,16 @@ def test_policy_evaluation_result_rejects_non_list_exception_guidance() -> None:
     except ValueError as exc:
         assert "exception_guidance" in str(exc)
     else:
-        raise AssertionError("PolicyEvaluationResult should reject non-list exception_guidance")
+        raise AssertionError(
+            "PolicyEvaluationResult should reject non-list exception_guidance"
+        )
 
 
 def test_policy_evaluation_result_rejects_non_list_notes() -> None:
     scenario = _load_scenario("policy_round_trip_non_compliant.json")
-    scenario["evaluation_result"]["notes"] = {"summary": "use preferred booking channel"}
+    scenario["evaluation_result"]["notes"] = {
+        "summary": "use preferred booking channel"
+    }
 
     try:
         PolicyEvaluationResult.from_dict(scenario["evaluation_result"])

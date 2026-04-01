@@ -60,7 +60,9 @@ def test_source_record_supports_managed_travel_source() -> None:
             review_consistency=0.6,
         ),
         business_approval_status="preferred",
-        business_approval_notes=["Default managed-travel channel for enterprise clients."],
+        business_approval_notes=[
+            "Default managed-travel channel for enterprise clients."
+        ],
     )
 
     assert record.business_approval_status == "preferred"

@@ -28,7 +28,9 @@ def _upsert_tension(
     description: str,
     influences: list[MaterialInfluence],
 ) -> None:
-    existing = next((flag for flag in profile.tension_flags if flag.id == flag_id), None)
+    existing = next(
+        (flag for flag in profile.tension_flags if flag.id == flag_id), None
+    )
     if existing is None:
         profile.tension_flags.append(
             TensionFlag(
@@ -127,8 +129,13 @@ def apply_interactions(
             ["breadth_vs_depth", "recovery_vs_intensity", "movement_vs_friction"],
         )
         for key in ("breadth_vs_depth", "recovery_vs_intensity"):
-            if tension_id not in explanation.dimension_explanations[key].tension_flag_ids:
-                explanation.dimension_explanations[key].tension_flag_ids.append(tension_id)
+            if (
+                tension_id
+                not in explanation.dimension_explanations[key].tension_flag_ids
+            ):
+                explanation.dimension_explanations[key].tension_flag_ids.append(
+                    tension_id
+                )
         explanation.activated_interactions.append(
             InteractionActivation(
                 rule_id=rule_id,
@@ -148,7 +155,9 @@ def apply_interactions(
         strength = _clamp_probability((abs(movement.value) + abs(scenic.value)) / 2.0)
         hybrids["route_modes"].mode = "both"
         hybrids["route_modes"].salience = max(hybrids["route_modes"].salience, 0.82)
-        hybrids["route_modes"].anchor_strength = max(hybrids["route_modes"].anchor_strength, 0.62)
+        hybrids["route_modes"].anchor_strength = max(
+            hybrids["route_modes"].anchor_strength, 0.62
+        )
         route.salience = max(route.salience, 0.7)
         rule_id = "movement-x-scenic-transit"
         profile.interaction_rules.append(
@@ -190,7 +199,9 @@ def apply_interactions(
                     "prefer_overland_modes": 0.93,
                     "treat_transit_as_experience": 0.95,
                 },
-                notes=["The route itself should be treated as part of the trip payoff."],
+                notes=[
+                    "The route itself should be treated as part of the trip payoff."
+                ],
             )
         )
 
@@ -239,8 +250,13 @@ def apply_interactions(
                 influences=influences,
             )
             for key in ("structure_vs_elasticity", "iconic_vs_discovery"):
-                if tension_id not in explanation.dimension_explanations[key].tension_flag_ids:
-                    explanation.dimension_explanations[key].tension_flag_ids.append(tension_id)
+                if (
+                    tension_id
+                    not in explanation.dimension_explanations[key].tension_flag_ids
+                ):
+                    explanation.dimension_explanations[key].tension_flag_ids.append(
+                        tension_id
+                    )
             tension_ids = [tension_id]
         else:
             tension_ids = []
@@ -267,7 +283,9 @@ def apply_interactions(
         or profile.hard_constraints.budget_ceiling is not None
     )
     if has_quality_floor and has_budget_pressure:
-        strength = _clamp_probability(0.5 + (profile.budget_model.total_budget_sensitivity * 0.4))
+        strength = _clamp_probability(
+            0.5 + (profile.budget_model.total_budget_sensitivity * 0.4)
+        )
         self_reliance.value = max(self_reliance.value, 0.45)
         self_reliance.salience = max(self_reliance.salience, 0.7)
         route.salience = max(route.salience, 0.62)
@@ -278,7 +296,9 @@ def apply_interactions(
                 dimensions=["self_reliance_vs_convenience"],
                 activation={
                     "budget_sensitivity": profile.budget_model.total_budget_sensitivity,
-                    "quality_floor_anchor_count": len(profile.anchors["quality_floor_anchors"]),
+                    "quality_floor_anchor_count": len(
+                        profile.anchors["quality_floor_anchors"]
+                    ),
                 },
                 effect={
                     "planning_biases": {
@@ -307,7 +327,9 @@ def apply_interactions(
             description="Budget pressure conflicts with comfort floors unless route scope or timing adjusts.",
             influences=influences,
         )
-        _record_rule_on_dimensions(explanation, rule_id, ["self_reliance_vs_convenience"])
+        _record_rule_on_dimensions(
+            explanation, rule_id, ["self_reliance_vs_convenience"]
+        )
         if (
             tension_id
             not in explanation.dimension_explanations[
@@ -380,8 +402,13 @@ def apply_interactions(
         )
         _record_rule_on_hybrid(explanation, rule_id, "rest")
         for key in ("social_energy_vs_solitude", "recovery_vs_intensity"):
-            if tension_id not in explanation.dimension_explanations[key].tension_flag_ids:
-                explanation.dimension_explanations[key].tension_flag_ids.append(tension_id)
+            if (
+                tension_id
+                not in explanation.dimension_explanations[key].tension_flag_ids
+            ):
+                explanation.dimension_explanations[key].tension_flag_ids.append(
+                    tension_id
+                )
         explanation.activated_interactions.append(
             InteractionActivation(
                 rule_id=rule_id,

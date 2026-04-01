@@ -1,0 +1,6 @@
+{
+  "profile_fixture": "site_visit_profile.json",
+  "constraint_fixture": "policy_round_trip_exception.json",
+  "expected_top_result_id": "candidate:bundle:policy-nearest-exception",
+  "title": "Likely exception trip"
+}

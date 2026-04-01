@@ -61,10 +61,16 @@ class InteractionActivation:
 
 @dataclass(slots=True)
 class ResolutionExplanation:
-    dimension_explanations: dict[str, DimensionResolutionExplanation] = field(default_factory=dict)
-    hybrid_factor_explanations: dict[str, HybridFactorExplanation] = field(default_factory=dict)
+    dimension_explanations: dict[str, DimensionResolutionExplanation] = field(
+        default_factory=dict
+    )
+    hybrid_factor_explanations: dict[str, HybridFactorExplanation] = field(
+        default_factory=dict
+    )
     activated_interactions: list[InteractionActivation] = field(default_factory=list)
-    tension_explanations: dict[str, list[MaterialInfluence]] = field(default_factory=dict)
+    tension_explanations: dict[str, list[MaterialInfluence]] = field(
+        default_factory=dict
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

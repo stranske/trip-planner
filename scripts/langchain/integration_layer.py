@@ -51,7 +51,9 @@ def label_issue(
     if label_store is None:
         return []
 
-    matches = label_matcher.find_similar_labels(label_store, issue_text, threshold=threshold, k=k)
+    matches = label_matcher.find_similar_labels(
+        label_store, issue_text, threshold=threshold, k=k
+    )
     names = _select_label_names(matches, max_labels=max_labels)
     issue.apply_labels(names)
     return names
@@ -100,9 +102,14 @@ def _collect_label_records(labels: Iterable[Any]) -> list[label_matcher.LabelRec
         else:
             if isinstance(item, Mapping):
                 raise ValueError(f"Label entry at index {index} is missing a name.")
-            if getattr(item, "name", None) is not None or getattr(item, "label", None) is not None:
+            if (
+                getattr(item, "name", None) is not None
+                or getattr(item, "label", None) is not None
+            ):
                 raise ValueError(f"Label entry at index {index} has an empty name.")
-            raise ValueError(f"Unsupported label entry at index {index}: {type(item).__name__}.")
+            raise ValueError(
+                f"Unsupported label entry at index {index}: {type(item).__name__}."
+            )
     return records
 
 
@@ -110,7 +117,9 @@ def _coerce_label_record(item: Any) -> label_matcher.LabelRecord | None:
     if isinstance(item, label_matcher.LabelRecord):
         return item
     if isinstance(item, (str, bytes)):
-        name = item.decode("utf-8", errors="replace") if isinstance(item, bytes) else item
+        name = (
+            item.decode("utf-8", errors="replace") if isinstance(item, bytes) else item
+        )
         name = name.strip()
         if not name:
             return None

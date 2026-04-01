@@ -176,11 +176,17 @@ class ItineraryObjectives:
     route_shape: str
     target_base_count: CountRange = field(default_factory=CountRange)
     move_density: MoveDensityTarget = field(default_factory=MoveDensityTarget)
-    recovery_expectations: RecoveryExpectations = field(default_factory=RecoveryExpectations)
-    day_structure: DayStructureObjectives = field(default_factory=DayStructureObjectives)
+    recovery_expectations: RecoveryExpectations = field(
+        default_factory=RecoveryExpectations
+    )
+    day_structure: DayStructureObjectives = field(
+        default_factory=DayStructureObjectives
+    )
     discovery_strategy: DiscoveryStrategy = field(default_factory=DiscoveryStrategy)
     budget_protection: BudgetProtection = field(default_factory=BudgetProtection)
-    quality_floor_protection: QualityFloorProtection = field(default_factory=QualityFloorProtection)
+    quality_floor_protection: QualityFloorProtection = field(
+        default_factory=QualityFloorProtection
+    )
     lodging_strategy: LodgingStrategy = field(default_factory=LodgingStrategy)
     transport_strategy: TransportStrategy = field(default_factory=TransportStrategy)
     explanations: list[str] = field(default_factory=list)
@@ -203,7 +209,9 @@ class ItineraryObjectives:
         if not isinstance(self.budget_protection, BudgetProtection):
             raise ValueError("budget_protection must be a BudgetProtection")
         if not isinstance(self.quality_floor_protection, QualityFloorProtection):
-            raise ValueError("quality_floor_protection must be a QualityFloorProtection")
+            raise ValueError(
+                "quality_floor_protection must be a QualityFloorProtection"
+            )
         if not isinstance(self.lodging_strategy, LodgingStrategy):
             raise ValueError("lodging_strategy must be a LodgingStrategy")
         if not isinstance(self.transport_strategy, TransportStrategy):

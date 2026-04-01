@@ -183,7 +183,9 @@ def _require_support_level(level: str) -> None:
 
 def support_for_dimension(dimension_key: str, evidence_type: str) -> str | None:
     if dimension_key not in schema.TRADEOFF_DIMENSION_KEYS:
-        raise ValueError(f"dimension_key must be one of {schema.TRADEOFF_DIMENSION_KEYS}")
+        raise ValueError(
+            f"dimension_key must be one of {schema.TRADEOFF_DIMENSION_KEYS}"
+        )
     level = DIMENSION_EVIDENCE_STRENGTH[dimension_key].get(evidence_type)
     if level is not None:
         _require_support_level(level)
@@ -192,7 +194,9 @@ def support_for_dimension(dimension_key: str, evidence_type: str) -> str | None:
 
 def support_for_hybrid_factor(hybrid_factor_key: str, evidence_type: str) -> str | None:
     if hybrid_factor_key not in schema.HYBRID_FACTOR_KEYS:
-        raise ValueError(f"hybrid_factor_key must be one of {schema.HYBRID_FACTOR_KEYS}")
+        raise ValueError(
+            f"hybrid_factor_key must be one of {schema.HYBRID_FACTOR_KEYS}"
+        )
     level = HYBRID_FACTOR_EVIDENCE_STRENGTH[hybrid_factor_key].get(evidence_type)
     if level is not None:
         _require_support_level(level)
