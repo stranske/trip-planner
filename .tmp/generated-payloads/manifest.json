@@ -1,0 +1,6 @@
+{
+  "artifactsDir": ".tmp/generated-payloads",
+  "baseBranch": "main",
+  "groups": [],
+  "manifestPath": ".tmp/generated-payloads/manifest.json"
+}
