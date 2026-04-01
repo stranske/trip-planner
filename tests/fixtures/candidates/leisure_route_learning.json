@@ -1,0 +1,64 @@
+{
+  "trip_id": "trip-leisure-kyoto",
+  "purpose": "profile_learning",
+  "selection_limit": 2,
+  "max_source_freshness_days": 21,
+  "destinations": [
+    {
+      "path": "tests/fixtures/options/destinations/kyoto_city.json"
+    }
+  ],
+  "lodging_options": [
+    {
+      "path": "tests/fixtures/options/lodging/central_urban_hotel.json"
+    },
+    {
+      "path": "tests/fixtures/options/lodging/quiet_outer_area_hotel.json",
+      "overrides": {
+        "source_refs": [
+          {
+            "provenance_id": "prov-quiet-editorial",
+            "source_id": "quiet-kyoto-guide",
+            "source_category": "editorial",
+            "subject_kind": "option",
+            "subject_id": "lodg-kyoto-hillside-retreat",
+            "contribution_kind": "editorial",
+            "summary": "Guide confirms the quieter outer-area tradeoff.",
+            "freshness_days_at_capture": 45
+          }
+        ]
+      }
+    }
+  ],
+  "activity_options": [
+    {
+      "path": "tests/fixtures/options/activities/major_museum.json",
+      "overrides": {
+        "destination_id": "dest-city-kyoto",
+        "source_refs": [
+          {
+            "provenance_id": "prov-major-museum",
+            "source_id": "museum-direct",
+            "source_category": "official_operational",
+            "subject_kind": "option",
+            "subject_id": "activity-major-museum",
+            "contribution_kind": "operational",
+            "summary": "Official museum site confirms hours, timed-entry windows, and ticketing.",
+            "freshness_days_at_capture": 3,
+            "trust_snapshot": {
+              "freshness_days": 3,
+              "editorial_independence": 0.74,
+              "operational_reliability": 0.96
+            },
+            "quality_value_fit": {
+              "quality_signal": 0.92,
+              "value_signal": 0.71,
+              "fit_signal": 0.66
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "transport_options": []
+}

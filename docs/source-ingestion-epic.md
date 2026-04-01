@@ -59,6 +59,7 @@ The first pass of this epic should stabilize the following surfaces before any p
 - `tests/fixtures/` for representative source, resolution, ingestion, and candidate scenarios
 
 For the first ingestion pass, see [contracts/source-ingestion.md](contracts/source-ingestion.md).
+For the deterministic post-ingestion assembly boundary, see [contracts/candidate-generation.md](contracts/candidate-generation.md).
 
 This keeps extension work additive instead of forcing later PRs to retrofit structure into already coupled code.
 
