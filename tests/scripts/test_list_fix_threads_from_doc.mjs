@@ -6,10 +6,12 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const {
+  buildPullRequestArtifactManifest,
   buildPullRequestCreationCommand,
   buildPullRequestPayload,
   buildSuggestedBranchName,
   buildFixThreadsReport,
+  DEFAULT_ARTIFACTS_DIR,
   DEFAULT_DOC_PATH,
   collectThreadInventoryIssues,
   extractPullRequestNumber,
@@ -32,6 +34,7 @@ const {
   normalizeUrlFieldValue,
   parseThreadInventory,
   shellQuote,
+  writePullRequestArtifacts,
 } = require(path.join(repoRoot, "scripts/list_fix_threads_from_doc.js"));
 
 test("parseThreadInventory reads structured thread metadata from markdown", () => {
@@ -560,6 +563,88 @@ test("buildPullRequestCreationCommand creates a gh pr create command with body f
   );
 });
 
+test("buildPullRequestArtifactManifest assigns body files and a manifest per follow-up group", () => {
+  const manifest = buildPullRequestArtifactManifest(
+    [
+      {
+        threadId: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        location: "trip_planner/example.py:17",
+        classification: "fix",
+        followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+        rationale: "Code path still drops the final stop.",
+        content: "Reviewer requested a bounds check.",
+        outdated: false,
+      },
+    ],
+    {
+      baseBranch: "release/next",
+      artifactsDir: ".tmp/generated-pr-payloads",
+    }
+  );
+
+  assert.equal(manifest.baseBranch, "release/next");
+  assert.equal(manifest.artifactsDir, ".tmp/generated-pr-payloads");
+  assert.equal(manifest.manifestPath, ".tmp/generated-pr-payloads/manifest.json");
+  assert.equal(manifest.groups.length, 1);
+  assert.equal(
+    manifest.groups[0].bodyFilePath,
+    ".tmp/generated-pr-payloads/pr-178-fix-group-1-body.md"
+  );
+  assert.match(manifest.groups[0].command, /--base 'release\/next'/);
+});
+
+test("writePullRequestArtifacts persists body files and a manifest for actionable fix threads", () => {
+  const writes = [];
+  const createdDirectories = [];
+  const manifest = writePullRequestArtifacts(
+    [
+      {
+        threadId: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        location: "trip_planner/example.py:17",
+        classification: "fix",
+        followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+        rationale: "Code path still drops the final stop.",
+        content: "Reviewer requested a bounds check.",
+        outdated: false,
+      },
+    ],
+    {
+      baseBranch: "main",
+      artifactsDir: ".tmp/custom-pr-payloads",
+    },
+    {
+      mkdirSync: (targetPath, options) => {
+        createdDirectories.push({ targetPath, options });
+      },
+      writeFileSync: (targetPath, contents, encoding) => {
+        writes.push({ targetPath, contents, encoding });
+      },
+      resolvePath: (targetPath) => `/abs/${targetPath}`,
+    }
+  );
+
+  assert.equal(manifest.groups.length, 1);
+  assert.deepEqual(createdDirectories, [
+    {
+      targetPath: "/abs/.tmp/custom-pr-payloads",
+      options: { recursive: true },
+    },
+  ]);
+  assert.equal(writes.length, 2);
+  assert.equal(
+    writes[0].targetPath,
+    "/abs/.tmp/custom-pr-payloads/pr-178-fix-group-1-body.md"
+  );
+  assert.equal(writes[0].encoding, "utf8");
+  assert.match(writes[0].contents, /## Summary/);
+  assert.equal(writes[1].targetPath, "/abs/.tmp/custom-pr-payloads/manifest.json");
+  assert.equal(writes[1].encoding, "utf8");
+  const persistedManifest = JSON.parse(writes[1].contents);
+  assert.equal(persistedManifest.groups[0].headBranch, "pr-178-fix/trip-planner-example-py-17-thread-1");
+});
+
 test("formatFixThreadsAsPullRequestPayloads renders each follow-up PR group as a reusable payload", () => {
   const report = formatFixThreadsAsPullRequestPayloads([
     {
@@ -613,6 +698,8 @@ test("formatFixThreadsAsGhCliCommands renders gh pr create guidance for each fol
   ]);
 
   assert.match(report, /# Follow-up PR Create Commands/);
+  assert.match(report, /Artifacts Directory: `\.tmp\/pr-thread-payloads`/);
+  assert.match(report, /Artifact Manifest: `\.tmp\/pr-thread-payloads\/manifest\.json`/);
   assert.match(report, /Suggested Branch: `pr-178-fix\/trip-planner-example-py-17-thread-1`/);
   assert.match(report, /Suggested Body File: `\.tmp\/pr-thread-payloads\/pr-178-fix-group-1-body\.md`/);
   assert.match(report, /```bash/);
@@ -844,6 +931,7 @@ test("getCliConfiguration parses completeness validation, doc path, and output f
       outputFormat: "json",
       requireComplete: true,
       baseBranch: "main",
+      writeArtifactsDir: null,
     }
   );
 });
@@ -856,6 +944,7 @@ test("getCliConfiguration accepts markdown output", () => {
     outputFormat: "markdown",
     requireComplete: false,
     baseBranch: "main",
+    writeArtifactsDir: null,
   });
 });
 
@@ -867,6 +956,7 @@ test("getCliConfiguration accepts plan output", () => {
     outputFormat: "plan",
     requireComplete: false,
     baseBranch: "main",
+    writeArtifactsDir: null,
   });
 });
 
@@ -878,7 +968,23 @@ test("getCliConfiguration accepts gh-cli output and a custom base branch", () =>
     outputFormat: "gh-cli",
     requireComplete: false,
     baseBranch: "release/next",
+    writeArtifactsDir: null,
   });
+});
+
+test("getCliConfiguration accepts a custom artifact directory for follow-up PR payloads", () => {
+  assert.deepEqual(
+    getCliConfiguration(["--format", "gh-cli", "--write-artifacts-dir", ".tmp/generated"]),
+    {
+      docPath: DEFAULT_DOC_PATH,
+      excludeOutdated: false,
+      followUpPr: null,
+      outputFormat: "gh-cli",
+      requireComplete: false,
+      baseBranch: "main",
+      writeArtifactsDir: ".tmp/generated",
+    }
+  );
 });
 
 test("getCliConfiguration rejects unknown options and extra positional arguments", () => {
@@ -894,6 +1000,10 @@ test("getCliConfiguration rejects unknown options and extra positional arguments
   assert.throws(
     () => getCliConfiguration(["--base-branch"]),
     /The --base-branch flag requires a value\./
+  );
+  assert.throws(
+    () => getCliConfiguration(["--write-artifacts-dir"]),
+    /The --write-artifacts-dir flag requires a value\./
   );
   assert.throws(
     () => getCliConfiguration(["--format", "html"]),
@@ -1168,7 +1278,50 @@ test("buildFixThreadsReport can render gh CLI creation commands for a bounded fo
 
   assert.match(report, /# Follow-up PR Create Commands/);
   assert.match(report, /Base Branch: `release\/next`/);
+  assert.match(report, new RegExp(`Artifacts Directory: \`${DEFAULT_ARTIFACTS_DIR.replace("/", "\\/")}\``));
   assert.match(report, /gh pr create --base 'release\/next'/);
+});
+
+test("buildFixThreadsReport can write follow-up PR artifacts while rendering gh CLI guidance", () => {
+  const writes = [];
+  const report = buildFixThreadsReport(
+    {
+      docPath: "docs/mixed.md",
+      outputFormat: "gh-cli",
+      requireComplete: true,
+      writeArtifactsDir: ".tmp/generated-payloads",
+    },
+    {
+      readFileSync: () => `
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Code path still drops the final stop.
+- Content: Reviewer requested a bounds check.
+- Outdated: no
+`,
+      mkdirSync: () => {},
+      writeFileSync: (targetPath, contents) => {
+        writes.push({ targetPath, contents });
+      },
+      resolvePath: (targetPath) => `/abs/${targetPath}`,
+    }
+  );
+
+  assert.equal(writes.length, 2);
+  assert.equal(
+    writes[0].targetPath,
+    "/abs/.tmp/generated-payloads/pr-178-fix-group-1-body.md"
+  );
+  assert.equal(writes[1].targetPath, "/abs/.tmp/generated-payloads/manifest.json");
+  assert.match(report, /Artifacts Directory: `\.tmp\/generated-payloads`/);
+  assert.match(report, /Artifact Manifest: `\.tmp\/generated-payloads\/manifest\.json`/);
 });
 
 test("buildFixThreadsReport excludes resolved-history fix threads from active follow-up scope", () => {

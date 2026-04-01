@@ -8,6 +8,7 @@ const path = require("node:path");
 const DEFAULT_DOC_PATH = path.resolve(__dirname, "..", "docs", "pr-178-unresolved-threads.md");
 const DEFAULT_REPOSITORY = "stranske/trip-planner";
 const GITHUB_PULL_BASE_URL = `https://github.com/${DEFAULT_REPOSITORY}/pull/`;
+const DEFAULT_ARTIFACTS_DIR = ".tmp/pr-thread-payloads";
 const PLACEHOLDER_VALUES = new Set(["tbd", "todo", "pending", "unknown"]);
 
 function parseThreadInventory(markdown, options = {}) {
@@ -578,11 +579,7 @@ function buildPullRequestCreationCommand(group, groupIndex, options = {}) {
   const baseBranch = options.baseBranch || "main";
   const bodyFilePath =
     options.bodyFilePath ||
-    path.posix.join(
-      ".tmp",
-      "pr-thread-payloads",
-      `pr-178-fix-group-${groupIndex + 1}-body.md`
-    );
+    path.join(DEFAULT_ARTIFACTS_DIR, `pr-178-fix-group-${groupIndex + 1}-body.md`);
   const headBranch =
     options.headBranch ||
     group.threads[0]?.suggestedBranch ||
@@ -608,6 +605,44 @@ function buildPullRequestCreationCommand(group, groupIndex, options = {}) {
     bodyFilePath,
     command,
   };
+}
+
+function buildPullRequestArtifactManifest(fixThreads, options = {}) {
+  const { baseBranch = "main", artifactsDir = DEFAULT_ARTIFACTS_DIR } = options;
+  const followUpPrGroups = groupFixThreadsByFollowUpPr(fixThreads);
+  const manifest = {
+    artifactsDir,
+    baseBranch,
+    groups: followUpPrGroups.map((group, groupIndex) =>
+      buildPullRequestCreationCommand(group, groupIndex, {
+        baseBranch,
+        bodyFilePath: path.join(
+          artifactsDir,
+          `pr-178-fix-group-${groupIndex + 1}-body.md`
+        ),
+      })
+    ),
+  };
+
+  manifest.manifestPath = path.join(artifactsDir, "manifest.json");
+  return manifest;
+}
+
+function writePullRequestArtifacts(fixThreads, options = {}, dependencies = {}) {
+  const mkdirSync = dependencies.mkdirSync || fs.mkdirSync;
+  const writeFileSync = dependencies.writeFileSync || fs.writeFileSync;
+  const resolvePath = dependencies.resolvePath || path.resolve;
+  const manifest = buildPullRequestArtifactManifest(fixThreads, options);
+  const outputDirectory = resolvePath(manifest.artifactsDir);
+
+  mkdirSync(outputDirectory, { recursive: true });
+
+  manifest.groups.forEach((group) => {
+    writeFileSync(resolvePath(group.bodyFilePath), `${group.body}\n`, "utf8");
+  });
+
+  writeFileSync(resolvePath(manifest.manifestPath), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  return manifest;
 }
 
 function formatFixThreadsAsPullRequestPayloads(fixThreads, options = {}) {
@@ -648,7 +683,8 @@ function formatFixThreadsAsPullRequestPayloads(fixThreads, options = {}) {
 }
 
 function formatFixThreadsAsGhCliCommands(fixThreads, options = {}) {
-  const { excludedOutdatedCount = 0, baseBranch = "main" } = options;
+  const { excludedOutdatedCount = 0, baseBranch = "main", artifactsDir = DEFAULT_ARTIFACTS_DIR } =
+    options;
   const followUpPrGroups = groupFixThreadsByFollowUpPr(fixThreads);
   const lines = ["# Follow-up PR Create Commands", ""];
 
@@ -664,8 +700,15 @@ function formatFixThreadsAsGhCliCommands(fixThreads, options = {}) {
     lines.push(`Excluded outdated fix threads: ${excludedOutdatedCount}`, "");
   }
 
+  lines.push(`Artifacts Directory: \`${artifactsDir}\``);
+  lines.push(`Artifact Manifest: \`${path.join(artifactsDir, "manifest.json")}\``);
+  lines.push("");
+
   followUpPrGroups.forEach((group, groupIndex) => {
-    const payload = buildPullRequestCreationCommand(group, groupIndex, { baseBranch });
+    const payload = buildPullRequestCreationCommand(group, groupIndex, {
+      baseBranch,
+      bodyFilePath: path.join(artifactsDir, `pr-178-fix-group-${groupIndex + 1}-body.md`),
+    });
     lines.push(`## Follow-up PR Group ${groupIndex + 1}: ${group.followUpPr || "<missing follow-up PR>"}`);
     lines.push("");
     lines.push(`Suggested Branch: \`${payload.headBranch}\``);
@@ -723,6 +766,7 @@ function buildFixThreadsReport(options = {}, dependencies = {}) {
     requireComplete = false,
     outputFormat = "text",
     baseBranch = "main",
+    writeArtifactsDir = null,
   } = options;
   const threads = loadThreadInventory(docPath, dependencies);
   const activeThreads = loadThreadInventory(docPath, dependencies, {
@@ -741,7 +785,17 @@ function buildFixThreadsReport(options = {}, dependencies = {}) {
   const fixThreads = followUpPr
     ? actionableFixThreads.filter((thread) => thread.followUpPr === normalizedFollowUpPr)
     : actionableFixThreads;
-  return formatFixThreadsOutput(fixThreads, outputFormat, { excludedOutdatedCount, baseBranch });
+
+  const artifactsDir = writeArtifactsDir || DEFAULT_ARTIFACTS_DIR;
+  if (writeArtifactsDir) {
+    writePullRequestArtifacts(fixThreads, { baseBranch, artifactsDir }, dependencies);
+  }
+
+  return formatFixThreadsOutput(fixThreads, outputFormat, {
+    excludedOutdatedCount,
+    baseBranch,
+    artifactsDir,
+  });
 }
 
 function getCliConfiguration(argv = process.argv.slice(2)) {
@@ -752,6 +806,7 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
     outputFormat: "text",
     requireComplete: false,
     baseBranch: "main",
+    writeArtifactsDir: null,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -804,6 +859,17 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
       continue;
     }
 
+    if (argument === "--write-artifacts-dir") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --write-artifacts-dir flag requires a value.");
+      }
+
+      options.writeArtifactsDir = value;
+      index += 1;
+      continue;
+    }
+
     if (argument.startsWith("--")) {
       throw new Error(`Unknown option: ${argument}`);
     }
@@ -825,7 +891,15 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
 }
 
 function main(argv = process.argv.slice(2)) {
-  const { docPath, excludeOutdated, followUpPr, outputFormat, requireComplete, baseBranch } =
+  const {
+    docPath,
+    excludeOutdated,
+    followUpPr,
+    outputFormat,
+    requireComplete,
+    baseBranch,
+    writeArtifactsDir,
+  } =
     getCliConfiguration(argv);
   process.stdout.write(
     buildFixThreadsReport({
@@ -835,6 +909,7 @@ function main(argv = process.argv.slice(2)) {
       outputFormat,
       requireComplete,
       baseBranch,
+      writeArtifactsDir,
     })
   );
 }
@@ -851,7 +926,9 @@ if (require.main === module) {
 module.exports = {
   buildFixThreadsReport,
   DEFAULT_DOC_PATH,
+  DEFAULT_ARTIFACTS_DIR,
   buildPullRequestCreationCommand,
+  buildPullRequestArtifactManifest,
   collectThreadInventoryIssues,
   formatFixThreadsAsGhCliCommands,
   formatFixThreadsAsJson,
@@ -876,4 +953,5 @@ module.exports = {
   parseThreadInventory,
   shellQuote,
   isPlaceholderValue,
+  writePullRequestArtifacts,
 };
