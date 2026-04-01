@@ -499,7 +499,9 @@ def _build_llm_config(
         issue_or_pr = (
             env_pr
             if env_pr.isdigit()
-            else env_issue if env_issue.isdigit() else "unknown"
+            else env_issue
+            if env_issue.isdigit()
+            else "unknown"
         )
     metadata = {
         "repo": repo,
