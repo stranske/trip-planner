@@ -27,10 +27,6 @@ def _require_probability(value: float, field_name: str) -> None:
         raise ValueError(f"{field_name} must be between 0.0 and 1.0")
 
 
-def _default_stage_preferences() -> dict[str, "AutonomyPreference"]:
-    return {stage: AutonomyPreference() for stage in schema.PLANNING_STAGES}
-
-
 @dataclass(slots=True)
 class AutonomyPreference:
     system_initiative: float = 0.5
@@ -112,9 +108,7 @@ class PlannerBehaviorMetadata:
 @dataclass(slots=True)
 class PlanningAutonomyProfile:
     default_preference: AutonomyPreference = field(default_factory=AutonomyPreference)
-    stage_preferences: dict[str, AutonomyPreference] = field(
-        default_factory=_default_stage_preferences
-    )
+    stage_preferences: dict[str, AutonomyPreference] = field(default_factory=dict)
     guardrails: AutonomyGuardrails = field(default_factory=AutonomyGuardrails)
     feedback_history: list[AutonomyFeedback] = field(default_factory=list)
 
