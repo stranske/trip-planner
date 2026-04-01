@@ -769,6 +769,30 @@ test("formatUnresolvedThreadsAsMarkdown uses the requested pull request number i
   const report = formatUnresolvedThreadsAsMarkdown("stranske/trip-planner", 581, []);
 
   assert.match(report, /# PR #581 Unresolved Thread Inventory/);
+  assert.match(report, /## Thread Inventory/);
+  assert.match(report, /No unresolved inline review threads found\./);
+});
+
+test("formatUnresolvedThreadsAsMarkdown preserves resolved history when zero unresolved threads remain", () => {
+  const report = formatUnresolvedThreadsAsMarkdown("stranske/trip-planner", 178, [], [
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/example.py:17",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale: "The follow-up PR landed and the thread is resolved.",
+      content: "reviewer: Please rework this helper.",
+      outdated: false,
+    },
+  ]);
+
+  assert.match(report, /Unresolved review threads: 0/);
+  assert.match(report, /## Thread Inventory/);
+  assert.match(report, /No unresolved inline review threads found\./);
+  assert.match(report, /## Resolved Thread Inventory/);
+  assert.match(report, /- Thread ID: THREAD_1/);
+  assert.match(report, /- Follow-up PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/);
 });
 
 test("formatUnresolvedThreadsAsMarkdown output can be parsed by the inventory tooling", () => {

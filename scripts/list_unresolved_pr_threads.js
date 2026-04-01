@@ -421,7 +421,18 @@ function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThrea
   ];
 
   if (unresolvedThreads.length === 0) {
-    lines.push("", "No unresolved inline review threads found.");
+    lines.push("", "## Thread Inventory", "", "No unresolved inline review threads found.");
+
+    const resolvedThreads = deduplicateInventoryEntries(
+      existingThreads.filter(isPopulatedInventoryEntry)
+    );
+    if (resolvedThreads.length > 0) {
+      lines.push("", "## Resolved Thread Inventory");
+      resolvedThreads.forEach((thread, index) => {
+        lines.push(...buildInventoryThreadSection(thread, index));
+      });
+    }
+
     return `${lines.join("\n")}\n`;
   }
 
