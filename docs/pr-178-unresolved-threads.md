@@ -78,6 +78,13 @@ To also write executable helper scripts plus a `manifest.json` for those disposi
 node scripts/list_disposition_threads_from_doc.js docs/pr-178-unresolved-threads.md --format gh-cli --exclude-outdated --write-artifacts-dir .tmp/pr-thread-disposition
 ```
 
+To dry-run or execute those disposition replies/resolutions from the generated `manifest.json`, use:
+
+```bash
+node scripts/resolve_disposition_threads_from_manifest.js --manifest .tmp/pr-thread-disposition/manifest.json
+node scripts/resolve_disposition_threads_from_manifest.js --manifest .tmp/pr-thread-disposition/manifest.json --thread-id THREAD_ID --execute
+```
+
 To verify that the populated inventory matches an exported review-thread snapshot before classifying or resolving items, run:
 
 ```bash

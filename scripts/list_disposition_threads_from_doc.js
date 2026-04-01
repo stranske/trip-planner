@@ -247,6 +247,31 @@ function getDispositionArtifactBasename(thread, index) {
   return `pr-178-disposition-thread-${index + 1}-${threadIdFragment || "thread"}`;
 }
 
+function buildDispositionManifestEntry(thread, index, resolvedArtifactsDir) {
+  const commands = buildDispositionGhCliCommands(thread);
+  const basename = getDispositionArtifactBasename(thread, index);
+  const scriptPath = path.join(resolvedArtifactsDir, `${basename}-resolve.sh`);
+
+  return {
+    threadId: commands.threadId,
+    originalThreadUrl: thread.originalThreadUrl || null,
+    location: thread.location || null,
+    scriptPath,
+    replyBody: commands.replyBody,
+    replyCommand: commands.replyCommand,
+    replyQuery: ADD_PULL_REQUEST_REVIEW_THREAD_REPLY_MUTATION,
+    replyVariables: {
+      threadId: commands.threadId,
+      body: commands.replyBody,
+    },
+    resolveCommand: commands.resolveCommand,
+    resolveQuery: RESOLVE_REVIEW_THREAD_MUTATION,
+    resolveVariables: {
+      threadId: commands.threadId,
+    },
+  };
+}
+
 function writeDispositionArtifacts(dispositionThreads, artifactsDir, dependencies = {}) {
   const mkdirSync = dependencies.mkdirSync || fs.mkdirSync;
   const writeFileSync = dependencies.writeFileSync || fs.writeFileSync;
@@ -259,29 +284,20 @@ function writeDispositionArtifacts(dispositionThreads, artifactsDir, dependencie
     artifactsDir: resolvedArtifactsDir,
     count: dispositionThreads.length,
     threads: dispositionThreads.map((thread, index) => {
-      const commands = buildDispositionGhCliCommands(thread);
-      const basename = getDispositionArtifactBasename(thread, index);
-      const scriptPath = path.join(resolvedArtifactsDir, `${basename}-resolve.sh`);
+      const manifestEntry = buildDispositionManifestEntry(thread, index, resolvedArtifactsDir);
       const scriptBody = [
         "#!/usr/bin/env bash",
         "set -euo pipefail",
         "",
-        commands.replyCommand,
-        commands.resolveCommand,
+        manifestEntry.replyCommand,
+        manifestEntry.resolveCommand,
         "",
       ].join("\n");
 
-      writeFileSync(scriptPath, scriptBody, "utf8");
-      chmodSync(scriptPath, 0o755);
+      writeFileSync(manifestEntry.scriptPath, scriptBody, "utf8");
+      chmodSync(manifestEntry.scriptPath, 0o755);
 
-      return {
-        threadId: commands.threadId,
-        originalThreadUrl: thread.originalThreadUrl || null,
-        location: thread.location || null,
-        scriptPath,
-        replyCommand: commands.replyCommand,
-        resolveCommand: commands.resolveCommand,
-      };
+      return manifestEntry;
     }),
   };
 
@@ -498,6 +514,7 @@ module.exports = {
   listDispositionClassifiedThreads,
   buildDispositionReplyBody,
   buildDispositionGhCliCommands,
+  buildDispositionManifestEntry,
   writeDispositionArtifacts,
   DEFAULT_ARTIFACTS_DIR,
 };
