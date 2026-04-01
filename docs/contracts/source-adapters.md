@@ -2,6 +2,8 @@
 
 Issue `#526` adds the ingestion boundary that sits between provider-specific fetch code and the planner's normalized contracts.
 
+Issue `#527` builds on that boundary with entity-resolution and deduplication contracts documented in [`docs/contracts/source-resolution.md`](source-resolution.md).
+
 ## Core Contracts
 
 - `SourceAdapter`: provider-facing interface that fetches raw source data and emits a stable handoff for downstream normalization.

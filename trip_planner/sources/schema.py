@@ -109,3 +109,39 @@ ADAPTER_ISSUE_SEVERITIES: tuple[str, ...] = (
     "warning",
     "error",
 )
+
+RESOLUTION_STATUSES: tuple[str, ...] = (
+    "match",
+    "ambiguous",
+    "distinct",
+    "blocked",
+)
+
+RESOLUTION_MATCH_STRATEGIES: tuple[str, ...] = (
+    "provider_id",
+    "geo_text",
+    "route_signature",
+    "policy_scope",
+    "manual_review",
+)
+
+RESOLUTION_CONFLICT_REASONS: tuple[str, ...] = (
+    "low_confidence",
+    "source_disagreement",
+    "incomplete_data",
+    "freshness_gap",
+    "policy_conflict",
+)
+
+RESOLUTION_CONFLICT_STATUSES: tuple[str, ...] = (
+    "preserved",
+    "selected",
+    "needs_review",
+)
+
+DEDUP_DECISIONS: tuple[str, ...] = (
+    "merge",
+    "keep_separate",
+    "needs_review",
+    "suppress",
+)
