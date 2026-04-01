@@ -6,10 +6,10 @@ tasks:
   - id: task-01
     title: 'Add a script (e.g., `scripts/list_unresolved_pr_threads.js`) that lists
       unresolved inline review threads for PR #178 via the GitHub API'
-    status: doing
+    status: done
     started_at: '2026-04-01T11:33:37Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-04-01T11:33:52Z'
+    commit: e78bb47d1170847c2bf49dfb8217871f7c3508f9
     notes: []
   - id: task-02
     title: 'Create the file `scripts/list_unresolved_pr_threads.js` with basic structure
