@@ -21,6 +21,7 @@ function parseCliArguments(argv = process.argv.slice(2)) {
     execute: false,
     outputFormat: "text",
     resultsPath: null,
+    remainingSnapshotPath: null,
     docPath: null,
     threadId: null,
     threadIndex: null,
@@ -63,6 +64,17 @@ function parseCliArguments(argv = process.argv.slice(2)) {
       }
 
       options.resultsPath = value;
+      index += 1;
+      continue;
+    }
+
+    if (argument === "--write-remaining-snapshot") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --write-remaining-snapshot flag requires a file path.");
+      }
+
+      options.remainingSnapshotPath = value;
       index += 1;
       continue;
     }
@@ -330,6 +342,26 @@ function writeExecutionResults(report, resultsPath, dependencies = {}) {
   writeFileSync(resultsPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 }
 
+function writeRemainingSnapshot(snapshotPath, remainingThreads, dependencies = {}) {
+  const mkdirSync = dependencies.mkdirSync || fs.mkdirSync;
+  const writeFileSync = dependencies.writeFileSync || fs.writeFileSync;
+  const normalizedThreads = (remainingThreads || []).map((thread) => ({
+    id: thread.id,
+    originalThreadUrl: thread.originalThreadUrl || null,
+    path: thread.path || "unknown",
+    line: thread.line ?? null,
+    isOutdated: Boolean(thread.isOutdated),
+    comments: Array.isArray(thread.comments) ? thread.comments : [],
+  }));
+
+  mkdirSync(path.dirname(snapshotPath), { recursive: true });
+  writeFileSync(
+    snapshotPath,
+    `${JSON.stringify({ unresolvedThreads: normalizedThreads }, null, 2)}\n`,
+    "utf8"
+  );
+}
+
 function executeManifestThreads(options = {}, dependencies = {}) {
   const manifest = loadManifest(options.manifestPath, dependencies);
   const threads = selectManifestThreads(manifest, options);
@@ -402,6 +434,24 @@ function executeManifestThreads(options = {}, dependencies = {}) {
     );
   }
 
+  if (options.remainingSnapshotPath) {
+    if (!options.execute || !options.docPath) {
+      throw new Error(
+        "The --write-remaining-snapshot flag requires both --execute and --doc so the active inventory can be refreshed first."
+      );
+    }
+
+    const remainingThreads = loadThreadInventory(options.docPath, dependencies, {
+      inventorySection: "unresolved",
+    }).map(convertInventoryEntryToSnapshotThread);
+    report.remainingSnapshotPath = resolveManifestRelativePath(
+      options.manifestPath,
+      options.remainingSnapshotPath
+    );
+    report.remainingSnapshotThreadCount = remainingThreads.length;
+    writeRemainingSnapshot(report.remainingSnapshotPath, remainingThreads, dependencies);
+  }
+
   if (options.resultsPath) {
     report.resultsPath = resolveManifestRelativePath(options.manifestPath, options.resultsPath);
     writeExecutionResults(report, report.resultsPath, dependencies);
@@ -429,6 +479,10 @@ function formatExecutionReport(report, outputFormat = "text") {
     lines.push(`Inventory Doc Updated: \`${report.inventoryUpdate.docPath}\``);
     lines.push(`Resolved Threads Moved: ${report.inventoryUpdate.resolvedThreadCount}`);
     lines.push(`Remaining Active Threads: ${report.inventoryUpdate.remainingThreadCount}`);
+  }
+  if (report.remainingSnapshotPath) {
+    lines.push(`Remaining Snapshot File: \`${report.remainingSnapshotPath}\``);
+    lines.push(`Remaining Snapshot Threads: ${report.remainingSnapshotThreadCount}`);
   }
 
   report.results.forEach((result) => {
@@ -495,4 +549,5 @@ module.exports = {
   updateInventoryDocumentAfterResolution,
   validateManifestThread,
   writeExecutionResults,
+  writeRemainingSnapshot,
 };

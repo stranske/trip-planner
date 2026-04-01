@@ -21,6 +21,7 @@ const {
   selectManifestThreads,
   updateInventoryDocumentAfterResolution,
   validateManifestThread,
+  writeRemainingSnapshot,
 } = require(path.join(repoRoot, "scripts/resolve_disposition_threads_from_manifest.js"));
 const {
   buildDispositionManifestEntry,
@@ -61,6 +62,8 @@ test("parseCliArguments parses execution, filtering, and result output options",
       "--execute",
       "--doc",
       "docs/pr-178-unresolved-threads.md",
+      "--write-remaining-snapshot",
+      "tmp/remaining-threads.json",
       "--thread-id",
       "THREAD_2",
       "--thread-index",
@@ -75,6 +78,7 @@ test("parseCliArguments parses execution, filtering, and result output options",
       execute: true,
       outputFormat: "json",
       resultsPath: "tmp/results.json",
+      remainingSnapshotPath: "tmp/remaining-threads.json",
       docPath: DEFAULT_DOC_PATH,
       threadId: "THREAD_2",
       threadIndex: 3,
@@ -280,6 +284,176 @@ test("executeManifestThreads can execute reply and resolve commands in sequence"
   ]);
   assert.equal(report.results[0].replyExitStatus, 0);
   assert.equal(report.results[0].resolveExitStatus, 0);
+});
+
+test("writeRemainingSnapshot writes a list_unresolved_pr_threads compatible payload", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "remaining-thread-snapshot-"));
+  const snapshotPath = path.join(tempDir, "remaining.json");
+
+  writeRemainingSnapshot(snapshotPath, [
+    {
+      id: "THREAD_2",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+      path: "src/file.js",
+      line: 12,
+      isOutdated: false,
+      comments: [
+        {
+          id: "COMMENT_2",
+          author: "reviewer",
+          body: "Please keep this open.",
+        },
+      ],
+    },
+  ]);
+
+  assert.deepEqual(JSON.parse(fs.readFileSync(snapshotPath, "utf8")), {
+    unresolvedThreads: [
+      {
+        id: "THREAD_2",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+        path: "src/file.js",
+        line: 12,
+        isOutdated: false,
+        comments: [
+          {
+            id: "COMMENT_2",
+            author: "reviewer",
+            body: "Please keep this open.",
+          },
+        ],
+      },
+    ],
+  });
+});
+
+test("executeManifestThreads can write a remaining unresolved-thread snapshot after execution", () => {
+  const manifestDir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-disposition-snapshot-"));
+  const manifestPath = path.join(manifestDir, "manifest.json");
+  const docPath = path.join(manifestDir, "pr-178-unresolved-threads.md");
+  const remainingSnapshotPath = "artifacts/remaining-threads.json";
+
+  fs.writeFileSync(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        threads: [
+          {
+            threadId: "THREAD_1",
+            originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+            location: "src/file.js:10",
+            replyQuery: "mutation Reply",
+            replyVariables: { threadId: "THREAD_1", body: "Disposition" },
+            resolveQuery: "mutation Resolve",
+            resolveVariables: { threadId: "THREAD_1" },
+          },
+        ],
+      },
+      null,
+      2
+    )}\n`
+  );
+  fs.writeFileSync(
+    docPath,
+    `# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: src/file.js:10
+- Classification: disposition
+- Follow-up PR:
+- Rationale: The existing behavior is intentional.
+- Content: reviewer: Keep this as-is.
+- Outdated: no
+
+### Thread 2
+
+- Thread ID: THREAD_2
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2
+- Location: src/other.js:22
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: The follow-up fix is still pending merge.
+- Content: reviewer: This still needs a patch.
+- Outdated: no
+`
+  );
+
+  const commands = [];
+  const report = executeManifestThreads(
+    {
+      manifestPath,
+      execute: true,
+      docPath,
+      remainingSnapshotPath,
+    },
+    {
+      spawnSync: (command, args) => {
+        commands.push([command, ...args]);
+        return { status: 0, stdout: '{"data":{"ok":true}}', stderr: "" };
+      },
+    }
+  );
+
+  const resolvedSnapshotPath = path.join(manifestDir, remainingSnapshotPath);
+  assert.equal(commands.length, 2);
+  assert.equal(report.remainingSnapshotPath, resolvedSnapshotPath);
+  assert.equal(report.remainingSnapshotThreadCount, 1);
+  assert.deepEqual(JSON.parse(fs.readFileSync(resolvedSnapshotPath, "utf8")), {
+    unresolvedThreads: [
+      {
+        id: "THREAD_2",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+        path: "src/other.js",
+        line: 22,
+        isOutdated: false,
+        comments: [
+          {
+            id: "inventory-comment-1",
+            author: "reviewer",
+            body: "This still needs a patch.",
+          },
+        ],
+      },
+    ],
+  });
+});
+
+test("executeManifestThreads rejects remaining snapshot output without execution and doc context", () => {
+  const manifestDir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-disposition-invalid-"));
+  const manifestPath = path.join(manifestDir, "manifest.json");
+  fs.writeFileSync(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        threads: [
+          {
+            threadId: "THREAD_1",
+            replyQuery: "mutation Reply",
+            replyVariables: { threadId: "THREAD_1", body: "Disposition" },
+            resolveQuery: "mutation Resolve",
+            resolveVariables: { threadId: "THREAD_1" },
+          },
+        ],
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  assert.throws(
+    () =>
+      executeManifestThreads({
+        manifestPath,
+        execute: false,
+        remainingSnapshotPath: "artifacts/remaining.json",
+      }),
+    /requires both --execute and --doc/
+  );
 });
 
 test("updateInventoryDocumentAfterResolution moves resolved threads out of the active inventory", () => {
