@@ -12,8 +12,10 @@ const {
   formatFixThreadsReport,
   formatThreadInventoryIssues,
   getCliConfiguration,
+  isPlaceholderValue,
   listFixClassifiedThreads,
   loadThreadInventory,
+  normalizeUrlFieldValue,
   parseThreadInventory,
 } = require(path.join(repoRoot, "scripts/list_fix_threads_from_doc.js"));
 
@@ -59,6 +61,34 @@ test("parseThreadInventory reads structured thread metadata from markdown", () =
       followUpPr: null,
       rationale: "Existing behavior is intentional.",
       content: "Reviewer asked for a change that would regress issue #176.",
+    },
+  ]);
+});
+
+test("parseThreadInventory normalizes markdown links for URL fields", () => {
+  const threads = parseThreadInventory(`
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: [review thread](https://github.com/stranske/trip-planner/pull/178#discussion_r1)
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: <https://github.com/stranske/trip-planner/pull/581>
+- Rationale: Code path still drops the final stop.
+- Content: Reviewer requested a bounds check.
+`);
+
+  assert.deepEqual(threads, [
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/example.py:17",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale: "Code path still drops the final stop.",
+      content: "Reviewer requested a bounds check.",
     },
   ]);
 });
@@ -134,6 +164,44 @@ test("collectThreadInventoryIssues flags missing metadata and placeholder entrie
     "Thread 1: missing content",
     'THREAD_2: invalid classification "follow-up"',
     "THREAD_3: missing follow-up PR",
+  ]);
+});
+
+test("placeholder helper recognizes common incomplete values", () => {
+  assert.equal(isPlaceholderValue("TBD"), true);
+  assert.equal(isPlaceholderValue(" pending "), true);
+  assert.equal(isPlaceholderValue("https://github.com/stranske/trip-planner/pull/581"), false);
+});
+
+test("normalizeUrlFieldValue unwraps markdown and autolink URLs", () => {
+  assert.equal(
+    normalizeUrlFieldValue("[PR #581](https://github.com/stranske/trip-planner/pull/581)"),
+    "https://github.com/stranske/trip-planner/pull/581"
+  );
+  assert.equal(
+    normalizeUrlFieldValue("<https://github.com/stranske/trip-planner/pull/581>"),
+    "https://github.com/stranske/trip-planner/pull/581"
+  );
+  assert.equal(normalizeUrlFieldValue("TBD"), null);
+});
+
+test("collectThreadInventoryIssues treats placeholder text as incomplete metadata", () => {
+  const issues = collectThreadInventoryIssues([
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: null,
+      location: "trip_planner/example.py:17",
+      classification: "fix",
+      followUpPr: null,
+      rationale: null,
+      content: "Reviewer requested a bounds check.",
+    },
+  ]);
+
+  assert.deepEqual(issues, [
+    "THREAD_1: missing original thread URL",
+    "THREAD_1: missing follow-up PR",
+    "THREAD_1: missing rationale",
   ]);
 });
 

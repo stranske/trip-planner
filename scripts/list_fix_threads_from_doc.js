@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const DEFAULT_DOC_PATH = path.resolve(__dirname, "..", "docs", "pr-178-unresolved-threads.md");
+const PLACEHOLDER_VALUES = new Set(["tbd", "todo", "pending", "unknown"]);
 
 function parseThreadInventory(markdown) {
   const sections = markdown.split(/^###\s+Thread\s+\d+\s*$/m).slice(1);
@@ -28,7 +29,7 @@ function parseThreadInventory(markdown) {
         if (line.startsWith("- Thread ID:")) {
           thread.threadId = normalizeFieldValue(line.slice("- Thread ID:".length));
         } else if (line.startsWith("- Original Thread URL:")) {
-          thread.originalThreadUrl = normalizeFieldValue(
+          thread.originalThreadUrl = normalizeUrlFieldValue(
             line.slice("- Original Thread URL:".length)
           );
         } else if (line.startsWith("- Location:")) {
@@ -37,7 +38,7 @@ function parseThreadInventory(markdown) {
           const classification = normalizeFieldValue(line.slice("- Classification:".length));
           thread.classification = classification ? classification.toLowerCase() : null;
         } else if (line.startsWith("- Follow-up PR:")) {
-          thread.followUpPr = normalizeFieldValue(line.slice("- Follow-up PR:".length));
+          thread.followUpPr = normalizeUrlFieldValue(line.slice("- Follow-up PR:".length));
         } else if (line.startsWith("- Rationale:")) {
           thread.rationale = normalizeFieldValue(line.slice("- Rationale:".length));
         } else if (line.startsWith("- Content:")) {
@@ -51,7 +52,34 @@ function parseThreadInventory(markdown) {
 
 function normalizeFieldValue(value) {
   const normalized = value.trim();
-  return normalized === "" ? null : normalized;
+  if (normalized === "") {
+    return null;
+  }
+
+  return isPlaceholderValue(normalized) ? null : normalized;
+}
+
+function normalizeUrlFieldValue(value) {
+  const normalized = normalizeFieldValue(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const markdownLinkMatch = normalized.match(/^\[[^\]]+\]\((https?:\/\/[^)\s]+)\)$/i);
+  if (markdownLinkMatch) {
+    return markdownLinkMatch[1];
+  }
+
+  const autoLinkMatch = normalized.match(/^<(https?:\/\/[^>\s]+)>$/i);
+  if (autoLinkMatch) {
+    return autoLinkMatch[1];
+  }
+
+  return normalized;
+}
+
+function isPlaceholderValue(value) {
+  return PLACEHOLDER_VALUES.has(value.trim().toLowerCase());
 }
 
 function collectThreadInventoryIssues(threads) {
@@ -196,5 +224,7 @@ module.exports = {
   listFixClassifiedThreads,
   loadThreadInventory,
   normalizeFieldValue,
+  normalizeUrlFieldValue,
   parseThreadInventory,
+  isPlaceholderValue,
 };
