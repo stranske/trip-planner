@@ -4,6 +4,7 @@
 
 const fs = require("node:fs");
 const https = require("node:https");
+const path = require("node:path");
 
 const DEFAULT_REPOSITORY = "stranske/trip-planner";
 const DEFAULT_PR_NUMBER = 178;
@@ -14,6 +15,7 @@ function parseCommandLineArguments(argv = process.argv.slice(2)) {
   let inputPath = null;
   let expectedCount = null;
   let outputFormat = "text";
+  let inventoryDocPath = null;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -51,12 +53,24 @@ function parseCommandLineArguments(argv = process.argv.slice(2)) {
       continue;
     }
 
+    if (argument === "--write-inventory-doc") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --write-inventory-doc flag requires a file path.");
+      }
+
+      inventoryDocPath = value;
+      index += 1;
+      continue;
+    }
+
     positional.push(argument);
   }
 
   return {
     expectedCount,
     inputPath,
+    inventoryDocPath,
     outputFormat,
     positional,
   };
@@ -71,6 +85,7 @@ function getConfiguration(argv = process.argv.slice(2), env = process.env) {
   const token = env.GITHUB_TOKEN;
   const inputPath = parsedArguments.inputPath || env.REVIEW_THREADS_FILE || null;
   const outputFormat = parsedArguments.outputFormat || "text";
+  const inventoryDocPath = parsedArguments.inventoryDocPath || env.REVIEW_THREADS_DOC || null;
   const expectedCountRaw = parsedArguments.expectedCount ?? env.EXPECT_UNRESOLVED_COUNT ?? null;
   const prNumber = Number.parseInt(prNumberRaw, 10);
   const expectedCount =
@@ -103,7 +118,16 @@ function getConfiguration(argv = process.argv.slice(2), env = process.env) {
   }
 
   const [owner, repo] = repository.split("/", 2);
-  return { owner, repo, prNumber, token, inputPath, outputFormat, expectedCount };
+  return {
+    owner,
+    repo,
+    prNumber,
+    token,
+    inputPath,
+    outputFormat,
+    expectedCount,
+    inventoryDocPath: inventoryDocPath ? path.resolve(inventoryDocPath) : null,
+  };
 }
 
 function buildReviewThreadsQuery() {
@@ -356,20 +380,26 @@ function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThrea
   }
 
   unresolvedThreads.forEach((thread, index) => {
-    lines.push("");
-    lines.push(`### Thread ${index + 1}`);
-    lines.push("");
-    lines.push(`- Thread ID: ${thread.id}`);
-    lines.push(`- Original Thread URL: ${thread.originalThreadUrl || ""}`);
-    lines.push(`- Location: ${thread.path}:${thread.line ?? "unknown"}`);
-    lines.push("- Classification:");
-    lines.push("- Follow-up PR:");
-    lines.push("- Rationale:");
-    lines.push(`- Content: ${formatThreadContent(thread.comments)}`);
-    lines.push(`- Outdated: ${thread.isOutdated ? "yes" : "no"}`);
+    lines.push(...buildMarkdownThreadSection(thread, index));
   });
 
   return `${lines.join("\n")}\n`;
+}
+
+function buildMarkdownThreadSection(thread, index) {
+  return [
+    "",
+    `### Thread ${index + 1}`,
+    "",
+    `- Thread ID: ${thread.id}`,
+    `- Original Thread URL: ${thread.originalThreadUrl || ""}`,
+    `- Location: ${thread.path}:${thread.line ?? "unknown"}`,
+    "- Classification:",
+    "- Follow-up PR:",
+    "- Rationale:",
+    `- Content: ${formatThreadContent(thread.comments)}`,
+    `- Outdated: ${thread.isOutdated ? "yes" : "no"}`,
+  ];
 }
 
 function formatThreadContent(comments) {
@@ -406,6 +436,36 @@ function validateExpectedCount(unresolvedThreads, expectedCount) {
   }
 }
 
+function mergeInventoryIntoDocument(existingDocument, unresolvedThreads) {
+  const trimmedDocument = existingDocument.trimEnd();
+  const threadSectionHeading = /^## Thread (?:Template|Inventory)\s*$/m;
+  const threadSection = ["## Thread Inventory"];
+
+  if (unresolvedThreads.length === 0) {
+    threadSection.push("", "No unresolved inline review threads found.");
+  } else {
+    unresolvedThreads.forEach((thread, index) => {
+      threadSection.push(...buildMarkdownThreadSection(thread, index));
+    });
+  }
+
+  const mergedThreadSection = threadSection.join("\n");
+  if (threadSectionHeading.test(trimmedDocument)) {
+    return `${trimmedDocument.replace(/## Thread (?:Template|Inventory)[\s\S]*$/m, mergedThreadSection)}\n`;
+  }
+
+  return `${trimmedDocument}\n\n${mergedThreadSection}\n`;
+}
+
+function writeInventoryDocument(inventoryDocPath, unresolvedThreads, dependencies = {}) {
+  const readFileSync = dependencies.readFileSync || fs.readFileSync;
+  const writeFileSync = dependencies.writeFileSync || fs.writeFileSync;
+  const existingDocument = readFileSync(inventoryDocPath, "utf8");
+  const nextDocument = mergeInventoryIntoDocument(existingDocument, unresolvedThreads);
+  writeFileSync(inventoryDocPath, nextDocument);
+  return nextDocument;
+}
+
 async function main() {
   const configuration = getConfiguration();
   const threads = configuration.inputPath
@@ -414,6 +474,11 @@ async function main() {
   const unresolvedThreads = extractUnresolvedThreads(threads);
   const repository = `${configuration.owner}/${configuration.repo}`;
   validateExpectedCount(unresolvedThreads, configuration.expectedCount);
+
+  if (configuration.inventoryDocPath) {
+    writeInventoryDocument(configuration.inventoryDocPath, unresolvedThreads);
+  }
+
   process.stdout.write(
     formatOutput(repository, configuration.prNumber, unresolvedThreads, configuration.outputFormat)
   );
@@ -433,6 +498,7 @@ module.exports = {
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
   formatOutput,
+  buildMarkdownThreadSection,
   formatThreadContent,
   formatUnresolvedThreadsAsJson,
   formatUnresolvedThreadsAsMarkdown,
@@ -442,6 +508,8 @@ module.exports = {
   loadReviewThreadsFromFile,
   normalizeBody,
   parseCommandLineArguments,
+  mergeInventoryIntoDocument,
   requestGraphql,
   validateExpectedCount,
+  writeInventoryDocument,
 };

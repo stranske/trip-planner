@@ -16,6 +16,7 @@ When a verified snapshot or `GITHUB_TOKEN` is available, use one of these comman
 ```bash
 node scripts/list_unresolved_pr_threads.js stranske/trip-planner 178 --format markdown --expect-count 4
 node scripts/list_unresolved_pr_threads.js stranske/trip-planner 178 --input path/to/pr-178-review-threads.json --format markdown --expect-count 4
+node scripts/list_unresolved_pr_threads.js stranske/trip-planner 178 --input path/to/pr-178-review-threads.json --write-inventory-doc docs/pr-178-unresolved-threads.md --expect-count 4
 ```
 
 After the inventory is populated, identify any `fix`-classified entries with:

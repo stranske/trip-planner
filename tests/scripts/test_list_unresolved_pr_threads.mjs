@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 
@@ -9,6 +10,7 @@ const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "
 const {
   DEFAULT_PR_NUMBER,
   DEFAULT_REPOSITORY,
+  buildMarkdownThreadSection,
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
   fetchAllReviewThreads,
@@ -19,9 +21,11 @@ const {
   formatUnresolvedThreadsReport,
   getConfiguration,
   loadReviewThreadsFromFile,
+  mergeInventoryIntoDocument,
   normalizeBody,
   parseCommandLineArguments,
   validateExpectedCount,
+  writeInventoryDocument,
 } = require(path.join(repoRoot, "scripts/list_unresolved_pr_threads.js"));
 const { parseThreadInventory } = require(path.join(repoRoot, "scripts/list_fix_threads_from_doc.js"));
 
@@ -39,6 +43,7 @@ test("getConfiguration applies defaults and parses explicit repository/PR inputs
     inputPath: null,
     outputFormat: "text",
     expectedCount: null,
+    inventoryDocPath: null,
   });
 
   const defaults = getConfiguration([], { GITHUB_TOKEN: "token-value" });
@@ -74,6 +79,25 @@ test("getConfiguration parses an expected unresolved thread count", () => {
   );
 
   assert.equal(configuration.expectedCount, 4);
+});
+
+test("getConfiguration resolves the inventory doc output path", () => {
+  const configuration = getConfiguration(
+    [
+      "octo/repo",
+      "178",
+      "--input",
+      "threads.json",
+      "--write-inventory-doc",
+      "docs/pr-178-unresolved-threads.md",
+    ],
+    {}
+  );
+
+  assert.equal(
+    configuration.inventoryDocPath,
+    path.resolve("docs/pr-178-unresolved-threads.md")
+  );
 });
 
 test("extractUnresolvedThreads keeps unresolved threads and normalizes comment text", () => {
@@ -159,6 +183,7 @@ test("parseCommandLineArguments separates positional values from the --input fla
     {
       expectedCount: null,
       inputPath: "threads.json",
+      inventoryDocPath: null,
       outputFormat: "text",
       positional: ["octo/repo", "178"],
     }
@@ -171,6 +196,7 @@ test("parseCommandLineArguments accepts an explicit output format", () => {
     {
       expectedCount: null,
       inputPath: "threads.json",
+      inventoryDocPath: null,
       outputFormat: "json",
       positional: ["octo/repo", "178"],
     }
@@ -190,6 +216,27 @@ test("parseCommandLineArguments accepts an explicit expected count", () => {
     {
       expectedCount: "0",
       inputPath: "threads.json",
+      inventoryDocPath: null,
+      outputFormat: "text",
+      positional: ["octo/repo", "178"],
+    }
+  );
+});
+
+test("parseCommandLineArguments accepts an inventory doc output path", () => {
+  assert.deepEqual(
+    parseCommandLineArguments([
+      "octo/repo",
+      "178",
+      "--input",
+      "threads.json",
+      "--write-inventory-doc",
+      "docs/pr-178-unresolved-threads.md",
+    ]),
+    {
+      expectedCount: null,
+      inputPath: "threads.json",
+      inventoryDocPath: "docs/pr-178-unresolved-threads.md",
       outputFormat: "text",
       positional: ["octo/repo", "178"],
     }
@@ -344,6 +391,40 @@ test("formatUnresolvedThreadsAsJson emits machine-readable unresolved thread dat
   assert.equal(parsed.unresolvedThreads[0].id, "THREAD_1");
 });
 
+test("buildMarkdownThreadSection emits a template-ready thread block", () => {
+  assert.deepEqual(
+    buildMarkdownThreadSection(
+      {
+        id: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        path: "trip_planner/example.py",
+        line: 17,
+        isOutdated: false,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please keep this branch explicit.",
+          },
+        ],
+      },
+      0
+    ),
+    [
+      "",
+      "### Thread 1",
+      "",
+      "- Thread ID: THREAD_1",
+      "- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      "- Location: trip_planner/example.py:17",
+      "- Classification:",
+      "- Follow-up PR:",
+      "- Rationale:",
+      "- Content: reviewer: Please keep this branch explicit.",
+      "- Outdated: no",
+    ]
+  );
+});
+
 test("formatUnresolvedThreadsAsMarkdown emits a doc-ready inventory skeleton", () => {
   const report = formatUnresolvedThreadsAsMarkdown("stranske/trip-planner", 178, [
     {
@@ -409,6 +490,93 @@ test("formatUnresolvedThreadsAsMarkdown output can be parsed by the inventory to
       content: "reviewer-a: Please keep this branch explicit.",
     },
   ]);
+});
+
+test("mergeInventoryIntoDocument replaces the placeholder template with generated threads", () => {
+  const mergedDocument = mergeInventoryIntoDocument(
+    `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Thread Template
+
+### Thread 1
+
+- Thread ID:
+- Original Thread URL:
+- Location:
+- Classification:
+- Follow-up PR:
+- Rationale:
+- Content:
+`,
+    [
+      {
+        id: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        path: "trip_planner/example.py",
+        line: 17,
+        isOutdated: false,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please keep this branch explicit.",
+          },
+        ],
+      },
+    ]
+  );
+
+  assert.match(mergedDocument, /^# PR #178 Unresolved Thread Inventory/m);
+  assert.match(mergedDocument, /Intro paragraph\./);
+  assert.match(mergedDocument, /## Thread Inventory/);
+  assert.doesNotMatch(mergedDocument, /## Thread Template/);
+  assert.match(mergedDocument, /- Thread ID: THREAD_1/);
+});
+
+test("writeInventoryDocument updates a doc file in place", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "thread-inventory-"));
+  const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
+  fs.writeFileSync(
+    docPath,
+    `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Thread Template
+
+### Thread 1
+
+- Thread ID:
+- Original Thread URL:
+- Location:
+- Classification:
+- Follow-up PR:
+- Rationale:
+- Content:
+`,
+    "utf8"
+  );
+
+  writeInventoryDocument(docPath, [
+    {
+      id: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      path: "trip_planner/example.py",
+      line: 17,
+      isOutdated: false,
+      comments: [
+        {
+          author: "reviewer",
+          body: "Please keep this branch explicit.",
+        },
+      ],
+    },
+  ]);
+
+  const updatedDocument = fs.readFileSync(docPath, "utf8");
+  assert.match(updatedDocument, /## Thread Inventory/);
+  assert.match(updatedDocument, /- Thread ID: THREAD_1/);
 });
 
 test("formatThreadContent condenses multiple comments into a single content field", () => {
