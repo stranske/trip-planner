@@ -380,16 +380,17 @@ def test_ranked_results_emit_breakdowns_and_explanation_records() -> None:
     )
 
     top_result = ranked.results[0]
+    target_option = top_result.target_option
 
     assert top_result.score_breakdown.component_contributions
     assert top_result.explanation_records
     assert any(record.record_type == "summary" for record in top_result.explanation_records)
-    assert top_result.explanation_records[0].target_id == top_result.target_option.option_id
+    assert target_option is not None
+    assert top_result.explanation_records[0].target_id == target_option.option_id
     assert top_result.explanation_records[0].factor_keys
     assert top_result.explanation_records[0].machine_context
     assert top_result.explanation_records[0].human_summary
-    assert ranked.results[0].target_option is not None
-    assert ranked.results[0].target_option.explanation
+    assert target_option.explanation
 
 
 def test_leisure_ranking_outputs_round_trip_through_canonical_result_contract() -> None:
