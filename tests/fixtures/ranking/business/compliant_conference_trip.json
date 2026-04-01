@@ -1,0 +1,6 @@
+{
+  "profile_fixture": "conference_profile.json",
+  "constraint_fixture": "policy_round_trip_compliant.json",
+  "expected_top_result_id": "candidate:bundle:compliant-conference",
+  "title": "Straightforward compliant business trip"
+}
