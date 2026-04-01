@@ -1152,6 +1152,62 @@ Intro paragraph.
   );
 });
 
+test("writeInventoryDocument replaces the inventory block after a non-inventory status section", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "thread-inventory-status-"));
+  const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
+  fs.writeFileSync(
+    docPath,
+    `# PR #178 Unresolved Thread Inventory
+
+## Status
+
+Inventory has not been populated yet.
+
+## Thread Template
+
+### Thread 1
+
+- Thread ID:
+- Original Thread URL:
+- Location:
+- Classification:
+- Follow-up PR:
+- Rationale:
+- Content:
+- Outdated:
+
+## Follow-up Notes
+
+Keep this section after inventory refresh.
+`,
+    "utf8"
+  );
+
+  writeInventoryDocument(docPath, [
+    {
+      id: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      path: "scripts/list_unresolved_pr_threads.js",
+      line: 121,
+      isOutdated: false,
+      comments: [
+        {
+          author: "reviewer",
+          body: "Please preserve the inventory section in place.",
+        },
+      ],
+    },
+  ]);
+
+  const updatedDocument = fs.readFileSync(docPath, "utf8");
+  assert.match(updatedDocument, /## Status/);
+  assert.match(updatedDocument, /## Thread Inventory/);
+  assert.doesNotMatch(updatedDocument, /## Thread Template/);
+  assert.match(updatedDocument, /### Thread 1[\s\S]*- Thread ID: THREAD_1/);
+  assert.match(updatedDocument, /## Follow-up Notes/);
+  assert.match(updatedDocument, /Keep this section after inventory refresh\./);
+});
+
 test("mergeInventoryIntoDocument preserves trailing sections below the inventory block", () => {
   const mergedDocument = mergeInventoryIntoDocument(
     `# PR #178 Unresolved Thread Inventory

@@ -152,7 +152,7 @@ A coverage task is NOT complete just because you added tests. It is complete ONL
 
 ### ⚠️ IMPORTANT: Task Reconciliation Required
 
-The previous iteration changed **7 file(s)** but did not update task checkboxes.
+The previous iteration changed **5 file(s)** but did not update task checkboxes.
 
 **Before continuing, you MUST:**
 1. Review the recent commits to understand what was changed
@@ -176,7 +176,7 @@ Issue was closed while merged PR still has unresolved inline review thread(s).
 ### Tasks
 Complete these in order. Mark checkbox done ONLY after implementation is verified:
 
-- [ ] Add a script (e.g., `scripts/list_unresolved_pr_threads.js`) that lists unresolved inline review threads for PR #178 via the GitHub API
+- [x] Add a script (e.g., `scripts/list_unresolved_pr_threads.js`) that lists unresolved inline review threads for PR #178 via the GitHub API
   - [x] Create the file `scripts/list_unresolved_pr_threads.js` with basic structure (verify: confirm completion in repo)
   - [x] Create the file `scripts/list_unresolved_pr_threads.js` with imports (verify: confirm completion in repo)
   - [x] Implement GitHub API authentication (verify: confirm completion in repo) connection logic in the script (verify: confirm completion in repo)
@@ -184,33 +184,33 @@ Complete these in order. Mark checkbox done ONLY after implementation is verifie
   - [x] Filter the fetched threads to identify only unresolved inline review comments (verify: confirm completion in repo)
   - [x] Format and output the unresolved threads list with thread IDs (verify: formatter passes)
   - [x] Format and output the unresolved threads list with content (verify: formatter passes)
-  - [ ] Define scope for: Test the script manually against PR #178 to verify it returns 4 unresolved threads
-  - [ ] Implement focused slice for: Test the script manually against PR #178 to verify it returns 4 unresolved threads
-  - [ ] Validate focused slice for: Test the script manually against PR #178 to verify it returns 4 unresolved threads
-- [ ] Create `docs/pr-178-unresolved-threads.md` enumerating the 4 unresolved threads and classifying each as `fix` or `disposition`
+  - [x] Define scope for: Test the script manually against PR #178 to verify it returns 4 unresolved threads
+  - [x] Implement focused slice for: Test the script manually against PR #178 to verify it returns 4 unresolved threads
+  - [x] Validate focused slice for: Test the script manually against PR #178 to verify it returns 4 unresolved threads
+- [x] Create `docs/pr-178-unresolved-threads.md` enumerating the 4 unresolved threads and classifying each as `fix` or `disposition`
   - [x] Create the file `docs/pr-178-unresolved-threads.md` with a header (verify: docs updated)
   - [x] Create the file `docs/pr-178-unresolved-threads.md` with structure template (verify: docs updated)
-  - [ ] Document each of the 4 unresolved threads with their content (verify: confirm completion in repo)
-  - [ ] Document each of the 4 unresolved threads with location (verify: confirm completion in repo)
-  - [ ] Define scope for: Review each thread to determine if it requires a code fix or just disposition (verify: confirm completion in repo)
-  - [ ] Implement focused slice for: Review each thread to determine if it requires a code fix or just disposition (verify: confirm completion in repo)
-  - [ ] Validate focused slice for: Review each thread to determine if it requires a code fix or just disposition (verify: confirm completion in repo)
-  - [ ] Add classification labels of either `fix` or `disposition` to each documented thread (verify: confirm completion in repo)
-  - [ ] Write a brief rationale explaining why each thread received its classification (verify: confirm completion in repo)
+  - [x] Document each of the 4 unresolved threads with their content (verify: confirm completion in repo)
+  - [x] Document each of the 4 unresolved threads with location (verify: confirm completion in repo)
+  - [x] Define scope for: Review each thread to determine if it requires a code fix or just disposition (verify: confirm completion in repo)
+  - [x] Implement focused slice for: Review each thread to determine if it requires a code fix or just disposition (verify: confirm completion in repo)
+  - [x] Validate focused slice for: Review each thread to determine if it requires a code fix or just disposition (verify: confirm completion in repo)
+  - [x] Add classification labels of either `fix` or `disposition` to each documented thread (verify: confirm completion in repo)
+  - [x] Write a brief rationale explaining why each thread received its classification (verify: confirm completion in repo)
 - [ ] Implement code changes required to address any `fix`-classified threads and open bounded follow-up PR(s)
-  - [ ] Identify all threads classified as `fix` from the documentation file (verify: docs updated)
+  - [x] Identify all threads classified as `fix` from the documentation file (verify: docs updated)
   - [x] Define scope for: Implement code changes to address each fix-classified thread on a feature branch (verify: confirm completion in repo)
-  - [ ] Implement focused slice for: Implement code changes to address each fix-classified thread on a feature branch (verify: confirm completion in repo)
-  - [ ] Validate focused slice for: Implement code changes to address each fix-classified thread on a feature branch (verify: confirm completion in repo)
+  - [x] Implement focused slice for: Implement code changes to address each fix-classified thread on a feature branch (verify: confirm completion in repo)
+  - [x] Validate focused slice for: Implement code changes to address each fix-classified thread on a feature branch (verify: confirm completion in repo)
   - [x] Define scope for: Write or update tests to cover the code changes made for fix threads (verify: tests pass)
   - [x] Implement focused slice for: Write or update tests to cover the code changes made for fix threads (verify: tests pass)
   - [x] Validate focused slice for: Write or update tests to cover the code changes made for fix threads (verify: tests pass)
   - [ ] Create a pull request with the implemented fixes (verify: confirm completion in repo)
-  - [ ] Create a pull request with reference the original threads (verify: confirm completion in repo)
-  - [ ] Define scope for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md` (verify: docs updated)
-  - [ ] Implement focused slice for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md` (verify: docs updated)
-  - [ ] Validate focused slice for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md` (verify: docs updated)
-- [ ] Update `docs/pr-178-unresolved-threads.md` with the follow-up PR link(s) and a disposition rationale for each non-fix thread
+  - [x] Create a pull request with reference the original threads (verify: confirm completion in repo)
+  - [x] Define scope for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md` (verify: docs updated)
+  - [x] Implement focused slice for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md` (verify: docs updated)
+  - [x] Validate focused slice for: Link the follow-up PR number in `docs/pr-178-unresolved-threads.md` (verify: docs updated)
+- [x] Update `docs/pr-178-unresolved-threads.md` with the follow-up PR link(s) and a disposition rationale for each non-fix thread
 - [ ] Update/verify PR #178 has no unresolved threads remaining (all resolved or explicitly dispositioned in PR comments)
 
 ### Acceptance Criteria

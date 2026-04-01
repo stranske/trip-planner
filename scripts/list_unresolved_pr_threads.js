@@ -648,19 +648,22 @@ function findInventorySectionRange(document) {
     return null;
   }
 
-  const start = headingMatches[0].index;
   const inventoryHeadings = new Set([
     "## Thread Template",
     "## Thread Inventory",
     "## Resolved Thread Inventory",
   ]);
+  const startHeadingIndex = headingMatches.findIndex((match) =>
+    inventoryHeadings.has(match[0].trim())
+  );
 
-  const firstHeadingText = headingMatches[0][0].trim();
-  if (!inventoryHeadings.has(firstHeadingText)) {
+  if (startHeadingIndex === -1) {
     return null;
   }
 
-  for (let index = 1; index < headingMatches.length; index += 1) {
+  const start = headingMatches[startHeadingIndex].index;
+
+  for (let index = startHeadingIndex + 1; index < headingMatches.length; index += 1) {
     const headingText = headingMatches[index][0].trim();
     if (!inventoryHeadings.has(headingText)) {
       return {
