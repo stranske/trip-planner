@@ -31,6 +31,7 @@ const {
   loadReviewThreadsFromFile,
   mergeInventoryIntoDocument,
   normalizeBody,
+  normalizeCommentCollection,
   normalizeSnapshotThreadCollection,
   parseCommandLineArguments,
   validateExpectedCount,
@@ -161,6 +162,57 @@ test("extractUnresolvedThreads keeps unresolved threads and normalizes comment t
   assert.equal(normalizeBody(" one \n two  "), "one two");
 });
 
+test("normalizeCommentCollection supports arrays, nodes, and edges", () => {
+  assert.deepEqual(normalizeCommentCollection([{ id: "COMMENT_1" }]), [{ id: "COMMENT_1" }]);
+  assert.deepEqual(normalizeCommentCollection({ nodes: [{ id: "COMMENT_2" }] }), [
+    { id: "COMMENT_2" },
+  ]);
+  assert.deepEqual(
+    normalizeCommentCollection({ edges: [{ node: { id: "COMMENT_3" } }, { node: null }] }),
+    [{ id: "COMMENT_3" }]
+  );
+});
+
+test("extractUnresolvedThreads supports pre-normalized unresolved thread artifacts", () => {
+  const unresolved = extractUnresolvedThreads([
+    {
+      id: "THREAD_1",
+      isOutdated: false,
+      path: "trip_planner/example.py",
+      line: 17,
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      comments: [
+        {
+          id: "COMMENT_1",
+          author: "reviewer",
+          body: "First line.\nSecond line.",
+          createdAt: "2025-01-01T00:00:00Z",
+          url: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        },
+      ],
+    },
+  ]);
+
+  assert.deepEqual(unresolved, [
+    {
+      id: "THREAD_1",
+      isOutdated: false,
+      path: "trip_planner/example.py",
+      line: 17,
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      comments: [
+        {
+          id: "COMMENT_1",
+          author: "reviewer",
+          body: "First line. Second line.",
+          createdAt: "2025-01-01T00:00:00Z",
+          url: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        },
+      ],
+    },
+  ]);
+});
+
 test("formatUnresolvedThreadsReport renders thread identifiers and content", () => {
   const report = formatUnresolvedThreadsReport("stranske/trip-planner", 178, [
     {
@@ -263,6 +315,63 @@ test("loadReviewThreadsFromFile supports GraphQL snapshot payloads", () => {
   assert.equal(threads.length, 3);
   assert.equal(threads[0].id, "THREAD_A");
   assert.equal(threads[2].id, "THREAD_C");
+});
+
+test("loadReviewThreadsFromFile supports saved unresolved-thread report JSON", () => {
+  const snapshotDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "review-thread-report-"));
+  const snapshotPath = path.join(snapshotDirectory, "unresolved-report.json");
+
+  fs.writeFileSync(
+    snapshotPath,
+    `${JSON.stringify(
+      {
+        repository: "stranske/trip-planner",
+        prNumber: 178,
+        unresolvedThreads: [
+          {
+            id: "THREAD_1",
+            isOutdated: false,
+            path: "trip_planner/example.py",
+            line: 17,
+            originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+            comments: [
+              {
+                id: "COMMENT_1",
+                author: "reviewer-a",
+                body: "Please keep this branch explicit.",
+                createdAt: "2025-01-01T00:00:00Z",
+                url: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+              },
+            ],
+          },
+        ],
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  const threads = loadReviewThreadsFromFile(snapshotPath);
+
+  assert.deepEqual(threads, [
+    {
+      id: "THREAD_1",
+      isOutdated: false,
+      path: "trip_planner/example.py",
+      line: 17,
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      comments: [
+        {
+          id: "COMMENT_1",
+          author: "reviewer-a",
+          body: "Please keep this branch explicit.",
+          createdAt: "2025-01-01T00:00:00Z",
+          url: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        },
+      ],
+    },
+  ]);
 });
 
 test("extractThreadsFromSnapshot supports reviewThreads edge collections", () => {

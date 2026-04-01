@@ -261,6 +261,7 @@ async function fetchAllReviewThreads(configuration, dependencies = {}) {
 function extractThreadsFromSnapshot(snapshot) {
   const supportedCollections = [
     snapshot,
+    snapshot?.unresolvedThreads,
     snapshot?.threads,
     snapshot?.reviewThreads,
     snapshot?.pullRequest?.reviewThreads,
@@ -321,13 +322,34 @@ function normalizeBody(body) {
     .trim();
 }
 
+function normalizeCommentCollection(comments) {
+  if (Array.isArray(comments)) {
+    return comments;
+  }
+
+  if (Array.isArray(comments?.nodes)) {
+    return comments.nodes;
+  }
+
+  if (Array.isArray(comments?.edges)) {
+    return comments.edges
+      .map((edge) => edge?.node)
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
 function extractUnresolvedThreads(threads) {
   return threads
     .filter((thread) => thread && !thread.isResolved)
     .map((thread) => {
-      const comments = (thread.comments?.nodes || []).map((comment) => ({
+      const comments = normalizeCommentCollection(thread.comments).map((comment) => ({
         id: comment.id,
-        author: comment.author?.login || "unknown",
+        author:
+          (typeof comment.author === "string" && comment.author) ||
+          comment.author?.login ||
+          "unknown",
         body: normalizeBody(comment.body),
         createdAt: comment.createdAt,
         url: comment.url || null,
@@ -789,6 +811,7 @@ module.exports = {
   loadReviewThreadsFromFile,
   normalizeSnapshotThreadCollection,
   normalizeBody,
+  normalizeCommentCollection,
   parseCommandLineArguments,
   mergeInventoryIntoDocument,
   requestGraphql,
