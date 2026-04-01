@@ -73,9 +73,9 @@ def rank_leisure_candidates(
 
     scored_results: list[tuple[float, RankedResult]] = []
     for seed in seeds:
-        feasibility = feasibility_index.get(
-            seed.bundle.bundle_id
-        ) or evaluate_bundle_feasibility(seed.bundle)
+        feasibility = feasibility_index.get(seed.bundle.bundle_id) or evaluate_bundle_feasibility(
+            seed.bundle
+        )
         score, result = _build_ranked_result(
             seed=seed,
             resolved_profile=resolved_profile,
@@ -93,19 +93,14 @@ def rank_leisure_candidates(
         ),
         reverse=True,
     )
-    results = [
-        _with_rank(result, rank=index)
-        for index, (_, result) in enumerate(ranked, start=1)
-    ]
+    results = [_with_rank(result, rank=index) for index, (_, result) in enumerate(ranked, start=1)]
     result_set_id = f"ranking:{trip_id}:leisure"
     result_explanations = [
         "Leisure ranking remains downstream from preference resolution, objective derivation, and feasibility evaluation.",
         "Scores keep component breakdowns, confidence penalties, and tension handling explicit for inspection.",
     ]
     source_refs = _dedupe_strings(
-        source_ref
-        for seed in seeds
-        for source_ref in seed.bundle.provenance_summary.source_refs
+        source_ref for seed in seeds for source_ref in seed.bundle.provenance_summary.source_refs
     )
     return RankedResultSet(
         result_set_id=result_set_id,
@@ -217,8 +212,7 @@ def _build_ranked_result(
             label="Quality and value posture",
             axis_key="quality_value",
             normalized_signal=_mean([quality_signal, value_signal]),
-            weighted_impact=((quality_signal * 0.55) + (value_signal * 0.45) - 0.5)
-            * 0.12,
+            weighted_impact=((quality_signal * 0.55) + (value_signal * 0.45) - 0.5) * 0.12,
             summary="Rewards bundles that preserve quality and value instead of collapsing them into one scalar.",
         ),
         _axis_contribution(
@@ -365,10 +359,7 @@ def _build_ranked_result(
                 amount=round(
                     min(
                         0.12,
-                        sum(
-                            flag.severity
-                            for flag in resolved_profile.profile.tension_flags
-                        )
+                        sum(flag.severity for flag in resolved_profile.profile.tension_flags)
                         * 0.03,
                     ),
                     4,
@@ -384,9 +375,7 @@ def _build_ranked_result(
                 adjustment_id=f"{bundle.bundle_id}:missing",
                 label="Missing feasibility inputs",
                 kind="missing_data",
-                amount=round(
-                    min(0.12, 0.025 * len(feasibility.missing_data_fields)), 4
-                ),
+                amount=round(min(0.12, 0.025 * len(feasibility.missing_data_fields)), 4),
                 reason_code="missing_feasibility_data",
                 summary="Missing feasibility inputs remain visible as ranking discounts.",
                 affected_factor_keys=["missing_data"],
@@ -409,8 +398,7 @@ def _build_ranked_result(
     low_confidence_flags = _low_confidence_flags(resolved_profile)
     coverage = _clamp(1.0 - (0.08 * len(feasibility.missing_data_fields)))
     stability = _mean(
-        dimension.stability
-        for dimension in resolved_profile.profile.tradeoff_dimensions.values()
+        dimension.stability for dimension in resolved_profile.profile.tradeoff_dimensions.values()
     )
     feasibility_confidence = _coalesce_signal(
         feasibility.confidence_signal,
@@ -596,15 +584,11 @@ def _dedupe_strings(values: Iterable[str]) -> list[str]:
 
 
 def _bundle_quality_signal(bundle: InventoryBundle) -> float:
-    lodging_quality = _mean(
-        item.quality_summary.overall_signal for item in bundle.lodging_options
-    )
+    lodging_quality = _mean(item.quality_summary.overall_signal for item in bundle.lodging_options)
     activity_quality = _mean(
         item.quality_summary.overall_signal for item in bundle.activity_options
     )
-    return _mean(
-        [bundle.quality_value_fit.quality_signal, lodging_quality, activity_quality]
-    )
+    return _mean([bundle.quality_value_fit.quality_signal, lodging_quality, activity_quality])
 
 
 def _iconic_signal(bundle: InventoryBundle) -> float:
@@ -614,16 +598,13 @@ def _iconic_signal(bundle: InventoryBundle) -> float:
         if item.significance_summary.local_icon_signal is not None
     ]
     anchor_bonus = [
-        1.0 if item.significance_summary.anchor_worthy else 0.0
-        for item in bundle.activity_options
+        1.0 if item.significance_summary.anchor_worthy else 0.0 for item in bundle.activity_options
     ]
     return _mean(values + anchor_bonus)
 
 
 def _discovery_signal(bundle: InventoryBundle) -> float:
-    open_ended = [
-        1.0 if item.category.open_ended else 0.0 for item in bundle.activity_options
-    ]
+    open_ended = [1.0 if item.category.open_ended else 0.0 for item in bundle.activity_options]
     wander_tags = [
         1.0
         for item in bundle.activity_options
@@ -649,20 +630,14 @@ def _scenic_signal(bundle: InventoryBundle) -> float:
 def _efficiency_signal(feasibility: FeasibilityAssessment) -> float:
     travel_minutes = feasibility.total_travel_minutes
     transfer_count = feasibility.total_transfer_count
-    return _clamp(
-        1.0 - min(0.7, (travel_minutes / 540.0)) - min(0.3, transfer_count * 0.08)
-    )
+    return _clamp(1.0 - min(0.7, (travel_minutes / 540.0)) - min(0.3, transfer_count * 0.08))
 
 
-def _recovery_signal(
-    bundle: InventoryBundle, feasibility: FeasibilityAssessment
-) -> float:
+def _recovery_signal(bundle: InventoryBundle, feasibility: FeasibilityAssessment) -> float:
     lodging_recovery = _mean(
         item.location_summary.recovery_signal for item in bundle.lodging_options
     )
-    quiet_signal = _mean(
-        item.location_summary.quiet_signal for item in bundle.lodging_options
-    )
+    quiet_signal = _mean(item.location_summary.quiet_signal for item in bundle.lodging_options)
     conflict_penalty = min(
         0.4,
         len([item for item in feasibility.timing_conflicts if item.blocking]) * 0.18,
@@ -686,22 +661,17 @@ def _intensity_signal(bundle: InventoryBundle) -> float:
 
 def _structure_signal(bundle: InventoryBundle) -> float:
     values = [
-        1.0 if item.booking_terms.booking_required else 0.35
-        for item in bundle.activity_options
+        1.0 if item.booking_terms.booking_required else 0.35 for item in bundle.activity_options
     ]
     return _mean(values or [0.45])
 
 
 def _elasticity_signal(bundle: InventoryBundle) -> float:
-    values = [
-        1.0 if item.category.open_ended else 0.25 for item in bundle.activity_options
-    ]
+    values = [1.0 if item.category.open_ended else 0.25 for item in bundle.activity_options]
     return _mean(values or [0.45])
 
 
-def _coherence_signal(
-    bundle: InventoryBundle, feasibility: FeasibilityAssessment
-) -> float:
+def _coherence_signal(bundle: InventoryBundle, feasibility: FeasibilityAssessment) -> float:
     destination_penalty = max(0, len(bundle.destination_ids) - 1) * 0.14
     route_penalty = len(feasibility.route_warnings) * 0.1
     transfer_penalty = feasibility.total_transfer_count * 0.05
@@ -712,21 +682,15 @@ def _breadth_signal(bundle: InventoryBundle) -> float:
     return _clamp(min(1.0, max(0.0, (len(bundle.destination_ids) - 1) / 2.0)))
 
 
-def _movement_signal(
-    bundle: InventoryBundle, feasibility: FeasibilityAssessment
-) -> float:
+def _movement_signal(bundle: InventoryBundle, feasibility: FeasibilityAssessment) -> float:
     transport_weight = 0.25 if bundle.transport_options else 0.0
     travel_component = min(0.55, feasibility.total_travel_minutes / 420.0)
     scenic_component = _scenic_signal(bundle) * 0.2
     breadth_component = _breadth_signal(bundle) * 0.25
-    return _clamp(
-        travel_component + scenic_component + breadth_component + transport_weight
-    )
+    return _clamp(travel_component + scenic_component + breadth_component + transport_weight)
 
 
-def _budget_signal(
-    seed: CandidateSeed, resolved_profile: ResolvedLeisureProfile
-) -> float:
+def _budget_signal(seed: CandidateSeed, resolved_profile: ResolvedLeisureProfile) -> float:
     estimated_total = seed.estimated_total()
     base_signal = _mean(
         [
@@ -740,9 +704,7 @@ def _budget_signal(
         return _clamp((base_signal * (0.65 + (sensitivity * 0.35))))
     if estimated_total.typical_amount is None:
         return base_signal
-    budget_ratio = (
-        estimated_total.typical_amount / budget_ceiling if budget_ceiling else 1.0
-    )
+    budget_ratio = estimated_total.typical_amount / budget_ceiling if budget_ceiling else 1.0
     if budget_ratio <= 0.85:
         return _clamp(max(base_signal, 0.75))
     if budget_ratio <= 1.0:
@@ -762,9 +724,7 @@ def _quality_floor_signal(bundle: InventoryBundle) -> float:
         for item in bundle.lodging_options
         if item.quality_summary.sleep_quality_signal is not None
     ]
-    return _mean(
-        lodging_signals + sleep_signals or [bundle.quality_value_fit.quality_signal]
-    )
+    return _mean(lodging_signals + sleep_signals or [bundle.quality_value_fit.quality_signal])
 
 
 def _anchor_signal(resolved_profile: ResolvedLeisureProfile, bundle_text: str) -> float:
@@ -772,9 +732,7 @@ def _anchor_signal(resolved_profile: ResolvedLeisureProfile, bundle_text: str) -
     for group_name, anchors in resolved_profile.profile.anchors.items():
         for anchor in anchors:
             label_terms = [
-                term
-                for term in anchor.label.lower().replace("-", " ").split()
-                if len(term) > 2
+                term for term in anchor.label.lower().replace("-", " ").split() if len(term) > 2
             ]
             if any(term in bundle_text for term in label_terms):
                 matches.append(anchor.strength)
@@ -802,15 +760,11 @@ def _hybrid_signal(
         matched = any(keyword in bundle_text for keyword in keywords)
         if key == "rest" and bundle.lodging_options:
             if rest_recovery_signal is None:
-                resolved_feasibility = feasibility or evaluate_bundle_feasibility(
-                    bundle
-                )
+                resolved_feasibility = feasibility or evaluate_bundle_feasibility(bundle)
                 rest_recovery_signal = _recovery_signal(bundle, resolved_feasibility)
             matched = matched or rest_recovery_signal >= 0.7
         if matched:
-            signals.append(
-                _clamp((factor.salience * 0.7) + (factor.anchor_strength * 0.3))
-            )
+            signals.append(_clamp((factor.salience * 0.7) + (factor.anchor_strength * 0.3)))
     return _mean(signals or [0.45])
 
 
@@ -818,9 +772,7 @@ def _freshness_signal(bundle: InventoryBundle) -> float:
     freshness: list[float] = []
     for destination in bundle.destinations:
         for destination_source in destination.source_refs:
-            freshness_days = getattr(
-                destination_source, "freshness_days_at_capture", None
-            )
+            freshness_days = getattr(destination_source, "freshness_days_at_capture", None)
             if freshness_days is not None:
                 freshness.append(_clamp(1.0 - min(1.0, freshness_days / 90.0)))
     for collection in (
@@ -832,13 +784,9 @@ def _freshness_signal(bundle: InventoryBundle) -> float:
             for option_source in option.source_refs:
                 trust = getattr(option_source, "trust_snapshot", None)
                 if trust and trust.freshness_days is not None:
-                    freshness.append(
-                        _clamp(1.0 - min(1.0, trust.freshness_days / 90.0))
-                    )
+                    freshness.append(_clamp(1.0 - min(1.0, trust.freshness_days / 90.0)))
                 else:
-                    freshness_days = getattr(
-                        option_source, "freshness_days_at_capture", None
-                    )
+                    freshness_days = getattr(option_source, "freshness_days_at_capture", None)
                     if freshness_days is not None:
                         freshness.append(_clamp(1.0 - min(1.0, freshness_days / 90.0)))
     return _mean(freshness or [0.75])
@@ -906,9 +854,7 @@ def _explanations_for_result(
             headline=f"{top_positive.label} promotes this bundle.",
             summary=top_positive.summary,
             factor_keys=[top_positive.axis_key],
-            machine_context={
-                "normalized_signal": f"{top_positive.normalized_signal or 0.0:.2f}"
-            },
+            machine_context={"normalized_signal": f"{top_positive.normalized_signal or 0.0:.2f}"},
             human_summary=_non_empty_strings(
                 *bundle.explanation.strengths[:2],
                 bundle.summary or bundle.title,
@@ -930,8 +876,7 @@ def _explanations_for_result(
                 "input_coverage": f"{confidence_summary.input_coverage or 0.0:.2f}",
                 "scoring_stability": f"{confidence_summary.scoring_stability or 0.0:.2f}",
             },
-            human_summary=confidence_summary.notes[:2]
-            or ["Confidence remains inspectable."],
+            human_summary=confidence_summary.notes[:2] or ["Confidence remains inspectable."],
             source_refs=list(bundle.provenance_summary.source_refs),
         ),
     ]
