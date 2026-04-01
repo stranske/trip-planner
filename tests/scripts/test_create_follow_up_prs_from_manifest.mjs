@@ -15,6 +15,7 @@ const {
   resolveManifestRelativePath,
   selectManifestGroups,
   validateManifestGroup,
+  writeExecutionResults,
 } = require(path.join(repoRoot, "scripts/create_follow_up_prs_from_manifest.js"));
 
 test("parseCliArguments accepts manifest execution options", () => {
@@ -28,6 +29,8 @@ test("parseCliArguments accepts manifest execution options", () => {
     "https://github.com/stranske/trip-planner/pull/581",
     "--group-index",
     "2",
+    "--write-results",
+    ".tmp/generated/results.json",
   ]);
 
   assert.equal(options.manifestPath, path.resolve(".tmp/generated/manifest.json"));
@@ -35,6 +38,7 @@ test("parseCliArguments accepts manifest execution options", () => {
   assert.equal(options.outputFormat, "json");
   assert.equal(options.followUpPr, "https://github.com/stranske/trip-planner/pull/581");
   assert.equal(options.groupIndex, 2);
+  assert.equal(options.resultsPath, ".tmp/generated/results.json");
 });
 
 test("loadManifest rejects malformed manifests", () => {
@@ -137,12 +141,14 @@ test("resolveManifestRelativePath resolves paths relative to the manifest locati
 });
 
 test("executeManifestGroups supports dry-run mode without invoking gh", () => {
+  const writes = [];
   const report = executeManifestGroups(
     {
       manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
       execute: false,
       followUpPr: null,
       groupIndex: null,
+      resultsPath: "created-prs.json",
     },
     {
       readFileSync: () =>
@@ -167,11 +173,15 @@ test("executeManifestGroups supports dry-run mode without invoking gh", () => {
       execFileSync: () => {
         throw new Error("gh should not be called during dry run");
       },
+      writeFileSync: (filePath, content, encoding) => {
+        writes.push({ filePath, content, encoding });
+      },
     }
   );
 
   assert.equal(report.execute, false);
   assert.equal(report.groupCount, 1);
+  assert.equal(report.resultsPath, path.resolve(".tmp/pr-thread-payloads/created-prs.json"));
   assert.equal(report.results[0].manifestGroupNumber, 1);
   assert.equal(report.results[0].mode, "dry-run");
   assert.equal(
@@ -179,6 +189,10 @@ test("executeManifestGroups supports dry-run mode without invoking gh", () => {
     path.resolve(".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md")
   );
   assert.match(report.results[0].command, /^gh pr create --base main --head codex\/fix-thread-1/);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].filePath, path.resolve(".tmp/pr-thread-payloads/created-prs.json"));
+  assert.equal(writes[0].encoding, "utf8");
+  assert.match(writes[0].content, /"resultsPath":/);
 });
 
 test("executeManifestGroups invokes gh for selected groups in execute mode", () => {
@@ -382,6 +396,7 @@ test("formatExecutionReport emits readable dry-run output", () => {
     {
       manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
       execute: false,
+      resultsPath: path.resolve(".tmp/pr-thread-payloads/created-prs.json"),
       groupCount: 1,
       results: [
         {
@@ -403,9 +418,38 @@ test("formatExecutionReport emits readable dry-run output", () => {
 
   assert.match(report, /# Follow-up PR Dry Run/);
   assert.match(report, /Selected Groups: 1/);
+  assert.match(report, /Results File: `.*created-prs\.json`/);
   assert.match(report, /Manifest Group 3/);
   assert.match(report, /Mode: dry-run/);
   assert.match(report, /Command: `gh pr create --base main --head codex\/fix-thread-1/);
+});
+
+test("writeExecutionResults persists the execution report as JSON", () => {
+  const writes = [];
+  const report = {
+    manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+    execute: true,
+    resultsPath: path.resolve(".tmp/pr-thread-payloads/created-prs.json"),
+    groupCount: 1,
+    results: [
+      {
+        manifestGroupNumber: 1,
+        followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+        createdPullRequestUrl: "https://github.com/stranske/trip-planner/pull/622",
+      },
+    ],
+  };
+
+  writeExecutionResults(report, report.resultsPath, {
+    writeFileSync: (filePath, content, encoding) => {
+      writes.push({ filePath, content, encoding });
+    },
+  });
+
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].filePath, report.resultsPath);
+  assert.equal(writes[0].encoding, "utf8");
+  assert.deepEqual(JSON.parse(writes[0].content), report);
 });
 
 test("formatExecutionReport includes the created PR URL when available", () => {

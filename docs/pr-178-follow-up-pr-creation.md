@@ -20,6 +20,13 @@ node scripts/create_follow_up_prs_from_manifest.js --manifest .tmp/pr-thread-pay
 node scripts/create_follow_up_prs_from_manifest.js --manifest .tmp/pr-thread-payloads/manifest.json --follow-up-pr https://github.com/stranske/trip-planner/pull/581 --execute
 ```
 
+## Persist the created PR results
+
+```bash
+node scripts/create_follow_up_prs_from_manifest.js --manifest .tmp/pr-thread-payloads/manifest.json --execute --write-results .tmp/pr-thread-payloads/created-prs.json
+```
+
 The script validates each selected manifest group, checks that the generated PR body file exists, and only runs `gh pr create` when `--execute` is provided.
 When execution succeeds, the report now includes a `Created PR:` line extracted from the `gh pr create` output.
+When `--write-results` is provided, the same execution report is also written to JSON relative to the manifest so the created PR URL(s) can be reused when updating `docs/pr-178-unresolved-threads.md` or other follow-up notes.
 If `gh` returns output without a GitHub pull request URL, the script fails so a partial or ambiguous run is not mistaken for a created follow-up PR.

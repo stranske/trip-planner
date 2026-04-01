@@ -13,6 +13,7 @@ function parseCliArguments(argv = process.argv.slice(2)) {
     outputFormat: "text",
     followUpPr: null,
     groupIndex: null,
+    resultsPath: null,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -68,6 +69,17 @@ function parseCliArguments(argv = process.argv.slice(2)) {
       }
 
       options.groupIndex = parsed;
+      index += 1;
+      continue;
+    }
+
+    if (argument === "--write-results") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --write-results flag requires a file path.");
+      }
+
+      options.resultsPath = value;
       index += 1;
       continue;
     }
@@ -190,6 +202,11 @@ function resolveManifestRelativePath(manifestPath, targetPath) {
   return path.resolve(path.dirname(manifestPath), targetPath);
 }
 
+function writeExecutionResults(report, resultsPath, dependencies = {}) {
+  const writeFileSync = dependencies.writeFileSync || fs.writeFileSync;
+  writeFileSync(resultsPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+}
+
 function executeManifestGroups(options = {}, dependencies = {}) {
   const manifest = loadManifest(options.manifestPath, dependencies);
   const statSync = dependencies.statSync || fs.statSync;
@@ -254,12 +271,19 @@ function executeManifestGroups(options = {}, dependencies = {}) {
     return result;
   });
 
-  return {
+  const report = {
     manifestPath: options.manifestPath,
     execute: options.execute,
     groupCount: results.length,
     results,
   };
+
+  if (options.resultsPath) {
+    report.resultsPath = resolveManifestRelativePath(options.manifestPath, options.resultsPath);
+    writeExecutionResults(report, report.resultsPath, dependencies);
+  }
+
+  return report;
 }
 
 function formatExecutionReport(report, outputFormat = "text") {
@@ -273,6 +297,10 @@ function formatExecutionReport(report, outputFormat = "text") {
     `Manifest: \`${report.manifestPath}\``,
     `Selected Groups: ${report.groupCount}`,
   ];
+
+  if (report.resultsPath) {
+    lines.push(`Results File: \`${report.resultsPath}\``);
+  }
 
   report.results.forEach((result) => {
     lines.push("");
@@ -322,4 +350,5 @@ module.exports = {
   resolveManifestRelativePath,
   selectManifestGroups,
   validateManifestGroup,
+  writeExecutionResults,
 };
