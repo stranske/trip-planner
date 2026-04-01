@@ -55,6 +55,16 @@ test("validateManifestGroup reports missing execution fields", () => {
   ]);
 });
 
+test("validateManifestGroup reports the manifest group number when present", () => {
+  assert.deepEqual(validateManifestGroup({ manifestGroupNumber: 4 }, 0), [
+    "Group 4 is missing followUpPr.",
+    "Group 4 is missing title.",
+    "Group 4 is missing baseBranch.",
+    "Group 4 is missing headBranch.",
+    "Group 4 is missing bodyFilePath.",
+  ]);
+});
+
 test("selectManifestGroups can isolate a specific follow-up PR", () => {
   const groups = selectManifestGroups(
     {
@@ -71,6 +81,7 @@ test("selectManifestGroups can isolate a specific follow-up PR", () => {
 
   assert.equal(groups.length, 1);
   assert.equal(groups[0].followUpPr, "https://github.com/stranske/trip-planner/pull/582");
+  assert.equal(groups[0].manifestGroupNumber, 2);
 });
 
 test("buildGhPrCreateArgs returns a non-shell command argv list", () => {
@@ -126,6 +137,7 @@ test("executeManifestGroups supports dry-run mode without invoking gh", () => {
 
   assert.equal(report.execute, false);
   assert.equal(report.groupCount, 1);
+  assert.equal(report.results[0].manifestGroupNumber, 1);
   assert.equal(report.results[0].mode, "dry-run");
   assert.match(report.results[0].command, /^gh pr create --base main --head codex\/fix-thread-1/);
 });
@@ -182,7 +194,45 @@ test("executeManifestGroups invokes gh for selected groups in execute mode", () 
     ".tmp/pr-thread-payloads/pr-178-fix-group-2-body.md",
   ]);
   assert.deepEqual(calls[0].execOptions, { encoding: "utf8" });
+  assert.equal(report.results[0].manifestGroupNumber, 2);
   assert.equal(report.results[0].output, "https://github.com/stranske/trip-planner/pull/622");
+});
+
+test("executeManifestGroups preserves manifest numbering after selecting a later group index", () => {
+  const report = executeManifestGroups(
+    {
+      manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+      execute: false,
+      followUpPr: null,
+      groupIndex: 2,
+    },
+    {
+      readFileSync: () =>
+        JSON.stringify({
+          groups: [
+            {
+              followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+              title: "Ignore me",
+              baseBranch: "main",
+              headBranch: "codex/fix-thread-1",
+              bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
+            },
+            {
+              followUpPr: "https://github.com/stranske/trip-planner/pull/582",
+              title: "Address PR #178 fix threads for follow-up PR #582",
+              baseBranch: "main",
+              headBranch: "codex/fix-thread-2",
+              bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-2-body.md",
+            },
+          ],
+        }),
+      statSync: () => ({ isFile: () => true }),
+    }
+  );
+
+  assert.equal(report.groupCount, 1);
+  assert.equal(report.results[0].groupNumber, 1);
+  assert.equal(report.results[0].manifestGroupNumber, 2);
 });
 
 test("executeManifestGroups fails when the selected body file is missing", () => {
@@ -226,6 +276,7 @@ test("formatExecutionReport emits readable dry-run output", () => {
       results: [
         {
           groupNumber: 1,
+          manifestGroupNumber: 3,
           followUpPr: "https://github.com/stranske/trip-planner/pull/581",
           mode: "dry-run",
           baseBranch: "main",
@@ -242,6 +293,7 @@ test("formatExecutionReport emits readable dry-run output", () => {
 
   assert.match(report, /# Follow-up PR Dry Run/);
   assert.match(report, /Selected Groups: 1/);
+  assert.match(report, /Manifest Group 3/);
   assert.match(report, /Mode: dry-run/);
   assert.match(report, /Command: `gh pr create --base main --head codex\/fix-thread-1/);
 });

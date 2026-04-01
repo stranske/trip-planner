@@ -97,46 +97,52 @@ function loadManifest(manifestPath, dependencies = {}) {
 
 function validateManifestGroup(group, groupIndex) {
   const issues = [];
+  const displayGroupNumber = group?.manifestGroupNumber || groupIndex + 1;
 
   if (!group || typeof group !== "object") {
-    return [`Group ${groupIndex + 1} is not an object.`];
+    return [`Group ${displayGroupNumber} is not an object.`];
   }
 
   if (!group.followUpPr) {
-    issues.push(`Group ${groupIndex + 1} is missing followUpPr.`);
+    issues.push(`Group ${displayGroupNumber} is missing followUpPr.`);
   }
 
   if (!group.title) {
-    issues.push(`Group ${groupIndex + 1} is missing title.`);
+    issues.push(`Group ${displayGroupNumber} is missing title.`);
   }
 
   if (!group.baseBranch) {
-    issues.push(`Group ${groupIndex + 1} is missing baseBranch.`);
+    issues.push(`Group ${displayGroupNumber} is missing baseBranch.`);
   }
 
   if (!group.headBranch) {
-    issues.push(`Group ${groupIndex + 1} is missing headBranch.`);
+    issues.push(`Group ${displayGroupNumber} is missing headBranch.`);
   }
 
   if (!group.bodyFilePath) {
-    issues.push(`Group ${groupIndex + 1} is missing bodyFilePath.`);
+    issues.push(`Group ${displayGroupNumber} is missing bodyFilePath.`);
   }
 
   return issues;
 }
 
 function selectManifestGroups(manifest, options = {}) {
-  const selectedGroups = manifest.groups.filter((group, index) => {
-    if (options.groupIndex !== null && index !== options.groupIndex - 1) {
-      return false;
-    }
+  const selectedGroups = manifest.groups
+    .map((group, index) => ({
+      ...group,
+      manifestGroupNumber: index + 1,
+    }))
+    .filter((group) => {
+      if (options.groupIndex !== null && group.manifestGroupNumber !== options.groupIndex) {
+        return false;
+      }
 
-    if (options.followUpPr && group.followUpPr !== options.followUpPr) {
-      return false;
-    }
+      if (options.followUpPr && group.followUpPr !== options.followUpPr) {
+        return false;
+      }
 
-    return true;
-  });
+      return true;
+    });
 
   if (selectedGroups.length === 0) {
     const selector = options.followUpPr
@@ -181,13 +187,14 @@ function executeManifestGroups(options = {}, dependencies = {}) {
       statSync(group.bodyFilePath);
     } catch (error) {
       throw new Error(
-        `Group ${index + 1} body file does not exist: ${group.bodyFilePath}`
+        `Group ${group.manifestGroupNumber} body file does not exist: ${group.bodyFilePath}`
       );
     }
 
     const args = buildGhPrCreateArgs(group);
     const result = {
       groupNumber: index + 1,
+      manifestGroupNumber: group.manifestGroupNumber,
       followUpPr: group.followUpPr,
       title: group.title,
       baseBranch: group.baseBranch,
@@ -227,7 +234,9 @@ function formatExecutionReport(report, outputFormat = "text") {
 
   report.results.forEach((result) => {
     lines.push("");
-    lines.push(`## Group ${result.groupNumber}: ${result.followUpPr}`);
+    lines.push(
+      `## Group ${result.groupNumber} (Manifest Group ${result.manifestGroupNumber}): ${result.followUpPr}`
+    );
     lines.push("");
     lines.push(`- Mode: ${result.mode}`);
     lines.push(`- Base Branch: \`${result.baseBranch}\``);
