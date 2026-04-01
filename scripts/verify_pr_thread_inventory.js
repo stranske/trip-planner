@@ -13,13 +13,14 @@ const {
   DEFAULT_PR_NUMBER,
   DEFAULT_REPOSITORY,
   extractUnresolvedThreads,
+  fetchAllReviewThreads,
   getConfiguration,
   loadReviewThreadsFromFile,
   validateExpectedCount,
 } = require("./list_unresolved_pr_threads.js");
 
 function getVerifierConfiguration(argv = process.argv.slice(2), env = process.env) {
-  const reviewThreadConfiguration = getConfiguration(argv, env);
+  const passthroughArguments = [];
   const options = {
     docPath: DEFAULT_DOC_PATH,
     expectDocCount: null,
@@ -47,8 +48,13 @@ function getVerifierConfiguration(argv = process.argv.slice(2), env = process.en
 
       options.expectDocCount = value;
       index += 1;
+      continue;
     }
+
+    passthroughArguments.push(argument);
   }
+
+  const reviewThreadConfiguration = getConfiguration(passthroughArguments, env);
 
   const expectDocCountRaw = options.expectDocCount ?? env.EXPECT_DOC_THREAD_COUNT ?? null;
   const expectDocCount =
@@ -177,34 +183,41 @@ function formatInventoryVerificationReport(configuration, documentedThreads, unr
 function buildInventoryVerificationReport(configuration, dependencies = {}) {
   const loadInventory = dependencies.loadThreadInventory || loadThreadInventory;
   const loadThreads = dependencies.loadReviewThreadsFromFile || loadReviewThreadsFromFile;
+  const fetchThreads = dependencies.fetchAllReviewThreads || fetchAllReviewThreads;
   const documentedThreads = loadInventory(configuration.docPath);
-  const unresolvedThreads = extractUnresolvedThreads(loadThreads(configuration.inputPath));
-  const issues = collectInventoryVerificationIssues(documentedThreads, unresolvedThreads, {
-    expectDocCount: configuration.expectDocCount,
+  const resolveRawThreads = configuration.inputPath
+    ? Promise.resolve(loadThreads(configuration.inputPath))
+    : Promise.resolve(fetchThreads(configuration));
+
+  return resolveRawThreads.then((rawThreads) => {
+    const unresolvedThreads = extractUnresolvedThreads(rawThreads);
+    const issues = collectInventoryVerificationIssues(documentedThreads, unresolvedThreads, {
+      expectDocCount: configuration.expectDocCount,
+    });
+    let expectedCountError = null;
+
+    try {
+      validateExpectedCount(unresolvedThreads, configuration.expectedCount);
+    } catch (error) {
+      expectedCountError = error.message;
+    }
+
+    if (expectedCountError) {
+      issues.push(expectedCountError);
+    }
+
+    return formatInventoryVerificationReport(
+      configuration,
+      documentedThreads,
+      unresolvedThreads,
+      issues
+    );
   });
-  let expectedCountError = null;
-
-  try {
-    validateExpectedCount(unresolvedThreads, configuration.expectedCount);
-  } catch (error) {
-    expectedCountError = error.message;
-  }
-
-  if (expectedCountError) {
-    issues.push(expectedCountError);
-  }
-
-  return formatInventoryVerificationReport(
-    configuration,
-    documentedThreads,
-    unresolvedThreads,
-    issues
-  );
 }
 
-function main(argv = process.argv.slice(2), env = process.env) {
+async function main(argv = process.argv.slice(2), env = process.env) {
   const configuration = getVerifierConfiguration(argv, env);
-  const report = buildInventoryVerificationReport(configuration);
+  const report = await buildInventoryVerificationReport(configuration);
   process.stdout.write(report);
 
   if (report.includes("Verification: FAILED")) {
@@ -213,12 +226,10 @@ function main(argv = process.argv.slice(2), env = process.env) {
 }
 
 if (require.main === module) {
-  try {
-    main();
-  } catch (error) {
+  main().catch((error) => {
     console.error(error.message);
     process.exitCode = 1;
-  }
+  });
 }
 
 module.exports = {

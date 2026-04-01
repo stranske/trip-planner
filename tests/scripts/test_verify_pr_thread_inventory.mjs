@@ -40,6 +40,23 @@ test("getVerifierConfiguration parses doc path and expected documented thread co
   assert.equal(configuration.expectedCount, 0);
 });
 
+test("getVerifierConfiguration keeps verifier-only flags out of repository parsing", () => {
+  const configuration = getVerifierConfiguration(
+    ["--input", "threads.json", "--doc", "docs/custom.md", "--expect-doc-count", "4"],
+    {
+      GITHUB_REPOSITORY: "stranske/trip-planner",
+      PR_NUMBER: "178",
+    }
+  );
+
+  assert.equal(configuration.owner, "stranske");
+  assert.equal(configuration.repo, "trip-planner");
+  assert.equal(configuration.prNumber, 178);
+  assert.equal(configuration.inputPath, "threads.json");
+  assert.equal(configuration.docPath, path.resolve("docs/custom.md"));
+  assert.equal(configuration.expectDocCount, 4);
+});
+
 test("collectInventoryVerificationIssues reports doc completeness and snapshot mismatches", () => {
   const documentedThreads = parseThreadInventory(`
 # PR #178 Unresolved Thread Inventory
@@ -154,7 +171,7 @@ test("formatInventoryVerificationReport summarizes passing verification", () => 
   assert.match(report, /Verification: OK/);
 });
 
-test("buildInventoryVerificationReport accepts a complete matching document and snapshot", () => {
+test("buildInventoryVerificationReport accepts a complete matching document and snapshot", async () => {
   const rawThreads = [
     {
       id: "THREAD_A",
@@ -218,25 +235,28 @@ test("buildInventoryVerificationReport accepts a complete matching document and 
 - Outdated: yes
 `;
 
-  const passingReport = buildInventoryVerificationReport({
-    owner: "stranske",
-    repo: "trip-planner",
-    prNumber: 178,
-    inputPath: "inline-snapshot.json",
-    docPath: path.resolve("docs/fixture-thread-inventory.md"),
-    expectDocCount: 2,
-    expectedCount: 2,
-    token: undefined,
-  }, {
-    loadThreadInventory: () => parseThreadInventory(markdown),
-    loadReviewThreadsFromFile: () => rawThreads,
-  });
+  const passingReport = await buildInventoryVerificationReport(
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      inputPath: "inline-snapshot.json",
+      docPath: path.resolve("docs/fixture-thread-inventory.md"),
+      expectDocCount: 2,
+      expectedCount: 2,
+      token: undefined,
+    },
+    {
+      loadThreadInventory: () => parseThreadInventory(markdown),
+      loadReviewThreadsFromFile: () => rawThreads,
+    }
+  );
 
   assert.match(passingReport, /Verification: OK/);
 });
 
-test("buildInventoryVerificationReport includes unresolved count mismatches in the failure output", () => {
-  const report = buildInventoryVerificationReport(
+test("buildInventoryVerificationReport includes unresolved count mismatches in the failure output", async () => {
+  const report = await buildInventoryVerificationReport(
     {
       owner: "stranske",
       repo: "trip-planner",
@@ -279,4 +299,56 @@ test("buildInventoryVerificationReport includes unresolved count mismatches in t
 
   assert.match(report, /Verification: FAILED/);
   assert.match(report, /Expected 0 unresolved review thread\(s\), found 1\./);
+});
+
+test("buildInventoryVerificationReport fetches live review threads when no snapshot input is provided", async () => {
+  const report = await buildInventoryVerificationReport(
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      inputPath: null,
+      docPath: path.resolve("docs/fixture-thread-inventory.md"),
+      expectDocCount: 1,
+      expectedCount: 1,
+      token: "test-token",
+    },
+    {
+      loadThreadInventory: () =>
+        parseThreadInventory(`
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: disposition
+- Rationale: Verified directly against the live review-thread payload.
+- Content: reviewer: Please keep this branch explicit.
+- Outdated: no
+`),
+      fetchAllReviewThreads: async () => [
+        {
+          id: "THREAD_1",
+          isResolved: false,
+          isOutdated: false,
+          path: "trip_planner/example.py",
+          line: 17,
+          comments: {
+            nodes: [
+              {
+                id: "COMMENT_1",
+                body: "Please keep this branch explicit.",
+                url: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+                author: { login: "reviewer" },
+              },
+            ],
+          },
+        },
+      ],
+    }
+  );
+
+  assert.match(report, /Verification: OK/);
 });
