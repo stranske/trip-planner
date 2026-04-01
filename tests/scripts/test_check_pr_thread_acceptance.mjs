@@ -124,12 +124,13 @@ No unresolved inline review threads found.
     }
   );
 
-  assert.equal(result.overallStatus, "blocked");
+  assert.equal(result.overallStatus, "manual");
   assert.equal(result.unresolvedThreadCount, 0);
   assert.equal(result.criteria[0].status, "pass");
   assert.equal(result.criteria[1].status, "pass");
   assert.equal(result.criteria[2].status, "pass");
   assert.equal(result.criteria[3].status, "manual");
+  assert.match(result.criteria[3].details, /cannot verify the live GitHub UI state/i);
 });
 
 test("evaluateAcceptance fails repo-local verification when zero unresolved threads are reported but the active inventory section still contains entries", async () => {
@@ -354,4 +355,29 @@ test("formatAcceptanceReport renders criterion statuses and issue details", () =
   assert.match(report, /Overall status: FAIL/);
   assert.match(report, /- \[FAIL\] Criterion one: First failure/);
   assert.match(report, /  - Missing metadata/);
+});
+
+test("formatAcceptanceReport renders manual overall status", () => {
+  const report = formatAcceptanceReport(
+    {
+      repository: "stranske/trip-planner",
+      prNumber: 178,
+      docPath: DEFAULT_DOC_PATH,
+      overallStatus: "manual",
+      criteria: [
+        {
+          label: "GitHub UI shows no unresolved inline review threads",
+          status: "manual",
+          details: "Manual verification is still required.",
+          issues: [],
+        },
+      ],
+    }
+  );
+
+  assert.match(report, /Overall status: MANUAL/);
+  assert.match(
+    report,
+    /- \[MANUAL\] GitHub UI shows no unresolved inline review threads: Manual verification is still required\./
+  );
 });

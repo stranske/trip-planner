@@ -262,7 +262,11 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
     ? "pass"
     : criteria.some((criterion) => criterion.status === "fail")
       ? "fail"
-      : "blocked";
+      : criteria.some((criterion) => criterion.status === "blocked")
+        ? "blocked"
+        : criteria.some((criterion) => criterion.status === "manual")
+          ? "manual"
+          : "blocked";
 
   return {
     repository,
