@@ -46,6 +46,50 @@ function normalizeFieldValue(value) {
   return normalized === "" ? null : normalized;
 }
 
+function collectThreadInventoryIssues(threads) {
+  const issues = [];
+
+  threads.forEach((thread, index) => {
+    const threadLabel = thread.threadId || `Thread ${index + 1}`;
+
+    if (!thread.threadId) {
+      issues.push(`${threadLabel}: missing thread ID`);
+    }
+
+    if (!thread.location) {
+      issues.push(`${threadLabel}: missing location`);
+    }
+
+    if (!thread.classification) {
+      issues.push(`${threadLabel}: missing classification`);
+    } else if (!["fix", "disposition"].includes(thread.classification)) {
+      issues.push(`${threadLabel}: invalid classification "${thread.classification}"`);
+    }
+
+    if (!thread.rationale) {
+      issues.push(`${threadLabel}: missing rationale`);
+    }
+
+    if (!thread.content) {
+      issues.push(`${threadLabel}: missing content`);
+    }
+  });
+
+  return issues;
+}
+
+function formatThreadInventoryIssues(issues) {
+  if (issues.length === 0) {
+    return "Thread inventory is complete.\n";
+  }
+
+  const lines = [`Thread inventory issues: ${issues.length}`];
+  issues.forEach((issue, index) => {
+    lines.push(`${index + 1}. ${issue}`);
+  });
+  return `${lines.join("\n")}\n`;
+}
+
 function loadThreadInventory(docPath = DEFAULT_DOC_PATH, dependencies = {}) {
   const readFileSync = dependencies.readFileSync || fs.readFileSync;
   return parseThreadInventory(readFileSync(docPath, "utf8"));
@@ -71,9 +115,43 @@ function formatFixThreadsReport(fixThreads) {
   return `${lines.join("\n")}\n`;
 }
 
+function getCliConfiguration(argv = process.argv.slice(2)) {
+  const options = {
+    docPath: DEFAULT_DOC_PATH,
+    requireComplete: false,
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+
+    if (argument === "--require-complete") {
+      options.requireComplete = true;
+      continue;
+    }
+
+    if (argument.startsWith("--")) {
+      throw new Error(`Unknown option: ${argument}`);
+    }
+
+    if (options.docPath !== DEFAULT_DOC_PATH) {
+      throw new Error(`Unexpected argument: ${argument}`);
+    }
+
+    options.docPath = path.resolve(argument);
+  }
+
+  return options;
+}
+
 function main(argv = process.argv.slice(2)) {
-  const docPath = argv[0] ? path.resolve(argv[0]) : DEFAULT_DOC_PATH;
+  const { docPath, requireComplete } = getCliConfiguration(argv);
   const threads = loadThreadInventory(docPath);
+  const issues = collectThreadInventoryIssues(threads);
+
+  if (requireComplete && issues.length > 0) {
+    throw new Error(formatThreadInventoryIssues(issues).trimEnd());
+  }
+
   const fixThreads = listFixClassifiedThreads(threads);
   process.stdout.write(formatFixThreadsReport(fixThreads));
 }
@@ -89,7 +167,10 @@ if (require.main === module) {
 
 module.exports = {
   DEFAULT_DOC_PATH,
+  collectThreadInventoryIssues,
   formatFixThreadsReport,
+  formatThreadInventoryIssues,
+  getCliConfiguration,
   listFixClassifiedThreads,
   loadThreadInventory,
   normalizeFieldValue,

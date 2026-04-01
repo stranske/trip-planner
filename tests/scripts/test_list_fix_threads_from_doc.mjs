@@ -7,7 +7,10 @@ const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const {
   DEFAULT_DOC_PATH,
+  collectThreadInventoryIssues,
   formatFixThreadsReport,
+  formatThreadInventoryIssues,
+  getCliConfiguration,
   listFixClassifiedThreads,
   loadThreadInventory,
   parseThreadInventory,
@@ -75,6 +78,60 @@ test("formatFixThreadsReport summarizes the filtered fix list", () => {
   assert.match(report, /Fix-classified threads: 1/);
   assert.match(report, /1\. THREAD_1/);
   assert.match(report, /Location: trip_planner\/example\.py:17/);
+});
+
+test("collectThreadInventoryIssues flags missing metadata and placeholder entries", () => {
+  const issues = collectThreadInventoryIssues([
+    {
+      threadId: null,
+      location: null,
+      classification: null,
+      rationale: null,
+      content: null,
+    },
+    {
+      threadId: "THREAD_2",
+      location: "trip_planner/other.py:8",
+      classification: "follow-up",
+      rationale: "Need product clarification.",
+      content: "Reviewer requested a new classification.",
+    },
+  ]);
+
+  assert.deepEqual(issues, [
+    "Thread 1: missing thread ID",
+    "Thread 1: missing location",
+    "Thread 1: missing classification",
+    "Thread 1: missing rationale",
+    "Thread 1: missing content",
+    'THREAD_2: invalid classification "follow-up"',
+  ]);
+});
+
+test("formatThreadInventoryIssues summarizes completeness problems", () => {
+  const report = formatThreadInventoryIssues([
+    "Thread 1: missing thread ID",
+    "THREAD_2: invalid classification \"follow-up\"",
+  ]);
+
+  assert.match(report, /Thread inventory issues: 2/);
+  assert.match(report, /1\. Thread 1: missing thread ID/);
+  assert.match(report, /2\. THREAD_2: invalid classification "follow-up"/);
+});
+
+test("getCliConfiguration parses completeness validation flag and doc path", () => {
+  assert.deepEqual(getCliConfiguration(["docs/custom.md", "--require-complete"]), {
+    docPath: path.resolve("docs/custom.md"),
+    requireComplete: true,
+  });
+});
+
+test("the checked-in PR #178 inventory is still incomplete until real threads are recorded", () => {
+  const threads = loadThreadInventory(DEFAULT_DOC_PATH);
+  const issues = collectThreadInventoryIssues(threads);
+
+  assert.equal(issues.length, 20);
+  assert.match(formatThreadInventoryIssues(issues), /Thread inventory issues: 20/);
 });
 
 test("the checked-in PR #178 inventory currently contains no fix-classified threads", () => {
