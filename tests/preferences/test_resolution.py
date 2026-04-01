@@ -31,7 +31,9 @@ def _same_direction(left: float, right: float) -> bool:
 
 def test_resolution_matches_fixture_directional_outcomes() -> None:
     for fixture in load_fixture_corpus():
-        result = resolve_leisure_profile(_resolution_seed(fixture.profile), fixture.evidence)
+        result = resolve_leisure_profile(
+            _resolution_seed(fixture.profile), fixture.evidence
+        )
 
         for dimension_key in fixture.intended_interpretation.dominant_dimensions:
             expected = fixture.profile.tradeoff_dimensions[dimension_key]
@@ -47,12 +49,16 @@ def test_resolution_matches_fixture_directional_outcomes() -> None:
 
 
 def test_resolution_emits_contradiction_tension_when_evidence_conflicts() -> None:
-    fixture = next(item for item in load_fixture_corpus() if item.id == "scenic-rail-nomad")
+    fixture = next(
+        item for item in load_fixture_corpus() if item.id == "scenic-rail-nomad"
+    )
     contradictory = deepcopy(fixture.evidence[0])
     contradictory.id = "scenic-rail-nomad-ev-contradiction"
     contradictory.signal_direction = "contradiction"
     contradictory.contradictions = []
-    contradictory.note = "Traveler also says frequent transfers become exhausting after a week."
+    contradictory.note = (
+        "Traveler also says frequent transfers become exhausting after a week."
+    )
 
     result = resolve_leisure_profile(
         _resolution_seed(fixture.profile),
@@ -60,15 +66,20 @@ def test_resolution_emits_contradiction_tension_when_evidence_conflicts() -> Non
     )
 
     assert any(
-        flag.id == "movement_vs_friction-contradiction" for flag in result.profile.tension_flags
+        flag.id == "movement_vs_friction-contradiction"
+        for flag in result.profile.tension_flags
     )
     assert "movement_vs_friction-contradiction" in (
-        result.explanation.dimension_explanations["movement_vs_friction"].tension_flag_ids
+        result.explanation.dimension_explanations[
+            "movement_vs_friction"
+        ].tension_flag_ids
     )
 
 
 def test_resolution_flags_dimensions_that_need_directional_seed() -> None:
-    fixture = next(item for item in load_fixture_corpus() if item.id == "discovery-wanderer")
+    fixture = next(
+        item for item in load_fixture_corpus() if item.id == "discovery-wanderer"
+    )
     seed = _resolution_seed(fixture.profile)
     seed.tradeoff_dimensions["iconic_vs_discovery"].value = 0.0
 
@@ -85,7 +96,9 @@ def test_resolution_flags_dimensions_that_need_directional_seed() -> None:
 
 
 def test_directional_seed_artifacts_removed_after_interaction_moves_off_zero() -> None:
-    fixture = next(item for item in load_fixture_corpus() if item.id == "discovery-wanderer")
+    fixture = next(
+        item for item in load_fixture_corpus() if item.id == "discovery-wanderer"
+    )
     seed = _resolution_seed(fixture.profile)
     seed.tradeoff_dimensions["movement_vs_friction"].value = 0.0
     seed.tradeoff_dimensions["breadth_vs_depth"].value = -0.6
@@ -100,10 +113,13 @@ def test_directional_seed_artifacts_removed_after_interaction_moves_off_zero() -
     )
     assert (
         "movement_vs_friction-needs-directional-seed"
-        not in result.explanation.dimension_explanations["movement_vs_friction"].tension_flag_ids
+        not in result.explanation.dimension_explanations[
+            "movement_vs_friction"
+        ].tension_flag_ids
     )
     assert (
-        "movement_vs_friction-needs-directional-seed" not in result.explanation.tension_explanations
+        "movement_vs_friction-needs-directional-seed"
+        not in result.explanation.tension_explanations
     )
     assert all(
         "movement_vs_friction received evidence but remained at a zero-direction seed value."

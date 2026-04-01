@@ -5,7 +5,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from trip_planner.sources.models import SourceRecord
-from trip_planner.sources.snapshots import NormalizationHandoff, RawSnapshot, SourceQuery
+from trip_planner.sources.snapshots import (
+    NormalizationHandoff,
+    RawSnapshot,
+    SourceQuery,
+)
 
 
 class SourceAdapter(ABC):

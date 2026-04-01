@@ -45,8 +45,10 @@ def test_materially_different_fixtures_produce_distinct_objective_signals() -> N
         "route_shape": scenic_obj.route_shape != comfort_obj.route_shape,
         "base_count": scenic_obj.target_base_count.to_dict()
         != comfort_obj.target_base_count.to_dict(),
-        "move_density": scenic_obj.move_density.to_dict() != comfort_obj.move_density.to_dict(),
-        "day_structure": scenic_obj.day_structure.to_dict() != comfort_obj.day_structure.to_dict(),
+        "move_density": scenic_obj.move_density.to_dict()
+        != comfort_obj.move_density.to_dict(),
+        "day_structure": scenic_obj.day_structure.to_dict()
+        != comfort_obj.day_structure.to_dict(),
         "discovery_style": scenic_obj.discovery_strategy.style
         != comfort_obj.discovery_strategy.style,
         "transport_strategy": scenic_obj.transport_strategy.to_dict()
@@ -103,7 +105,9 @@ def test_interaction_biases_change_objective_bundle() -> None:
     without_interactions.explanation.activated_interactions = []
 
     with_biases = derive_itinerary_objectives(resolved, trip_id="trip-bias")
-    without_biases = derive_itinerary_objectives(without_interactions, trip_id="trip-bias")
+    without_biases = derive_itinerary_objectives(
+        without_interactions, trip_id="trip-bias"
+    )
 
     with_min = with_biases.target_base_count.min_value
     without_min = without_biases.target_base_count.min_value
@@ -141,13 +145,19 @@ def test_derivation_carries_forward_hard_constraint_guidance() -> None:
     min_value = objectives.target_base_count.min_value
     assert min_value is not None
     assert min_value >= 2
-    assert any("Hard budget ceiling=4200" in note for note in objectives.budget_protection.notes)
     assert any(
-        line.startswith("hard_constraints:must_include_places=") for line in objectives.explanations
+        "Hard budget ceiling=4200" in note
+        for note in objectives.budget_protection.notes
+    )
+    assert any(
+        line.startswith("hard_constraints:must_include_places=")
+        for line in objectives.explanations
     )
 
 
-def test_short_trip_base_count_respects_duration_cap_with_many_required_places() -> None:
+def test_short_trip_base_count_respects_duration_cap_with_many_required_places() -> (
+    None
+):
     profile = build_profile_from_overrides(
         {
             "trip_frame": {"duration_days": 3},

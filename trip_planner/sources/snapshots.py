@@ -37,7 +37,9 @@ class SourceQuery:
     def __post_init__(self) -> None:
         require_non_empty(self.query_id, "query_id")
         if self.entity_scope not in schema.SOURCE_ENTITY_SCOPES:
-            raise ValueError(f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}")
+            raise ValueError(
+                f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}"
+            )
         if self.option_kind not in schema.SOURCE_OPTION_KINDS:
             raise ValueError(f"option_kind must be one of {schema.SOURCE_OPTION_KINDS}")
         for field_name in (
@@ -79,7 +81,9 @@ class AdapterIssue:
         if self.stage not in schema.ADAPTER_ISSUE_STAGES:
             raise ValueError(f"stage must be one of {schema.ADAPTER_ISSUE_STAGES}")
         if self.severity not in schema.ADAPTER_ISSUE_SEVERITIES:
-            raise ValueError(f"severity must be one of {schema.ADAPTER_ISSUE_SEVERITIES}")
+            raise ValueError(
+                f"severity must be one of {schema.ADAPTER_ISSUE_SEVERITIES}"
+            )
         require_optional_non_empty(self.observed_at or None, "observed_at")
         require_optional_non_empty(self.provider_status or None, "provider_status")
         require_strings(self.affected_record_ids, "affected_record_ids")
@@ -109,7 +113,9 @@ class RawSourceRecord:
         require_non_empty(self.provider_entity_id, "provider_entity_id")
         require_non_empty(self.payload_type, "payload_type")
         if self.entity_scope not in schema.SOURCE_ENTITY_SCOPES:
-            raise ValueError(f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}")
+            raise ValueError(
+                f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}"
+            )
         if not isinstance(self.payload, dict):
             raise ValueError("payload must be a dict")
         for field_name in (
@@ -155,13 +161,19 @@ class RawSnapshot:
         require_non_empty(self.payload_format, "payload_format")
         require_non_empty(self.transport, "transport")
         if self.source_category not in schema.SOURCE_CATEGORIES:
-            raise ValueError(f"source_category must be one of {schema.SOURCE_CATEGORIES}")
+            raise ValueError(
+                f"source_category must be one of {schema.SOURCE_CATEGORIES}"
+            )
         if self.entity_scope not in schema.SOURCE_ENTITY_SCOPES:
-            raise ValueError(f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}")
+            raise ValueError(
+                f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}"
+            )
         if self.option_kind not in schema.SOURCE_OPTION_KINDS:
             raise ValueError(f"option_kind must be one of {schema.SOURCE_OPTION_KINDS}")
         if self.snapshot_status not in schema.SNAPSHOT_STATUSES:
-            raise ValueError(f"snapshot_status must be one of {schema.SNAPSHOT_STATUSES}")
+            raise ValueError(
+                f"snapshot_status must be one of {schema.SNAPSHOT_STATUSES}"
+            )
         if self.handoff_status not in schema.HANDOFF_STATUSES:
             raise ValueError(f"handoff_status must be one of {schema.HANDOFF_STATUSES}")
         if not isinstance(self.query, SourceQuery):
@@ -173,7 +185,9 @@ class RawSnapshot:
         if any(not isinstance(item, RawSourceRecord) for item in self.records):
             raise ValueError("records must contain RawSourceRecord instances")
         if any(record.entity_scope != self.entity_scope for record in self.records):
-            raise ValueError("all record.entity_scope values must match snapshot entity_scope")
+            raise ValueError(
+                "all record.entity_scope values must match snapshot entity_scope"
+            )
         if any(not isinstance(item, AdapterIssue) for item in self.issues):
             raise ValueError("issues must contain AdapterIssue instances")
         require_optional_non_empty(self.expires_at or None, "expires_at")
@@ -204,13 +218,19 @@ class NormalizationHandoff:
         require_non_empty(self.snapshot_id, "snapshot_id")
         require_non_empty(self.target_contract, "target_contract")
         if self.entity_scope not in schema.SOURCE_ENTITY_SCOPES:
-            raise ValueError(f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}")
+            raise ValueError(
+                f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}"
+            )
         if self.status not in schema.HANDOFF_STATUSES:
             raise ValueError(f"status must be one of {schema.HANDOFF_STATUSES}")
         require_strings(self.input_record_ids, "input_record_ids")
         require_strings(self.blocked_issue_ids, "blocked_issue_ids")
-        if any(not isinstance(item, ProvenanceReference) for item in self.provenance_refs):
-            raise ValueError("provenance_refs must contain ProvenanceReference instances")
+        if any(
+            not isinstance(item, ProvenanceReference) for item in self.provenance_refs
+        ):
+            raise ValueError(
+                "provenance_refs must contain ProvenanceReference instances"
+            )
         if self.record_count is not None:
             require_non_negative(self.record_count, "record_count")
         require_strings(self.notes, "notes")
