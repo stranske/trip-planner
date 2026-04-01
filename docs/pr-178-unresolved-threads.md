@@ -46,6 +46,7 @@ After the fix/disposition work is complete, rerun the same command with `--expec
 - Follow-up PR:
 - Rationale:
 - Content:
+- Outdated:
 
 ### Thread 2
 
@@ -56,6 +57,7 @@ After the fix/disposition work is complete, rerun the same command with `--expec
 - Follow-up PR:
 - Rationale:
 - Content:
+- Outdated:
 
 ### Thread 3
 
@@ -66,6 +68,7 @@ After the fix/disposition work is complete, rerun the same command with `--expec
 - Follow-up PR:
 - Rationale:
 - Content:
+- Outdated:
 
 ### Thread 4
 
@@ -76,3 +79,4 @@ After the fix/disposition work is complete, rerun the same command with `--expec
 - Follow-up PR:
 - Rationale:
 - Content:
+- Outdated:

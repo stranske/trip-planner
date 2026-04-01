@@ -10,6 +10,8 @@ const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "
 const {
   DEFAULT_PR_NUMBER,
   DEFAULT_REPOSITORY,
+  buildBlankInventoryTemplate,
+  buildBlankMarkdownThreadSection,
   buildMarkdownThreadSection,
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
@@ -551,6 +553,31 @@ test("buildMarkdownThreadSection preserves existing triage metadata when availab
   );
 });
 
+test("buildBlankMarkdownThreadSection emits the verifier-compatible inventory shape", () => {
+  assert.deepEqual(buildBlankMarkdownThreadSection(0), [
+    "",
+    "### Thread 1",
+    "",
+    "- Thread ID:",
+    "- Original Thread URL:",
+    "- Location:",
+    "- Classification:",
+    "- Follow-up PR:",
+    "- Rationale:",
+    "- Content:",
+    "- Outdated:",
+  ]);
+});
+
+test("buildBlankInventoryTemplate includes outdated placeholders for each thread", () => {
+  const template = buildBlankInventoryTemplate(2);
+
+  assert.match(template, /^## Thread Template/m);
+  assert.match(template, /### Thread 1/);
+  assert.match(template, /### Thread 2/);
+  assert.equal((template.match(/- Outdated:/g) || []).length, 2);
+});
+
 test("formatUnresolvedThreadsAsMarkdown emits a doc-ready inventory skeleton", () => {
   const report = formatUnresolvedThreadsAsMarkdown("stranske/trip-planner", 178, [
     {
@@ -625,18 +652,7 @@ test("mergeInventoryIntoDocument replaces the placeholder template with generate
 
 Intro paragraph.
 
-## Thread Template
-
-### Thread 1
-
-- Thread ID:
-- Original Thread URL:
-- Location:
-- Classification:
-- Follow-up PR:
-- Rationale:
-- Content:
-`,
+${buildBlankInventoryTemplate(1)}`,
     [
       {
         id: "THREAD_1",
@@ -719,18 +735,7 @@ test("writeInventoryDocument updates a doc file in place", () => {
 
 Intro paragraph.
 
-## Thread Template
-
-### Thread 1
-
-- Thread ID:
-- Original Thread URL:
-- Location:
-- Classification:
-- Follow-up PR:
-- Rationale:
-- Content:
-`,
+${buildBlankInventoryTemplate(1)}`,
     "utf8"
   );
 

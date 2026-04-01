@@ -431,6 +431,37 @@ function buildMarkdownThreadSection(thread, index, existingEntry = null) {
   ];
 }
 
+function buildBlankMarkdownThreadSection(index) {
+  return [
+    "",
+    `### Thread ${index + 1}`,
+    "",
+    "- Thread ID:",
+    "- Original Thread URL:",
+    "- Location:",
+    "- Classification:",
+    "- Follow-up PR:",
+    "- Rationale:",
+    "- Content:",
+    "- Outdated:",
+  ];
+}
+
+function buildBlankInventoryTemplate(threadCount = 4) {
+  const normalizedThreadCount = Number.parseInt(String(threadCount), 10);
+  const lines = ["## Thread Template"];
+
+  if (!Number.isInteger(normalizedThreadCount) || normalizedThreadCount <= 0) {
+    return `${lines.join("\n")}\n`;
+  }
+
+  for (let index = 0; index < normalizedThreadCount; index += 1) {
+    lines.push(...buildBlankMarkdownThreadSection(index));
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 function formatOptionalMetadataLine(label, value) {
   return value ? `- ${label}: ${value}` : `- ${label}:`;
 }
@@ -530,6 +561,8 @@ if (require.main === module) {
 module.exports = {
   DEFAULT_PR_NUMBER,
   DEFAULT_REPOSITORY,
+  buildBlankInventoryTemplate,
+  buildBlankMarkdownThreadSection,
   buildReviewThreadsQuery,
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
