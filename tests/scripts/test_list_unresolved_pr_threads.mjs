@@ -13,6 +13,7 @@ const {
   buildBlankInventoryTemplate,
   buildBlankMarkdownThreadSection,
   buildMarkdownThreadSection,
+  collectResolvedInventoryEntries,
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
   fetchAllReviewThreads,
@@ -918,6 +919,40 @@ Intro paragraph.
   );
 });
 
+test("collectResolvedInventoryEntries returns documented threads that are no longer unresolved", () => {
+  const existingThreads = [
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/example.py:17",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale: "Still unresolved.",
+      content: "reviewer: Please keep this branch explicit.",
+      outdated: false,
+    },
+    {
+      threadId: "THREAD_2",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+      location: "trip_planner/other.py:23",
+      classification: "disposition",
+      followUpPr: null,
+      rationale: "This one was already resolved.",
+      content: "reviewer: Please extract a helper.",
+      outdated: false,
+    },
+  ];
+
+  const resolvedThreads = collectResolvedInventoryEntries(existingThreads, [
+    {
+      id: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+    },
+  ]);
+
+  assert.deepEqual(resolvedThreads, [existingThreads[1]]);
+});
+
 test("writeInventoryDocument keeps resolved thread inventory when refreshing to zero unresolved threads", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "thread-inventory-zero-"));
   const docPath = path.join(tempDir, "pr-178-unresolved-threads.md");
@@ -952,6 +987,66 @@ Intro paragraph.
   assert.match(
     updatedDocument,
     /### Thread 1[\s\S]*- Rationale: The reviewer concern was handled in the original PR discussion\./
+  );
+});
+
+test("mergeInventoryIntoDocument preserves resolved history when only some threads remain unresolved", () => {
+  const mergedDocument = mergeInventoryIntoDocument(
+    `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: old/path.py:10
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: This fix is still pending.
+- Content: reviewer: stale unresolved text
+- Outdated: no
+
+### Thread 2
+
+- Thread ID: THREAD_2
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2
+- Location: old/resolved.py:20
+- Classification: disposition
+- Follow-up PR:
+- Rationale: This discussion was already handled in the PR conversation.
+- Content: reviewer: stale resolved text
+- Outdated: yes
+`,
+    [
+      {
+        id: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        path: "trip_planner/example.py",
+        line: 17,
+        isOutdated: false,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please keep this branch explicit.",
+          },
+        ],
+      },
+    ]
+  );
+
+  assert.match(mergedDocument, /## Thread Inventory/);
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Thread ID: THREAD_1/);
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Classification: fix/);
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Location: trip_planner\/example\.py:17/);
+  assert.match(mergedDocument, /## Resolved Thread Inventory/);
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Thread ID: THREAD_2/);
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Classification: disposition/);
+  assert.match(
+    mergedDocument,
+    /### Thread 1[\s\S]*- Rationale: This discussion was already handled in the PR conversation\./
   );
 });
 

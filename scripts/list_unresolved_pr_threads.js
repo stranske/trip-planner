@@ -521,6 +521,28 @@ function findExistingInventoryEntry(existingThreads, thread, index) {
   );
 }
 
+function collectResolvedInventoryEntries(existingThreads, unresolvedThreads) {
+  if (existingThreads.length === 0) {
+    return [];
+  }
+
+  const matchedIndexes = new Set();
+
+  unresolvedThreads.forEach((thread, index) => {
+    const existingEntry = findExistingInventoryEntry(existingThreads, thread, index);
+    if (!existingEntry) {
+      return;
+    }
+
+    const existingIndex = existingThreads.indexOf(existingEntry);
+    if (existingIndex !== -1) {
+      matchedIndexes.add(existingIndex);
+    }
+  });
+
+  return existingThreads.filter((_, index) => !matchedIndexes.has(index));
+}
+
 function validateExpectedCount(unresolvedThreads, expectedCount) {
   if (expectedCount === null) {
     return;
@@ -540,6 +562,7 @@ function mergeInventoryIntoDocument(existingDocument, unresolvedThreads) {
     /## (?:Thread Template|Thread Inventory|Resolved Thread Inventory)[\s\S]*$/m;
   const threadSection = ["## Thread Inventory"];
   const existingThreads = parseThreadInventory(existingDocument);
+  const resolvedThreads = collectResolvedInventoryEntries(existingThreads, unresolvedThreads);
 
   if (unresolvedThreads.length === 0) {
     threadSection.push("", "No unresolved inline review threads found.");
@@ -554,6 +577,13 @@ function mergeInventoryIntoDocument(existingDocument, unresolvedThreads) {
       const existingEntry = findExistingInventoryEntry(existingThreads, thread, index);
       threadSection.push(...buildMarkdownThreadSection(thread, index, existingEntry));
     });
+
+    if (resolvedThreads.length > 0) {
+      threadSection.push("", "## Resolved Thread Inventory");
+      resolvedThreads.forEach((thread, index) => {
+        threadSection.push(...buildInventoryThreadSection(thread, index));
+      });
+    }
   }
 
   const mergedThreadSection = threadSection.join("\n");
@@ -611,6 +641,7 @@ module.exports = {
   formatOptionalMetadataLine,
   formatOutput,
   buildMarkdownThreadSection,
+  collectResolvedInventoryEntries,
   formatThreadContent,
   formatUnresolvedThreadsAsJson,
   formatUnresolvedThreadsAsMarkdown,
