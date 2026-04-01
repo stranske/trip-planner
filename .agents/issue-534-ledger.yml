@@ -1,0 +1,715 @@
+version: 1
+issue: 534
+base: main
+branch: codex/issue-534
+tasks:
+  - id: task-01
+    title: Create `trip_planner/ranking/leisure.py` implementing a deterministic leisure
+      ranking engine that consumes `LeisurePreferenceProfile`, `ItineraryObjectives`,
+      feasibility outputs, and candidate sets/bundles.
+    status: doing
+    started_at: '2026-04-01T11:33:15Z'
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-02
+    title: 'Define scope for: Create the `trip_planner/ranking/leisure.py` module
+      with the main LeisureRankingEngine class skeleton (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: 'Implement focused slice for: Create the `trip_planner/ranking/leisure.py`
+      module with the main LeisureRankingEngine class skeleton (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: 'Validate focused slice for: Create the `trip_planner/ranking/leisure.py`
+      module with the main LeisureRankingEngine class skeleton (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: 'Implement methods to consume (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: 'validate LeisurePreferenceProfile inputs in the ranking engine (verify:
+      confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: 'validate ItineraryObjectives inputs in the ranking engine (verify: confirm
+      completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: 'validate feasibility outputs in the ranking engine (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: 'validate candidate sets (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: 'bundles in the ranking engine (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: 'Implement the core deterministic scoring algorithm that combines all input
+      sources (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: Implement scoring components in `trip_planner/ranking/leisure.py` to account
+      for anchors, quality floors, budget posture, route coherence, discovery fit,
+      movement/friction fit, recovery protection, and other first-tier leisure dimensions.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: 'Define scope for: Implement the anchor scoring component that evaluates
+      candidate alignment with user-specified anchors (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: 'Implement focused slice for: Implement the anchor scoring component that
+      evaluates candidate alignment with user-specified anchors (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: 'Validate focused slice for: Implement the anchor scoring component that
+      evaluates candidate alignment with user-specified anchors (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-16
+    title: 'Define scope for: Implement the quality floor scoring component that penalizes
+      options below minimum quality thresholds (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-17
+    title: 'Implement focused slice for: Implement the quality floor scoring component
+      that penalizes options below minimum quality thresholds (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-18
+    title: 'Validate focused slice for: Implement the quality floor scoring component
+      that penalizes options below minimum quality thresholds (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-19
+    title: 'Define scope for: Implement the budget posture scoring component that
+      evaluates cost alignment with user preferences (verify: confirm completion in
+      repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-20
+    title: 'Implement focused slice for: Implement the budget posture scoring component
+      that evaluates cost alignment with user preferences (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-21
+    title: 'Validate focused slice for: Implement the budget posture scoring component
+      that evaluates cost alignment with user preferences (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-22
+    title: 'Implement the route coherence scoring component that evaluates geographic
+      (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-23
+    title: 'logical flow (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-24
+    title: 'Define scope for: Implement the discovery fit scoring component that matches
+      exploration preferences to candidate characteristics (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-25
+    title: 'Implement focused slice for: Implement the discovery fit scoring component
+      that matches exploration preferences to candidate characteristics (verify: confirm
+      completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-26
+    title: 'Validate focused slice for: Implement the discovery fit scoring component
+      that matches exploration preferences to candidate characteristics (verify: confirm
+      completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-27
+    title: 'Implement the movement (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-28
+    title: 'friction fit scoring component that evaluates travel burden (verify: confirm
+      completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-29
+    title: 'Implement the recovery protection scoring component that ensures adequate
+      rest periods (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-30
+    title: 'Define scope for: Implement the scoring aggregation logic that combines
+      all component scores into final rankings (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-31
+    title: 'Implement focused slice for: Implement the scoring aggregation logic that
+      combines all component scores into final rankings (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-32
+    title: 'Validate focused slice for: Implement the scoring aggregation logic that
+      combines all component scores into final rankings (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-33
+    title: Add logic in `trip_planner/ranking/leisure.py` to encode how tension flags
+      and low-confidence profile areas affect ranking confidence and/or penalties.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-34
+    title: 'Implement output emission in `trip_planner/ranking/leisure.py` to match
+      the canonical ranking/explanation contracts from issue #532 (ranked results
+      plus component breakdown/explanation records).'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-35
+    title: Add JSON fixtures under `tests/fixtures/ranking/leisure/*.json` representing
+      materially different traveler types (depth-oriented urban trips, scenic-transit
+      routes, discovery-heavy wanderer routes, quality-floor-sensitive trips).
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-36
+    title: 'Define scope for: Create JSON fixture for depth-oriented urban trip traveler
+      profile under tests/fixtures/ranking/leisure/ (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-37
+    title: 'Implement focused slice for: Create JSON fixture for depth-oriented urban
+      trip traveler profile under tests/fixtures/ranking/leisure/ (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-38
+    title: 'Validate focused slice for: Create JSON fixture for depth-oriented urban
+      trip traveler profile under tests/fixtures/ranking/leisure/ (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-39
+    title: 'Define scope for: Create JSON fixture for scenic-transit route traveler
+      profile under tests/fixtures/ranking/leisure/ (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-40
+    title: 'Implement focused slice for: Create JSON fixture for scenic-transit route
+      traveler profile under tests/fixtures/ranking/leisure/ (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-41
+    title: 'Validate focused slice for: Create JSON fixture for scenic-transit route
+      traveler profile under tests/fixtures/ranking/leisure/ (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-42
+    title: 'Define scope for: Create JSON fixture for discovery-heavy wanderer route
+      traveler profile under tests/fixtures/ranking/leisure/ (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-43
+    title: 'Implement focused slice for: Create JSON fixture for discovery-heavy wanderer
+      route traveler profile under tests/fixtures/ranking/leisure/ (verify: tests
+      pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-44
+    title: 'Validate focused slice for: Create JSON fixture for discovery-heavy wanderer
+      route traveler profile under tests/fixtures/ranking/leisure/ (verify: tests
+      pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-45
+    title: 'Define scope for: Create JSON fixture for quality-floor-sensitive trip
+      traveler profile under tests/fixtures/ranking/leisure/ (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-46
+    title: 'Implement focused slice for: Create JSON fixture for quality-floor-sensitive
+      trip traveler profile under tests/fixtures/ranking/leisure/ (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-47
+    title: 'Validate focused slice for: Create JSON fixture for quality-floor-sensitive
+      trip traveler profile under tests/fixtures/ranking/leisure/ (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-48
+    title: Write unit tests in `tests/ranking/test_leisure_ranking.py` asserting rank-order
+      differences across traveler types, including at least one case where the same
+      candidates rank differently for different profiles.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-49
+    title: 'Define scope for: Write unit test asserting that depth-oriented urban
+      traveler profile produces expected ranking order (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-50
+    title: 'Implement focused slice for: Write unit test asserting that depth-oriented
+      urban traveler profile produces expected ranking order (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-51
+    title: 'Validate focused slice for: Write unit test asserting that depth-oriented
+      urban traveler profile produces expected ranking order (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-52
+    title: 'Define scope for: Write unit test asserting that scenic-transit route
+      traveler profile produces expected ranking order (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-53
+    title: 'Implement focused slice for: Write unit test asserting that scenic-transit
+      route traveler profile produces expected ranking order (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-54
+    title: 'Validate focused slice for: Write unit test asserting that scenic-transit
+      route traveler profile produces expected ranking order (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-55
+    title: 'Define scope for: Write unit test asserting that discovery-heavy wanderer
+      profile produces expected ranking order (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-56
+    title: 'Implement focused slice for: Write unit test asserting that discovery-heavy
+      wanderer profile produces expected ranking order (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-57
+    title: 'Validate focused slice for: Write unit test asserting that discovery-heavy
+      wanderer profile produces expected ranking order (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-58
+    title: 'Define scope for: Write unit test asserting that quality-floor-sensitive
+      profile produces expected ranking order (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-59
+    title: 'Implement focused slice for: Write unit test asserting that quality-floor-sensitive
+      profile produces expected ranking order (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-60
+    title: 'Validate focused slice for: Write unit test asserting that quality-floor-sensitive
+      profile produces expected ranking order (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-61
+    title: 'Define scope for: Write unit test demonstrating that identical candidates
+      rank differently for depth-oriented versus discovery-heavy profiles (verify:
+      confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-62
+    title: 'Implement focused slice for: Write unit test demonstrating that identical
+      candidates rank differently for depth-oriented versus discovery-heavy profiles
+      (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-63
+    title: 'Validate focused slice for: Write unit test demonstrating that identical
+      candidates rank differently for depth-oriented versus discovery-heavy profiles
+      (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-64
+    title: 'Write unit test validating that tension flags (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-65
+    title: 'low-confidence areas affect ranking as expected (verify: confirm completion
+      in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-66
+    title: Update documentation (file path not provided) describing that leisure ranking
+      remains downstream from preference evaluation and objective derivation.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-67
+    title: '`trip_planner/ranking/leisure.py` exists and provides a first-pass leisure
+      ranking engine that consumes `LeisurePreferenceProfile` and `ItineraryObjectives`
+      (and does not bypass them).'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-68
+    title: 'Ranked outputs produced by the leisure ranking engine include explainable
+      component breakdowns and explanation records per the contracts from issue #532.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-69
+    title: Running `pytest` includes assertions showing different leisure profiles
+      materially reorder the same candidate set.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-70
+    title: '`tests/ranking/test_leisure_ranking.py` covers multiple traveler-profile
+      cases and includes at least one low-confidence and/or tension-heavy case.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-71
+    title: Documentation (file path not provided) explicitly states the boundary between
+      leisure preference resolution/objective derivation and leisure ranking.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-72
+    title: Implement a leisure ranking layer that consumes `LeisurePreferenceProfile`,
+      `ItineraryObjectives`, feasibility outputs, and candidate sets or bundles.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-73
+    title: Ensure the scorer can account for anchors, quality floors, budget posture,
+      route coherence, discovery fit, movement/friction fit, recovery protection,
+      and other first-tier leisure dimensions.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-74
+    title: Encode how tension flags and low-confidence profile areas affect ranking
+      confidence or penalty structure.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-75
+    title: 'Emit ranked results through the canonical ranking/explanation contracts
+      from issue #532.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-76
+    title: Add representative fixtures for materially different leisure traveler types,
+      such as depth-oriented urban trips, scenic-transit routes, discovery-heavy wanderer
+      routes, and quality-floor-sensitive trips.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-77
+    title: Write unit tests covering rank-order differences across traveler types,
+      plus at least one case where the same candidates rank differently for different
+      profiles.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-78
+    title: Document how leisure ranking remains downstream from preference evaluation
+      and objective derivation.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-79
+    title: The repo contains a first-pass leisure ranking engine that consumes the
+      preference and objective foundations rather than bypassing them.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-80
+    title: Ranked outputs are explainable through component breakdowns and explanation
+      records.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-81
+    title: Different leisure profiles can materially reorder the same candidate set.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-82
+    title: Tests cover multiple traveler-profile cases and at least one low-confidence
+      or tension-heavy case.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-83
+    title: Documentation preserves the boundary between leisure preference resolution
+      and leisure ranking.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-84
+    title: Update documentation (file path not provided) describing that leisure ranking
+      remains downstream from preference evaluation and objective derivation. (The
+      task explicitly states 'file path not provided', making it impossible for an
+      agent to determine which file to modify. The agent cannot make subjective decisions
+      about where documentation should live. | Specify the exact documentation file
+      path (e.g., `docs/architecture/ranking.md` or `trip_planner/ranking/README.md`)
+      or create a separate task to determine the appropriate documentation location
+      first.)
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
