@@ -12,6 +12,7 @@ from trip_planner.sources import (
     DeduplicationDecision,
     EntityResolution,
     NormalizationHandoff,
+    ProvenanceReference,
     RawSnapshot,
     RawSourceRecord,
 )
@@ -76,7 +77,7 @@ def ingest_activity_snapshot(
     low_confidence_option_ids: list[str] = []
     activity_options: list[ActivityOption] = []
     preserved_conflicts: list[AttributeConflict] = []
-    provenance_refs = []
+    provenance_refs: list[ProvenanceReference] = []
 
     for decision in dedup_decisions:
         if decision.entity_scope != "activity" or decision.option_kind != snapshot.option_kind:

@@ -126,10 +126,6 @@ def ingest_destination_snapshot(
             )
             unresolved = unresolved_conflicts(resolution.conflicts)
             preserved_conflicts.extend(unresolved)
-            _extend_destination_notes(
-                destination,
-                [f"resolution:{resolution.resolution_id}", *resolution.notes],
-            )
             if resolution.review_required or _lowest_match_confidence(resolution) < 0.75:
                 low_confidence_destination_ids.append(destination.destination_id)
         _append_record_warnings(destination, [record], warnings)
@@ -207,7 +203,7 @@ def _destination_from_records(
                 contribution_kind=ref.contribution_kind,
                 summary=ref.summary,
                 freshness_days_at_capture=ref.freshness_days_at_capture,
-                notes=list(ref.notes),
+                notes=_merge_scalar_list(ref.notes, record.payload.get("ingestion_notes", [])),
             )
         )
         provenance_refs.append(ref)
@@ -244,11 +240,6 @@ def _merge_destination_payload(
             payload.get("mobility_profile"),
             candidate.get("mobility_profile"),
         )
-        payload.setdefault("notes", [])
-        payload["notes"] = _merge_scalar_list(
-            payload["notes"], candidate.get("ingestion_notes", [])
-        )
-    payload.setdefault("notes", [])
     return payload
 
 
