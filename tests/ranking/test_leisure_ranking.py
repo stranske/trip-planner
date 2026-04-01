@@ -479,6 +479,45 @@ def test_identical_profile_reorders_when_objectives_change() -> None:
     assert _result_option_id(scenic_ranked.results[0]) == "candidate:bundle:scenic-wanderer"
 
 
+def test_same_candidate_scores_change_with_profile_and_objective_inputs() -> None:
+    engine = LeisureRankingEngine()
+    candidate_set = _candidate_set()
+
+    depth_ranked = engine.rank_candidate_set(
+        _profile_from_fixture("depth_oriented_urban_trip.json"),
+        _objectives_from_fixture("depth_oriented_urban_trip.json"),
+        candidate_set,
+    )
+    discovery_ranked = engine.rank_candidate_set(
+        _profile_from_fixture("discovery_heavy_wanderer_route.json"),
+        _objectives_from_fixture("scenic_transit_route.json"),
+        candidate_set,
+    )
+
+    def result_by_option_id(ranked_result_set: object, option_id: str) -> object:
+        return next(
+            item
+            for item in cast(Any, ranked_result_set).results
+            if _result_option_id(item) == option_id
+        )
+
+    depth_result = result_by_option_id(depth_ranked, "candidate:bundle:urban-culture")
+    discovery_result = result_by_option_id(discovery_ranked, "candidate:bundle:urban-culture")
+
+    depth_components = {
+        contribution.contribution_id: contribution.normalized_signal
+        for contribution in cast(Any, depth_result).score_breakdown.component_contributions
+    }
+    discovery_components = {
+        contribution.contribution_id: contribution.normalized_signal
+        for contribution in cast(Any, discovery_result).score_breakdown.component_contributions
+    }
+
+    assert cast(Any, depth_result).score != cast(Any, discovery_result).score
+    assert depth_components["anchor_alignment"] != discovery_components["anchor_alignment"]
+    assert depth_components["discovery_fit"] != discovery_components["discovery_fit"]
+
+
 def test_rank_bundles_reorders_same_inventory_for_different_profiles() -> None:
     engine = LeisureRankingEngine()
     bundles = [seed.bundle for seed in _candidate_set().seeds]
