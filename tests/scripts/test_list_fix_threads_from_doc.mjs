@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const {
+  buildFixThreadsReport,
   DEFAULT_DOC_PATH,
   collectThreadInventoryIssues,
   formatFixThreadsReport,
@@ -196,4 +197,53 @@ test("disposition-only entries do not require a follow-up PR to be complete", ()
 `);
 
   assert.deepEqual(collectThreadInventoryIssues(threads), []);
+});
+
+test("buildFixThreadsReport enforces completeness checks before returning fix threads", () => {
+  const markdown = `
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Code path still drops the final stop.
+- Content: Reviewer requested a bounds check.
+`;
+
+  const report = buildFixThreadsReport(
+    { docPath: "docs/complete.md", requireComplete: true },
+    {
+      readFileSync: () => markdown,
+    }
+  );
+
+  assert.match(report, /Fix-classified threads: 1/);
+  assert.match(report, /THREAD_1/);
+});
+
+test("buildFixThreadsReport surfaces completeness issues when --require-complete would fail", () => {
+  assert.throws(
+    () =>
+      buildFixThreadsReport(
+        { docPath: "docs/incomplete.md", requireComplete: true },
+        {
+          readFileSync: () => `
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID:
+- Location:
+- Classification:
+- Follow-up PR:
+- Rationale:
+- Content:
+`,
+        }
+      ),
+    /Thread inventory issues: 5/
+  );
 });

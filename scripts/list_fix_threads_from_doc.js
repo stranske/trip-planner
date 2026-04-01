@@ -121,6 +121,19 @@ function formatFixThreadsReport(fixThreads) {
   return `${lines.join("\n")}\n`;
 }
 
+function buildFixThreadsReport(options = {}, dependencies = {}) {
+  const { docPath = DEFAULT_DOC_PATH, requireComplete = false } = options;
+  const threads = loadThreadInventory(docPath, dependencies);
+  const issues = collectThreadInventoryIssues(threads);
+
+  if (requireComplete && issues.length > 0) {
+    throw new Error(formatThreadInventoryIssues(issues).trimEnd());
+  }
+
+  const fixThreads = listFixClassifiedThreads(threads);
+  return formatFixThreadsReport(fixThreads);
+}
+
 function getCliConfiguration(argv = process.argv.slice(2)) {
   const options = {
     docPath: DEFAULT_DOC_PATH,
@@ -151,15 +164,7 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
 
 function main(argv = process.argv.slice(2)) {
   const { docPath, requireComplete } = getCliConfiguration(argv);
-  const threads = loadThreadInventory(docPath);
-  const issues = collectThreadInventoryIssues(threads);
-
-  if (requireComplete && issues.length > 0) {
-    throw new Error(formatThreadInventoryIssues(issues).trimEnd());
-  }
-
-  const fixThreads = listFixClassifiedThreads(threads);
-  process.stdout.write(formatFixThreadsReport(fixThreads));
+  process.stdout.write(buildFixThreadsReport({ docPath, requireComplete }));
 }
 
 if (require.main === module) {
@@ -172,6 +177,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildFixThreadsReport,
   DEFAULT_DOC_PATH,
   collectThreadInventoryIssues,
   formatFixThreadsReport,
