@@ -31,6 +31,12 @@ To generate a bounded follow-up PR title/body payload for each `fix`-classified 
 node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md --format pr-payload --exclude-outdated
 ```
 
+To generate a shell-ready `gh pr create` command plus the matching markdown body for each bounded follow-up PR group, run:
+
+```bash
+node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md --format gh-cli --exclude-outdated
+```
+
 To generate a bounded checklist for any `disposition`-classified entries that still need a PR comment, run:
 
 ```bash

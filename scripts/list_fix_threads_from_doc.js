@@ -569,6 +569,47 @@ function buildPullRequestPayload(group, groupIndex) {
   };
 }
 
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\"'\"'`)}'`;
+}
+
+function buildPullRequestCreationCommand(group, groupIndex, options = {}) {
+  const payload = buildPullRequestPayload(group, groupIndex);
+  const baseBranch = options.baseBranch || "main";
+  const bodyFilePath =
+    options.bodyFilePath ||
+    path.posix.join(
+      ".tmp",
+      "pr-thread-payloads",
+      `pr-178-fix-group-${groupIndex + 1}-body.md`
+    );
+  const headBranch =
+    options.headBranch ||
+    group.threads[0]?.suggestedBranch ||
+    buildSuggestedBranchName(group.threads[0] || {}, groupIndex);
+  const command = [
+    "gh",
+    "pr",
+    "create",
+    "--base",
+    shellQuote(baseBranch),
+    "--head",
+    shellQuote(headBranch),
+    "--title",
+    shellQuote(payload.title),
+    "--body-file",
+    shellQuote(bodyFilePath),
+  ].join(" ");
+
+  return {
+    ...payload,
+    baseBranch,
+    headBranch,
+    bodyFilePath,
+    command,
+  };
+}
+
 function formatFixThreadsAsPullRequestPayloads(fixThreads, options = {}) {
   const { excludedOutdatedCount = 0 } = options;
   const followUpPrGroups = groupFixThreadsByFollowUpPr(fixThreads);
@@ -606,6 +647,50 @@ function formatFixThreadsAsPullRequestPayloads(fixThreads, options = {}) {
   return `${lines.join("\n")}\n`;
 }
 
+function formatFixThreadsAsGhCliCommands(fixThreads, options = {}) {
+  const { excludedOutdatedCount = 0, baseBranch = "main" } = options;
+  const followUpPrGroups = groupFixThreadsByFollowUpPr(fixThreads);
+  const lines = ["# Follow-up PR Create Commands", ""];
+
+  if (fixThreads.length === 0) {
+    if (excludedOutdatedCount > 0) {
+      lines.push(`Excluded outdated fix threads: ${excludedOutdatedCount}`, "");
+    }
+    lines.push("No actionable fix-classified threads found.");
+    return `${lines.join("\n")}\n`;
+  }
+
+  if (excludedOutdatedCount > 0) {
+    lines.push(`Excluded outdated fix threads: ${excludedOutdatedCount}`, "");
+  }
+
+  followUpPrGroups.forEach((group, groupIndex) => {
+    const payload = buildPullRequestCreationCommand(group, groupIndex, { baseBranch });
+    lines.push(`## Follow-up PR Group ${groupIndex + 1}: ${group.followUpPr || "<missing follow-up PR>"}`);
+    lines.push("");
+    lines.push(`Suggested Branch: \`${payload.headBranch}\``);
+    lines.push(`Suggested Body File: \`${payload.bodyFilePath}\``);
+    lines.push(`Base Branch: \`${payload.baseBranch}\``);
+    lines.push("");
+    lines.push("Command:");
+    lines.push("```bash");
+    lines.push(payload.command);
+    lines.push("```");
+    lines.push("");
+    lines.push("Body:");
+    lines.push("```markdown");
+    lines.push(payload.body);
+    lines.push("```");
+    lines.push("");
+  });
+
+  if (lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 function formatFixThreadsOutput(fixThreads, outputFormat = "text", options = {}) {
   if (outputFormat === "json") {
     return formatFixThreadsAsJson(fixThreads, options);
@@ -623,6 +708,10 @@ function formatFixThreadsOutput(fixThreads, outputFormat = "text", options = {})
     return formatFixThreadsAsPullRequestPayloads(fixThreads, options);
   }
 
+  if (outputFormat === "gh-cli") {
+    return formatFixThreadsAsGhCliCommands(fixThreads, options);
+  }
+
   return formatFixThreadsReport(fixThreads, options);
 }
 
@@ -633,6 +722,7 @@ function buildFixThreadsReport(options = {}, dependencies = {}) {
     followUpPr = null,
     requireComplete = false,
     outputFormat = "text",
+    baseBranch = "main",
   } = options;
   const threads = loadThreadInventory(docPath, dependencies);
   const activeThreads = loadThreadInventory(docPath, dependencies, {
@@ -651,7 +741,7 @@ function buildFixThreadsReport(options = {}, dependencies = {}) {
   const fixThreads = followUpPr
     ? actionableFixThreads.filter((thread) => thread.followUpPr === normalizedFollowUpPr)
     : actionableFixThreads;
-  return formatFixThreadsOutput(fixThreads, outputFormat, { excludedOutdatedCount });
+  return formatFixThreadsOutput(fixThreads, outputFormat, { excludedOutdatedCount, baseBranch });
 }
 
 function getCliConfiguration(argv = process.argv.slice(2)) {
@@ -661,6 +751,7 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
     followUpPr: null,
     outputFormat: "text",
     requireComplete: false,
+    baseBranch: "main",
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -702,6 +793,17 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
       continue;
     }
 
+    if (argument === "--base-branch") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --base-branch flag requires a value.");
+      }
+
+      options.baseBranch = value;
+      index += 1;
+      continue;
+    }
+
     if (argument.startsWith("--")) {
       throw new Error(`Unknown option: ${argument}`);
     }
@@ -713,9 +815,9 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
     options.docPath = path.resolve(argument);
   }
 
-  if (!["text", "json", "markdown", "plan", "pr-payload"].includes(options.outputFormat)) {
+  if (!["text", "json", "markdown", "plan", "pr-payload", "gh-cli"].includes(options.outputFormat)) {
     throw new Error(
-      `Output format must be one of "text", "json", "markdown", "plan", or "pr-payload"; received "${options.outputFormat}".`
+      `Output format must be one of "text", "json", "markdown", "plan", "pr-payload", or "gh-cli"; received "${options.outputFormat}".`
     );
   }
 
@@ -723,10 +825,17 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
 }
 
 function main(argv = process.argv.slice(2)) {
-  const { docPath, excludeOutdated, followUpPr, outputFormat, requireComplete } =
+  const { docPath, excludeOutdated, followUpPr, outputFormat, requireComplete, baseBranch } =
     getCliConfiguration(argv);
   process.stdout.write(
-    buildFixThreadsReport({ docPath, excludeOutdated, followUpPr, outputFormat, requireComplete })
+    buildFixThreadsReport({
+      docPath,
+      excludeOutdated,
+      followUpPr,
+      outputFormat,
+      requireComplete,
+      baseBranch,
+    })
   );
 }
 
@@ -742,7 +851,9 @@ if (require.main === module) {
 module.exports = {
   buildFixThreadsReport,
   DEFAULT_DOC_PATH,
+  buildPullRequestCreationCommand,
   collectThreadInventoryIssues,
+  formatFixThreadsAsGhCliCommands,
   formatFixThreadsAsJson,
   formatFixThreadsAsPlan,
   formatFixThreadsAsMarkdown,
@@ -763,5 +874,6 @@ module.exports = {
   normalizeOutdatedFieldValue,
   normalizeUrlFieldValue,
   parseThreadInventory,
+  shellQuote,
   isPlaceholderValue,
 };

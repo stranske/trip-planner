@@ -6,12 +6,14 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const {
+  buildPullRequestCreationCommand,
   buildPullRequestPayload,
   buildSuggestedBranchName,
   buildFixThreadsReport,
   DEFAULT_DOC_PATH,
   collectThreadInventoryIssues,
   extractPullRequestNumber,
+  formatFixThreadsAsGhCliCommands,
   formatFixThreadsAsJson,
   formatFixThreadsAsPlan,
   formatFixThreadsAsMarkdown,
@@ -29,6 +31,7 @@ const {
   normalizeFollowUpPrFieldValue,
   normalizeUrlFieldValue,
   parseThreadInventory,
+  shellQuote,
 } = require(path.join(repoRoot, "scripts/list_fix_threads_from_doc.js"));
 
 test("parseThreadInventory reads structured thread metadata from markdown", () => {
@@ -518,6 +521,45 @@ test("buildPullRequestPayload creates a PR-ready title and body for a bounded th
   assert.match(payload.body, /## Validation/);
 });
 
+test("shellQuote escapes single quotes for gh CLI commands", () => {
+  assert.equal(shellQuote("main"), "'main'");
+  assert.equal(shellQuote("reviewer's branch"), "'reviewer'\"'\"'s branch'");
+});
+
+test("buildPullRequestCreationCommand creates a gh pr create command with body file metadata", () => {
+  const commandPayload = buildPullRequestCreationCommand(
+    {
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      threadCount: 1,
+      threads: [
+        {
+          threadId: "THREAD_1",
+          originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+          location: "trip_planner/example.py:17",
+          suggestedBranch: "pr-178-fix/trip-planner-example-py-17-thread-1",
+          rationale: "Code path still drops the final stop.",
+          content: "Reviewer requested a bounds check.",
+        },
+      ],
+    },
+    0,
+    { baseBranch: "release/next" }
+  );
+
+  assert.equal(commandPayload.baseBranch, "release/next");
+  assert.equal(commandPayload.headBranch, "pr-178-fix/trip-planner-example-py-17-thread-1");
+  assert.equal(commandPayload.bodyFilePath, ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md");
+  assert.match(commandPayload.command, /^gh pr create --base 'release\/next'/);
+  assert.match(
+    commandPayload.command,
+    /--head 'pr-178-fix\/trip-planner-example-py-17-thread-1'/
+  );
+  assert.match(
+    commandPayload.command,
+    /--body-file '\.tmp\/pr-thread-payloads\/pr-178-fix-group-1-body\.md'/
+  );
+});
+
 test("formatFixThreadsAsPullRequestPayloads renders each follow-up PR group as a reusable payload", () => {
   const report = formatFixThreadsAsPullRequestPayloads([
     {
@@ -556,6 +598,28 @@ test("formatFixThreadsAsPullRequestPayloads renders each follow-up PR group as a
   );
 });
 
+test("formatFixThreadsAsGhCliCommands renders gh pr create guidance for each follow-up group", () => {
+  const report = formatFixThreadsAsGhCliCommands([
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/example.py:17",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale: "Code path still drops the final stop.",
+      content: "Reviewer requested a bounds check.",
+      outdated: false,
+    },
+  ]);
+
+  assert.match(report, /# Follow-up PR Create Commands/);
+  assert.match(report, /Suggested Branch: `pr-178-fix\/trip-planner-example-py-17-thread-1`/);
+  assert.match(report, /Suggested Body File: `\.tmp\/pr-thread-payloads\/pr-178-fix-group-1-body\.md`/);
+  assert.match(report, /```bash/);
+  assert.match(report, /gh pr create --base 'main'/);
+  assert.match(report, /```markdown/);
+});
+
 test("formatFixThreadsOutput dispatches to the requested formatter", () => {
   const fixThreads = [
     {
@@ -577,6 +641,10 @@ test("formatFixThreadsOutput dispatches to the requested formatter", () => {
   assert.match(
     formatFixThreadsOutput(fixThreads, "pr-payload"),
     /# Follow-up PR Payloads/
+  );
+  assert.match(
+    formatFixThreadsOutput(fixThreads, "gh-cli"),
+    /# Follow-up PR Create Commands/
   );
 });
 
@@ -775,6 +843,7 @@ test("getCliConfiguration parses completeness validation, doc path, and output f
       followUpPr: "https://github.com/stranske/trip-planner/pull/581",
       outputFormat: "json",
       requireComplete: true,
+      baseBranch: "main",
     }
   );
 });
@@ -786,6 +855,7 @@ test("getCliConfiguration accepts markdown output", () => {
     followUpPr: null,
     outputFormat: "markdown",
     requireComplete: false,
+    baseBranch: "main",
   });
 });
 
@@ -796,6 +866,18 @@ test("getCliConfiguration accepts plan output", () => {
     followUpPr: null,
     outputFormat: "plan",
     requireComplete: false,
+    baseBranch: "main",
+  });
+});
+
+test("getCliConfiguration accepts gh-cli output and a custom base branch", () => {
+  assert.deepEqual(getCliConfiguration(["--format", "gh-cli", "--base-branch", "release/next"]), {
+    docPath: DEFAULT_DOC_PATH,
+    excludeOutdated: false,
+    followUpPr: null,
+    outputFormat: "gh-cli",
+    requireComplete: false,
+    baseBranch: "release/next",
   });
 });
 
@@ -810,8 +892,12 @@ test("getCliConfiguration rejects unknown options and extra positional arguments
     /The --follow-up-pr flag requires a non-placeholder URL/
   );
   assert.throws(
+    () => getCliConfiguration(["--base-branch"]),
+    /The --base-branch flag requires a value\./
+  );
+  assert.throws(
     () => getCliConfiguration(["--format", "html"]),
-    /Output format must be one of "text", "json", "markdown", "plan", or "pr-payload"/
+    /Output format must be one of "text", "json", "markdown", "plan", "pr-payload", or "gh-cli"/
   );
   assert.throws(
     () => getCliConfiguration(["docs/one.md", "docs/two.md"]),
@@ -1052,6 +1138,37 @@ test("buildFixThreadsReport matches follow-up PR shorthand against canonicalized
   assert.equal(parsed.count, 1);
   assert.equal(parsed.fixThreads[0].threadId, "THREAD_2");
   assert.equal(parsed.followUpPrGroups[0].followUpPr, "https://github.com/stranske/trip-planner/pull/582");
+});
+
+test("buildFixThreadsReport can render gh CLI creation commands for a bounded follow-up PR scope", () => {
+  const report = buildFixThreadsReport(
+    {
+      docPath: "docs/mixed.md",
+      outputFormat: "gh-cli",
+      baseBranch: "release/next",
+      requireComplete: true,
+    },
+    {
+      readFileSync: () => `
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Code path still drops the final stop.
+- Content: Reviewer requested a bounds check.
+- Outdated: no
+`,
+    }
+  );
+
+  assert.match(report, /# Follow-up PR Create Commands/);
+  assert.match(report, /Base Branch: `release\/next`/);
+  assert.match(report, /gh pr create --base 'release\/next'/);
 });
 
 test("buildFixThreadsReport excludes resolved-history fix threads from active follow-up scope", () => {
