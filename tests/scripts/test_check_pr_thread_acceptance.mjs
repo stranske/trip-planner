@@ -44,6 +44,16 @@ test("getAcceptanceConfiguration parses acceptance-specific options", () => {
   assert.equal(configuration.expectedCount, 0);
   assert.equal(configuration.githubUiConfirmed, true);
   assert.equal(configuration.outputFormat, "json");
+  assert.equal(configuration.writeInventoryDoc, false);
+});
+
+test("getAcceptanceConfiguration accepts --write-inventory-doc", () => {
+  const configuration = getAcceptanceConfiguration(
+    ["octo/repo", "178", "--input", "threads.json", "--write-inventory-doc"],
+    {}
+  );
+
+  assert.equal(configuration.writeInventoryDoc, true);
 });
 
 test("evaluateAcceptance reports blocked snapshot verification when no token or snapshot is provided", async () => {
@@ -131,6 +141,79 @@ No unresolved inline review threads found.
   assert.equal(result.criteria[2].status, "pass");
   assert.equal(result.criteria[3].status, "manual");
   assert.match(result.criteria[3].details, /cannot verify the live GitHub UI state/i);
+});
+
+test("evaluateAcceptance can sync the inventory document before verifying a zero-thread snapshot", async () => {
+  const resolvedOnlyInventory = `
+# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+No unresolved inline review threads found.
+
+## Resolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: The follow-up PR landed and the thread is resolved.
+- Content: reviewer: Please rework this helper.
+- Outdated: no
+`;
+
+  let writeInventoryDocumentCalls = 0;
+  const result = await evaluateAcceptance(
+    {
+      owner: "stranske",
+      repo: "trip-planner",
+      prNumber: 178,
+      token: null,
+      inputPath: "threads.json",
+      docPath: path.resolve("docs/pr-178-unresolved-threads.md"),
+      expectDocCount: 1,
+      expectedCount: 0,
+      githubUiConfirmed: false,
+      outputFormat: "text",
+      writeInventoryDoc: true,
+    },
+    {
+      loadThreadInventory: (_docPath, _dependencies, options = {}) =>
+        parseThreadInventory(
+          writeInventoryDocumentCalls === 0
+            ? `
+# PR #178 Unresolved Thread Inventory
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: The follow-up PR landed and the thread is resolved.
+- Content: reviewer: Please rework this helper.
+- Outdated: no
+`
+            : resolvedOnlyInventory,
+          options
+        ),
+      loadReviewThreadsFromFile: () => [],
+      writeInventoryDocument: () => {
+        writeInventoryDocumentCalls += 1;
+      },
+    }
+  );
+
+  assert.equal(writeInventoryDocumentCalls, 1);
+  assert.equal(result.inventoryDocumentUpdated, true);
+  assert.equal(result.overallStatus, "manual");
+  assert.equal(result.criteria[2].status, "pass");
 });
 
 test("evaluateAcceptance fails repo-local verification when zero unresolved threads are reported but the active inventory section still contains entries", async () => {
@@ -340,6 +423,7 @@ test("formatAcceptanceReport renders criterion statuses and issue details", () =
       repository: "stranske/trip-planner",
       prNumber: 178,
       docPath: DEFAULT_DOC_PATH,
+      inventoryDocumentUpdated: true,
       overallStatus: "fail",
       criteria: [
         {
@@ -353,6 +437,7 @@ test("formatAcceptanceReport renders criterion statuses and issue details", () =
   );
 
   assert.match(report, /Overall status: FAIL/);
+  assert.match(report, /Inventory document sync: UPDATED/);
   assert.match(report, /- \[FAIL\] Criterion one: First failure/);
   assert.match(report, /  - Missing metadata/);
 });

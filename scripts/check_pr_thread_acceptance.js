@@ -19,6 +19,7 @@ const {
   loadReviewThreadsFromFile,
   parseCommandLineArguments,
   validateExpectedCount,
+  writeInventoryDocument,
 } = require("./list_unresolved_pr_threads.js");
 const {
   collectInventoryVerificationIssues,
@@ -33,6 +34,7 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
     githubUiConfirmed: false,
     live: false,
     outputFormat: "text",
+    writeInventoryDoc: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -79,6 +81,11 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
 
     if (argument === "--github-ui-confirmed") {
       options.githubUiConfirmed = true;
+      continue;
+    }
+
+    if (argument === "--write-inventory-doc") {
+      options.writeInventoryDoc = true;
       continue;
     }
 
@@ -147,6 +154,7 @@ function getAcceptanceConfiguration(argv = process.argv.slice(2), env = process.
     outputFormat: options.outputFormat,
     githubUiConfirmed: options.githubUiConfirmed,
     live: options.live,
+    writeInventoryDoc: options.writeInventoryDoc,
   };
 }
 
@@ -158,15 +166,16 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
   const loadInventory = dependencies.loadThreadInventory || loadThreadInventory;
   const loadThreads = dependencies.loadReviewThreadsFromFile || loadReviewThreadsFromFile;
   const fetchThreads = dependencies.fetchAllReviewThreads || fetchAllReviewThreads;
+  const syncInventoryDocument = dependencies.writeInventoryDocument || writeInventoryDocument;
 
   const repository = `${configuration.owner}/${configuration.repo}`;
-  const documentedThreads = loadInventory(configuration.docPath);
-  const activeDocumentedThreads = loadInventory(configuration.docPath, {}, {
+  let documentedThreads = loadInventory(configuration.docPath);
+  let activeDocumentedThreads = loadInventory(configuration.docPath, {}, {
     inventorySection: "unresolved",
   });
-  const docIssues = collectThreadInventoryIssues(documentedThreads);
-  const fixThreads = listFixClassifiedThreads(documentedThreads);
-  const fixThreadsMissingOrInvalidFollowUpPr = fixThreads.filter(
+  let docIssues = collectThreadInventoryIssues(documentedThreads);
+  let fixThreads = listFixClassifiedThreads(documentedThreads);
+  let fixThreadsMissingOrInvalidFollowUpPr = fixThreads.filter(
     (thread) => !isValidFollowUpPrLink(thread.followUpPr)
   );
 
@@ -206,12 +215,58 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
   ];
 
   let unresolvedThreads = null;
+  let inventoryDocumentUpdated = false;
 
   if (configuration.inputPath || configuration.token) {
     const rawThreads = configuration.inputPath
       ? loadThreads(configuration.inputPath)
       : await fetchThreads(configuration);
     unresolvedThreads = extractUnresolvedThreads(rawThreads);
+
+    if (configuration.writeInventoryDoc) {
+      syncInventoryDocument(configuration.docPath, unresolvedThreads);
+      inventoryDocumentUpdated = true;
+      documentedThreads = loadInventory(configuration.docPath);
+      activeDocumentedThreads = loadInventory(configuration.docPath, {}, {
+        inventorySection: "unresolved",
+      });
+      docIssues = collectThreadInventoryIssues(documentedThreads);
+      fixThreads = listFixClassifiedThreads(documentedThreads);
+      fixThreadsMissingOrInvalidFollowUpPr = fixThreads.filter(
+        (thread) => !isValidFollowUpPrLink(thread.followUpPr)
+      );
+      criteria[0] = {
+        ...criteria[0],
+        status:
+          documentedThreads.length === configuration.expectDocCount && docIssues.length === 0
+            ? "pass"
+            : "fail",
+        details:
+          docIssues.length === 0 && documentedThreads.length === configuration.expectDocCount
+            ? `Found ${documentedThreads.length} documented thread entries with complete metadata.`
+            : `Found ${documentedThreads.length} documented thread entries; ${docIssues.length} completeness issue(s) remain.`,
+        issues: docIssues,
+      };
+      criteria[1] = {
+        ...criteria[1],
+        status: fixThreadsMissingOrInvalidFollowUpPr.length === 0 ? "pass" : "fail",
+        details:
+          fixThreads.length === 0
+            ? "No fix-classified threads are currently documented."
+            : fixThreadsMissingOrInvalidFollowUpPr.length === 0
+              ? `All ${fixThreads.length} fix-classified thread(s) include follow-up PR links.`
+              : `${fixThreadsMissingOrInvalidFollowUpPr.length} of ${fixThreads.length} fix-classified thread(s) are missing valid follow-up PR links.`,
+        issues: fixThreadsMissingOrInvalidFollowUpPr.map(
+          (thread) =>
+            `${thread.threadId || "<missing thread id>"}: ${
+              thread.followUpPr
+                ? `invalid follow-up PR "${thread.followUpPr}"`
+                : "missing follow-up PR"
+            }`
+        ),
+      };
+    }
+
     const inventoryIssues = collectInventoryVerificationIssues(
       documentedThreads,
       unresolvedThreads,
@@ -276,6 +331,7 @@ async function evaluateAcceptance(configuration, dependencies = {}) {
     expectedCount: configuration.expectedCount,
     documentedThreadCount: documentedThreads.length,
     unresolvedThreadCount: unresolvedThreads ? unresolvedThreads.length : null,
+    inventoryDocumentUpdated,
     criteria,
     overallStatus,
   };
@@ -294,6 +350,10 @@ function formatAcceptanceReport(result, outputFormat = "text") {
     "",
     "Acceptance criteria:",
   ];
+
+  if (result.inventoryDocumentUpdated) {
+    lines.splice(4, 0, "Inventory document sync: UPDATED");
+  }
 
   result.criteria.forEach((criterion) => {
     lines.push(formatCriterionLine(criterion.status.toUpperCase(), criterion.label, criterion.details));
