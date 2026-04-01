@@ -293,6 +293,44 @@ def test_leisure_ranking_fixture_set_is_complete() -> None:
     assert sorted(path.name for path in fixture_dir.glob("*.json")) == sorted(RANKING_FIXTURE_NAMES)
 
 
+def test_ranking_fixtures_capture_distinct_traveler_shapes() -> None:
+    depth_fixture = _load_ranking_fixture("depth_oriented_urban_trip.json")
+    scenic_fixture = _load_ranking_fixture("scenic_transit_route.json")
+    discovery_fixture = _load_ranking_fixture("discovery_heavy_wanderer_route.json")
+    quality_fixture = _load_ranking_fixture("quality_floor_sensitive_trip.json")
+
+    depth_anchors = cast(
+        dict[str, list[dict[str, object]]],
+        cast(dict[str, object], depth_fixture["profile_overrides"])["anchors"],
+    )
+    scenic_anchors = cast(
+        dict[str, list[dict[str, object]]],
+        cast(dict[str, object], scenic_fixture["profile_overrides"])["anchors"],
+    )
+    quality_anchors = cast(
+        dict[str, list[dict[str, object]]],
+        cast(dict[str, object], quality_fixture["profile_overrides"])["anchors"],
+    )
+    discovery_objectives = cast(dict[str, object], discovery_fixture["objectives"])
+
+    assert depth_anchors["experience_anchors"][0]["type"] == "museum"
+    assert depth_anchors["place_anchors"][0]["label"] == "Kyoto"
+    assert scenic_anchors["mode_anchors"][0]["type"] == "rail"
+    assert discovery_objectives["protect_open_blocks"] is True
+    assert quality_anchors["quality_floor_anchors"][0]["label"] == "quiet sleep"
+    assert (
+        _expected_rank_order("depth_oriented_urban_trip.json")[0]
+        == "candidate:bundle:urban-culture"
+    )
+    assert (
+        _expected_rank_order("scenic_transit_route.json")[0] == "candidate:bundle:scenic-wanderer"
+    )
+    assert (
+        _expected_rank_order("quality_floor_sensitive_trip.json")[0]
+        == "candidate:bundle:quiet-recovery"
+    )
+
+
 @pytest.mark.parametrize("fixture_name", RANKING_FIXTURE_NAMES)
 def test_fixture_profiles_produce_expected_rank_order(fixture_name: str) -> None:
     engine = LeisureRankingEngine()
