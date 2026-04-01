@@ -340,7 +340,7 @@ function formatUnresolvedThreadsAsJson(repository, prNumber, unresolvedThreads) 
 
 function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThreads) {
   const lines = [
-    "# PR #178 Unresolved Thread Inventory",
+    `# PR #${prNumber} Unresolved Thread Inventory`,
     "",
     `Generated from \`${repository}\` PR #${prNumber} review threads.`,
     "",
@@ -359,10 +359,10 @@ function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThrea
     lines.push(`- Thread ID: ${thread.id}`);
     lines.push(`- Location: ${thread.path}:${thread.line ?? "unknown"}`);
     lines.push("- Classification:");
+    lines.push("- Follow-up PR:");
     lines.push("- Rationale:");
     lines.push(`- Content: ${formatThreadContent(thread.comments)}`);
     lines.push(`- Outdated: ${thread.isOutdated ? "yes" : "no"}`);
-
   });
 
   return `${lines.join("\n")}\n`;

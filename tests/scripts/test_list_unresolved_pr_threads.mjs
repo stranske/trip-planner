@@ -361,9 +361,16 @@ test("formatUnresolvedThreadsAsMarkdown emits a doc-ready inventory skeleton", (
   assert.match(report, /- Thread ID: THREAD_1/);
   assert.match(report, /- Location: scripts\/list_unresolved_pr_threads\.js:99/);
   assert.match(report, /- Classification:/);
+  assert.match(report, /- Follow-up PR:/);
   assert.match(report, /- Rationale:/);
   assert.match(report, /- Content: reviewer: Please handle pagination\./);
   assert.match(report, /- Outdated: yes/);
+});
+
+test("formatUnresolvedThreadsAsMarkdown uses the requested pull request number in the title", () => {
+  const report = formatUnresolvedThreadsAsMarkdown("stranske/trip-planner", 581, []);
+
+  assert.match(report, /# PR #581 Unresolved Thread Inventory/);
 });
 
 test("formatUnresolvedThreadsAsMarkdown output can be parsed by the inventory tooling", () => {
