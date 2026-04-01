@@ -536,6 +536,8 @@ function validateExpectedCount(unresolvedThreads, expectedCount) {
 function mergeInventoryIntoDocument(existingDocument, unresolvedThreads) {
   const trimmedDocument = existingDocument.trimEnd();
   const threadSectionHeading = /^## (?:Thread Template|Thread Inventory|Resolved Thread Inventory)\s*$/m;
+  const threadSectionPattern =
+    /## (?:Thread Template|Thread Inventory|Resolved Thread Inventory)[\s\S]*$/m;
   const threadSection = ["## Thread Inventory"];
   const existingThreads = parseThreadInventory(existingDocument);
 
@@ -556,7 +558,7 @@ function mergeInventoryIntoDocument(existingDocument, unresolvedThreads) {
 
   const mergedThreadSection = threadSection.join("\n");
   if (threadSectionHeading.test(trimmedDocument)) {
-    return `${trimmedDocument.replace(/## Thread (?:Template|Inventory)[\s\S]*$/m, mergedThreadSection)}\n`;
+    return `${trimmedDocument.replace(threadSectionPattern, mergedThreadSection)}\n`;
   }
 
   return `${trimmedDocument}\n\n${mergedThreadSection}\n`;

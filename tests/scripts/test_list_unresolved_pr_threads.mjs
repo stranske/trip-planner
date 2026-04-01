@@ -955,6 +955,56 @@ Intro paragraph.
   );
 });
 
+test("mergeInventoryIntoDocument replaces a resolved-thread-only section when unresolved threads return", () => {
+  const mergedDocument = mergeInventoryIntoDocument(
+    `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Resolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_OLD
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: disposition
+- Follow-up PR:
+- Rationale: Historical triage should be replaced by the latest unresolved snapshot.
+- Content: reviewer: Legacy resolved thread content.
+- Outdated: no
+`,
+    [
+      {
+        id: "THREAD_NEW",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+        path: "scripts/list_unresolved_pr_threads.js",
+        line: 121,
+        isOutdated: true,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please handle the latest unresolved case.",
+          },
+        ],
+      },
+    ]
+  );
+
+  assert.match(mergedDocument, /## Thread Inventory/);
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Thread ID: THREAD_NEW/);
+  assert.match(
+    mergedDocument,
+    /### Thread 1[\s\S]*- Original Thread URL: https:\/\/github\.com\/stranske\/trip-planner\/pull\/178#discussion_r2/
+  );
+  assert.match(
+    mergedDocument,
+    /### Thread 1[\s\S]*- Content: reviewer: Please handle the latest unresolved case\./
+  );
+  assert.doesNotMatch(mergedDocument, /## Resolved Thread Inventory/);
+  assert.doesNotMatch(mergedDocument, /THREAD_OLD/);
+});
+
 test("formatThreadContent condenses multiple comments into a single content field", () => {
   assert.equal(
     formatThreadContent([
