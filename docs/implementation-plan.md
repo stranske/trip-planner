@@ -51,6 +51,7 @@ See [source-ingestion-epic.md](source-ingestion-epic.md) for the dependency chai
 
 ### 5. Ranking And Route Assembly
 
+- [Epic `#531`: ranking, route feasibility, and explainable search](ranking-route-search-epic.md)
 - `#532` ranking and explanation contracts
 - `#533` feasibility and move-cost evaluation
 - `#534` leisure ranking
