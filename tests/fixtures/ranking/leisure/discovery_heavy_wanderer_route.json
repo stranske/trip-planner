@@ -1,0 +1,65 @@
+{
+  "id": "discovery-heavy-wanderer-route",
+  "summary": "Open-ended wanderer who prioritizes discovery, elasticity, and scenic movement.",
+  "profile_overrides": {
+    "hard_constraints": {
+      "budget_ceiling": 1550.0
+    },
+    "anchors": {
+      "experience_anchors": [
+        {
+          "type": "wandering",
+          "label": "wandering district",
+          "strength": 0.98,
+          "flexibility": 0.1
+        }
+      ],
+      "mode_anchors": [
+        {
+          "type": "rail",
+          "label": "scenic rail",
+          "strength": 0.88,
+          "flexibility": 0.22
+        }
+      ]
+    },
+    "tradeoff_dimensions": {
+      "iconic_vs_discovery": {
+        "value": -0.92,
+        "confidence": 0.86,
+        "salience": 0.92
+      },
+      "structure_vs_elasticity": {
+        "value": -0.82,
+        "confidence": 0.8,
+        "salience": 0.84
+      },
+      "breadth_vs_depth": {
+        "value": -0.35,
+        "confidence": 0.68,
+        "salience": 0.58
+      },
+      "scenic_transit_vs_destination_time": {
+        "value": 0.8,
+        "confidence": 0.78,
+        "salience": 0.76
+      }
+    },
+    "budget_model": {
+      "total_budget_sensitivity": 0.4
+    }
+  },
+  "objectives": {
+    "route_shape": "mixed",
+    "discovery_style": "discovery_forward",
+    "protect_open_blocks": true,
+    "recovery_priority": 0.3,
+    "required_quality": [],
+    "transit_is_feature": true
+  },
+  "expected_rank_order": [
+    "candidate:bundle:scenic-wanderer",
+    "candidate:bundle:urban-culture",
+    "candidate:bundle:quiet-recovery"
+  ]
+}
