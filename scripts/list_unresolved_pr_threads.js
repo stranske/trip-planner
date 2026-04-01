@@ -555,11 +555,44 @@ function validateExpectedCount(unresolvedThreads, expectedCount) {
   }
 }
 
+function findInventorySectionRange(document) {
+  const headingPattern = /^## .+$/gm;
+  const headingMatches = Array.from(document.matchAll(headingPattern));
+
+  if (headingMatches.length === 0) {
+    return null;
+  }
+
+  const start = headingMatches[0].index;
+  const inventoryHeadings = new Set([
+    "## Thread Template",
+    "## Thread Inventory",
+    "## Resolved Thread Inventory",
+  ]);
+
+  const firstHeadingText = headingMatches[0][0].trim();
+  if (!inventoryHeadings.has(firstHeadingText)) {
+    return null;
+  }
+
+  for (let index = 1; index < headingMatches.length; index += 1) {
+    const headingText = headingMatches[index][0].trim();
+    if (!inventoryHeadings.has(headingText)) {
+      return {
+        start,
+        end: headingMatches[index].index,
+      };
+    }
+  }
+
+  return {
+    start,
+    end: document.length,
+  };
+}
+
 function mergeInventoryIntoDocument(existingDocument, unresolvedThreads) {
   const trimmedDocument = existingDocument.trimEnd();
-  const threadSectionHeading = /^## (?:Thread Template|Thread Inventory|Resolved Thread Inventory)\s*$/m;
-  const threadSectionPattern =
-    /## (?:Thread Template|Thread Inventory|Resolved Thread Inventory)[\s\S]*$/m;
   const threadSection = ["## Thread Inventory"];
   const existingThreads = parseThreadInventory(existingDocument);
   const resolvedThreads = collectResolvedInventoryEntries(existingThreads, unresolvedThreads);
@@ -587,8 +620,12 @@ function mergeInventoryIntoDocument(existingDocument, unresolvedThreads) {
   }
 
   const mergedThreadSection = threadSection.join("\n");
-  if (threadSectionHeading.test(trimmedDocument)) {
-    return `${trimmedDocument.replace(threadSectionPattern, mergedThreadSection)}\n`;
+  const sectionRange = findInventorySectionRange(trimmedDocument);
+  if (sectionRange) {
+    const beforeSection = trimmedDocument.slice(0, sectionRange.start).trimEnd();
+    const afterSection = trimmedDocument.slice(sectionRange.end).trim();
+    const parts = [beforeSection, mergedThreadSection, afterSection].filter(Boolean);
+    return `${parts.join("\n\n")}\n`;
   }
 
   return `${trimmedDocument}\n\n${mergedThreadSection}\n`;
@@ -637,6 +674,7 @@ module.exports = {
   buildReviewThreadsQuery,
   extractUnresolvedThreads,
   extractThreadsFromSnapshot,
+  findInventorySectionRange,
   findExistingInventoryEntry,
   formatOptionalMetadataLine,
   formatOutput,

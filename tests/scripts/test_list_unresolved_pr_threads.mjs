@@ -23,6 +23,7 @@ const {
   formatUnresolvedThreadsAsJson,
   formatUnresolvedThreadsAsMarkdown,
   formatUnresolvedThreadsReport,
+  findInventorySectionRange,
   getConfiguration,
   loadReviewThreadsFromFile,
   mergeInventoryIntoDocument,
@@ -679,6 +680,28 @@ ${buildBlankInventoryTemplate(1)}`,
   assert.match(mergedDocument, /- Thread ID: THREAD_1/);
 });
 
+test("findInventorySectionRange isolates only the inventory block when trailing sections exist", () => {
+  const document = `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+
+## Follow-up Notes
+
+This section should stay below the generated inventory.
+`;
+
+  assert.deepEqual(findInventorySectionRange(document), {
+    start: document.indexOf("## Thread Inventory"),
+    end: document.indexOf("## Follow-up Notes"),
+  });
+});
+
 test("mergeInventoryIntoDocument preserves manual classifications and follow-up PR links", () => {
   const mergedDocument = mergeInventoryIntoDocument(
     `# PR #178 Unresolved Thread Inventory
@@ -988,6 +1011,52 @@ Intro paragraph.
     updatedDocument,
     /### Thread 1[\s\S]*- Rationale: The reviewer concern was handled in the original PR discussion\./
   );
+});
+
+test("mergeInventoryIntoDocument preserves trailing sections below the inventory block", () => {
+  const mergedDocument = mergeInventoryIntoDocument(
+    `# PR #178 Unresolved Thread Inventory
+
+Intro paragraph.
+
+## Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: old/path.py:10
+- Classification: disposition
+- Follow-up PR:
+- Rationale: Existing triage should survive inventory refreshes.
+- Content: reviewer: stale text
+- Outdated: no
+
+## Follow-up Notes
+
+- Keep these notes after refresh.
+`,
+    [
+      {
+        id: "THREAD_1",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        path: "trip_planner/example.py",
+        line: 17,
+        isOutdated: false,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please keep this branch explicit.",
+          },
+        ],
+      },
+    ]
+  );
+
+  assert.match(mergedDocument, /## Thread Inventory/);
+  assert.match(mergedDocument, /### Thread 1[\s\S]*- Location: trip_planner\/example\.py:17/);
+  assert.match(mergedDocument, /## Follow-up Notes/);
+  assert.match(mergedDocument, /Keep these notes after refresh\./);
 });
 
 test("mergeInventoryIntoDocument preserves resolved history when only some threads remain unresolved", () => {
