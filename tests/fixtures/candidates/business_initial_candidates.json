@@ -1,0 +1,123 @@
+{
+  "trip_id": "trip-business-chicago",
+  "purpose": "policy_comparison",
+  "selection_limit": 2,
+  "max_source_freshness_days": 21,
+  "policy_constraints": {
+    "policy_id": "policy-candidates-001",
+    "organization_id": "org-001",
+    "policy_version": "2026.1",
+    "required_booking_channels": ["managed-travel", "managed-travel-portal"],
+    "airfare_rules": {
+      "cabin": "economy"
+    },
+    "lodging_rules": {
+      "max_nightly_rate_usd": 300
+    },
+    "ground_transport_rules": {
+      "rideshare_allowed": true
+    },
+    "meal_rules": {
+      "per_diem": "standard"
+    },
+    "approval_rules": [
+      "manager approval required"
+    ],
+    "documentation_rules": [
+      "retain airfare and lodging receipts"
+    ],
+    "allowed_exception_types": [
+      "lodging_cap"
+    ]
+  },
+  "destinations": [
+    {
+      "payload": {
+        "destination_id": "dest-home-ord",
+        "place_kind": "city",
+        "name": "Chicago O'Hare origin",
+        "geo": {
+          "latitude": 41.9742,
+          "longitude": -87.9073,
+          "country_code": "US"
+        },
+        "source_refs": [
+          {
+            "provenance_id": "prov-ord-origin",
+            "role": "operational",
+            "source_id": "managed-travel-origin",
+            "source_category": "managed_travel_policy",
+            "contribution_kind": "policy",
+            "summary": "Origin airport context for business travel candidate generation."
+          }
+        ]
+      }
+    },
+    {
+      "payload": {
+        "destination_id": "dest-city-chicago",
+        "place_kind": "city",
+        "name": "Chicago",
+        "geo": {
+          "latitude": 41.8781,
+          "longitude": -87.6298,
+          "country_code": "US"
+        },
+        "source_refs": [
+          {
+            "provenance_id": "prov-chicago-city",
+            "role": "operational",
+            "source_id": "managed-travel-destination",
+            "source_category": "managed_travel_policy",
+            "contribution_kind": "policy",
+            "summary": "Managed-travel destination context for Chicago business travel."
+          }
+        ]
+      }
+    }
+  ],
+  "lodging_options": [
+    {
+      "path": "tests/fixtures/options/lodging/conference_hotel.json"
+    }
+  ],
+  "transport_options": [
+    {
+      "path": "tests/fixtures/options/transport/coastal_flight.json",
+      "overrides": {
+        "origin_id": "dest-home-ord",
+        "destination_id": "dest-city-chicago",
+        "booking_terms": {
+          "booking_channel": "managed-travel",
+          "approved_channels": ["managed-travel", "managed-travel-portal"],
+          "class_of_service": "economy"
+        },
+        "policy_summary": {
+          "business_approval_status": "preferred",
+          "approved_booking_channel": true,
+          "class_of_service": "economy"
+        },
+        "source_refs": [
+          {
+            "provenance_id": "prov-flight-managed-travel",
+            "source_id": "managed-travel",
+            "source_category": "managed_travel_policy",
+            "subject_kind": "option",
+            "subject_id": "transport-flight-business",
+            "contribution_kind": "policy",
+            "summary": "Managed-travel flight inventory for the initial business candidate set.",
+            "freshness_days_at_capture": 2
+          }
+        ]
+      }
+    },
+    {
+      "path": "tests/fixtures/options/transport/regional_rental_car.json",
+      "overrides": {
+        "origin_id": "dest-home-ord",
+        "destination_id": "dest-city-chicago"
+      }
+    }
+  ],
+  "activity_options": []
+}

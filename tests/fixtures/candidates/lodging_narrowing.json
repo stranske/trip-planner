@@ -1,0 +1,31 @@
+{
+  "trip_id": "trip-lodging-narrowing",
+  "purpose": "inventory_narrowing",
+  "selection_limit": 2,
+  "max_source_freshness_days": 30,
+  "destinations": [
+    {
+      "path": "tests/fixtures/options/destinations/kyoto_city.json"
+    }
+  ],
+  "lodging_options": [
+    {
+      "path": "tests/fixtures/options/lodging/central_urban_hotel.json"
+    },
+    {
+      "path": "tests/fixtures/options/lodging/quiet_outer_area_hotel.json"
+    },
+    {
+      "path": "tests/fixtures/options/lodging/vacation_rental.json",
+      "overrides": {
+        "feasibility": {
+          "inventory_status": "sold_out",
+          "available": false,
+          "business_approval_status": "restricted"
+        }
+      }
+    }
+  ],
+  "activity_options": [],
+  "transport_options": []
+}
