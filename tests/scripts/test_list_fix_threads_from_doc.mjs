@@ -11,6 +11,7 @@ const {
   DEFAULT_DOC_PATH,
   collectThreadInventoryIssues,
   formatFixThreadsAsJson,
+  formatFixThreadsAsPlan,
   formatFixThreadsAsMarkdown,
   formatFixThreadsOutput,
   formatFixThreadsReport,
@@ -333,6 +334,46 @@ test("formatFixThreadsAsMarkdown reports excluded outdated fix threads", () => {
   assert.match(report, /No fix-classified threads found\./);
 });
 
+test("formatFixThreadsAsPlan emits a bounded follow-up PR execution plan", () => {
+  const report = formatFixThreadsAsPlan([
+    {
+      threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+      location: "trip_planner/example.py:17",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale: "Code path still drops the final stop.",
+      content: "Reviewer requested a bounds check.",
+      outdated: false,
+    },
+    {
+      threadId: "THREAD_2",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+      location: "trip_planner/other.py:8",
+      classification: "fix",
+      followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+      rationale: "Separate code path needs the same guard.",
+      content: "Reviewer requested parity with the primary branch.",
+      outdated: false,
+    },
+  ]);
+
+  assert.match(report, /# Follow-up PR Execution Plan/);
+  assert.match(report, /Actionable fix threads: 2/);
+  assert.match(report, /Follow-up PR groups: 1/);
+  assert.match(
+    report,
+    /## Follow-up PR Group 1: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/
+  );
+  assert.match(report, /- Thread Count: 2/);
+  assert.match(report, /- Thread: THREAD_1/);
+  assert.match(report, /- Suggested Branch: `pr-178-fix\/trip-planner-example-py-17-thread-1`/);
+  assert.match(
+    report,
+    /- Next Step: Implement the requested code change and reply on the follow-up PR\./
+  );
+});
+
 test("formatFixThreadsOutput dispatches to the requested formatter", () => {
   const fixThreads = [
     {
@@ -350,6 +391,7 @@ test("formatFixThreadsOutput dispatches to the requested formatter", () => {
   assert.match(formatFixThreadsOutput(fixThreads, "text"), /Fix-classified threads: 1/);
   assert.doesNotThrow(() => JSON.parse(formatFixThreadsOutput(fixThreads, "json")));
   assert.match(formatFixThreadsOutput(fixThreads, "markdown"), /# Fix-Classified Thread Scope/);
+  assert.match(formatFixThreadsOutput(fixThreads, "plan"), /# Follow-up PR Execution Plan/);
 });
 
 test("buildSuggestedBranchName derives a stable feature branch from location and thread id", () => {
@@ -531,11 +573,20 @@ test("getCliConfiguration accepts markdown output", () => {
   });
 });
 
+test("getCliConfiguration accepts plan output", () => {
+  assert.deepEqual(getCliConfiguration(["--format", "plan"]), {
+    docPath: DEFAULT_DOC_PATH,
+    excludeOutdated: false,
+    outputFormat: "plan",
+    requireComplete: false,
+  });
+});
+
 test("getCliConfiguration rejects unknown options and extra positional arguments", () => {
   assert.throws(() => getCliConfiguration(["--unknown"]), /Unknown option: --unknown/);
   assert.throws(
     () => getCliConfiguration(["--format", "html"]),
-    /Output format must be one of "text", "json", or "markdown"/
+    /Output format must be one of "text", "json", "markdown", or "plan"/
   );
   assert.throws(
     () => getCliConfiguration(["docs/one.md", "docs/two.md"]),

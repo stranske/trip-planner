@@ -418,6 +418,45 @@ function formatFixThreadsAsMarkdown(fixThreads, options = {}) {
   return `${lines.join("\n")}\n`;
 }
 
+function formatFixThreadsAsPlan(fixThreads, options = {}) {
+  const { excludedOutdatedCount = 0 } = options;
+  const followUpPrGroups = groupFixThreadsByFollowUpPr(fixThreads);
+  const lines = ["# Follow-up PR Execution Plan", ""];
+
+  if (fixThreads.length === 0) {
+    if (excludedOutdatedCount > 0) {
+      lines.push(`Excluded outdated fix threads: ${excludedOutdatedCount}`, "");
+    }
+    lines.push("No actionable fix-classified threads found.");
+    return `${lines.join("\n")}\n`;
+  }
+
+  lines.push(`Actionable fix threads: ${fixThreads.length}`);
+  if (excludedOutdatedCount > 0) {
+    lines.push(`Excluded outdated fix threads: ${excludedOutdatedCount}`);
+  }
+  lines.push(`Follow-up PR groups: ${followUpPrGroups.length}`);
+
+  followUpPrGroups.forEach((group, groupIndex) => {
+    lines.push("");
+    lines.push(
+      `## Follow-up PR Group ${groupIndex + 1}: ${group.followUpPr || "<missing follow-up PR>"}`
+    );
+    lines.push("");
+    lines.push(`- Thread Count: ${group.threadCount}`);
+
+    group.threads.forEach((thread) => {
+      lines.push(`- Thread: ${thread.threadId || "<missing thread id>"}`);
+      lines.push(`- Suggested Branch: \`${thread.suggestedBranch}\``);
+      lines.push(`- Location: ${thread.location || "<missing location>"}`);
+      lines.push(`- Original Thread URL: ${thread.originalThreadUrl || "<missing original thread URL>"}`);
+      lines.push(`- Next Step: Implement the requested code change and reply on the follow-up PR.`);
+    });
+  });
+
+  return `${lines.join("\n")}\n`;
+}
+
 function formatFixThreadsOutput(fixThreads, outputFormat = "text", options = {}) {
   if (outputFormat === "json") {
     return formatFixThreadsAsJson(fixThreads, options);
@@ -425,6 +464,10 @@ function formatFixThreadsOutput(fixThreads, outputFormat = "text", options = {})
 
   if (outputFormat === "markdown") {
     return formatFixThreadsAsMarkdown(fixThreads, options);
+  }
+
+  if (outputFormat === "plan") {
+    return formatFixThreadsAsPlan(fixThreads, options);
   }
 
   return formatFixThreadsReport(fixThreads, options);
@@ -493,9 +536,9 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
     options.docPath = path.resolve(argument);
   }
 
-  if (!["text", "json", "markdown"].includes(options.outputFormat)) {
+  if (!["text", "json", "markdown", "plan"].includes(options.outputFormat)) {
     throw new Error(
-      `Output format must be one of "text", "json", or "markdown"; received "${options.outputFormat}".`
+      `Output format must be one of "text", "json", "markdown", or "plan"; received "${options.outputFormat}".`
     );
   }
 
@@ -523,6 +566,7 @@ module.exports = {
   DEFAULT_DOC_PATH,
   collectThreadInventoryIssues,
   formatFixThreadsAsJson,
+  formatFixThreadsAsPlan,
   formatFixThreadsAsMarkdown,
   formatFixThreadsOutput,
   formatFixThreadsReport,
