@@ -1,0 +1,170 @@
+version: 1
+issue: 588
+base: main
+branch: codex/issue-588
+tasks:
+  - id: task-01
+    title: 'Add a markdown file `pr-569-unresolved-threads.md` enumerating the 5 unresolved
+      inline review threads on PR #569 (include direct links and short summaries)'
+    status: doing
+    started_at: '2026-04-01T11:39:21Z'
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-02
+    title: Review each unresolved thread and document the technical concern raised
+      in the review comment in `pr-569-unresolved-threads.md`
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: 'Apply objective criteria to classify threads: security issues and bugs
+      are warranted fixes, style preferences and alternative approaches are not-warranted
+      dispositions'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: Update `pr-569-unresolved-threads.md` with the classification and justification
+      for each thread based on the applied criteria
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: Create a separate branch for each warranted fix thread identified in the
+      classification step
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: Implement the code changes addressing each warranted fix thread according
+      to the review feedback
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: Write a pull request description for each warranted fix referencing the
+      original thread
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: Update `pr-569-unresolved-threads.md` with permalinks to each follow-up
+      pull request
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: 'Write a disposition comment for each "not-warranted disposition" thread
+      directly on PR #569 explaining why the feedback is not being implemented'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: Record the comment permalink(s) for each disposition in `pr-569-unresolved-threads.md`
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: Update `pr-569-unresolved-threads.md` to confirm all 5 threads have been
+      addressed (either via follow-up PR or disposition comment)
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: Review and approve follow-up pull requests for warranted fix threads
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: Merge approved follow-up pull requests
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: File `pr-569-unresolved-threads.md` exists in the repository root
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: '`pr-569-unresolved-threads.md` lists all 5 unresolved inline review threads
+      from PR #569 with direct GitHub permalink URLs'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-16
+    title: Each thread entry includes the technical concern raised by the reviewer
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-17
+    title: Each thread is classified as either "warranted fix" or "not-warranted disposition"
+      with a one-line justification
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-18
+    title: 'Classification decisions follow the criteria documented in Implementation
+      Notes: security/bug fixes are warranted, style/preference comments are dispositioned'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-19
+    title: All "warranted fix" threads have corresponding code changes in follow-up
+      PR(s) with permalinks recorded in the markdown file
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-20
+    title: 'All "not-warranted disposition" threads have a posted comment on PR #569
+      with rationale and the comment permalink recorded in the markdown file'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-21
+    title: 'All 5 unresolved inline review threads on PR #569 have either been resolved
+      via follow-up PRs or have disposition comments with recorded permalinks in the
+      markdown file'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
