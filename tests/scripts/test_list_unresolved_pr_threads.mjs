@@ -795,6 +795,57 @@ test("formatUnresolvedThreadsAsMarkdown preserves resolved history when zero unr
   assert.match(report, /- Follow-up PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/);
 });
 
+test("formatUnresolvedThreadsAsMarkdown preserves resolved history when unresolved threads still remain", () => {
+  const report = formatUnresolvedThreadsAsMarkdown(
+    "stranske/trip-planner",
+    178,
+    [
+      {
+        id: "THREAD_ACTIVE",
+        isOutdated: false,
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+        path: "trip_planner/example.py",
+        line: 17,
+        comments: [
+          {
+            author: "reviewer",
+            body: "Please keep this branch explicit.",
+          },
+        ],
+      },
+    ],
+    [
+      {
+        threadId: "THREAD_ACTIVE",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
+        location: "old/example.py:9",
+        classification: "fix",
+        followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+        rationale: "Existing unresolved triage should stay attached to the active thread.",
+        content: "reviewer: stale active content",
+        outdated: false,
+      },
+      {
+        threadId: "THREAD_RESOLVED",
+        originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
+        location: "trip_planner/resolved.py:22",
+        classification: "disposition",
+        followUpPr: null,
+        rationale: "The concern was addressed in discussion and then resolved.",
+        content: "reviewer: historical resolved thread",
+        outdated: true,
+      },
+    ]
+  );
+
+  assert.match(report, /- Thread ID: THREAD_ACTIVE/);
+  assert.match(report, /- Classification: fix/);
+  assert.match(report, /## Resolved Thread Inventory/);
+  assert.match(report, /- Thread ID: THREAD_RESOLVED/);
+  assert.match(report, /- Classification: disposition/);
+  assert.doesNotMatch(report, /- Thread ID: THREAD_ACTIVE[\s\S]*## Resolved Thread Inventory[\s\S]*- Thread ID: THREAD_ACTIVE/);
+});
+
 test("formatUnresolvedThreadsAsMarkdown output can be parsed by the inventory tooling", () => {
   const report = formatUnresolvedThreadsAsMarkdown("stranske/trip-planner", 178, [
     {

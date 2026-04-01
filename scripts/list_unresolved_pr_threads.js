@@ -441,6 +441,16 @@ function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThrea
     lines.push(...buildMarkdownThreadSection(thread, index, existingEntry));
   });
 
+  const resolvedThreads = deduplicateInventoryEntries(
+    collectResolvedInventoryEntries(existingThreads, unresolvedThreads).filter(isPopulatedInventoryEntry)
+  );
+  if (resolvedThreads.length > 0) {
+    lines.push("", "## Resolved Thread Inventory");
+    resolvedThreads.forEach((thread, index) => {
+      lines.push(...buildInventoryThreadSection(thread, index));
+    });
+  }
+
   return `${lines.join("\n")}\n`;
 }
 
