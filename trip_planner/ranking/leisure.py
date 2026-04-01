@@ -742,18 +742,18 @@ def _hybrid_signal(
 def _freshness_signal(bundle: InventoryBundle) -> float:
     freshness: list[float] = []
     for destination in bundle.destinations:
-        for source in destination.source_refs:
-            freshness_days = getattr(source, "freshness_days_at_capture", None)
+        for destination_source in destination.source_refs:
+            freshness_days = getattr(destination_source, "freshness_days_at_capture", None)
             if freshness_days is not None:
                 freshness.append(_clamp(1.0 - min(1.0, freshness_days / 90.0)))
     for collection in (bundle.lodging_options, bundle.transport_options, bundle.activity_options):
         for option in collection:
-            for source in option.source_refs:
-                trust = getattr(source, "trust_snapshot", None)
+            for option_source in option.source_refs:
+                trust = getattr(option_source, "trust_snapshot", None)
                 if trust and trust.freshness_days is not None:
                     freshness.append(_clamp(1.0 - min(1.0, trust.freshness_days / 90.0)))
                 else:
-                    freshness_days = getattr(source, "freshness_days_at_capture", None)
+                    freshness_days = getattr(option_source, "freshness_days_at_capture", None)
                     if freshness_days is not None:
                         freshness.append(_clamp(1.0 - min(1.0, freshness_days / 90.0)))
     return _mean(freshness or [0.75])
