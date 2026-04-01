@@ -12,11 +12,15 @@ from trip_planner._validators import (
     require_string_mapping,
     require_strings,
 )
-from trip_planner.contracts.options import MoneyRange
+from trip_planner._option_contracts import MoneyRange
 
 from .profile import TravelerContext
 
-POLICY_EVALUATION_STATUSES: tuple[str, ...] = ("compliant", "non_compliant", "exception_required")
+POLICY_EVALUATION_STATUSES: tuple[str, ...] = (
+    "compliant",
+    "non_compliant",
+    "exception_required",
+)
 FAILURE_SEVERITIES: tuple[str, ...] = ("warning", "blocking")
 
 
@@ -105,7 +109,9 @@ class SelectedOptionSummary:
         require_non_empty(self.label, "label")
         require_non_empty(self.vendor, "vendor")
         require_non_empty(self.booking_channel, "booking_channel")
-        if self.estimated_cost is not None and not isinstance(self.estimated_cost, MoneyRange):
+        if self.estimated_cost is not None and not isinstance(
+            self.estimated_cost, MoneyRange
+        ):
             raise ValueError("estimated_cost must be a MoneyRange when provided")
         require_strings(self.justification_refs, "justification_refs")
 
@@ -205,17 +211,29 @@ class TripPlanProposal:
         if not isinstance(self.traveler_context, TravelerContext):
             raise ValueError("traveler_context must be a TravelerContext")
         if not self.selected_options:
-            raise ValueError("selected_options must contain at least one SelectedOptionSummary")
-        if any(not isinstance(item, SelectedOptionSummary) for item in self.selected_options):
-            raise ValueError("selected_options must contain SelectedOptionSummary instances")
+            raise ValueError(
+                "selected_options must contain at least one SelectedOptionSummary"
+            )
+        if any(
+            not isinstance(item, SelectedOptionSummary)
+            for item in self.selected_options
+        ):
+            raise ValueError(
+                "selected_options must contain SelectedOptionSummary instances"
+            )
         if not isinstance(self.cost_summary, ProposalCostSummary):
             raise ValueError("cost_summary must be a ProposalCostSummary")
         if any(not isinstance(item, ComparableOption) for item in self.comparables):
             raise ValueError("comparables must contain ComparableOption instances")
-        if any(not isinstance(item, JustificationRecord) for item in self.justifications):
-            raise ValueError("justifications must contain JustificationRecord instances")
         if any(
-            not isinstance(item, BookingChannelSummary) for item in self.booking_channel_summaries
+            not isinstance(item, JustificationRecord) for item in self.justifications
+        ):
+            raise ValueError(
+                "justifications must contain JustificationRecord instances"
+            )
+        if any(
+            not isinstance(item, BookingChannelSummary)
+            for item in self.booking_channel_summaries
         ):
             raise ValueError(
                 "booking_channel_summaries must contain BookingChannelSummary instances"
@@ -223,7 +241,9 @@ class TripPlanProposal:
         if self.requested_exception is not None and not isinstance(
             self.requested_exception, ExceptionRequest
         ):
-            raise ValueError("requested_exception must be an ExceptionRequest when provided")
+            raise ValueError(
+                "requested_exception must be an ExceptionRequest when provided"
+            )
         require_strings(self.approval_notes, "approval_notes")
         if self.constraint_set_id is not None and not self.constraint_set_id:
             raise ValueError("constraint_set_id must be non-empty when provided")
@@ -236,7 +256,9 @@ class TripPlanProposal:
         selected_options = _require_list_field(payload, "selected_options")
         comparables = _optional_list_field(payload, "comparables")
         justifications = _optional_list_field(payload, "justifications")
-        booking_channel_summaries = _optional_list_field(payload, "booking_channel_summaries")
+        booking_channel_summaries = _optional_list_field(
+            payload, "booking_channel_summaries"
+        )
         approval_notes = _optional_list_field(payload, "approval_notes")
 
         return cls(
@@ -347,12 +369,26 @@ class PolicyEvaluationResult:
         require_non_empty(self.proposal_id, "proposal_id")
         if self.status not in POLICY_EVALUATION_STATUSES:
             raise ValueError(f"status must be one of {POLICY_EVALUATION_STATUSES}")
-        if any(not isinstance(item, ApprovalRequirement) for item in self.approval_requirements):
-            raise ValueError("approval_requirements must contain ApprovalRequirement instances")
-        if any(not isinstance(item, PolicyFailureReason) for item in self.failure_reasons):
-            raise ValueError("failure_reasons must contain PolicyFailureReason instances")
-        if any(not isinstance(item, PreferredAlternative) for item in self.preferred_alternatives):
-            raise ValueError("preferred_alternatives must contain PreferredAlternative instances")
+        if any(
+            not isinstance(item, ApprovalRequirement)
+            for item in self.approval_requirements
+        ):
+            raise ValueError(
+                "approval_requirements must contain ApprovalRequirement instances"
+            )
+        if any(
+            not isinstance(item, PolicyFailureReason) for item in self.failure_reasons
+        ):
+            raise ValueError(
+                "failure_reasons must contain PolicyFailureReason instances"
+            )
+        if any(
+            not isinstance(item, PreferredAlternative)
+            for item in self.preferred_alternatives
+        ):
+            raise ValueError(
+                "preferred_alternatives must contain PreferredAlternative instances"
+            )
         require_strings(self.exception_guidance, "exception_guidance")
         require_strings(self.notes, "notes")
         require_probability(self.compliance_score, "compliance_score")
@@ -372,7 +408,9 @@ class PolicyEvaluationResult:
             evaluation_id=payload["evaluation_id"],
             proposal_id=payload["proposal_id"],
             status=payload["status"],
-            approval_requirements=[ApprovalRequirement(**item) for item in approval_requirements],
+            approval_requirements=[
+                ApprovalRequirement(**item) for item in approval_requirements
+            ],
             failure_reasons=[PolicyFailureReason(**item) for item in failure_reasons],
             preferred_alternatives=[
                 PreferredAlternative(**item) for item in preferred_alternatives

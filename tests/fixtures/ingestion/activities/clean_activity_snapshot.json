@@ -1,0 +1,103 @@
+{
+  "snapshot": {
+    "snapshot_id": "snapshot-activity-clean",
+    "adapter_id": "fixture-activity-adapter",
+    "source_id": "museum-direct",
+    "source_category": "official_operational",
+    "entity_scope": "activity",
+    "option_kind": "activity",
+    "fetched_at": "2026-04-01T03:32:00Z",
+    "query": {
+      "query_id": "query-activity-clean",
+      "entity_scope": "activity",
+      "option_kind": "activity",
+      "destination": "dest-kyoto"
+    },
+    "records": [
+      {
+        "record_id": "record-activity-clean",
+        "entity_scope": "activity",
+        "provider_entity_id": "major-museum-direct",
+        "payload_type": "fixture",
+        "payload": {
+          "option_id": "activity-major-museum",
+          "name": "National Museum anchor visit",
+          "activity_kind": "museum",
+          "destination_id": "dest-kyoto",
+          "place_id": "place-national-museum",
+          "category": {
+            "primary": "museum",
+            "secondary": ["art", "history"],
+            "tags": ["indoor", "anchor"],
+            "open_ended": false
+          },
+          "timing_summary": {
+            "duration_minutes": 180,
+            "typical_start_window": "09:30-13:30",
+            "timing_sensitivity_signal": 0.72,
+            "closure_risk_signal": 0.18,
+            "crowd_pressure_signal": 0.83,
+            "weather_dependency_signal": 0.04
+          },
+          "significance_summary": {
+            "overall_signal": 0.95,
+            "local_icon_signal": 0.91,
+            "cultural_signal": 0.96,
+            "anchor_worthy": true
+          },
+          "booking_terms": {
+            "activity_format": "timed_entry",
+            "booking_required": true,
+            "ticketed": true,
+            "booking_channel": "museum-direct",
+            "reservation_cutoff": "Same-day slots often gone by noon"
+          },
+          "cost_summary": {
+            "total": {"currency": "USD", "typical_amount": 24.0},
+            "per_person": {"currency": "USD", "typical_amount": 24.0}
+          },
+          "quality_summary": {
+            "overall_signal": 0.92,
+            "content_quality_signal": 0.95,
+            "hospitality_signal": 0.77,
+            "maintenance_signal": 0.9
+          },
+          "value_summary": {
+            "overall_signal": 0.71,
+            "uniqueness_signal": 0.93,
+            "time_value_signal": 0.63,
+            "cost_value_signal": 0.67
+          },
+          "fit_summary": {
+            "overall_signal": 0.66,
+            "traveler_fit_signal": 0.64,
+            "pacing_fit_signal": 0.55,
+            "weather_fit_signal": 0.93,
+            "group_fit_signal": 0.7
+          },
+          "feasibility": {
+            "available": true,
+            "availability_status": "available",
+            "indoor_outdoor": "indoor",
+            "accessibility_notes": ["Elevator access exists, but queues can be long."]
+          },
+          "summary": "High-significance museum anchor with timed-entry crowd pressure.",
+          "booking_links": ["https://example.com/museum"],
+          "tags": ["museum", "anchor"],
+          "trust_signals": {
+            "freshness_days": 3,
+            "editorial_independence": 0.74,
+            "operational_reliability": 0.96
+          },
+          "quality_value_fit": {
+            "quality_signal": 0.92,
+            "value_signal": 0.71,
+            "fit_signal": 0.66
+          }
+        }
+      }
+    ]
+  },
+  "resolutions": [],
+  "dedup_decisions": []
+}

@@ -1,0 +1,74 @@
+{
+  "snapshot": {
+    "snapshot_id": "snapshot-destination-clean",
+    "adapter_id": "fixture-destination-adapter",
+    "source_id": "city-guide",
+    "source_category": "editorial",
+    "entity_scope": "destination",
+    "option_kind": "mixed",
+    "fetched_at": "2026-04-01T03:30:00Z",
+    "query": {
+      "query_id": "query-destination-clean",
+      "entity_scope": "destination",
+      "option_kind": "mixed",
+      "destination": "dest-city-lisbon"
+    },
+    "records": [
+      {
+        "record_id": "record-destination-clean",
+        "entity_scope": "destination",
+        "provider_entity_id": "lisbon-city-guide",
+        "payload_type": "fixture",
+        "payload": {
+          "destination_id": "dest-city-lisbon",
+          "place_kind": "city",
+          "name": "Lisbon",
+          "summary": "Editorial city shell that keeps hillside neighborhoods and riverfront context visible.",
+          "geo": {
+            "latitude": 38.7223,
+            "longitude": -9.1393,
+            "country_code": "PT",
+            "region_code": "PT-11",
+            "time_zone": "Europe/Lisbon",
+            "locality_hint": "Historic core and riverfront hills"
+          },
+          "tags": [
+            {
+              "key": "hillside-city",
+              "label": "Hillside city",
+              "scope": "experience",
+              "weight": 0.78
+            }
+          ],
+          "mobility_profile": {
+            "arrival_modes": ["rail", "shuttle"],
+            "local_modes": ["walk", "transit", "rail"],
+            "walkability": 0.69,
+            "transit_coverage": 0.83,
+            "notes": ["Steep grades matter when chaining neighborhoods."]
+          },
+          "experience_signals": [
+            {
+              "key": "layered-neighborhoods",
+              "label": "Layered neighborhoods",
+              "sentiment": "positive",
+              "strength": 0.88
+            }
+          ],
+          "trust_signals": {
+            "freshness_days": 9,
+            "editorial_independence": 0.86,
+            "operational_reliability": 0.58
+          },
+          "quality_value_fit": {
+            "quality_signal": 0.8,
+            "value_signal": 0.72,
+            "fit_signal": 0.76
+          }
+        }
+      }
+    ]
+  },
+  "resolutions": [],
+  "dedup_decisions": []
+}

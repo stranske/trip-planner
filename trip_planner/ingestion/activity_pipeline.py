@@ -1,4 +1,4 @@
-"""Lodging ingestion scaffolding from raw snapshots to normalized options."""
+"""Activity ingestion scaffolding from raw snapshots to normalized activities."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from trip_planner._validators import require_non_empty, require_strings
-from trip_planner.options.lodging import LodgingOption
+from trip_planner.options.activities import ActivityOption
 from trip_planner.sources import (
     AttributeConflict,
     DeduplicationDecision,
@@ -28,10 +28,10 @@ from ._common import (
 
 
 @dataclass(slots=True)
-class LodgingIngestionResult:
+class ActivityIngestionResult:
     pipeline_id: str
     snapshot_id: str
-    lodging_options: list[LodgingOption] = field(default_factory=list)
+    activity_options: list[ActivityOption] = field(default_factory=list)
     unresolved_conflicts: list[AttributeConflict] = field(default_factory=list)
     warnings: list[IngestionWarning] = field(default_factory=list)
     handoff: NormalizationHandoff | None = None
@@ -41,8 +41,8 @@ class LodgingIngestionResult:
     def __post_init__(self) -> None:
         require_non_empty(self.pipeline_id, "pipeline_id")
         require_non_empty(self.snapshot_id, "snapshot_id")
-        if any(not isinstance(item, LodgingOption) for item in self.lodging_options):
-            raise ValueError("lodging_options must contain LodgingOption instances")
+        if any(not isinstance(item, ActivityOption) for item in self.activity_options):
+            raise ValueError("activity_options must contain ActivityOption instances")
         if any(
             not isinstance(item, AttributeConflict)
             for item in self.unresolved_conflicts
@@ -64,16 +64,16 @@ class LodgingIngestionResult:
         return asdict(self)
 
 
-def ingest_lodging_snapshot(
+def ingest_activity_snapshot(
     snapshot: RawSnapshot,
     *,
     resolutions: list[EntityResolution] | None = None,
     dedup_decisions: list[DeduplicationDecision] | None = None,
-) -> LodgingIngestionResult:
-    if snapshot.entity_scope != "lodging":
-        raise ValueError("snapshot.entity_scope must be lodging")
-    if snapshot.option_kind != "lodging":
-        raise ValueError("snapshot.option_kind must be lodging")
+) -> ActivityIngestionResult:
+    if snapshot.entity_scope != "activity":
+        raise ValueError("snapshot.entity_scope must be activity")
+    if snapshot.option_kind != "activity":
+        raise ValueError("snapshot.option_kind must be activity")
 
     resolutions = resolutions or []
     dedup_decisions = dedup_decisions or []
@@ -84,13 +84,13 @@ def ingest_lodging_snapshot(
     emitted_ids: set[str] = set()
     filtered_record_ids: list[str] = []
     low_confidence_option_ids: list[str] = []
-    lodging_options: list[LodgingOption] = []
+    activity_options: list[ActivityOption] = []
     preserved_conflicts: list[AttributeConflict] = []
     provenance_refs: list[ProvenanceReference] = []
 
     for decision in dedup_decisions:
         if (
-            decision.entity_scope != "lodging"
+            decision.entity_scope != "activity"
             or decision.option_kind != snapshot.option_kind
         ):
             continue
@@ -108,21 +108,19 @@ def ingest_lodging_snapshot(
             continue
         if decision.decision != "merge":
             continue
-        candidate_records = _records_for_decision(
-            snapshot.records, decision, resolution_map
-        )
-        if not candidate_records:
+        records = _records_for_decision(snapshot.records, decision, resolution_map)
+        if not records:
             warnings.append(
                 IngestionWarning(
                     warning_id=f"{decision.decision_id}:missing-records",
                     severity="warning",
                     code="missing_merge_records",
-                    message="Dedup decision did not map to any raw lodging records.",
+                    message="Dedup decision did not map to any raw activity records.",
                 )
             )
             continue
-        option = _lodging_option_from_records(
-            candidate_records, snapshot, decision.canonical_entity_id
+        option = _activity_option_from_records(
+            records, snapshot, decision.canonical_entity_id
         )
         option.notes.extend([f"dedup_decision:{decision.decision_id}", *decision.notes])
         option.feasibility.constraints.extend(
@@ -133,7 +131,7 @@ def ingest_lodging_snapshot(
         )
         if decision.confidence < 0.75:
             low_confidence_option_ids.append(option.option_id)
-        for record in candidate_records:
+        for record in records:
             record_warnings = record.payload.get("normalization_warnings", [])
             if record_warnings:
                 warnings.append(
@@ -146,16 +144,16 @@ def ingest_lodging_snapshot(
                     )
                 )
                 option.notes.extend(record_warnings)
-        lodging_options.append(option)
-        emitted_ids.update(record.record_id for record in candidate_records)
-        filtered_record_ids.extend(record.record_id for record in candidate_records[1:])
+        activity_options.append(option)
+        emitted_ids.update(record.record_id for record in records)
+        filtered_record_ids.extend(record.record_id for record in records[1:])
         provenance_refs.extend(option.source_refs)
 
     for record in snapshot.records:
         if record.record_id in emitted_ids:
             continue
         resolution = _resolution_for_record(record.record_id, resolutions)
-        option = _lodging_option_from_records(
+        option = _activity_option_from_records(
             [record], snapshot, _canonical_option_id(record, resolution)
         )
         if resolution is not None:
@@ -187,28 +185,28 @@ def ingest_lodging_snapshot(
                 )
             )
             option.notes.extend(record_warnings)
-        lodging_options.append(option)
+        activity_options.append(option)
         provenance_refs.extend(option.source_refs)
 
     preserved_conflicts = _dedupe_conflicts(preserved_conflicts)
     handoff_status = "ready"
     if warnings or preserved_conflicts:
         handoff_status = "partial"
-    if not lodging_options:
+    if not activity_options:
         handoff_status = "blocked"
 
     summary = IngestionSummary(
         total_records=len(snapshot.records),
-        emitted_options=len(lodging_options),
-        skipped_records=max(0, len(snapshot.records) - len(lodging_options)),
-        degraded_options=sum(1 for option in lodging_options if option.notes),
+        emitted_options=len(activity_options),
+        skipped_records=max(0, len(snapshot.records) - len(activity_options)),
+        degraded_options=sum(1 for option in activity_options if option.notes),
         unresolved_conflicts=len(preserved_conflicts),
         low_confidence_option_ids=sorted(set(low_confidence_option_ids)),
         filtered_record_ids=filtered_record_ids,
     )
     handoff = make_handoff(
         snapshot,
-        target_contract="LodgingOption",
+        target_contract="ActivityOption",
         status=handoff_status,
         input_record_ids=[record.record_id for record in snapshot.records],
         blocked_issue_ids=[
@@ -216,13 +214,13 @@ def ingest_lodging_snapshot(
         ],
         provenance_refs=provenance_refs,
         notes=[
-            "Lodging ingestion scaffolding emitted normalized options from raw snapshots."
+            "Activity ingestion scaffolding emitted normalized activity options from raw snapshots."
         ],
     )
-    return LodgingIngestionResult(
-        pipeline_id=f"lodging-ingestion:{snapshot.snapshot_id}",
+    return ActivityIngestionResult(
+        pipeline_id=f"activity-ingestion:{snapshot.snapshot_id}",
         snapshot_id=snapshot.snapshot_id,
-        lodging_options=lodging_options,
+        activity_options=activity_options,
         unresolved_conflicts=preserved_conflicts,
         warnings=warnings,
         handoff=handoff,
@@ -256,40 +254,53 @@ def _record_ids_for_decision(
     return list(dict.fromkeys(record_ids))
 
 
-def _lodging_option_from_records(
+def _activity_option_from_records(
     records: list[RawSourceRecord],
     snapshot: RawSnapshot,
     option_id: str,
-) -> LodgingOption:
+) -> ActivityOption:
     primary = records[0]
     payload = dict(primary.payload)
     payload["option_id"] = option_id
-    if "destination_id" not in payload:
-        location_summary = payload.get("location_summary") or {}
-        payload["destination_id"] = location_summary.get("destination_id")
-    payload.setdefault("source_refs", [])
     payload["source_refs"] = [
         build_provenance_reference(
             snapshot,
             record,
             subject_id=option_id,
-            summary=f"Normalized lodging option sourced from {record.provider_entity_id}.",
+            contribution_kind=_contribution_kind(snapshot.source_category),
+            summary=f"Normalized activity option sourced from {record.provider_entity_id}.",
         ).to_dict()
         for record in records
     ]
-    payload.setdefault("notes", [])
-    payload["notes"] = [
-        *payload["notes"],
-        *(record.payload.get("ingestion_notes", []) for record in records),
-    ]
-    flattened_notes: list[str] = []
-    for item in payload["notes"]:
-        if isinstance(item, list):
-            flattened_notes.extend(item)
-        else:
-            flattened_notes.append(item)
-    payload["notes"] = flattened_notes
-    return LodgingOption.from_dict(payload)
+    payload["booking_links"] = _merge_string_lists(
+        payload.get("booking_links", []),
+        *[record.payload.get("booking_links", []) for record in records[1:]],
+    )
+    payload["tags"] = _merge_string_lists(
+        payload.get("tags", []),
+        *[record.payload.get("tags", []) for record in records[1:]],
+    )
+    payload["notes"] = _merge_string_lists(
+        payload.get("notes", []),
+        *[record.payload.get("ingestion_notes", []) for record in records],
+    )
+    for record in records[1:]:
+        candidate = record.payload
+        if not payload.get("summary") and candidate.get("summary"):
+            payload["summary"] = candidate["summary"]
+        if not payload.get("place_id") and candidate.get("place_id"):
+            payload["place_id"] = candidate["place_id"]
+        if not payload.get("destination_id") and candidate.get("destination_id"):
+            payload["destination_id"] = candidate["destination_id"]
+        payload["booking_terms"] = _merge_mapping(
+            payload.get("booking_terms"),
+            candidate.get("booking_terms"),
+        )
+        payload["feasibility"] = _merge_mapping(
+            payload.get("feasibility"),
+            candidate.get("feasibility"),
+        )
+    return ActivityOption.from_dict(payload)
 
 
 def _resolution_for_record(
@@ -308,17 +319,61 @@ def _canonical_option_id(
 ) -> str:
     if resolution is not None:
         return resolution.canonical_entity_id
-    return f"lodging-{record.provider_entity_id}"
+    payload_option_id = record.payload.get("option_id")
+    if isinstance(payload_option_id, str) and payload_option_id:
+        return payload_option_id
+    return record.provider_entity_id
 
 
 def _lowest_match_confidence(resolution: EntityResolution) -> float:
     if not resolution.match_candidates:
-        return 1.0
+        return 0.0
     return min(candidate.confidence for candidate in resolution.match_candidates)
 
 
 def _dedupe_conflicts(conflicts: list[AttributeConflict]) -> list[AttributeConflict]:
-    deduped: dict[str, AttributeConflict] = {}
+    deduped: list[AttributeConflict] = []
+    seen: set[tuple[str, str, str]] = set()
     for conflict in conflicts:
-        deduped[conflict.conflict_id] = conflict
-    return list(deduped.values())
+        key = (conflict.conflict_id, conflict.attribute_path, conflict.status)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(conflict)
+    return deduped
+
+
+def _merge_string_lists(*lists: Any) -> list[str]:
+    merged: list[str] = []
+    for values in lists:
+        for value in values or []:
+            if isinstance(value, str) and value not in merged:
+                merged.append(value)
+    return merged
+
+
+def _merge_mapping(existing: Any, incoming: Any) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    if isinstance(existing, dict):
+        result.update(existing)
+    if isinstance(incoming, dict):
+        for key, value in incoming.items():
+            if key in {
+                "constraints",
+                "accessibility_notes",
+                "notes",
+                "approved_channels",
+            }:
+                result[key] = _merge_string_lists(result.get(key, []), value)
+                continue
+            if key not in result or result[key] in ("", None, [], {}):
+                result[key] = value
+    return result
+
+
+def _contribution_kind(source_category: str) -> str:
+    if source_category == "official_operational":
+        return "operational"
+    if source_category in {"editorial", "specialist_non_commercial"}:
+        return "editorial"
+    return "inventory"

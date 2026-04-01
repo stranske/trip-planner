@@ -1,0 +1,202 @@
+{
+  "snapshot": {
+    "snapshot_id": "snapshot-activity-conflicted",
+    "adapter_id": "fixture-activity-adapter",
+    "source_id": "night-market-guides",
+    "source_category": "specialist_non_commercial",
+    "entity_scope": "activity",
+    "option_kind": "activity",
+    "fetched_at": "2026-04-01T03:33:00Z",
+    "query": {
+      "query_id": "query-activity-conflicted",
+      "entity_scope": "activity",
+      "option_kind": "activity",
+      "destination": "dest-kyoto"
+    },
+    "issues": [
+      {
+        "issue_id": "activity-ticket-window-warning",
+        "stage": "validation",
+        "severity": "warning",
+        "code": "partial_ticket_window",
+        "message": "One source only described reservations as recommended, not required."
+      }
+    ],
+    "records": [
+      {
+        "record_id": "record-activity-a",
+        "entity_scope": "activity",
+        "provider_entity_id": "kyoto-night-market-guide-a",
+        "payload_type": "fixture",
+        "payload": {
+          "option_id": "activity-kyoto-night-market",
+          "name": "Kyoto night market tasting walk",
+          "activity_kind": "tour",
+          "destination_id": "dest-kyoto",
+          "place_id": "place-kyoto-night-market",
+          "category": {
+            "primary": "food-tour",
+            "secondary": ["street-food", "guided-walk"],
+            "tags": ["evening", "group-friendly"]
+          },
+          "timing_summary": {
+            "duration_minutes": 150,
+            "typical_start_window": "18:30-20:30",
+            "timing_sensitivity_signal": 0.68,
+            "crowd_pressure_signal": 0.74
+          },
+          "significance_summary": {
+            "overall_signal": 0.72,
+            "cultural_signal": 0.81,
+            "anchor_worthy": false,
+            "optional": true
+          },
+          "booking_terms": {
+            "activity_format": "reservation_required",
+            "booking_required": true,
+            "ticketed": true,
+            "booking_channel": "market-guides"
+          },
+          "fit_summary": {
+            "overall_signal": 0.69,
+            "traveler_fit_signal": 0.73,
+            "group_fit_signal": 0.8
+          },
+          "feasibility": {
+            "available": true,
+            "availability_status": "available",
+            "indoor_outdoor": "mixed"
+          },
+          "summary": "Structured tasting walk with evening pacing and crowd exposure.",
+          "booking_links": ["https://example.com/night-market-tour"],
+          "tags": ["food", "nightlife"],
+          "trust_signals": {
+            "freshness_days": 8,
+            "editorial_independence": 0.83,
+            "operational_reliability": 0.61
+          },
+          "quality_value_fit": {
+            "quality_signal": 0.78,
+            "value_signal": 0.73,
+            "fit_signal": 0.69
+          }
+        }
+      },
+      {
+        "record_id": "record-activity-b",
+        "entity_scope": "activity",
+        "provider_entity_id": "kyoto-night-market-guide-b",
+        "payload_type": "fixture",
+        "payload": {
+          "option_id": "activity-kyoto-night-market-alt",
+          "name": "Kyoto evening food crawl",
+          "activity_kind": "tour",
+          "destination_id": "dest-kyoto",
+          "place_id": "place-kyoto-night-market",
+          "category": {
+            "primary": "food-tour",
+            "secondary": ["street-food"],
+            "tags": ["evening", "small-group"]
+          },
+          "timing_summary": {
+            "duration_minutes": 135,
+            "typical_start_window": "19:00-20:00",
+            "timing_sensitivity_signal": 0.61,
+            "crowd_pressure_signal": 0.69
+          },
+          "booking_terms": {
+            "activity_format": "reservation_required",
+            "booking_required": false,
+            "ticketed": true,
+            "booking_channel": "market-guides"
+          },
+          "fit_summary": {
+            "overall_signal": 0.65,
+            "traveler_fit_signal": 0.7,
+            "group_fit_signal": 0.74
+          },
+          "feasibility": {
+            "available": true,
+            "availability_status": "limited",
+            "indoor_outdoor": "mixed"
+          },
+          "normalization_warnings": [
+            "Secondary guide marks reservations as recommended rather than required."
+          ],
+          "summary": "Alternative guide framing with looser reservation language.",
+          "booking_links": ["https://example.com/night-market-tour-alt"],
+          "tags": ["food", "nightlife"],
+          "trust_signals": {
+            "freshness_days": 12,
+            "editorial_independence": 0.79,
+            "operational_reliability": 0.55
+          },
+          "quality_value_fit": {
+            "quality_signal": 0.74,
+            "value_signal": 0.7,
+            "fit_signal": 0.65
+          }
+        }
+      }
+    ]
+  },
+  "resolutions": [
+    {
+      "resolution_id": "resolution-activity-1",
+      "entity_scope": "activity",
+      "option_kind": "activity",
+      "status": "ambiguous",
+      "canonical_entity_id": "activity-kyoto-night-market",
+      "summary": "Two guides likely describe the same food walk but disagree on reservation strictness.",
+      "match_candidates": [
+        {
+          "candidate_id": "candidate-activity-1",
+          "entity_scope": "activity",
+          "option_kind": "activity",
+          "match_strategy": "geo_text",
+          "confidence": 0.72,
+          "source_record_ids": ["record-activity-a", "record-activity-b"],
+          "matched_fields": ["name", "place_id", "destination_id"]
+        }
+      ],
+      "conflicts": [
+        {
+          "conflict_id": "conflict-activity-1",
+          "attribute_path": "booking_terms.booking_required",
+          "reason": "source_disagreement",
+          "status": "needs_review",
+          "values_by_source": {
+            "record-activity-a": "true",
+            "record-activity-b": "false"
+          }
+        }
+      ],
+      "review_required": true
+    }
+  ],
+  "dedup_decisions": [
+    {
+      "decision_id": "dedup-activity-1",
+      "entity_scope": "activity",
+      "option_kind": "activity",
+      "decision": "merge",
+      "canonical_entity_id": "activity-kyoto-night-market",
+      "summary": "Merge the overlapping food-walk guides but keep reservation ambiguity visible.",
+      "duplicate_entity_ids": ["activity-kyoto-night-market-alt"],
+      "resolution_ids": ["resolution-activity-1"],
+      "preserved_conflicts": [
+        {
+          "conflict_id": "conflict-activity-1",
+          "attribute_path": "booking_terms.booking_required",
+          "reason": "source_disagreement",
+          "status": "needs_review",
+          "values_by_source": {
+            "record-activity-a": "true",
+            "record-activity-b": "false"
+          }
+        }
+      ],
+      "confidence": 0.72
+    }
+  ]
+}

@@ -12,8 +12,12 @@ from trip_planner._validators import (
     require_probability,
     require_strings,
 )
-from trip_planner.contracts.options import MoneyRange
-from trip_planner.sources import ProvenanceReference, QualityValueFitSummary, SourceTrustSignals
+from trip_planner._option_contracts import MoneyRange
+from trip_planner.sources import (
+    ProvenanceReference,
+    QualityValueFitSummary,
+    SourceTrustSignals,
+)
 from trip_planner.sources import schema as source_schema
 
 SCHEMA_VERSION = "0.1.0"
@@ -29,7 +33,12 @@ SEGMENT_MODES: tuple[str, ...] = (
     "walk",
     "shuttle",
 )
-AVAILABILITY_STATUSES: tuple[str, ...] = ("available", "limited", "request_only", "sold_out")
+AVAILABILITY_STATUSES: tuple[str, ...] = (
+    "available",
+    "limited",
+    "request_only",
+    "sold_out",
+)
 CLASS_OF_SERVICE: tuple[str, ...] = (
     "economy",
     "premium_economy",
@@ -64,7 +73,9 @@ def _optional_mapping_field(payload: dict[str, Any], field_name: str) -> dict[st
     return value
 
 
-def _parse_money_range(payload: dict[str, Any] | None, field_name: str) -> MoneyRange | None:
+def _parse_money_range(
+    payload: dict[str, Any] | None, field_name: str
+) -> MoneyRange | None:
     if payload is None:
         return None
     if not isinstance(payload, dict):
@@ -91,7 +102,9 @@ def _parse_provenance_reference(payload: dict[str, Any]) -> ProvenanceReference:
         captured_at=payload.get("captured_at", ""),
         freshness_days_at_capture=payload.get("freshness_days_at_capture"),
         trust_snapshot=SourceTrustSignals(**trust_payload) if trust_payload else None,
-        quality_value_fit=QualityValueFitSummary(**quality_payload) if quality_payload else None,
+        quality_value_fit=(
+            QualityValueFitSummary(**quality_payload) if quality_payload else None
+        ),
         notes=_optional_list_field(payload, "notes"),
     )
 
@@ -113,7 +126,9 @@ class TransportTimingSummary:
         require_non_empty(self.departure_local, "departure_local")
         require_non_empty(self.arrival_local, "arrival_local")
         require_non_negative(self.duration_minutes, "duration_minutes")
-        require_optional_non_empty(self.departure_timezone or None, "departure_timezone")
+        require_optional_non_empty(
+            self.departure_timezone or None, "departure_timezone"
+        )
         require_optional_non_empty(self.arrival_timezone or None, "arrival_timezone")
         require_non_negative(self.day_rollover_count, "day_rollover_count")
         _require_string_list(self.notes, "notes")
@@ -177,7 +192,9 @@ class TransportTransferBurden:
             if value is not None:
                 require_probability(value, field_name)
         if self.minimum_connection_minutes is not None:
-            require_non_negative(self.minimum_connection_minutes, "minimum_connection_minutes")
+            require_non_negative(
+                self.minimum_connection_minutes, "minimum_connection_minutes"
+            )
         require_optional_non_empty(self.transfer_summary or None, "transfer_summary")
         _require_string_list(self.notes, "notes")
 
@@ -197,7 +214,9 @@ class TransportBookingTerms:
 
     def __post_init__(self) -> None:
         require_optional_non_empty(self.booking_channel or None, "booking_channel")
-        require_optional_non_empty(self.changeability_summary or None, "changeability_summary")
+        require_optional_non_empty(
+            self.changeability_summary or None, "changeability_summary"
+        )
         if self.class_of_service and self.class_of_service not in CLASS_OF_SERVICE:
             raise ValueError(f"class_of_service must be one of {CLASS_OF_SERVICE}")
         _require_string_list(self.approved_channels, "approved_channels")
@@ -287,7 +306,10 @@ class TransportPolicySummary:
     comparable_reference_ids: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        if self.business_approval_status not in source_schema.BUSINESS_APPROVAL_STATUSES:
+        if (
+            self.business_approval_status
+            not in source_schema.BUSINESS_APPROVAL_STATUSES
+        ):
             raise ValueError(
                 "business_approval_status must be one of "
                 f"{source_schema.BUSINESS_APPROVAL_STATUSES}"
@@ -311,7 +333,9 @@ class TransportFeasibility:
 
     def __post_init__(self) -> None:
         if self.availability_status not in AVAILABILITY_STATUSES:
-            raise ValueError(f"availability_status must be one of {AVAILABILITY_STATUSES}")
+            raise ValueError(
+                f"availability_status must be one of {AVAILABILITY_STATUSES}"
+            )
         _require_string_list(self.constraints, "constraints")
         _require_string_list(self.accessibility_notes, "accessibility_notes")
         _require_string_list(self.notes, "notes")
@@ -329,14 +353,18 @@ class TransportOption:
     destination_id: str
     timing_summary: TransportTimingSummary
     segments: list[TransportSegment]
-    transfer_burden: TransportTransferBurden = field(default_factory=TransportTransferBurden)
+    transfer_burden: TransportTransferBurden = field(
+        default_factory=TransportTransferBurden
+    )
     booking_terms: TransportBookingTerms = field(default_factory=TransportBookingTerms)
     cost_summary: TransportCostSummary = field(default_factory=TransportCostSummary)
     experience_summary: TransportExperienceSummary = field(
         default_factory=TransportExperienceSummary
     )
     fit_summary: TransportFitSummary = field(default_factory=TransportFitSummary)
-    policy_summary: TransportPolicySummary = field(default_factory=TransportPolicySummary)
+    policy_summary: TransportPolicySummary = field(
+        default_factory=TransportPolicySummary
+    )
     feasibility: TransportFeasibility = field(default_factory=TransportFeasibility)
     summary: str = ""
     booking_links: list[str] = field(default_factory=list)
@@ -350,7 +378,9 @@ class TransportOption:
         require_non_empty(self.name, "name")
         require_non_empty(self.origin_id, "origin_id")
         require_non_empty(self.destination_id, "destination_id")
-        object.__setattr__(self, "transport_kind", _normalize_transport_kind(self.transport_kind))
+        object.__setattr__(
+            self, "transport_kind", _normalize_transport_kind(self.transport_kind)
+        )
         if self.transport_kind not in TRANSPORT_KINDS:
             raise ValueError(f"transport_kind must be one of {TRANSPORT_KINDS}")
         if self.schema_version != SCHEMA_VERSION:
@@ -402,7 +432,9 @@ class TransportOption:
                 **_optional_mapping_field(payload, "booking_terms")
             ),
             cost_summary=TransportCostSummary(
-                total=_parse_money_range(cost_payload.get("total"), "cost_summary.total"),
+                total=_parse_money_range(
+                    cost_payload.get("total"), "cost_summary.total"
+                ),
                 base_fare=_parse_money_range(
                     cost_payload.get("base_fare"),
                     "cost_summary.base_fare",
@@ -420,11 +452,15 @@ class TransportOption:
             experience_summary=TransportExperienceSummary(
                 **_optional_mapping_field(payload, "experience_summary")
             ),
-            fit_summary=TransportFitSummary(**_optional_mapping_field(payload, "fit_summary")),
+            fit_summary=TransportFitSummary(
+                **_optional_mapping_field(payload, "fit_summary")
+            ),
             policy_summary=TransportPolicySummary(
                 **_optional_mapping_field(payload, "policy_summary")
             ),
-            feasibility=TransportFeasibility(**_optional_mapping_field(payload, "feasibility")),
+            feasibility=TransportFeasibility(
+                **_optional_mapping_field(payload, "feasibility")
+            ),
             summary=payload.get("summary", ""),
             booking_links=_optional_list_field(payload, "booking_links"),
             source_refs=[

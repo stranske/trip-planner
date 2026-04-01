@@ -24,7 +24,7 @@ Within the epic itself, the expected order is:
 1. `#526` source adapter interfaces and raw snapshot contracts
 2. `#527` entity resolution and deduplication contracts
 3. `#528` lodging and transport ingestion scaffolding
-4. `#529` destination and activity ingestion scaffolding
+4. `#529` destination and activity ingestion scaffolding, including significance- and uncertainty-preserving normalization for place and activity records
 5. `#530` candidate generation and filtering contracts
 
 Issues `#528` and `#529` can proceed in parallel once `#526` and `#527` have landed, but `#530` should not start from ad hoc provider payloads. It should consume normalized outputs produced by the ingestion layer.
