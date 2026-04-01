@@ -223,6 +223,17 @@ function listFixClassifiedThreads(threads) {
   return threads.filter((thread) => thread.classification === "fix");
 }
 
+function listActionableFixThreads(threads, options = {}) {
+  const { excludeOutdated = false } = options;
+  const fixThreads = listFixClassifiedThreads(threads);
+
+  if (!excludeOutdated) {
+    return fixThreads;
+  }
+
+  return fixThreads.filter((thread) => thread.outdated !== true);
+}
+
 function sanitizeBranchSegment(value, fallback) {
   const normalized = (value || "")
     .toLowerCase()
@@ -238,12 +249,20 @@ function buildSuggestedBranchName(thread, index) {
   return `pr-178-fix/${locationSegment}-${idSegment}`;
 }
 
-function formatFixThreadsReport(fixThreads) {
+function formatFixThreadsReport(fixThreads, options = {}) {
+  const { excludedOutdatedCount = 0 } = options;
   if (fixThreads.length === 0) {
-    return "Fix-classified threads: 0\n";
+    const lines = ["Fix-classified threads: 0"];
+    if (excludedOutdatedCount > 0) {
+      lines.push(`Excluded outdated fix threads: ${excludedOutdatedCount}`);
+    }
+    return `${lines.join("\n")}\n`;
   }
 
   const lines = [`Fix-classified threads: ${fixThreads.length}`];
+  if (excludedOutdatedCount > 0) {
+    lines.push(`Excluded outdated fix threads: ${excludedOutdatedCount}`);
+  }
   fixThreads.forEach((thread, index) => {
     lines.push(`${index + 1}. ${thread.threadId || "<missing thread id>"}`);
     lines.push(`   Suggested Branch: ${buildSuggestedBranchName(thread, index)}`);
@@ -266,7 +285,8 @@ function formatFixThreadsReport(fixThreads) {
   return `${lines.join("\n")}\n`;
 }
 
-function formatFixThreadsAsJson(fixThreads) {
+function formatFixThreadsAsJson(fixThreads, options = {}) {
+  const { excludedOutdatedCount = 0 } = options;
   return `${JSON.stringify(
     {
       fixThreads: fixThreads.map((thread, index) => ({
@@ -274,21 +294,29 @@ function formatFixThreadsAsJson(fixThreads) {
         suggestedBranch: buildSuggestedBranchName(thread, index),
       })),
       count: fixThreads.length,
+      excludedOutdatedCount,
     },
     null,
     2
   )}\n`;
 }
 
-function formatFixThreadsAsMarkdown(fixThreads) {
+function formatFixThreadsAsMarkdown(fixThreads, options = {}) {
+  const { excludedOutdatedCount = 0 } = options;
   const lines = ["# Fix-Classified Thread Scope", ""];
 
   if (fixThreads.length === 0) {
+    if (excludedOutdatedCount > 0) {
+      lines.push(`Excluded outdated fix threads: ${excludedOutdatedCount}`, "");
+    }
     lines.push("No fix-classified threads found.");
     return `${lines.join("\n")}\n`;
   }
 
   lines.push(`Fix-classified threads: ${fixThreads.length}`);
+  if (excludedOutdatedCount > 0) {
+    lines.push(`Excluded outdated fix threads: ${excludedOutdatedCount}`);
+  }
 
   fixThreads.forEach((thread, index) => {
     lines.push("");
@@ -315,20 +343,25 @@ function formatFixThreadsAsMarkdown(fixThreads) {
   return `${lines.join("\n")}\n`;
 }
 
-function formatFixThreadsOutput(fixThreads, outputFormat = "text") {
+function formatFixThreadsOutput(fixThreads, outputFormat = "text", options = {}) {
   if (outputFormat === "json") {
-    return formatFixThreadsAsJson(fixThreads);
+    return formatFixThreadsAsJson(fixThreads, options);
   }
 
   if (outputFormat === "markdown") {
-    return formatFixThreadsAsMarkdown(fixThreads);
+    return formatFixThreadsAsMarkdown(fixThreads, options);
   }
 
-  return formatFixThreadsReport(fixThreads);
+  return formatFixThreadsReport(fixThreads, options);
 }
 
 function buildFixThreadsReport(options = {}, dependencies = {}) {
-  const { docPath = DEFAULT_DOC_PATH, requireComplete = false, outputFormat = "text" } = options;
+  const {
+    docPath = DEFAULT_DOC_PATH,
+    excludeOutdated = false,
+    requireComplete = false,
+    outputFormat = "text",
+  } = options;
   const threads = loadThreadInventory(docPath, dependencies);
   const issues = collectThreadInventoryIssues(threads);
 
@@ -336,13 +369,16 @@ function buildFixThreadsReport(options = {}, dependencies = {}) {
     throw new Error(formatThreadInventoryIssues(issues).trimEnd());
   }
 
-  const fixThreads = listFixClassifiedThreads(threads);
-  return formatFixThreadsOutput(fixThreads, outputFormat);
+  const allFixThreads = listFixClassifiedThreads(threads);
+  const fixThreads = listActionableFixThreads(threads, { excludeOutdated });
+  const excludedOutdatedCount = allFixThreads.length - fixThreads.length;
+  return formatFixThreadsOutput(fixThreads, outputFormat, { excludedOutdatedCount });
 }
 
 function getCliConfiguration(argv = process.argv.slice(2)) {
   const options = {
     docPath: DEFAULT_DOC_PATH,
+    excludeOutdated: false,
     outputFormat: "text",
     requireComplete: false,
   };
@@ -352,6 +388,11 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
 
     if (argument === "--require-complete") {
       options.requireComplete = true;
+      continue;
+    }
+
+    if (argument === "--exclude-outdated") {
+      options.excludeOutdated = true;
       continue;
     }
 
@@ -387,8 +428,10 @@ function getCliConfiguration(argv = process.argv.slice(2)) {
 }
 
 function main(argv = process.argv.slice(2)) {
-  const { docPath, outputFormat, requireComplete } = getCliConfiguration(argv);
-  process.stdout.write(buildFixThreadsReport({ docPath, outputFormat, requireComplete }));
+  const { docPath, excludeOutdated, outputFormat, requireComplete } = getCliConfiguration(argv);
+  process.stdout.write(
+    buildFixThreadsReport({ docPath, excludeOutdated, outputFormat, requireComplete })
+  );
 }
 
 if (require.main === module) {
@@ -411,6 +454,7 @@ module.exports = {
   formatThreadInventoryIssues,
   getCliConfiguration,
   buildSuggestedBranchName,
+  listActionableFixThreads,
   listFixClassifiedThreads,
   loadThreadInventory,
   normalizeFieldValue,

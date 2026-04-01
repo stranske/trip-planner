@@ -17,6 +17,7 @@ const {
   formatThreadInventoryIssues,
   getCliConfiguration,
   isPlaceholderValue,
+  listActionableFixThreads,
   listFixClassifiedThreads,
   loadThreadInventory,
   normalizeOutdatedFieldValue,
@@ -148,6 +149,19 @@ test("listFixClassifiedThreads returns only fix-classified entries", () => {
   assert.deepEqual(fixThreads, [{ threadId: "THREAD_1", classification: "fix" }]);
 });
 
+test("listActionableFixThreads can exclude outdated fix-classified entries", () => {
+  const fixThreads = listActionableFixThreads(
+    [
+      { threadId: "THREAD_1", classification: "fix", outdated: false },
+      { threadId: "THREAD_2", classification: "fix", outdated: true },
+      { threadId: "THREAD_3", classification: "disposition", outdated: false },
+    ],
+    { excludeOutdated: true }
+  );
+
+  assert.deepEqual(fixThreads, [{ threadId: "THREAD_1", classification: "fix", outdated: false }]);
+});
+
 test("formatFixThreadsReport summarizes the filtered fix list", () => {
   const report = formatFixThreadsReport([
     {
@@ -171,6 +185,13 @@ test("formatFixThreadsReport summarizes the filtered fix list", () => {
   assert.match(report, /Location: trip_planner\/example\.py:17/);
   assert.match(report, /Follow-up PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/);
   assert.match(report, /Outdated: no/);
+});
+
+test("formatFixThreadsReport includes excluded outdated fix-thread counts when provided", () => {
+  const report = formatFixThreadsReport([], { excludedOutdatedCount: 2 });
+
+  assert.match(report, /Fix-classified threads: 0/);
+  assert.match(report, /Excluded outdated fix threads: 2/);
 });
 
 test("formatFixThreadsAsJson emits machine-readable fix-thread metadata", () => {
@@ -198,6 +219,7 @@ test("formatFixThreadsAsJson emits machine-readable fix-thread metadata", () => 
     parsed.fixThreads[0].followUpPr,
     "https://github.com/stranske/trip-planner/pull/581"
   );
+  assert.equal(parsed.excludedOutdatedCount, 0);
 });
 
 test("formatFixThreadsAsMarkdown emits an actionable fix scope checklist", () => {
@@ -228,6 +250,13 @@ test("formatFixThreadsAsMarkdown emits an actionable fix scope checklist", () =>
   assert.match(report, /- Rationale: Code path still drops the final stop\./);
   assert.match(report, /- Content: Reviewer requested a bounds check\./);
   assert.match(report, /- Outdated: no/);
+});
+
+test("formatFixThreadsAsMarkdown reports excluded outdated fix threads", () => {
+  const report = formatFixThreadsAsMarkdown([], { excludedOutdatedCount: 1 });
+
+  assert.match(report, /Excluded outdated fix threads: 1/);
+  assert.match(report, /No fix-classified threads found\./);
 });
 
 test("formatFixThreadsOutput dispatches to the requested formatter", () => {
@@ -408,16 +437,21 @@ test("formatThreadInventoryIssues summarizes completeness problems", () => {
 });
 
 test("getCliConfiguration parses completeness validation, doc path, and output format", () => {
-  assert.deepEqual(getCliConfiguration(["docs/custom.md", "--require-complete", "--format", "json"]), {
-    docPath: path.resolve("docs/custom.md"),
-    outputFormat: "json",
-    requireComplete: true,
-  });
+  assert.deepEqual(
+    getCliConfiguration(["docs/custom.md", "--require-complete", "--exclude-outdated", "--format", "json"]),
+    {
+      docPath: path.resolve("docs/custom.md"),
+      excludeOutdated: true,
+      outputFormat: "json",
+      requireComplete: true,
+    }
+  );
 });
 
 test("getCliConfiguration accepts markdown output", () => {
   assert.deepEqual(getCliConfiguration(["--format", "markdown"]), {
     docPath: DEFAULT_DOC_PATH,
+    excludeOutdated: false,
     outputFormat: "markdown",
     requireComplete: false,
   });
@@ -538,4 +572,47 @@ test("buildFixThreadsReport surfaces completeness issues when --require-complete
       ),
     /Thread inventory issues: 7/
   );
+});
+
+test("buildFixThreadsReport can exclude outdated fix-classified threads from the branch scope", () => {
+  const report = buildFixThreadsReport(
+    {
+      docPath: "docs/mixed.md",
+      excludeOutdated: true,
+      outputFormat: "json",
+      requireComplete: true,
+    },
+    {
+      readFileSync: () => `
+# PR #178 Unresolved Thread Inventory
+
+### Thread 1
+
+- Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
+- Location: trip_planner/example.py:17
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/581
+- Rationale: Code path still drops the final stop.
+- Content: Reviewer requested a bounds check.
+- Outdated: no
+
+### Thread 2
+
+- Thread ID: THREAD_2
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2
+- Location: trip_planner/other.py:8
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/582
+- Rationale: The old implementation already moved, so this is no longer actionable.
+- Content: Reviewer requested a patch on outdated code.
+- Outdated: yes
+`,
+    }
+  );
+
+  const parsed = JSON.parse(report);
+  assert.equal(parsed.count, 1);
+  assert.equal(parsed.excludedOutdatedCount, 1);
+  assert.equal(parsed.fixThreads[0].threadId, "THREAD_1");
 });
