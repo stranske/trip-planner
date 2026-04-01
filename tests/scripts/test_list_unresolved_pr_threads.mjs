@@ -90,6 +90,7 @@ test("extractUnresolvedThreads keeps unresolved threads and normalizes comment t
             id: "COMMENT_1",
             body: "First line.\n\nSecond line.",
             createdAt: "2025-01-01T00:00:00Z",
+            url: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
             author: { login: "reviewer" },
           },
         ],
@@ -111,12 +112,14 @@ test("extractUnresolvedThreads keeps unresolved threads and normalizes comment t
       isOutdated: false,
       path: "trip_planner/example.py",
       line: 17,
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
       comments: [
         {
           id: "COMMENT_1",
           author: "reviewer",
           body: "First line. Second line.",
           createdAt: "2025-01-01T00:00:00Z",
+          url: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
         },
       ],
     },
@@ -346,6 +349,7 @@ test("formatUnresolvedThreadsAsMarkdown emits a doc-ready inventory skeleton", (
     {
       id: "THREAD_1",
       isOutdated: true,
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
       path: "scripts/list_unresolved_pr_threads.js",
       line: 99,
       comments: [
@@ -359,6 +363,10 @@ test("formatUnresolvedThreadsAsMarkdown emits a doc-ready inventory skeleton", (
 
   assert.match(report, /# PR #178 Unresolved Thread Inventory/);
   assert.match(report, /- Thread ID: THREAD_1/);
+  assert.match(
+    report,
+    /- Original Thread URL: https:\/\/github\.com\/stranske\/trip-planner\/pull\/178#discussion_r1/
+  );
   assert.match(report, /- Location: scripts\/list_unresolved_pr_threads\.js:99/);
   assert.match(report, /- Classification:/);
   assert.match(report, /- Follow-up PR:/);
@@ -378,6 +386,7 @@ test("formatUnresolvedThreadsAsMarkdown output can be parsed by the inventory to
     {
       id: "THREAD_1",
       isOutdated: false,
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
       path: "trip_planner/example.py",
       line: 17,
       comments: [
@@ -392,6 +401,7 @@ test("formatUnresolvedThreadsAsMarkdown output can be parsed by the inventory to
   assert.deepEqual(parseThreadInventory(report), [
     {
       threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
       location: "trip_planner/example.py:17",
       classification: null,
       followUpPr: null,

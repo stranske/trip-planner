@@ -24,6 +24,7 @@ test("parseThreadInventory reads structured thread metadata from markdown", () =
 ### Thread 1
 
 - Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
 - Location: trip_planner/example.py:17
 - Classification: fix
 - Follow-up PR: https://github.com/stranske/trip-planner/pull/581
@@ -33,6 +34,7 @@ test("parseThreadInventory reads structured thread metadata from markdown", () =
 ### Thread 2
 
 - Thread ID: THREAD_2
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2
 - Location: trip_planner/other.py:8
 - Classification: disposition
 - Rationale: Existing behavior is intentional.
@@ -42,6 +44,7 @@ test("parseThreadInventory reads structured thread metadata from markdown", () =
   assert.deepEqual(threads, [
     {
       threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
       location: "trip_planner/example.py:17",
       classification: "fix",
       followUpPr: "https://github.com/stranske/trip-planner/pull/581",
@@ -50,6 +53,7 @@ test("parseThreadInventory reads structured thread metadata from markdown", () =
     },
     {
       threadId: "THREAD_2",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
       location: "trip_planner/other.py:8",
       classification: "disposition",
       followUpPr: null,
@@ -73,6 +77,7 @@ test("formatFixThreadsReport summarizes the filtered fix list", () => {
   const report = formatFixThreadsReport([
     {
       threadId: "THREAD_1",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r1",
       location: "trip_planner/example.py:17",
       followUpPr: "https://github.com/stranske/trip-planner/pull/581",
       rationale: "Code path still drops the final stop.",
@@ -82,6 +87,10 @@ test("formatFixThreadsReport summarizes the filtered fix list", () => {
 
   assert.match(report, /Fix-classified threads: 1/);
   assert.match(report, /1\. THREAD_1/);
+  assert.match(
+    report,
+    /Original Thread URL: https:\/\/github\.com\/stranske\/trip-planner\/pull\/178#discussion_r1/
+  );
   assert.match(report, /Location: trip_planner\/example\.py:17/);
   assert.match(report, /Follow-up PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/581/);
 });
@@ -98,6 +107,7 @@ test("collectThreadInventoryIssues flags missing metadata and placeholder entrie
     },
     {
       threadId: "THREAD_2",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r2",
       location: "trip_planner/other.py:8",
       followUpPr: null,
       classification: "follow-up",
@@ -106,6 +116,7 @@ test("collectThreadInventoryIssues flags missing metadata and placeholder entrie
     },
     {
       threadId: "THREAD_3",
+      originalThreadUrl: "https://github.com/stranske/trip-planner/pull/178#discussion_r3",
       location: "trip_planner/fix.py:5",
       classification: "fix",
       followUpPr: null,
@@ -116,6 +127,7 @@ test("collectThreadInventoryIssues flags missing metadata and placeholder entrie
 
   assert.deepEqual(issues, [
     "Thread 1: missing thread ID",
+    "Thread 1: missing original thread URL",
     "Thread 1: missing location",
     "Thread 1: missing classification",
     "Thread 1: missing rationale",
@@ -155,8 +167,8 @@ test("the checked-in PR #178 inventory is still incomplete until real threads ar
   const threads = loadThreadInventory(DEFAULT_DOC_PATH);
   const issues = collectThreadInventoryIssues(threads);
 
-  assert.equal(issues.length, 20);
-  assert.match(formatThreadInventoryIssues(issues), /Thread inventory issues: 20/);
+  assert.equal(issues.length, 24);
+  assert.match(formatThreadInventoryIssues(issues), /Thread inventory issues: 24/);
 });
 
 test("the checked-in PR #178 inventory currently contains no fix-classified threads", () => {
@@ -173,6 +185,7 @@ test("fix-classified entries with follow-up PR links satisfy completeness checks
 ### Thread 1
 
 - Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
 - Location: trip_planner/example.py:17
 - Classification: fix
 - Follow-up PR: https://github.com/stranske/trip-planner/pull/581
@@ -190,6 +203,7 @@ test("disposition-only entries do not require a follow-up PR to be complete", ()
 ### Thread 1
 
 - Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
 - Location: trip_planner/example.py:17
 - Classification: disposition
 - Rationale: The requested change would regress the documented behavior.
@@ -206,6 +220,7 @@ test("buildFixThreadsReport enforces completeness checks before returning fix th
 ### Thread 1
 
 - Thread ID: THREAD_1
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r1
 - Location: trip_planner/example.py:17
 - Classification: fix
 - Follow-up PR: https://github.com/stranske/trip-planner/pull/581
@@ -236,6 +251,7 @@ test("buildFixThreadsReport surfaces completeness issues when --require-complete
 ### Thread 1
 
 - Thread ID:
+- Original Thread URL:
 - Location:
 - Classification:
 - Follow-up PR:
@@ -244,6 +260,6 @@ test("buildFixThreadsReport surfaces completeness issues when --require-complete
 `,
         }
       ),
-    /Thread inventory issues: 5/
+    /Thread inventory issues: 6/
   );
 });

@@ -13,6 +13,7 @@ function parseThreadInventory(markdown) {
   return sections.map((section) => {
     const thread = {
       threadId: null,
+      originalThreadUrl: null,
       location: null,
       classification: null,
       followUpPr: null,
@@ -26,6 +27,10 @@ function parseThreadInventory(markdown) {
       .forEach((line) => {
         if (line.startsWith("- Thread ID:")) {
           thread.threadId = normalizeFieldValue(line.slice("- Thread ID:".length));
+        } else if (line.startsWith("- Original Thread URL:")) {
+          thread.originalThreadUrl = normalizeFieldValue(
+            line.slice("- Original Thread URL:".length)
+          );
         } else if (line.startsWith("- Location:")) {
           thread.location = normalizeFieldValue(line.slice("- Location:".length));
         } else if (line.startsWith("- Classification:")) {
@@ -57,6 +62,10 @@ function collectThreadInventoryIssues(threads) {
 
     if (!thread.threadId) {
       issues.push(`${threadLabel}: missing thread ID`);
+    }
+
+    if (!thread.originalThreadUrl) {
+      issues.push(`${threadLabel}: missing original thread URL`);
     }
 
     if (!thread.location) {
@@ -112,6 +121,7 @@ function formatFixThreadsReport(fixThreads) {
   const lines = [`Fix-classified threads: ${fixThreads.length}`];
   fixThreads.forEach((thread, index) => {
     lines.push(`${index + 1}. ${thread.threadId || "<missing thread id>"}`);
+    lines.push(`   Original Thread URL: ${thread.originalThreadUrl || "<missing original thread URL>"}`);
     lines.push(`   Location: ${thread.location || "<missing location>"}`);
     lines.push(`   Follow-up PR: ${thread.followUpPr || "<missing follow-up PR>"}`);
     lines.push(`   Rationale: ${thread.rationale || "<missing rationale>"}`);

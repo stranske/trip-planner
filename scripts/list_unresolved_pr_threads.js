@@ -124,6 +124,7 @@ function buildReviewThreadsQuery() {
                   id
                   body
                   createdAt
+                  url
                   author {
                     login
                   }
@@ -281,6 +282,7 @@ function extractUnresolvedThreads(threads) {
         author: comment.author?.login || "unknown",
         body: normalizeBody(comment.body),
         createdAt: comment.createdAt,
+        url: comment.url || null,
       }));
 
       return {
@@ -288,6 +290,7 @@ function extractUnresolvedThreads(threads) {
         isOutdated: Boolean(thread.isOutdated),
         path: thread.path || "unknown",
         line: thread.line ?? thread.originalLine ?? null,
+        originalThreadUrl: comments.find((comment) => comment.url)?.url || null,
         comments,
       };
     });
@@ -357,6 +360,7 @@ function formatUnresolvedThreadsAsMarkdown(repository, prNumber, unresolvedThrea
     lines.push(`### Thread ${index + 1}`);
     lines.push("");
     lines.push(`- Thread ID: ${thread.id}`);
+    lines.push(`- Original Thread URL: ${thread.originalThreadUrl || ""}`);
     lines.push(`- Location: ${thread.path}:${thread.line ?? "unknown"}`);
     lines.push("- Classification:");
     lines.push("- Follow-up PR:");
