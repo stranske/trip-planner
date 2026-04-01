@@ -10,6 +10,7 @@ function parseCliArguments(argv = process.argv.slice(2)) {
   const options = {
     manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
     execute: false,
+    enforceCreatedPrMatch: false,
     outputFormat: "text",
     followUpPr: null,
     groupIndex: null,
@@ -32,6 +33,11 @@ function parseCliArguments(argv = process.argv.slice(2)) {
 
     if (argument === "--execute") {
       options.execute = true;
+      continue;
+    }
+
+    if (argument === "--enforce-created-pr-match") {
+      options.enforceCreatedPrMatch = true;
       continue;
     }
 
@@ -190,6 +196,26 @@ function extractCreatedPullRequestUrl(output) {
   return match ? match[0] : null;
 }
 
+function normalizePullRequestUrl(pullRequestUrl) {
+  if (!pullRequestUrl) {
+    return null;
+  }
+
+  const normalizedUrl = String(pullRequestUrl).trim().replace(/\/+$/, "");
+  return normalizedUrl || null;
+}
+
+function doesCreatedPullRequestMatchFollowUpPr(followUpPr, createdPullRequestUrl) {
+  const normalizedFollowUpPr = normalizePullRequestUrl(followUpPr);
+  const normalizedCreatedPullRequestUrl = normalizePullRequestUrl(createdPullRequestUrl);
+
+  if (!normalizedFollowUpPr || !normalizedCreatedPullRequestUrl) {
+    return null;
+  }
+
+  return normalizedFollowUpPr.toLowerCase() === normalizedCreatedPullRequestUrl.toLowerCase();
+}
+
 function resolveManifestRelativePath(manifestPath, targetPath) {
   if (!targetPath) {
     return targetPath;
@@ -256,6 +282,7 @@ function executeManifestGroups(options = {}, dependencies = {}) {
       mode: options.execute ? "execute" : "dry-run",
       output: null,
       createdPullRequestUrl: null,
+      createdPullRequestMatchesFollowUpPr: null,
     };
 
     if (options.execute) {
@@ -264,6 +291,15 @@ function executeManifestGroups(options = {}, dependencies = {}) {
       if (!result.createdPullRequestUrl) {
         throw new Error(
           `Group ${group.manifestGroupNumber} gh pr create output did not include a pull request URL.`
+        );
+      }
+      result.createdPullRequestMatchesFollowUpPr = doesCreatedPullRequestMatchFollowUpPr(
+        group.followUpPr,
+        result.createdPullRequestUrl
+      );
+      if (options.enforceCreatedPrMatch && result.createdPullRequestMatchesFollowUpPr === false) {
+        throw new Error(
+          `Group ${group.manifestGroupNumber} created PR "${result.createdPullRequestUrl}" does not match follow-up PR "${group.followUpPr}".`
         );
       }
     }
@@ -316,6 +352,13 @@ function formatExecutionReport(report, outputFormat = "text") {
     if (result.createdPullRequestUrl) {
       lines.push(`- Created PR: ${result.createdPullRequestUrl}`);
     }
+    if (result.createdPullRequestMatchesFollowUpPr !== null) {
+      lines.push(
+        `- Created PR Matches Follow-up PR: ${
+          result.createdPullRequestMatchesFollowUpPr ? "yes" : "no"
+        }`
+      );
+    }
     if (result.output) {
       lines.push(`- Output: ${result.output}`);
     }
@@ -342,10 +385,12 @@ if (require.main === module) {
 module.exports = {
   buildGhPrCreateArgs,
   executeManifestGroups,
+  doesCreatedPullRequestMatchFollowUpPr,
   extractCreatedPullRequestUrl,
   formatExecutionReport,
   loadManifest,
   main,
+  normalizePullRequestUrl,
   parseCliArguments,
   resolveManifestRelativePath,
   selectManifestGroups,

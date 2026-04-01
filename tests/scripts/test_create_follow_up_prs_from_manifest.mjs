@@ -7,10 +7,12 @@ const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const {
   buildGhPrCreateArgs,
+  doesCreatedPullRequestMatchFollowUpPr,
   executeManifestGroups,
   extractCreatedPullRequestUrl,
   formatExecutionReport,
   loadManifest,
+  normalizePullRequestUrl,
   parseCliArguments,
   resolveManifestRelativePath,
   selectManifestGroups,
@@ -23,6 +25,7 @@ test("parseCliArguments accepts manifest execution options", () => {
     "--manifest",
     ".tmp/generated/manifest.json",
     "--execute",
+    "--enforce-created-pr-match",
     "--format",
     "json",
     "--follow-up-pr",
@@ -35,6 +38,7 @@ test("parseCliArguments accepts manifest execution options", () => {
 
   assert.equal(options.manifestPath, path.resolve(".tmp/generated/manifest.json"));
   assert.equal(options.execute, true);
+  assert.equal(options.enforceCreatedPrMatch, true);
   assert.equal(options.outputFormat, "json");
   assert.equal(options.followUpPr, "https://github.com/stranske/trip-planner/pull/581");
   assert.equal(options.groupIndex, 2);
@@ -121,6 +125,35 @@ test("extractCreatedPullRequestUrl returns the created PR URL from gh output", (
     "https://github.com/stranske/trip-planner/pull/622"
   );
   assert.equal(extractCreatedPullRequestUrl("created successfully"), null);
+});
+
+test("normalizePullRequestUrl trims whitespace and trailing slashes", () => {
+  assert.equal(
+    normalizePullRequestUrl(" https://github.com/stranske/trip-planner/pull/622/ "),
+    "https://github.com/stranske/trip-planner/pull/622"
+  );
+  assert.equal(normalizePullRequestUrl("   "), null);
+});
+
+test("doesCreatedPullRequestMatchFollowUpPr compares normalized PR URLs", () => {
+  assert.equal(
+    doesCreatedPullRequestMatchFollowUpPr(
+      "https://github.com/stranske/trip-planner/pull/622/",
+      "https://github.com/stranske/trip-planner/pull/622"
+    ),
+    true
+  );
+  assert.equal(
+    doesCreatedPullRequestMatchFollowUpPr(
+      "https://github.com/stranske/trip-planner/pull/581",
+      "https://github.com/stranske/trip-planner/pull/622"
+    ),
+    false
+  );
+  assert.equal(
+    doesCreatedPullRequestMatchFollowUpPr(null, "https://github.com/stranske/trip-planner/pull/622"),
+    null
+  );
 });
 
 test("resolveManifestRelativePath resolves paths relative to the manifest location", () => {
@@ -259,6 +292,7 @@ test("executeManifestGroups invokes gh for selected groups in execute mode", () 
     report.results[0].createdPullRequestUrl,
     "https://github.com/stranske/trip-planner/pull/622"
   );
+  assert.equal(report.results[0].createdPullRequestMatchesFollowUpPr, false);
 });
 
 test("executeManifestGroups preserves manifest numbering after selecting a later group index", () => {
@@ -391,6 +425,38 @@ test("executeManifestGroups fails when gh output does not include a PR URL", () 
   );
 });
 
+test("executeManifestGroups can enforce that the created PR matches the follow-up PR", () => {
+  assert.throws(
+    () =>
+      executeManifestGroups(
+        {
+          manifestPath: path.resolve(".tmp/pr-thread-payloads/manifest.json"),
+          execute: true,
+          enforceCreatedPrMatch: true,
+          followUpPr: null,
+          groupIndex: null,
+        },
+        {
+          readFileSync: () =>
+            JSON.stringify({
+              groups: [
+                {
+                  followUpPr: "https://github.com/stranske/trip-planner/pull/581",
+                  title: "Address PR #178 fix threads for follow-up PR #581",
+                  baseBranch: "main",
+                  headBranch: "codex/fix-thread-1",
+                  bodyFilePath: ".tmp/pr-thread-payloads/pr-178-fix-group-1-body.md",
+                },
+              ],
+            }),
+          statSync: () => ({ isFile: () => true }),
+          execFileSync: () => "https://github.com/stranske/trip-planner/pull/622\n",
+        }
+      ),
+    /does not match follow-up PR/
+  );
+});
+
 test("formatExecutionReport emits readable dry-run output", () => {
   const report = formatExecutionReport(
     {
@@ -471,6 +537,7 @@ test("formatExecutionReport includes the created PR URL when available", () => {
             "gh pr create --base main --head codex/fix-thread-1 --title example --body-file .tmp/body.md",
           output: "https://github.com/stranske/trip-planner/pull/622",
           createdPullRequestUrl: "https://github.com/stranske/trip-planner/pull/622",
+          createdPullRequestMatchesFollowUpPr: false,
         },
       ],
     },
@@ -478,4 +545,5 @@ test("formatExecutionReport includes the created PR URL when available", () => {
   );
 
   assert.match(report, /Created PR: https:\/\/github\.com\/stranske\/trip-planner\/pull\/622/);
+  assert.match(report, /Created PR Matches Follow-up PR: no/);
 });
