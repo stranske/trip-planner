@@ -35,15 +35,11 @@ class MatchCandidate:
     def __post_init__(self) -> None:
         require_non_empty(self.candidate_id, "candidate_id")
         if self.entity_scope not in schema.SOURCE_ENTITY_SCOPES:
-            raise ValueError(
-                f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}"
-            )
+            raise ValueError(f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}")
         if self.option_kind not in schema.SOURCE_OPTION_KINDS:
             raise ValueError(f"option_kind must be one of {schema.SOURCE_OPTION_KINDS}")
         if self.match_strategy not in schema.RESOLUTION_MATCH_STRATEGIES:
-            raise ValueError(
-                f"match_strategy must be one of {schema.RESOLUTION_MATCH_STRATEGIES}"
-            )
+            raise ValueError(f"match_strategy must be one of {schema.RESOLUTION_MATCH_STRATEGIES}")
         require_probability(self.confidence, "confidence")
         require_strings(self.source_record_ids, "source_record_ids")
         require_strings(self.source_snapshot_ids, "source_snapshot_ids")
@@ -70,13 +66,9 @@ class AttributeConflict:
         require_non_empty(self.conflict_id, "conflict_id")
         require_non_empty(self.attribute_path, "attribute_path")
         if self.reason not in schema.RESOLUTION_CONFLICT_REASONS:
-            raise ValueError(
-                f"reason must be one of {schema.RESOLUTION_CONFLICT_REASONS}"
-            )
+            raise ValueError(f"reason must be one of {schema.RESOLUTION_CONFLICT_REASONS}")
         if self.status not in schema.RESOLUTION_CONFLICT_STATUSES:
-            raise ValueError(
-                f"status must be one of {schema.RESOLUTION_CONFLICT_STATUSES}"
-            )
+            raise ValueError(f"status must be one of {schema.RESOLUTION_CONFLICT_STATUSES}")
         require_string_mapping(self.values_by_source, "values_by_source")
         for source_id, value in self.values_by_source.items():
             require_non_empty(value, f"values_by_source[{source_id}]")
@@ -103,17 +95,11 @@ class MergedEntityProvenance:
     def __post_init__(self) -> None:
         require_non_empty(self.canonical_entity_id, "canonical_entity_id")
         if self.entity_scope not in schema.SOURCE_ENTITY_SCOPES:
-            raise ValueError(
-                f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}"
-            )
+            raise ValueError(f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}")
         require_strings(self.source_record_ids, "source_record_ids")
         require_strings(self.source_snapshot_ids, "source_snapshot_ids")
-        if any(
-            not isinstance(item, ProvenanceReference) for item in self.provenance_refs
-        ):
-            raise ValueError(
-                "provenance_refs must contain ProvenanceReference instances"
-            )
+        if any(not isinstance(item, ProvenanceReference) for item in self.provenance_refs):
+            raise ValueError("provenance_refs must contain ProvenanceReference instances")
         require_strings(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
@@ -139,9 +125,7 @@ class EntityResolution:
         require_non_empty(self.canonical_entity_id, "canonical_entity_id")
         require_non_empty(self.summary, "summary")
         if self.entity_scope not in schema.SOURCE_ENTITY_SCOPES:
-            raise ValueError(
-                f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}"
-            )
+            raise ValueError(f"entity_scope must be one of {schema.SOURCE_ENTITY_SCOPES}")
         if self.option_kind not in schema.SOURCE_OPTION_KINDS:
             raise ValueError(f"option_kind must be one of {schema.SOURCE_OPTION_KINDS}")
         if self.status not in schema.RESOLUTION_STATUSES:
@@ -153,25 +137,17 @@ class EntityResolution:
         if self.merged_provenance is not None and not isinstance(
             self.merged_provenance, MergedEntityProvenance
         ):
-            raise ValueError(
-                "merged_provenance must be a MergedEntityProvenance when provided"
-            )
+            raise ValueError("merged_provenance must be a MergedEntityProvenance when provided")
         require_strings(self.notes, "notes")
         if self.status == "match" and not self.match_candidates:
-            raise ValueError(
-                "match resolutions must include at least one match candidate"
-            )
+            raise ValueError("match resolutions must include at least one match candidate")
         if self.status == "ambiguous":
             if not self.review_required:
                 raise ValueError("ambiguous resolutions must set review_required")
             if not self.conflicts:
-                raise ValueError(
-                    "ambiguous resolutions must preserve explicit conflicts"
-                )
+                raise ValueError("ambiguous resolutions must preserve explicit conflicts")
         if self.status == "distinct" and self.merged_provenance is None:
-            raise ValueError(
-                "distinct resolutions still require merged_provenance context"
-            )
+            raise ValueError("distinct resolutions still require merged_provenance context")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

@@ -198,9 +198,7 @@ def _activity_timing_conflicts(
     for activity in bundle.activity_options:
         window = _parse_window(activity.timing_summary.typical_start_window)
         if window is None:
-            missing_data_fields.append(
-                f"activity:{activity.option_id}:typical_start_window"
-            )
+            missing_data_fields.append(f"activity:{activity.option_id}:typical_start_window")
             continue
         arrival = arrival_by_destination.get(activity.destination_id)
         if arrival is None:
@@ -352,9 +350,7 @@ def evaluate_bundle_feasibility(bundle: InventoryBundle) -> FeasibilityAssessmen
     blocking_reasons.extend(
         reason for move_cost in move_costs for reason in move_cost.blocking_reasons
     )
-    blocking_reasons.extend(
-        conflict.code for conflict in timing_conflicts if conflict.blocking
-    )
+    blocking_reasons.extend(conflict.code for conflict in timing_conflicts if conflict.blocking)
     if not bundle.feasibility.available:
         blocking_reasons.append("bundle_unavailable")
     if not bundle.feasibility.internally_consistent:
