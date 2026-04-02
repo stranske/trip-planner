@@ -51,7 +51,9 @@ class CandidateExclusion:
         require_non_empty(self.option_id, "option_id")
         require_non_empty(self.option_kind, "option_kind")
         if self.reason_code not in CANDIDATE_FILTER_REASON_CODES:
-            raise ValueError(f"reason_code must be one of {CANDIDATE_FILTER_REASON_CODES}")
+            raise ValueError(
+                f"reason_code must be one of {CANDIDATE_FILTER_REASON_CODES}"
+            )
         require_non_empty(self.message, "message")
         require_strings(self.destination_ids, "destination_ids")
         require_strings(self.source_ref_ids, "source_ref_ids")
@@ -76,9 +78,13 @@ class CandidateSeed:
         if not isinstance(self.bundle, InventoryBundle):
             raise ValueError("bundle must be an InventoryBundle")
         require_strings(self.supported_purposes, "supported_purposes")
-        invalid = [item for item in self.supported_purposes if item not in OPTION_SET_PURPOSES]
+        invalid = [
+            item for item in self.supported_purposes if item not in OPTION_SET_PURPOSES
+        ]
         if invalid:
-            raise ValueError(f"supported_purposes must contain only {OPTION_SET_PURPOSES}")
+            raise ValueError(
+                f"supported_purposes must contain only {OPTION_SET_PURPOSES}"
+            )
         require_strings(self.inclusion_reasons, "inclusion_reasons")
         require_strings(self.unresolved_risks, "unresolved_risks")
         require_strings(self.notes, "notes")
@@ -88,7 +94,9 @@ class CandidateSeed:
         total = 0.0
         seen = False
         for lodging_option in self.bundle.lodging_options:
-            nightly = lodging_option.cost_summary.total or lodging_option.cost_summary.nightly
+            nightly = (
+                lodging_option.cost_summary.total or lodging_option.cost_summary.nightly
+            )
             if nightly is None or nightly.typical_amount is None:
                 continue
             currency = currency or nightly.currency
@@ -106,7 +114,10 @@ class CandidateSeed:
             total += amount.typical_amount
             seen = True
         for activity_option in self.bundle.activity_options:
-            amount = activity_option.cost_summary.total or activity_option.cost_summary.per_person
+            amount = (
+                activity_option.cost_summary.total
+                or activity_option.cost_summary.per_person
+            )
             if amount is None or amount.typical_amount is None:
                 continue
             currency = currency or amount.currency
@@ -208,7 +219,9 @@ class CandidateSet:
     purpose: str
     seeds: list[CandidateSeed]
     exclusions: list[CandidateExclusion] = field(default_factory=list)
-    filter_summary: CandidateFilterSummary = field(default_factory=CandidateFilterSummary)
+    filter_summary: CandidateFilterSummary = field(
+        default_factory=CandidateFilterSummary
+    )
     comparison_axes: list[ComparisonAxis] = field(default_factory=list)
     explanation: list[str] = field(default_factory=list)
     source_refs: list[str] = field(default_factory=list)

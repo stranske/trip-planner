@@ -44,7 +44,9 @@ def _build_resolution(payload: dict[str, Any]) -> EntityResolution:
         status=payload["status"],
         canonical_entity_id=payload["canonical_entity_id"],
         summary=payload["summary"],
-        match_candidates=[MatchCandidate(**item) for item in payload.get("match_candidates", [])],
+        match_candidates=[
+            MatchCandidate(**item) for item in payload.get("match_candidates", [])
+        ],
         conflicts=[AttributeConflict(**item) for item in payload.get("conflicts", [])],
         review_required=payload.get("review_required", False),
         notes=payload.get("notes", []),
@@ -80,7 +82,9 @@ def test_destination_pipeline_emits_a_clean_normalized_destination() -> None:
     assert result.destinations[0].source_refs[0].role == "experience"
 
 
-def test_destination_pipeline_merges_duplicates_and_preserves_operational_gaps() -> None:
+def test_destination_pipeline_merges_duplicates_and_preserves_operational_gaps() -> (
+    None
+):
     fixture = _load_fixture("conflicted_destination_snapshot.json")
     fixture["snapshot"]["records"][1]["payload"]["ingestion_notes"] = [
         "Operational source notes shoulder-season crowding can spike around festivals."
@@ -98,12 +102,16 @@ def test_destination_pipeline_merges_duplicates_and_preserves_operational_gaps()
     assert result.summary.filtered_record_ids == ["record-destination-b"]
     assert result.summary.low_confidence_option_ids == ["dest-city-kyoto"]
     assert len(result.destinations[0].source_refs) == 2
-    assert result.destinations[0].operational_notes[0].summary.startswith("Bus crowding")
+    assert (
+        result.destinations[0].operational_notes[0].summary.startswith("Bus crowding")
+    )
     assert (
         "Operational source notes shoulder-season crowding can spike around festivals."
         in result.destinations[0].source_refs[1].notes
     )
-    assert result.unresolved_conflicts[0].attribute_path == "operational_notes[0].impact"
+    assert (
+        result.unresolved_conflicts[0].attribute_path == "operational_notes[0].impact"
+    )
     assert {warning.code for warning in result.warnings} == {
         "partial_operational_context",
         "normalization_warning",
@@ -112,7 +120,9 @@ def test_destination_pipeline_merges_duplicates_and_preserves_operational_gaps()
 
 def test_destination_pipeline_scopes_resolution_notes_to_comparison_refs() -> None:
     fixture = _load_fixture("conflicted_destination_snapshot.json")
-    fixture["resolutions"][0]["notes"] = ["Manual comparison review confirmed same destination."]
+    fixture["resolutions"][0]["notes"] = [
+        "Manual comparison review confirmed same destination."
+    ]
 
     result = ingest_destination_snapshot(
         _build_snapshot(fixture["snapshot"]),
@@ -133,7 +143,9 @@ def test_destination_pipeline_scopes_resolution_notes_to_comparison_refs() -> No
     assert raw_ref.notes == []
 
 
-def test_destination_pipeline_keeps_separate_decisions_as_individual_destinations() -> None:
+def test_destination_pipeline_keeps_separate_decisions_as_individual_destinations() -> (
+    None
+):
     fixture = _load_fixture("conflicted_destination_snapshot.json")
     decision = _build_decision(fixture["dedup_decisions"][0])
     decision.decision = "keep_separate"
@@ -148,7 +160,9 @@ def test_destination_pipeline_keeps_separate_decisions_as_individual_destination
     assert result.summary.emitted_options == 2
     assert result.summary.filtered_record_ids == []
     assert len(result.unresolved_conflicts) == 1
-    assert sorted(destination.destination_id for destination in result.destinations) == [
+    assert sorted(
+        destination.destination_id for destination in result.destinations
+    ) == [
         "dest-city-kyoto",
         "dest-city-kyoto",
     ]

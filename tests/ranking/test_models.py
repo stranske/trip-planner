@@ -24,7 +24,8 @@ def test_leisure_ranking_fixture_round_trips_and_keeps_item_contracts() -> None:
     assert result_set.results[0].target_option is not None
     assert result_set.results[0].score_breakdown.final_score == pytest.approx(0.69)
     assert (
-        result_set.results[0].explanation_records[0].machine_context["primary_axis"] == "enjoyment"
+        result_set.results[0].explanation_records[0].machine_context["primary_axis"]
+        == "enjoyment"
     )
     assert result_set.to_dict()["results"][0]["target_option"]["option_id"] == (
         "candidate:kyoto-museum-day"
@@ -36,7 +37,9 @@ def test_business_ranking_fixture_preserves_missing_data_penalties() -> None:
 
     result = result_set.results[0]
     assert result.result_kind == "item"
-    assert result.score_breakdown.missing_data_penalties[0].reason_code == ("missing_tax_estimate")
+    assert result.score_breakdown.missing_data_penalties[0].reason_code == (
+        "missing_tax_estimate"
+    )
     assert result.confidence_summary.low_confidence_flags == ["missing_tax_estimate"]
     assert result.unresolved_risks[0].code == "missing_tax_estimate"
 

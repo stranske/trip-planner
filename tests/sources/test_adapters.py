@@ -20,7 +20,9 @@ def _load_fixture(name: str) -> dict[str, object]:
 
 
 class FixtureAdapter(SourceAdapter):
-    def __init__(self, adapter_id: str, source_record: SourceRecord, payload_name: str) -> None:
+    def __init__(
+        self, adapter_id: str, source_record: SourceRecord, payload_name: str
+    ) -> None:
         self.adapter_id = adapter_id
         self.source_record = source_record
         self.payload_name = payload_name
@@ -34,7 +36,9 @@ class FixtureAdapter(SourceAdapter):
             record_id=f"{query.query_id}-record-1",
             entity_scope=query.entity_scope,
             provider_entity_id=str(
-                payload.get("hotel_id") or payload.get("listing_id") or payload.get("property_id")
+                payload.get("hotel_id")
+                or payload.get("listing_id")
+                or payload.get("property_id")
             ),
             payload_type="json_document",
             payload=payload,
@@ -69,13 +73,19 @@ class FixtureAdapter(SourceAdapter):
                     source_id=snapshot.source_id,
                     source_category=snapshot.source_category,
                     subject_kind=(
-                        "option" if snapshot.entity_scope != "destination" else "destination"
+                        "option"
+                        if snapshot.entity_scope != "destination"
+                        else "destination"
                     ),
                     subject_id=f"{snapshot.entity_scope}-candidate-1",
                     contribution_kind=(
                         "inventory"
                         if snapshot.source_category == "commercial_inventory"
-                        else ("editorial" if snapshot.source_category == "editorial" else "policy")
+                        else (
+                            "editorial"
+                            if snapshot.source_category == "editorial"
+                            else "policy"
+                        )
                     ),
                     summary="Normalization receives a stable snapshot wrapper and provenance seed.",
                     captured_at=snapshot.fetched_at,

@@ -65,7 +65,9 @@ def _searchable_bundle_text(bundle: InventoryBundle) -> str:
         values.extend((transport.name, transport.transport_kind))
         values.extend(segment.mode for segment in transport.segments)
     for activity in bundle.activity_options:
-        values.extend((activity.name, activity.activity_kind, activity.category.primary))
+        values.extend(
+            (activity.name, activity.activity_kind, activity.category.primary)
+        )
     return " ".join(part.lower() for part in values if part)
 
 
@@ -131,12 +133,16 @@ class LeisureRankingEngine:
         "recovery_protection": 0.10,
     }
 
-    def validate_profile(self, profile: LeisurePreferenceProfile) -> LeisurePreferenceProfile:
+    def validate_profile(
+        self, profile: LeisurePreferenceProfile
+    ) -> LeisurePreferenceProfile:
         if not isinstance(profile, LeisurePreferenceProfile):
             raise ValueError("profile must be a LeisurePreferenceProfile")
         return profile
 
-    def validate_objectives(self, objectives: ItineraryObjectives) -> ItineraryObjectives:
+    def validate_objectives(
+        self, objectives: ItineraryObjectives
+    ) -> ItineraryObjectives:
         if not isinstance(objectives, ItineraryObjectives):
             raise ValueError("objectives must be an ItineraryObjectives")
         return objectives
@@ -158,7 +164,9 @@ class LeisureRankingEngine:
                 "feasibility_outputs must be a mapping, a sequence of FeasibilityAssessment values, or None"
             )
         if any(not isinstance(item, FeasibilityAssessment) for item in values.values()):
-            raise ValueError("feasibility_outputs must contain FeasibilityAssessment instances")
+            raise ValueError(
+                "feasibility_outputs must contain FeasibilityAssessment instances"
+            )
         return values
 
     def validate_candidate_set(self, candidate_set: CandidateSet) -> CandidateSet:
@@ -166,7 +174,9 @@ class LeisureRankingEngine:
             raise ValueError("candidate_set must be a CandidateSet")
         return candidate_set
 
-    def validate_bundles(self, bundles: Sequence[InventoryBundle]) -> list[InventoryBundle]:
+    def validate_bundles(
+        self, bundles: Sequence[InventoryBundle]
+    ) -> list[InventoryBundle]:
         if isinstance(bundles, (str, bytes)) or not isinstance(bundles, Sequence):
             raise ValueError("bundles must be a sequence of InventoryBundle instances")
         bundle_list = list(bundles)
@@ -263,9 +273,9 @@ class LeisureRankingEngine:
     ) -> RankedResultSet:
         scored: list[tuple[float, RankedResult]] = []
         for candidate in candidates:
-            assessment = assessments.get(candidate.bundle.bundle_id) or evaluate_bundle_feasibility(
-                candidate.bundle
-            )
+            assessment = assessments.get(
+                candidate.bundle.bundle_id
+            ) or evaluate_bundle_feasibility(candidate.bundle)
             result = self._score_candidate(profile, objectives, candidate, assessment)
             scored.append((result.score, result))
 
@@ -461,8 +471,12 @@ class LeisureRankingEngine:
             matched_weight += weight * self._anchor_match(bundle, searchable, anchor)
         return _clamp(matched_weight / total_weight if total_weight else 0.5)
 
-    def _anchor_match(self, bundle: InventoryBundle, searchable: str, anchor: Anchor) -> float:
-        label_tokens = [token for token in anchor.label.lower().replace("-", " ").split() if token]
+    def _anchor_match(
+        self, bundle: InventoryBundle, searchable: str, anchor: Anchor
+    ) -> float:
+        label_tokens = [
+            token for token in anchor.label.lower().replace("-", " ").split() if token
+        ]
         type_token = anchor.type.lower().replace("_", " ")
         if anchor.label.lower() in searchable or type_token in searchable:
             return 1.0
@@ -472,18 +486,24 @@ class LeisureRankingEngine:
             activity.activity_kind == "museum" for activity in bundle.activity_options
         ):
             return 0.95
-        if any(word in type_token for word in ("wander", "district", "discovery")) and any(
+        if any(
+            word in type_token for word in ("wander", "district", "discovery")
+        ) and any(
             activity.activity_kind in {"district", "market", "neighborhood"}
             for activity in bundle.activity_options
         ):
             return 0.95
         if any(word in type_token for word in ("rail", "ferry", "transit")) and any(
-            transport.transport_kind in {"rail", "ferry"} for transport in bundle.transport_options
+            transport.transport_kind in {"rail", "ferry"}
+            for transport in bundle.transport_options
         ):
             return 0.95
         if any(word in type_token for word in ("quiet", "sleep", "recovery")):
             recovery_signal = _average(
-                [lodging.fit_summary.quiet_recovery_signal for lodging in bundle.lodging_options],
+                [
+                    lodging.fit_summary.quiet_recovery_signal
+                    for lodging in bundle.lodging_options
+                ],
                 default=0.5,
             )
             return recovery_signal
@@ -497,7 +517,10 @@ class LeisureRankingEngine:
     ) -> float:
         bundle_quality = bundle.quality_value_fit.quality_signal
         lodging_quality = _average(
-            [lodging.quality_summary.overall_signal for lodging in bundle.lodging_options],
+            [
+                lodging.quality_summary.overall_signal
+                for lodging in bundle.lodging_options
+            ],
             default=0.5,
         )
         comfort_signal = _average(
@@ -505,7 +528,10 @@ class LeisureRankingEngine:
             default=0.5,
         )
         activity_quality = _average(
-            [activity.quality_summary.overall_signal for activity in bundle.activity_options],
+            [
+                activity.quality_summary.overall_signal
+                for activity in bundle.activity_options
+            ],
             default=0.5,
         )
         quality_signal = _average(
@@ -616,7 +642,10 @@ class LeisureRankingEngine:
         assessment: FeasibilityAssessment,
     ) -> float:
         quiet_recovery = _average(
-            [lodging.fit_summary.quiet_recovery_signal for lodging in bundle.lodging_options],
+            [
+                lodging.fit_summary.quiet_recovery_signal
+                for lodging in bundle.lodging_options
+            ],
             default=0.5,
         )
         buffer_support = _clamp(1.0 - min(1.0, len(assessment.timing_conflicts) / 3.0))
@@ -659,7 +688,10 @@ class LeisureRankingEngine:
                 )
             )
         quality_signal = self._quality_floor_signal(bundle, profile, objectives)
-        if objectives.quality_floor_protection.required_categories and quality_signal < 0.7:
+        if (
+            objectives.quality_floor_protection.required_categories
+            and quality_signal < 0.7
+        ):
             penalties.append(
                 ScoreAdjustment(
                     adjustment_id="quality-floor",
@@ -846,7 +878,9 @@ class LeisureRankingEngine:
                 ),
                 factor_keys=[item.contribution_id for item in dominant],
                 machine_context={
-                    "primary_axis": dominant[0].contribution_id if dominant else "anchor_alignment",
+                    "primary_axis": dominant[0].contribution_id
+                    if dominant
+                    else "anchor_alignment",
                     "confidence": f"{confidence_summary.overall_confidence or 0.0:.2f}",
                 },
                 human_summary=[item.label for item in dominant]
@@ -897,7 +931,10 @@ class LeisureRankingEngine:
                     ),
                     factor_keys=[
                         *confidence_summary.low_confidence_flags[:3],
-                        *[penalty.reason_code for penalty in missing_data_penalties[:1]],
+                        *[
+                            penalty.reason_code
+                            for penalty in missing_data_penalties[:1]
+                        ],
                     ],
                     machine_context={
                         "overall_confidence": f"{confidence_summary.overall_confidence or 0.0:.2f}"
@@ -935,7 +972,9 @@ class LeisureRankingEngine:
                 RiskFlag(
                     risk_id=f"risk:{assessment.bundle_id}:{blocking_reason}",
                     code=blocking_reason,
-                    severity="critical" if not assessment.recommended_for_ranking else "warning",
+                    severity="critical"
+                    if not assessment.recommended_for_ranking
+                    else "warning",
                     summary=f"Feasibility issue remains unresolved: {blocking_reason}.",
                     blocking=not assessment.recommended_for_ranking,
                 )
@@ -990,7 +1029,8 @@ class LeisureRankingEngine:
             booking_links=list(bundle.provenance_summary.booking_links),
             source_refs=list(bundle.provenance_summary.source_refs),
             supporting_place_ids=list(bundle.destination_ids),
-            explanation=list(bundle.explanation.strengths) + list(bundle.explanation.evidence),
+            explanation=list(bundle.explanation.strengths)
+            + list(bundle.explanation.evidence),
         )
 
     def _comparison_axes(self) -> list[ComparisonAxis]:

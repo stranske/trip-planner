@@ -44,7 +44,9 @@ def _build_resolution(payload: dict[str, Any]) -> EntityResolution:
         status=payload["status"],
         canonical_entity_id=payload["canonical_entity_id"],
         summary=payload["summary"],
-        match_candidates=[MatchCandidate(**item) for item in payload.get("match_candidates", [])],
+        match_candidates=[
+            MatchCandidate(**item) for item in payload.get("match_candidates", [])
+        ],
         conflicts=[AttributeConflict(**item) for item in payload.get("conflicts", [])],
         review_required=payload.get("review_required", False),
     )
@@ -92,7 +94,9 @@ def test_transport_pipeline_merges_duplicates_and_retains_review_gaps() -> None:
     assert result.handoff.status == "partial"
     assert result.summary.emitted_options == 1
     assert result.summary.filtered_record_ids == ["record-transport-b"]
-    assert result.summary.low_confidence_option_ids == ["transport-paris-amsterdam-eurostar"]
+    assert result.summary.low_confidence_option_ids == [
+        "transport-paris-amsterdam-eurostar"
+    ]
     assert len(result.transport_options[0].source_refs) == 2
     assert len(result.unresolved_conflicts) == 1
     assert {warning.code for warning in result.warnings} == {
