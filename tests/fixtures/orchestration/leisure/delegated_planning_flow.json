@@ -1,0 +1,35 @@
+{
+  "session": {
+    "session_state_id": "session-state:kyoto-delegated",
+    "trip_id": "trip-leisure-kyoto-draft",
+    "user_id": "user:leisure-kyoto",
+    "owner_profile_id": "traveler-leisure",
+    "mode": "leisure",
+    "started_at": "2026-04-02T08:00:00Z",
+    "updated_at": "2026-04-02T09:20:00Z",
+    "interaction_state": {
+      "interaction_style": "guided",
+      "initiative_level": "planner_first",
+      "checkpoint_frequency": "phase",
+      "option_preview_timing": "deferred",
+      "summary_granularity": "balanced",
+      "auto_advance_research_passes": 2,
+      "ask_before_major_change": false,
+      "notes": [
+        "Planner may carry the leisure flow through scenario review before the next checkpoint."
+      ]
+    },
+    "recent_option_presentations": [],
+    "pending_decisions": [],
+    "status": "active",
+    "current_saved_scenario_id": "saved-scenario:baseline-kyoto",
+    "activity_log_id": "activity-log:kyoto-spring",
+    "tags": [
+      "delegated",
+      "leisure"
+    ],
+    "notes": [
+      "Delegated planning prefers a save-ready checkpoint over an immediate traveler interrupt."
+    ]
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "session": {
+    "session_state_id": "session-state:kyoto-revision",
+    "trip_id": "trip-leisure-kyoto-draft",
+    "user_id": "user:leisure-kyoto",
+    "owner_profile_id": "traveler-leisure",
+    "mode": "leisure",
+    "started_at": "2026-04-02T08:00:00Z",
+    "updated_at": "2026-04-02T09:35:00Z",
+    "interaction_state": {
+      "interaction_style": "collaborative",
+      "initiative_level": "balanced",
+      "checkpoint_frequency": "milestone",
+      "option_preview_timing": "early",
+      "summary_granularity": "detailed",
+      "auto_advance_research_passes": 1,
+      "ask_before_major_change": true,
+      "notes": [
+        "Traveler rejected the surfaced fallback and asked for a calmer route."
+      ]
+    },
+    "recent_option_presentations": [
+      {
+        "presentation_id": "presentation:kyoto-v3",
+        "option_set_id": "option-set:kyoto-v3",
+        "shown_at": "2026-04-02T09:30:00Z",
+        "surface_kind": "scenario_comparison",
+        "surfaced_option_ids": [
+          "option:kyoto-central",
+          "option:osaka-daytrip"
+        ],
+        "highlighted_option_id": "option:osaka-daytrip",
+        "rejected_option_ids": [
+          "option:osaka-daytrip"
+        ],
+        "summary": "Traveler rejected the higher-movement fallback."
+      }
+    ],
+    "pending_decisions": [],
+    "status": "active",
+    "current_saved_scenario_id": "saved-scenario:baseline-kyoto",
+    "activity_log_id": "activity-log:kyoto-spring",
+    "tags": [
+      "revision",
+      "leisure"
+    ],
+    "notes": [
+      "Revision should trigger an explicit reranking pass."
+    ]
+  }
+}

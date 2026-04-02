@@ -4,6 +4,7 @@ The canonical orchestration contracts now live in:
 
 - `trip_planner/orchestration/actions.py`
 - `trip_planner/orchestration/models.py`
+- `trip_planner/orchestration/leisure.py`
 
 These contracts define the shared workflow layer that later leisure, business, and in-trip orchestrators should build on.
 
@@ -39,9 +40,15 @@ Representative fixtures live in:
 - `tests/fixtures/orchestration/turns/leisure_planning_turn.json`
 - `tests/fixtures/orchestration/turns/business_planning_turn.json`
 - `tests/fixtures/orchestration/turns/in_trip_adjustment_turn.json`
+- `tests/fixtures/orchestration/leisure/delegated_planning_flow.json`
+- `tests/fixtures/orchestration/leisure/collaborative_iterative_flow.json`
+- `tests/fixtures/orchestration/leisure/revised_after_feedback_flow.json`
 
 These fixtures show how the same contract layer can express:
 
 - a leisure checkpoint with ranked scenario outputs
 - a business planning turn gated by policy posture
 - an in-trip replanning turn triggered by disruption
+- a delegated leisure scaffold that can auto-advance to a save-ready checkpoint
+- a collaborative leisure flow that waits on a structured traveler decision
+- a revision flow that returns to explicit reranking after surfaced-option feedback
