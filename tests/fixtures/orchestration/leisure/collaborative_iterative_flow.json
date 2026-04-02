@@ -1,0 +1,66 @@
+{
+  "session": {
+    "session_state_id": "session-state:kyoto-collaborative",
+    "trip_id": "trip-leisure-kyoto-draft",
+    "user_id": "user:leisure-kyoto",
+    "owner_profile_id": "traveler-leisure",
+    "mode": "leisure",
+    "started_at": "2026-04-02T08:00:00Z",
+    "updated_at": "2026-04-02T09:15:00Z",
+    "interaction_state": {
+      "interaction_style": "collaborative",
+      "initiative_level": "balanced",
+      "checkpoint_frequency": "milestone",
+      "option_preview_timing": "early",
+      "summary_granularity": "balanced",
+      "auto_advance_research_passes": 1,
+      "ask_before_major_change": true,
+      "notes": [
+        "Traveler wants to approve the next save/revise step."
+      ]
+    },
+    "recent_option_presentations": [
+      {
+        "presentation_id": "presentation:kyoto-v3",
+        "option_set_id": "option-set:kyoto-v3",
+        "shown_at": "2026-04-02T09:10:00Z",
+        "surface_kind": "scenario_comparison",
+        "surfaced_option_ids": [
+          "option:kyoto-central",
+          "option:osaka-daytrip"
+        ],
+        "highlighted_option_id": "option:kyoto-central",
+        "rejected_option_ids": [],
+        "summary": "Presented the baseline Kyoto plan with one fallback."
+      }
+    ],
+    "pending_decisions": [
+      {
+        "decision_id": "decision:save-baseline",
+        "title": "Save baseline scenario",
+        "prompt": "Should the current Kyoto route become the saved baseline?",
+        "created_at": "2026-04-02T09:12:00Z",
+        "choices": [
+          "save baseline",
+          "keep exploring"
+        ],
+        "blocking": true,
+        "related_option_set_id": "option-set:kyoto-v3",
+        "related_saved_scenario_id": "saved-scenario:baseline-kyoto",
+        "notes": [
+          "Needed before the next revision cycle."
+        ]
+      }
+    ],
+    "status": "active",
+    "current_saved_scenario_id": "saved-scenario:baseline-kyoto",
+    "activity_log_id": "activity-log:kyoto-spring",
+    "tags": [
+      "collaborative",
+      "leisure"
+    ],
+    "notes": [
+      "The leisure workflow pauses at explicit collaborative checkpoints."
+    ]
+  }
+}
