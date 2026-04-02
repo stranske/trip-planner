@@ -1,0 +1,86 @@
+{
+  "user_id": "user-family-1",
+  "email": "family@example.com",
+  "display_name": "Morgan Planner",
+  "traveler_profiles": [
+    {
+      "traveler_profile_id": "traveler-solo",
+      "display_name": "Solo city breaks",
+      "profile_kind": "personal",
+      "supported_modes": ["leisure"],
+      "leisure_profile_id": "leisure-profile-solo",
+      "default_origin_airports": ["BOS"],
+      "regional_defaults": {
+        "locale": "en-US",
+        "currency": "USD",
+        "timezone": "America/New_York",
+        "home_airport": "BOS",
+        "departure_region": "US-NORTHEAST"
+      },
+      "traveler_tags": ["solo", "museums"],
+      "notes": ["Optimized for short weekend trips."]
+    },
+    {
+      "traveler_profile_id": "traveler-business-lite",
+      "display_name": "Light business travel",
+      "profile_kind": "mixed",
+      "supported_modes": ["leisure", "business"],
+      "leisure_profile_id": "leisure-profile-bleisure",
+      "business_profile_id": "business-profile-bleisure",
+      "default_origin_airports": ["BOS", "JFK"],
+      "regional_defaults": {
+        "locale": "en-US",
+        "currency": "USD",
+        "timezone": "America/New_York",
+        "home_airport": "BOS",
+        "departure_region": "US-NORTHEAST"
+      },
+      "traveler_tags": ["bleisure"],
+      "notes": ["Supports combined personal and client travel."]
+    },
+    {
+      "traveler_profile_id": "traveler-family",
+      "display_name": "Family vacations",
+      "profile_kind": "family",
+      "supported_modes": ["leisure"],
+      "leisure_profile_id": "leisure-profile-family",
+      "default_origin_airports": ["BOS"],
+      "regional_defaults": {
+        "locale": "fr-FR",
+        "currency": "EUR",
+        "timezone": "Europe/Paris",
+        "home_airport": "CDG",
+        "departure_region": "FR-IDF"
+      },
+      "traveler_tags": ["family", "school-breaks"],
+      "notes": ["Carries separate defaults for family holidays in Europe."]
+    }
+  ],
+  "account_preferences": {
+    "default_traveler_profile_id": "traveler-family",
+    "default_interaction_style": "collaborative",
+    "default_summary_granularity": "detailed",
+    "default_trip_mode": "leisure",
+    "auto_save_checkpoints": true,
+    "regional_defaults": {
+      "locale": "en-US",
+      "currency": "USD",
+      "timezone": "America/New_York",
+      "home_airport": "BOS",
+      "departure_region": "US-NORTHEAST"
+    },
+    "notification_preferences": [
+      {"channel": "email", "cadence": "digest", "enabled": true},
+      {"channel": "sms", "cadence": "important_only", "enabled": false}
+    ],
+    "preferred_languages": ["en-US", "fr-FR"],
+    "planning_tags": ["family-priority", "checkpoint-heavy"]
+  },
+  "status": "active",
+  "schema_version": "0.1.0",
+  "external_refs": {
+    "household_id": "home-44"
+  },
+  "account_tags": ["family-planner"],
+  "notes": ["Maintains separate traveler contexts for solo, business, and family travel."]
+}
