@@ -40,8 +40,8 @@ tests/test_generate_segments.py
 tests/test_penalty.py
 tests/test_render_pr_review_thread_report.py
 tests/state/test_accounts.py
-tests/state/test_scenarios.py
 tests/state/test_budget.py
+tests/state/test_scenarios.py
 tests/state/test_trips.py
 trip_planner/__init__.py
 trip_planner/_option_contracts.py
@@ -87,6 +87,9 @@ trip_planner/options/bundles.py
 trip_planner/options/destinations.py
 trip_planner/options/lodging.py
 trip_planner/options/transport.py
+trip_planner/orchestration/__init__.py
+trip_planner/orchestration/actions.py
+trip_planner/orchestration/models.py
 trip_planner/preferences/__init__.py
 trip_planner/preferences/autonomy.py
 trip_planner/preferences/evidence.py
@@ -119,6 +122,6 @@ trip_planner/state/scenarios.py
 trip_planner/state/trips.py
 trip_planner/state/repositories/__init__.py
 trip_planner/state/repositories/accounts.py
-trip_planner/state/repositories/scenarios.py
 trip_planner/state/repositories/budget.py
+trip_planner/state/repositories/scenarios.py
 trip_planner/state/repositories/trips.py

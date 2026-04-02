@@ -1,0 +1,174 @@
+{
+  "turn_id": "turn-business-summit-004",
+  "trip_id": "trip-business-summit",
+  "mode": "business",
+  "workflow_kind": "business_planning",
+  "turn_kind": "planning_pass",
+  "started_at": "2026-04-02T13:22:00Z",
+  "workflow_state": {
+    "workflow_state_id": "workflow-business-summit-v4",
+    "trip_id": "trip-business-summit",
+    "mode": "business",
+    "workflow_kind": "business_planning",
+    "current_stage": "policy_alignment",
+    "status": "active",
+    "recorded_at": "2026-04-02T13:25:00Z",
+    "pending_decisions": [
+      {
+        "decision_id": "decision-exception-route",
+        "prompt": "Should the planner keep the lower-cost connection that requires a policy exception review?",
+        "requested_at": "2026-04-02T13:25:00Z",
+        "choices": [
+          {
+            "choice_id": "choice-keep-policy-safe",
+            "label": "Keep the compliant option",
+            "description": "Prefer the more expensive but policy-safe itinerary.",
+            "recommended": true
+          },
+          {
+            "choice_id": "choice-request-exception",
+            "label": "Request an exception",
+            "description": "Carry the lower-cost connection into policy review."
+          }
+        ],
+        "blocking": true,
+        "notes": [
+          "Meeting arrival buffer stays compliant either way."
+        ],
+        "related_option_ids": [
+          "option-set-business-policy"
+        ]
+      }
+    ],
+    "open_action_ids": [
+      "action-prepare-policy-summary",
+      "action-request-exception-decision"
+    ],
+    "completed_action_ids": [
+      "action-refresh-preferences",
+      "action-rank-business-options"
+    ],
+    "recent_output_ids": [
+      "output-policy-summary",
+      "output-policy-warning"
+    ],
+    "notes": [
+      "Business constraints are now the dominant planning signal."
+    ],
+    "tags": [
+      "business",
+      "policy-check"
+    ],
+    "schema_version": "0.1.0"
+  },
+  "actions": [
+    {
+      "action_id": "action-refresh-preferences",
+      "action_kind": "refresh_preferences",
+      "title": "Refresh travel and policy posture before scoring",
+      "stage": "objective_derivation",
+      "status": "completed",
+      "payload": {
+        "business_profile_id": "business-profile:summit-owner"
+      }
+    },
+    {
+      "action_id": "action-rank-business-options",
+      "action_kind": "rank_options",
+      "title": "Rank compliant and exception-path itineraries",
+      "stage": "ranking",
+      "status": "completed",
+      "depends_on_action_ids": [
+        "action-refresh-preferences"
+      ],
+      "payload": {
+        "option_set_id": "option-set-business-policy"
+      }
+    },
+    {
+      "action_id": "action-prepare-policy-summary",
+      "action_kind": "prepare_policy_summary",
+      "title": "Prepare policy-facing summary for the leading itinerary",
+      "stage": "policy_alignment",
+      "status": "in_progress",
+      "depends_on_action_ids": [
+        "action-rank-business-options"
+      ],
+      "payload": {
+        "proposal_id": "proposal-client-summit-v2"
+      }
+    },
+    {
+      "action_id": "action-request-exception-decision",
+      "action_kind": "request_decision",
+      "title": "Ask whether the traveler wants to request a policy exception",
+      "stage": "decision_checkpoint",
+      "status": "pending",
+      "depends_on_action_ids": [
+        "action-prepare-policy-summary"
+      ],
+      "payload": {
+        "decision_id": "decision-exception-route"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "output_id": "output-policy-summary",
+      "output_kind": "policy_summary",
+      "title": "Policy posture for client summit itinerary",
+      "emitted_at": "2026-04-02T13:25:05Z",
+      "surface": "policy_packet",
+      "summary": "The lead itinerary is compliant; the cheaper fallback would need an exception request.",
+      "ref_ids": [
+        "proposal-client-summit-v2",
+        "option-set-business-policy"
+      ],
+      "payload": {
+        "compliance": "conditional"
+      }
+    },
+    {
+      "output_id": "output-policy-warning",
+      "output_kind": "warning",
+      "title": "Exception path requires explicit traveler confirmation",
+      "emitted_at": "2026-04-02T13:25:05Z",
+      "surface": "planner_chat",
+      "summary": "The lower-cost route cannot be carried forward silently.",
+      "ref_ids": [
+        "decision-exception-route"
+      ],
+      "warnings": [
+        "policy-exception-required"
+      ],
+      "payload": {
+        "severity": "high"
+      }
+    }
+  ],
+  "transition": {
+    "from_stage": "ranking",
+    "to_stage": "policy_alignment",
+    "trigger": "policy_constraint",
+    "changed_at": "2026-04-02T13:25:00Z",
+    "reason": "Business routes must surface policy posture before the traveler chooses a path.",
+    "warning_codes": [
+      "policy-exception-required"
+    ]
+  },
+  "next_step": {
+    "headline": "Finish the policy summary and ask whether to keep the compliant route or request an exception.",
+    "recommended_action_id": "action-prepare-policy-summary",
+    "blocking_decision_ids": [
+      "decision-exception-route"
+    ],
+    "expected_output_ids": [
+      "output-policy-summary",
+      "output-policy-warning"
+    ]
+  },
+  "notes": [
+    "This turn captures a representative business planning checkpoint with policy gating."
+  ],
+  "schema_version": "0.1.0"
+}

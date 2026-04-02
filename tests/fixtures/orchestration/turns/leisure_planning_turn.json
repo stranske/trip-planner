@@ -1,0 +1,181 @@
+{
+  "turn_id": "turn-leisure-kyoto-001",
+  "trip_id": "trip-leisure-kyoto",
+  "mode": "leisure",
+  "workflow_kind": "leisure_planning",
+  "turn_kind": "planning_pass",
+  "started_at": "2026-04-02T13:15:00Z",
+  "workflow_state": {
+    "workflow_state_id": "workflow-leisure-kyoto-v3",
+    "trip_id": "trip-leisure-kyoto",
+    "mode": "leisure",
+    "workflow_kind": "leisure_planning",
+    "current_stage": "ranking",
+    "status": "active",
+    "recorded_at": "2026-04-02T13:18:00Z",
+    "pending_decisions": [
+      {
+        "decision_id": "decision-rank-direction",
+        "prompt": "Should the planner bias toward Kyoto neighborhoods or day-trip variety first?",
+        "requested_at": "2026-04-02T13:18:00Z",
+        "choices": [
+          {
+            "choice_id": "choice-kyoto-depth",
+            "label": "Prioritize Kyoto depth",
+            "description": "Keep fewer bases and preserve open wandering blocks.",
+            "recommended": true,
+            "metadata": {
+              "objective_id": "obj-kyoto-depth"
+            }
+          },
+          {
+            "choice_id": "choice-day-trip-variety",
+            "label": "Surface more day trips",
+            "description": "Trade some neighborhood depth for destination breadth.",
+            "metadata": {
+              "objective_id": "obj-day-trip-variety"
+            }
+          }
+        ],
+        "blocking": false,
+        "notes": [
+          "Traveler asked to see tradeoffs before committing."
+        ],
+        "related_option_ids": [
+          "option-set-kyoto-ranked"
+        ]
+      }
+    ],
+    "open_action_ids": [
+      "action-rank-options",
+      "action-ask-checkpoint"
+    ],
+    "completed_action_ids": [
+      "action-derive-objectives",
+      "action-assemble-candidates"
+    ],
+    "recent_output_ids": [
+      "output-question-depth-vs-variety",
+      "output-ranked-scenarios"
+    ],
+    "notes": [
+      "Preference profile is stable enough for ranked scenarios."
+    ],
+    "tags": [
+      "leisure",
+      "checkpoint-ready"
+    ],
+    "schema_version": "0.1.0"
+  },
+  "actions": [
+    {
+      "action_id": "action-derive-objectives",
+      "action_kind": "derive_objectives",
+      "title": "Derive itinerary objectives from the resolved leisure profile",
+      "stage": "objective_derivation",
+      "status": "completed",
+      "notes": [
+        "Objective bundle preserved open wandering support."
+      ],
+      "payload": {
+        "objective_id": "obj-kyoto-depth"
+      }
+    },
+    {
+      "action_id": "action-assemble-candidates",
+      "action_kind": "assemble_candidates",
+      "title": "Assemble lodging and activity candidates",
+      "stage": "candidate_generation",
+      "status": "completed",
+      "depends_on_action_ids": [
+        "action-derive-objectives"
+      ],
+      "payload": {
+        "candidate_set_id": "candidate-set-kyoto"
+      }
+    },
+    {
+      "action_id": "action-rank-options",
+      "action_kind": "rank_options",
+      "title": "Rank scenario options for the current checkpoint",
+      "stage": "ranking",
+      "status": "in_progress",
+      "depends_on_action_ids": [
+        "action-assemble-candidates"
+      ],
+      "payload": {
+        "option_set_id": "option-set-kyoto-ranked"
+      }
+    },
+    {
+      "action_id": "action-ask-checkpoint",
+      "action_kind": "request_decision",
+      "title": "Ask whether to favor Kyoto depth or day-trip variety",
+      "stage": "decision_checkpoint",
+      "status": "pending",
+      "depends_on_action_ids": [
+        "action-rank-options"
+      ],
+      "payload": {
+        "decision_id": "decision-rank-direction"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "output_id": "output-question-depth-vs-variety",
+      "output_kind": "question",
+      "title": "Checkpoint question: Kyoto depth or more day-trip variety?",
+      "emitted_at": "2026-04-02T13:18:05Z",
+      "surface": "planner_chat",
+      "summary": "The planner has two viable directions and wants to confirm the traveler’s bias.",
+      "ref_ids": [
+        "decision-rank-direction"
+      ],
+      "payload": {
+        "question_style": "checkpoint"
+      }
+    },
+    {
+      "output_id": "output-ranked-scenarios",
+      "output_kind": "ranked_scenarios",
+      "title": "Ranked Kyoto scenario set",
+      "emitted_at": "2026-04-02T13:18:05Z",
+      "surface": "side_panel",
+      "summary": "Two scenario families are ready for comparison.",
+      "ref_ids": [
+        "option-set-kyoto-ranked",
+        "scenario-kyoto-depth",
+        "scenario-day-trip-variety"
+      ],
+      "payload": {
+        "ranked_count": 2
+      }
+    }
+  ],
+  "transition": {
+    "from_stage": "candidate_generation",
+    "to_stage": "ranking",
+    "trigger": "planner_recommendation",
+    "changed_at": "2026-04-02T13:18:00Z",
+    "reason": "Enough candidate coverage exists to surface ranked scenarios."
+  },
+  "next_step": {
+    "headline": "Finish ranking, then ask the traveler which scenario direction to keep exploring.",
+    "recommended_action_id": "action-rank-options",
+    "blocking_decision_ids": [
+      "decision-rank-direction"
+    ],
+    "expected_output_ids": [
+      "output-question-depth-vs-variety",
+      "output-ranked-scenarios"
+    ],
+    "notes": [
+      "Do not open another research pass before the traveler reacts to the ranked set."
+    ]
+  },
+  "notes": [
+    "This turn captures a representative leisure checkpoint after initial candidate generation."
+  ],
+  "schema_version": "0.1.0"
+}
