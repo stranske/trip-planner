@@ -1,4 +1,4 @@
-"""Persisted account, budget, trip, and session state contracts."""
+"""Persisted account, budget, trip, scenario, and session state contracts."""
 
 from .accounts import (
     ACCOUNT_SCHEMA_VERSION,
@@ -45,6 +45,20 @@ from .scenarios import (
     ScenarioComparison,
     ScenarioVersion,
 )
+from .sessions import (
+    ACTIVITY_LOG_EVENT_KINDS,
+    CHECKPOINT_FREQUENCIES,
+    INITIATIVE_LEVELS,
+    OPTION_PRESENTATION_KINDS,
+    OPTION_PREVIEW_TIMINGS,
+    PLANNING_SESSION_STATUSES,
+    SESSION_STATE_SCHEMA_VERSION,
+    ActivityLogEvent,
+    OptionPresentationRecord,
+    PendingDecision,
+    PlanningInteractionState,
+    PlanningSessionState,
+)
 
 __all__ = [
     "ACCOUNT_SCHEMA_VERSION",
@@ -68,14 +82,26 @@ __all__ = [
     "PersistedTripRecord",
     "RegionalDefaults",
     "CHECKPOINT_KINDS",
+    "CHECKPOINT_FREQUENCIES",
     "COMPARISON_OUTCOMES",
+    "INITIATIVE_LEVELS",
+    "OPTION_PRESENTATION_KINDS",
+    "OPTION_PREVIEW_TIMINGS",
+    "PLANNING_SESSION_STATUSES",
     "SAVED_SCENARIO_LABELS",
     "SCENARIO_STATE_SCHEMA_VERSION",
+    "SESSION_STATE_SCHEMA_VERSION",
     "SavedScenarioRecord",
     "ScenarioArtifactRefs",
     "ScenarioCheckpoint",
     "ScenarioComparison",
     "ScenarioVersion",
+    "ACTIVITY_LOG_EVENT_KINDS",
+    "ActivityLogEvent",
+    "OptionPresentationRecord",
+    "PendingDecision",
+    "PlanningInteractionState",
+    "PlanningSessionState",
     "SUMMARY_GRANULARITIES",
     "TRIP_SCHEMA_VERSION",
     "TRAVELER_PROFILE_KINDS",
