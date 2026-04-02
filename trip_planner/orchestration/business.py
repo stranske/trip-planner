@@ -211,6 +211,18 @@ def _slug(value: str) -> str:
     return "".join(char.lower() if char.isalnum() else "-" for char in value).strip("-")
 
 
+def _policy_input_decision_id(field_name: str) -> str:
+    return f"decision:policy-input:{_slug(field_name)}"
+
+
+def _comparable_decision_id(category: str) -> str:
+    return f"decision:comparables:{_slug(category)}"
+
+
+def _missing_comparable_warning_code(category: str) -> str:
+    return f"missing-comparable:{category}"
+
+
 def _missing_policy_inputs(context: BusinessWorkflowContext) -> list[str]:
     required_fields = context.objectives.justification_readiness.required_fields
     return [
@@ -292,7 +304,11 @@ def _workflow_status(
 ) -> str:
     if pending_decisions:
         return "waiting_on_user"
-    if _needs_exception_path(context) and context.proposal is None:
+    if (
+        _needs_exception_path(context)
+        and context.proposal is None
+        and not context.objectives.policy_nearest_fallback.active
+    ):
         return "blocked"
     return "active"
 
@@ -384,7 +400,7 @@ def _build_pending_decisions(
         decision_slug = _slug(field_name)
         decisions.append(
             PendingDecision(
-                decision_id=f"decision:policy-input:{decision_slug}",
+                decision_id=_policy_input_decision_id(field_name),
                 prompt=f"Provide the policy-ready detail for {field_name}.",
                 requested_at=context.generated_at,
                 choices=[
@@ -416,7 +432,7 @@ def _build_pending_decisions(
         ]
         decisions.append(
             PendingDecision(
-                decision_id=f"decision:comparables:{decision_slug}",
+                decision_id=_comparable_decision_id(category),
                 prompt=(
                     f"Collect {shortfall} more {category} comparable"
                     f"{'s' if shortfall != 1 else ''} before proposal prep?"
@@ -553,7 +569,7 @@ def _build_actions(
         PlannerAction(
             action_id="action-request-path-decision",
             action_kind="request_decision",
-            title="Confirm the compliant-first or exception-nearest business path",
+            title="Confirm the remaining policy-input and comparable checkpoints",
             stage="decision_checkpoint",
             status="pending" if pending_decisions else "skipped",
             depends_on_action_ids=["action-prepare-policy-packet"],
@@ -640,7 +656,10 @@ def _build_outputs(
                     "without performing the external policy evaluation."
                 ),
                 ref_ids=packet_ref_ids,
-                warnings=list(comparable_gaps),
+                warnings=[
+                    _missing_comparable_warning_code(category)
+                    for category in sorted(comparable_gaps)
+                ],
                 payload={
                     "selected_path": context.selected_path,
                     "proposal_id": (
@@ -712,7 +731,7 @@ def _build_outputs(
                 ref_ids=packet_ref_ids,
                 warnings=[
                     *(
-                        f"missing-comparable:{category}"
+                        _missing_comparable_warning_code(category)
                         for category in sorted(comparable_gaps)
                     ),
                     *(
@@ -793,9 +812,7 @@ def _build_transition(
             trigger="policy_constraint",
             changed_at=context.generated_at,
             reason="Business planning cannot prepare a packet until required policy inputs are captured.",
-            blocker_ids=[
-                f"policy-input:{_slug(name)}" for name in missing_policy_inputs
-            ],
+            blocker_ids=[_policy_input_decision_id(name) for name in missing_policy_inputs],
         )
     if comparable_gaps:
         return WorkflowTransition(
@@ -805,10 +822,11 @@ def _build_transition(
             changed_at=context.generated_at,
             reason="Comparable collection remains incomplete for the active business path.",
             blocker_ids=[
-                f"comparable:{category}" for category in sorted(comparable_gaps)
+                _comparable_decision_id(category) for category in sorted(comparable_gaps)
             ],
             warning_codes=[
-                f"missing-comparable:{category}" for category in sorted(comparable_gaps)
+                _missing_comparable_warning_code(category)
+                for category in sorted(comparable_gaps)
             ],
         )
     if current_stage == "policy_alignment":

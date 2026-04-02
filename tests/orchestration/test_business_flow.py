@@ -129,6 +129,63 @@ def test_missing_comparable_flow_surfaces_structured_pending_decisions() -> None
     )
     assert comparable_decision.choices[0].metadata["required_total"] == 1
     assert comparable_decision.choices[1].metadata["shortfall"] == 1
+    assert turn.actions[5].title == (
+        "Confirm the remaining policy-input and comparable checkpoints"
+    )
+
+
+def test_comparable_only_gap_uses_structured_decision_ids_in_transition_and_warnings() -> None:
+    context = _build_context("missing_comparables_flow.json")
+    context.collected_policy_inputs["need for in-person presence"] = (
+        "Lead negotiator must be physically present for renewal terms."
+    )
+    context.collected_policy_inputs["exception rationale"] = (
+        "Ground transport shortfall is the only remaining exception candidate."
+    )
+
+    turn = build_business_planner_turn(context)
+
+    assert turn.workflow_state.current_stage == "candidate_generation"
+    assert turn.transition.blocker_ids == [
+        "decision:comparables:airfare",
+        "decision:comparables:ground-transport",
+        "decision:comparables:lodging",
+    ]
+    assert turn.transition.warning_codes == [
+        "missing-comparable:airfare",
+        "missing-comparable:ground_transport",
+        "missing-comparable:lodging",
+    ]
+    warning_output = next(
+        output for output in turn.outputs if output.output_kind == "warning"
+    )
+    assert warning_output.warnings == [
+        "missing-comparable:airfare",
+        "missing-comparable:ground_transport",
+        "missing-comparable:lodging",
+    ]
+
+
+def test_exception_path_without_proposal_stays_active_when_fallback_is_available() -> None:
+    context = _build_context("exception_prep_flow.json")
+
+    turn = build_business_planner_turn(
+        BusinessWorkflowContext(
+            trip_record=context.trip_record,
+            business_profile=context.business_profile,
+            objectives=context.objectives,
+            generated_at=context.generated_at,
+            constraint_set=context.constraint_set,
+            proposal=None,
+            comparable_inventory=context.comparable_inventory,
+            collected_policy_inputs=context.collected_policy_inputs,
+            selected_path=context.selected_path,
+        )
+    )
+
+    assert turn.workflow_state.current_stage == "policy_alignment"
+    assert turn.workflow_state.status == "active"
+    assert turn.next_step.recommended_action_id == "action-prepare-policy-packet"
 
 
 def test_exception_prep_flow_keeps_exception_nearest_path_explicit() -> None:
