@@ -224,8 +224,11 @@ def test_scenario_repository_protocol_can_restore_and_compare_versions() -> None
         focus_areas=["route_coherence", "rollback"],
     )
 
+    current_record = repo.get_scenario(baseline.saved_scenario_id)
+
     assert restored.based_on_version_id == "saved-scenario:kyoto-baseline-v1"
-    assert repo.get_scenario(baseline.saved_scenario_id).current_version_id == restored.version_id
+    assert current_record is not None
+    assert current_record.current_version_id == restored.version_id
     assert len(repo.list_versions(baseline.saved_scenario_id)) == 3
     assert repo.list_scenarios(label="fallback")[0].saved_scenario_id == fallback.saved_scenario_id
     assert comparison.outcome == "preferred"
