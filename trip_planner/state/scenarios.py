@@ -36,10 +36,14 @@ COMPARISON_OUTCOMES: tuple[str, ...] = (
 )
 
 
-def _require_unique_strings(values: list[str], field_name: str) -> None:
+def _require_string_list(values: list[str], field_name: str) -> None:
     if isinstance(values, str) or not isinstance(values, list):
         raise ValueError(f"{field_name} must be a list of strings")
     require_strings(values, field_name)
+
+
+def _require_unique_strings(values: list[str], field_name: str) -> None:
+    _require_string_list(values, field_name)
     if len(set(values)) != len(values):
         raise ValueError(f"{field_name} cannot contain duplicates")
 
@@ -83,7 +87,7 @@ class ScenarioArtifactRefs:
         ):
             require_optional_non_empty(getattr(self, field_name), field_name)
         _require_unique_strings(self.option_set_ids, "option_set_ids")
-        require_strings(self.notes, "notes")
+        _require_string_list(self.notes, "notes")
 
         if not any(
             (
@@ -96,9 +100,13 @@ class ScenarioArtifactRefs:
                 self.budget_state_id,
                 self.policy_state_id,
                 self.session_state_id,
+                self.leisure_profile_id,
+                self.business_profile_id,
             )
         ):
-            raise ValueError("ScenarioArtifactRefs must capture at least one saved reference")
+            raise ValueError(
+                "ScenarioArtifactRefs must capture at least one saved reference"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -129,9 +137,9 @@ class ScenarioVersion:
     title: str
     label: str
     created_at: str
+    snapshot_refs: ScenarioArtifactRefs
     created_by: str = "system"
     scope: str = "route"
-    snapshot_refs: ScenarioArtifactRefs = field(default_factory=ScenarioArtifactRefs)
     based_on_version_id: str | None = None
     summary: str = ""
     tags: list[str] = field(default_factory=list)
@@ -152,7 +160,7 @@ class ScenarioVersion:
             raise ValueError("snapshot_refs must be a ScenarioArtifactRefs")
         require_optional_non_empty(self.based_on_version_id, "based_on_version_id")
         _require_unique_strings(self.tags, "tags")
-        require_strings(self.notes, "notes")
+        _require_string_list(self.notes, "notes")
 
         if self.label in {"compliant_first", "exception_nearest"}:
             if self.snapshot_refs.business_profile_id is None:
@@ -163,14 +171,21 @@ class ScenarioVersion:
                 raise ValueError(
                     f"{self.label} versions require snapshot_refs.policy_state_id"
                 )
-        if self.label == "in_trip_revision" and self.snapshot_refs.session_state_id is None:
-            raise ValueError("in_trip_revision versions require snapshot_refs.session_state_id")
+        if (
+            self.label == "in_trip_revision"
+            and self.snapshot_refs.session_state_id is None
+        ):
+            raise ValueError(
+                "in_trip_revision versions require snapshot_refs.session_state_id"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "ScenarioVersion":
+        if "snapshot_refs" not in payload:
+            raise ValueError("snapshot_refs is required")
         return cls(
             version_id=payload["version_id"],
             saved_scenario_id=payload["saved_scenario_id"],
@@ -178,11 +193,9 @@ class ScenarioVersion:
             title=payload["title"],
             label=payload["label"],
             created_at=payload["created_at"],
+            snapshot_refs=ScenarioArtifactRefs.from_dict(payload["snapshot_refs"]),
             created_by=payload.get("created_by", "system"),
             scope=payload.get("scope", "route"),
-            snapshot_refs=ScenarioArtifactRefs.from_dict(
-                payload.get("snapshot_refs", {})
-            ),
             based_on_version_id=payload.get("based_on_version_id"),
             summary=payload.get("summary", ""),
             tags=_payload_list(payload, "tags", []),
@@ -212,9 +225,11 @@ class ScenarioComparison:
         if self.outcome not in COMPARISON_OUTCOMES:
             raise ValueError(f"outcome must be one of {COMPARISON_OUTCOMES}")
         if self.baseline_scenario_id == self.candidate_scenario_id:
-            raise ValueError("candidate_scenario_id must differ from baseline_scenario_id")
+            raise ValueError(
+                "candidate_scenario_id must differ from baseline_scenario_id"
+            )
         _require_unique_strings(self.focus_areas, "focus_areas")
-        require_strings(self.notes, "notes")
+        _require_string_list(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -260,7 +275,7 @@ class SavedScenarioRecord:
                 f"schema_version must be {SCENARIO_STATE_SCHEMA_VERSION!r}"
             )
         _require_unique_strings(self.tags, "tags")
-        require_strings(self.notes, "notes")
+        _require_string_list(self.notes, "notes")
 
         version_ids = [item.version_id for item in self.versions]
         if len(set(version_ids)) != len(version_ids):
@@ -277,7 +292,9 @@ class SavedScenarioRecord:
             if comparison.trip_id != self.trip_id:
                 raise ValueError("comparisons must share the record trip_id")
             if comparison.baseline_scenario_id != self.saved_scenario_id:
-                raise ValueError("comparisons must reference the record scenario as baseline")
+                raise ValueError(
+                    "comparisons must reference the record scenario as baseline"
+                )
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -296,9 +313,7 @@ class SavedScenarioRecord:
                 ScenarioComparison.from_dict(item)
                 for item in _payload_list(payload, "comparisons", [])
             ],
-            schema_version=payload.get(
-                "schema_version", SCENARIO_STATE_SCHEMA_VERSION
-            ),
+            schema_version=payload.get("schema_version", SCENARIO_STATE_SCHEMA_VERSION),
             tags=_payload_list(payload, "tags", []),
             notes=_payload_list(payload, "notes", []),
         )
@@ -327,7 +342,7 @@ class ScenarioCheckpoint:
         if self.checkpoint_kind not in CHECKPOINT_KINDS:
             raise ValueError(f"checkpoint_kind must be one of {CHECKPOINT_KINDS}")
         _require_unique_strings(self.pending_decision_ids, "pending_decision_ids")
-        require_strings(self.notes, "notes")
+        _require_string_list(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

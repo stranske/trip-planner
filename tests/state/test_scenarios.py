@@ -15,7 +15,9 @@ from trip_planner.state.scenarios import (
 
 
 def _fixture_path(name: str) -> Path:
-    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "state" / "scenarios"
+    fixtures_dir = (
+        Path(__file__).resolve().parents[1] / "fixtures" / "state" / "scenarios"
+    )
     return fixtures_dir / name
 
 
@@ -32,11 +34,16 @@ def test_saved_scenario_record_loads_leisure_pair_fixture() -> None:
     assert baseline.current_version_id == "saved-scenario:kyoto-baseline-v2"
     assert baseline.versions[-1].label == "preferred"
     assert (
-        baseline.versions[-1].snapshot_refs.budget_state_id == "budget-state:kyoto-spring"
+        baseline.versions[-1].snapshot_refs.budget_state_id
+        == "budget-state:kyoto-spring"
     )
     assert fallback.versions[0].label == "fallback"
     assert comparison.outcome == "preferred"
-    assert comparison.focus_areas == ["recovery", "route_coherence", "weather_resilience"]
+    assert comparison.focus_areas == [
+        "recovery",
+        "route_coherence",
+        "weather_resilience",
+    ]
 
 
 def test_saved_scenario_record_loads_business_policy_pair_fixture() -> None:
@@ -45,7 +52,10 @@ def test_saved_scenario_record_loads_business_policy_pair_fixture() -> None:
     exception = SavedScenarioRecord.from_dict(payload["records"][1])
 
     assert compliant.versions[0].label == "compliant_first"
-    assert compliant.versions[0].snapshot_refs.policy_state_id == "policy-state:q2-client-summit"
+    assert (
+        compliant.versions[0].snapshot_refs.policy_state_id
+        == "policy-state:q2-client-summit"
+    )
     assert exception.versions[0].label == "exception_nearest"
     assert (
         exception.versions[0].snapshot_refs.business_profile_id
@@ -59,7 +69,9 @@ def test_scenario_checkpoint_loads_in_trip_revision_fixture() -> None:
     checkpoint = ScenarioCheckpoint.from_dict(payload["checkpoint"])
 
     assert record.versions[0].label == "in_trip_revision"
-    assert record.versions[0].snapshot_refs.session_state_id == "session-state:kyoto-live"
+    assert (
+        record.versions[0].snapshot_refs.session_state_id == "session-state:kyoto-live"
+    )
     assert checkpoint.checkpoint_kind == "in_trip_revision"
     assert checkpoint.pending_decision_ids == [
         "decision:move-temple-visit",
@@ -75,9 +87,82 @@ def test_scenario_artifact_refs_reject_duplicate_option_set_ids() -> None:
         )
 
 
+def test_scenario_artifact_refs_accept_profile_only_reference() -> None:
+    refs = ScenarioArtifactRefs(leisure_profile_id="leisure-profile:kyoto")
+
+    assert refs.leisure_profile_id == "leisure-profile:kyoto"
+
+
+def test_scenario_models_reject_string_notes() -> None:
+    version = ScenarioVersion(
+        version_id="saved-scenario:test-v1",
+        saved_scenario_id="saved-scenario:test",
+        trip_id="trip-1",
+        title="Baseline",
+        label="baseline",
+        created_at="2026-04-02T12:00:00Z",
+        snapshot_refs=ScenarioArtifactRefs(objective_id="objective:1"),
+    )
+
+    with pytest.raises(ValueError, match="notes must be a list of strings"):
+        ScenarioArtifactRefs(objective_id="objective:1", notes="oops")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="notes must be a list of strings"):
+        ScenarioVersion(
+            version_id=version.version_id,
+            saved_scenario_id=version.saved_scenario_id,
+            trip_id=version.trip_id,
+            title=version.title,
+            label=version.label,
+            created_at=version.created_at,
+            snapshot_refs=version.snapshot_refs,
+            notes="oops",  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValueError, match="notes must be a list of strings"):
+        ScenarioComparison(
+            comparison_id="comparison:test",
+            trip_id="trip-1",
+            baseline_scenario_id="saved-scenario:test",
+            candidate_scenario_id="saved-scenario:alt",
+            compared_at="2026-04-02T12:05:00Z",
+            outcome="tradeoff",
+            summary="Compare baseline to fallback.",
+            notes="oops",  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValueError, match="notes must be a list of strings"):
+        SavedScenarioRecord(
+            saved_scenario_id="saved-scenario:test",
+            trip_id="trip-1",
+            current_version_id=version.version_id,
+            versions=[version],
+            notes="oops",  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValueError, match="notes must be a list of strings"):
+        ScenarioCheckpoint(
+            checkpoint_id="checkpoint:test",
+            trip_id="trip-1",
+            saved_scenario_id="saved-scenario:test",
+            version_id=version.version_id,
+            created_at="2026-04-02T12:10:00Z",
+            checkpoint_kind="baseline_capture",
+            title="Checkpoint",
+            notes="oops",  # type: ignore[arg-type]
+        )
+
+
+def test_scenario_version_requires_snapshot_refs_in_payload() -> None:
+    payload = _load_payload("leisure_baseline_vs_fallback.json")["records"][0][
+        "versions"
+    ][0]
+    payload.pop("snapshot_refs")
+
+    with pytest.raises(ValueError, match="snapshot_refs is required"):
+        ScenarioVersion.from_dict(payload)
+
+
 def test_scenario_version_rejects_in_trip_revision_without_session_reference() -> None:
     with pytest.raises(
-        ValueError, match="in_trip_revision versions require snapshot_refs.session_state_id"
+        ValueError,
+        match="in_trip_revision versions require snapshot_refs.session_state_id",
     ):
         ScenarioVersion(
             version_id="saved-scenario:broken-v1",
@@ -94,7 +179,9 @@ def test_saved_scenario_record_rejects_unknown_current_version() -> None:
     payload = _load_payload("leisure_baseline_vs_fallback.json")["records"][0]
     payload["current_version_id"] = "saved-scenario:missing"
 
-    with pytest.raises(ValueError, match="current_version_id must reference a saved version"):
+    with pytest.raises(
+        ValueError, match="current_version_id must reference a saved version"
+    ):
         SavedScenarioRecord.from_dict(payload)
 
 
@@ -133,7 +220,11 @@ def test_scenario_repository_protocol_can_restore_and_compare_versions() -> None
             summary: str = "",
         ) -> ScenarioVersion:
             record = self._records[saved_scenario_id]
-            source = next(version for version in record.versions if version.version_id == version_id)
+            source = next(
+                version
+                for version in record.versions
+                if version.version_id == version_id
+            )
             restored = ScenarioVersion(
                 version_id=f"{saved_scenario_id}-v{len(record.versions) + 1}",
                 saved_scenario_id=saved_scenario_id,
@@ -167,7 +258,8 @@ def test_scenario_repository_protocol_can_restore_and_compare_versions() -> None
                     record
                     for record in results
                     if any(
-                        version.version_id == record.current_version_id and version.label == label
+                        version.version_id == record.current_version_id
+                        and version.label == label
                         for version in record.versions
                     )
                 ]
@@ -230,7 +322,10 @@ def test_scenario_repository_protocol_can_restore_and_compare_versions() -> None
     assert current_record is not None
     assert current_record.current_version_id == restored.version_id
     assert len(repo.list_versions(baseline.saved_scenario_id)) == 3
-    assert repo.list_scenarios(label="fallback")[0].saved_scenario_id == fallback.saved_scenario_id
+    assert (
+        repo.list_scenarios(label="fallback")[0].saved_scenario_id
+        == fallback.saved_scenario_id
+    )
     assert comparison.outcome == "preferred"
     assert comparison.focus_areas == ["route_coherence", "rollback"]
 
@@ -243,7 +338,9 @@ def test_scenario_checkpoint_repository_protocol_can_filter_checkpoints() -> Non
         def get_checkpoint(self, checkpoint_id: str) -> ScenarioCheckpoint | None:
             return self._checkpoints.get(checkpoint_id)
 
-        def create_checkpoint(self, checkpoint: ScenarioCheckpoint) -> ScenarioCheckpoint:
+        def create_checkpoint(
+            self, checkpoint: ScenarioCheckpoint
+        ) -> ScenarioCheckpoint:
             self._checkpoints[checkpoint.checkpoint_id] = checkpoint
             return checkpoint
 
@@ -259,7 +356,9 @@ def test_scenario_checkpoint_repository_protocol_can_filter_checkpoints() -> Non
                 results = [item for item in results if item.trip_id == trip_id]
             if saved_scenario_id is not None:
                 results = [
-                    item for item in results if item.saved_scenario_id == saved_scenario_id
+                    item
+                    for item in results
+                    if item.saved_scenario_id == saved_scenario_id
                 ]
             if checkpoint_kind is not None:
                 results = [
