@@ -19,7 +19,9 @@ TRIP_STATUSES: tuple[str, ...] = (
 TRAVELER_PARTY_KINDS: tuple[str, ...] = ("solo", "pair", "family", "friends", "team")
 
 
-def _payload_list(payload: dict[str, Any], field_name: str, default: list[Any]) -> list[Any]:
+def _payload_list(
+    payload: dict[str, Any], field_name: str, default: list[Any]
+) -> list[Any]:
     value = payload.get(field_name, default)
     if not isinstance(value, list):
         raise ValueError(f"{field_name} must be a list")

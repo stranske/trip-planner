@@ -29,7 +29,9 @@ def test_trip_record_loads_leisure_draft_fixture() -> None:
 
     assert payload["trip"]["trip_id"] == "trip-leisure-kyoto-draft"
     assert payload["trip"]["status"] == "draft"
-    assert payload["artifact_refs"]["scenario_search_id"] == "scenario-search:kyoto-spring"
+    assert (
+        payload["artifact_refs"]["scenario_search_id"] == "scenario-search:kyoto-spring"
+    )
     assert payload["artifact_refs"]["saved_scenario_ids"] == [
         "saved-scenario:baseline-kyoto",
         "saved-scenario:fallback-osaka",
@@ -59,16 +61,24 @@ def test_validate_trip_status_transition_rejects_skipping_booked_state() -> None
 
 
 def test_trip_record_rejects_leisure_policy_reference() -> None:
-    payload = json.loads(_fixture_path("leisure_draft_trip.json").read_text(encoding="utf-8"))
+    payload = json.loads(
+        _fixture_path("leisure_draft_trip.json").read_text(encoding="utf-8")
+    )
     payload["artifact_refs"]["policy_state_id"] = "policy-state:should-not-exist"
 
-    with pytest.raises(ValueError, match="leisure trips cannot persist policy_state_id"):
+    with pytest.raises(
+        ValueError, match="leisure trips cannot persist policy_state_id"
+    ):
         PersistedTripRecord.from_dict(payload)
 
 
 def test_trip_record_rejects_duplicate_saved_scenarios() -> None:
-    with pytest.raises(ValueError, match="saved_scenario_ids cannot contain duplicates"):
-        PersistedTripArtifactRefs(saved_scenario_ids=["saved-scenario:1", "saved-scenario:1"])
+    with pytest.raises(
+        ValueError, match="saved_scenario_ids cannot contain duplicates"
+    ):
+        PersistedTripArtifactRefs(
+            saved_scenario_ids=["saved-scenario:1", "saved-scenario:1"]
+        )
 
 
 def test_trip_record_rejects_string_instead_of_list_for_option_set_ids() -> None:
@@ -77,7 +87,9 @@ def test_trip_record_rejects_string_instead_of_list_for_option_set_ids() -> None
 
 
 def test_trip_record_rejects_status_history_that_ends_at_wrong_status() -> None:
-    payload = json.loads(_fixture_path("business_active_trip.json").read_text(encoding="utf-8"))
+    payload = json.loads(
+        _fixture_path("business_active_trip.json").read_text(encoding="utf-8")
+    )
     payload["status_history"].append(
         {
             "from_status": "booked",
@@ -88,7 +100,9 @@ def test_trip_record_rejects_status_history_that_ends_at_wrong_status() -> None:
         }
     )
 
-    with pytest.raises(ValueError, match="status_history must end at the persisted trip status"):
+    with pytest.raises(
+        ValueError, match="status_history must end at the persisted trip status"
+    ):
         PersistedTripRecord.from_dict(payload)
 
 
@@ -191,10 +205,14 @@ def test_trip_repository_protocol_can_store_and_transition_trip_state() -> None:
         ) -> list[PersistedTripRecord]:
             results = list(self._records.values())
             if user_id is not None:
-                results = [record for record in results if record.trip.user_id == user_id]
+                results = [
+                    record for record in results if record.trip.user_id == user_id
+                ]
             if owner_profile_id is not None:
                 results = [
-                    record for record in results if record.owner_profile_id == owner_profile_id
+                    record
+                    for record in results
+                    if record.owner_profile_id == owner_profile_id
                 ]
             if mode is not None:
                 results = [record for record in results if record.trip.mode == mode]
@@ -226,7 +244,9 @@ def test_trip_repository_protocol_can_store_and_transition_trip_state() -> None:
     assert stored is not None
     assert stored.trip.status == "archived"
     assert stored.lifecycle.archived_at == "2026-04-02T04:40:00Z"
-    assert [version.version_id for version in repo.list_versions(record.trip.trip_id)] == [
+    assert [
+        version.version_id for version in repo.list_versions(record.trip.trip_id)
+    ] == [
         first.version_id,
         second.version_id,
         f"{record.trip.trip_id}-v3",
@@ -239,8 +259,9 @@ def test_validate_trip_status_transition_rejects_status_without_transition_confi
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delitem(
-        __import__("trip_planner.state.trips", fromlist=["ALLOWED_TRIP_STATUS_TRANSITIONS"])
-        .ALLOWED_TRIP_STATUS_TRANSITIONS,
+        __import__(
+            "trip_planner.state.trips", fromlist=["ALLOWED_TRIP_STATUS_TRANSITIONS"]
+        ).ALLOWED_TRIP_STATUS_TRANSITIONS,
         "draft",
         raising=False,
     )

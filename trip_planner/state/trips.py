@@ -32,7 +32,9 @@ def _require_unique_strings(values: list[str], field_name: str) -> None:
         raise ValueError(f"{field_name} cannot contain duplicates")
 
 
-def _payload_list(payload: dict[str, Any], field_name: str, default: list[Any]) -> list[Any]:
+def _payload_list(
+    payload: dict[str, Any], field_name: str, default: list[Any]
+) -> list[Any]:
     value = payload.get(field_name, default)
     if not isinstance(value, list):
         raise ValueError(f"{field_name} must be a list")
@@ -193,13 +195,19 @@ class PersistedTripRecord:
         if self.revision <= 0:
             raise ValueError("revision must be positive")
         require_string_mapping(self.external_refs, "external_refs")
-        if any(not isinstance(value, str) or not value for value in self.external_refs.values()):
+        if any(
+            not isinstance(value, str) or not value
+            for value in self.external_refs.values()
+        ):
             raise ValueError("external_refs must contain non-empty string values")
         _require_unique_strings(self.tags, "tags")
         require_strings(self.notes, "notes")
         if self.trip.mode not in TRIP_MODES:
             raise ValueError(f"trip.mode must be one of {TRIP_MODES}")
-        if self.trip.mode == "leisure" and self.artifact_refs.policy_state_id is not None:
+        if (
+            self.trip.mode == "leisure"
+            and self.artifact_refs.policy_state_id is not None
+        ):
             raise ValueError("leisure trips cannot persist policy_state_id")
         if self.trip.status == "archived" and self.lifecycle.archived_at is None:
             raise ValueError("archived trips require lifecycle.archived_at")
