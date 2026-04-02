@@ -1,0 +1,27 @@
+{
+  "event": {
+    "trigger_event_id": "trigger:kyoto-travel-delay",
+    "trip_id": "trip-leisure-kyoto-live",
+    "session_state_id": "session-state:kyoto-rainy-day",
+    "trigger_kind": "delay",
+    "severity": "critical",
+    "change_scope": "trip_wide",
+    "observed_at": "2026-04-02T11:28:00Z",
+    "summary": "A major transit delay invalidated the active route and requires an immediate fallback.",
+    "actor": "planner",
+    "source": "transport_feed",
+    "trigger_codes": [
+      "major_delay"
+    ],
+    "affected_option_ids": [
+      "option:indoor-museum",
+      "option:tea-house"
+    ],
+    "affected_checkpoint_id": "checkpoint:rainy-day-1100",
+    "affected_saved_scenario_id": "saved-scenario:kyoto-rainy-day",
+    "metadata": {
+      "option_set_id": "option-set:rainy-day-v1",
+      "delay_minutes": "145"
+    }
+  }
+}
