@@ -41,7 +41,7 @@ def test_budget_plan_loads_leisure_fixture_with_scenario_variants() -> None:
     assert record.scenario_budgets[1].allocations[3].category_key == "local_mobility"
 
 
-def test_budget_scenario_to_dict_round_trips_without_derived_fields() -> None:
+def test_budget_plan_to_dict_preserves_scenario_derived_totals() -> None:
     record = _load_plan("leisure_budget_plan.json")
     scenario = record.scenario_budgets[0]
     payload = scenario.to_dict()
