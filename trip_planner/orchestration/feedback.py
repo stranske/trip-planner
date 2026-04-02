@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Any
 
 from trip_planner.contracts._validators import (
     require_non_empty,
@@ -15,18 +14,22 @@ from trip_planner.preferences import (
     RevealedPreferenceSignal,
     RevealedPreferenceUpdate,
     build_revealed_preference_update,
+    schema as preference_schema,
 )
 from trip_planner.preferences.autonomy import AUTONOMY_FEEDBACK_KINDS
 from trip_planner.preferences.models import LeisurePreferenceProfile
 from trip_planner.state import (
     ActivityLogEvent,
     OptionPresentationRecord,
+    PendingDecision as SessionPendingDecision,
     PlanningInteractionState,
     PlanningSessionState,
 )
 
 from .models import (
+    DecisionOption,
     NextStepSummary,
+    PendingDecision,
     PlannerAction,
     PlannerOutput,
     PlannerTurn,
@@ -77,6 +80,10 @@ class FeedbackLoopContext:
             raise ValueError("autonomy_profile must be a PlanningAutonomyProfile")
         if self.session_state.mode != "leisure":
             raise ValueError("session_state must represent a leisure session")
+        if self.trip_stage not in preference_schema.PLANNING_STAGES:
+            raise ValueError(
+                f"trip_stage must be one of {preference_schema.PLANNING_STAGES}"
+            )
         require_non_empty(self.generated_at, "generated_at")
 
 
@@ -122,9 +129,7 @@ class OptionFeedbackEvent:
         require_optional_non_empty(self.fallback_title, "fallback_title")
         if self.feedback_kind == "save_as_fallback":
             if self.fallback_saved_scenario_id is None:
-                raise ValueError(
-                    "save_as_fallback requires fallback_saved_scenario_id"
-                )
+                raise ValueError("save_as_fallback requires fallback_saved_scenario_id")
             if self.fallback_title is None:
                 raise ValueError("save_as_fallback requires fallback_title")
 
@@ -255,6 +260,7 @@ def build_feedback_loop_result(
         activity_event,
         scenario_capture_request,
         context.generated_at,
+        context.trip_stage,
     )
 
     return FeedbackLoopResult(
@@ -289,11 +295,15 @@ def _apply_feedback_to_presentation(
             rejected_option_ids.append(event.option_id)
         if selected_option_id == event.option_id:
             selected_option_id = None
-    else:
+    elif event.feedback_kind == "accept_option":
         selected_option_id = event.option_id
         rejected_option_ids = [
-            option_id for option_id in rejected_option_ids if option_id != event.option_id
+            option_id
+            for option_id in rejected_option_ids
+            if option_id != event.option_id
         ]
+    elif event.feedback_kind == "save_as_fallback":
+        pass
 
     notes.append(f"feedback:{event.feedback_kind}:{event.summary}")
 
@@ -360,7 +370,9 @@ def _interaction_state_from_behavior(
         notes.append("feedback-loop updated planner autonomy pacing.")
     return replace(
         previous,
-        initiative_level=_initiative_level_from_preference(preference.system_initiative),
+        initiative_level=_initiative_level_from_preference(
+            preference.system_initiative
+        ),
         checkpoint_frequency=(
             "phase" if behavior.ask_before_next_major_change else "manual"
         ),
@@ -384,7 +396,7 @@ def _initiative_level_from_preference(system_initiative: float) -> str:
 def _updated_pending_decisions(
     session_state: PlanningSessionState,
     event: OptionFeedbackEvent,
-) -> list[Any]:
+) -> list[SessionPendingDecision]:
     if event.feedback_kind in {"reject_option", "request_alternatives"}:
         return []
     return list(session_state.pending_decisions)
@@ -431,7 +443,7 @@ def _build_activity_event(
 ) -> ActivityLogEvent:
     event_kind = {
         "accept_option": "decision_recorded",
-        "reject_option": "rerank_requested",
+        "reject_option": "option_rejected",
         "request_alternatives": "rerank_requested",
         "save_as_fallback": "scenario_saved",
     }[event.feedback_kind]
@@ -442,7 +454,7 @@ def _build_activity_event(
         occurred_at=generated_at,
         event_kind=event_kind,
         summary=event.summary,
-        actor="planner",
+        actor="user",
         related_option_set_id=presentation.option_set_id,
         saved_scenario_id=(
             scenario_capture_request.saved_scenario_id
@@ -466,6 +478,7 @@ def _build_planner_turn(
     activity_event: ActivityLogEvent,
     scenario_capture_request: ScenarioCaptureRequest | None,
     generated_at: str,
+    trip_stage: str,
 ) -> PlannerTurn:
     rerank = event.feedback_kind in {"reject_option", "request_alternatives"}
     current_stage = "ranking" if rerank else "decision_checkpoint"
@@ -501,7 +514,7 @@ def _build_planner_turn(
                 "feedback_kind": event.feedback_kind,
                 "autonomy_feedback_kinds": list(event.autonomy_feedback_kinds),
                 "target_research_passes": autonomy_profile.behavior_for_stage(
-                    "inventory_selection"
+                    trip_stage
                 ).target_research_passes,
             },
         ),
@@ -587,7 +600,8 @@ def _build_planner_turn(
                     payload={
                         "selected_option_id": presentation.selected_option_id or "",
                         "pending_decision_ids": [
-                            decision.decision_id for decision in session_state.pending_decisions
+                            decision.decision_id
+                            for decision in session_state.pending_decisions
                         ],
                     },
                 )
@@ -635,7 +649,7 @@ def _build_planner_turn(
         current_stage=current_stage,
         status=status,
         recorded_at=generated_at,
-        pending_decisions=[],
+        pending_decisions=_map_pending_decisions(session_state.pending_decisions),
         open_action_ids=[
             action.action_id
             for action in actions
@@ -689,6 +703,46 @@ def _build_planner_turn(
             f"presentation:{presentation.presentation_id}",
         ],
     )
+
+
+def _map_pending_decisions(
+    session_decisions: list[SessionPendingDecision],
+) -> list[PendingDecision]:
+    decisions: list[PendingDecision] = []
+    for session_decision in session_decisions:
+        choices = [
+            DecisionOption(
+                choice_id=f"{session_decision.decision_id}:choice:{index + 1}",
+                label=choice,
+                recommended=index == 0,
+            )
+            for index, choice in enumerate(session_decision.choices)
+        ]
+        selected_choice_id = None
+        if session_decision.selected_choice is not None:
+            for choice in choices:
+                if choice.label == session_decision.selected_choice:
+                    selected_choice_id = choice.choice_id
+                    break
+        related_option_ids = []
+        if session_decision.related_option_set_id is not None:
+            related_option_ids.append(session_decision.related_option_set_id)
+        if session_decision.related_saved_scenario_id is not None:
+            related_option_ids.append(session_decision.related_saved_scenario_id)
+        decisions.append(
+            PendingDecision(
+                decision_id=session_decision.decision_id,
+                prompt=session_decision.prompt,
+                requested_at=session_decision.created_at,
+                choices=choices,
+                blocking=session_decision.blocking,
+                selected_choice_id=selected_choice_id,
+                due_by=session_decision.due_by,
+                notes=list(session_decision.notes),
+                related_option_ids=related_option_ids,
+            )
+        )
+    return decisions
 
 
 def _comparison_summary(comparison_depth: str) -> str:

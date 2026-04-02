@@ -82,7 +82,10 @@ def test_reject_and_rerank_clears_checkpoint_and_updates_autonomy() -> None:
     assert result.updated_session_state.pending_decisions == []
     assert result.activity_event.event_kind == "rerank_requested"
     assert result.planner_turn.next_step.recommended_action_id == "action-rank-options"
-    assert result.updated_session_state.interaction_state.auto_advance_research_passes > 1
+    assert (
+        result.updated_session_state.interaction_state.auto_advance_research_passes > 1
+    )
+    assert result.planner_turn.workflow_state.pending_decisions == []
 
 
 def test_save_as_fallback_emits_structured_scenario_capture_request() -> None:
@@ -103,6 +106,34 @@ def test_save_as_fallback_emits_structured_scenario_capture_request() -> None:
     assert result.planner_turn.next_step.recommended_action_id == (
         "action-persist-fallback"
     )
+    presentation = result.updated_session_state.recent_option_presentations[0]
+    assert presentation.selected_option_id is None
+    assert presentation.rejected_option_ids == ["option:osaka-daytrip"]
+    assert result.activity_event.actor == "user"
+    assert result.planner_turn.workflow_state.pending_decisions[0].decision_id == (
+        "decision:save-baseline"
+    )
+
+
+def test_feedback_context_rejects_invalid_trip_stage() -> None:
+    fixture = load_fixture_map()["discovery-wanderer"]
+    with pytest.raises(ValueError, match="trip_stage"):
+        FeedbackLoopContext(
+            preference_profile=fixture.profile,
+            session_state=_load_session(),
+            autonomy_profile=PlanningAutonomyProfile(),
+            generated_at="2026-04-02T15:00:00Z",
+            trip_stage="bad-stage",
+        )
+
+
+def test_reject_option_records_option_rejected_activity() -> None:
+    event = _load_event("reject_and_rerank.json")
+    event.feedback_kind = "reject_option"
+    result = build_feedback_loop_result(_context(), event)
+
+    assert result.activity_event.event_kind == "option_rejected"
+    assert result.activity_event.actor == "user"
 
 
 def test_feedback_rejects_unknown_option_id() -> None:
