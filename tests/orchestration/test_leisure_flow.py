@@ -161,6 +161,13 @@ def test_delegated_leisure_flow_auto_advances_to_save_ready_checkpoint() -> None
     assert turn.outputs[0].output_kind == "ranked_scenarios"
     assert turn.outputs[1].output_kind == "status_update"
     assert turn.workflow_state.open_action_ids == ["action-persist-state"]
+    assert turn.actions[0].payload["activity_log_id"] == "activity-log:kyoto-spring"
+    assert turn.actions[1].payload["ask_before_major_change"] is False
+    assert turn.actions[3].payload["scenario_count"] == 2
+    assert turn.actions[4].payload["source_refs"] == [
+        "ranked-results:kyoto-spring",
+        "objective:kyoto-spring",
+    ]
 
 
 def test_collaborative_leisure_flow_waits_on_structured_checkpoint() -> None:
@@ -172,6 +179,8 @@ def test_collaborative_leisure_flow_waits_on_structured_checkpoint() -> None:
     assert turn.next_step.blocking_decision_ids == ["decision:save-baseline"]
     assert turn.outputs[1].output_kind == "decision_request"
     assert "action-request-decision" in turn.workflow_state.open_action_ids
+    assert turn.actions[5].payload["decision_ids"] == ["decision:save-baseline"]
+    assert turn.actions[6].payload["decision_ids"] == ["decision:save-baseline"]
 
 
 def test_revised_leisure_flow_returns_to_ranking_after_feedback() -> None:
@@ -185,6 +194,26 @@ def test_revised_leisure_flow_returns_to_ranking_after_feedback() -> None:
     assert turn.outputs[1].output_kind == "status_update"
     assert turn.workflow_state.open_action_ids == ["action-rank-options"]
     assert turn.transition.warning_codes == ["feedback_rejected_option_set"]
+    assert turn.actions[-1].payload["rejected_option_ids"] == [
+        "option:osaka-daytrip"
+    ]
+
+
+def test_collect_context_omits_missing_activity_log_id() -> None:
+    trip = _trip_record()
+    session = _session_state("delegated_planning_flow.json")
+    session.activity_log_id = None
+
+    turn = build_leisure_planner_turn(
+        LeisureWorkflowContext(
+            trip_record=trip,
+            session_state=session,
+            scenario_search=_scenario_search(),
+            generated_at="2026-04-02T15:00:00Z",
+        )
+    )
+
+    assert "activity_log_id" not in turn.actions[0].payload
 
 
 def test_builder_rejects_trip_and_session_mismatch() -> None:

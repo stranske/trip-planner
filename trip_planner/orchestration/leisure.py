@@ -235,11 +235,7 @@ def _build_actions(
             title="Load persisted leisure session context",
             stage="intake",
             status="completed",
-            payload={
-                "trip_id": trip_id,
-                "session_state_id": session.session_state_id,
-                "activity_log_id": session.activity_log_id or "",
-            },
+            payload=_collect_context_payload(trip_id, session),
         ),
         PlannerAction(
             action_id="action-refresh-preferences",
@@ -250,9 +246,7 @@ def _build_actions(
             payload={
                 "interaction_style": session.interaction_state.interaction_style,
                 "initiative_level": session.interaction_state.initiative_level,
-                "ask_before_major_change": str(
-                    session.interaction_state.ask_before_major_change
-                ).lower(),
+                "ask_before_major_change": session.interaction_state.ask_before_major_change,
             },
         ),
         PlannerAction(
@@ -273,7 +267,7 @@ def _build_actions(
             stage="candidate_generation",
             status="completed",
             payload={
-                "scenario_count": str(len(scenario_search.scenarios)),
+                "scenario_count": len(scenario_search.scenarios),
                 "source_result_set_id": scenario_search.source_result_set_id,
             },
         ),
@@ -299,7 +293,7 @@ def _build_actions(
             payload={
                 "search_id": scenario_search.search_id,
                 "top_scenario_id": scenario_search.scenarios[0].scenario_id,
-                "source_refs": ",".join(scenario_search.source_refs),
+                "source_refs": list(scenario_search.source_refs),
             },
         )
     )
@@ -334,7 +328,7 @@ def _build_actions(
                     status="in_progress",
                     depends_on_action_ids=["action-rank-options"],
                     payload={
-                        "decision_ids": ",".join(decision_ids),
+                        "decision_ids": decision_ids,
                         "latest_option_set_id": (
                             latest_presentation.option_set_id
                             if latest_presentation is not None
@@ -350,7 +344,7 @@ def _build_actions(
                     status="pending",
                     depends_on_action_ids=["action-request-decision"],
                     payload={
-                        "decision_ids": ",".join(decision_ids),
+                        "decision_ids": decision_ids,
                         "current_saved_scenario_id": session.current_saved_scenario_id
                         or "",
                     },
@@ -367,7 +361,7 @@ def _build_actions(
                 status="completed",
                 depends_on_action_ids=["action-collect-context"],
                 payload={
-                    "rejected_option_ids": ",".join(feedback_option_ids),
+                    "rejected_option_ids": feedback_option_ids,
                     "presentation_id": (
                         latest_presentation.presentation_id
                         if latest_presentation is not None
@@ -388,6 +382,9 @@ def _build_outputs(
     scenario_search = context.scenario_search
     session = context.session_state
     latest_presentation = _latest_presentation(session)
+    latest_presentation_id = (
+        latest_presentation.presentation_id if latest_presentation is not None else ""
+    )
     outputs: list[PlannerOutput] = []
 
     if variant != "revised_after_feedback":
@@ -472,11 +469,7 @@ def _build_outputs(
                     warnings=["feedback_rejected_option_set"],
                     payload={
                         "rejected_option_ids": _feedback_option_ids(session),
-                        "presentation_id": (
-                            latest_presentation.presentation_id
-                            if latest_presentation is not None
-                            else ""
-                        ),
+                        "presentation_id": latest_presentation_id,
                     },
                 ),
                 PlannerOutput(
@@ -576,6 +569,18 @@ def _validate_generated_at(value: str) -> None:
         datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
         raise ValueError("generated_at must be a valid ISO 8601 timestamp") from exc
+
+
+def _collect_context_payload(
+    trip_id: str, session: PlanningSessionState
+) -> dict[str, str]:
+    payload = {
+        "trip_id": trip_id,
+        "session_state_id": session.session_state_id,
+    }
+    if session.activity_log_id is not None:
+        payload["activity_log_id"] = session.activity_log_id
+    return payload
 
 
 def _latest_presentation(session: PlanningSessionState):
