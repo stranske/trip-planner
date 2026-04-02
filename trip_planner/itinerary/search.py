@@ -24,8 +24,8 @@ def _bundle_total(bundle: InventoryBundle) -> MoneyRange | None:
     total = 0.0
     seen = False
 
-    for option in bundle.lodging_options:
-        amount = option.cost_summary.total or option.cost_summary.nightly
+    for lodging_option in bundle.lodging_options:
+        amount = lodging_option.cost_summary.total or lodging_option.cost_summary.nightly
         if amount is None or amount.typical_amount is None:
             continue
         currency = currency or amount.currency
@@ -34,8 +34,8 @@ def _bundle_total(bundle: InventoryBundle) -> MoneyRange | None:
         total += amount.typical_amount
         seen = True
 
-    for option in bundle.transport_options:
-        amount = option.cost_summary.total
+    for transport_option in bundle.transport_options:
+        amount = transport_option.cost_summary.total
         if amount is None or amount.typical_amount is None:
             continue
         currency = currency or amount.currency
@@ -44,8 +44,8 @@ def _bundle_total(bundle: InventoryBundle) -> MoneyRange | None:
         total += amount.typical_amount
         seen = True
 
-    for option in bundle.activity_options:
-        amount = option.cost_summary.total or option.cost_summary.per_person
+    for activity_option in bundle.activity_options:
+        amount = activity_option.cost_summary.total or activity_option.cost_summary.per_person
         if amount is None or amount.typical_amount is None:
             continue
         currency = currency or amount.currency
