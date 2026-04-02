@@ -434,6 +434,29 @@ class PlannerTurn:
         )
         if unknown_open or unknown_completed:
             raise ValueError("workflow_state action ids must be present in actions")
+        unknown_dependencies = {
+            dependency_id
+            for action in self.actions
+            for dependency_id in action.depends_on_action_ids
+            if dependency_id not in all_known_action_ids
+        }
+        if unknown_dependencies:
+            raise ValueError("actions.depends_on_action_ids must refer to actions")
+        action_by_id = {action.action_id: action for action in self.actions}
+        open_statuses = {"pending", "in_progress"}
+        completed_statuses = {"completed", "skipped"}
+        for action_id in self.workflow_state.open_action_ids:
+            if action_by_id[action_id].status not in open_statuses:
+                raise ValueError(
+                    "workflow_state.open_action_ids must refer to pending or "
+                    "in_progress actions"
+                )
+        for action_id in self.workflow_state.completed_action_ids:
+            if action_by_id[action_id].status not in completed_statuses:
+                raise ValueError(
+                    "workflow_state.completed_action_ids must refer to completed or "
+                    "skipped actions"
+                )
         all_decision_ids = {
             decision.decision_id for decision in self.workflow_state.pending_decisions
         }
@@ -445,7 +468,10 @@ class PlannerTurn:
             self.next_step.recommended_action_id not in all_known_action_ids
         ):
             raise ValueError("next_step.recommended_action_id must refer to an action")
-        if not set(self.next_step.expected_output_ids).issubset(set(output_ids)):
+        all_known_output_ids = set(output_ids)
+        if not set(self.workflow_state.recent_output_ids).issubset(all_known_output_ids):
+            raise ValueError("workflow_state.recent_output_ids must refer to outputs")
+        if not set(self.next_step.expected_output_ids).issubset(all_known_output_ids):
             raise ValueError("next_step.expected_output_ids must refer to outputs")
         _require_string_list(self.notes, "notes")
         if self.schema_version != ORCHESTRATION_SCHEMA_VERSION:

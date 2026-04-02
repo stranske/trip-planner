@@ -72,3 +72,27 @@ def test_planner_turn_rejects_overlapping_open_and_completed_actions() -> None:
 
     with pytest.raises(ValueError, match="must not overlap"):
         PlannerTurn.from_dict(payload)
+
+
+def test_planner_turn_rejects_unknown_action_dependencies() -> None:
+    payload = json.loads(_fixture_path("leisure_planning_turn.json").read_text())
+    payload["actions"][0]["depends_on_action_ids"] = ["missing-action"]
+
+    with pytest.raises(ValueError, match="depends_on_action_ids"):
+        PlannerTurn.from_dict(payload)
+
+
+def test_planner_turn_rejects_inconsistent_open_action_status() -> None:
+    payload = json.loads(_fixture_path("leisure_planning_turn.json").read_text())
+    payload["actions"][2]["status"] = "completed"
+
+    with pytest.raises(ValueError, match="open_action_ids"):
+        PlannerTurn.from_dict(payload)
+
+
+def test_planner_turn_rejects_unknown_recent_output_references() -> None:
+    payload = json.loads(_fixture_path("business_planning_turn.json").read_text())
+    payload["workflow_state"]["recent_output_ids"] = ["missing-output"]
+
+    with pytest.raises(ValueError, match="recent_output_ids"):
+        PlannerTurn.from_dict(payload)

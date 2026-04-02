@@ -137,7 +137,7 @@ def test_actual_spend_event_rejects_invalid_source_or_amount() -> None:
         )
 
 
-def test_budget_scenario_to_dict_round_trips_without_derived_fields() -> None:
+def test_budget_plan_to_dict_preserves_scenario_derived_totals() -> None:
     record = _load_plan("leisure_budget_plan.json")
     scenario_payload = record.scenario_budgets[0].to_dict()
 
