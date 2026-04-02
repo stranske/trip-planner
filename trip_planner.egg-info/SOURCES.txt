@@ -91,6 +91,7 @@ trip_planner/options/transport.py
 trip_planner/orchestration/__init__.py
 trip_planner/orchestration/actions.py
 trip_planner/orchestration/leisure.py
+trip_planner/orchestration/in_trip.py
 trip_planner/orchestration/models.py
 trip_planner/preferences/__init__.py
 trip_planner/preferences/autonomy.py
