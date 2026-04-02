@@ -1,0 +1,318 @@
+#!/usr/bin/env node
+
+"use strict";
+
+const path = require("node:path");
+
+const {
+  collectThreadInventoryIssues,
+  DEFAULT_DOC_PATH,
+  loadThreadInventory,
+} = require("./list_fix_threads_from_doc.js");
+const {
+  DEFAULT_PR_NUMBER,
+  DEFAULT_REPOSITORY,
+  extractUnresolvedThreads,
+  fetchAllReviewThreads,
+  getConfiguration,
+  loadReviewThreadsFromFile,
+  validateExpectedCount,
+} = require("./list_unresolved_pr_threads.js");
+
+function getVerifierConfiguration(argv = process.argv.slice(2), env = process.env) {
+  const passthroughArguments = [];
+  const options = {
+    docPath: DEFAULT_DOC_PATH,
+    expectDocCount: null,
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+
+    if (argument === "--doc") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --doc flag requires a file path.");
+      }
+
+      options.docPath = path.resolve(value);
+      index += 1;
+      continue;
+    }
+
+    if (argument === "--expect-doc-count") {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error("The --expect-doc-count flag requires an integer value.");
+      }
+
+      options.expectDocCount = value;
+      index += 1;
+      continue;
+    }
+
+    passthroughArguments.push(argument);
+  }
+
+  const reviewThreadConfiguration = getConfiguration(passthroughArguments, env);
+
+  const expectDocCountRaw = options.expectDocCount ?? env.EXPECT_DOC_THREAD_COUNT ?? null;
+  const expectDocCount =
+    expectDocCountRaw === null ? null : Number.parseInt(String(expectDocCountRaw), 10);
+
+  if (expectDocCountRaw !== null && (!Number.isInteger(expectDocCount) || expectDocCount < 0)) {
+    throw new Error(
+      `Expected documented thread count must be a non-negative integer; received "${expectDocCountRaw}".`
+    );
+  }
+
+  return {
+    ...reviewThreadConfiguration,
+    docPath: options.docPath,
+    expectDocCount,
+  };
+}
+
+function findMatchedDocumentedThread(documentedThreads, matchedDocumentIndexes, unresolvedThread, index) {
+  const unmatchedById = documentedThreads.findIndex(
+    (candidate, candidateIndex) =>
+      !matchedDocumentIndexes.has(candidateIndex) && candidate.threadId === unresolvedThread.id
+  );
+  if (unmatchedById !== -1) {
+    return unmatchedById;
+  }
+
+  const unmatchedByOriginalThreadUrl = documentedThreads.findIndex(
+    (candidate, candidateIndex) =>
+      !matchedDocumentIndexes.has(candidateIndex) &&
+      !candidate.threadId &&
+      candidate.originalThreadUrl &&
+      unresolvedThread.originalThreadUrl &&
+      candidate.originalThreadUrl === unresolvedThread.originalThreadUrl
+  );
+  if (unmatchedByOriginalThreadUrl !== -1) {
+    return unmatchedByOriginalThreadUrl;
+  }
+
+  if (
+    index < documentedThreads.length &&
+    !matchedDocumentIndexes.has(index) &&
+    !documentedThreads[index].threadId
+  ) {
+    return index;
+  }
+
+  return -1;
+}
+
+function collectInventoryVerificationIssues(documentedThreads, unresolvedThreads, options = {}) {
+  const { expectDocCount = null, activeDocumentedThreads = null } = options;
+  const issues = collectThreadInventoryIssues(documentedThreads);
+  const allowResolvedInventoryOnly = unresolvedThreads.length === 0;
+
+  if (expectDocCount !== null && documentedThreads.length !== expectDocCount) {
+    issues.push(
+      `Expected ${expectDocCount} documented thread(s), found ${documentedThreads.length}.`
+    );
+  }
+
+  if (
+    allowResolvedInventoryOnly &&
+    Array.isArray(activeDocumentedThreads) &&
+    activeDocumentedThreads.length > 0
+  ) {
+    issues.push(
+      `Documented unresolved inventory must be empty when the snapshot has zero unresolved thread(s); found ${activeDocumentedThreads.length} active thread entr${
+        activeDocumentedThreads.length === 1 ? "y" : "ies"
+      }.`
+    );
+  }
+
+  const matchedDocumentIndexes = new Set();
+  const unresolvedThreadMatches = unresolvedThreads.map((thread, index) => {
+    const documentedIndex = findMatchedDocumentedThread(
+      documentedThreads,
+      matchedDocumentIndexes,
+      thread,
+      index
+    );
+
+    if (documentedIndex === -1) {
+      return null;
+    }
+
+    matchedDocumentIndexes.add(documentedIndex);
+    return {
+      documentedIndex,
+      documentedThread: documentedThreads[documentedIndex],
+      unresolvedThread: thread,
+    };
+  });
+  const matchedDocumentIndexesByThreadId = new Map(
+    unresolvedThreadMatches
+      .filter(Boolean)
+      .filter(({ documentedThread }) => documentedThread.threadId)
+      .map(({ documentedThread, documentedIndex }) => [documentedThread.threadId, documentedIndex])
+  );
+
+  unresolvedThreadMatches.forEach((match, index) => {
+    if (!match) {
+      const thread = unresolvedThreads[index];
+      issues.push(`Unresolved thread ${thread.id} is missing from the inventory document.`);
+    }
+  });
+
+  documentedThreads.forEach((thread, documentedIndex) => {
+    const threadLabel = thread.threadId || `Thread ${documentedIndex + 1}`;
+    const matchedIndex = matchedDocumentIndexesByThreadId.get(thread.threadId);
+    const matchedUnresolvedThread =
+      matchedIndex === undefined
+        ? unresolvedThreadMatches.find((match) => match?.documentedIndex === documentedIndex)
+            ?.unresolvedThread || null
+        : unresolvedThreadMatches.find((match) => match?.documentedIndex === matchedIndex)
+            ?.unresolvedThread || null;
+
+    if (thread.threadId && !allowResolvedInventoryOnly && !matchedUnresolvedThread) {
+      issues.push(`Documented thread ${thread.threadId} is not unresolved in the provided snapshot.`);
+      return;
+    }
+
+    if (!matchedUnresolvedThread) {
+      return;
+    }
+
+    const expectedLocation = `${matchedUnresolvedThread.path || "unknown"}:${
+      matchedUnresolvedThread.line ?? "unknown"
+    }`;
+    if (thread.location && thread.location !== expectedLocation) {
+      issues.push(
+        `Documented thread ${threadLabel} location does not match the snapshot (${expectedLocation}).`
+      );
+    }
+
+    const expectedOriginalThreadUrl = matchedUnresolvedThread.originalThreadUrl || null;
+    if (thread.originalThreadUrl && thread.originalThreadUrl !== expectedOriginalThreadUrl) {
+      issues.push(
+        `Documented thread ${threadLabel} original thread URL does not match the snapshot.`
+      );
+    }
+
+    const expectedContent = matchedUnresolvedThread.comments
+      .map((comment) => `${comment.author}: ${comment.body || "<empty>"}`)
+      .join(" | ") || "No thread comments returned by the API.";
+    if (thread.content && thread.content !== expectedContent) {
+      issues.push(
+        `Documented thread ${threadLabel} content does not match the snapshot.`
+      );
+    }
+
+    if (
+      typeof thread.outdated === "boolean" &&
+      thread.outdated !== Boolean(matchedUnresolvedThread.isOutdated)
+    ) {
+      issues.push(
+        `Documented thread ${threadLabel} outdated status does not match the snapshot.`
+      );
+    }
+  });
+
+  return issues;
+}
+
+function formatInventoryVerificationReport(configuration, documentedThreads, unresolvedThreads, issues) {
+  const repository = `${configuration.owner}/${configuration.repo}`;
+  const lines = [
+    `Repository: ${repository}`,
+    `Pull request: #${configuration.prNumber}`,
+    `Inventory document: ${configuration.docPath}`,
+    `Documented threads: ${documentedThreads.length}`,
+    `Unresolved threads in snapshot: ${unresolvedThreads.length}`,
+  ];
+
+  if (configuration.expectDocCount !== null) {
+    lines.push(`Expected documented threads: ${configuration.expectDocCount}`);
+  }
+
+  if (configuration.expectedCount !== null) {
+    lines.push(`Expected unresolved threads: ${configuration.expectedCount}`);
+  }
+
+  if (issues.length === 0) {
+    lines.push("Verification: OK");
+    return `${lines.join("\n")}\n`;
+  }
+
+  lines.push(`Verification: FAILED (${issues.length} issue${issues.length === 1 ? "" : "s"})`);
+  issues.forEach((issue, index) => {
+    lines.push(`${index + 1}. ${issue}`);
+  });
+  return `${lines.join("\n")}\n`;
+}
+
+function buildInventoryVerificationReport(configuration, dependencies = {}) {
+  const loadInventory = dependencies.loadThreadInventory || loadThreadInventory;
+  const loadThreads = dependencies.loadReviewThreadsFromFile || loadReviewThreadsFromFile;
+  const fetchThreads = dependencies.fetchAllReviewThreads || fetchAllReviewThreads;
+  const documentedThreads = loadInventory(configuration.docPath);
+  const activeDocumentedThreads = loadInventory(configuration.docPath, {}, {
+    inventorySection: "unresolved",
+  });
+  const resolveRawThreads = configuration.inputPath
+    ? Promise.resolve(loadThreads(configuration.inputPath))
+    : Promise.resolve(fetchThreads(configuration));
+
+  return resolveRawThreads.then((rawThreads) => {
+    const unresolvedThreads = extractUnresolvedThreads(rawThreads);
+    const issues = collectInventoryVerificationIssues(documentedThreads, unresolvedThreads, {
+      expectDocCount: configuration.expectDocCount,
+      activeDocumentedThreads,
+    });
+    let expectedCountError = null;
+
+    try {
+      validateExpectedCount(unresolvedThreads, configuration.expectedCount);
+    } catch (error) {
+      expectedCountError = error.message;
+    }
+
+    if (expectedCountError) {
+      issues.push(expectedCountError);
+    }
+
+    return formatInventoryVerificationReport(
+      configuration,
+      documentedThreads,
+      unresolvedThreads,
+      issues
+    );
+  });
+}
+
+async function main(argv = process.argv.slice(2), env = process.env) {
+  const configuration = getVerifierConfiguration(argv, env);
+  const report = await buildInventoryVerificationReport(configuration);
+  process.stdout.write(report);
+
+  if (report.includes("Verification: FAILED")) {
+    process.exitCode = 1;
+  }
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = {
+  buildInventoryVerificationReport,
+  collectInventoryVerificationIssues,
+  findMatchedDocumentedThread,
+  formatInventoryVerificationReport,
+  getVerifierConfiguration,
+  main,
+  DEFAULT_DOC_PATH,
+  DEFAULT_PR_NUMBER,
+  DEFAULT_REPOSITORY,
+};

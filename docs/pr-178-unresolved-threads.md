@@ -1,0 +1,155 @@
+# PR #178 Unresolved Thread Inventory
+
+This file tracks the unresolved inline review threads for PR #178 and records whether each item needs a code fix or a disposition-only response.
+
+## Status
+
+The repo now supports loading review threads from a local JSON snapshot via `node scripts/list_unresolved_pr_threads.js --input <path>`.
+It also supports `--expect-count <n>` so the same command can fail fast when the unresolved-thread count does not match the expected live PR state.
+
+The exact 4 unresolved threads for PR #178 are still not available in this environment because live GitHub review-thread access is blocked and no exported PR #178 snapshot is checked into the repository yet.
+
+The checked-in fixture at `tests/fixtures/scripts/review_threads_snapshot.json` is synthetic test data only. It must not be used to classify or disposition PR #178 review threads.
+
+When a verified snapshot or `GITHUB_TOKEN` is available, use one of these commands before populating the sections below:
+
+```bash
+node scripts/list_unresolved_pr_threads.js stranske/trip-planner 178 --format markdown --expect-count 4
+node scripts/list_unresolved_pr_threads.js stranske/trip-planner 178 --input path/to/pr-178-review-threads.json --format markdown --expect-count 4
+node scripts/list_unresolved_pr_threads.js stranske/trip-planner 178 --input path/to/pr-178-review-threads.json --write-inventory-doc docs/pr-178-unresolved-threads.md --expect-count 4
+```
+
+After the inventory is populated, identify any `fix`-classified entries with:
+
+```bash
+node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md
+```
+
+To generate a bounded follow-up PR title/body payload for each `fix`-classified PR group, run:
+
+```bash
+node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md --format pr-payload --exclude-outdated
+```
+
+To generate a shell-ready `gh pr create` command plus the matching markdown body for each bounded follow-up PR group, run:
+
+```bash
+node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md --format gh-cli --exclude-outdated
+```
+
+To also write the referenced PR body files, executable `gh pr create` helper scripts, plus a `manifest.json` that captures the exact grouped `gh pr create` commands, run:
+
+```bash
+node scripts/list_fix_threads_from_doc.js docs/pr-178-unresolved-threads.md --format gh-cli --exclude-outdated --write-artifacts-dir .tmp/pr-thread-payloads
+```
+
+That artifact directory now includes one `pr-178-fix-group-*-create.sh` script per follow-up PR group so the generated `gh pr create` invocation can be executed directly after the branch is ready.
+
+To dry-run or execute those grouped PR creations from the generated `manifest.json`, use:
+
+```bash
+node scripts/create_follow_up_prs_from_manifest.js --manifest .tmp/pr-thread-payloads/manifest.json
+node scripts/create_follow_up_prs_from_manifest.js --manifest .tmp/pr-thread-payloads/manifest.json --follow-up-pr https://github.com/stranske/trip-planner/pull/581 --execute
+```
+
+Additional usage notes are captured in `docs/pr-178-follow-up-pr-creation.md`.
+
+To generate a bounded checklist for any `disposition`-classified entries that still need a PR comment, run:
+
+```bash
+node scripts/list_disposition_threads_from_doc.js docs/pr-178-unresolved-threads.md --format plan --exclude-outdated
+```
+
+To generate ready-to-post disposition comment drafts for those unresolved threads, run:
+
+```bash
+node scripts/list_disposition_threads_from_doc.js docs/pr-178-unresolved-threads.md --format comments --exclude-outdated
+```
+
+To generate shell-ready `gh api graphql` commands for posting each disposition reply and resolving the matching review thread once GitHub write access is available, run:
+
+```bash
+node scripts/list_disposition_threads_from_doc.js docs/pr-178-unresolved-threads.md --format gh-cli --exclude-outdated
+```
+
+To also write executable helper scripts plus a `manifest.json` for those disposition replies/resolutions, run:
+
+```bash
+node scripts/list_disposition_threads_from_doc.js docs/pr-178-unresolved-threads.md --format gh-cli --exclude-outdated --write-artifacts-dir .tmp/pr-thread-disposition
+```
+
+To dry-run or execute those disposition replies/resolutions from the generated `manifest.json`, use:
+
+```bash
+node scripts/resolve_disposition_threads_from_manifest.js --manifest .tmp/pr-thread-disposition/manifest.json
+node scripts/resolve_disposition_threads_from_manifest.js --manifest .tmp/pr-thread-disposition/manifest.json --thread-id THREAD_ID --execute
+```
+
+To verify that the populated inventory matches an exported review-thread snapshot before classifying or resolving items, run:
+
+```bash
+node scripts/verify_pr_thread_inventory.js stranske/trip-planner 178 --doc docs/pr-178-unresolved-threads.md --input path/to/pr-178-review-threads.json --expect-doc-count 4 --expect-count 4
+```
+
+The verifier now checks that each documented thread ID, original thread URL, location, and content match the unresolved-thread snapshot, so copy the generated markdown carefully before adding classifications and rationales.
+
+After the fix/disposition work is complete, rerun the same command with `--expect-count 0` to verify the acceptance criterion.
+
+To summarize the local repo state against the acceptance criteria before doing any GitHub UI follow-up, run:
+
+```bash
+node scripts/check_pr_thread_acceptance.js --doc docs/pr-178-unresolved-threads.md
+node scripts/check_pr_thread_acceptance.js --doc docs/pr-178-unresolved-threads.md --input path/to/pr-178-review-threads.json
+node scripts/check_pr_thread_acceptance.js --doc docs/pr-178-unresolved-threads.md --input path/to/pr-178-review-threads.json --github-ui-confirmed
+node scripts/check_pr_thread_acceptance.js --results .tmp/pr-thread-disposition/results.json
+```
+
+The acceptance checker fails loudly when the inventory is still incomplete, and it only performs live GitHub API verification when you opt in with `--live`.
+Use `--github-ui-confirmed` only after manually confirming in the PR #178 GitHub UI that no unresolved inline review threads remain.
+Use `--results` to reuse a persisted `resolve_disposition_threads_from_manifest.js --write-results ...` artifact instead of manually re-entering the doc path, PR number, and remaining snapshot path.
+
+## Thread Template
+
+### Thread 1
+
+- Thread ID:
+- Original Thread URL:
+- Location:
+- Classification:
+- Follow-up PR:
+- Rationale:
+- Content:
+- Outdated:
+
+### Thread 2
+
+- Thread ID:
+- Original Thread URL:
+- Location:
+- Classification:
+- Follow-up PR:
+- Rationale:
+- Content:
+- Outdated:
+
+### Thread 3
+
+- Thread ID:
+- Original Thread URL:
+- Location:
+- Classification:
+- Follow-up PR:
+- Rationale:
+- Content:
+- Outdated:
+
+### Thread 4
+
+- Thread ID:
+- Original Thread URL:
+- Location:
+- Classification:
+- Follow-up PR:
+- Rationale:
+- Content:
+- Outdated:
