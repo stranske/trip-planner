@@ -12,6 +12,15 @@ from .actions import (
     WORKFLOW_STATUSES,
 )
 from .leisure import LeisureWorkflowContext, build_leisure_planner_turn
+from .feedback import (
+    COMPARISON_DEPTHS,
+    FEEDBACK_KINDS,
+    FeedbackLoopContext,
+    FeedbackLoopResult,
+    OptionFeedbackEvent,
+    ScenarioCaptureRequest,
+    build_feedback_loop_result,
+)
 from .models import (
     ORCHESTRATION_SCHEMA_VERSION,
     DecisionOption,
@@ -41,17 +50,23 @@ __all__ = [
     "ACTION_KINDS",
     "ACTION_STATUSES",
     "CHANGE_SCOPES",
+    "COMPARISON_DEPTHS",
     "DecisionOption",
-    "LeisureWorkflowContext",
+    "FEEDBACK_KINDS",
+    "FeedbackLoopContext",
+    "FeedbackLoopResult",
     "InTripAdjustmentContext",
     "InTripAdjustmentResult",
     "InTripRevisionOutput",
     "InTripTriggerEvent",
+    "LeisureWorkflowContext",
     "NextStepSummary",
     "ORCHESTRATION_SCHEMA_VERSION",
+    "OptionFeedbackEvent",
     "OUTPUT_KINDS",
     "OUTPUT_SURFACES",
     "PendingDecision",
+    "ScenarioCaptureRequest",
     "PlannerAction",
     "PlannerOutput",
     "PlannerTurn",
@@ -69,4 +84,5 @@ __all__ = [
     "WorkflowTransition",
     "build_leisure_planner_turn",
     "build_in_trip_adjustment_result",
+    "build_feedback_loop_result",
 ]

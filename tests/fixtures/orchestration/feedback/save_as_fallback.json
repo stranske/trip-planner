@@ -1,0 +1,20 @@
+{
+  "event": {
+    "feedback_event_id": "feedback:save-osaka-fallback",
+    "presentation_id": "presentation:kyoto-v3",
+    "feedback_kind": "save_as_fallback",
+    "option_id": "option:osaka-daytrip",
+    "summary": "Traveler does not want Osaka as the default path but wants it preserved as a fallback.",
+    "comparison_depth": "inventory_narrowing",
+    "signal_strength": 0.74,
+    "dimension_biases": {
+      "movement_vs_friction": -0.25,
+      "recovery_vs_intensity": 0.4
+    },
+    "hybrid_biases": {
+      "rest": 0.3
+    },
+    "fallback_saved_scenario_id": "saved-scenario:osaka-weather-fallback",
+    "fallback_title": "Osaka weather fallback"
+  }
+}
