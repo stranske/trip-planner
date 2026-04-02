@@ -11,14 +11,18 @@ from trip_planner.sources import (
     ProvenanceReference,
 )
 
-FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "sources" / "resolution"
+FIXTURE_ROOT = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "sources" / "resolution"
+)
 
 
 def load_fixture(name: str) -> dict[str, Any]:
     return json.loads((FIXTURE_ROOT / name).read_text())
 
 
-def build_provenance(canonical_entity_id: str, entity_scope: str) -> MergedEntityProvenance:
+def build_provenance(
+    canonical_entity_id: str, entity_scope: str
+) -> MergedEntityProvenance:
     return MergedEntityProvenance(
         canonical_entity_id=canonical_entity_id,
         entity_scope=entity_scope,
@@ -91,7 +95,9 @@ def test_deduplication_merge_supports_transport_and_activity_contracts() -> None
 
 def test_deduplication_can_keep_activity_records_separate() -> None:
     fixture = load_fixture("activity_non_match.json")
-    conflict = AttributeConflict(conflict_id="conflict-activity-1", **fixture["conflict"])
+    conflict = AttributeConflict(
+        conflict_id="conflict-activity-1", **fixture["conflict"]
+    )
     decision = DeduplicationDecision(
         decision_id="decision-activity-2",
         entity_scope="activity",
@@ -101,7 +107,9 @@ def test_deduplication_can_keep_activity_records_separate() -> None:
         duplicate_entity_ids=list(fixture["duplicate_entity_ids"]),
         resolution_ids=list(fixture["resolution_ids"]),
         preserved_conflicts=[conflict],
-        merged_provenance=build_provenance("activity-river-cruise-separate", "activity"),
+        merged_provenance=build_provenance(
+            "activity-river-cruise-separate", "activity"
+        ),
         confidence=float(fixture["confidence"]),
         summary="Duration and itinerary disagreement keep the cruises separate.",
     )

@@ -44,7 +44,9 @@ def _build_resolution(payload: dict[str, Any]) -> EntityResolution:
         status=payload["status"],
         canonical_entity_id=payload["canonical_entity_id"],
         summary=payload["summary"],
-        match_candidates=[MatchCandidate(**item) for item in payload.get("match_candidates", [])],
+        match_candidates=[
+            MatchCandidate(**item) for item in payload.get("match_candidates", [])
+        ],
         conflicts=[AttributeConflict(**item) for item in payload.get("conflicts", [])],
         review_required=payload.get("review_required", False),
         notes=payload.get("notes", []),

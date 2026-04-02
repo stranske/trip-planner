@@ -117,16 +117,22 @@ class PlanningAutonomyProfile:
             raise ValueError("default_preference must be an AutonomyPreference")
         invalid_stages = set(self.stage_preferences) - set(schema.PLANNING_STAGES)
         if invalid_stages:
-            raise ValueError(f"unsupported stage_preferences keys: {sorted(invalid_stages)}")
+            raise ValueError(
+                f"unsupported stage_preferences keys: {sorted(invalid_stages)}"
+            )
         if any(
             not isinstance(preference, AutonomyPreference)
             for preference in self.stage_preferences.values()
         ):
-            raise ValueError("stage_preferences must contain AutonomyPreference instances")
+            raise ValueError(
+                "stage_preferences must contain AutonomyPreference instances"
+            )
         self.stage_preferences = {
             stage: replace(self.default_preference) for stage in schema.PLANNING_STAGES
         } | self.stage_preferences
-        if any(not isinstance(item, AutonomyFeedback) for item in self.feedback_history):
+        if any(
+            not isinstance(item, AutonomyFeedback) for item in self.feedback_history
+        ):
             raise ValueError("feedback_history must contain AutonomyFeedback instances")
 
     def preference_for_stage(self, trip_stage: str) -> AutonomyPreference:
@@ -145,7 +151,11 @@ class PlanningAutonomyProfile:
         preference = self.preference_for_stage(trip_stage)
         target_research_passes = max(
             1,
-            ceil(1 + (preference.system_initiative * 3) + (preference.exploration_depth * 2)),
+            ceil(
+                1
+                + (preference.system_initiative * 3)
+                + (preference.exploration_depth * 2)
+            ),
         )
         target_options_before_checkpoint = max(
             1,
@@ -160,7 +170,8 @@ class PlanningAutonomyProfile:
         return PlannerBehaviorMetadata(
             trip_stage=trip_stage,
             ask_before_next_major_change=(
-                preference.checkpoint_frequency >= CHECKPOINT_FREQUENCY_CONFIRMATION_THRESHOLD
+                preference.checkpoint_frequency
+                >= CHECKPOINT_FREQUENCY_CONFIRMATION_THRESHOLD
             ),
             target_research_passes=target_research_passes,
             target_options_before_checkpoint=target_options_before_checkpoint,
@@ -173,7 +184,8 @@ class PlanningAutonomyProfile:
         updated = replace(
             self,
             stage_preferences={
-                stage: replace(preference) for stage, preference in self.stage_preferences.items()
+                stage: replace(preference)
+                for stage, preference in self.stage_preferences.items()
             },
             feedback_history=[*self.feedback_history, feedback],
         )
@@ -181,22 +193,40 @@ class PlanningAutonomyProfile:
         delta = feedback.strength * AUTONOMY_FEEDBACK_DELTA_MULTIPLIER
 
         if feedback.feedback_kind == "do_more_before_asking":
-            preference.system_initiative = min(1.0, preference.system_initiative + delta)
-            preference.exploration_depth = min(1.0, preference.exploration_depth + delta)
-            preference.checkpoint_frequency = max(0.0, preference.checkpoint_frequency - delta)
+            preference.system_initiative = min(
+                1.0, preference.system_initiative + delta
+            )
+            preference.exploration_depth = min(
+                1.0, preference.exploration_depth + delta
+            )
+            preference.checkpoint_frequency = max(
+                0.0, preference.checkpoint_frequency - delta
+            )
         elif feedback.feedback_kind == "show_options_sooner":
-            preference.option_preview_timing = min(1.0, preference.option_preview_timing + delta)
+            preference.option_preview_timing = min(
+                1.0, preference.option_preview_timing + delta
+            )
             preference.checkpoint_frequency = min(
                 1.0, preference.checkpoint_frequency + (delta * 0.4)
             )
-            preference.exploration_depth = max(0.0, preference.exploration_depth - (delta * 0.5))
+            preference.exploration_depth = max(
+                0.0, preference.exploration_depth - (delta * 0.5)
+            )
         elif feedback.feedback_kind == "ask_me_earlier":
-            preference.checkpoint_frequency = min(1.0, preference.checkpoint_frequency + delta)
-            preference.system_initiative = max(0.0, preference.system_initiative - (delta * 0.5))
+            preference.checkpoint_frequency = min(
+                1.0, preference.checkpoint_frequency + delta
+            )
+            preference.system_initiative = max(
+                0.0, preference.system_initiative - (delta * 0.5)
+            )
         elif feedback.feedback_kind == "explain_more":
-            preference.explanation_depth = min(1.0, preference.explanation_depth + delta)
+            preference.explanation_depth = min(
+                1.0, preference.explanation_depth + delta
+            )
         elif feedback.feedback_kind == "explain_less":
-            preference.explanation_depth = max(0.0, preference.explanation_depth - delta)
+            preference.explanation_depth = max(
+                0.0, preference.explanation_depth - delta
+            )
         return updated
 
     def to_dict(self) -> dict[str, Any]:

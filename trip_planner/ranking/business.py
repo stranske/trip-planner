@@ -6,8 +6,18 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from statistics import fmean
 
-from trip_planner._option_contracts import ComparisonAxis, MoneyRange, Option, OptionCostSummary, OptionQualitySummary
-from trip_planner.business import BusinessPlanningObjectives, BusinessTravelProfile, PolicyConstraintSet
+from trip_planner._option_contracts import (
+    ComparisonAxis,
+    MoneyRange,
+    Option,
+    OptionCostSummary,
+    OptionQualitySummary,
+)
+from trip_planner.business import (
+    BusinessPlanningObjectives,
+    BusinessTravelProfile,
+    PolicyConstraintSet,
+)
 from trip_planner.candidates import CandidateSet
 from trip_planner.itinerary import evaluate_bundle_feasibility
 from trip_planner.itinerary.feasibility import FeasibilityAssessment
@@ -124,8 +134,12 @@ class BusinessRankingEngine:
     def validate_constraint_set(
         self, constraint_set: PolicyConstraintSet | None
     ) -> PolicyConstraintSet | None:
-        if constraint_set is not None and not isinstance(constraint_set, PolicyConstraintSet):
-            raise ValueError("constraint_set must be a PolicyConstraintSet when provided")
+        if constraint_set is not None and not isinstance(
+            constraint_set, PolicyConstraintSet
+        ):
+            raise ValueError(
+                "constraint_set must be a PolicyConstraintSet when provided"
+            )
         return constraint_set
 
     def validate_feasibility_outputs(
@@ -145,7 +159,9 @@ class BusinessRankingEngine:
                 "feasibility_outputs must be a mapping, a sequence of FeasibilityAssessment values, or None"
             )
         if any(not isinstance(item, FeasibilityAssessment) for item in values.values()):
-            raise ValueError("feasibility_outputs must contain FeasibilityAssessment instances")
+            raise ValueError(
+                "feasibility_outputs must contain FeasibilityAssessment instances"
+            )
         return values
 
     def validate_candidate_set(self, candidate_set: CandidateSet) -> CandidateSet:
@@ -153,7 +169,9 @@ class BusinessRankingEngine:
             raise ValueError("candidate_set must be a CandidateSet")
         return candidate_set
 
-    def validate_bundles(self, bundles: Sequence[InventoryBundle]) -> list[InventoryBundle]:
+    def validate_bundles(
+        self, bundles: Sequence[InventoryBundle]
+    ) -> list[InventoryBundle]:
         if isinstance(bundles, (str, bytes)) or not isinstance(bundles, Sequence):
             raise ValueError("bundles must be a sequence of InventoryBundle instances")
         bundle_list = list(bundles)
@@ -256,9 +274,9 @@ class BusinessRankingEngine:
     ) -> RankedResultSet:
         ranked_payloads: list[tuple[float, RankedResult]] = []
         for candidate in candidates:
-            assessment = assessments.get(candidate.bundle.bundle_id) or evaluate_bundle_feasibility(
-                candidate.bundle
-            )
+            assessment = assessments.get(
+                candidate.bundle.bundle_id
+            ) or evaluate_bundle_feasibility(candidate.bundle)
             contributions = self._component_contributions(
                 profile,
                 objectives,
@@ -316,8 +334,12 @@ class BusinessRankingEngine:
                         confidence_summary=confidence,
                         explanation_records=explanation_records,
                         unresolved_risks=risks,
-                        source_refs=_dedupe_strings(source_refs + candidate.source_refs),
-                        notes=["Business ranking is a planning recommendation, not a policy verdict."],
+                        source_refs=_dedupe_strings(
+                            source_refs + candidate.source_refs
+                        ),
+                        notes=[
+                            "Business ranking is a planning recommendation, not a policy verdict."
+                        ],
                     ),
                 )
             )
@@ -364,16 +386,24 @@ class BusinessRankingEngine:
             bundle,
             constraint_set=constraint_set,
         )
-        schedule_signal, schedule_notes = self._schedule_signal(profile, objectives, bundle, assessment)
+        schedule_signal, schedule_notes = self._schedule_signal(
+            profile, objectives, bundle, assessment
+        )
         cost_signal, cost_notes = self._cost_signal(objectives, bundle)
-        comparable_signal, comparable_notes = self._comparable_signal(objectives, bundle)
+        comparable_signal, comparable_notes = self._comparable_signal(
+            objectives, bundle
+        )
         justification_signal, justification_notes = self._justification_signal(
             objectives,
             bundle,
             constraint_set=constraint_set,
         )
-        comfort_signal, comfort_notes = self._comfort_signal(profile, objectives, bundle)
-        exception_signal, exception_notes = self._exception_path_signal(objectives, bundle)
+        comfort_signal, comfort_notes = self._comfort_signal(
+            profile, objectives, bundle
+        )
+        exception_signal, exception_notes = self._exception_path_signal(
+            objectives, bundle
+        )
         signals = [
             (
                 "policy_compliance",
@@ -466,16 +496,26 @@ class BusinessRankingEngine:
         for transport in bundle.transport_options:
             if transport.policy_summary.approved_booking_channel is True:
                 channel_hits.append(1.0)
-            elif required_channels and transport.booking_terms.booking_channel in required_channels:
+            elif (
+                required_channels
+                and transport.booking_terms.booking_channel in required_channels
+            ):
                 channel_hits.append(1.0)
             elif required_channels and any(
-                channel in required_channels for channel in transport.booking_terms.approved_channels
+                channel in required_channels
+                for channel in transport.booking_terms.approved_channels
             ):
                 channel_hits.append(0.9)
             elif required_channels:
                 channel_hits.append(0.25)
-        policy_fit = [transport.fit_summary.policy_fit_signal for transport in bundle.transport_options]
-        policy_fit.extend(lodging.value_summary.policy_value_signal for lodging in bundle.lodging_options)
+        policy_fit = [
+            transport.fit_summary.policy_fit_signal
+            for transport in bundle.transport_options
+        ]
+        policy_fit.extend(
+            lodging.value_summary.policy_value_signal
+            for lodging in bundle.lodging_options
+        )
         signal = _average(
             [
                 _average(lodging_statuses + transport_statuses, default=0.5),
@@ -498,13 +538,16 @@ class BusinessRankingEngine:
         assessment: FeasibilityAssessment,
     ) -> tuple[float, list[str]]:
         transport_schedule = [
-            transport.fit_summary.schedule_fit_signal for transport in bundle.transport_options
+            transport.fit_summary.schedule_fit_signal
+            for transport in bundle.transport_options
         ]
         protection = [
-            transport.transfer_burden.schedule_protection_signal for transport in bundle.transport_options
+            transport.transfer_burden.schedule_protection_signal
+            for transport in bundle.transport_options
         ]
         arrival_readiness = [
-            lodging.location_summary.business_access_signal for lodging in bundle.lodging_options
+            lodging.location_summary.business_access_signal
+            for lodging in bundle.lodging_options
         ]
         feasibility = 1.0 if assessment.recommended_for_ranking else 0.35
         friction = _clamp(1.0 - min(assessment.friction_penalty_total, 1.0))
@@ -529,13 +572,20 @@ class BusinessRankingEngine:
         self, objectives: BusinessPlanningObjectives, bundle: InventoryBundle
     ) -> tuple[float, list[str]]:
         value_signal = _average(
-            [bundle.quality_value_fit.value_signal, bundle.quality_value_fit.fit_signal],
+            [
+                bundle.quality_value_fit.value_signal,
+                bundle.quality_value_fit.fit_signal,
+            ],
             default=0.55,
         )
-        quality_signal = _average([bundle.quality_value_fit.quality_signal], default=0.6)
+        quality_signal = _average(
+            [bundle.quality_value_fit.quality_signal], default=0.6
+        )
         posture = objectives.cost_control_posture.posture
         if posture == "cost_first":
-            signal = _average([value_signal, bundle.quality_value_fit.value_signal], default=0.55)
+            signal = _average(
+                [value_signal, bundle.quality_value_fit.value_signal], default=0.55
+            )
         elif posture == "policy_first":
             signal = _average([value_signal, quality_signal], default=0.55)
         else:
@@ -545,13 +595,17 @@ class BusinessRankingEngine:
     def _comparable_signal(
         self, objectives: BusinessPlanningObjectives, bundle: InventoryBundle
     ) -> tuple[float, list[str]]:
-        required_total = sum(objectives.comparable_requirements.required_categories.values())
+        required_total = sum(
+            objectives.comparable_requirements.required_categories.values()
+        )
         comparable_refs = 0
         comparable_refs += sum(
-            len(transport.booking_terms.comparable_reference_ids) for transport in bundle.transport_options
+            len(transport.booking_terms.comparable_reference_ids)
+            for transport in bundle.transport_options
         )
         comparable_refs += sum(
-            len(transport.policy_summary.comparable_reference_ids) for transport in bundle.transport_options
+            len(transport.policy_summary.comparable_reference_ids)
+            for transport in bundle.transport_options
         )
         searchable_text = _searchable_bundle_text(bundle)
         if "comparable" in searchable_text:
@@ -559,7 +613,10 @@ class BusinessRankingEngine:
         if required_total <= 0:
             return 0.82, ["No explicit comparable requirements."]
         signal = _clamp(comparable_refs / required_total)
-        return signal, [f"required_comparables={required_total}", f"captured_refs={comparable_refs}"]
+        return signal, [
+            f"required_comparables={required_total}",
+            f"captured_refs={comparable_refs}",
+        ]
 
     def _justification_signal(
         self,
@@ -574,10 +631,13 @@ class BusinessRankingEngine:
         evidence_count = len(bundle.provenance_summary.source_refs)
         evidence_count += len(bundle.provenance_summary.booking_links)
         evidence_count += len(bundle.explanation.evidence)
-        evidence_count += sum(len(item.policy_summary.policy_notes) for item in bundle.transport_options)
+        evidence_count += sum(
+            len(item.policy_summary.policy_notes) for item in bundle.transport_options
+        )
         expected = max(
             1,
-            len(required_fields) + len(objectives.justification_readiness.required_receipt_categories),
+            len(required_fields)
+            + len(objectives.justification_readiness.required_receipt_categories),
         )
         signal = _clamp(evidence_count / expected)
         notes = [
@@ -626,7 +686,9 @@ class BusinessRankingEngine:
             signal = _clamp(signal + 0.05 * _average(lodging_scores, default=0.5))
         notes = [
             "required_categories="
-            + ",".join(objectives.comfort_floor_protection.required_categories or ["none"]),
+            + ",".join(
+                objectives.comfort_floor_protection.required_categories or ["none"]
+            ),
             f"mobility_needs={len(profile.traveler_context.mobility_or_access_needs)}",
         ]
         return signal, notes
@@ -635,10 +697,12 @@ class BusinessRankingEngine:
         self, objectives: BusinessPlanningObjectives, bundle: InventoryBundle
     ) -> tuple[float, list[str]]:
         statuses = [
-            lodging.feasibility.business_approval_status for lodging in bundle.lodging_options
+            lodging.feasibility.business_approval_status
+            for lodging in bundle.lodging_options
         ]
         statuses.extend(
-            transport.policy_summary.business_approval_status for transport in bundle.transport_options
+            transport.policy_summary.business_approval_status
+            for transport in bundle.transport_options
         )
         status_values = [_APPROVAL_SIGNALS[status] for status in statuses]
         approval_flags = [
@@ -648,7 +712,9 @@ class BusinessRankingEngine:
         posture = objectives.exception_path_posture.posture
         baseline = _average(status_values, default=0.45)
         if posture == "compliant_first":
-            signal = _average([baseline, _average(approval_flags, default=1.0)], default=0.5)
+            signal = _average(
+                [baseline, _average(approval_flags, default=1.0)], default=0.5
+            )
         elif posture == "policy_nearest":
             if any(status == "restricted" for status in statuses):
                 signal = _average(
@@ -668,7 +734,10 @@ class BusinessRankingEngine:
                 )
         else:
             signal = _average([max(0.4, baseline), 0.75], default=0.55)
-        return signal, [f"posture={posture}", f"fallback_mode={objectives.exception_path_posture.fallback_mode}"]
+        return signal, [
+            f"posture={posture}",
+            f"fallback_mode={objectives.exception_path_posture.fallback_mode}",
+        ]
 
     def _penalties(
         self,
@@ -710,11 +779,20 @@ class BusinessRankingEngine:
                     affected_factor_keys=["policy_compliance", "exception_path_fit"],
                 )
             )
-        required_total = sum(objectives.comparable_requirements.required_categories.values())
+        required_total = sum(
+            objectives.comparable_requirements.required_categories.values()
+        )
         comparable_refs = sum(
-            len(transport.booking_terms.comparable_reference_ids) for transport in bundle.transport_options
-        ) + sum(len(transport.policy_summary.comparable_reference_ids) for transport in bundle.transport_options)
-        if objectives.comparable_requirements.capture_required and required_total > comparable_refs:
+            len(transport.booking_terms.comparable_reference_ids)
+            for transport in bundle.transport_options
+        ) + sum(
+            len(transport.policy_summary.comparable_reference_ids)
+            for transport in bundle.transport_options
+        )
+        if (
+            objectives.comparable_requirements.capture_required
+            and required_total > comparable_refs
+        ):
             missing.append(
                 ScoreAdjustment(
                     adjustment_id=f"missing:{bundle.bundle_id}:comparables",
@@ -769,7 +847,10 @@ class BusinessRankingEngine:
         penalties: list[ScoreAdjustment],
     ) -> ScoreConfidenceSummary:
         missing_fields = list(assessment.missing_data_fields)
-        if objectives.justification_readiness.booking_link_retention_required and not bundle.provenance_summary.booking_links:
+        if (
+            objectives.justification_readiness.booking_link_retention_required
+            and not bundle.provenance_summary.booking_links
+        ):
             missing_fields.append("bundle:booking_links")
         input_coverage = _clamp(1.0 - 0.1 * len(missing_fields))
         policy_source_count = sum(
@@ -796,9 +877,15 @@ class BusinessRankingEngine:
             default=0.72,
         )
         low_confidence_flags = []
-        if profile.approval_targets.needs_exception_preclearance and not bundle.provenance_summary.booking_links:
+        if (
+            profile.approval_targets.needs_exception_preclearance
+            and not bundle.provenance_summary.booking_links
+        ):
             low_confidence_flags.append("exception_packet_sparse")
-        if any(item.normalized_signal is not None and item.normalized_signal < 0.45 for item in contributions):
+        if any(
+            item.normalized_signal is not None and item.normalized_signal < 0.45
+            for item in contributions
+        ):
             low_confidence_flags.append("low_business_fit_component")
         return ScoreConfidenceSummary(
             overall_confidence=_round(overall),
@@ -841,8 +928,12 @@ class BusinessRankingEngine:
                 ),
                 factor_keys=[top_positive.axis_key, top_negative.axis_key],
                 machine_context={
-                    "compliant_first": str(objectives.compliant_first_path.active).lower(),
-                    "policy_nearest_fallback": str(objectives.policy_nearest_fallback.active).lower(),
+                    "compliant_first": str(
+                        objectives.compliant_first_path.active
+                    ).lower(),
+                    "policy_nearest_fallback": str(
+                        objectives.policy_nearest_fallback.active
+                    ).lower(),
                 },
                 human_summary=_dedupe_strings(
                     [
@@ -864,9 +955,12 @@ class BusinessRankingEngine:
                     headline="Confidence remains bounded by proposal-readiness coverage.",
                     summary="Missing data and policy-documentation gaps stay visible in the ranking output.",
                     factor_keys=["justification_readiness", "comparable_readiness"],
-                    machine_context={"overall_confidence": str(confidence.overall_confidence or 0.0)},
+                    machine_context={
+                        "overall_confidence": str(confidence.overall_confidence or 0.0)
+                    },
                     human_summary=[
-                        "Missing data fields: " + ", ".join(confidence.missing_data_fields[:3])
+                        "Missing data fields: "
+                        + ", ".join(confidence.missing_data_fields[:3])
                     ],
                     source_refs=candidate.source_refs[:2],
                 )
@@ -885,7 +979,9 @@ class BusinessRankingEngine:
                 RiskFlag(
                     risk_id=f"risk:{assessment.bundle_id}:{blocking_reason}",
                     code=blocking_reason,
-                    severity="critical" if not assessment.recommended_for_ranking else "warning",
+                    severity="critical"
+                    if not assessment.recommended_for_ranking
+                    else "warning",
                     summary=f"Feasibility issue remains unresolved: {blocking_reason}.",
                     blocking=not assessment.recommended_for_ranking,
                 )
@@ -900,7 +996,10 @@ class BusinessRankingEngine:
                         summary=f"{transport.name} still requires manual approval.",
                     )
                 )
-        if objectives.justification_readiness.maintain_exception_packet and not bundle.provenance_summary.booking_links:
+        if (
+            objectives.justification_readiness.maintain_exception_packet
+            and not bundle.provenance_summary.booking_links
+        ):
             risks.append(
                 RiskFlag(
                     risk_id=f"risk:{bundle.bundle_id}:exception-packet",
@@ -933,11 +1032,13 @@ class BusinessRankingEngine:
                 value_signal=bundle.quality_value_fit.value_signal,
                 fit_signal=bundle.quality_value_fit.fit_signal,
             ),
-            drawbacks=list(bundle.explanation.tradeoffs) + list(bundle.feasibility.blocking_reasons),
+            drawbacks=list(bundle.explanation.tradeoffs)
+            + list(bundle.feasibility.blocking_reasons),
             booking_links=list(bundle.provenance_summary.booking_links),
             source_refs=list(bundle.provenance_summary.source_refs),
             supporting_place_ids=list(bundle.destination_ids),
-            explanation=list(bundle.explanation.strengths) + list(bundle.explanation.evidence),
+            explanation=list(bundle.explanation.strengths)
+            + list(bundle.explanation.evidence),
         )
 
     def _estimate_bundle_total(self, bundle: InventoryBundle) -> MoneyRange | None:

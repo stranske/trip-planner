@@ -43,11 +43,18 @@ class DestinationIngestionResult:
         require_non_empty(self.snapshot_id, "snapshot_id")
         if any(not isinstance(item, Destination) for item in self.destinations):
             raise ValueError("destinations must contain Destination instances")
-        if any(not isinstance(item, AttributeConflict) for item in self.unresolved_conflicts):
-            raise ValueError("unresolved_conflicts must contain AttributeConflict instances")
+        if any(
+            not isinstance(item, AttributeConflict)
+            for item in self.unresolved_conflicts
+        ):
+            raise ValueError(
+                "unresolved_conflicts must contain AttributeConflict instances"
+            )
         if any(not isinstance(item, IngestionWarning) for item in self.warnings):
             raise ValueError("warnings must contain IngestionWarning instances")
-        if self.handoff is not None and not isinstance(self.handoff, NormalizationHandoff):
+        if self.handoff is not None and not isinstance(
+            self.handoff, NormalizationHandoff
+        ):
             raise ValueError("handoff must be a NormalizationHandoff when provided")
         if not isinstance(self.summary, IngestionSummary):
             raise ValueError("summary must be an IngestionSummary")
@@ -71,7 +78,9 @@ def ingest_destination_snapshot(
     resolutions = resolutions or []
     dedup_decisions = dedup_decisions or []
     warnings = [warning_from_issue(issue) for issue in snapshot.issues]
-    resolution_map = {resolution.resolution_id: resolution for resolution in resolutions}
+    resolution_map = {
+        resolution.resolution_id: resolution for resolution in resolutions
+    }
     emitted_ids: set[str] = set()
     filtered_record_ids: list[str] = []
     low_confidence_destination_ids: list[str] = []
@@ -80,14 +89,19 @@ def ingest_destination_snapshot(
     provenance_refs: list[ProvenanceReference] = []
 
     for decision in dedup_decisions:
-        if decision.entity_scope != "destination" or decision.option_kind != snapshot.option_kind:
+        if (
+            decision.entity_scope != "destination"
+            or decision.option_kind != snapshot.option_kind
+        ):
             continue
         record_ids = _record_ids_for_decision(decision, resolution_map)
         preserved_conflicts.extend(unresolved_conflicts(decision.preserved_conflicts))
         if decision.decision == "suppress":
             emitted_ids.update(record_ids)
             filtered_record_ids.extend(
-                record_id for record_id in record_ids if record_id not in filtered_record_ids
+                record_id
+                for record_id in record_ids
+                if record_id not in filtered_record_ids
             )
             continue
         if decision.decision in {"keep_separate", "needs_review"}:
@@ -121,14 +135,19 @@ def ingest_destination_snapshot(
             continue
         resolution = _resolution_for_record(record.record_id, resolutions)
         destination_id = _canonical_destination_id(record, resolution)
-        destination, refs = _destination_from_records([record], snapshot, destination_id)
+        destination, refs = _destination_from_records(
+            [record], snapshot, destination_id
+        )
         if resolution is not None:
             destination.source_refs.extend(
                 _resolution_source_ref(snapshot, resolution, destination_id)
             )
             unresolved = unresolved_conflicts(resolution.conflicts)
             preserved_conflicts.extend(unresolved)
-            if resolution.review_required or _lowest_match_confidence(resolution) < 0.75:
+            if (
+                resolution.review_required
+                or _lowest_match_confidence(resolution) < 0.75
+            ):
                 low_confidence_destination_ids.append(destination.destination_id)
         _append_record_warnings(destination, [record], warnings)
         destinations.append(destination)
@@ -148,7 +167,8 @@ def ingest_destination_snapshot(
         degraded_options=sum(
             1
             for destination in destinations
-            if destination.operational_notes or any(ref.notes for ref in destination.source_refs)
+            if destination.operational_notes
+            or any(ref.notes for ref in destination.source_refs)
         ),
         unresolved_conflicts=len(preserved_conflicts),
         low_confidence_option_ids=sorted(set(low_confidence_destination_ids)),
@@ -206,7 +226,9 @@ def _destination_from_records(
                 contribution_kind=ref.contribution_kind,
                 summary=ref.summary,
                 freshness_days_at_capture=ref.freshness_days_at_capture,
-                notes=_merge_scalar_list(ref.notes, record.payload.get("ingestion_notes", [])),
+                notes=_merge_scalar_list(
+                    ref.notes, record.payload.get("ingestion_notes", [])
+                ),
             )
         )
         provenance_refs.append(ref)
@@ -290,7 +312,9 @@ def _resolution_source_ref(
 ) -> list[DestinationSourceRef]:
     notes = [f"resolution:{resolution.resolution_id}", *resolution.notes]
     unresolved = unresolved_conflicts(resolution.conflicts)
-    notes.extend(f"{conflict.attribute_path}:{conflict.reason}" for conflict in unresolved)
+    notes.extend(
+        f"{conflict.attribute_path}:{conflict.reason}" for conflict in unresolved
+    )
     return [
         DestinationSourceRef(
             provenance_id=f"{snapshot.snapshot_id}:{resolution.resolution_id}",
@@ -341,7 +365,9 @@ def _resolution_for_record(
     return None
 
 
-def _canonical_destination_id(record: RawSourceRecord, resolution: EntityResolution | None) -> str:
+def _canonical_destination_id(
+    record: RawSourceRecord, resolution: EntityResolution | None
+) -> str:
     if resolution is not None:
         return resolution.canonical_entity_id
     payload_destination_id = record.payload.get("destination_id")

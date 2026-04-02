@@ -168,7 +168,9 @@ def build_move_cost_summaries(
         )
         schedule_pressure = None
         if option.transfer_burden.schedule_protection_signal is not None:
-            schedule_pressure = round(1.0 - option.transfer_burden.schedule_protection_signal, 4)
+            schedule_pressure = round(
+                1.0 - option.transfer_burden.schedule_protection_signal, 4
+            )
         continuity = _continuity_signal(bundle, option)
         friction_penalty = round(
             (estimate.duration_minutes / 600.0)

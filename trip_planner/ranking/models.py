@@ -194,24 +194,38 @@ class ScoreBreakdown:
     notes: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        if any(not isinstance(item, ScoreContribution) for item in self.component_contributions):
-            raise ValueError("component_contributions must contain ScoreContribution instances")
+        if any(
+            not isinstance(item, ScoreContribution)
+            for item in self.component_contributions
+        ):
+            raise ValueError(
+                "component_contributions must contain ScoreContribution instances"
+            )
         if any(not isinstance(item, ScoreAdjustment) for item in self.penalties):
             raise ValueError("penalties must contain ScoreAdjustment instances")
         if any(not isinstance(item, ScoreAdjustment) for item in self.bonuses):
             raise ValueError("bonuses must contain ScoreAdjustment instances")
-        if any(not isinstance(item, ScoreAdjustment) for item in self.missing_data_penalties):
-            raise ValueError("missing_data_penalties must contain ScoreAdjustment instances")
+        if any(
+            not isinstance(item, ScoreAdjustment)
+            for item in self.missing_data_penalties
+        ):
+            raise ValueError(
+                "missing_data_penalties must contain ScoreAdjustment instances"
+            )
         if any(item.kind != "penalty" for item in self.penalties):
             raise ValueError("penalties must only contain penalty adjustments")
         if any(item.kind != "bonus" for item in self.bonuses):
             raise ValueError("bonuses must only contain bonus adjustments")
         if any(item.kind != "missing_data" for item in self.missing_data_penalties):
-            raise ValueError("missing_data_penalties must only contain missing_data adjustments")
+            raise ValueError(
+                "missing_data_penalties must only contain missing_data adjustments"
+            )
         require_strings(self.notes, "notes")
 
         computed_score = self.baseline_score
-        computed_score += sum(item.weighted_impact for item in self.component_contributions)
+        computed_score += sum(
+            item.weighted_impact for item in self.component_contributions
+        )
         computed_score += sum(item.amount for item in self.bonuses)
         computed_score -= sum(item.amount for item in self.penalties)
         computed_score -= sum(item.amount for item in self.missing_data_penalties)
@@ -234,7 +248,9 @@ class RankedResult:
     supporting_destination_ids: list[str] = field(default_factory=list)
     route_sequence: list[str] = field(default_factory=list)
     score_breakdown: ScoreBreakdown = field(default_factory=ScoreBreakdown)
-    confidence_summary: ScoreConfidenceSummary = field(default_factory=ScoreConfidenceSummary)
+    confidence_summary: ScoreConfidenceSummary = field(
+        default_factory=ScoreConfidenceSummary
+    )
     explanation_records: list[ExplanationRecord] = field(default_factory=list)
     unresolved_risks: list[RiskFlag] = field(default_factory=list)
     source_refs: list[str] = field(default_factory=list)
@@ -247,14 +263,20 @@ class RankedResult:
             raise ValueError("rank must be positive")
         if self.result_kind not in RANK_RESULT_KINDS:
             raise ValueError(f"result_kind must be one of {RANK_RESULT_KINDS}")
-        if self.target_option is not None and not isinstance(self.target_option, Option):
+        if self.target_option is not None and not isinstance(
+            self.target_option, Option
+        ):
             raise ValueError("target_option must be an Option when provided")
         if not isinstance(self.score_breakdown, ScoreBreakdown):
             raise ValueError("score_breakdown must be a ScoreBreakdown")
         if not isinstance(self.confidence_summary, ScoreConfidenceSummary):
             raise ValueError("confidence_summary must be a ScoreConfidenceSummary")
-        if any(not isinstance(item, ExplanationRecord) for item in self.explanation_records):
-            raise ValueError("explanation_records must contain ExplanationRecord instances")
+        if any(
+            not isinstance(item, ExplanationRecord) for item in self.explanation_records
+        ):
+            raise ValueError(
+                "explanation_records must contain ExplanationRecord instances"
+            )
         if any(not isinstance(item, RiskFlag) for item in self.unresolved_risks):
             raise ValueError("unresolved_risks must contain RiskFlag instances")
         require_strings(self.supporting_option_ids, "supporting_option_ids")
@@ -265,7 +287,9 @@ class RankedResult:
         if self.score_breakdown.final_score != self.score:
             raise ValueError("score must match score_breakdown.final_score")
         if not self.explanation_records:
-            raise ValueError("explanation_records must contain at least one ExplanationRecord")
+            raise ValueError(
+                "explanation_records must contain at least one ExplanationRecord"
+            )
 
         if self.result_kind == "item":
             if self.target_option is None:
@@ -274,7 +298,9 @@ class RankedResult:
                 raise ValueError("item results cannot provide target_bundle_id")
         else:
             if not self.target_bundle_id:
-                raise ValueError("bundle and route results must provide target_bundle_id")
+                raise ValueError(
+                    "bundle and route results must provide target_bundle_id"
+                )
             if self.result_kind == "route" and not self.route_sequence:
                 raise ValueError("route results must provide route_sequence")
 
@@ -290,11 +316,17 @@ class RankedResult:
             rank=payload["rank"],
             score=payload["score"],
             target_option=(
-                _parse_option(target_option_payload) if target_option_payload is not None else None
+                _parse_option(target_option_payload)
+                if target_option_payload is not None
+                else None
             ),
             target_bundle_id=payload.get("target_bundle_id"),
-            supporting_option_ids=_optional_list_field(payload, "supporting_option_ids"),
-            supporting_destination_ids=_optional_list_field(payload, "supporting_destination_ids"),
+            supporting_option_ids=_optional_list_field(
+                payload, "supporting_option_ids"
+            ),
+            supporting_destination_ids=_optional_list_field(
+                payload, "supporting_destination_ids"
+            ),
             route_sequence=_optional_list_field(payload, "route_sequence"),
             score_breakdown=ScoreBreakdown(
                 baseline_score=_optional_mapping_field(payload, "score_breakdown").get(
@@ -341,7 +373,8 @@ class RankedResult:
                 for item in _optional_list_field(payload, "explanation_records")
             ],
             unresolved_risks=[
-                RiskFlag(**item) for item in _optional_list_field(payload, "unresolved_risks")
+                RiskFlag(**item)
+                for item in _optional_list_field(payload, "unresolved_risks")
             ],
             source_refs=_optional_list_field(payload, "source_refs"),
             notes=_optional_list_field(payload, "notes"),
@@ -399,10 +432,12 @@ class RankedResultSet:
             scope=payload["scope"],
             title=payload["title"],
             results=[
-                RankedResult.from_dict(item) for item in _optional_list_field(payload, "results")
+                RankedResult.from_dict(item)
+                for item in _optional_list_field(payload, "results")
             ],
             comparison_axes=[
-                ComparisonAxis(**item) for item in _optional_list_field(payload, "comparison_axes")
+                ComparisonAxis(**item)
+                for item in _optional_list_field(payload, "comparison_axes")
             ],
             explanation=_optional_list_field(payload, "explanation"),
             source_refs=_optional_list_field(payload, "source_refs"),

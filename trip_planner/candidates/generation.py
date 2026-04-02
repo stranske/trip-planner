@@ -42,7 +42,9 @@ def generate_candidate_set(
     policy_constraints: PolicyConstraintSet | None = None,
 ) -> CandidateSet:
     if selection_limit <= 0:
-        raise ValueError(f"selection_limit must be a positive integer; got {selection_limit!r}")
+        raise ValueError(
+            f"selection_limit must be a positive integer; got {selection_limit!r}"
+        )
     if max_source_freshness_days < 0:
         raise ValueError(
             "max_source_freshness_days must be a non-negative integer; "
@@ -60,7 +62,9 @@ def generate_candidate_set(
             lodging_option,
             destination_map=destination_map,
             max_source_freshness_days=max_source_freshness_days,
-            policy_constraints=(policy_constraints if purpose == "policy_comparison" else None),
+            policy_constraints=(
+                policy_constraints if purpose == "policy_comparison" else None
+            ),
         )
         if exclusion is None:
             included_lodging.append(lodging_option)
@@ -72,7 +76,9 @@ def generate_candidate_set(
             transport_option,
             destination_map=destination_map,
             max_source_freshness_days=max_source_freshness_days,
-            policy_constraints=(policy_constraints if purpose == "policy_comparison" else None),
+            policy_constraints=(
+                policy_constraints if purpose == "policy_comparison" else None
+            ),
         )
         if exclusion is None:
             included_transport.append(transport_option)
@@ -96,10 +102,14 @@ def generate_candidate_set(
         lodging_options=included_lodging,
         transport_options=included_transport,
         activity_options=included_activity,
-        policy_constraints=(policy_constraints if purpose == "policy_comparison" else None),
+        policy_constraints=(
+            policy_constraints if purpose == "policy_comparison" else None
+        ),
     )
     if not seeds:
-        raise ValueError("candidate generation produced no bundle seeds from the provided inputs")
+        raise ValueError(
+            "candidate generation produced no bundle seeds from the provided inputs"
+        )
 
     limited_seeds = seeds[:selection_limit]
     source_refs = _dedupe_strings(
@@ -121,7 +131,8 @@ def generate_candidate_set(
         policy_exclusion_count=sum(
             1
             for item in exclusions
-            if item.reason_code in {"policy_channel", "policy_rate_cap", "policy_approval"}
+            if item.reason_code
+            in {"policy_channel", "policy_rate_cap", "policy_approval"}
         ),
         availability_exclusion_count=sum(
             1 for item in exclusions if item.reason_code == "unavailable"
@@ -230,23 +241,43 @@ def _build_candidate_seeds(
                     destination_transport,
                     destination_activity,
                 ),
-                notes=["Source references remain explicit on the included normalized records."],
+                notes=[
+                    "Source references remain explicit on the included normalized records."
+                ],
             ),
             quality_value_fit=BundleQualityValueFitSummary(
                 quality_signal=_mean_or_none(
-                    [item.quality_summary.overall_signal for item in destination_lodging]
-                    + [item.quality_summary.overall_signal for item in destination_activity]
-                    + [item.experience_summary.comfort_signal for item in destination_transport]
+                    [
+                        item.quality_summary.overall_signal
+                        for item in destination_lodging
+                    ]
+                    + [
+                        item.quality_summary.overall_signal
+                        for item in destination_activity
+                    ]
+                    + [
+                        item.experience_summary.comfort_signal
+                        for item in destination_transport
+                    ]
                 ),
                 value_signal=_mean_or_none(
                     [item.value_summary.overall_signal for item in destination_lodging]
-                    + [item.value_summary.overall_signal for item in destination_activity]
-                    + [item.fit_summary.policy_fit_signal for item in destination_transport]
+                    + [
+                        item.value_summary.overall_signal
+                        for item in destination_activity
+                    ]
+                    + [
+                        item.fit_summary.policy_fit_signal
+                        for item in destination_transport
+                    ]
                 ),
                 fit_signal=_mean_or_none(
                     [item.fit_summary.overall_signal for item in destination_lodging]
                     + [item.fit_summary.overall_signal for item in destination_activity]
-                    + [item.fit_summary.overall_signal for item in destination_transport]
+                    + [
+                        item.fit_summary.overall_signal
+                        for item in destination_transport
+                    ]
                 ),
             ),
             feasibility=BundleFeasibility(
@@ -286,8 +317,12 @@ def _build_candidate_seeds(
                 "Early candidate seed for downstream comparison and ranking without collapsing "
                 "the normalized option layer."
             ),
-            tags=_bundle_tags(destination_lodging, destination_transport, destination_activity),
-            notes=["Downstream ranking can reorder or discard this seed without rebuilding input."],
+            tags=_bundle_tags(
+                destination_lodging, destination_transport, destination_activity
+            ),
+            notes=[
+                "Downstream ranking can reorder or discard this seed without rebuilding input."
+            ],
         )
         seeds.append(
             CandidateSeed(
@@ -340,7 +375,10 @@ def _evaluate_lodging(
             destination_ids=[option.destination_id],
             source_ref_ids=[item.provenance_id for item in option.source_refs],
         )
-    if not option.feasibility.available or option.feasibility.inventory_status == "sold_out":
+    if (
+        not option.feasibility.available
+        or option.feasibility.inventory_status == "sold_out"
+    ):
         return CandidateExclusion(
             option_id=option.option_id,
             option_kind="lodging",
@@ -423,7 +461,10 @@ def _evaluate_transport(
     max_source_freshness_days: int,
     policy_constraints: PolicyConstraintSet | None,
 ) -> CandidateExclusion | None:
-    if option.origin_id not in destination_map or option.destination_id not in destination_map:
+    if (
+        option.origin_id not in destination_map
+        or option.destination_id not in destination_map
+    ):
         return CandidateExclusion(
             option_id=option.option_id,
             option_kind=option.transport_kind,
@@ -432,7 +473,10 @@ def _evaluate_transport(
             destination_ids=[option.origin_id, option.destination_id],
             source_ref_ids=[item.provenance_id for item in option.source_refs],
         )
-    if not option.feasibility.available or option.feasibility.availability_status == "sold_out":
+    if (
+        not option.feasibility.available
+        or option.feasibility.availability_status == "sold_out"
+    ):
         return CandidateExclusion(
             option_id=option.option_id,
             option_kind=option.transport_kind,
@@ -494,7 +538,10 @@ def _evaluate_activity(
             destination_ids=[option.destination_id],
             source_ref_ids=[item.provenance_id for item in option.source_refs],
         )
-    if not option.feasibility.available or option.feasibility.availability_status == "sold_out":
+    if (
+        not option.feasibility.available
+        or option.feasibility.availability_status == "sold_out"
+    ):
         return CandidateExclusion(
             option_id=option.option_id,
             option_kind="activity",
@@ -528,7 +575,11 @@ def _bundle_destinations(
     ids = [primary_destination.destination_id]
     for option in destination_transport:
         ids.extend([option.origin_id, option.destination_id])
-    return [destination_map[item] for item in _dedupe_strings(ids) if item in destination_map]
+    return [
+        destination_map[item]
+        for item in _dedupe_strings(ids)
+        if item in destination_map
+    ]
 
 
 def _bundle_strengths(
@@ -571,7 +622,8 @@ def _bundle_tradeoffs(
         risks.extend(lodging_option.feasibility.constraints)
     for transport_option in transport_options:
         risks.extend(
-            transport_option.feasibility.constraints + transport_option.policy_summary.policy_notes
+            transport_option.feasibility.constraints
+            + transport_option.policy_summary.policy_notes
         )
     for activity_option in activity_options:
         risks.extend(activity_option.feasibility.constraints)
@@ -678,7 +730,9 @@ def _aggregate_source_refs(
     activity_options: list[ActivityOption],
 ) -> list[str]:
     values = [
-        item.provenance_id for destination in destinations for item in destination.source_refs
+        item.provenance_id
+        for destination in destinations
+        for item in destination.source_refs
     ]
     for lodging_option in lodging_options:
         values.extend(item.provenance_id for item in lodging_option.source_refs)
@@ -701,7 +755,9 @@ def _aggregate_booking_links(
 
 
 def _is_stale(values: list[int | None], max_source_freshness_days: int) -> bool:
-    return any(value is not None and value > max_source_freshness_days for value in values)
+    return any(
+        value is not None and value > max_source_freshness_days for value in values
+    )
 
 
 def _channel_allowed(channel: str, required_channels: list[str]) -> bool:
