@@ -1,10 +1,12 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from trip_planner.orchestration import (
     InTripAdjustmentContext,
+    InTripRevisionOutput,
     InTripTriggerEvent,
     build_in_trip_adjustment_result,
 )
@@ -83,6 +85,24 @@ def test_budget_drift_event_routes_into_reranking() -> None:
     assert result.updated_session_state.pending_decisions == _load_session().pending_decisions
 
 
+def test_rerank_event_does_not_require_confirmation_for_prior_decisions() -> None:
+    session = _load_session()
+    session.pending_decisions = [*session.pending_decisions]
+    session.pending_decisions[0] = replace(
+        session.pending_decisions[0],
+        blocking=True,
+    )
+
+    result = build_in_trip_adjustment_result(
+        _context(session_state=session),
+        _load_event("budget_drift_replan.json"),
+    )
+
+    assert result.replanning_request.replanning_kind == "rerank"
+    assert result.replanning_request.requires_user_confirmation is False
+    assert result.updated_session_state.pending_decisions == session.pending_decisions
+
+
 def test_travel_delay_event_routes_into_emergency_fallback() -> None:
     result = build_in_trip_adjustment_result(
         _context(),
@@ -133,3 +153,35 @@ def test_trigger_event_rejects_unknown_severity() -> None:
             observed_at="2026-04-02T11:40:00Z",
             summary="Bad severity fixture.",
         )
+
+
+def test_trigger_event_from_dict_rejects_non_mapping_metadata() -> None:
+    payload = {
+        "trigger_event_id": "trigger:bad-metadata",
+        "trip_id": "trip-leisure-kyoto-live",
+        "session_state_id": "session-state:kyoto-rainy-day",
+        "trigger_kind": "closure",
+        "severity": "advisory",
+        "change_scope": "day_segment",
+        "observed_at": "2026-04-02T11:40:00Z",
+        "summary": "Bad metadata fixture.",
+        "metadata": ["option-set:bad"],
+    }
+
+    with pytest.raises(ValueError, match="metadata"):
+        InTripTriggerEvent.from_dict(payload)
+
+
+def test_revision_output_from_dict_rejects_non_mapping_payload() -> None:
+    payload = {
+        "revision_output_id": "revision-output:bad-payload",
+        "trip_id": "trip-leisure-kyoto-live",
+        "output_kind": "status_note",
+        "generated_at": "2026-04-02T11:40:00Z",
+        "summary": "Bad revision payload fixture.",
+        "recommended_action_id": "action-record-trigger",
+        "payload": ["not-a-mapping"],
+    }
+
+    with pytest.raises(ValueError, match="payload"):
+        InTripRevisionOutput.from_dict(payload)

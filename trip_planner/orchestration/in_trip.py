@@ -159,6 +159,8 @@ class InTripTriggerEvent:
             self.affected_saved_scenario_id,
             "affected_saved_scenario_id",
         )
+        if not isinstance(self.metadata, dict):
+            raise ValueError("metadata must be a mapping")
         require_string_mapping(self.metadata, "metadata")
 
     def to_dict(self) -> dict[str, Any]:
@@ -181,7 +183,7 @@ class InTripTriggerEvent:
             affected_option_ids=_payload_list(payload, "affected_option_ids", []),
             affected_checkpoint_id=payload.get("affected_checkpoint_id"),
             affected_saved_scenario_id=payload.get("affected_saved_scenario_id"),
-            metadata=payload.get("metadata", {}),
+            metadata=_payload_mapping(payload, "metadata", {}),
         )
 
 
@@ -273,6 +275,8 @@ class InTripRevisionOutput:
             raise ValueError(f"output_kind must be one of {REVISION_OUTPUT_KINDS}")
         _require_unique_strings(self.ref_ids, "ref_ids")
         _require_unique_strings(self.warning_codes, "warning_codes")
+        if not isinstance(self.payload, dict):
+            raise ValueError("payload must be a mapping")
         require_string_mapping(self.payload, "payload")
 
     def to_dict(self) -> dict[str, Any]:
@@ -289,7 +293,7 @@ class InTripRevisionOutput:
             recommended_action_id=payload["recommended_action_id"],
             ref_ids=_payload_list(payload, "ref_ids", []),
             warning_codes=_payload_list(payload, "warning_codes", []),
-            payload=payload.get("payload", {}),
+            payload=_payload_mapping(payload, "payload", {}),
         )
 
 
@@ -464,6 +468,9 @@ def _build_replanning_request(
     replanning_kind: str,
     pending_decisions: list[SessionPendingDecision],
 ) -> ReplanningRequest:
+    introduced_blocking_decision = len(pending_decisions) > len(
+        context.session_state.pending_decisions
+    )
     return ReplanningRequest(
         request_id=f"{event.trigger_event_id}:request",
         trip_id=context.session_state.trip_id,
@@ -480,7 +487,7 @@ def _build_replanning_request(
         ),
         affected_option_ids=list(event.affected_option_ids),
         warning_codes=list(event.trigger_codes),
-        requires_user_confirmation=bool(pending_decisions),
+        requires_user_confirmation=introduced_blocking_decision,
         notes=[
             "Keep in-trip routing attached to saved-scenario, checkpoint, and ranking references."
         ],
