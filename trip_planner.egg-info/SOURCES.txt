@@ -76,6 +76,8 @@ trip_planner/itinerary/__init__.py
 trip_planner/itinerary/feasibility.py
 trip_planner/itinerary/move_costs.py
 trip_planner/itinerary/objective_derivation.py
+trip_planner/itinerary/scenarios.py
+trip_planner/itinerary/search.py
 trip_planner/options/__init__.py
 trip_planner/options/activities.py
 trip_planner/options/bundles.py

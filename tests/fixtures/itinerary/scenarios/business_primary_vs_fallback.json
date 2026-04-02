@@ -1,0 +1,15 @@
+{
+  "title": "Business primary versus fallback route set",
+  "expected_bundle_order": [
+    "bundle:approved-business",
+    "bundle:exception-business"
+  ],
+  "expected_kinds": [
+    "primary",
+    "fallback"
+  ],
+  "expected_fallback_tradeoff_codes": [
+    "policy_exception_path",
+    "ranking_not_recommended"
+  ]
+}

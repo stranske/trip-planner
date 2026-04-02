@@ -1,0 +1,13 @@
+{
+  "title": "Leisure multi-scenario route set",
+  "expected_bundle_order": [
+    "bundle:urban-culture",
+    "bundle:quiet-recovery",
+    "bundle:scenic-wanderer"
+  ],
+  "expected_kinds": [
+    "primary",
+    "alternative",
+    "alternative"
+  ]
+}
