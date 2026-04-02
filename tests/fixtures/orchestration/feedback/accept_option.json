@@ -1,0 +1,18 @@
+{
+  "event": {
+    "feedback_event_id": "feedback:accept-kyoto-central",
+    "presentation_id": "presentation:kyoto-v3",
+    "feedback_kind": "accept_option",
+    "option_id": "option:kyoto-central",
+    "summary": "Traveler wants to carry the Kyoto central option into the next checkpoint.",
+    "comparison_depth": "quick_preference_check",
+    "signal_strength": 0.82,
+    "dimension_biases": {
+      "route_coherence_vs_eclectic_contrast": -0.55,
+      "self_reliance_vs_convenience": 0.35
+    },
+    "hybrid_biases": {
+      "rest": 0.25
+    }
+  }
+}

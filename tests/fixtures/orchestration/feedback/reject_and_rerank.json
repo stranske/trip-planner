@@ -1,0 +1,21 @@
+{
+  "event": {
+    "feedback_event_id": "feedback:reject-osaka-rerank",
+    "presentation_id": "presentation:kyoto-v3",
+    "feedback_kind": "request_alternatives",
+    "option_id": "option:osaka-daytrip",
+    "summary": "Traveler wants more alternatives before the next checkpoint and does not want the Osaka-heavy branch.",
+    "comparison_depth": "inventory_narrowing",
+    "signal_strength": 0.88,
+    "dimension_biases": {
+      "movement_vs_friction": -0.65,
+      "self_reliance_vs_convenience": -0.45
+    },
+    "hybrid_biases": {
+      "route_modes": -0.3
+    },
+    "autonomy_feedback_kinds": [
+      "do_more_before_asking"
+    ]
+  }
+}

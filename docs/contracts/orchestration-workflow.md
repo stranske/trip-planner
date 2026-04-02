@@ -4,6 +4,7 @@ The canonical orchestration contracts now live in:
 
 - `trip_planner/orchestration/actions.py`
 - `trip_planner/orchestration/in_trip.py`
+- `trip_planner/orchestration/feedback.py`
 - `trip_planner/orchestration/models.py`
 - `trip_planner/orchestration/leisure.py`
 
@@ -27,6 +28,8 @@ These contracts define the shared workflow layer that later leisure, business, a
   - tells later orchestrators which action to continue next and which decision/output references are still blocking
 - `InTripAdjustmentResult`
   - captures one structured in-trip trigger plus the resulting replanning request, planner turn, activity event, and revision output
+- `FeedbackLoopResult`
+  - captures one structured option-feedback event plus the resulting planner turn, session-state delta, activity log event, and optional fallback-save request
 
 ## Design Rules
 
@@ -36,6 +39,7 @@ These contracts define the shared workflow layer that later leisure, business, a
 - Represent decision requests as structured options, not free-form strings.
 - Let later orchestrators compose these contracts instead of inventing mode-specific action containers.
 - Keep in-trip adjustment downstream from saved-scenario, session, ranking, and checkpoint layers instead of bypassing them.
+- Route concrete option reactions through explicit feedback-loop state instead of mutating the session opportunistically.
 
 ## Representative Fixtures
 
@@ -44,6 +48,9 @@ Representative fixtures live in:
 - `tests/fixtures/orchestration/in_trip/budget_drift_replan.json`
 - `tests/fixtures/orchestration/in_trip/closure_driven_replan.json`
 - `tests/fixtures/orchestration/in_trip/travel_delay_emergency.json`
+- `tests/fixtures/orchestration/feedback/accept_option.json`
+- `tests/fixtures/orchestration/feedback/reject_and_rerank.json`
+- `tests/fixtures/orchestration/feedback/save_as_fallback.json`
 - `tests/fixtures/orchestration/turns/leisure_planning_turn.json`
 - `tests/fixtures/orchestration/turns/business_planning_turn.json`
 - `tests/fixtures/orchestration/turns/in_trip_adjustment_turn.json`
@@ -56,6 +63,9 @@ These fixtures show how the same contract layer can express:
 - a budget-drift event that refreshes ranked alternatives without replacing the saved scenario yet
 - a closure-driven in-trip scenario revision that stays anchored to the current checkpoint
 - a travel-delay emergency fallback that escalates without pretending the traveler started a new trip
+- a quick preference-learning acceptance that stays inside a checkpointed leisure workflow
+- a deeper inventory-narrowing rerank request with autonomy feedback
+- a structured "save this as fallback" request that can hand off to scenario persistence
 - a leisure checkpoint with ranked scenario outputs
 - a business planning turn gated by policy posture
 - an in-trip replanning turn triggered by disruption
