@@ -218,3 +218,19 @@ def test_builder_rejects_non_final_selection_scenario_search() -> None:
                 generated_at="2026-04-02T15:00:00Z",
             )
         )
+
+
+@pytest.mark.parametrize("generated_at", ["", "not-a-timestamp"])
+def test_builder_rejects_invalid_generated_at(generated_at: str) -> None:
+    trip = _trip_record()
+    session = _session_state("delegated_planning_flow.json")
+
+    with pytest.raises(ValueError, match="generated_at"):
+        build_leisure_planner_turn(
+            LeisureWorkflowContext(
+                trip_record=trip,
+                session_state=session,
+                scenario_search=_scenario_search(),
+                generated_at=generated_at,
+            )
+        )

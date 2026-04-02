@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from trip_planner.itinerary import ScenarioSearchResult
 from trip_planner.state import PlanningSessionState, PersistedTripRecord
@@ -33,6 +34,7 @@ class LeisureWorkflowContext:
             raise ValueError("trip_record must represent a leisure trip")
         if self.session_state.mode != "leisure":
             raise ValueError("session_state must represent a leisure session")
+        _validate_generated_at(self.generated_at)
         if self.scenario_search.trip_id != self.trip_record.trip.trip_id:
             raise ValueError("scenario_search.trip_id must match trip_record.trip.trip_id")
         if self.session_state.trip_id != self.trip_record.trip.trip_id:
@@ -385,6 +387,7 @@ def _build_outputs(
 ) -> list[PlannerOutput]:
     scenario_search = context.scenario_search
     session = context.session_state
+    latest_presentation = _latest_presentation(session)
     outputs: list[PlannerOutput] = []
 
     if variant != "revised_after_feedback":
@@ -470,8 +473,8 @@ def _build_outputs(
                     payload={
                         "rejected_option_ids": _feedback_option_ids(session),
                         "presentation_id": (
-                            _latest_presentation(session).presentation_id
-                            if _latest_presentation(session) is not None
+                            latest_presentation.presentation_id
+                            if latest_presentation is not None
                             else ""
                         ),
                     },
@@ -564,6 +567,15 @@ def _build_transition(
         changed_by="planner",
         warning_codes=["feedback_rejected_option_set"],
     )
+
+
+def _validate_generated_at(value: str) -> None:
+    if not value.strip():
+        raise ValueError("generated_at must be a non-empty ISO 8601 timestamp")
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("generated_at must be a valid ISO 8601 timestamp") from exc
 
 
 def _latest_presentation(session: PlanningSessionState):
