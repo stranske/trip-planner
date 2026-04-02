@@ -1,0 +1,174 @@
+{
+  "turn_id": "turn-in-trip-rome-002",
+  "trip_id": "trip-in-trip-rome",
+  "mode": "leisure",
+  "workflow_kind": "in_trip_adjustment",
+  "turn_kind": "adjustment_pass",
+  "started_at": "2026-04-02T13:30:00Z",
+  "workflow_state": {
+    "workflow_state_id": "workflow-in-trip-rome-v2",
+    "trip_id": "trip-in-trip-rome",
+    "mode": "leisure",
+    "workflow_kind": "in_trip_adjustment",
+    "current_stage": "replanning",
+    "status": "waiting_on_user",
+    "recorded_at": "2026-04-02T13:33:00Z",
+    "pending_decisions": [
+      {
+        "decision_id": "decision-accept-replan",
+        "prompt": "Should the planner replace the rained-out day trip with an in-city museum cluster?",
+        "requested_at": "2026-04-02T13:33:00Z",
+        "choices": [
+          {
+            "choice_id": "choice-accept-city-cluster",
+            "label": "Accept the in-city cluster",
+            "description": "Keep transit light and reuse existing reservations.",
+            "recommended": true
+          },
+          {
+            "choice_id": "choice-ask-for-more-outdoor-options",
+            "label": "Show more outdoor fallbacks",
+            "description": "Keep looking for alternatives despite the weather."
+          }
+        ],
+        "blocking": true,
+        "notes": [
+          "The weather alert invalidated the original day trip."
+        ],
+        "related_option_ids": [
+          "option-set-rain-fallback"
+        ]
+      }
+    ],
+    "open_action_ids": [
+      "action-replan-options",
+      "action-request-replan-decision"
+    ],
+    "completed_action_ids": [
+      "action-record-disruption",
+      "action-collect-fallbacks"
+    ],
+    "recent_output_ids": [
+      "output-adjustment-warning",
+      "output-fallback-options"
+    ],
+    "notes": [
+      "The traveler is already in trip, so the planner should minimize disruption."
+    ],
+    "tags": [
+      "in-trip",
+      "weather-trigger"
+    ],
+    "schema_version": "0.1.0"
+  },
+  "actions": [
+    {
+      "action_id": "action-record-disruption",
+      "action_kind": "record_warning",
+      "title": "Record the weather disruption against the current itinerary",
+      "stage": "monitoring",
+      "status": "completed",
+      "payload": {
+        "disruption_code": "weather-rain"
+      }
+    },
+    {
+      "action_id": "action-collect-fallbacks",
+      "action_kind": "assemble_candidates",
+      "title": "Collect indoor fallback options near the current base",
+      "stage": "replanning",
+      "status": "completed",
+      "depends_on_action_ids": [
+        "action-record-disruption"
+      ],
+      "payload": {
+        "option_set_id": "option-set-rain-fallback"
+      }
+    },
+    {
+      "action_id": "action-replan-options",
+      "action_kind": "replan_itinerary",
+      "title": "Build a low-disruption city fallback plan",
+      "stage": "replanning",
+      "status": "in_progress",
+      "depends_on_action_ids": [
+        "action-collect-fallbacks"
+      ],
+      "payload": {
+        "replacement_checkpoint_id": "checkpoint-rain-fallback"
+      }
+    },
+    {
+      "action_id": "action-request-replan-decision",
+      "action_kind": "request_decision",
+      "title": "Ask whether to accept the low-disruption fallback plan",
+      "stage": "decision_checkpoint",
+      "status": "pending",
+      "depends_on_action_ids": [
+        "action-replan-options"
+      ],
+      "payload": {
+        "decision_id": "decision-accept-replan"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "output_id": "output-adjustment-warning",
+      "output_kind": "warning",
+      "title": "Original day trip is no longer viable",
+      "emitted_at": "2026-04-02T13:33:05Z",
+      "surface": "notification",
+      "summary": "Weather conditions invalidate the original outdoor plan.",
+      "warnings": [
+        "weather-rain"
+      ],
+      "payload": {
+        "severity": "medium"
+      }
+    },
+    {
+      "output_id": "output-fallback-options",
+      "output_kind": "option_set",
+      "title": "Indoor Rome fallback options",
+      "emitted_at": "2026-04-02T13:33:05Z",
+      "surface": "side_panel",
+      "summary": "The planner assembled museum and neighborhood options near the current base.",
+      "ref_ids": [
+        "option-set-rain-fallback",
+        "checkpoint-rain-fallback"
+      ],
+      "payload": {
+        "fallback_count": 3
+      }
+    }
+  ],
+  "transition": {
+    "from_stage": "monitoring",
+    "to_stage": "replanning",
+    "trigger": "trip_disruption",
+    "changed_at": "2026-04-02T13:33:00Z",
+    "reason": "The planner needs a low-disruption fallback after a weather event.",
+    "warning_codes": [
+      "weather-rain"
+    ]
+  },
+  "next_step": {
+    "headline": "Complete the fallback plan and wait for traveler confirmation before replacing the current day.",
+    "recommended_action_id": "action-replan-options",
+    "blocking_decision_ids": [
+      "decision-accept-replan"
+    ],
+    "expected_output_ids": [
+      "output-adjustment-warning",
+      "output-fallback-options"
+    ],
+    "notes": [
+      "Avoid changing reservations automatically while the traveler is mid-trip."
+    ]
+  },
+  "notes": [
+    "This turn captures a representative in-trip replanning pass after a disruption."
+  ],
+  "schema_version": "0.1.0"
+}
