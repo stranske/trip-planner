@@ -154,7 +154,9 @@ class InTripTriggerEvent:
             raise ValueError(f"change_scope must be one of {CHANGE_SCOPES}")
         _require_unique_strings(self.trigger_codes, "trigger_codes")
         _require_unique_strings(self.affected_option_ids, "affected_option_ids")
-        require_optional_non_empty(self.affected_checkpoint_id, "affected_checkpoint_id")
+        require_optional_non_empty(
+            self.affected_checkpoint_id, "affected_checkpoint_id"
+        )
         require_optional_non_empty(
             self.affected_saved_scenario_id,
             "affected_saved_scenario_id",
@@ -479,7 +481,8 @@ def _build_replanning_request(
         replanning_kind=replanning_kind,
         summary=_request_summary(replanning_kind),
         trigger_event_id=event.trigger_event_id,
-        based_on_saved_scenario_id=context.session_state.current_saved_scenario_id or "",
+        based_on_saved_scenario_id=context.session_state.current_saved_scenario_id
+        or "",
         scenario_search_id=context.scenario_search_id,
         ranked_result_set_id=context.ranked_result_set_id,
         checkpoint_id=(
@@ -501,7 +504,9 @@ def _request_summary(replanning_kind: str) -> str:
         return "Refresh ranked alternatives before mutating the saved scenario."
     if replanning_kind == "scenario_revision":
         return "Build a scenario revision that preserves existing trip context."
-    return "Escalate to an emergency fallback without treating the change as a new trip."
+    return (
+        "Escalate to an emergency fallback without treating the change as a new trip."
+    )
 
 
 def _build_activity_event(
