@@ -99,7 +99,9 @@ def test_option_presentation_rejects_rejected_option_outside_surface() -> None:
 
 
 def test_activity_log_event_rejects_empty_metadata_value() -> None:
-    with pytest.raises(ValueError, match="metadata must contain non-empty string values"):
+    with pytest.raises(
+        ValueError, match="metadata must contain non-empty string values"
+    ):
         ActivityLogEvent(
             activity_event_id="activity:test",
             trip_id="trip-1",
@@ -138,7 +140,9 @@ def test_planning_session_rejects_duplicate_pending_decisions() -> None:
         PlanningSessionState.from_dict(payload)
 
 
-def test_planning_session_repository_protocol_can_store_session_state_and_logs() -> None:
+def test_planning_session_repository_protocol_can_store_session_state_and_logs() -> (
+    None
+):
     class InMemoryPlanningSessionRepository(PlanningSessionRepository):
         def __init__(self) -> None:
             self._sessions: dict[str, PlanningSessionState] = {}
@@ -221,9 +225,13 @@ def test_planning_session_repository_protocol_can_store_session_state_and_logs()
         ) -> list[PlanningSessionState]:
             sessions = list(self._sessions.values())
             if trip_id is not None:
-                sessions = [session for session in sessions if session.trip_id == trip_id]
+                sessions = [
+                    session for session in sessions if session.trip_id == trip_id
+                ]
             if user_id is not None:
-                sessions = [session for session in sessions if session.user_id == user_id]
+                sessions = [
+                    session for session in sessions if session.user_id == user_id
+                ]
             if owner_profile_id is not None:
                 sessions = [
                     session
@@ -326,7 +334,8 @@ def test_planning_session_repository_protocol_can_store_session_state_and_logs()
     assert stored.interaction_state.initiative_level == "planner_led"
     assert stored.recent_option_presentations[-1].option_set_id == "option-set:kyoto-v4"
     assert [
-        version.version_id for version in session_repo.list_versions(session.session_state_id)
+        version.version_id
+        for version in session_repo.list_versions(session.session_state_id)
     ] == [first.version_id, second.version_id, third.version_id]
     assert stored_event.event_kind == "scenario_saved"
     assert log_repo.list_events(event_kind="scenario_saved")[0].activity_event_id == (

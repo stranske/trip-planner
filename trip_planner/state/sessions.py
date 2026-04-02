@@ -148,9 +148,7 @@ class OptionPresentationRecord:
         require_non_empty(self.option_set_id, "option_set_id")
         require_non_empty(self.shown_at, "shown_at")
         if self.surface_kind not in OPTION_PRESENTATION_KINDS:
-            raise ValueError(
-                f"surface_kind must be one of {OPTION_PRESENTATION_KINDS}"
-            )
+            raise ValueError(f"surface_kind must be one of {OPTION_PRESENTATION_KINDS}")
         if not self.surfaced_option_ids:
             raise ValueError("surfaced_option_ids must contain at least one option id")
         _require_unique_strings(self.surfaced_option_ids, "surfaced_option_ids")
@@ -222,7 +220,10 @@ class PendingDecision:
             "related_saved_scenario_id",
         )
         _require_string_list(self.notes, "notes")
-        if self.selected_choice is not None and self.selected_choice not in self.choices:
+        if (
+            self.selected_choice is not None
+            and self.selected_choice not in self.choices
+        ):
             raise ValueError("selected_choice must be one of choices")
 
     def to_dict(self) -> dict[str, Any]:
@@ -280,9 +281,7 @@ class PlanningSessionState:
         if self.mode not in TRIP_MODES:
             raise ValueError(f"mode must be one of {TRIP_MODES}")
         if self.status not in PLANNING_SESSION_STATUSES:
-            raise ValueError(
-                f"status must be one of {PLANNING_SESSION_STATUSES}"
-            )
+            raise ValueError(f"status must be one of {PLANNING_SESSION_STATUSES}")
         if not isinstance(self.interaction_state, PlanningInteractionState):
             raise ValueError("interaction_state must be a PlanningInteractionState")
         if any(
@@ -292,7 +291,9 @@ class PlanningSessionState:
             raise ValueError(
                 "recent_option_presentations must contain OptionPresentationRecord instances"
             )
-        if any(not isinstance(item, PendingDecision) for item in self.pending_decisions):
+        if any(
+            not isinstance(item, PendingDecision) for item in self.pending_decisions
+        ):
             raise ValueError("pending_decisions must contain PendingDecision instances")
         presentation_ids = [
             presentation.presentation_id
@@ -382,9 +383,7 @@ class ActivityLogEvent:
         require_non_empty(self.summary, "summary")
         require_non_empty(self.actor, "actor")
         if self.event_kind not in ACTIVITY_LOG_EVENT_KINDS:
-            raise ValueError(
-                f"event_kind must be one of {ACTIVITY_LOG_EVENT_KINDS}"
-            )
+            raise ValueError(f"event_kind must be one of {ACTIVITY_LOG_EVENT_KINDS}")
         for field_name in (
             "related_decision_id",
             "related_option_set_id",
@@ -397,7 +396,9 @@ class ActivityLogEvent:
         if not isinstance(self.metadata, dict):
             raise ValueError("metadata must be a dict of string keys to string values")
         require_string_mapping(self.metadata, "metadata")
-        if any(not isinstance(value, str) or not value for value in self.metadata.values()):
+        if any(
+            not isinstance(value, str) or not value for value in self.metadata.values()
+        ):
             raise ValueError("metadata must contain non-empty string values")
         _require_unique_strings(self.tags, "tags")
         _require_string_list(self.notes, "notes")
