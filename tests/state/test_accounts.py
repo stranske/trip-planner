@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from trip_planner.state import (
     AccountPreferenceRecord,
     NotificationPreference,
@@ -84,6 +86,54 @@ def test_user_rejects_missing_default_traveler_profile_reference() -> None:
         assert "default_traveler_profile_id" in str(exc)
     else:
         raise AssertionError("User should reject unknown default traveler profiles")
+
+
+def test_account_preferences_reject_scalar_string_list_fields() -> None:
+    with pytest.raises(ValueError, match="preferred_languages must be a list"):
+        AccountPreferenceRecord.from_dict({"preferred_languages": "en-US"})
+
+
+def test_traveler_profile_rejects_scalar_string_list_fields() -> None:
+    with pytest.raises(ValueError, match="supported_modes must be a list"):
+        TravelerProfile.from_dict(
+            {
+                "traveler_profile_id": "traveler-invalid",
+                "display_name": "Invalid traveler",
+                "supported_modes": "business",
+            }
+        )
+
+
+def test_user_rejects_non_list_traveler_profiles_payload() -> None:
+    with pytest.raises(ValueError, match="traveler_profiles must be a list"):
+        User.from_dict(
+            {
+                "user_id": "user-invalid",
+                "email": "user@example.com",
+                "display_name": "Traveler",
+                "traveler_profiles": "traveler-1",
+            }
+        )
+
+
+def test_user_rejects_scalar_string_account_tags() -> None:
+    with pytest.raises(ValueError, match="account_tags must be a list"):
+        User.from_dict(
+            {
+                "user_id": "user-invalid",
+                "email": "user@example.com",
+                "display_name": "Traveler",
+                "traveler_profiles": [
+                    {
+                        "traveler_profile_id": "traveler-1",
+                        "display_name": "Primary leisure",
+                        "supported_modes": ["leisure"],
+                        "leisure_profile_id": "leisure-1",
+                    }
+                ],
+                "account_tags": "vip",
+            }
+        )
 
 
 def test_account_repository_protocol_can_version_user_state() -> None:

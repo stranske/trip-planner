@@ -27,6 +27,13 @@ def _require_unique_strings(values: list[str], field_name: str) -> None:
         raise ValueError(f"{field_name} cannot contain duplicates")
 
 
+def _payload_list(payload: dict[str, Any], field_name: str, default: list[Any]) -> list[Any]:
+    value = payload.get(field_name, default)
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list")
+    return list(value)
+
+
 @dataclass(slots=True)
 class RegionalDefaults:
     locale: str = "en-US"
@@ -135,10 +142,10 @@ class AccountPreferenceRecord:
             ),
             notification_preferences=[
                 NotificationPreference.from_dict(item)
-                for item in payload.get("notification_preferences", [])
+                for item in _payload_list(payload, "notification_preferences", [])
             ],
-            preferred_languages=list(payload.get("preferred_languages", [])),
-            planning_tags=list(payload.get("planning_tags", [])),
+            preferred_languages=_payload_list(payload, "preferred_languages", []),
+            planning_tags=_payload_list(payload, "planning_tags", []),
         )
 
 
@@ -187,19 +194,23 @@ class TravelerProfile:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "TravelerProfile":
+        supported_modes = _payload_list(payload, "supported_modes", ["leisure"])
+        default_origin_airports = _payload_list(payload, "default_origin_airports", [])
+        traveler_tags = _payload_list(payload, "traveler_tags", [])
+        notes = _payload_list(payload, "notes", [])
         return cls(
             traveler_profile_id=payload["traveler_profile_id"],
             display_name=payload["display_name"],
             profile_kind=payload.get("profile_kind", "personal"),
-            supported_modes=list(payload.get("supported_modes", ["leisure"])),
+            supported_modes=supported_modes,
             leisure_profile_id=payload.get("leisure_profile_id"),
             business_profile_id=payload.get("business_profile_id"),
-            default_origin_airports=list(payload.get("default_origin_airports", [])),
+            default_origin_airports=default_origin_airports,
             regional_defaults=RegionalDefaults.from_dict(
                 payload.get("regional_defaults", {})
             ),
-            traveler_tags=list(payload.get("traveler_tags", [])),
-            notes=list(payload.get("notes", [])),
+            traveler_tags=traveler_tags,
+            notes=notes,
         )
 
 
@@ -252,20 +263,24 @@ class User:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "User":
+        raw_traveler_profiles = _payload_list(payload, "traveler_profiles", [])
+        traveler_profiles: list[TravelerProfile] = []
+        for index, item in enumerate(raw_traveler_profiles):
+            if not isinstance(item, dict):
+                raise ValueError(f"traveler_profiles[{index}] must be an object")
+            traveler_profiles.append(TravelerProfile.from_dict(item))
+
         return cls(
             user_id=payload["user_id"],
             email=payload["email"],
             display_name=payload["display_name"],
-            traveler_profiles=[
-                TravelerProfile.from_dict(item)
-                for item in payload.get("traveler_profiles", [])
-            ],
+            traveler_profiles=traveler_profiles,
             account_preferences=AccountPreferenceRecord.from_dict(
                 payload.get("account_preferences", {})
             ),
             status=payload.get("status", "active"),
             schema_version=payload.get("schema_version", ACCOUNT_SCHEMA_VERSION),
             external_refs=dict(payload.get("external_refs", {})),
-            account_tags=list(payload.get("account_tags", [])),
-            notes=list(payload.get("notes", [])),
+            account_tags=_payload_list(payload, "account_tags", []),
+            notes=_payload_list(payload, "notes", []),
         )
