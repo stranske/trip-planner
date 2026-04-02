@@ -39,6 +39,7 @@ tests/test_dependency_version_alignment.py
 tests/test_generate_segments.py
 tests/test_penalty.py
 tests/test_render_pr_review_thread_report.py
+tests/state/test_accounts.py
 trip_planner/__init__.py
 trip_planner/_option_contracts.py
 trip_planner/_validators.py
@@ -106,3 +107,7 @@ trip_planner/sources/schema.py
 trip_planner/sources/snapshots.py
 trip_planner/sources/adapters/__init__.py
 trip_planner/sources/adapters/base.py
+trip_planner/state/__init__.py
+trip_planner/state/accounts.py
+trip_planner/state/repositories/__init__.py
+trip_planner/state/repositories/accounts.py
