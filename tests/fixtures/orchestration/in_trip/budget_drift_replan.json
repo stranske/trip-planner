@@ -1,0 +1,26 @@
+{
+  "event": {
+    "trigger_event_id": "trigger:kyoto-budget-drift",
+    "trip_id": "trip-leisure-kyoto-live",
+    "session_state_id": "session-state:kyoto-rainy-day",
+    "trigger_kind": "budget_drift",
+    "severity": "advisory",
+    "change_scope": "full_day",
+    "observed_at": "2026-04-02T11:24:00Z",
+    "summary": "Actual spend drifted beyond the planned activity budget, so the ranked alternatives should rebalance cost.",
+    "actor": "planner",
+    "source": "budget_monitor",
+    "trigger_codes": [
+      "budget_activities_drift"
+    ],
+    "affected_option_ids": [
+      "option:tea-house"
+    ],
+    "affected_checkpoint_id": "checkpoint:rainy-day-1100",
+    "affected_saved_scenario_id": "saved-scenario:kyoto-rainy-day",
+    "metadata": {
+      "option_set_id": "option-set:rainy-day-v1",
+      "budget_category": "activities"
+    }
+  }
+}

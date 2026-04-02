@@ -3,6 +3,7 @@
 The canonical orchestration contracts now live in:
 
 - `trip_planner/orchestration/actions.py`
+- `trip_planner/orchestration/in_trip.py`
 - `trip_planner/orchestration/models.py`
 - `trip_planner/orchestration/leisure.py`
 
@@ -24,6 +25,8 @@ These contracts define the shared workflow layer that later leisure, business, a
   - packages a single planning or adjustment pass with state, actions, outputs, transition metadata, and next-step guidance
 - `NextStepSummary`
   - tells later orchestrators which action to continue next and which decision/output references are still blocking
+- `InTripAdjustmentResult`
+  - captures one structured in-trip trigger plus the resulting replanning request, planner turn, activity event, and revision output
 
 ## Design Rules
 
@@ -32,11 +35,15 @@ These contracts define the shared workflow layer that later leisure, business, a
 - Reuse the same action and output vocabularies across leisure, business, and in-trip flows.
 - Represent decision requests as structured options, not free-form strings.
 - Let later orchestrators compose these contracts instead of inventing mode-specific action containers.
+- Keep in-trip adjustment downstream from saved-scenario, session, ranking, and checkpoint layers instead of bypassing them.
 
 ## Representative Fixtures
 
 Representative fixtures live in:
 
+- `tests/fixtures/orchestration/in_trip/budget_drift_replan.json`
+- `tests/fixtures/orchestration/in_trip/closure_driven_replan.json`
+- `tests/fixtures/orchestration/in_trip/travel_delay_emergency.json`
 - `tests/fixtures/orchestration/turns/leisure_planning_turn.json`
 - `tests/fixtures/orchestration/turns/business_planning_turn.json`
 - `tests/fixtures/orchestration/turns/in_trip_adjustment_turn.json`
@@ -46,6 +53,9 @@ Representative fixtures live in:
 
 These fixtures show how the same contract layer can express:
 
+- a budget-drift event that refreshes ranked alternatives without replacing the saved scenario yet
+- a closure-driven in-trip scenario revision that stays anchored to the current checkpoint
+- a travel-delay emergency fallback that escalates without pretending the traveler started a new trip
 - a leisure checkpoint with ranked scenario outputs
 - a business planning turn gated by policy posture
 - an in-trip replanning turn triggered by disruption

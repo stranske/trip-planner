@@ -1,0 +1,26 @@
+{
+  "event": {
+    "trigger_event_id": "trigger:rome-closure",
+    "trip_id": "trip-leisure-kyoto-live",
+    "session_state_id": "session-state:kyoto-rainy-day",
+    "trigger_kind": "closure",
+    "severity": "disruptive",
+    "change_scope": "day_segment",
+    "observed_at": "2026-04-02T11:22:00Z",
+    "summary": "A key attraction closed unexpectedly, so the current saved day can no longer run as planned.",
+    "actor": "planner",
+    "source": "operations_feed",
+    "trigger_codes": [
+      "attraction_closed"
+    ],
+    "affected_option_ids": [
+      "option:indoor-museum"
+    ],
+    "affected_checkpoint_id": "checkpoint:rainy-day-1100",
+    "affected_saved_scenario_id": "saved-scenario:kyoto-rainy-day",
+    "metadata": {
+      "option_set_id": "option-set:rainy-day-v1",
+      "closure_type": "venue"
+    }
+  }
+}
