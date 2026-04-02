@@ -10,7 +10,10 @@ from trip_planner.itinerary import (
     ScenarioSummary,
     ScenarioTradeoff,
 )
-from trip_planner.orchestration import LeisureWorkflowContext, build_leisure_planner_turn
+from trip_planner.orchestration import (
+    LeisureWorkflowContext,
+    build_leisure_planner_turn,
+)
 from trip_planner.ranking import ExplanationRecord
 from trip_planner.state import PersistedTripRecord, PlanningSessionState
 
@@ -77,7 +80,9 @@ def _scenario_search(trip_id: str = "trip-leisure-kyoto-draft") -> ScenarioSearc
                     summary="The baseline scenario preserves depth in Kyoto with one light excursion.",
                     factor_keys=["cultural_depth", "moderate_pace"],
                     machine_context={"planner_mode": "leisure"},
-                    human_summary=["Keeps travel friction moderate while preserving variety."],
+                    human_summary=[
+                        "Keeps travel friction moderate while preserving variety."
+                    ],
                     source_refs=["ranked-results:kyoto-spring"],
                 )
             ],
@@ -120,7 +125,9 @@ def _scenario_search(trip_id: str = "trip-leisure-kyoto-draft") -> ScenarioSearc
                     summary="The alternative opens more nightlife at the cost of extra transfers.",
                     factor_keys=["breadth", "transfer_cost"],
                     machine_context={"planner_mode": "leisure"},
-                    human_summary=["Broader exploration, slightly more travel fatigue."],
+                    human_summary=[
+                        "Broader exploration, slightly more travel fatigue."
+                    ],
                     source_refs=["ranked-results:kyoto-spring"],
                 )
             ],
@@ -194,9 +201,7 @@ def test_revised_leisure_flow_returns_to_ranking_after_feedback() -> None:
     assert turn.outputs[1].output_kind == "status_update"
     assert turn.workflow_state.open_action_ids == ["action-rank-options"]
     assert turn.transition.warning_codes == ["feedback_rejected_option_set"]
-    assert turn.actions[-1].payload["rejected_option_ids"] == [
-        "option:osaka-daytrip"
-    ]
+    assert turn.actions[-1].payload["rejected_option_ids"] == ["option:osaka-daytrip"]
 
 
 def test_collect_context_omits_missing_activity_log_id() -> None:
