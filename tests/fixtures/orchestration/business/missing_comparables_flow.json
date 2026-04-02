@@ -1,0 +1,47 @@
+{
+  "generated_at": "2026-04-02T18:20:00Z",
+  "trip_fixture": "business_active_trip.json",
+  "profile_fixture": "client_meeting_profile.json",
+  "policy_fixture": "policy_round_trip_exception.json",
+  "selected_path": "compliant_first",
+  "collected_policy_inputs": {
+    "client importance": "Renewal meeting controls the account expansion decision."
+  },
+  "comparable_inventory": {
+    "airfare": 1,
+    "lodging": 1,
+    "ground_transport": 0
+  },
+  "trip_overrides": {
+    "trip": {
+      "trip_id": "trip-business-client-renewal-001",
+      "title": "Client renewal negotiation",
+      "summary": "Business planning is still collecting compliant comparables.",
+      "artifacts": {
+        "objective_id": "objective:client-renewal-001",
+        "option_set_ids": [
+          "option-set:client-renewal-air",
+          "option-set:client-renewal-lodging",
+          "option-set:client-renewal-ground"
+        ],
+        "policy_state_id": "policy-state:client-renewal-001"
+      }
+    },
+    "artifact_refs": {
+      "objective_id": "objective:client-renewal-001",
+      "option_set_ids": [
+        "option-set:client-renewal-air",
+        "option-set:client-renewal-lodging",
+        "option-set:client-renewal-ground"
+      ],
+      "ranked_result_set_id": "ranked-results:client-renewal-001",
+      "scenario_search_id": "scenario-search:client-renewal-001",
+      "saved_scenario_ids": [
+        "saved-scenario:client-renewal-compliant"
+      ],
+      "policy_state_id": "policy-state:client-renewal-001",
+      "session_state_id": "session-state:client-renewal-001",
+      "activity_log_id": "activity-log:client-renewal-001"
+    }
+  }
+}
