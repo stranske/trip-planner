@@ -25,6 +25,8 @@ ALLOWED_TRIP_STATUS_TRANSITIONS: dict[str, tuple[str, ...]] = {
 
 
 def _require_unique_strings(values: list[str], field_name: str) -> None:
+    if isinstance(values, str) or not isinstance(values, list):
+        raise ValueError(f"{field_name} must be a list of strings")
     require_strings(values, field_name)
     if len(set(values)) != len(values):
         raise ValueError(f"{field_name} cannot contain duplicates")
@@ -42,7 +44,10 @@ def validate_trip_status_transition(from_status: str, to_status: str) -> None:
         raise ValueError(f"from_status must be one of {TRIP_STATUSES}")
     if to_status not in TRIP_STATUSES:
         raise ValueError(f"to_status must be one of {TRIP_STATUSES}")
-    if to_status not in ALLOWED_TRIP_STATUS_TRANSITIONS[from_status]:
+    allowed_transitions = ALLOWED_TRIP_STATUS_TRANSITIONS.get(from_status)
+    if allowed_transitions is None:
+        raise ValueError(f"from_status {from_status!r} has no configured transitions")
+    if to_status not in allowed_transitions:
         raise ValueError(f"{from_status} cannot transition to {to_status}")
 
 

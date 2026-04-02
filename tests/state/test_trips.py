@@ -71,6 +71,11 @@ def test_trip_record_rejects_duplicate_saved_scenarios() -> None:
         PersistedTripArtifactRefs(saved_scenario_ids=["saved-scenario:1", "saved-scenario:1"])
 
 
+def test_trip_record_rejects_string_instead_of_list_for_option_set_ids() -> None:
+    with pytest.raises(ValueError, match="option_set_ids must be a list of strings"):
+        PersistedTripArtifactRefs(option_set_ids="option-set-1")  # type: ignore[arg-type]
+
+
 def test_trip_record_rejects_status_history_that_ends_at_wrong_status() -> None:
     payload = json.loads(_fixture_path("business_active_trip.json").read_text(encoding="utf-8"))
     payload["status_history"].append(
@@ -141,11 +146,12 @@ def test_trip_repository_protocol_can_store_and_transition_trip_state() -> None:
             actor: str = "system",
         ) -> TripVersion:
             current = self._records[trip_id]
-            validate_trip_status_transition(current.trip.status, to_status)
+            from_status = current.trip.status
+            validate_trip_status_transition(from_status, to_status)
             current.trip.status = to_status
             current.status_history.append(
                 TripStatusChange(
-                    from_status=current.status_history[-1].to_status,
+                    from_status=from_status,
                     to_status=to_status,
                     changed_at=changed_at,
                     reason=reason,
@@ -227,3 +233,128 @@ def test_trip_repository_protocol_can_store_and_transition_trip_state() -> None:
         archived.version_id,
     ]
     assert repo.list_trips(status="archived")[0].trip.trip_id == record.trip.trip_id
+
+
+def test_validate_trip_status_transition_rejects_status_without_transition_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delitem(
+        __import__("trip_planner.state.trips", fromlist=["ALLOWED_TRIP_STATUS_TRANSITIONS"])
+        .ALLOWED_TRIP_STATUS_TRANSITIONS,
+        "draft",
+        raising=False,
+    )
+
+    with pytest.raises(ValueError, match="has no configured transitions"):
+        validate_trip_status_transition("draft", "active")
+
+
+def test_trip_repository_transition_status_allows_empty_history() -> None:
+    class InMemoryTripRepository(TripRepository):
+        def __init__(self) -> None:
+            self._records: dict[str, PersistedTripRecord] = {}
+            self._versions: dict[str, list[TripVersion]] = {}
+
+        def get_trip(self, trip_id: str) -> PersistedTripRecord | None:
+            return self._records.get(trip_id)
+
+        def create_trip(
+            self,
+            trip_record: PersistedTripRecord,
+            *,
+            summary: str = "",
+        ) -> TripVersion:
+            self._records[trip_record.trip.trip_id] = trip_record
+            version = TripVersion(
+                version_id=f"{trip_record.trip.trip_id}-v1",
+                trip_id=trip_record.trip.trip_id,
+                recorded_at="2026-04-02T04:15:00Z",
+                summary=summary,
+            )
+            self._versions[trip_record.trip.trip_id] = [version]
+            return version
+
+        def update_trip(
+            self,
+            trip_record: PersistedTripRecord,
+            *,
+            summary: str = "",
+        ) -> TripVersion:
+            self._records[trip_record.trip.trip_id] = trip_record
+            version = TripVersion(
+                version_id=(
+                    f"{trip_record.trip.trip_id}-v"
+                    f"{len(self._versions.get(trip_record.trip.trip_id, [])) + 1}"
+                ),
+                trip_id=trip_record.trip.trip_id,
+                recorded_at="2026-04-02T04:25:00Z",
+                summary=summary,
+            )
+            self._versions.setdefault(trip_record.trip.trip_id, []).append(version)
+            return version
+
+        def transition_status(
+            self,
+            trip_id: str,
+            to_status: str,
+            *,
+            changed_at: str,
+            reason: str = "",
+            actor: str = "system",
+        ) -> TripVersion:
+            current = self._records[trip_id]
+            from_status = current.trip.status
+            validate_trip_status_transition(from_status, to_status)
+            current.trip.status = to_status
+            current.status_history.append(
+                TripStatusChange(
+                    from_status=from_status,
+                    to_status=to_status,
+                    changed_at=changed_at,
+                    reason=reason,
+                    actor=actor,
+                )
+            )
+            current.lifecycle.updated_at = changed_at
+            return self.update_trip(current, summary=reason or f"status -> {to_status}")
+
+        def archive_trip(
+            self,
+            trip_id: str,
+            *,
+            archived_at: str,
+            reason: str = "",
+            actor: str = "system",
+        ) -> TripVersion:
+            raise NotImplementedError
+
+        def list_trips(
+            self,
+            *,
+            user_id: str | None = None,
+            owner_profile_id: str | None = None,
+            mode: str | None = None,
+            status: str | None = None,
+        ) -> list[PersistedTripRecord]:
+            return list(self._records.values())
+
+        def list_versions(self, trip_id: str) -> list[TripVersion]:
+            return list(self._versions.get(trip_id, []))
+
+    repo = InMemoryTripRepository()
+    record = _load_fixture("leisure_draft_trip.json")
+    record.status_history = []
+
+    repo.create_trip(record, summary="initial import")
+    repo.transition_status(
+        record.trip.trip_id,
+        "active",
+        changed_at="2026-04-02T04:30:00Z",
+        reason="user started planning session",
+    )
+
+    stored = repo.get_trip(record.trip.trip_id)
+
+    assert stored is not None
+    assert stored.status_history[-1].from_status == "draft"
+    assert stored.status_history[-1].to_status == "active"
