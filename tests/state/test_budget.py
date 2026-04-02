@@ -137,6 +137,16 @@ def test_actual_spend_event_rejects_invalid_source_or_amount() -> None:
         )
 
 
+def test_budget_scenario_to_dict_round_trips_without_derived_fields() -> None:
+    record = _load_plan("leisure_budget_plan.json")
+    scenario_payload = record.scenario_budgets[0].to_dict()
+
+    assert "total_planned_amount" not in scenario_payload
+    assert BudgetPlan.from_dict(record.to_dict()).scenario_budgets[
+        0
+    ].total_planned_amount == record.scenario_budgets[0].total_planned_amount
+
+
 def test_budget_repository_protocol_can_store_plans_and_spend_events() -> None:
     class InMemoryBudgetPlanRepository(BudgetPlanRepository):
         def __init__(self) -> None:
@@ -285,3 +295,6 @@ def test_budget_repository_protocol_can_store_plans_and_spend_events() -> None:
     assert spend_repo.list_spend_events(category_key="client_hospitality")[
         0
     ].trip_id == ("trip-business-client-summit")
+    assert spend_repo.list_spend_events(
+        scenario_budget_id="budget-scenario:client-summit-compliant"
+    )[0].category_key == "client_hospitality"

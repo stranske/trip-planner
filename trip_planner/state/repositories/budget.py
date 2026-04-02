@@ -70,4 +70,8 @@ class SpendEventRepository(Protocol):
         category_key: str | None = None,
         source_kind: str | None = None,
     ) -> list[ActualSpendEvent]:
-        """List actual-spend events using backend-neutral filters."""
+        """List actual-spend events using backend-neutral filters.
+
+        Use ``saved_scenario_id`` to filter by the logical saved scenario and
+        ``scenario_budget_id`` to target a specific scenario-budget variant.
+        """
