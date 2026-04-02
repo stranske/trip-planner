@@ -66,6 +66,7 @@ class SpendEventRepository(Protocol):
         trip_id: str | None = None,
         budget_plan_id: str | None = None,
         saved_scenario_id: str | None = None,
+        scenario_budget_id: str | None = None,
         category_key: str | None = None,
         source_kind: str | None = None,
     ) -> list[ActualSpendEvent]:

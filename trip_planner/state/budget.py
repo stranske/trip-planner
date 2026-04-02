@@ -148,9 +148,7 @@ class BudgetScenario:
         return round(sum(item.planned_amount for item in self.allocations), 2)
 
     def to_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["total_planned_amount"] = self.total_planned_amount
-        return payload
+        return asdict(self)
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "BudgetScenario":

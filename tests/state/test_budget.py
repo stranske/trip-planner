@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from trip_planner.state import ActualSpendEvent, BudgetPlan
+from trip_planner.state import ActualSpendEvent, BudgetPlan, BudgetScenario
 from trip_planner.state.budget import BudgetCategoryAllocation
 from trip_planner.state.repositories import (
     BudgetPlanRepository,
@@ -39,6 +39,15 @@ def test_budget_plan_loads_leisure_fixture_with_scenario_variants() -> None:
     )
     assert record.scenario_budgets[0].total_planned_amount == 1720.0
     assert record.scenario_budgets[1].allocations[3].category_key == "local_mobility"
+
+
+def test_budget_scenario_to_dict_round_trips_without_derived_fields() -> None:
+    record = _load_plan("leisure_budget_plan.json")
+    scenario = record.scenario_budgets[0]
+    payload = scenario.to_dict()
+
+    assert "total_planned_amount" not in payload
+    assert BudgetScenario.from_dict(payload) == scenario
 
 
 def test_budget_plan_loads_business_fixture_with_policy_sensitive_categories() -> None:
@@ -203,6 +212,7 @@ def test_budget_repository_protocol_can_store_plans_and_spend_events() -> None:
             trip_id: str | None = None,
             budget_plan_id: str | None = None,
             saved_scenario_id: str | None = None,
+            scenario_budget_id: str | None = None,
             category_key: str | None = None,
             source_kind: str | None = None,
         ) -> list[ActualSpendEvent]:
@@ -218,6 +228,12 @@ def test_budget_repository_protocol_can_store_plans_and_spend_events() -> None:
                     event
                     for event in events
                     if event.saved_scenario_id == saved_scenario_id
+                ]
+            if scenario_budget_id is not None:
+                events = [
+                    event
+                    for event in events
+                    if event.scenario_budget_id == scenario_budget_id
                 ]
             if category_key is not None:
                 events = [
@@ -259,6 +275,12 @@ def test_budget_repository_protocol_can_store_plans_and_spend_events() -> None:
             )
         )
         == 1
+    )
+    assert (
+        spend_repo.list_spend_events(
+            scenario_budget_id="budget-scenario:client-summit-compliant"
+        )[0].saved_scenario_id
+        == "saved-scenario:client-summit-compliant"
     )
     assert spend_repo.list_spend_events(category_key="client_hospitality")[
         0
