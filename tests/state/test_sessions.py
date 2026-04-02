@@ -111,6 +111,22 @@ def test_activity_log_event_rejects_empty_metadata_value() -> None:
         )
 
 
+def test_activity_log_event_rejects_non_dict_metadata() -> None:
+    with pytest.raises(
+        ValueError,
+        match="metadata must be a dict of string keys to string values",
+    ):
+        ActivityLogEvent(
+            activity_event_id="activity:test",
+            trip_id="trip-1",
+            session_state_id="session-1",
+            occurred_at="2026-04-02T12:00:00Z",
+            event_kind="scenario_saved",
+            summary="Saved scenario.",
+            metadata=["reason"],  # type: ignore[arg-type]
+        )
+
+
 def test_planning_session_rejects_duplicate_pending_decisions() -> None:
     payload = _load_payload("active_leisure_session.json")["session"]
     payload["pending_decisions"].append(payload["pending_decisions"][0])

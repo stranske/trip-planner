@@ -394,6 +394,8 @@ class ActivityLogEvent:
             "checkpoint_id",
         ):
             require_optional_non_empty(getattr(self, field_name), field_name)
+        if not isinstance(self.metadata, dict):
+            raise ValueError("metadata must be a dict of string keys to string values")
         require_string_mapping(self.metadata, "metadata")
         if any(not isinstance(value, str) or not value for value in self.metadata.values()):
             raise ValueError("metadata must contain non-empty string values")
