@@ -1,4 +1,4 @@
-"""Persisted account, trip, and session state contracts."""
+"""Persisted account, budget, trip, and session state contracts."""
 
 from .accounts import (
     ACCOUNT_SCHEMA_VERSION,
@@ -13,6 +13,17 @@ from .accounts import (
     RegionalDefaults,
     TravelerProfile,
     User,
+)
+from .budget import (
+    ACTUAL_SPEND_SOURCE_KINDS,
+    BUDGET_CATEGORY_KEYS,
+    BUDGET_FLEXIBILITY_LEVELS,
+    BUDGET_SCHEMA_VERSION,
+    BUSINESS_ONLY_BUDGET_CATEGORIES,
+    ActualSpendEvent,
+    BudgetCategoryAllocation,
+    BudgetPlan,
+    BudgetScenario,
 )
 from .trips import (
     ALLOWED_TRIP_STATUS_TRANSITIONS,
@@ -37,9 +48,18 @@ from .scenarios import (
 
 __all__ = [
     "ACCOUNT_SCHEMA_VERSION",
+    "ACTUAL_SPEND_SOURCE_KINDS",
     "ACCOUNT_STATUSES",
     "ALLOWED_TRIP_STATUS_TRANSITIONS",
     "AccountPreferenceRecord",
+    "ActualSpendEvent",
+    "BUDGET_CATEGORY_KEYS",
+    "BUDGET_FLEXIBILITY_LEVELS",
+    "BUDGET_SCHEMA_VERSION",
+    "BUSINESS_ONLY_BUDGET_CATEGORIES",
+    "BudgetCategoryAllocation",
+    "BudgetPlan",
+    "BudgetScenario",
     "INTERACTION_STYLES",
     "NOTIFICATION_CADENCES",
     "NOTIFICATION_CHANNELS",

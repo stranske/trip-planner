@@ -1,0 +1,109 @@
+{
+  "budget_plan_id": "budget-plan:kyoto-spring",
+  "trip_id": "trip-leisure-kyoto-draft",
+  "owner_profile_id": "traveler-profile:kyoto-leisure",
+  "title": "Kyoto spring budget guardrails",
+  "mode": "leisure",
+  "created_at": "2026-04-02T05:00:00Z",
+  "updated_at": "2026-04-02T05:30:00Z",
+  "current_scenario_budget_id": "budget-scenario:kyoto-baseline",
+  "currency": "USD",
+  "tags": ["spring", "leisure"],
+  "notes": ["Baseline budget keeps one splurge dinner while protecting transit."],
+  "scenario_budgets": [
+    {
+      "scenario_budget_id": "budget-scenario:kyoto-baseline",
+      "trip_id": "trip-leisure-kyoto-draft",
+      "title": "Kyoto baseline",
+      "created_at": "2026-04-02T05:00:00Z",
+      "saved_scenario_id": "saved-scenario:baseline-kyoto",
+      "currency": "USD",
+      "summary": "Baseline leisure plan with food and activity headroom.",
+      "tags": ["baseline"],
+      "allocations": [
+        {
+          "category_key": "lodging",
+          "label": "Ryokan + hotel split",
+          "planned_amount": 780.0,
+          "currency": "USD",
+          "flexibility": "protected"
+        },
+        {
+          "category_key": "transport",
+          "label": "Rail passes and airport transfer",
+          "planned_amount": 260.0,
+          "currency": "USD",
+          "flexibility": "fixed"
+        },
+        {
+          "category_key": "food",
+          "label": "Daily meals plus one splurge dinner",
+          "planned_amount": 340.0,
+          "currency": "USD",
+          "flexibility": "flexible"
+        },
+        {
+          "category_key": "activities",
+          "label": "Temples, museum tickets, and tea ceremony",
+          "planned_amount": 220.0,
+          "currency": "USD",
+          "flexibility": "flexible"
+        },
+        {
+          "category_key": "contingency",
+          "label": "Weather reroute reserve",
+          "planned_amount": 120.0,
+          "currency": "USD",
+          "flexibility": "stretch"
+        }
+      ]
+    },
+    {
+      "scenario_budget_id": "budget-scenario:kyoto-rainy-day",
+      "trip_id": "trip-leisure-kyoto-draft",
+      "title": "Kyoto rainy-day fallback",
+      "created_at": "2026-04-02T05:12:00Z",
+      "saved_scenario_id": "saved-scenario:fallback-osaka",
+      "currency": "USD",
+      "summary": "Fallback shifts more spend into lodging and local mobility.",
+      "tags": ["fallback"],
+      "allocations": [
+        {
+          "category_key": "lodging",
+          "label": "Central hotel upgrade",
+          "planned_amount": 860.0,
+          "currency": "USD",
+          "flexibility": "protected"
+        },
+        {
+          "category_key": "transport",
+          "label": "Rail passes and fallback intercity segment",
+          "planned_amount": 280.0,
+          "currency": "USD",
+          "flexibility": "fixed"
+        },
+        {
+          "category_key": "food",
+          "label": "Indoor dining reserve",
+          "planned_amount": 300.0,
+          "currency": "USD",
+          "flexibility": "flexible"
+        },
+        {
+          "category_key": "local_mobility",
+          "label": "Taxi buffer for rain days",
+          "planned_amount": 120.0,
+          "currency": "USD",
+          "flexibility": "stretch"
+        },
+        {
+          "category_key": "contingency",
+          "label": "Late-booking reserve",
+          "planned_amount": 150.0,
+          "currency": "USD",
+          "flexibility": "stretch"
+        }
+      ]
+    }
+  ]
+}
