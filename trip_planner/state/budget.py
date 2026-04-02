@@ -87,9 +87,7 @@ class BudgetCategoryAllocation:
         if self.planned_amount <= 0:
             raise ValueError("planned_amount must be positive")
         if self.flexibility not in BUDGET_FLEXIBILITY_LEVELS:
-            raise ValueError(
-                f"flexibility must be one of {BUDGET_FLEXIBILITY_LEVELS}"
-            )
+            raise ValueError(f"flexibility must be one of {BUDGET_FLEXIBILITY_LEVELS}")
         _require_string_list(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
@@ -200,14 +198,14 @@ class BudgetPlan:
             raise ValueError(f"mode must be one of {TRIP_MODES}")
         _require_currency(self.currency, "currency")
         if not self.scenario_budgets:
-            raise ValueError("scenario_budgets must contain at least one BudgetScenario")
+            raise ValueError(
+                "scenario_budgets must contain at least one BudgetScenario"
+            )
         if any(not isinstance(item, BudgetScenario) for item in self.scenario_budgets):
             raise ValueError("scenario_budgets must contain BudgetScenario instances")
         scenario_ids = [item.scenario_budget_id for item in self.scenario_budgets]
         if len(set(scenario_ids)) != len(scenario_ids):
-            raise ValueError(
-                "scenario_budgets cannot repeat scenario_budget_id values"
-            )
+            raise ValueError("scenario_budgets cannot repeat scenario_budget_id values")
         if self.current_scenario_budget_id not in scenario_ids:
             raise ValueError(
                 "current_scenario_budget_id must reference a scenario budget"
@@ -285,9 +283,7 @@ class ActualSpendEvent:
         _require_currency(self.currency, "currency")
         require_non_empty(self.occurred_at, "occurred_at")
         if self.source_kind not in ACTUAL_SPEND_SOURCE_KINDS:
-            raise ValueError(
-                f"source_kind must be one of {ACTUAL_SPEND_SOURCE_KINDS}"
-            )
+            raise ValueError(f"source_kind must be one of {ACTUAL_SPEND_SOURCE_KINDS}")
         require_non_empty(self.source_context, "source_context")
         require_optional_non_empty(self.scenario_budget_id, "scenario_budget_id")
         require_optional_non_empty(self.saved_scenario_id, "saved_scenario_id")

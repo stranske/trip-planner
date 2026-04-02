@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from trip_planner.state import ActualSpendEvent, BudgetPlan, BudgetScenario
+from trip_planner.state import ActualSpendEvent, BudgetPlan
 from trip_planner.state.budget import BudgetCategoryAllocation
 from trip_planner.state.repositories import (
     BudgetPlanRepository,
@@ -23,7 +23,9 @@ def _load_plan(name: str) -> BudgetPlan:
 
 
 def _load_events() -> list[ActualSpendEvent]:
-    payload = json.loads(_fixture_path("actual_spend_events.json").read_text(encoding="utf-8"))
+    payload = json.loads(
+        _fixture_path("actual_spend_events.json").read_text(encoding="utf-8")
+    )
     return [ActualSpendEvent.from_dict(item) for item in payload["events"]]
 
 
@@ -32,7 +34,9 @@ def test_budget_plan_loads_leisure_fixture_with_scenario_variants() -> None:
 
     assert record.mode == "leisure"
     assert record.current_scenario_budget_id == "budget-scenario:kyoto-baseline"
-    assert record.scenario_budgets[0].saved_scenario_id == "saved-scenario:baseline-kyoto"
+    assert (
+        record.scenario_budgets[0].saved_scenario_id == "saved-scenario:baseline-kyoto"
+    )
     assert record.scenario_budgets[0].total_planned_amount == 1720.0
     assert record.scenario_budgets[1].allocations[3].category_key == "local_mobility"
 
@@ -216,7 +220,9 @@ def test_budget_repository_protocol_can_store_plans_and_spend_events() -> None:
                     if event.saved_scenario_id == saved_scenario_id
                 ]
             if category_key is not None:
-                events = [event for event in events if event.category_key == category_key]
+                events = [
+                    event for event in events if event.category_key == category_key
+                ]
             if source_kind is not None:
                 events = [event for event in events if event.source_kind == source_kind]
             return events
@@ -239,16 +245,21 @@ def test_budget_repository_protocol_can_store_plans_and_spend_events() -> None:
 
     assert stored is not None
     assert stored.current_scenario_budget_id == "budget-scenario:kyoto-rainy-day"
-    assert [version.version_id for version in plan_repo.list_versions(plan.budget_plan_id)] == [
+    assert [
+        version.version_id for version in plan_repo.list_versions(plan.budget_plan_id)
+    ] == [
         first.version_id,
         second.version_id,
     ]
-    assert len(
-        spend_repo.list_spend_events(
-            trip_id="trip-leisure-kyoto-draft",
-            saved_scenario_id="saved-scenario:baseline-kyoto",
+    assert (
+        len(
+            spend_repo.list_spend_events(
+                trip_id="trip-leisure-kyoto-draft",
+                saved_scenario_id="saved-scenario:baseline-kyoto",
+            )
         )
-    ) == 1
-    assert spend_repo.list_spend_events(category_key="client_hospitality")[0].trip_id == (
-        "trip-business-client-summit"
+        == 1
     )
+    assert spend_repo.list_spend_events(category_key="client_hospitality")[
+        0
+    ].trip_id == ("trip-business-client-summit")
