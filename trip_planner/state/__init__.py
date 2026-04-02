@@ -23,6 +23,17 @@ from .trips import (
     TripStatusChange,
     validate_trip_status_transition,
 )
+from .scenarios import (
+    CHECKPOINT_KINDS,
+    COMPARISON_OUTCOMES,
+    SAVED_SCENARIO_LABELS,
+    SCENARIO_STATE_SCHEMA_VERSION,
+    SavedScenarioRecord,
+    ScenarioArtifactRefs,
+    ScenarioCheckpoint,
+    ScenarioComparison,
+    ScenarioVersion,
+)
 
 __all__ = [
     "ACCOUNT_SCHEMA_VERSION",
@@ -36,6 +47,15 @@ __all__ = [
     "PersistedTripArtifactRefs",
     "PersistedTripRecord",
     "RegionalDefaults",
+    "CHECKPOINT_KINDS",
+    "COMPARISON_OUTCOMES",
+    "SAVED_SCENARIO_LABELS",
+    "SCENARIO_STATE_SCHEMA_VERSION",
+    "SavedScenarioRecord",
+    "ScenarioArtifactRefs",
+    "ScenarioCheckpoint",
+    "ScenarioComparison",
+    "ScenarioVersion",
     "SUMMARY_GRANULARITIES",
     "TRIP_SCHEMA_VERSION",
     "TRAVELER_PROFILE_KINDS",
