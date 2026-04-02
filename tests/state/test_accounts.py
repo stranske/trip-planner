@@ -13,7 +13,9 @@ from trip_planner.state.repositories import AccountRepository, AccountVersion
 
 
 def _fixture_path(name: str) -> Path:
-    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "state" / "accounts"
+    fixtures_dir = (
+        Path(__file__).resolve().parents[1] / "fixtures" / "state" / "accounts"
+    )
     return fixtures_dir / name
 
 
@@ -29,15 +31,22 @@ def test_account_loads_leisure_focused_fixture() -> None:
 
     assert payload["user_id"] == "user-leisure-1"
     assert payload["account_preferences"]["default_trip_mode"] == "leisure"
-    assert payload["traveler_profiles"][0]["leisure_profile_id"] == "leisure-profile-paris"
+    assert (
+        payload["traveler_profiles"][0]["leisure_profile_id"] == "leisure-profile-paris"
+    )
 
 
 def test_account_loads_mixed_leisure_business_fixture() -> None:
     account = _load_fixture("mixed_mode_user.json")
 
     assert len(account.traveler_profiles) == 2
-    assert account.traveler_profiles[1].business_profile_id == "business-profile-consulting"
-    assert account.account_preferences.default_traveler_profile_id == "traveler-business"
+    assert (
+        account.traveler_profiles[1].business_profile_id
+        == "business-profile-consulting"
+    )
+    assert (
+        account.account_preferences.default_traveler_profile_id == "traveler-business"
+    )
 
 
 def test_account_loads_multi_profile_fixture() -> None:
@@ -61,7 +70,9 @@ def test_traveler_profile_rejects_business_mode_without_business_profile_ref() -
     except ValueError as exc:
         assert "business_profile_id" in str(exc)
     else:
-        raise AssertionError("Business traveler profiles should require business_profile_id")
+        raise AssertionError(
+            "Business traveler profiles should require business_profile_id"
+        )
 
 
 def test_user_rejects_missing_default_traveler_profile_reference() -> None:
@@ -176,4 +187,7 @@ def test_account_repository_protocol_can_version_user_state() -> None:
         first.version_id,
         second.version_id,
     ]
-    assert repo.list_users()[0].account_preferences.notification_preferences[-1].channel == "push"
+    assert (
+        repo.list_users()[0].account_preferences.notification_preferences[-1].channel
+        == "push"
+    )

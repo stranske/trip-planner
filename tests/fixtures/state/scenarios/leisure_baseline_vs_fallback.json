@@ -1,0 +1,121 @@
+{
+  "records": [
+    {
+      "saved_scenario_id": "saved-scenario:kyoto-baseline",
+      "trip_id": "trip-leisure-kyoto-draft",
+      "current_version_id": "saved-scenario:kyoto-baseline-v2",
+      "versions": [
+        {
+          "version_id": "saved-scenario:kyoto-baseline-v1",
+          "saved_scenario_id": "saved-scenario:kyoto-baseline",
+          "trip_id": "trip-leisure-kyoto-draft",
+          "title": "Kyoto spring baseline",
+          "label": "baseline",
+          "created_at": "2026-04-02T09:00:00Z",
+          "created_by": "planner",
+          "scope": "route",
+          "snapshot_refs": {
+            "objective_id": "objective:kyoto-spring",
+            "scenario_search_id": "scenario-search:kyoto-spring",
+            "source_result_set_id": "ranked-result-set:kyoto-spring",
+            "itinerary_scenario_id": "scenario:trip-leisure-kyoto-draft:1",
+            "ranked_result_set_id": "ranked-result-set:kyoto-spring",
+            "option_set_ids": [
+              "option-set:lodging:kyoto",
+              "option-set:activities:kyoto"
+            ],
+            "leisure_profile_id": "leisure-profile-paris",
+            "notes": [
+              "Baseline route keeps Kyoto as the primary cultural base."
+            ]
+          },
+          "summary": "Initial spring Kyoto baseline saved after route comparison.",
+          "tags": ["baseline", "culture"],
+          "notes": ["Preserves the first coherent route the traveler approved."]
+        },
+        {
+          "version_id": "saved-scenario:kyoto-baseline-v2",
+          "saved_scenario_id": "saved-scenario:kyoto-baseline",
+          "trip_id": "trip-leisure-kyoto-draft",
+          "title": "Kyoto spring preferred refinement",
+          "label": "preferred",
+          "created_at": "2026-04-02T09:30:00Z",
+          "created_by": "planner",
+          "scope": "route",
+          "snapshot_refs": {
+            "objective_id": "objective:kyoto-spring",
+            "scenario_search_id": "scenario-search:kyoto-spring",
+            "source_result_set_id": "ranked-result-set:kyoto-spring",
+            "itinerary_scenario_id": "scenario:trip-leisure-kyoto-draft:1",
+            "ranked_result_set_id": "ranked-result-set:kyoto-spring",
+            "option_set_ids": [
+              "option-set:lodging:kyoto",
+              "option-set:activities:kyoto"
+            ],
+            "budget_state_id": "budget-state:kyoto-spring",
+            "leisure_profile_id": "leisure-profile-paris",
+            "notes": [
+              "Traveler preferred the quieter Kyoto lodging cluster after review."
+            ]
+          },
+          "based_on_version_id": "saved-scenario:kyoto-baseline-v1",
+          "summary": "Promoted the Kyoto baseline to the preferred scenario after refinement.",
+          "tags": ["preferred", "recovery-protected"],
+          "notes": ["Budget reference added once the planner preserved the quieter hotel."]
+        }
+      ],
+      "comparisons": [],
+      "tags": ["leisure", "saved-history"],
+      "notes": ["Trip keeps both the baseline and explicit fallback alternatives."]
+    },
+    {
+      "saved_scenario_id": "saved-scenario:osaka-fallback",
+      "trip_id": "trip-leisure-kyoto-draft",
+      "current_version_id": "saved-scenario:osaka-fallback-v1",
+      "versions": [
+        {
+          "version_id": "saved-scenario:osaka-fallback-v1",
+          "saved_scenario_id": "saved-scenario:osaka-fallback",
+          "trip_id": "trip-leisure-kyoto-draft",
+          "title": "Osaka rainy-day fallback",
+          "label": "fallback",
+          "created_at": "2026-04-02T09:05:00Z",
+          "created_by": "planner",
+          "scope": "route",
+          "snapshot_refs": {
+            "objective_id": "objective:kyoto-spring",
+            "scenario_search_id": "scenario-search:kyoto-spring",
+            "source_result_set_id": "ranked-result-set:kyoto-spring",
+            "itinerary_scenario_id": "scenario:trip-leisure-kyoto-draft:2",
+            "ranked_result_set_id": "ranked-result-set:kyoto-spring",
+            "option_set_ids": [
+              "option-set:lodging:osaka",
+              "option-set:activities:indoor"
+            ],
+            "leisure_profile_id": "leisure-profile-paris",
+            "notes": [
+              "Fallback scenario stays explicit for weather-disrupted days."
+            ]
+          },
+          "summary": "Fallback route retained to preserve lower-friction rainy-day options.",
+          "tags": ["fallback", "weather-safe"],
+          "notes": ["This scenario is durable rather than an ephemeral scratch branch."]
+        }
+      ],
+      "comparisons": [],
+      "tags": ["leisure", "fallback"],
+      "notes": ["Alternative remains available without becoming the default path."]
+    }
+  ],
+  "comparison": {
+    "comparison_id": "comparison:kyoto-vs-osaka",
+    "trip_id": "trip-leisure-kyoto-draft",
+    "baseline_scenario_id": "saved-scenario:kyoto-baseline",
+    "candidate_scenario_id": "saved-scenario:osaka-fallback",
+    "compared_at": "2026-04-02T09:35:00Z",
+    "outcome": "preferred",
+    "summary": "Kyoto remains the preferred baseline while Osaka stays as an explicit fallback.",
+    "focus_areas": ["recovery", "route_coherence", "weather_resilience"],
+    "notes": ["The comparison stays durable for later review and rollback."]
+  }
+}

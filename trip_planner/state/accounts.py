@@ -15,7 +15,12 @@ from trip_planner.contracts.trip import TRIP_MODES
 ACCOUNT_SCHEMA_VERSION = "0.1.0"
 ACCOUNT_STATUSES: tuple[str, ...] = ("active", "archived")
 TRAVELER_PROFILE_KINDS: tuple[str, ...] = ("personal", "family", "business", "mixed")
-INTERACTION_STYLES: tuple[str, ...] = ("concise", "guided", "collaborative", "autonomous")
+INTERACTION_STYLES: tuple[str, ...] = (
+    "concise",
+    "guided",
+    "collaborative",
+    "autonomous",
+)
 SUMMARY_GRANULARITIES: tuple[str, ...] = ("brief", "balanced", "detailed")
 NOTIFICATION_CADENCES: tuple[str, ...] = ("off", "important_only", "digest", "realtime")
 NOTIFICATION_CHANNELS: tuple[str, ...] = ("email", "push", "sms")
@@ -27,7 +32,9 @@ def _require_unique_strings(values: list[str], field_name: str) -> None:
         raise ValueError(f"{field_name} cannot contain duplicates")
 
 
-def _payload_list(payload: dict[str, Any], field_name: str, default: list[Any]) -> list[Any]:
+def _payload_list(
+    payload: dict[str, Any], field_name: str, default: list[Any]
+) -> list[Any]:
     value = payload.get(field_name, default)
     if not isinstance(value, list):
         raise ValueError(f"{field_name} must be a list")
@@ -100,10 +107,12 @@ class AccountPreferenceRecord:
             )
         if self.default_summary_granularity not in SUMMARY_GRANULARITIES:
             raise ValueError(
-                "default_summary_granularity must be one of "
-                f"{SUMMARY_GRANULARITIES}"
+                f"default_summary_granularity must be one of {SUMMARY_GRANULARITIES}"
             )
-        if self.default_trip_mode is not None and self.default_trip_mode not in TRIP_MODES:
+        if (
+            self.default_trip_mode is not None
+            and self.default_trip_mode not in TRIP_MODES
+        ):
             raise ValueError(f"default_trip_mode must be one of {TRIP_MODES}")
         if not isinstance(self.regional_defaults, RegionalDefaults):
             raise ValueError("regional_defaults must be a RegionalDefaults")
@@ -176,9 +185,15 @@ class TravelerProfile:
             raise ValueError("leisure supported_modes require leisure_profile_id")
         if "business" in self.supported_modes and self.business_profile_id is None:
             raise ValueError("business supported_modes require business_profile_id")
-        if "leisure" not in self.supported_modes and self.leisure_profile_id is not None:
+        if (
+            "leisure" not in self.supported_modes
+            and self.leisure_profile_id is not None
+        ):
             raise ValueError("leisure_profile_id requires leisure in supported_modes")
-        if "business" not in self.supported_modes and self.business_profile_id is not None:
+        if (
+            "business" not in self.supported_modes
+            and self.business_profile_id is not None
+        ):
             raise ValueError("business_profile_id requires business in supported_modes")
         _require_unique_strings(
             self.default_origin_airports,
@@ -234,8 +249,12 @@ class User:
         require_non_empty(self.email, "email")
         require_non_empty(self.display_name, "display_name")
         if not self.traveler_profiles:
-            raise ValueError("traveler_profiles must contain at least one TravelerProfile")
-        if any(not isinstance(item, TravelerProfile) for item in self.traveler_profiles):
+            raise ValueError(
+                "traveler_profiles must contain at least one TravelerProfile"
+            )
+        if any(
+            not isinstance(item, TravelerProfile) for item in self.traveler_profiles
+        ):
             raise ValueError("traveler_profiles must contain TravelerProfile instances")
         if not isinstance(self.account_preferences, AccountPreferenceRecord):
             raise ValueError("account_preferences must be an AccountPreferenceRecord")
@@ -245,7 +264,9 @@ class User:
             raise ValueError(f"schema_version must be {ACCOUNT_SCHEMA_VERSION!r}")
         profile_ids = [item.traveler_profile_id for item in self.traveler_profiles]
         if len(set(profile_ids)) != len(profile_ids):
-            raise ValueError("traveler_profiles cannot repeat traveler_profile_id values")
+            raise ValueError(
+                "traveler_profiles cannot repeat traveler_profile_id values"
+            )
         default_id = self.account_preferences.default_traveler_profile_id
         if default_id is not None and default_id not in profile_ids:
             raise ValueError(
@@ -253,7 +274,10 @@ class User:
             )
         if any(not isinstance(key, str) or not key for key in self.external_refs):
             raise ValueError("external_refs must use non-empty string keys")
-        if any(not isinstance(value, str) or not value for value in self.external_refs.values()):
+        if any(
+            not isinstance(value, str) or not value
+            for value in self.external_refs.values()
+        ):
             raise ValueError("external_refs must contain non-empty string values")
         _require_unique_strings(self.account_tags, "account_tags")
         require_strings(self.notes, "notes")
