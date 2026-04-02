@@ -1,0 +1,112 @@
+{
+  "trip": {
+    "trip_id": "trip-archived-oslo-retrospective",
+    "user_id": "user-leisure-1",
+    "mode": "leisure",
+    "status": "archived",
+    "trip_frame": {
+      "start_date": "2025-09-20",
+      "end_date": "2025-09-29",
+      "duration_days": 9,
+      "primary_regions": [
+        "NO-03"
+      ],
+      "traveler_party": {
+        "kind": "solo",
+        "traveler_count": 1,
+        "notes": "Post-trip archive after itinerary completion."
+      }
+    },
+    "profile_refs": {
+      "leisure_profile_id": "leisure-profile-paris"
+    },
+    "artifacts": {
+      "objective_id": "objective:oslo-autumn",
+      "option_set_ids": [
+        "option-set:oslo-lodging"
+      ],
+      "itinerary_state_id": "itinerary-state:oslo-autumn",
+      "budget_state_id": "budget-state:oslo-autumn"
+    },
+    "title": "Archived Oslo retrospective",
+    "summary": "Completed leisure trip retained for later budget and scenario comparison."
+  },
+  "owner_profile_id": "traveler-leisure",
+  "lifecycle": {
+    "created_at": "2025-08-18T11:00:00Z",
+    "updated_at": "2025-10-03T18:20:00Z",
+    "booked_at": "2025-08-25T12:00:00Z",
+    "started_at": "2025-09-20T07:15:00Z",
+    "completed_at": "2025-09-29T21:10:00Z",
+    "archived_at": "2025-10-03T18:20:00Z"
+  },
+  "artifact_refs": {
+    "objective_id": "objective:oslo-autumn",
+    "option_set_ids": [
+      "option-set:oslo-lodging"
+    ],
+    "ranked_result_set_id": "ranked-results:oslo-autumn",
+    "scenario_search_id": "scenario-search:oslo-autumn",
+    "saved_scenario_ids": [
+      "saved-scenario:final-booked-oslo"
+    ],
+    "itinerary_state_id": "itinerary-state:oslo-autumn",
+    "budget_state_id": "budget-state:oslo-autumn",
+    "session_state_id": "session-state:oslo-autumn",
+    "activity_log_id": "activity-log:oslo-autumn"
+  },
+  "status_history": [
+    {
+      "to_status": "draft",
+      "changed_at": "2025-08-18T11:00:00Z",
+      "reason": "Initial trip draft",
+      "actor": "planner"
+    },
+    {
+      "from_status": "draft",
+      "to_status": "active",
+      "changed_at": "2025-08-20T09:00:00Z",
+      "reason": "Traveler resumed planning",
+      "actor": "planner"
+    },
+    {
+      "from_status": "active",
+      "to_status": "booked",
+      "changed_at": "2025-08-25T12:00:00Z",
+      "reason": "Flights and hotel booked",
+      "actor": "planner"
+    },
+    {
+      "from_status": "booked",
+      "to_status": "in_trip",
+      "changed_at": "2025-09-20T07:15:00Z",
+      "reason": "Travel start",
+      "actor": "planner"
+    },
+    {
+      "from_status": "in_trip",
+      "to_status": "completed",
+      "changed_at": "2025-09-29T21:10:00Z",
+      "reason": "Trip complete",
+      "actor": "planner"
+    },
+    {
+      "from_status": "completed",
+      "to_status": "archived",
+      "changed_at": "2025-10-03T18:20:00Z",
+      "reason": "Moved to historical archive",
+      "actor": "planner"
+    }
+  ],
+  "revision": 5,
+  "external_refs": {
+    "expense_export_id": "expense-archive-2025-09-oslo"
+  },
+  "tags": [
+    "archive",
+    "retrospective"
+  ],
+  "notes": [
+    "Archived trip persists final artifacts for later comparison instead of deleting them."
+  ]
+}

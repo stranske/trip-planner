@@ -19,6 +19,15 @@ TRIP_STATUSES: tuple[str, ...] = (
 TRAVELER_PARTY_KINDS: tuple[str, ...] = ("solo", "pair", "family", "friends", "team")
 
 
+def _payload_list(
+    payload: dict[str, Any], field_name: str, default: list[Any]
+) -> list[Any]:
+    value = payload.get(field_name, default)
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list")
+    return list(value)
+
+
 @dataclass(slots=True)
 class TravelerPartySummary:
     kind: str = "solo"
@@ -33,6 +42,10 @@ class TravelerPartySummary:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "TravelerPartySummary":
+        return cls(**payload)
 
 
 @dataclass(slots=True)
@@ -57,6 +70,18 @@ class TripFrameSummary:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "TripFrameSummary":
+        return cls(
+            start_date=payload.get("start_date"),
+            end_date=payload.get("end_date"),
+            duration_days=payload.get("duration_days"),
+            primary_regions=_payload_list(payload, "primary_regions", []),
+            traveler_party=TravelerPartySummary.from_dict(
+                payload.get("traveler_party", {})
+            ),
+        )
+
 
 @dataclass(slots=True)
 class ProfileRefs:
@@ -71,6 +96,13 @@ class ProfileRefs:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "ProfileRefs":
+        return cls(
+            leisure_profile_id=payload.get("leisure_profile_id"),
+            business_profile_id=payload.get("business_profile_id"),
+        )
 
 
 @dataclass(slots=True)
@@ -97,6 +129,16 @@ class TripArtifactRefs:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "TripArtifactRefs":
+        return cls(
+            objective_id=payload.get("objective_id"),
+            option_set_ids=_payload_list(payload, "option_set_ids", []),
+            itinerary_state_id=payload.get("itinerary_state_id"),
+            budget_state_id=payload.get("budget_state_id"),
+            policy_state_id=payload.get("policy_state_id"),
+        )
 
 
 @dataclass(slots=True)
@@ -139,3 +181,17 @@ class Trip:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "Trip":
+        return cls(
+            trip_id=payload["trip_id"],
+            user_id=payload["user_id"],
+            mode=payload["mode"],
+            status=payload["status"],
+            trip_frame=TripFrameSummary.from_dict(payload.get("trip_frame", {})),
+            profile_refs=ProfileRefs.from_dict(payload.get("profile_refs", {})),
+            artifacts=TripArtifactRefs.from_dict(payload.get("artifacts", {})),
+            title=payload.get("title", ""),
+            summary=payload.get("summary", ""),
+        )
