@@ -1,0 +1,162 @@
+{
+  "profile": {
+    "traveler_context": {
+      "employee_type": "employee",
+      "traveler_experience": "frequent",
+      "home_airport": "ORD",
+      "loyalty_programs": ["United MileagePlus"],
+      "mobility_or_access_needs": []
+    },
+    "trip_purpose": {
+      "purpose_type": "conference",
+      "business_justification": "Attend a customer conference and preserve time for partner meetings.",
+      "required_presence_windows": [
+        {"start": "2026-10-12T09:00:00-05:00", "end": "2026-10-14T17:00:00-05:00", "label": "conference floor"}
+      ],
+      "trip_criticality": "high"
+    },
+    "policy_constraints": {
+      "required_booking_channels": ["Concur"],
+      "airfare_rules": {"cabin": "economy"},
+      "lodging_rules": {"max_nightly_rate_usd": 300},
+      "ground_transport_rules": {"rideshare_allowed": true},
+      "per_diem_or_meal_rules": {"per_diem": "standard"},
+      "approval_triggers": ["manager approval required"],
+      "documentation_rules": ["retain airfare and lodging receipts"]
+    },
+    "vendor_constraints": {
+      "preferred_vendors": ["United", "Hilton"],
+      "approved_vendors": ["United", "Hilton", "American"],
+      "disallowed_vendors": [],
+      "comparison_requirements": {"airfare": 1}
+    },
+    "schedule_requirements": {
+      "arrival_buffer_preference": "moderate",
+      "meeting_protection_priority": 0.85,
+      "same_day_return_tolerance": 0.25,
+      "red_eye_tolerance": 0.15
+    },
+    "cost_controls": {
+      "overall_cost_priority": 0.45,
+      "policy_compliance_priority": 0.8,
+      "employee_convenience_priority": 0.6,
+      "splurge_requires_justification": true
+    },
+    "comfort_floors": {
+      "lodging_needs": ["walking distance to conference venue"],
+      "transport_needs": [],
+      "arrival_readiness_needs": ["arrive before keynote"],
+      "work_enablers": ["reliable hotel wifi"]
+    },
+    "documentation_requirements": {
+      "required_receipt_categories": ["airfare", "lodging", "registration"],
+      "justification_fields": ["conference relevance", "expected partner meetings"],
+      "comparable_capture_required": true,
+      "booking_link_retention_required": true
+    },
+    "approval_targets": {
+      "needs_manager_approval": true,
+      "needs_finance_review": false,
+      "needs_exception_preclearance": false,
+      "approval_roles": ["manager"]
+    },
+    "exception_strategy": {
+      "fallback_mode": "nearest_compliant",
+      "require_additional_comparables": false,
+      "notes": []
+    }
+  },
+  "proposal": {
+    "proposal_id": "proposal-clean-001",
+    "trip_id": "trip-clean-001",
+    "mode": "business",
+    "constraint_set_id": "policy-001",
+    "traveler_context": {
+      "employee_type": "employee",
+      "traveler_experience": "frequent",
+      "home_airport": "ORD",
+      "loyalty_programs": ["United MileagePlus"],
+      "mobility_or_access_needs": []
+    },
+    "selected_options": [
+      {
+        "category": "airfare",
+        "option_id": "air-001",
+        "label": "United nonstop economy",
+        "vendor": "United",
+        "booking_channel": "Concur",
+        "estimated_cost": {"currency": "USD", "typical_amount": 420.0},
+        "justification_refs": ["just-001"]
+      },
+      {
+        "category": "lodging",
+        "option_id": "hotel-001",
+        "label": "Hilton near convention center",
+        "vendor": "Hilton",
+        "booking_channel": "Concur",
+        "estimated_cost": {"currency": "USD", "typical_amount": 780.0},
+        "justification_refs": ["just-002"]
+      }
+    ],
+    "cost_summary": {
+      "currency": "USD",
+      "total_estimated_cost": 1340.0,
+      "category_estimates": {"airfare": 420.0, "lodging": 780.0, "ground_transport": 140.0},
+      "notes": ["All selected channels are policy-approved."]
+    },
+    "comparables": [
+      {
+        "category": "airfare",
+        "label": "American one-stop economy",
+        "vendor": "American",
+        "booking_channel": "Concur",
+        "estimated_cost": {"currency": "USD", "typical_amount": 390.0},
+        "notes": ["Longer total travel time."]
+      }
+    ],
+    "justifications": [
+      {
+        "category": "airfare",
+        "summary": "Nonstop arrival improves readiness for same-day partner meetings.",
+        "evidence": ["meeting begins two hours after arrival window"]
+      },
+      {
+        "category": "lodging",
+        "summary": "Walking-distance hotel reduces ground-transport complexity.",
+        "evidence": ["hotel is 0.3 miles from venue"]
+      }
+    ],
+    "booking_channel_summaries": [
+      {"category": "airfare", "selected_channel": "Concur", "approved": true, "rationale": "Policy-required booking tool."},
+      {"category": "lodging", "selected_channel": "Concur", "approved": true, "rationale": "Policy-required booking tool."}
+    ],
+    "approval_notes": ["Manager approval captured before proposal export."]
+  },
+  "evaluation_result": {
+    "evaluation_id": "eval-clean-001",
+    "proposal_id": "proposal-clean-001",
+    "status": "compliant",
+    "approval_requirements": [
+      {"role": "manager", "reason": "Standard travel approval", "mandatory": true}
+    ],
+    "failure_reasons": [],
+    "preferred_alternatives": [],
+    "exception_guidance": [],
+    "notes": ["Proposal satisfies booking-channel and documentation requirements."],
+    "compliance_score": 1.0
+  },
+  "expected_package": {
+    "package_status": "approval_ready",
+    "scenario_posture": "compliant_first",
+    "approval_roles": ["manager"],
+    "required_receipt_categories": ["airfare", "lodging", "registration"],
+    "justification_fields": ["conference relevance", "expected partner meetings"],
+    "readiness_check_statuses": {
+      "booking_channels": "ready",
+      "comparables": "ready",
+      "justifications": "ready",
+      "approval_path": "ready",
+      "policy_posture": "ready"
+    }
+  }
+}
