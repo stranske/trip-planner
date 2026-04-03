@@ -17,6 +17,7 @@
 - [Leisure preference schema draft](docs/leisure-preference-schema.md)
 - [Preference learning model](docs/preference-learning-model.md)
 - [Preference roadmap](docs/preference-roadmap.md)
+- [Frontend route visualization](docs/frontend-route-visualization.md)
 - [Planning autonomy and revealed preference contracts](docs/contracts/planning-autonomy.md)
 - [Shared planning contracts](docs/shared-planning-contracts.md)
 - [Normalized inventory contracts epic](docs/normalized-inventory-contracts-epic.md)
