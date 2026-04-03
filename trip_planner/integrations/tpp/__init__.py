@@ -30,6 +30,12 @@ from .submission import (
     ProposalSubmissionRecord,
     TPPProposalSubmissionService,
 )
+from .reoptimization import (
+    PolicyReoptimizationContext,
+    PolicyReoptimizationPlan,
+    ReoptimizationPlanningError,
+    TPPReoptimizationService,
+)
 
 __all__ = [
     "BaseTPPIntegrationClient",
@@ -42,6 +48,9 @@ __all__ = [
     "ProposalSubmissionError",
     "ProposalSubmissionLinkage",
     "ProposalSubmissionRecord",
+    "PolicyReoptimizationContext",
+    "PolicyReoptimizationPlan",
+    "ReoptimizationPlanningError",
     "TPPCorrelationId",
     "TPPErrorRecord",
     "TPPEvaluationResultIngestionService",
@@ -50,6 +59,7 @@ __all__ = [
     "TPPOperationRequest",
     "TPPProposalSubmissionService",
     "TPPPolicySyncService",
+    "TPPReoptimizationService",
     "TPPRequestEnvelope",
     "TPPResponseEnvelope",
     "TPPRetryMetadata",

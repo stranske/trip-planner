@@ -1,0 +1,152 @@
+{
+  "proposal": {
+    "proposal_id": "proposal-553",
+    "trip_id": "trip-business-client-summit",
+    "mode": "business",
+    "traveler_context": {
+      "employee_type": "employee",
+      "traveler_experience": "frequent",
+      "home_airport": "ORD",
+      "loyalty_programs": ["United"],
+      "mobility_or_access_needs": []
+    },
+    "selected_options": [
+      {
+        "category": "lodging",
+        "option_id": "hotel-conference",
+        "label": "Conference Hotel",
+        "vendor": "Marriott",
+        "booking_channel": "Navan",
+        "estimated_cost": {
+          "currency": "USD",
+          "typical_amount": 265.0,
+          "min_amount": 265.0,
+          "max_amount": 265.0
+        },
+        "justification_refs": ["justification:lodging:venue-proximity"]
+      },
+      {
+        "category": "ground_transport",
+        "option_id": "car-service-direct",
+        "label": "Direct car service",
+        "vendor": "Blacklane",
+        "booking_channel": "Navan",
+        "estimated_cost": {
+          "currency": "USD",
+          "typical_amount": 128.0,
+          "min_amount": 128.0,
+          "max_amount": 128.0
+        },
+        "justification_refs": ["justification:ground:late-arrival-risk"]
+      }
+    ],
+    "cost_summary": {
+      "currency": "USD",
+      "total_estimated_cost": 393.0,
+      "category_estimates": {
+        "lodging": 265.0,
+        "ground_transport": 128.0
+      },
+      "notes": ["Preferred itinerary needs an explicit exception packet."]
+    },
+    "comparables": [],
+    "justifications": [
+      {
+        "category": "lodging",
+        "summary": "Venue-adjacent lodging protects the keynote arrival window.",
+        "evidence": ["venue_adjacent", "late_checkin_buffer"]
+      },
+      {
+        "category": "ground_transport",
+        "summary": "Direct service avoids unreliable late-night transfer gaps.",
+        "evidence": ["late_arrival_risk", "safety_buffer"]
+      }
+    ],
+    "booking_channel_summaries": [],
+    "approval_notes": [
+      "Traveler would require an exception for lodging and late arrival handling."
+    ],
+    "requested_exception": {
+      "exception_type": "schedule_protection",
+      "reason": "Only venue-adjacent lodging preserves the executive briefing start window.",
+      "requested_approval_roles": ["manager", "finance"],
+      "notes": ["Comparable options remain attached for later review."]
+    },
+    "constraint_set_id": "policy-q2-client-summit"
+  },
+  "evaluation_result": {
+    "evaluation_id": "eval-553-exception",
+    "proposal_id": "proposal-553",
+    "status": "exception_required",
+    "approval_requirements": [
+      {
+        "role": "manager",
+        "reason": "Venue-adjacent lodging exceeds the cap."
+      },
+      {
+        "role": "finance",
+        "reason": "Ground transport requires schedule-protection approval."
+      }
+    ],
+    "failure_reasons": [
+      {
+        "code": "lodging_cap_exceeded",
+        "message": "Venue-adjacent lodging exceeds the nightly cap.",
+        "severity": "blocking",
+        "related_category": "lodging"
+      },
+      {
+        "code": "late_arrival_transfer_gap",
+        "message": "Approved transfer inventory cannot cover the late arrival safely.",
+        "severity": "blocking",
+        "related_category": "ground_transport"
+      }
+    ],
+    "preferred_alternatives": [],
+    "exception_guidance": [
+      "Prepare exception packet with venue-adjacent lodging rationale.",
+      "Retain ground-transport comparables to justify the protected arrival plan."
+    ],
+    "notes": [
+      "Planner should create a durable exception-nearest branch rather than overwrite the compliant path."
+    ],
+    "compliance_score": 0.31
+  },
+  "source_version": {
+    "version_id": "saved-scenario:compliant-first-v1",
+    "saved_scenario_id": "saved-scenario:compliant-first",
+    "trip_id": "trip-business-client-summit",
+    "title": "Compliant-first client summit plan",
+    "label": "compliant_first",
+    "created_at": "2026-04-02T10:00:00Z",
+    "created_by": "policy-planner",
+    "scope": "route",
+    "snapshot_refs": {
+      "objective_id": "objective:client-summit",
+      "scenario_search_id": "scenario-search:client-summit",
+      "source_result_set_id": "ranked-result-set:client-summit",
+      "itinerary_scenario_id": "scenario:trip-business-client-summit:1",
+      "ranked_result_set_id": "ranked-result-set:client-summit",
+      "option_set_ids": [
+        "option-set:lodging:conference",
+        "option-set:ground:direct"
+      ],
+      "policy_state_id": "policy-state:q2-client-summit",
+      "business_profile_id": "business-profile-consulting",
+      "notes": [
+        "Primary approval-ready path with compliant booking channels."
+      ]
+    },
+    "summary": "Primary scenario retains approved vendors and schedule protection.",
+    "tags": ["business", "approval-ready"],
+    "notes": ["Used as the baseline for business policy review."]
+  },
+  "comparable_refs": {
+    "lodging": ["comparable:lodging:policy-cap"],
+    "ground_transport": ["comparable:ground:approved-shuttle"]
+  },
+  "justification_refs": {
+    "lodging": ["justification:lodging:venue-proximity"],
+    "ground_transport": ["justification:ground:late-arrival-risk"]
+  }
+}
