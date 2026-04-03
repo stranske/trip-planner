@@ -812,7 +812,9 @@ def _build_transition(
             trigger="policy_constraint",
             changed_at=context.generated_at,
             reason="Business planning cannot prepare a packet until required policy inputs are captured.",
-            blocker_ids=[_policy_input_decision_id(name) for name in missing_policy_inputs],
+            blocker_ids=[
+                _policy_input_decision_id(name) for name in missing_policy_inputs
+            ],
         )
     if comparable_gaps:
         return WorkflowTransition(
@@ -822,7 +824,8 @@ def _build_transition(
             changed_at=context.generated_at,
             reason="Comparable collection remains incomplete for the active business path.",
             blocker_ids=[
-                _comparable_decision_id(category) for category in sorted(comparable_gaps)
+                _comparable_decision_id(category)
+                for category in sorted(comparable_gaps)
             ],
             warning_codes=[
                 _missing_comparable_warning_code(category)

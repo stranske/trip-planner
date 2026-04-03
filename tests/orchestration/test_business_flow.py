@@ -134,7 +134,9 @@ def test_missing_comparable_flow_surfaces_structured_pending_decisions() -> None
     )
 
 
-def test_comparable_only_gap_uses_structured_decision_ids_in_transition_and_warnings() -> None:
+def test_comparable_only_gap_uses_structured_decision_ids_in_transition_and_warnings() -> (
+    None
+):
     context = _build_context("missing_comparables_flow.json")
     context.collected_policy_inputs["need for in-person presence"] = (
         "Lead negotiator must be physically present for renewal terms."
@@ -166,7 +168,9 @@ def test_comparable_only_gap_uses_structured_decision_ids_in_transition_and_warn
     ]
 
 
-def test_exception_path_without_proposal_stays_active_when_fallback_is_available() -> None:
+def test_exception_path_without_proposal_stays_active_when_fallback_is_available() -> (
+    None
+):
     context = _build_context("exception_prep_flow.json")
 
     turn = build_business_planner_turn(
