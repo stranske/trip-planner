@@ -1,5 +1,10 @@
 """Canonical business travel profile contracts."""
 
+from .approval_ready import (
+    ApprovalReadinessCheck,
+    ApprovalReadyPackage,
+    build_approval_ready_package,
+)
 from .objective_derivation import derive_business_planning_objectives
 from .objectives import (
     BookingChannelObjectives,
@@ -41,14 +46,22 @@ from .policy_contracts import (
     SelectedOptionSummary,
     TripPlanProposal,
 )
+from .simulator import (
+    PolicyEvaluationSimulator,
+    PolicySimulationCase,
+    SimulatedPolicyRun,
+)
 
 __all__ = [
+    "ApprovalReadinessCheck",
+    "ApprovalReadyPackage",
     "ApprovalTargets",
     "ApprovalRequirement",
     "BusinessTravelProfile",
     "BusinessPlanningObjectives",
     "BookingChannelSummary",
     "BookingChannelObjectives",
+    "build_approval_ready_package",
     "ComparableRequirementObjectives",
     "ComparableOption",
     "ComfortFloors",
@@ -65,7 +78,9 @@ __all__ = [
     "ObjectiveExplanationBundle",
     "PolicyConstraintSet",
     "PolicyEvaluationResult",
+    "PolicyEvaluationSimulator",
     "PolicyFailureReason",
+    "PolicySimulationCase",
     "PlanningPathObjectives",
     "PolicyConstraints",
     "PreferredAlternative",
@@ -78,4 +93,5 @@ __all__ = [
     "TripPlanProposal",
     "TripPurpose",
     "VendorConstraints",
+    "SimulatedPolicyRun",
 ]

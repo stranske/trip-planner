@@ -3,6 +3,8 @@
 The canonical policy-facing business-trip exchange contracts now live in:
 
 - `trip_planner/business/policy_contracts.py`
+- `trip_planner/business/approval_ready.py`
+- `trip_planner/business/simulator.py`
 
 These contracts define the boundary between `trip-planner` and `Travel-Plan-Permission`.
 
@@ -25,6 +27,8 @@ That boundary is intentional:
   - proposal export with selected options, comparables, justifications, booking-channel summaries, and optional exception request
 - `PolicyEvaluationResult`
   - structured response with compliance status, approval requirements, failure reasons, preferred alternatives, and exception guidance
+- `ApprovalReadyPackage`
+  - local approval packet artifact that packages proposal evidence, routing, and readiness checks without replacing policy authority
 
 ## Planner Reaction Boundary
 
@@ -41,3 +45,4 @@ Once `Travel-Plan-Permission` returns a `PolicyEvaluationResult`, planner-side f
 - Keep proposal export distinct from evaluation result.
 - Avoid opaque blobs for comparables, justifications, or failure reasons.
 - Do not re-encode organization-specific policy logic in this repo.
+- Keep local simulator behavior fixture-backed and explicitly non-authoritative.
