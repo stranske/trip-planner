@@ -97,11 +97,11 @@ class BusinessWorkflowContext:
             require_non_empty(str(value), f"collected_policy_inputs[{key}]")
         if not isinstance(self.comparable_inventory, dict):
             raise ValueError("comparable_inventory must be a mapping")
-        for key, value in self.comparable_inventory.items():
+        for key, count in self.comparable_inventory.items():
             require_non_empty(key, "comparable_inventory key")
-            if isinstance(value, bool) or not isinstance(value, int):
+            if isinstance(count, bool) or not isinstance(count, int):
                 raise ValueError(f"comparable_inventory[{key}] must be an int")
-            if value < 0:
+            if count < 0:
                 raise ValueError(f"comparable_inventory[{key}] must be non-negative")
 
 
