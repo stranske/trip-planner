@@ -36,32 +36,21 @@ class LeisureWorkflowContext:
             raise ValueError("session_state must represent a leisure session")
         _validate_generated_at(self.generated_at)
         if self.scenario_search.trip_id != self.trip_record.trip.trip_id:
-            raise ValueError(
-                "scenario_search.trip_id must match trip_record.trip.trip_id"
-            )
+            raise ValueError("scenario_search.trip_id must match trip_record.trip.trip_id")
         if self.session_state.trip_id != self.trip_record.trip.trip_id:
-            raise ValueError(
-                "session_state.trip_id must match trip_record.trip.trip_id"
-            )
+            raise ValueError("session_state.trip_id must match trip_record.trip.trip_id")
         if self.scenario_search.purpose != "final_selection":
             raise ValueError("scenario_search.purpose must be final_selection")
         if not self.scenario_search.scenarios:
             raise ValueError("scenario_search.scenarios must not be empty")
         current_saved = self.session_state.current_saved_scenario_id
         known_saved = set(self.trip_record.artifact_refs.saved_scenario_ids)
-        if (
-            current_saved is not None
-            and known_saved
-            and current_saved not in known_saved
-        ):
+        if current_saved is not None and known_saved and current_saved not in known_saved:
             raise ValueError(
                 "session_state.current_saved_scenario_id must be present in trip_record artifact_refs"
             )
         scenario_search_id = self.trip_record.artifact_refs.scenario_search_id
-        if (
-            scenario_search_id is not None
-            and scenario_search_id != self.scenario_search.search_id
-        ):
+        if scenario_search_id is not None and scenario_search_id != self.scenario_search.search_id:
             raise ValueError(
                 "trip_record artifact_refs.scenario_search_id must match scenario_search.search_id"
             )
@@ -77,14 +66,10 @@ def build_leisure_planner_turn(context: LeisureWorkflowContext) -> PlannerTurn:
     actions = _build_actions(context, variant, decisions)
     outputs = _build_outputs(context, variant, decisions)
     open_action_ids = [
-        action.action_id
-        for action in actions
-        if action.status in {"pending", "in_progress"}
+        action.action_id for action in actions if action.status in {"pending", "in_progress"}
     ]
     completed_action_ids = [
-        action.action_id
-        for action in actions
-        if action.status in {"completed", "skipped"}
+        action.action_id for action in actions if action.status in {"completed", "skipped"}
     ]
     recent_output_ids = [output.output_id for output in outputs]
 
@@ -172,9 +157,7 @@ def _workflow_notes(context: LeisureWorkflowContext, variant: str) -> list[str]:
         ),
     ]
     if variant == "revised_after_feedback":
-        notes.append(
-            "Feedback-triggered revision keeps the workflow stateful and explicit."
-        )
+        notes.append("Feedback-triggered revision keeps the workflow stateful and explicit.")
     return notes
 
 
@@ -287,9 +270,7 @@ def _build_actions(
     ]
 
     rank_status = "completed"
-    rank_notes = [
-        "Ranking remains the upstream source of scenario order for the leisure scaffold."
-    ]
+    rank_notes = ["Ranking remains the upstream source of scenario order for the leisure scaffold."]
     if variant == "revised_after_feedback":
         rank_status = "in_progress"
         rank_notes.append(
@@ -324,8 +305,7 @@ def _build_actions(
                     "Delegated planning can auto-advance to a save-ready checkpoint without forcing an immediate user stop."
                 ],
                 payload={
-                    "current_saved_scenario_id": session.current_saved_scenario_id
-                    or "",
+                    "current_saved_scenario_id": session.current_saved_scenario_id or "",
                     "scenario_search_id": scenario_search.search_id,
                 },
             )
@@ -359,8 +339,7 @@ def _build_actions(
                     depends_on_action_ids=["action-request-decision"],
                     payload={
                         "decision_ids": decision_ids,
-                        "current_saved_scenario_id": session.current_saved_scenario_id
-                        or "",
+                        "current_saved_scenario_id": session.current_saved_scenario_id or "",
                     },
                 ),
             ]
@@ -460,9 +439,7 @@ def _build_outputs(
                 payload={
                     "decision_ids": [decision.decision_id for decision in decisions],
                     "blocking_decision_ids": [
-                        decision.decision_id
-                        for decision in decisions
-                        if decision.blocking
+                        decision.decision_id for decision in decisions if decision.blocking
                     ],
                 },
             )
@@ -499,8 +476,7 @@ def _build_outputs(
                     ref_ids=["action-rank-options", scenario_search.search_id],
                     payload={
                         "search_id": scenario_search.search_id,
-                        "current_saved_scenario_id": session.current_saved_scenario_id
-                        or "",
+                        "current_saved_scenario_id": session.current_saved_scenario_id or "",
                     },
                 ),
             ]
@@ -585,9 +561,7 @@ def _validate_generated_at(value: str) -> None:
         raise ValueError("generated_at must be a valid ISO 8601 timestamp") from exc
 
 
-def _collect_context_payload(
-    trip_id: str, session: PlanningSessionState
-) -> dict[str, str]:
+def _collect_context_payload(trip_id: str, session: PlanningSessionState) -> dict[str, str]:
     payload = {
         "trip_id": trip_id,
         "session_state_id": session.session_state_id,

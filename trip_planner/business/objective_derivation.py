@@ -32,9 +32,7 @@ def _effective_required_channels(
     profile: BusinessTravelProfile,
     constraint_set: PolicyConstraintSet | None,
 ) -> list[str]:
-    constraint_channels = (
-        constraint_set.required_booking_channels if constraint_set else []
-    )
+    constraint_channels = constraint_set.required_booking_channels if constraint_set else []
     return _merge_unique(
         constraint_channels,
         profile.policy_constraints.required_booking_channels,
@@ -46,9 +44,7 @@ def _effective_documentation_rules(
     constraint_set: PolicyConstraintSet | None,
 ) -> list[str]:
     constraint_rules = constraint_set.documentation_rules if constraint_set else []
-    return _merge_unique(
-        constraint_rules, profile.policy_constraints.documentation_rules
-    )
+    return _merge_unique(constraint_rules, profile.policy_constraints.documentation_rules)
 
 
 def _effective_allowed_exception_types(
@@ -73,13 +69,9 @@ def _channel_strategy(
 
     notes = []
     if required_channels:
-        notes.append(
-            "Prioritize required booking channels before evaluating convenience."
-        )
+        notes.append("Prioritize required booking channels before evaluating convenience.")
     if profile.vendor_constraints.approved_vendors:
-        notes.append(
-            "Approved vendors remain preferred after channel compliance is satisfied."
-        )
+        notes.append("Approved vendors remain preferred after channel compliance is satisfied.")
     if profile.vendor_constraints.disallowed_vendors:
         notes.append("Disallowed vendors should be excluded from option assembly.")
     return BookingChannelObjectives(
@@ -106,9 +98,7 @@ def _schedule_protection(
         f"Required presence windows={len(profile.trip_purpose.required_presence_windows)}.",
     ]
     if profile.schedule_requirements.same_day_return_tolerance <= 0.25:
-        notes.append(
-            "Avoid same-day return plans unless they clearly preserve readiness."
-        )
+        notes.append("Avoid same-day return plans unless they clearly preserve readiness.")
     if profile.schedule_requirements.red_eye_tolerance == 0.0:
         notes.append("Red-eye options should not be preferred in default planning.")
     return ScheduleProtectionObjectives(
@@ -147,9 +137,7 @@ def _justification_readiness(
     profile: BusinessTravelProfile,
     constraint_set: PolicyConstraintSet | None,
 ) -> JustificationReadinessObjectives:
-    required_fields = _sorted_strings(
-        profile.documentation_requirements.justification_fields
-    )
+    required_fields = _sorted_strings(profile.documentation_requirements.justification_fields)
     if profile.approval_targets.needs_exception_preclearance:
         required_fields = _merge_unique(required_fields, ["exception rationale"])
     documentation_rules = _effective_documentation_rules(profile, constraint_set)
@@ -189,9 +177,7 @@ def _cost_control_posture(profile: BusinessTravelProfile) -> CostControlObjectiv
     if profile.cost_controls.splurge_requires_justification:
         notes.append("Higher-comfort upgrades require explicit justification support.")
     if convenience >= 0.7:
-        notes.append(
-            "Traveler convenience remains material once policy gates are satisfied."
-        )
+        notes.append("Traveler convenience remains material once policy gates are satisfied.")
     return CostControlObjectives(
         posture=posture,
         overall_cost_priority=overall,
@@ -249,9 +235,7 @@ def _exception_path(
     if allowed_exception_types:
         notes.append("Allowed exception types: " + ", ".join(allowed_exception_types))
     if profile.exception_strategy.require_additional_comparables:
-        notes.append(
-            "Prepare additional comparables before escalating exception paths."
-        )
+        notes.append("Prepare additional comparables before escalating exception paths.")
     return ExceptionPathObjectives(
         posture=posture,
         fallback_mode=fallback_mode,
@@ -310,9 +294,7 @@ def _planning_paths(
             "Use the nearest policy fit when a clean compliant plan may not preserve the trip objective.",
         ]
         + (
-            [
-                "Retain comparables and justification material so review can explain the fallback."
-            ]
+            ["Retain comparables and justification material so review can explain the fallback."]
             if fallback_active
             else []
         ),
@@ -346,19 +328,14 @@ def _build_explanations(
         "comparison_requirements:"
         + ",".join(
             f"{key}={value}"
-            for key, value in sorted(
-                profile.vendor_constraints.comparison_requirements.items()
-            )
+            for key, value in sorted(profile.vendor_constraints.comparison_requirements.items())
         ),
         "justification_fields:"
         + ",".join(
-            _sorted_strings(profile.documentation_requirements.justification_fields)
-            or ["none"]
+            _sorted_strings(profile.documentation_requirements.justification_fields) or ["none"]
         ),
         "approval_roles:"
-        + ",".join(
-            _sorted_strings(profile.approval_targets.approval_roles) or ["none"]
-        ),
+        + ",".join(_sorted_strings(profile.approval_targets.approval_roles) or ["none"]),
         f"fallback_mode:{profile.exception_strategy.fallback_mode}",
         f"compliant_first_active:{str(compliant_first_path.active).lower()}",
         f"policy_nearest_fallback_active:{str(policy_nearest_fallback.active).lower()}",

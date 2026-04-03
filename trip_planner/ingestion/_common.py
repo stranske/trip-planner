@@ -97,9 +97,7 @@ def build_provenance_reference(
             "freshness_days", payload.get("freshness_days")
         ),
         trust_snapshot=SourceTrustSignals(**trust_payload) if trust_payload else None,
-        quality_value_fit=(
-            QualityValueFitSummary(**quality_payload) if quality_payload else None
-        ),
+        quality_value_fit=(QualityValueFitSummary(**quality_payload) if quality_payload else None),
         notes=payload.get("provenance_notes", []),
     )
 

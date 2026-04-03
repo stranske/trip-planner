@@ -86,9 +86,7 @@ class ProposalSubmissionRecord:
         if not isinstance(self.execution_status, TPPExecutionStatus):
             raise ValueError("execution_status must be a TPPExecutionStatus")
         self.request_payload = _optional_mapping(self.request_payload, "request_payload")
-        self.response_payload = _optional_mapping(
-            self.response_payload, "response_payload"
-        )
+        self.response_payload = _optional_mapping(self.response_payload, "response_payload")
         for field_name in (
             "execution_id",
             "queue_state",
@@ -160,25 +158,17 @@ class TPPProposalSubmissionService:
         scenario_id: str | None = None,
     ) -> ProposalSubmissionRecord:
         if request.operation != "submit_proposal":
-            raise ProposalSubmissionError(
-                "request.operation must be 'submit_proposal'"
-            )
+            raise ProposalSubmissionError("request.operation must be 'submit_proposal'")
         if response.operation != "submit_proposal":
-            raise ProposalSubmissionError(
-                "response.operation must be 'submit_proposal'"
-            )
+            raise ProposalSubmissionError("response.operation must be 'submit_proposal'")
         if response.request_id != request.request_id:
-            raise ProposalSubmissionError(
-                "response.request_id does not match request.request_id"
-            )
+            raise ProposalSubmissionError("response.request_id does not match request.request_id")
         if response.correlation_id.value != request.correlation_id.value:
             raise ProposalSubmissionError(
                 "response.correlation_id does not match request.correlation_id"
             )
         if request.proposal_id is not None and request.proposal_id != proposal.proposal_id:
-            raise ProposalSubmissionError(
-                "request.proposal_id does not match proposal.proposal_id"
-            )
+            raise ProposalSubmissionError("request.proposal_id does not match proposal.proposal_id")
         if request.trip_id is not None and request.trip_id != proposal.trip_id:
             raise ProposalSubmissionError("request.trip_id does not match proposal.trip_id")
 

@@ -376,15 +376,11 @@ def _candidate_set(*bundles: InventoryBundle) -> CandidateSet:
 
 def _objectives_for_scenario(
     scenario_name: str,
-) -> tuple[
-    BusinessTravelProfile, BusinessPlanningObjectives, PolicyConstraintSet | None
-]:
+) -> tuple[BusinessTravelProfile, BusinessPlanningObjectives, PolicyConstraintSet | None]:
     scenario = _load_scenario(scenario_name)
     profile = _load_profile(cast(str, scenario["profile_fixture"]))
     constraint_fixture = cast(str | None, scenario["constraint_fixture"])
-    constraint_set = (
-        _load_constraint_set(constraint_fixture) if constraint_fixture else None
-    )
+    constraint_set = _load_constraint_set(constraint_fixture) if constraint_fixture else None
     objectives = derive_business_planning_objectives(
         profile,
         trip_id=f"trip:{scenario_name}",
@@ -469,9 +465,7 @@ def test_business_ranking_uses_provided_feasibility_outputs() -> None:
 
 
 def test_business_ranking_exposes_proposal_readiness_records() -> None:
-    profile, objectives, constraint_set = _objectives_for_scenario(
-        "likely_exception_trip.json"
-    )
+    profile, objectives, constraint_set = _objectives_for_scenario("likely_exception_trip.json")
     bundle = _policy_nearest_exception_bundle()
 
     result_set = BusinessRankingEngine().rank_bundles(

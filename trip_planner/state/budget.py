@@ -61,9 +61,7 @@ def _require_unique_strings(values: list[str], field_name: str) -> None:
         raise ValueError(f"{field_name} cannot contain duplicates")
 
 
-def _payload_list(
-    payload: dict[str, Any], field_name: str, default: list[Any]
-) -> list[Any]:
+def _payload_list(payload: dict[str, Any], field_name: str, default: list[Any]) -> list[Any]:
     value = payload.get(field_name, default)
     if not isinstance(value, list):
         raise ValueError(f"{field_name} must be a list")
@@ -126,15 +124,9 @@ class BudgetScenario:
         _require_currency(self.currency, "currency")
         require_optional_non_empty(self.saved_scenario_id, "saved_scenario_id")
         if not self.allocations:
-            raise ValueError(
-                "allocations must contain at least one BudgetCategoryAllocation"
-            )
-        if any(
-            not isinstance(item, BudgetCategoryAllocation) for item in self.allocations
-        ):
-            raise ValueError(
-                "allocations must contain BudgetCategoryAllocation instances"
-            )
+            raise ValueError("allocations must contain at least one BudgetCategoryAllocation")
+        if any(not isinstance(item, BudgetCategoryAllocation) for item in self.allocations):
+            raise ValueError("allocations must contain BudgetCategoryAllocation instances")
         category_keys = [item.category_key for item in self.allocations]
         if len(set(category_keys)) != len(category_keys):
             raise ValueError("allocations cannot repeat category_key values")
@@ -196,18 +188,14 @@ class BudgetPlan:
             raise ValueError(f"mode must be one of {TRIP_MODES}")
         _require_currency(self.currency, "currency")
         if not self.scenario_budgets:
-            raise ValueError(
-                "scenario_budgets must contain at least one BudgetScenario"
-            )
+            raise ValueError("scenario_budgets must contain at least one BudgetScenario")
         if any(not isinstance(item, BudgetScenario) for item in self.scenario_budgets):
             raise ValueError("scenario_budgets must contain BudgetScenario instances")
         scenario_ids = [item.scenario_budget_id for item in self.scenario_budgets]
         if len(set(scenario_ids)) != len(scenario_ids):
             raise ValueError("scenario_budgets cannot repeat scenario_budget_id values")
         if self.current_scenario_budget_id not in scenario_ids:
-            raise ValueError(
-                "current_scenario_budget_id must reference a scenario budget"
-            )
+            raise ValueError("current_scenario_budget_id must reference a scenario budget")
         if any(item.trip_id != self.trip_id for item in self.scenario_budgets):
             raise ValueError("scenario_budgets must share the budget plan trip_id")
         if any(item.currency != self.currency for item in self.scenario_budgets):
@@ -222,9 +210,7 @@ class BudgetPlan:
                 if allocation.category_key in BUSINESS_ONLY_BUDGET_CATEGORIES
             }
             if business_categories:
-                raise ValueError(
-                    "leisure budget plans cannot use business-only categories"
-                )
+                raise ValueError("leisure budget plans cannot use business-only categories")
         _require_unique_strings(self.tags, "tags")
         _require_string_list(self.notes, "notes")
 

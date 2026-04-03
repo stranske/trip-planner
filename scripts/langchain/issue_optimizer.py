@@ -196,9 +196,7 @@ def _format_task_splitting(task_splitting: list[dict[str, Any]]) -> list[str]:
         suggestions = item.get("split_suggestions") if isinstance(item, dict) else None
         suggestion_text = ""
         if isinstance(suggestions, list) and suggestions:
-            suggestion_text = (
-                f" Suggested split: {', '.join(str(s) for s in suggestions)}."
-            )
+            suggestion_text = f" Suggested split: {', '.join(str(s) for s in suggestions)}."
         if task:
             detail = f"{task} ({reason})" if reason else task
             entries.append(f"{detail}.{suggestion_text}".strip())
@@ -578,9 +576,7 @@ def _deduplicate_task_lines(formatted: str) -> str:
     """
     lines = formatted.splitlines()
     try:
-        header_idx = next(
-            i for i, line in enumerate(lines) if line.strip() == "## Tasks"
-        )
+        header_idx = next(i for i, line in enumerate(lines) if line.strip() == "## Tasks")
     except StopIteration:
         return formatted
 
@@ -664,9 +660,7 @@ def _is_large_task(task: str) -> bool:
     return bool(re.search(r"\s\+\s", lowered) or ", " in task or " / " in task)
 
 
-def _detect_task_splitting(
-    tasks: list[str], *, use_llm: bool = False
-) -> list[dict[str, Any]]:
+def _detect_task_splitting(tasks: list[str], *, use_llm: bool = False) -> list[dict[str, Any]]:
     try:
         from scripts.langchain import task_decomposer
     except ModuleNotFoundError:
@@ -726,15 +720,9 @@ def _normalize_result(
 ) -> IssueOptimizationResult:
     task_splitting = payload.get("task_splitting") if isinstance(payload, dict) else []
     blocked_tasks = payload.get("blocked_tasks") if isinstance(payload, dict) else []
-    objective_criteria = (
-        payload.get("objective_criteria") if isinstance(payload, dict) else []
-    )
-    missing_sections = (
-        payload.get("missing_sections") if isinstance(payload, dict) else []
-    )
-    formatting_issues = (
-        payload.get("formatting_issues") if isinstance(payload, dict) else []
-    )
+    objective_criteria = payload.get("objective_criteria") if isinstance(payload, dict) else []
+    missing_sections = payload.get("missing_sections") if isinstance(payload, dict) else []
+    formatting_issues = payload.get("formatting_issues") if isinstance(payload, dict) else []
     overall_notes = payload.get("overall_notes")
 
     def _coerce_list(value: Any) -> list[Any]:
@@ -784,9 +772,7 @@ def _process_llm_response(
         return None, f"LLM output failed validation: {parsed.error_detail}"
 
     result = _normalize_result(parsed.payload.model_dump(), provider)
-    result.task_splitting = _ensure_task_decomposition(
-        result.task_splitting, use_llm=use_llm
-    )
+    result.task_splitting = _ensure_task_decomposition(result.task_splitting, use_llm=use_llm)
     result.langsmith_trace_id = trace_id
     result.langsmith_trace_url = trace_url
     return result, None
@@ -921,9 +907,7 @@ def analyze_issue(issue_body: str, *, use_llm: bool = True) -> IssueOptimization
         note = result.overall_notes or ""
         detail = f"LLM structured output failed: {last_error}"
         result.overall_notes = f"{note} {detail}".strip()
-    result.task_splitting = _ensure_task_decomposition(
-        result.task_splitting, use_llm=False
-    )
+    result.task_splitting = _ensure_task_decomposition(result.task_splitting, use_llm=False)
     return result
 
 
@@ -963,9 +947,7 @@ def _append_deferred_tasks(formatted_body: str, suggestions: dict[str, Any]) -> 
     return "\n".join(parts).strip()
 
 
-def _apply_task_decomposition(
-    formatted_body: str | None, suggestions: dict[str, Any]
-) -> str:
+def _apply_task_decomposition(formatted_body: str | None, suggestions: dict[str, Any]) -> str:
     # Guard against None input (can happen when issue body is too large)
     if formatted_body is None:
         return ""
@@ -1131,9 +1113,7 @@ def apply_suggestions(
                                     operation="apply_suggestions",
                                     issue_number=issue_num,
                                 )
-                                content = getattr(response, "content", None) or str(
-                                    response
-                                )
+                                content = getattr(response, "content", None) or str(response)
                                 formatted = content.strip()
                                 if _formatted_output_valid(formatted):
                                     formatted = _deduplicate_task_lines(formatted)
@@ -1229,14 +1209,10 @@ def _load_suggestions(args: argparse.Namespace) -> dict[str, Any] | None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Analyze issue text for optimization suggestions."
-    )
+    parser = argparse.ArgumentParser(description="Analyze issue text for optimization suggestions.")
     parser.add_argument("--input-file", help="Path to raw issue text.")
     parser.add_argument("--input-text", help="Raw issue text (inline).")
-    parser.add_argument(
-        "--json", action="store_true", help="Emit JSON payload to stdout."
-    )
+    parser.add_argument("--json", action="store_true", help="Emit JSON payload to stdout.")
     parser.add_argument("--no-llm", action="store_true", help="Disable LLM usage.")
     parser.add_argument(
         "--apply-suggestions",

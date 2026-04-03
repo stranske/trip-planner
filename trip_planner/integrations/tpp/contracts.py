@@ -147,9 +147,7 @@ class TPPRequestEnvelope:
         if not isinstance(self.correlation_id, TPPCorrelationId):
             raise ValueError("correlation_id must be a TPPCorrelationId")
         if self.transport_pattern not in TPP_TRANSPORT_PATTERNS:
-            raise ValueError(
-                f"transport_pattern must be one of {TPP_TRANSPORT_PATTERNS}"
-            )
+            raise ValueError(f"transport_pattern must be one of {TPP_TRANSPORT_PATTERNS}")
         self.payload = _require_mapping(self.payload, "payload")
         self.metadata = _optional_mapping(self.metadata, "metadata")
         require_string_mapping(self.metadata, "metadata")
@@ -203,9 +201,7 @@ class TPPResponseEnvelope:
         if not isinstance(self.correlation_id, TPPCorrelationId):
             raise ValueError("correlation_id must be a TPPCorrelationId")
         if self.transport_pattern not in TPP_TRANSPORT_PATTERNS:
-            raise ValueError(
-                f"transport_pattern must be one of {TPP_TRANSPORT_PATTERNS}"
-            )
+            raise ValueError(f"transport_pattern must be one of {TPP_TRANSPORT_PATTERNS}")
         if not isinstance(self.execution_status, TPPExecutionStatus):
             raise ValueError("execution_status must be a TPPExecutionStatus")
         self.result_payload = _optional_mapping(self.result_payload, "result_payload")
@@ -240,18 +236,12 @@ class TPPResponseEnvelope:
             correlation_id=TPPCorrelationId.from_value(response["correlation_id"]),
             transport_pattern=response.get("transport_pattern", "sync"),
             execution_status=TPPExecutionStatus(**response["execution_status"]),
-            result_payload=_optional_mapping(
-                response.get("result_payload"), "result_payload"
-            ),
+            result_payload=_optional_mapping(response.get("result_payload"), "result_payload"),
             error=(
-                TPPErrorRecord(**response["error"])
-                if response.get("error") is not None
-                else None
+                TPPErrorRecord(**response["error"]) if response.get("error") is not None else None
             ),
             retry=(
-                TPPRetryMetadata(**response["retry"])
-                if response.get("retry") is not None
-                else None
+                TPPRetryMetadata(**response["retry"]) if response.get("retry") is not None else None
             ),
             received_at=response.get("received_at"),
             status_endpoint=response.get("status_endpoint"),

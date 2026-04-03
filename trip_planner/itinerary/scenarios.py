@@ -59,9 +59,7 @@ class ScenarioSummary:
         require_non_empty(self.headline, "headline")
         if self.scenario_kind not in SCENARIO_KINDS:
             raise ValueError(f"scenario_kind must be one of {SCENARIO_KINDS}")
-        if self.estimated_total is not None and not isinstance(
-            self.estimated_total, MoneyRange
-        ):
+        if self.estimated_total is not None and not isinstance(self.estimated_total, MoneyRange):
             raise ValueError("estimated_total must be a MoneyRange when provided")
         require_non_negative(self.total_travel_minutes, "total_travel_minutes")
         require_non_negative(self.total_transfer_count, "total_transfer_count")
@@ -96,25 +94,15 @@ class ItineraryScenario:
             raise ValueError("rank must be positive")
         if not isinstance(self.scenario_summary, ScenarioSummary):
             raise ValueError("scenario_summary must be a ScenarioSummary")
-        if any(
-            not isinstance(item, ExplanationRecord) for item in self.explanation_records
-        ):
-            raise ValueError(
-                "explanation_records must contain ExplanationRecord instances"
-            )
-        if any(
-            not isinstance(item, ScenarioTradeoff) for item in self.unresolved_tradeoffs
-        ):
-            raise ValueError(
-                "unresolved_tradeoffs must contain ScenarioTradeoff instances"
-            )
+        if any(not isinstance(item, ExplanationRecord) for item in self.explanation_records):
+            raise ValueError("explanation_records must contain ExplanationRecord instances")
+        if any(not isinstance(item, ScenarioTradeoff) for item in self.unresolved_tradeoffs):
+            raise ValueError("unresolved_tradeoffs must contain ScenarioTradeoff instances")
         require_strings(self.supporting_option_ids, "supporting_option_ids")
         require_strings(self.objective_refs, "objective_refs")
         require_strings(self.notes, "notes")
         if not self.explanation_records:
-            raise ValueError(
-                "explanation_records must contain at least one ExplanationRecord"
-            )
+            raise ValueError("explanation_records must contain at least one ExplanationRecord")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

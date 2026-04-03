@@ -14,13 +14,7 @@ from trip_planner.state import PlanningSessionState
 
 
 def _fixture_path(name: str) -> Path:
-    return (
-        Path(__file__).resolve().parents[1]
-        / "fixtures"
-        / "orchestration"
-        / "in_trip"
-        / name
-    )
+    return Path(__file__).resolve().parents[1] / "fixtures" / "orchestration" / "in_trip" / name
 
 
 def _load_event(name: str) -> InTripTriggerEvent:
@@ -77,15 +71,10 @@ def test_budget_drift_event_routes_into_reranking() -> None:
     )
 
     assert result.replanning_request.replanning_kind == "rerank"
-    assert result.planner_turn.next_step.recommended_action_id == (
-        "action-refresh-ranking"
-    )
+    assert result.planner_turn.next_step.recommended_action_id == ("action-refresh-ranking")
     assert result.revision_output.output_kind == "reranked_options"
     assert result.activity_event.event_kind == "budget_updated"
-    assert (
-        result.updated_session_state.pending_decisions
-        == _load_session().pending_decisions
-    )
+    assert result.updated_session_state.pending_decisions == _load_session().pending_decisions
 
 
 def test_rerank_event_does_not_require_confirmation_for_prior_decisions() -> None:
@@ -140,13 +129,8 @@ def test_informational_fatigue_event_stays_in_monitoring() -> None:
 
     assert result.replanning_request.replanning_kind == "ignore"
     assert result.planner_turn.workflow_state.current_stage == "monitoring"
-    assert (
-        result.planner_turn.next_step.recommended_action_id == "action-record-trigger"
-    )
-    assert (
-        result.updated_session_state.pending_decisions
-        == _load_session().pending_decisions
-    )
+    assert result.planner_turn.next_step.recommended_action_id == "action-record-trigger"
+    assert result.updated_session_state.pending_decisions == _load_session().pending_decisions
 
 
 def test_trigger_event_rejects_unknown_severity() -> None:

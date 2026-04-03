@@ -84,22 +84,15 @@ class PersistedEvaluationResult:
             self.evaluation_result, PolicyEvaluationResult
         ):
             raise ValueError("evaluation_result must be a PolicyEvaluationResult")
-        self.request_payload = _optional_mapping(
-            self.request_payload, "request_payload"
-        )
-        self.response_payload = _optional_mapping(
-            self.response_payload, "response_payload"
-        )
+        self.request_payload = _optional_mapping(self.request_payload, "request_payload")
+        self.response_payload = _optional_mapping(self.response_payload, "response_payload")
         if self.retry is not None and not isinstance(self.retry, TPPRetryMetadata):
             raise ValueError("retry must be a TPPRetryMetadata when provided")
         if self.error is not None and not isinstance(self.error, TPPErrorRecord):
             raise ValueError("error must be a TPPErrorRecord when provided")
         _optional_string(self.status_endpoint, "status_endpoint")
         _optional_string(self.received_at, "received_at")
-        if (
-            self.execution_status.state == "succeeded"
-            and self.evaluation_result is None
-        ):
+        if self.execution_status.state == "succeeded" and self.evaluation_result is None:
             raise ValueError(
                 "succeeded evaluation responses must include a normalized evaluation_result"
             )

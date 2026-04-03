@@ -44,9 +44,7 @@ class PolicyReoptimizationContext:
         if not isinstance(self.source_version, ScenarioVersion):
             raise ValueError("source_version must be a ScenarioVersion")
         if self.source_version.label not in BUSINESS_SCENARIO_LABELS:
-            raise ValueError(
-                f"source_version.label must be one of {BUSINESS_SCENARIO_LABELS}"
-            )
+            raise ValueError(f"source_version.label must be one of {BUSINESS_SCENARIO_LABELS}")
         _validate_ref_mapping(self.comparable_refs, "comparable_refs")
         _validate_ref_mapping(self.justification_refs, "justification_refs")
 
@@ -117,9 +115,7 @@ class PolicyReoptimizationPlan:
             ]
         )
         if self.candidate_categories:
-            snapshot_notes.append(
-                "candidate-categories:" + ",".join(self.candidate_categories)
-            )
+            snapshot_notes.append("candidate-categories:" + ",".join(self.candidate_categories))
         snapshot_payload["notes"] = _dedupe(snapshot_notes)
 
         version_notes = list(self.source_version.notes)
@@ -142,9 +138,7 @@ class PolicyReoptimizationPlan:
             scope=self.source_version.scope,
             based_on_version_id=self.source_version.version_id,
             snapshot_refs=ScenarioArtifactRefs.from_dict(snapshot_payload),
-            summary=(
-                f"Policy reaction {self.reaction_kind} for evaluation {self.evaluation_id}."
-            ),
+            summary=(f"Policy reaction {self.reaction_kind} for evaluation {self.evaluation_id}."),
             tags=sorted(set(version_tags)),
             notes=_dedupe(version_notes),
         )
@@ -190,13 +184,9 @@ class TPPReoptimizationService:
         if not isinstance(proposal, TripPlanProposal):
             raise ReoptimizationPlanningError("proposal must be a TripPlanProposal")
         if not isinstance(evaluation_result, PolicyEvaluationResult):
-            raise ReoptimizationPlanningError(
-                "evaluation_result must be a PolicyEvaluationResult"
-            )
+            raise ReoptimizationPlanningError("evaluation_result must be a PolicyEvaluationResult")
         if not isinstance(context, PolicyReoptimizationContext):
-            raise ReoptimizationPlanningError(
-                "context must be a PolicyReoptimizationContext"
-            )
+            raise ReoptimizationPlanningError("context must be a PolicyReoptimizationContext")
         if evaluation_result.proposal_id != proposal.proposal_id:
             raise ReoptimizationPlanningError(
                 "evaluation_result.proposal_id must match proposal.proposal_id"
@@ -237,9 +227,7 @@ class TPPReoptimizationService:
         required_approval_roles = _dedupe(
             [item.role for item in evaluation_result.approval_requirements]
         )
-        failure_codes = _dedupe(
-            [item.code for item in evaluation_result.failure_reasons]
-        )
+        failure_codes = _dedupe([item.code for item in evaluation_result.failure_reasons])
         note_lines = list(evaluation_result.notes)
         note_lines.extend(evaluation_result.exception_guidance)
         note_lines.extend(item.message for item in evaluation_result.failure_reasons)
@@ -255,9 +243,7 @@ class TPPReoptimizationService:
             target_label = "exception_nearest"
             comparison_outcome = "tradeoff"
             target_title = "Generate an exception-ready candidate scenario"
-            ranking_focus_areas = _dedupe(
-                candidate_categories + ["exception_handling", "approval"]
-            )
+            ranking_focus_areas = _dedupe(candidate_categories + ["exception_handling", "approval"])
         elif evaluation_result.preferred_alternatives:
             reaction_kind = "narrow_candidates"
             comparison_outcome = "preferred"
@@ -265,9 +251,7 @@ class TPPReoptimizationService:
             ranking_focus_areas = _dedupe(
                 candidate_categories + ["policy_alignment", "comparables"]
             )
-        elif any(
-            item.severity == "blocking" for item in evaluation_result.failure_reasons
-        ):
+        elif any(item.severity == "blocking" for item in evaluation_result.failure_reasons):
             reaction_kind = "regenerate_scenario"
             comparison_outcome = "tradeoff"
             target_title = "Regenerate a compliant scenario for fixable policy failures"

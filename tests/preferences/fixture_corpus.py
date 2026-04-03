@@ -71,9 +71,7 @@ def load_fixture_corpus(path: Path | None = None) -> list[TravelerFixture]:
     fixtures = payload.get("fixtures", [])
     if not isinstance(fixtures, list):
         raise ValueError("fixtures must be a list")
-    fixture_objects = [
-        _build_fixture(index, entry) for index, entry in enumerate(fixtures)
-    ]
+    fixture_objects = [_build_fixture(index, entry) for index, entry in enumerate(fixtures)]
     fixture_ids = [fixture.id for fixture in fixture_objects]
     if len(set(fixture_ids)) != len(fixture_ids):
         raise ValueError("fixture corpus ids must be unique")
@@ -93,9 +91,7 @@ def _build_fixture(index: int, payload: Any) -> TravelerFixture:
             raise ValueError(f"fixture {fixture_id!r} must define {required_field}")
     intended = payload.get("intended_interpretation", {})
     if not isinstance(intended, dict):
-        raise ValueError(
-            f"fixture {fixture_id!r} intended_interpretation must be an object"
-        )
+        raise ValueError(f"fixture {fixture_id!r} intended_interpretation must be an object")
     raw_inputs = payload.get("raw_inputs", {})
     if not isinstance(raw_inputs, dict):
         raise ValueError(f"fixture {fixture_id!r} raw_inputs must be an object")
@@ -145,8 +141,7 @@ def build_profile_from_overrides(overrides: dict[str, Any]) -> LeisurePreference
     unknown_constraint_keys = set(hard_constraint_overrides) - allowed_constraint_keys
     if unknown_constraint_keys:
         raise ValueError(
-            "unsupported hard constraint override keys: "
-            f"{sorted(unknown_constraint_keys)}"
+            "unsupported hard constraint override keys: " f"{sorted(unknown_constraint_keys)}"
         )
     date_window = {
         **profile_payload["hard_constraints"]["date_window"],
@@ -164,8 +159,7 @@ def build_profile_from_overrides(overrides: dict[str, Any]) -> LeisurePreference
     unknown_duration_keys = set(duration_bounds) - {"min_days", "max_days"}
     if unknown_duration_keys:
         raise ValueError(
-            "unsupported duration_bounds override keys: "
-            f"{sorted(unknown_duration_keys)}"
+            "unsupported duration_bounds override keys: " f"{sorted(unknown_duration_keys)}"
         )
     merged_constraints = {
         **profile_payload["hard_constraints"],
@@ -215,9 +209,7 @@ def build_profile_from_overrides(overrides: dict[str, Any]) -> LeisurePreference
     return LeisurePreferenceProfile(
         trip_frame=TripFrame(**profile_payload["trip_frame"]),
         hard_constraints=HardConstraints(
-            date_window=DateWindow(
-                **profile_payload["hard_constraints"]["date_window"]
-            ),
+            date_window=DateWindow(**profile_payload["hard_constraints"]["date_window"]),
             duration_bounds=DurationBounds(
                 **profile_payload["hard_constraints"]["duration_bounds"]
             ),
@@ -248,16 +240,13 @@ def build_profile_from_overrides(overrides: dict[str, Any]) -> LeisurePreference
             for key, values in profile_payload["tradeoff_dimensions"].items()
         },
         hybrid_factors={
-            key: HybridFactor(**values)
-            for key, values in profile_payload["hybrid_factors"].items()
+            key: HybridFactor(**values) for key, values in profile_payload["hybrid_factors"].items()
         },
         conditional_overrides=list(profile_payload["conditional_overrides"]),
         interaction_rules=[
             InteractionRule(**rule) for rule in profile_payload["interaction_rules"]
         ],
-        tension_flags=[
-            TensionFlag(**flag) for flag in profile_payload["tension_flags"]
-        ],
+        tension_flags=[TensionFlag(**flag) for flag in profile_payload["tension_flags"]],
         evidence_summary=EvidenceSummary(**profile_payload["evidence_summary"]),
     )
 

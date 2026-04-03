@@ -74,9 +74,7 @@ def _require_unique_strings(values: list[str], field_name: str) -> None:
         raise ValueError(f"{field_name} cannot contain duplicates")
 
 
-def _payload_list(
-    payload: dict[str, Any], field_name: str, default: list[Any]
-) -> list[Any]:
+def _payload_list(payload: dict[str, Any], field_name: str, default: list[Any]) -> list[Any]:
     value = payload.get(field_name, default)
     if not isinstance(value, list):
         raise ValueError(f"{field_name} must be a list")
@@ -154,9 +152,7 @@ class InTripTriggerEvent:
             raise ValueError(f"change_scope must be one of {CHANGE_SCOPES}")
         _require_unique_strings(self.trigger_codes, "trigger_codes")
         _require_unique_strings(self.affected_option_ids, "affected_option_ids")
-        require_optional_non_empty(
-            self.affected_checkpoint_id, "affected_checkpoint_id"
-        )
+        require_optional_non_empty(self.affected_checkpoint_id, "affected_checkpoint_id")
         require_optional_non_empty(
             self.affected_saved_scenario_id,
             "affected_saved_scenario_id",
@@ -331,9 +327,7 @@ def build_in_trip_adjustment_result(
     if event.trip_id != context.session_state.trip_id:
         raise ValueError("event.trip_id must match session_state.trip_id")
     if event.session_state_id != context.session_state.session_state_id:
-        raise ValueError(
-            "event.session_state_id must match session_state.session_state_id"
-        )
+        raise ValueError("event.session_state_id must match session_state.session_state_id")
 
     replanning_kind = _classify_replanning_kind(event)
     pending_decisions = _pending_decisions(context, event, replanning_kind)
@@ -345,8 +339,7 @@ def build_in_trip_adjustment_result(
         + [f"in-trip-trigger:{event.trigger_kind}:{replanning_kind}"],
         tags=list(
             dict.fromkeys(
-                list(context.session_state.tags)
-                + ["in-trip", event.trigger_kind, replanning_kind]
+                list(context.session_state.tags) + ["in-trip", event.trigger_kind, replanning_kind]
             )
         ),
     )
@@ -481,13 +474,10 @@ def _build_replanning_request(
         replanning_kind=replanning_kind,
         summary=_request_summary(replanning_kind),
         trigger_event_id=event.trigger_event_id,
-        based_on_saved_scenario_id=context.session_state.current_saved_scenario_id
-        or "",
+        based_on_saved_scenario_id=context.session_state.current_saved_scenario_id or "",
         scenario_search_id=context.scenario_search_id,
         ranked_result_set_id=context.ranked_result_set_id,
-        checkpoint_id=(
-            event.affected_checkpoint_id or context.session_state.current_checkpoint_id
-        ),
+        checkpoint_id=(event.affected_checkpoint_id or context.session_state.current_checkpoint_id),
         affected_option_ids=list(event.affected_option_ids),
         warning_codes=list(event.trigger_codes),
         requires_user_confirmation=introduced_blocking_decision,
@@ -504,9 +494,7 @@ def _request_summary(replanning_kind: str) -> str:
         return "Refresh ranked alternatives before mutating the saved scenario."
     if replanning_kind == "scenario_revision":
         return "Build a scenario revision that preserves existing trip context."
-    return (
-        "Escalate to an emergency fallback without treating the change as a new trip."
-    )
+    return "Escalate to an emergency fallback without treating the change as a new trip."
 
 
 def _build_activity_event(
@@ -515,9 +503,7 @@ def _build_activity_event(
     replanning_request: ReplanningRequest,
 ) -> ActivityLogEvent:
     event_kind = (
-        "budget_updated"
-        if event.trigger_kind == "budget_drift"
-        else "in_trip_change_requested"
+        "budget_updated" if event.trigger_kind == "budget_drift" else "in_trip_change_requested"
     )
     return ActivityLogEvent(
         activity_event_id=f"{event.trigger_event_id}:activity",
@@ -614,14 +600,10 @@ def _build_planner_turn(
         pending_decisions,
     )
     open_action_ids = [
-        action.action_id
-        for action in actions
-        if action.status in {"pending", "in_progress"}
+        action.action_id for action in actions if action.status in {"pending", "in_progress"}
     ]
     completed_action_ids = [
-        action.action_id
-        for action in actions
-        if action.status in {"completed", "skipped"}
+        action.action_id for action in actions if action.status in {"completed", "skipped"}
     ]
     workflow_state = WorkflowStateSnapshot(
         workflow_state_id=(
@@ -654,9 +636,7 @@ def _build_planner_turn(
     next_step = NextStepSummary(
         headline=_next_step_headline(replanning_kind),
         recommended_action_id=revision_output.recommended_action_id,
-        blocking_decision_ids=[
-            decision.decision_id for decision in workflow_pending_decisions
-        ],
+        blocking_decision_ids=[decision.decision_id for decision in workflow_pending_decisions],
         expected_output_ids=[output.output_id],
         notes=[
             "Preserve checkpoint lineage and keep the revision downstream from ranking and saved scenarios."

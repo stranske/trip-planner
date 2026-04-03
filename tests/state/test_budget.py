@@ -23,9 +23,7 @@ def _load_plan(name: str) -> BudgetPlan:
 
 
 def _load_events() -> list[ActualSpendEvent]:
-    payload = json.loads(
-        _fixture_path("actual_spend_events.json").read_text(encoding="utf-8")
-    )
+    payload = json.loads(_fixture_path("actual_spend_events.json").read_text(encoding="utf-8"))
     return [ActualSpendEvent.from_dict(item) for item in payload["events"]]
 
 
@@ -34,9 +32,7 @@ def test_budget_plan_loads_leisure_fixture_with_scenario_variants() -> None:
 
     assert record.mode == "leisure"
     assert record.current_scenario_budget_id == "budget-scenario:kyoto-baseline"
-    assert (
-        record.scenario_budgets[0].saved_scenario_id == "saved-scenario:baseline-kyoto"
-    )
+    assert record.scenario_budgets[0].saved_scenario_id == "saved-scenario:baseline-kyoto"
     assert record.scenario_budgets[0].total_planned_amount == 1720.0
     assert record.scenario_budgets[1].allocations[3].category_key == "local_mobility"
 
@@ -73,9 +69,7 @@ def test_actual_spend_event_fixture_captures_source_context() -> None:
 
 
 def test_budget_plan_rejects_leisure_business_only_category() -> None:
-    payload = json.loads(
-        _fixture_path("leisure_budget_plan.json").read_text(encoding="utf-8")
-    )
+    payload = json.loads(_fixture_path("leisure_budget_plan.json").read_text(encoding="utf-8"))
     payload["scenario_budgets"][0]["allocations"].append(
         {
             "category_key": "workspace",
@@ -92,9 +86,7 @@ def test_budget_plan_rejects_leisure_business_only_category() -> None:
 
 
 def test_budget_category_allocation_rejects_invalid_currency_and_category() -> None:
-    with pytest.raises(
-        ValueError, match="currency must be a 3-letter uppercase currency code"
-    ):
+    with pytest.raises(ValueError, match="currency must be a 3-letter uppercase currency code"):
         BudgetCategoryAllocation(
             category_key="lodging",
             label="Hotel",
@@ -231,25 +223,15 @@ def test_budget_repository_protocol_can_store_plans_and_spend_events() -> None:
             if trip_id is not None:
                 events = [event for event in events if event.trip_id == trip_id]
             if budget_plan_id is not None:
-                events = [
-                    event for event in events if event.budget_plan_id == budget_plan_id
-                ]
+                events = [event for event in events if event.budget_plan_id == budget_plan_id]
             if saved_scenario_id is not None:
-                events = [
-                    event
-                    for event in events
-                    if event.saved_scenario_id == saved_scenario_id
-                ]
+                events = [event for event in events if event.saved_scenario_id == saved_scenario_id]
             if scenario_budget_id is not None:
                 events = [
-                    event
-                    for event in events
-                    if event.scenario_budget_id == scenario_budget_id
+                    event for event in events if event.scenario_budget_id == scenario_budget_id
                 ]
             if category_key is not None:
-                events = [
-                    event for event in events if event.category_key == category_key
-                ]
+                events = [event for event in events if event.category_key == category_key]
             if source_kind is not None:
                 events = [event for event in events if event.source_kind == source_kind]
             return events
@@ -272,9 +254,7 @@ def test_budget_repository_protocol_can_store_plans_and_spend_events() -> None:
 
     assert stored is not None
     assert stored.current_scenario_budget_id == "budget-scenario:kyoto-rainy-day"
-    assert [
-        version.version_id for version in plan_repo.list_versions(plan.budget_plan_id)
-    ] == [
+    assert [version.version_id for version in plan_repo.list_versions(plan.budget_plan_id)] == [
         first.version_id,
         second.version_id,
     ]
@@ -288,17 +268,17 @@ def test_budget_repository_protocol_can_store_plans_and_spend_events() -> None:
         == 1
     )
     assert (
-        spend_repo.list_spend_events(
-            scenario_budget_id="budget-scenario:client-summit-compliant"
-        )[0].saved_scenario_id
+        spend_repo.list_spend_events(scenario_budget_id="budget-scenario:client-summit-compliant")[
+            0
+        ].saved_scenario_id
         == "saved-scenario:client-summit-compliant"
     )
-    assert spend_repo.list_spend_events(category_key="client_hospitality")[
-        0
-    ].trip_id == ("trip-business-client-summit")
+    assert spend_repo.list_spend_events(category_key="client_hospitality")[0].trip_id == (
+        "trip-business-client-summit"
+    )
     assert (
-        spend_repo.list_spend_events(
-            scenario_budget_id="budget-scenario:client-summit-compliant"
-        )[0].category_key
+        spend_repo.list_spend_events(scenario_budget_id="budget-scenario:client-summit-compliant")[
+            0
+        ].category_key
         == "client_hospitality"
     )

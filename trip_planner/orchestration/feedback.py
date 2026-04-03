@@ -81,9 +81,7 @@ class FeedbackLoopContext:
         if self.session_state.mode != "leisure":
             raise ValueError("session_state must represent a leisure session")
         if self.trip_stage not in preference_schema.PLANNING_STAGES:
-            raise ValueError(
-                f"trip_stage must be one of {preference_schema.PLANNING_STAGES}"
-            )
+            raise ValueError(f"trip_stage must be one of {preference_schema.PLANNING_STAGES}")
         require_non_empty(self.generated_at, "generated_at")
 
 
@@ -119,9 +117,7 @@ class OptionFeedbackEvent:
         _require_axis_mapping(self.hybrid_biases, "hybrid_biases")
         for kind in self.autonomy_feedback_kinds:
             if kind not in AUTONOMY_FEEDBACK_KINDS:
-                raise ValueError(
-                    "autonomy_feedback_kinds must contain supported autonomy feedback"
-                )
+                raise ValueError("autonomy_feedback_kinds must contain supported autonomy feedback")
         require_optional_non_empty(
             self.fallback_saved_scenario_id,
             "fallback_saved_scenario_id",
@@ -172,9 +168,7 @@ class FeedbackLoopResult:
     updated_session_state: PlanningSessionState
     activity_event: ActivityLogEvent
     updated_autonomy_profile: PlanningAutonomyProfile
-    revealed_preference_updates: list[RevealedPreferenceUpdate] = field(
-        default_factory=list
-    )
+    revealed_preference_updates: list[RevealedPreferenceUpdate] = field(default_factory=list)
     scenario_capture_request: ScenarioCaptureRequest | None = None
 
     def __post_init__(self) -> None:
@@ -185,9 +179,7 @@ class FeedbackLoopResult:
         if not isinstance(self.activity_event, ActivityLogEvent):
             raise ValueError("activity_event must be an ActivityLogEvent")
         if not isinstance(self.updated_autonomy_profile, PlanningAutonomyProfile):
-            raise ValueError(
-                "updated_autonomy_profile must be a PlanningAutonomyProfile"
-            )
+            raise ValueError("updated_autonomy_profile must be a PlanningAutonomyProfile")
         if any(
             not isinstance(item, RevealedPreferenceUpdate)
             for item in self.revealed_preference_updates
@@ -212,11 +204,7 @@ def build_feedback_loop_result(
         context.session_state,
         updated_at=context.generated_at,
         recent_option_presentations=[
-            (
-                updated_presentation
-                if item.presentation_id == presentation.presentation_id
-                else item
-            )
+            (updated_presentation if item.presentation_id == presentation.presentation_id else item)
             for item in context.session_state.recent_option_presentations
         ],
     )
@@ -300,9 +288,7 @@ def _apply_feedback_to_presentation(
     elif event.feedback_kind == "accept_option":
         selected_option_id = event.option_id
         rejected_option_ids = [
-            option_id
-            for option_id in rejected_option_ids
-            if option_id != event.option_id
+            option_id for option_id in rejected_option_ids if option_id != event.option_id
         ]
     elif event.feedback_kind == "save_as_fallback":
         pass
@@ -372,12 +358,8 @@ def _interaction_state_from_behavior(
         notes.append("feedback-loop updated planner autonomy pacing.")
     return replace(
         previous,
-        initiative_level=_initiative_level_from_preference(
-            preference.system_initiative
-        ),
-        checkpoint_frequency=(
-            "phase" if behavior.ask_before_next_major_change else "manual"
-        ),
+        initiative_level=_initiative_level_from_preference(preference.system_initiative),
+        checkpoint_frequency=("phase" if behavior.ask_before_next_major_change else "manual"),
         option_preview_timing="early" if behavior.surface_options_early else "balanced",
         auto_advance_research_passes=behavior.target_research_passes,
         ask_before_major_change=behavior.ask_before_next_major_change,
@@ -409,9 +391,7 @@ def _session_notes(
     event: OptionFeedbackEvent,
 ) -> list[str]:
     notes = list(session_state.notes)
-    notes.append(
-        f"feedback-loop:{event.feedback_kind}:{event.comparison_depth}:{event.option_id}"
-    )
+    notes.append(f"feedback-loop:{event.feedback_kind}:{event.comparison_depth}:{event.option_id}")
     return notes
 
 
@@ -533,8 +513,7 @@ def _build_planner_turn(
                 status="in_progress",
                 depends_on_action_ids=[action_ids["update"]],
                 payload={
-                    "requested_alternatives": event.feedback_kind
-                    == "request_alternatives",
+                    "requested_alternatives": event.feedback_kind == "request_alternatives",
                     "rejected_option_ids": list(presentation.rejected_option_ids),
                     "comparison_depth": event.comparison_depth,
                 },
@@ -602,8 +581,7 @@ def _build_planner_turn(
                     payload={
                         "selected_option_id": presentation.selected_option_id or "",
                         "pending_decision_ids": [
-                            decision.decision_id
-                            for decision in session_state.pending_decisions
+                            decision.decision_id for decision in session_state.pending_decisions
                         ],
                     },
                 )
@@ -653,14 +631,10 @@ def _build_planner_turn(
         recorded_at=generated_at,
         pending_decisions=_map_pending_decisions(session_state.pending_decisions),
         open_action_ids=[
-            action.action_id
-            for action in actions
-            if action.status in {"pending", "in_progress"}
+            action.action_id for action in actions if action.status in {"pending", "in_progress"}
         ],
         completed_action_ids=[
-            action.action_id
-            for action in actions
-            if action.status in {"completed", "skipped"}
+            action.action_id for action in actions if action.status in {"completed", "skipped"}
         ],
         recent_output_ids=[output.output_id for output in outputs],
         notes=[

@@ -14,11 +14,7 @@ from trip_planner.state import ScenarioVersion
 
 def _fixture_path(name: str) -> Path:
     fixtures_dir = (
-        Path(__file__).resolve().parents[1]
-        / "fixtures"
-        / "integrations"
-        / "tpp"
-        / "reoptimization"
+        Path(__file__).resolve().parents[1] / "fixtures" / "integrations" / "tpp" / "reoptimization"
     )
     return fixtures_dir / name
 
@@ -112,9 +108,7 @@ def test_reoptimization_generates_exception_candidate_with_preserved_context() -
         created_at="2026-04-03T10:30:00Z",
     )
     assert candidate.label == "exception_nearest"
-    assert candidate.snapshot_refs.notes[-1] == (
-        "candidate-categories:lodging,ground_transport"
-    )
+    assert candidate.snapshot_refs.notes[-1] == ("candidate-categories:lodging,ground_transport")
 
 
 def test_reoptimization_rejects_mismatched_evaluation_result() -> None:
