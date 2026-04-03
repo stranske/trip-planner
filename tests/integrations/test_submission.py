@@ -14,7 +14,10 @@ from trip_planner.integrations.tpp import (
 
 
 def _fixture_path(name: str) -> Path:
-    return Path("tests/fixtures/integrations/tpp") / name
+    fixtures_dir = (
+        Path(__file__).resolve().parents[1] / "fixtures" / "integrations" / "tpp"
+    )
+    return fixtures_dir / name
 
 
 def _load_fixture(name: str) -> dict:
@@ -32,7 +35,7 @@ def _proposal_fixture() -> TripPlanProposal:
                 "traveler_experience": "frequent",
                 "home_airport": "ORD",
                 "loyalty_programs": ["United"],
-                "mobility_or_access_needs": []
+                "mobility_or_access_needs": [],
             },
             "selected_options": [
                 {
@@ -45,9 +48,9 @@ def _proposal_fixture() -> TripPlanProposal:
                         "currency": "USD",
                         "typical_amount": 620.0,
                         "min_amount": 620.0,
-                        "max_amount": 620.0
+                        "max_amount": 620.0,
                     },
-                    "justification_refs": ["fare-policy"]
+                    "justification_refs": ["fare-policy"],
                 },
                 {
                     "category": "lodging",
@@ -59,10 +62,10 @@ def _proposal_fixture() -> TripPlanProposal:
                         "currency": "USD",
                         "typical_amount": 245.0,
                         "min_amount": 245.0,
-                        "max_amount": 245.0
+                        "max_amount": 245.0,
                     },
-                    "justification_refs": ["meeting-proximity"]
-                }
+                    "justification_refs": ["meeting-proximity"],
+                },
             ],
             "cost_summary": {
                 "currency": "USD",
@@ -71,9 +74,9 @@ def _proposal_fixture() -> TripPlanProposal:
                     "airfare": 620.0,
                     "lodging": 490.0,
                     "ground_transport": 75.0,
-                    "meals": 80.0
+                    "meals": 80.0,
                 },
-                "notes": ["Costs include taxes and expected local transport."]
+                "notes": ["Costs include taxes and expected local transport."],
             },
             "comparables": [
                 {
@@ -85,16 +88,16 @@ def _proposal_fixture() -> TripPlanProposal:
                         "currency": "USD",
                         "typical_amount": 198.0,
                         "min_amount": 198.0,
-                        "max_amount": 198.0
+                        "max_amount": 198.0,
                     },
-                    "notes": ["Available but farther from venue."]
+                    "notes": ["Available but farther from venue."],
                 }
             ],
             "justifications": [
                 {
                     "category": "lodging",
                     "summary": "Conference hotel shortens transfer time before the keynote.",
-                    "evidence": ["venue_adjacent"]
+                    "evidence": ["venue_adjacent"],
                 }
             ],
             "booking_channel_summaries": [
@@ -102,11 +105,11 @@ def _proposal_fixture() -> TripPlanProposal:
                     "category": "airfare",
                     "selected_channel": "Navan",
                     "approved": True,
-                    "rationale": "Preferred company channel"
+                    "rationale": "Preferred company channel",
                 }
             ],
             "approval_notes": ["International leg requires manager review."],
-            "constraint_set_id": "policy-standard-2026-02"
+            "constraint_set_id": "policy-standard-2026-02",
         }
     )
 

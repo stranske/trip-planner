@@ -13,7 +13,14 @@ from trip_planner.integrations.tpp import (
 
 
 def _fixture_path(name: str) -> Path:
-    return Path("tests/fixtures/integrations/tpp/results") / name
+    return (
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "integrations"
+        / "tpp"
+        / "results"
+        / name
+    )
 
 
 def _load_fixture(name: str) -> dict:
@@ -93,6 +100,43 @@ def test_result_ingestion_rejects_succeeded_payload_without_evaluation_result() 
     service = TPPEvaluationResultIngestionService(FakeTPPResultClient(response))
 
     with pytest.raises(EvaluationResultIngestionError, match="evaluation_result"):
+        service.fetch_evaluation_result(
+            request,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+
+def test_result_ingestion_rejects_missing_linkage_trip_id_with_clear_error() -> None:
+    fixture = _load_fixture("approved_evaluation.json")
+    fixture["request"]["trip_id"] = None
+    del fixture["response"]["result_payload"]["trip_id"]
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    response = TPPResponseEnvelope.from_dict(fixture["response"])
+    service = TPPEvaluationResultIngestionService(FakeTPPResultClient(response))
+
+    with pytest.raises(EvaluationResultIngestionError, match="trip_id is required"):
+        service.fetch_evaluation_result(
+            request,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+
+def test_result_ingestion_rejects_missing_linkage_proposal_id_with_clear_error() -> (
+    None
+):
+    fixture = _load_fixture("approved_evaluation.json")
+    fixture["request"]["proposal_id"] = None
+    del fixture["response"]["result_payload"]["proposal_id"]
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    response = TPPResponseEnvelope.from_dict(fixture["response"])
+    service = TPPEvaluationResultIngestionService(FakeTPPResultClient(response))
+
+    with pytest.raises(
+        EvaluationResultIngestionError,
+        match="proposal_id is required",
+    ):
         service.fetch_evaluation_result(
             request,
             proposal_version="proposal-v3",

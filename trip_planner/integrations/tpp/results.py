@@ -84,7 +84,9 @@ class PersistedEvaluationResult:
             self.evaluation_result, PolicyEvaluationResult
         ):
             raise ValueError("evaluation_result must be a PolicyEvaluationResult")
-        self.request_payload = _optional_mapping(self.request_payload, "request_payload")
+        self.request_payload = _optional_mapping(
+            self.request_payload, "request_payload"
+        )
         self.response_payload = _optional_mapping(
             self.response_payload, "response_payload"
         )
@@ -94,7 +96,10 @@ class PersistedEvaluationResult:
             raise ValueError("error must be a TPPErrorRecord when provided")
         _optional_string(self.status_endpoint, "status_endpoint")
         _optional_string(self.received_at, "received_at")
-        if self.execution_status.state == "succeeded" and self.evaluation_result is None:
+        if (
+            self.execution_status.state == "succeeded"
+            and self.evaluation_result is None
+        ):
             raise ValueError(
                 "succeeded evaluation responses must include a normalized evaluation_result"
             )
@@ -168,22 +173,33 @@ class TPPEvaluationResultIngestionService:
             )
         if response.correlation_id.value != request.correlation_id.value:
             raise EvaluationResultIngestionError(
-                "response.correlation_id does not match request.request_id"
+                "response.correlation_id does not match request.correlation_id"
             )
 
         payload = _optional_mapping(response.result_payload, "result_payload")
+        payload_trip_id = _optional_string(
+            payload.get("trip_id"),
+            "result_payload.trip_id",
+        )
+        linkage_trip_id = payload_trip_id or request.trip_id
+        if not linkage_trip_id:
+            raise EvaluationResultIngestionError(
+                "trip_id is required in result_payload.trip_id when request.trip_id is missing"
+            )
+
+        payload_proposal_id = _optional_string(
+            payload.get("proposal_id"),
+            "result_payload.proposal_id",
+        )
+        linkage_proposal_id = payload_proposal_id or request.proposal_id
+        if not linkage_proposal_id:
+            raise EvaluationResultIngestionError(
+                "proposal_id is required in result_payload.proposal_id when request.proposal_id is missing"
+            )
+
         linkage = ProposalEvaluationLinkage(
-            trip_id=_optional_string(payload.get("trip_id"), "result_payload.trip_id")
-            or request.trip_id
-            or "",
-            proposal_id=(
-                _optional_string(
-                    payload.get("proposal_id"),
-                    "result_payload.proposal_id",
-                )
-                or request.proposal_id
-                or ""
-            ),
+            trip_id=linkage_trip_id,
+            proposal_id=linkage_proposal_id,
             proposal_version=(
                 _optional_string(
                     payload.get("proposal_version"),
