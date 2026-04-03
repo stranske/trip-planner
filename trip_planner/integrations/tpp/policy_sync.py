@@ -46,6 +46,13 @@ def _optional_string_list(value: Any, field_name: str) -> list[str]:
     return _require_string_list(value, field_name)
 
 
+def _require_string_field(value: Any, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be provided as a string")
+    require_non_empty(value, field_name)
+    return value
+
+
 def _parse_timestamp(value: str, field_name: str) -> datetime:
     require_non_empty(value, field_name)
     try:
@@ -130,6 +137,13 @@ class OrganizationContextSnapshot:
         require_strings(self.approved_channels, "approved_channels")
         require_strings(self.documentation_rules, "documentation_rules")
         require_strings(self.approval_triggers, "approval_triggers")
+        self.comfort_preferences = _require_mapping(
+            self.comfort_preferences, "comfort_preferences"
+        )
+        self.class_of_service_limits = _require_mapping(
+            self.class_of_service_limits, "class_of_service_limits"
+        )
+        self.metadata = _require_mapping(self.metadata, "metadata")
         require_string_mapping(self.comfort_preferences, "comfort_preferences")
         require_string_mapping(self.class_of_service_limits, "class_of_service_limits")
         require_string_mapping(self.metadata, "metadata")
@@ -212,6 +226,14 @@ class TPPPolicySyncService:
             )
         if response.execution_status.state != "succeeded":
             raise PolicySyncError("policy imports require a succeeded execution_status")
+        if response.request_id != request.request_id:
+            raise PolicySyncError(
+                "response.request_id does not match request.request_id"
+            )
+        if response.correlation_id.value != request.correlation_id.value:
+            raise PolicySyncError(
+                "response.correlation_id does not match request.correlation_id"
+            )
 
         payload = _require_mapping(response.result_payload, "result_payload")
         constraint_payload = _require_mapping(
@@ -225,9 +247,11 @@ class TPPPolicySyncService:
             payload.get("freshness"), "result_payload.freshness"
         )
 
-        organization_id = constraint_payload.get(
-            "organization_id"
-        ) or context_payload.get("organization_id")
+        organization_id = _require_string_field(
+            constraint_payload.get("organization_id")
+            or context_payload.get("organization_id"),
+            "organization_id",
+        )
         if (
             request.organization_id is not None
             and organization_id != request.organization_id
@@ -338,7 +362,8 @@ def summarize_policy_import(
 ) -> dict[str, Any]:
     """Expose a compact summary for ranking and orchestration handoff."""
 
-    summary = {
+    freshness_summary = imported.freshness.to_dict()
+    summary: dict[str, Any] = {
         "organization_id": imported.organization_id,
         "policy_id": imported.constraint_set.policy_id,
         "policy_version": imported.constraint_set.policy_version,
@@ -349,17 +374,17 @@ def summarize_policy_import(
             imported.organization_context.comparable_requirements
         ),
         "is_stale": imported.is_stale(reference_time),
-        "freshness": imported.freshness.to_dict(),
+        "freshness": freshness_summary,
     }
-    summary["freshness"]["captured_at"] = _serialize_timestamp(
+    freshness_summary["captured_at"] = _serialize_timestamp(
         _parse_timestamp(imported.freshness.captured_at, "captured_at")
     )
     if imported.freshness.fresh_until is not None:
-        summary["freshness"]["fresh_until"] = _serialize_timestamp(
+        freshness_summary["fresh_until"] = _serialize_timestamp(
             _parse_timestamp(imported.freshness.fresh_until, "fresh_until")
         )
     if imported.freshness.invalidated_at is not None:
-        summary["freshness"]["invalidated_at"] = _serialize_timestamp(
+        freshness_summary["invalidated_at"] = _serialize_timestamp(
             _parse_timestamp(imported.freshness.invalidated_at, "invalidated_at")
         )
     return summary

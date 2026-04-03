@@ -14,7 +14,14 @@ from trip_planner.integrations.tpp import (
 
 
 def _fixture_path(name: str) -> Path:
-    return Path("tests/fixtures/integrations/tpp/policy") / name
+    return (
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "integrations"
+        / "tpp"
+        / "policy"
+        / name
+    )
 
 
 def _load_fixture(name: str) -> dict:
@@ -117,4 +124,26 @@ def test_policy_sync_rejects_non_succeeded_execution_status() -> None:
     service = TPPPolicySyncService(FakeTPPPolicyClient(response))
 
     with pytest.raises(PolicySyncError, match="succeeded execution_status"):
+        service.import_policy_constraints(request)
+
+
+def test_policy_sync_rejects_mismatched_request_id() -> None:
+    fixture = _load_fixture("standard_policy_sync.json")
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    fixture["response"]["request_id"] = "policy-sync-req-other"
+    response = TPPResponseEnvelope.from_dict(fixture["response"])
+    service = TPPPolicySyncService(FakeTPPPolicyClient(response))
+
+    with pytest.raises(PolicySyncError, match="response.request_id"):
+        service.import_policy_constraints(request)
+
+
+def test_policy_sync_rejects_mismatched_correlation_id() -> None:
+    fixture = _load_fixture("standard_policy_sync.json")
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    fixture["response"]["correlation_id"]["value"] = "corr-policy-sync-other"
+    response = TPPResponseEnvelope.from_dict(fixture["response"])
+    service = TPPPolicySyncService(FakeTPPPolicyClient(response))
+
+    with pytest.raises(PolicySyncError, match="response.correlation_id"):
         service.import_policy_constraints(request)
