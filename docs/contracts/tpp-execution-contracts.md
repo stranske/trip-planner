@@ -13,6 +13,8 @@ This contract layer owns transport and execution semantics for the `trip-planner
 - `trip_planner/integrations/tpp/contracts.py`
 - `trip_planner/integrations/tpp/client.py`
 - `trip_planner/integrations/tpp/policy_sync.py`
+- `trip_planner/integrations/tpp/submission.py`
+- `trip_planner/integrations/tpp/results.py`
 
 ## Design Rules
 
@@ -27,3 +29,5 @@ This contract layer owns transport and execution semantics for the `trip-planner
 - issue `#552` should submit `TripPlanProposal` payloads inside these envelopes and read deferred or failed execution state from the same layer.
 - issue `#553` should consume retry and failure records when deciding whether to reoptimize or branch into exception handling.
 - issue `#554` should use the same client abstraction in test harnesses so approval-readiness flows can run against mocks or simulators.
+
+See [tpp-proposal-execution.md](tpp-proposal-execution.md) for the submission and evaluation-result persistence boundary built on top of this execution layer.
