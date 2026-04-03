@@ -72,9 +72,7 @@ def build_repair_prompt(
 def build_repair_callback(
     client: Any, *, template: str = DEFAULT_REPAIR_PROMPT
 ) -> Callable[[str, str, str], str | None]:
-    def _repair(
-        schema_json: str, validation_errors: str, raw_response: str
-    ) -> str | None:
+    def _repair(schema_json: str, validation_errors: str, raw_response: str) -> str | None:
         try:
             repair_prompt = build_repair_prompt(
                 schema_json=schema_json,

@@ -54,9 +54,7 @@ def test_provenance_reference_supports_policy_ready_proposal() -> None:
         locator="policy://org/demo/travel",
         captured_at="2026-03-15T12:00:00Z",
         freshness_days_at_capture=0,
-        notes=[
-            "Retain this record in the approval packet for downstream audit trails."
-        ],
+        notes=["Retain this record in the approval packet for downstream audit trails."],
     )
 
     assert reference.subject_kind == "proposal"
@@ -94,9 +92,7 @@ def test_provenance_reference_rejects_invalid_contribution_kind() -> None:
     except ValueError as exc:
         assert "contribution_kind" in str(exc)
     else:
-        raise AssertionError(
-            "ProvenanceReference should reject invalid contribution kinds"
-        )
+        raise AssertionError("ProvenanceReference should reject invalid contribution kinds")
 
 
 def test_provenance_reference_rejects_negative_capture_freshness() -> None:
@@ -114,6 +110,4 @@ def test_provenance_reference_rejects_negative_capture_freshness() -> None:
     except ValueError as exc:
         assert "freshness_days_at_capture" in str(exc)
     else:
-        raise AssertionError(
-            "ProvenanceReference should reject negative freshness_days_at_capture"
-        )
+        raise AssertionError("ProvenanceReference should reject negative freshness_days_at_capture")

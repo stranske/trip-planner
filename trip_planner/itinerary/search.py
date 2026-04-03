@@ -28,9 +28,7 @@ def _bundle_total(bundle: InventoryBundle) -> MoneyRange | None:
     seen = False
 
     for lodging_option in bundle.lodging_options:
-        amount = (
-            lodging_option.cost_summary.total or lodging_option.cost_summary.nightly
-        )
+        amount = lodging_option.cost_summary.total or lodging_option.cost_summary.nightly
         if amount is None or amount.typical_amount is None:
             continue
         currency = currency or amount.currency
@@ -50,10 +48,7 @@ def _bundle_total(bundle: InventoryBundle) -> MoneyRange | None:
         seen = True
 
     for activity_option in bundle.activity_options:
-        amount = (
-            activity_option.cost_summary.total
-            or activity_option.cost_summary.per_person
-        )
+        amount = activity_option.cost_summary.total or activity_option.cost_summary.per_person
         if amount is None or amount.typical_amount is None:
             continue
         currency = currency or amount.currency
@@ -74,15 +69,11 @@ def _bundle_map(
 ) -> dict[str, InventoryBundle]:
     mapped: dict[str, InventoryBundle] = {}
     if candidate_set is not None:
-        mapped.update(
-            {seed.bundle.bundle_id: seed.bundle for seed in candidate_set.seeds}
-        )
+        mapped.update({seed.bundle.bundle_id: seed.bundle for seed in candidate_set.seeds})
     if bundles is not None:
         mapped.update({bundle.bundle_id: bundle for bundle in bundles})
     if not mapped:
-        raise ValueError(
-            "candidate_set or bundles must provide at least one InventoryBundle"
-        )
+        raise ValueError("candidate_set or bundles must provide at least one InventoryBundle")
     return mapped
 
 
@@ -102,9 +93,7 @@ def _normalize_feasibility_outputs(
             "feasibility_outputs must be a mapping, sequence of FeasibilityAssessment values, or None"
         )
     if any(not isinstance(item, FeasibilityAssessment) for item in values.values()):
-        raise ValueError(
-            "feasibility_outputs must contain FeasibilityAssessment instances"
-        )
+        raise ValueError("feasibility_outputs must contain FeasibilityAssessment instances")
     return values
 
 
@@ -186,8 +175,7 @@ def _build_tradeoffs(
                 code=warning.code,
                 summary=warning.summary,
                 severity=warning.severity,
-                related_ids=list(warning.related_option_ids)
-                + list(warning.destination_ids),
+                related_ids=list(warning.related_option_ids) + list(warning.destination_ids),
                 notes=list(warning.notes),
             )
         )
@@ -254,22 +242,14 @@ def assemble_itinerary_scenarios(
     objective_refs = _objective_refs(objectives)
 
     scenarios: list[ItineraryScenario] = []
-    for result in sorted(ranked_results.results, key=lambda item: item.rank)[
-        :max_scenarios
-    ]:
+    for result in sorted(ranked_results.results, key=lambda item: item.rank)[:max_scenarios]:
         if not result.target_bundle_id:
-            raise ValueError(
-                "route assembly requires ranked results with target_bundle_id values"
-            )
+            raise ValueError("route assembly requires ranked results with target_bundle_id values")
         bundle = bundle_map.get(result.target_bundle_id)
         if bundle is None:
-            raise ValueError(
-                f"missing bundle for ranked result target {result.target_bundle_id!r}"
-            )
+            raise ValueError(f"missing bundle for ranked result target {result.target_bundle_id!r}")
 
-        assessment = assessments.get(bundle.bundle_id) or evaluate_bundle_feasibility(
-            bundle
-        )
+        assessment = assessments.get(bundle.bundle_id) or evaluate_bundle_feasibility(bundle)
         tradeoffs = _build_tradeoffs(result, assessment)
         scenario_kind = _scenario_kind(
             rank=result.rank,
@@ -293,8 +273,7 @@ def assemble_itinerary_scenarios(
             )
 
         scenario_summary = ScenarioSummary(
-            headline=bundle.explanation.headline
-            or result.explanation_records[0].headline,
+            headline=bundle.explanation.headline or result.explanation_records[0].headline,
             scenario_kind=scenario_kind,
             feasible=assessment.feasible,
             recommended_for_selection=assessment.recommended_for_ranking,
@@ -328,9 +307,7 @@ def assemble_itinerary_scenarios(
         )
 
     if not scenarios:
-        raise ValueError(
-            "ranked_results must contain at least one scenario-ready result"
-        )
+        raise ValueError("ranked_results must contain at least one scenario-ready result")
 
     explanation = [
         f"objective_mode:{objective_mode}",
@@ -351,9 +328,7 @@ def assemble_itinerary_scenarios(
         )
 
     search_title = title or f"{objective_mode.title()} itinerary scenarios"
-    source_refs = list(
-        dict.fromkeys([*ranked_results.source_refs, ranked_results.result_set_id])
-    )
+    source_refs = list(dict.fromkeys([*ranked_results.source_refs, ranked_results.result_set_id]))
 
     return ScenarioSearchResult(
         search_id=f"scenario-search:{ranked_results.trip_id}:{objective_mode}",

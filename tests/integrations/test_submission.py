@@ -14,9 +14,7 @@ from trip_planner.integrations.tpp import (
 
 
 def _fixture_path(name: str) -> Path:
-    fixtures_dir = (
-        Path(__file__).resolve().parents[1] / "fixtures" / "integrations" / "tpp"
-    )
+    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "integrations" / "tpp"
     return fixtures_dir / name
 
 

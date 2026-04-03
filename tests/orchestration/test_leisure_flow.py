@@ -19,13 +19,7 @@ from trip_planner.state import PersistedTripRecord, PlanningSessionState
 
 
 def _fixture_path(name: str) -> Path:
-    return (
-        Path(__file__).resolve().parents[1]
-        / "fixtures"
-        / "orchestration"
-        / "leisure"
-        / name
-    )
+    return Path(__file__).resolve().parents[1] / "fixtures" / "orchestration" / "leisure" / name
 
 
 def _load_json(path: Path) -> dict:
@@ -80,9 +74,7 @@ def _scenario_search(trip_id: str = "trip-leisure-kyoto-draft") -> ScenarioSearc
                     summary="The baseline scenario preserves depth in Kyoto with one light excursion.",
                     factor_keys=["cultural_depth", "moderate_pace"],
                     machine_context={"planner_mode": "leisure"},
-                    human_summary=[
-                        "Keeps travel friction moderate while preserving variety."
-                    ],
+                    human_summary=["Keeps travel friction moderate while preserving variety."],
                     source_refs=["ranked-results:kyoto-spring"],
                 )
             ],
@@ -125,9 +117,7 @@ def _scenario_search(trip_id: str = "trip-leisure-kyoto-draft") -> ScenarioSearc
                     summary="The alternative opens more nightlife at the cost of extra transfers.",
                     factor_keys=["breadth", "transfer_cost"],
                     machine_context={"planner_mode": "leisure"},
-                    human_summary=[
-                        "Broader exploration, slightly more travel fatigue."
-                    ],
+                    human_summary=["Broader exploration, slightly more travel fatigue."],
                     source_refs=["ranked-results:kyoto-spring"],
                 )
             ],

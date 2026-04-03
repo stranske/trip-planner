@@ -10,9 +10,7 @@ from trip_planner.preferences.revealed_preference import (
 
 
 def test_revealed_preference_update_emits_option_evidence() -> None:
-    fixture = next(
-        item for item in load_fixture_corpus() if item.id == "discovery-wanderer"
-    )
+    fixture = next(item for item in load_fixture_corpus() if item.id == "discovery-wanderer")
     signal = RevealedPreferenceSignal(
         signal_id="signal-1",
         trip_stage="inventory_selection",
@@ -42,9 +40,7 @@ def test_revealed_preference_update_emits_option_evidence() -> None:
 
 
 def test_revealed_preference_guardrail_blocks_overwrite_of_stable_dimension() -> None:
-    fixture = next(
-        item for item in load_fixture_corpus() if item.id == "urban-historian"
-    )
+    fixture = next(item for item in load_fixture_corpus() if item.id == "urban-historian")
     profile = deepcopy(fixture.profile)
     profile.tradeoff_dimensions["breadth_vs_depth"].salience = 0.92
     profile.tradeoff_dimensions["breadth_vs_depth"].stability = 0.9
@@ -65,10 +61,7 @@ def test_revealed_preference_guardrail_blocks_overwrite_of_stable_dimension() ->
 
     assert update.blocked_overwrites == ["breadth_vs_depth"]
     assert update.emitted_evidence[0].signal_direction == "contradiction"
-    assert (
-        "anchors" in update.protected_targets
-        or "hard_constraints" in update.protected_targets
-    )
+    assert "anchors" in update.protected_targets or "hard_constraints" in update.protected_targets
 
 
 def test_revealed_preference_marks_transient_clicks() -> None:

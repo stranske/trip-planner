@@ -137,9 +137,7 @@ class OrganizationContextSnapshot:
         require_strings(self.approved_channels, "approved_channels")
         require_strings(self.documentation_rules, "documentation_rules")
         require_strings(self.approval_triggers, "approval_triggers")
-        self.comfort_preferences = _require_mapping(
-            self.comfort_preferences, "comfort_preferences"
-        )
+        self.comfort_preferences = _require_mapping(self.comfort_preferences, "comfort_preferences")
         self.class_of_service_limits = _require_mapping(
             self.class_of_service_limits, "class_of_service_limits"
         )
@@ -147,9 +145,7 @@ class OrganizationContextSnapshot:
         require_string_mapping(self.comfort_preferences, "comfort_preferences")
         require_string_mapping(self.class_of_service_limits, "class_of_service_limits")
         require_string_mapping(self.metadata, "metadata")
-        if any(
-            not isinstance(key, str) or not key for key in self.comparable_requirements
-        ):
+        if any(not isinstance(key, str) or not key for key in self.comparable_requirements):
             raise ValueError("comparable_requirements must use non-empty string keys")
         for key, value in self.comparable_requirements.items():
             if not isinstance(value, int):
@@ -173,9 +169,7 @@ class PolicyConstraintImport:
         if not isinstance(self.constraint_set, PolicyConstraintSet):
             raise ValueError("constraint_set must be a PolicyConstraintSet")
         if not isinstance(self.organization_context, OrganizationContextSnapshot):
-            raise ValueError(
-                "organization_context must be an OrganizationContextSnapshot"
-            )
+            raise ValueError("organization_context must be an OrganizationContextSnapshot")
         if not isinstance(self.freshness, PolicyFreshness):
             raise ValueError("freshness must be a PolicyFreshness")
         require_non_empty(self.source_request_id, "source_request_id")
@@ -207,9 +201,7 @@ class TPPPolicySyncService:
     def __init__(self, client: TPPIntegrationClient) -> None:
         self.client = client
 
-    def import_policy_constraints(
-        self, request: TPPRequestEnvelope
-    ) -> PolicyConstraintImport:
+    def import_policy_constraints(self, request: TPPRequestEnvelope) -> PolicyConstraintImport:
         response = self.client.fetch_policy_constraints(request)
         return self.normalize_response(request, response)
 
@@ -217,23 +209,15 @@ class TPPPolicySyncService:
         self, request: TPPRequestEnvelope, response: TPPResponseEnvelope
     ) -> PolicyConstraintImport:
         if request.operation != "fetch_policy_constraints":
-            raise PolicySyncError(
-                "request.operation must be 'fetch_policy_constraints'"
-            )
+            raise PolicySyncError("request.operation must be 'fetch_policy_constraints'")
         if response.operation != "fetch_policy_constraints":
-            raise PolicySyncError(
-                "response.operation must be 'fetch_policy_constraints'"
-            )
+            raise PolicySyncError("response.operation must be 'fetch_policy_constraints'")
         if response.execution_status.state != "succeeded":
             raise PolicySyncError("policy imports require a succeeded execution_status")
         if response.request_id != request.request_id:
-            raise PolicySyncError(
-                "response.request_id does not match request.request_id"
-            )
+            raise PolicySyncError("response.request_id does not match request.request_id")
         if response.correlation_id.value != request.correlation_id.value:
-            raise PolicySyncError(
-                "response.correlation_id does not match request.correlation_id"
-            )
+            raise PolicySyncError("response.correlation_id does not match request.correlation_id")
 
         payload = _require_mapping(response.result_payload, "result_payload")
         constraint_payload = _require_mapping(
@@ -243,22 +227,14 @@ class TPPPolicySyncService:
             payload.get("organization_context"),
             "result_payload.organization_context",
         )
-        freshness_payload = _require_mapping(
-            payload.get("freshness"), "result_payload.freshness"
-        )
+        freshness_payload = _require_mapping(payload.get("freshness"), "result_payload.freshness")
 
         organization_id = _require_string_field(
-            constraint_payload.get("organization_id")
-            or context_payload.get("organization_id"),
+            constraint_payload.get("organization_id") or context_payload.get("organization_id"),
             "organization_id",
         )
-        if (
-            request.organization_id is not None
-            and organization_id != request.organization_id
-        ):
-            raise PolicySyncError(
-                "response organization_id does not match request.organization_id"
-            )
+        if request.organization_id is not None and organization_id != request.organization_id:
+            raise PolicySyncError("response organization_id does not match request.organization_id")
 
         constraint_set = PolicyConstraintSet(
             policy_id=constraint_payload["policy_id"],
@@ -279,9 +255,7 @@ class TPPPolicySyncService:
                 constraint_payload.get("ground_transport_rules"),
                 "ground_transport_rules",
             ),
-            meal_rules=_optional_mapping(
-                constraint_payload.get("meal_rules"), "meal_rules"
-            ),
+            meal_rules=_optional_mapping(constraint_payload.get("meal_rules"), "meal_rules"),
             approval_rules=_optional_string_list(
                 constraint_payload.get("approval_rules")
                 or context_payload.get("approval_triggers"),
@@ -370,9 +344,7 @@ def summarize_policy_import(
         "approved_channels": list(imported.organization_context.approved_channels),
         "approval_triggers": list(imported.organization_context.approval_triggers),
         "documentation_rules": list(imported.constraint_set.documentation_rules),
-        "comparable_requirements": dict(
-            imported.organization_context.comparable_requirements
-        ),
+        "comparable_requirements": dict(imported.organization_context.comparable_requirements),
         "is_stale": imported.is_stale(reference_time),
         "freshness": freshness_summary,
     }

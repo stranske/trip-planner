@@ -68,9 +68,7 @@ class BusinessWorkflowContext:
         if self.constraint_set is not None and not isinstance(
             self.constraint_set, PolicyConstraintSet
         ):
-            raise ValueError(
-                "constraint_set must be a PolicyConstraintSet when provided"
-            )
+            raise ValueError("constraint_set must be a PolicyConstraintSet when provided")
         if self.proposal is not None:
             if not isinstance(self.proposal, TripPlanProposal):
                 raise ValueError("proposal must be a TripPlanProposal when provided")
@@ -138,14 +136,10 @@ def build_business_planner_turn(context: BusinessWorkflowContext) -> PlannerTurn
         pending_decisions,
     )
     open_action_ids = [
-        action.action_id
-        for action in actions
-        if action.status in {"pending", "in_progress"}
+        action.action_id for action in actions if action.status in {"pending", "in_progress"}
     ]
     completed_action_ids = [
-        action.action_id
-        for action in actions
-        if action.status in {"completed", "skipped"}
+        action.action_id for action in actions if action.status in {"completed", "skipped"}
     ]
     recent_output_ids = [output.output_id for output in outputs]
 
@@ -247,8 +241,7 @@ def _comparable_gaps(context: BusinessWorkflowContext) -> dict[str, int]:
 
 def _needs_exception_path(context: BusinessWorkflowContext) -> bool:
     return context.selected_path == "exception_nearest" or (
-        context.proposal is not None
-        and context.proposal.requested_exception is not None
+        context.proposal is not None and context.proposal.requested_exception is not None
     )
 
 
@@ -266,9 +259,7 @@ def _phase_statuses(
 
     return {
         "profile_confirmation": "completed",
-        "policy_input_assembly": (
-            "completed" if not missing_policy_inputs else "in_progress"
-        ),
+        "policy_input_assembly": ("completed" if not missing_policy_inputs else "in_progress"),
         "comparable_collection": "completed" if not comparable_gaps else "in_progress",
         "ranked_option_review": (
             "completed"
@@ -357,9 +348,7 @@ def _workflow_notes(
     if comparable_gaps:
         notes.append(
             "comparable_shortfalls:"
-            + ",".join(
-                f"{key}:{value}" for key, value in sorted(comparable_gaps.items())
-            )
+            + ",".join(f"{key}:{value}" for key, value in sorted(comparable_gaps.items()))
         )
     return notes
 
@@ -427,9 +416,7 @@ def _build_pending_decisions(
 
     for category, shortfall in sorted(comparable_gaps.items()):
         decision_slug = _slug(category)
-        required_total = context.objectives.comparable_requirements.required_categories[
-            category
-        ]
+        required_total = context.objectives.comparable_requirements.required_categories[category]
         decisions.append(
             PendingDecision(
                 decision_id=_comparable_decision_id(category),
@@ -447,9 +434,7 @@ def _build_pending_decisions(
                         metadata={
                             "category": category,
                             "required_total": required_total,
-                            "current_total": context.comparable_inventory.get(
-                                category, 0
-                            ),
+                            "current_total": context.comparable_inventory.get(category, 0),
                         },
                     ),
                     DecisionOption(
@@ -494,8 +479,7 @@ def _build_actions(
                 "business_profile_id": context.trip_record.trip.profile_refs.business_profile_id
                 or "",
                 "objective_id": context.trip_record.artifact_refs.objective_id or "",
-                "policy_state_id": context.trip_record.artifact_refs.policy_state_id
-                or "",
+                "policy_state_id": context.trip_record.artifact_refs.policy_state_id or "",
                 "saved_scenario_ids": context.trip_record.artifact_refs.saved_scenario_ids,
             },
         ),
@@ -574,9 +558,7 @@ def _build_actions(
             status="pending" if pending_decisions else "skipped",
             depends_on_action_ids=["action-prepare-policy-packet"],
             payload={
-                "decision_ids": [
-                    decision.decision_id for decision in pending_decisions
-                ],
+                "decision_ids": [decision.decision_id for decision in pending_decisions],
                 "selected_path": context.selected_path,
             },
         ),
@@ -586,17 +568,13 @@ def _build_actions(
             title="Persist proposal-prep outputs back into saved-state layers",
             stage="booking_prep",
             status=(
-                "pending"
-                if context.proposal is not None and not pending_decisions
-                else "skipped"
+                "pending" if context.proposal is not None and not pending_decisions else "skipped"
             ),
             depends_on_action_ids=["action-prepare-policy-packet"],
             payload={
-                "policy_state_id": context.trip_record.artifact_refs.policy_state_id
-                or "",
+                "policy_state_id": context.trip_record.artifact_refs.policy_state_id or "",
                 "saved_scenario_ids": context.trip_record.artifact_refs.saved_scenario_ids,
-                "session_state_id": context.trip_record.artifact_refs.session_state_id
-                or "",
+                "session_state_id": context.trip_record.artifact_refs.session_state_id or "",
             },
         ),
     ]
@@ -633,16 +611,13 @@ def _build_outputs(
             payload={
                 "selected_path": context.selected_path,
                 "phase_statuses": phase_statuses,
-                "policy_state_id": context.trip_record.artifact_refs.policy_state_id
-                or "",
+                "policy_state_id": context.trip_record.artifact_refs.policy_state_id or "",
                 "objective_id": context.trip_record.artifact_refs.objective_id or "",
             },
         )
     )
 
-    if context.proposal is not None or (
-        not missing_policy_inputs and not comparable_gaps
-    ):
+    if context.proposal is not None or (not missing_policy_inputs and not comparable_gaps):
         outputs.insert(
             0,
             PlannerOutput(
@@ -662,9 +637,7 @@ def _build_outputs(
                 ],
                 payload={
                     "selected_path": context.selected_path,
-                    "proposal_id": (
-                        context.proposal.proposal_id if context.proposal else ""
-                    ),
+                    "proposal_id": (context.proposal.proposal_id if context.proposal else ""),
                     "constraint_set_id": (
                         context.proposal.constraint_set_id
                         if context.proposal is not None
@@ -681,8 +654,7 @@ def _build_outputs(
                     "missing_policy_inputs": missing_policy_inputs,
                     "comparable_shortfalls": comparable_gaps,
                     "saved_scenario_ids": context.trip_record.artifact_refs.saved_scenario_ids,
-                    "policy_state_id": context.trip_record.artifact_refs.policy_state_id
-                    or "",
+                    "policy_state_id": context.trip_record.artifact_refs.policy_state_id or "",
                     "external_policy_evaluation_required": True,
                     "requested_exception_type": (
                         context.proposal.requested_exception.exception_type
@@ -708,9 +680,7 @@ def _build_outputs(
                 ),
                 ref_ids=[decision.decision_id for decision in pending_decisions],
                 payload={
-                    "decision_ids": [
-                        decision.decision_id for decision in pending_decisions
-                    ],
+                    "decision_ids": [decision.decision_id for decision in pending_decisions],
                     "selected_path": context.selected_path,
                 },
             )
@@ -734,11 +704,7 @@ def _build_outputs(
                         _missing_comparable_warning_code(category)
                         for category in sorted(comparable_gaps)
                     ),
-                    *(
-                        ["exception-path-active"]
-                        if _needs_exception_path(context)
-                        else []
-                    ),
+                    *(["exception-path-active"] if _needs_exception_path(context) else []),
                 ],
                 payload={
                     "comparable_shortfalls": comparable_gaps,
@@ -763,27 +729,21 @@ def _build_next_step(
         return NextStepSummary(
             headline="Capture the missing policy-ready inputs before preparing the business proposal packet.",
             recommended_action_id="action-assemble-policy-inputs",
-            blocking_decision_ids=[
-                decision.decision_id for decision in pending_decisions
-            ],
+            blocking_decision_ids=[decision.decision_id for decision in pending_decisions],
             expected_output_ids=output_ids,
         )
     if comparable_gaps:
         return NextStepSummary(
             headline="Collect the remaining comparables or explicitly escalate the shortfall into exception prep.",
             recommended_action_id="action-collect-comparables",
-            blocking_decision_ids=[
-                decision.decision_id for decision in pending_decisions
-            ],
+            blocking_decision_ids=[decision.decision_id for decision in pending_decisions],
             expected_output_ids=output_ids,
         )
     if _needs_exception_path(context):
         return NextStepSummary(
             headline="Finish the exception-nearest policy packet and keep the fallback path explicit for later review.",
             recommended_action_id="action-prepare-policy-packet",
-            blocking_decision_ids=[
-                decision.decision_id for decision in pending_decisions
-            ],
+            blocking_decision_ids=[decision.decision_id for decision in pending_decisions],
             expected_output_ids=output_ids,
         )
     if context.proposal is None:
@@ -812,9 +772,7 @@ def _build_transition(
             trigger="policy_constraint",
             changed_at=context.generated_at,
             reason="Business planning cannot prepare a packet until required policy inputs are captured.",
-            blocker_ids=[
-                _policy_input_decision_id(name) for name in missing_policy_inputs
-            ],
+            blocker_ids=[_policy_input_decision_id(name) for name in missing_policy_inputs],
         )
     if comparable_gaps:
         return WorkflowTransition(
@@ -823,13 +781,9 @@ def _build_transition(
             trigger="policy_constraint",
             changed_at=context.generated_at,
             reason="Comparable collection remains incomplete for the active business path.",
-            blocker_ids=[
-                _comparable_decision_id(category)
-                for category in sorted(comparable_gaps)
-            ],
+            blocker_ids=[_comparable_decision_id(category) for category in sorted(comparable_gaps)],
             warning_codes=[
-                _missing_comparable_warning_code(category)
-                for category in sorted(comparable_gaps)
+                _missing_comparable_warning_code(category) for category in sorted(comparable_gaps)
             ],
         )
     if current_stage == "policy_alignment":

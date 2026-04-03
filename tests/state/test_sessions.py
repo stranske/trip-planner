@@ -18,9 +18,7 @@ from trip_planner.state.sessions import OptionPresentationRecord
 
 
 def _fixture_path(name: str) -> Path:
-    fixtures_dir = (
-        Path(__file__).resolve().parents[1] / "fixtures" / "state" / "sessions"
-    )
+    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "state" / "sessions"
     return fixtures_dir / name
 
 
@@ -33,10 +31,7 @@ def _load_session(name: str) -> PlanningSessionState:
 
 
 def _load_events(name: str) -> list[ActivityLogEvent]:
-    return [
-        ActivityLogEvent.from_dict(item)
-        for item in _load_payload(name).get("events", [])
-    ]
+    return [ActivityLogEvent.from_dict(item) for item in _load_payload(name).get("events", [])]
 
 
 def test_planning_session_loads_active_leisure_fixture() -> None:
@@ -99,9 +94,7 @@ def test_option_presentation_rejects_rejected_option_outside_surface() -> None:
 
 
 def test_activity_log_event_rejects_empty_metadata_value() -> None:
-    with pytest.raises(
-        ValueError, match="metadata must contain non-empty string values"
-    ):
+    with pytest.raises(ValueError, match="metadata must contain non-empty string values"):
         ActivityLogEvent(
             activity_event_id="activity:test",
             trip_id="trip-1",
@@ -140,9 +133,7 @@ def test_planning_session_rejects_duplicate_pending_decisions() -> None:
         PlanningSessionState.from_dict(payload)
 
 
-def test_planning_session_repository_protocol_can_store_session_state_and_logs() -> (
-    None
-):
+def test_planning_session_repository_protocol_can_store_session_state_and_logs() -> None:
     class InMemoryPlanningSessionRepository(PlanningSessionRepository):
         def __init__(self) -> None:
             self._sessions: dict[str, PlanningSessionState] = {}
@@ -167,9 +158,7 @@ def test_planning_session_repository_protocol_can_store_session_state_and_logs()
                 recorded_at=session_state.updated_at,
                 summary=summary,
             )
-            self._versions.setdefault(session_state.session_state_id, []).append(
-                version
-            )
+            self._versions.setdefault(session_state.session_state_id, []).append(version)
             return version
 
         def update_interaction_state(
@@ -225,18 +214,12 @@ def test_planning_session_repository_protocol_can_store_session_state_and_logs()
         ) -> list[PlanningSessionState]:
             sessions = list(self._sessions.values())
             if trip_id is not None:
-                sessions = [
-                    session for session in sessions if session.trip_id == trip_id
-                ]
+                sessions = [session for session in sessions if session.trip_id == trip_id]
             if user_id is not None:
-                sessions = [
-                    session for session in sessions if session.user_id == user_id
-                ]
+                sessions = [session for session in sessions if session.user_id == user_id]
             if owner_profile_id is not None:
                 sessions = [
-                    session
-                    for session in sessions
-                    if session.owner_profile_id == owner_profile_id
+                    session for session in sessions if session.owner_profile_id == owner_profile_id
                 ]
             if mode is not None:
                 sessions = [session for session in sessions if session.mode == mode]
@@ -271,18 +254,12 @@ def test_planning_session_repository_protocol_can_store_session_state_and_logs()
             if trip_id is not None:
                 events = [event for event in events if event.trip_id == trip_id]
             if session_state_id is not None:
-                events = [
-                    event
-                    for event in events
-                    if event.session_state_id == session_state_id
-                ]
+                events = [event for event in events if event.session_state_id == session_state_id]
             if event_kind is not None:
                 events = [event for event in events if event.event_kind == event_kind]
             if related_decision_id is not None:
                 events = [
-                    event
-                    for event in events
-                    if event.related_decision_id == related_decision_id
+                    event for event in events if event.related_decision_id == related_decision_id
                 ]
             if related_option_set_id is not None:
                 events = [
@@ -334,8 +311,7 @@ def test_planning_session_repository_protocol_can_store_session_state_and_logs()
     assert stored.interaction_state.initiative_level == "planner_led"
     assert stored.recent_option_presentations[-1].option_set_id == "option-set:kyoto-v4"
     assert [
-        version.version_id
-        for version in session_repo.list_versions(session.session_state_id)
+        version.version_id for version in session_repo.list_versions(session.session_state_id)
     ] == [first.version_id, second.version_id, third.version_id]
     assert stored_event.event_kind == "scenario_saved"
     assert log_repo.list_events(event_kind="scenario_saved")[0].activity_event_id == (

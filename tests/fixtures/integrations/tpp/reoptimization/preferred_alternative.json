@@ -1,0 +1,132 @@
+{
+  "proposal": {
+    "proposal_id": "proposal-553",
+    "trip_id": "trip-business-client-summit",
+    "mode": "business",
+    "traveler_context": {
+      "employee_type": "employee",
+      "traveler_experience": "frequent",
+      "home_airport": "ORD",
+      "loyalty_programs": ["United"],
+      "mobility_or_access_needs": []
+    },
+    "selected_options": [
+      {
+        "category": "airfare",
+        "option_id": "flight-123",
+        "label": "Early nonstop",
+        "vendor": "United",
+        "booking_channel": "Navan",
+        "estimated_cost": {
+          "currency": "USD",
+          "typical_amount": 620.0,
+          "min_amount": 620.0,
+          "max_amount": 620.0
+        },
+        "justification_refs": ["justification:airfare:arrival-protection"]
+      },
+      {
+        "category": "lodging",
+        "option_id": "hotel-conference",
+        "label": "Conference Hotel",
+        "vendor": "Marriott",
+        "booking_channel": "Navan",
+        "estimated_cost": {
+          "currency": "USD",
+          "typical_amount": 235.0,
+          "min_amount": 235.0,
+          "max_amount": 235.0
+        },
+        "justification_refs": ["justification:lodging:venue-proximity"]
+      }
+    ],
+    "cost_summary": {
+      "currency": "USD",
+      "total_estimated_cost": 855.0,
+      "category_estimates": {
+        "airfare": 620.0,
+        "lodging": 235.0
+      },
+      "notes": ["Current proposal is compliant but not policy-preferred."]
+    },
+    "comparables": [],
+    "justifications": [
+      {
+        "category": "airfare",
+        "summary": "Nonstop arrival preserves client-briefing prep time.",
+        "evidence": ["arrival_buffer"]
+      },
+      {
+        "category": "lodging",
+        "summary": "Venue-adjacent lodging protects the morning keynote.",
+        "evidence": ["venue_adjacent"]
+      }
+    ],
+    "booking_channel_summaries": [],
+    "approval_notes": [],
+    "constraint_set_id": "policy-q2-client-summit"
+  },
+  "evaluation_result": {
+    "evaluation_id": "eval-553-preferred",
+    "proposal_id": "proposal-553",
+    "status": "compliant",
+    "approval_requirements": [],
+    "failure_reasons": [],
+    "preferred_alternatives": [
+      {
+        "category": "airfare",
+        "summary": "Use the preferred corporate fare bundle.",
+        "rationale": "Same arrival time with lower approved spend.",
+        "comparable_ref": "comparable:airfare:preferred-channel"
+      },
+      {
+        "category": "lodging",
+        "summary": "Shift to the negotiated conference block.",
+        "rationale": "Preserves venue access while reducing nightly rate.",
+        "comparable_ref": "comparable:lodging:policy-cap"
+      }
+    ],
+    "exception_guidance": [],
+    "notes": [
+      "Keep the same trip shape but re-rank around corporate-preferred inventory."
+    ],
+    "compliance_score": 0.88
+  },
+  "source_version": {
+    "version_id": "saved-scenario:compliant-first-v1",
+    "saved_scenario_id": "saved-scenario:compliant-first",
+    "trip_id": "trip-business-client-summit",
+    "title": "Compliant-first client summit plan",
+    "label": "compliant_first",
+    "created_at": "2026-04-02T10:00:00Z",
+    "created_by": "policy-planner",
+    "scope": "route",
+    "snapshot_refs": {
+      "objective_id": "objective:client-summit",
+      "scenario_search_id": "scenario-search:client-summit",
+      "source_result_set_id": "ranked-result-set:client-summit",
+      "itinerary_scenario_id": "scenario:trip-business-client-summit:1",
+      "ranked_result_set_id": "ranked-result-set:client-summit",
+      "option_set_ids": [
+        "option-set:airfare:approved",
+        "option-set:lodging:conference"
+      ],
+      "policy_state_id": "policy-state:q2-client-summit",
+      "business_profile_id": "business-profile-consulting",
+      "notes": [
+        "Primary approval-ready path with compliant booking channels."
+      ]
+    },
+    "summary": "Primary scenario retains approved vendors and schedule protection.",
+    "tags": ["business", "approval-ready"],
+    "notes": ["Used as the baseline for business policy review."]
+  },
+  "comparable_refs": {
+    "airfare": ["comparable:airfare:preferred-channel"],
+    "lodging": ["comparable:lodging:policy-cap"]
+  },
+  "justification_refs": {
+    "airfare": ["justification:airfare:arrival-protection"],
+    "lodging": ["justification:lodging:venue-proximity"]
+  }
+}

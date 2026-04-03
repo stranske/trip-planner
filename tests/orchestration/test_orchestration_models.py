@@ -7,9 +7,7 @@ from trip_planner.orchestration import PlannerTurn
 
 
 def _fixture_path(name: str) -> Path:
-    fixtures_dir = (
-        Path(__file__).resolve().parents[1] / "fixtures" / "orchestration" / "turns"
-    )
+    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "orchestration" / "turns"
     return fixtures_dir / name
 
 

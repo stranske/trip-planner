@@ -9,9 +9,7 @@ from trip_planner.business import (
 )
 
 
-def test_business_planning_objectives_serialize_structured_paths_and_explanations() -> (
-    None
-):
+def test_business_planning_objectives_serialize_structured_paths_and_explanations() -> None:
     objectives = BusinessPlanningObjectives(
         objective_id="obj-business-1",
         trip_id="trip-business-1",
@@ -52,9 +50,7 @@ def test_business_planning_objectives_serialize_structured_paths_and_explanation
 def test_objective_explanation_bundle_rejects_non_list_category_reasons(
     value: object,
 ) -> None:
-    with pytest.raises(
-        ValueError, match=r"category_reasons\[planning_paths\] must be a list"
-    ):
+    with pytest.raises(ValueError, match=r"category_reasons\[planning_paths\] must be a list"):
         ObjectiveExplanationBundle(
             summary=[],
             category_reasons={"planning_paths": cast(Any, value)},

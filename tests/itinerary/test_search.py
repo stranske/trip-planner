@@ -52,9 +52,7 @@ def _fixture_path(*parts: str) -> Path:
 
 
 def _load_json(*parts: str) -> dict[str, Any]:
-    return cast(
-        dict[str, Any], json.loads(_fixture_path(*parts).read_text(encoding="utf-8"))
-    )
+    return cast(dict[str, Any], json.loads(_fixture_path(*parts).read_text(encoding="utf-8")))
 
 
 def _load_destination(name: str) -> Destination:
@@ -202,13 +200,9 @@ def _leisure_candidate_set() -> CandidateSet:
             transport_name="scenic_rail.json",
             activity_name="wandering_district.json",
             summary="Rail-led discovery day with open blocks for wandering.",
-            strengths=[
-                "The route keeps wandering and scenic transit as the core experience."
-            ],
+            strengths=["The route keeps wandering and scenic transit as the core experience."],
             tradeoffs=["The scenic leg is slower than the more direct options."],
-            evidence=[
-                "Open-ended exploration is preserved as an explicit alternative."
-            ],
+            evidence=["Open-ended exploration is preserved as an explicit alternative."],
             tags=["discovery", "rail", "wandering"],
             quality_signal=0.76,
             value_signal=0.78,
@@ -254,13 +248,9 @@ def _business_candidate_set() -> CandidateSet:
             transport_name="scenic_rail.json",
             activity_name="wandering_district.json",
             summary="Fallback route retained when the compliant-first path is not viable.",
-            strengths=[
-                "Still preserves a coherent trip when strict approval channels fail."
-            ],
+            strengths=["Still preserves a coherent trip when strict approval channels fail."],
             tradeoffs=["Needs exception handling and weaker schedule protection."],
-            evidence=[
-                "Fallback remains explicit instead of disappearing from the route set."
-            ],
+            evidence=["Fallback remains explicit instead of disappearing from the route set."],
             tags=["business", "fallback", "exception"],
             quality_signal=0.71,
             value_signal=0.74,
@@ -277,9 +267,7 @@ def _business_candidate_set() -> CandidateSet:
             CandidateSeed(candidate_id=f"candidate:{bundle.bundle_id}", bundle=bundle)
             for bundle in bundles
         ],
-        explanation=[
-            "Business route alternatives for primary-vs-fallback assembly tests."
-        ],
+        explanation=["Business route alternatives for primary-vs-fallback assembly tests."],
         source_refs=["fixture:itinerary:business"],
     )
 
@@ -291,27 +279,19 @@ def _leisure_objectives() -> ItineraryObjectives:
         route_shape="regional_cluster",
         target_base_count=CountRange(min_value=1, max_value=2),
         move_density=MoveDensityTarget(max_moves=3, cadence_days=3),
-        recovery_expectations=RecoveryExpectations(
-            buffer_days=1, recovery_priority=0.62
-        ),
+        recovery_expectations=RecoveryExpectations(buffer_days=1, recovery_priority=0.62),
         day_structure=DayStructureObjectives(
             structure_level="moderate",
             wandering_support_level=0.75,
             reservation_density=0.4,
         ),
-        discovery_strategy=DiscoveryStrategy(
-            style="balanced", protect_open_blocks=True
-        ),
+        discovery_strategy=DiscoveryStrategy(style="balanced", protect_open_blocks=True),
         budget_protection=BudgetProtection(
             protected_categories=["lodging", "food"],
             sensitivity=0.55,
         ),
-        quality_floor_protection=QualityFloorProtection(
-            required_categories=["lodging"]
-        ),
-        lodging_strategy=LodgingStrategy(
-            base_style="single_base", arrival_buffer_priority=0.5
-        ),
+        quality_floor_protection=QualityFloorProtection(required_categories=["lodging"]),
+        lodging_strategy=LodgingStrategy(base_style="single_base", arrival_buffer_priority=0.5),
         transport_strategy=TransportStrategy(preferred_modes=["rail", "local_ground"]),
     )
 
@@ -461,15 +441,11 @@ def test_assemble_itinerary_scenarios_preserves_leisure_alternatives() -> None:
         title=cast(str, fixture["title"]),
     )
 
-    assert [scenario.bundle_id for scenario in result.scenarios] == fixture[
-        "expected_bundle_order"
+    assert [scenario.bundle_id for scenario in result.scenarios] == fixture["expected_bundle_order"]
+    assert [scenario.scenario_summary.scenario_kind for scenario in result.scenarios] == fixture[
+        "expected_kinds"
     ]
-    assert [
-        scenario.scenario_summary.scenario_kind for scenario in result.scenarios
-    ] == fixture["expected_kinds"]
-    assert all(
-        scenario.scenario_summary.coherence_passed for scenario in result.scenarios
-    )
+    assert all(scenario.scenario_summary.coherence_passed for scenario in result.scenarios)
     assert all(scenario.explanation_records for scenario in result.scenarios)
     assert result.explanation[0] == "objective_mode:leisure"
 
@@ -498,9 +474,7 @@ def test_assemble_itinerary_scenarios_supports_business_primary_and_fallback() -
             total_travel_minutes=95,
             total_transfer_count=2,
             friction_penalty_total=0.21,
-            blocking_reasons=[
-                "Manual policy exception review is required before booking."
-            ],
+            blocking_reasons=["Manual policy exception review is required before booking."],
         ),
     }
 
@@ -512,33 +486,24 @@ def test_assemble_itinerary_scenarios_supports_business_primary_and_fallback() -
         title=cast(str, fixture["title"]),
     )
 
-    assert [scenario.bundle_id for scenario in result.scenarios] == fixture[
-        "expected_bundle_order"
+    assert [scenario.bundle_id for scenario in result.scenarios] == fixture["expected_bundle_order"]
+    assert [scenario.scenario_summary.scenario_kind for scenario in result.scenarios] == fixture[
+        "expected_kinds"
     ]
-    assert [
-        scenario.scenario_summary.scenario_kind for scenario in result.scenarios
-    ] == fixture["expected_kinds"]
-    fallback_codes = [
-        tradeoff.code for tradeoff in result.scenarios[1].unresolved_tradeoffs
-    ]
+    fallback_codes = [tradeoff.code for tradeoff in result.scenarios[1].unresolved_tradeoffs]
     for code in fixture["expected_fallback_tradeoff_codes"]:
         assert code in fallback_codes
     assert result.explanation[0] == "objective_mode:business"
     assert result.scenarios[0].scenario_summary.recommended_for_selection is True
     assert result.scenarios[1].scenario_summary.recommended_for_selection is False
-    assert (
-        result.scenarios[1].unresolved_tradeoffs[0].tradeoff_id
-        == "risk:policy-exception"
-    )
+    assert result.scenarios[1].unresolved_tradeoffs[0].tradeoff_id == "risk:policy-exception"
     assert (
         result.scenarios[1].unresolved_tradeoffs[1].tradeoff_id
         == "blocking:bundle:exception-business:1"
     )
 
 
-def test_assemble_itinerary_scenarios_marks_infeasible_results_as_not_coherent() -> (
-    None
-):
+def test_assemble_itinerary_scenarios_marks_infeasible_results_as_not_coherent() -> None:
     candidate_set = _leisure_candidate_set()
     ranked_results = _leisure_ranked_results(candidate_set)
     lead_bundle = candidate_set.seeds[0].bundle

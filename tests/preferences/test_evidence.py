@@ -93,9 +93,7 @@ def test_option_evidence_requires_selected_option_in_presented_list() -> None:
     except ValueError as exc:
         assert "must include option_id" in str(exc)
     else:
-        raise AssertionError(
-            "Presented option lists should include the selected option"
-        )
+        raise AssertionError("Presented option lists should include the selected option")
 
 
 def test_preference_evidence_rejects_option_payload_on_non_option_types() -> None:
@@ -153,6 +151,4 @@ def test_option_rejection_cannot_have_positive_signal_direction() -> None:
     except ValueError as exc:
         assert "cannot use a positive signal_direction" in str(exc)
     else:
-        raise AssertionError(
-            "Option rejection should not allow positive signal direction"
-        )
+        raise AssertionError("Option rejection should not allow positive signal direction")

@@ -26,6 +26,15 @@ That boundary is intentional:
 - `PolicyEvaluationResult`
   - structured response with compliance status, approval requirements, failure reasons, preferred alternatives, and exception guidance
 
+## Planner Reaction Boundary
+
+Once `Travel-Plan-Permission` returns a `PolicyEvaluationResult`, planner-side follow-up should move through `trip_planner/integrations/tpp/reoptimization.py`.
+
+- `trip-planner` may rerank or narrow the compliant lane around preferred alternatives
+- `trip-planner` may regenerate a compliant scenario when failures are fixable
+- `trip-planner` may create an explicit `exception_nearest` candidate when policy requires escalation
+- planner-side reaction should preserve comparable and justification refs so saved-scenario history remains inspectable
+
 ## Design Rules
 
 - Keep policy constraints distinct from selected proposal content.

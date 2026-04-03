@@ -14,12 +14,7 @@ from trip_planner.integrations.tpp import (
 
 def _fixture_path(name: str) -> Path:
     return (
-        Path(__file__).resolve().parents[1]
-        / "fixtures"
-        / "integrations"
-        / "tpp"
-        / "results"
-        / name
+        Path(__file__).resolve().parents[1] / "fixtures" / "integrations" / "tpp" / "results" / name
     )
 
 
@@ -123,9 +118,7 @@ def test_result_ingestion_rejects_missing_linkage_trip_id_with_clear_error() -> 
         )
 
 
-def test_result_ingestion_rejects_missing_linkage_proposal_id_with_clear_error() -> (
-    None
-):
+def test_result_ingestion_rejects_missing_linkage_proposal_id_with_clear_error() -> None:
     fixture = _load_fixture("approved_evaluation.json")
     fixture["request"]["proposal_id"] = None
     del fixture["response"]["result_payload"]["proposal_id"]

@@ -15,12 +15,7 @@ from trip_planner.integrations.tpp import (
 
 def _fixture_path(name: str) -> Path:
     return (
-        Path(__file__).resolve().parents[1]
-        / "fixtures"
-        / "integrations"
-        / "tpp"
-        / "policy"
-        / name
+        Path(__file__).resolve().parents[1] / "fixtures" / "integrations" / "tpp" / "policy" / name
     )
 
 
@@ -93,9 +88,9 @@ def test_invalidated_policy_snapshot_is_marked_stale() -> None:
 
 def test_policy_sync_rejects_malformed_comparable_requirements() -> None:
     fixture = _load_fixture("standard_policy_sync.json")
-    fixture["response"]["result_payload"]["organization_context"][
-        "comparable_requirements"
-    ]["lodging"] = "two"
+    fixture["response"]["result_payload"]["organization_context"]["comparable_requirements"][
+        "lodging"
+    ] = "two"
     request = TPPRequestEnvelope.from_dict(fixture["request"])
     response = TPPResponseEnvelope.from_dict(fixture["response"])
     service = TPPPolicySyncService(FakeTPPPolicyClient(response))

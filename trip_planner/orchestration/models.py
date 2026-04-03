@@ -40,9 +40,7 @@ def _require_unique_strings(values: list[str], field_name: str) -> None:
         raise ValueError(f"{field_name} cannot contain duplicates")
 
 
-def _payload_list(
-    payload: dict[str, Any], field_name: str, default: list[Any]
-) -> list[Any]:
+def _payload_list(payload: dict[str, Any], field_name: str, default: list[Any]) -> list[Any]:
     value = payload.get(field_name, default)
     if not isinstance(value, list):
         raise ValueError(f"{field_name} must be a list")
@@ -110,10 +108,7 @@ class PendingDecision:
         choice_ids = [choice.choice_id for choice in self.choices]
         if len(set(choice_ids)) != len(choice_ids):
             raise ValueError("choices cannot repeat choice_id values")
-        if (
-            self.selected_choice_id is not None
-            and self.selected_choice_id not in choice_ids
-        ):
+        if self.selected_choice_id is not None and self.selected_choice_id not in choice_ids:
             raise ValueError("selected_choice_id must be one of choices")
         _require_string_list(self.notes, "notes")
         _require_unique_strings(self.related_option_ids, "related_option_ids")
@@ -128,8 +123,7 @@ class PendingDecision:
             prompt=payload["prompt"],
             requested_at=payload["requested_at"],
             choices=[
-                DecisionOption.from_dict(item)
-                for item in _payload_list(payload, "choices", [])
+                DecisionOption.from_dict(item) for item in _payload_list(payload, "choices", [])
             ],
             blocking=payload.get("blocking", True),
             selected_choice_id=payload.get("selected_choice_id"),
@@ -326,9 +320,7 @@ class WorkflowStateSnapshot:
             raise ValueError(f"current_stage must be one of {WORKFLOW_STAGES}")
         if self.status not in WORKFLOW_STATUSES:
             raise ValueError(f"status must be one of {WORKFLOW_STATUSES}")
-        if any(
-            not isinstance(item, PendingDecision) for item in self.pending_decisions
-        ):
+        if any(not isinstance(item, PendingDecision) for item in self.pending_decisions):
             raise ValueError("pending_decisions must contain PendingDecision instances")
         decision_ids = [decision.decision_id for decision in self.pending_decisions]
         if len(set(decision_ids)) != len(decision_ids):
@@ -337,9 +329,7 @@ class WorkflowStateSnapshot:
         _require_unique_strings(self.completed_action_ids, "completed_action_ids")
         overlapping_actions = set(self.open_action_ids) & set(self.completed_action_ids)
         if overlapping_actions:
-            raise ValueError(
-                "open_action_ids and completed_action_ids must not overlap"
-            )
+            raise ValueError("open_action_ids and completed_action_ids must not overlap")
         _require_unique_strings(self.recent_output_ids, "recent_output_ids")
         _require_unique_strings(self.tags, "tags")
         _require_string_list(self.notes, "notes")
@@ -414,9 +404,7 @@ class PlannerTurn:
         if self.workflow_state.workflow_kind != self.workflow_kind:
             raise ValueError("workflow_state.workflow_kind must match workflow_kind")
         if self.transition.to_stage != self.workflow_state.current_stage:
-            raise ValueError(
-                "transition.to_stage must match workflow_state.current_stage"
-            )
+            raise ValueError("transition.to_stage must match workflow_state.current_stage")
         if any(not isinstance(item, PlannerAction) for item in self.actions):
             raise ValueError("actions must contain PlannerAction instances")
         if any(not isinstance(item, PlannerOutput) for item in self.outputs):
@@ -429,9 +417,7 @@ class PlannerTurn:
             raise ValueError("outputs cannot repeat output_id values")
         all_known_action_ids = set(action_ids)
         unknown_open = set(self.workflow_state.open_action_ids) - all_known_action_ids
-        unknown_completed = (
-            set(self.workflow_state.completed_action_ids) - all_known_action_ids
-        )
+        unknown_completed = set(self.workflow_state.completed_action_ids) - all_known_action_ids
         if unknown_open or unknown_completed:
             raise ValueError("workflow_state action ids must be present in actions")
         unknown_dependencies = {
@@ -448,8 +434,7 @@ class PlannerTurn:
         for action_id in self.workflow_state.open_action_ids:
             if action_by_id[action_id].status not in open_statuses:
                 raise ValueError(
-                    "workflow_state.open_action_ids must refer to pending or "
-                    "in_progress actions"
+                    "workflow_state.open_action_ids must refer to pending or " "in_progress actions"
                 )
         for action_id in self.workflow_state.completed_action_ids:
             if action_by_id[action_id].status not in completed_statuses:
@@ -461,17 +446,13 @@ class PlannerTurn:
             decision.decision_id for decision in self.workflow_state.pending_decisions
         }
         if not set(self.next_step.blocking_decision_ids).issubset(all_decision_ids):
-            raise ValueError(
-                "next_step.blocking_decision_ids must refer to pending_decisions"
-            )
+            raise ValueError("next_step.blocking_decision_ids must refer to pending_decisions")
         if self.next_step.recommended_action_id is not None and (
             self.next_step.recommended_action_id not in all_known_action_ids
         ):
             raise ValueError("next_step.recommended_action_id must refer to an action")
         all_known_output_ids = set(output_ids)
-        if not set(self.workflow_state.recent_output_ids).issubset(
-            all_known_output_ids
-        ):
+        if not set(self.workflow_state.recent_output_ids).issubset(all_known_output_ids):
             raise ValueError("workflow_state.recent_output_ids must refer to outputs")
         if not set(self.next_step.expected_output_ids).issubset(all_known_output_ids):
             raise ValueError("next_step.expected_output_ids must refer to outputs")
@@ -495,12 +476,10 @@ class PlannerTurn:
             transition=WorkflowTransition.from_dict(payload["transition"]),
             next_step=NextStepSummary.from_dict(payload["next_step"]),
             actions=[
-                PlannerAction.from_dict(item)
-                for item in _payload_list(payload, "actions", [])
+                PlannerAction.from_dict(item) for item in _payload_list(payload, "actions", [])
             ],
             outputs=[
-                PlannerOutput.from_dict(item)
-                for item in _payload_list(payload, "outputs", [])
+                PlannerOutput.from_dict(item) for item in _payload_list(payload, "outputs", [])
             ],
             notes=_payload_list(payload, "notes", []),
             schema_version=payload.get(

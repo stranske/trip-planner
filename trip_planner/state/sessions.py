@@ -69,9 +69,7 @@ def _require_unique_strings(values: list[str], field_name: str) -> None:
         raise ValueError(f"{field_name} cannot contain duplicates")
 
 
-def _payload_list(
-    payload: dict[str, Any], field_name: str, default: list[Any]
-) -> list[Any]:
+def _payload_list(payload: dict[str, Any], field_name: str, default: list[Any]) -> list[Any]:
     value = payload.get(field_name, default)
     if not isinstance(value, list):
         raise ValueError(f"{field_name} must be a list")
@@ -95,17 +93,11 @@ class PlanningInteractionState:
         if self.initiative_level not in INITIATIVE_LEVELS:
             raise ValueError(f"initiative_level must be one of {INITIATIVE_LEVELS}")
         if self.checkpoint_frequency not in CHECKPOINT_FREQUENCIES:
-            raise ValueError(
-                f"checkpoint_frequency must be one of {CHECKPOINT_FREQUENCIES}"
-            )
+            raise ValueError(f"checkpoint_frequency must be one of {CHECKPOINT_FREQUENCIES}")
         if self.option_preview_timing not in OPTION_PREVIEW_TIMINGS:
-            raise ValueError(
-                f"option_preview_timing must be one of {OPTION_PREVIEW_TIMINGS}"
-            )
+            raise ValueError(f"option_preview_timing must be one of {OPTION_PREVIEW_TIMINGS}")
         if self.summary_granularity not in SUMMARY_GRANULARITIES:
-            raise ValueError(
-                f"summary_granularity must be one of {SUMMARY_GRANULARITIES}"
-            )
+            raise ValueError(f"summary_granularity must be one of {SUMMARY_GRANULARITIES}")
         if self.auto_advance_research_passes < 0:
             raise ValueError("auto_advance_research_passes must be non-negative")
         _require_string_list(self.notes, "notes")
@@ -166,10 +158,7 @@ class OptionPresentationRecord:
             and self.selected_option_id not in self.surfaced_option_ids
         ):
             raise ValueError("selected_option_id must be one of surfaced_option_ids")
-        if any(
-            option_id not in self.surfaced_option_ids
-            for option_id in self.rejected_option_ids
-        ):
+        if any(option_id not in self.surfaced_option_ids for option_id in self.rejected_option_ids):
             raise ValueError("rejected_option_ids must be drawn from surfaced options")
 
     def to_dict(self) -> dict[str, Any]:
@@ -220,10 +209,7 @@ class PendingDecision:
             "related_saved_scenario_id",
         )
         _require_string_list(self.notes, "notes")
-        if (
-            self.selected_choice is not None
-            and self.selected_choice not in self.choices
-        ):
+        if self.selected_choice is not None and self.selected_choice not in self.choices:
             raise ValueError("selected_choice must be one of choices")
 
     def to_dict(self) -> dict[str, Any]:
@@ -255,12 +241,8 @@ class PlanningSessionState:
     mode: str
     started_at: str
     updated_at: str
-    interaction_state: PlanningInteractionState = field(
-        default_factory=PlanningInteractionState
-    )
-    recent_option_presentations: list[OptionPresentationRecord] = field(
-        default_factory=list
-    )
+    interaction_state: PlanningInteractionState = field(default_factory=PlanningInteractionState)
+    recent_option_presentations: list[OptionPresentationRecord] = field(default_factory=list)
     pending_decisions: list[PendingDecision] = field(default_factory=list)
     status: str = "active"
     current_checkpoint_id: str | None = None
@@ -291,18 +273,13 @@ class PlanningSessionState:
             raise ValueError(
                 "recent_option_presentations must contain OptionPresentationRecord instances"
             )
-        if any(
-            not isinstance(item, PendingDecision) for item in self.pending_decisions
-        ):
+        if any(not isinstance(item, PendingDecision) for item in self.pending_decisions):
             raise ValueError("pending_decisions must contain PendingDecision instances")
         presentation_ids = [
-            presentation.presentation_id
-            for presentation in self.recent_option_presentations
+            presentation.presentation_id for presentation in self.recent_option_presentations
         ]
         if len(set(presentation_ids)) != len(presentation_ids):
-            raise ValueError(
-                "recent_option_presentations cannot repeat presentation_id values"
-            )
+            raise ValueError("recent_option_presentations cannot repeat presentation_id values")
         decision_ids = [decision.decision_id for decision in self.pending_decisions]
         if len(set(decision_ids)) != len(decision_ids):
             raise ValueError("pending_decisions cannot repeat decision_id values")
@@ -396,9 +373,7 @@ class ActivityLogEvent:
         if not isinstance(self.metadata, dict):
             raise ValueError("metadata must be a dict of string keys to string values")
         require_string_mapping(self.metadata, "metadata")
-        if any(
-            not isinstance(value, str) or not value for value in self.metadata.values()
-        ):
+        if any(not isinstance(value, str) or not value for value in self.metadata.values()):
             raise ValueError("metadata must contain non-empty string values")
         _require_unique_strings(self.tags, "tags")
         _require_string_list(self.notes, "notes")

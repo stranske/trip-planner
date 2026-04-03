@@ -46,9 +46,7 @@ def _fixture_path(*parts: str) -> Path:
 
 
 def _load_ranking_fixture(name: str) -> dict[str, object]:
-    return json.loads(
-        _fixture_path("ranking", "leisure", name).read_text(encoding="utf-8")
-    )
+    return json.loads(_fixture_path("ranking", "leisure", name).read_text(encoding="utf-8"))
 
 
 def _result_option_id(result: object) -> str:
@@ -59,33 +57,25 @@ def _result_option_id(result: object) -> str:
 
 def _load_destination(name: str) -> Destination:
     return Destination.from_dict(
-        json.loads(
-            _fixture_path("options", "destinations", name).read_text(encoding="utf-8")
-        )
+        json.loads(_fixture_path("options", "destinations", name).read_text(encoding="utf-8"))
     )
 
 
 def _load_lodging(name: str) -> LodgingOption:
     return LodgingOption.from_dict(
-        json.loads(
-            _fixture_path("options", "lodging", name).read_text(encoding="utf-8")
-        )
+        json.loads(_fixture_path("options", "lodging", name).read_text(encoding="utf-8"))
     )
 
 
 def _load_transport(name: str) -> TransportOption:
     return TransportOption.from_dict(
-        json.loads(
-            _fixture_path("options", "transport", name).read_text(encoding="utf-8")
-        )
+        json.loads(_fixture_path("options", "transport", name).read_text(encoding="utf-8"))
     )
 
 
 def _load_activity(name: str) -> ActivityOption:
     return ActivityOption.from_dict(
-        json.loads(
-            _fixture_path("options", "activities", name).read_text(encoding="utf-8")
-        )
+        json.loads(_fixture_path("options", "activities", name).read_text(encoding="utf-8"))
     )
 
 
@@ -169,9 +159,7 @@ def _scenic_wanderer_bundle() -> InventoryBundle:
             fit_signal=0.81,
         ),
         explanation=BundleExplanation(
-            strengths=[
-                "Transit doubles as an experience and the day stays open-ended."
-            ],
+            strengths=["Transit doubles as an experience and the day stays open-ended."],
             tradeoffs=["The scenic leg adds more time than the direct urban option."],
             evidence=["The candidate favors wandering over checklist landmarks."],
         ),
@@ -275,9 +263,7 @@ def _make_objectives(
             protected_categories=["lodging", "food"],
             sensitivity=0.65,
         ),
-        quality_floor_protection=QualityFloorProtection(
-            required_categories=required_quality
-        ),
+        quality_floor_protection=QualityFloorProtection(required_categories=required_quality),
         lodging_strategy=LodgingStrategy(
             base_style="single_base",
             arrival_buffer_priority=recovery_priority,
@@ -292,9 +278,7 @@ def _make_objectives(
 
 def _profile_from_fixture(name: str) -> LeisurePreferenceProfile:
     fixture = _load_ranking_fixture(name)
-    return build_profile_from_overrides(
-        cast(dict[str, Any], fixture["profile_overrides"])
-    )
+    return build_profile_from_overrides(cast(dict[str, Any], fixture["profile_overrides"]))
 
 
 def _objectives_from_fixture(name: str) -> ItineraryObjectives:
@@ -318,9 +302,7 @@ def _expected_rank_order(name: str) -> list[str]:
 def test_leisure_ranking_fixture_set_is_complete() -> None:
     fixture_dir = _fixture_path("ranking", "leisure")
 
-    assert sorted(path.name for path in fixture_dir.glob("*.json")) == sorted(
-        RANKING_FIXTURE_NAMES
-    )
+    assert sorted(path.name for path in fixture_dir.glob("*.json")) == sorted(RANKING_FIXTURE_NAMES)
 
 
 def test_ranking_fixtures_capture_distinct_traveler_shapes() -> None:
@@ -353,8 +335,7 @@ def test_ranking_fixtures_capture_distinct_traveler_shapes() -> None:
         == "candidate:bundle:urban-culture"
     )
     assert (
-        _expected_rank_order("scenic_transit_route.json")[0]
-        == "candidate:bundle:scenic-wanderer"
+        _expected_rank_order("scenic_transit_route.json")[0] == "candidate:bundle:scenic-wanderer"
     )
     assert (
         _expected_rank_order("quality_floor_sensitive_trip.json")[0]
@@ -372,9 +353,9 @@ def test_fixture_profiles_produce_expected_rank_order(fixture_name: str) -> None
         _candidate_set(),
     )
 
-    assert [
-        _result_option_id(result) for result in ranked.results
-    ] == _expected_rank_order(fixture_name)
+    assert [_result_option_id(result) for result in ranked.results] == _expected_rank_order(
+        fixture_name
+    )
 
 
 def test_depth_oriented_profile_ranks_urban_culture_first() -> None:
@@ -385,9 +366,9 @@ def test_depth_oriented_profile_ranks_urban_culture_first() -> None:
         _candidate_set(),
     )
 
-    assert [
-        _result_option_id(result) for result in ranked.results
-    ] == _expected_rank_order("depth_oriented_urban_trip.json")
+    assert [_result_option_id(result) for result in ranked.results] == _expected_rank_order(
+        "depth_oriented_urban_trip.json"
+    )
 
 
 def test_scenic_discovery_profile_ranks_scenic_bundle_first() -> None:
@@ -399,9 +380,7 @@ def test_scenic_discovery_profile_ranks_scenic_bundle_first() -> None:
     )
 
     assert _result_option_id(ranked.results[0]) == "candidate:bundle:scenic-wanderer"
-    assert (
-        ranked.results[0].score_breakdown.bonuses[0].reason_code == "transit_is_feature"
-    )
+    assert ranked.results[0].score_breakdown.bonuses[0].reason_code == "transit_is_feature"
 
 
 def test_ranked_results_emit_breakdowns_and_explanation_records() -> None:
@@ -417,12 +396,8 @@ def test_ranked_results_emit_breakdowns_and_explanation_records() -> None:
 
     assert top_result.score_breakdown.component_contributions
     assert top_result.explanation_records
-    assert any(
-        record.record_type == "summary" for record in top_result.explanation_records
-    )
-    assert any(
-        record.record_type == "promotion" for record in top_result.explanation_records
-    )
+    assert any(record.record_type == "summary" for record in top_result.explanation_records)
+    assert any(record.record_type == "promotion" for record in top_result.explanation_records)
     assert target_option is not None
     assert top_result.explanation_records[0].target_id == target_option.option_id
     assert top_result.explanation_records[0].factor_keys
@@ -489,13 +464,8 @@ def test_identical_candidates_reorder_between_depth_and_discovery_profiles() -> 
     assert [_result_option_id(result) for result in depth_ranked.results] != [
         _result_option_id(result) for result in discovery_ranked.results
     ]
-    assert (
-        _result_option_id(depth_ranked.results[0]) == "candidate:bundle:urban-culture"
-    )
-    assert (
-        _result_option_id(discovery_ranked.results[0])
-        == "candidate:bundle:scenic-wanderer"
-    )
+    assert _result_option_id(depth_ranked.results[0]) == "candidate:bundle:urban-culture"
+    assert _result_option_id(discovery_ranked.results[0]) == "candidate:bundle:scenic-wanderer"
 
 
 def test_identical_profile_reorders_when_objectives_change() -> None:
@@ -517,13 +487,8 @@ def test_identical_profile_reorders_when_objectives_change() -> None:
     assert [_result_option_id(result) for result in depth_ranked.results] != [
         _result_option_id(result) for result in scenic_ranked.results
     ]
-    assert (
-        _result_option_id(depth_ranked.results[0]) == "candidate:bundle:urban-culture"
-    )
-    assert (
-        _result_option_id(scenic_ranked.results[0])
-        == "candidate:bundle:scenic-wanderer"
-    )
+    assert _result_option_id(depth_ranked.results[0]) == "candidate:bundle:urban-culture"
+    assert _result_option_id(scenic_ranked.results[0]) == "candidate:bundle:scenic-wanderer"
 
 
 def test_same_candidate_scores_change_with_profile_and_objective_inputs() -> None:
@@ -549,27 +514,19 @@ def test_same_candidate_scores_change_with_profile_and_objective_inputs() -> Non
         )
 
     depth_result = result_by_option_id(depth_ranked, "candidate:bundle:urban-culture")
-    discovery_result = result_by_option_id(
-        discovery_ranked, "candidate:bundle:urban-culture"
-    )
+    discovery_result = result_by_option_id(discovery_ranked, "candidate:bundle:urban-culture")
 
     depth_components = {
         contribution.contribution_id: contribution.normalized_signal
-        for contribution in cast(
-            Any, depth_result
-        ).score_breakdown.component_contributions
+        for contribution in cast(Any, depth_result).score_breakdown.component_contributions
     }
     discovery_components = {
         contribution.contribution_id: contribution.normalized_signal
-        for contribution in cast(
-            Any, discovery_result
-        ).score_breakdown.component_contributions
+        for contribution in cast(Any, discovery_result).score_breakdown.component_contributions
     }
 
     assert cast(Any, depth_result).score != cast(Any, discovery_result).score
-    assert (
-        depth_components["anchor_alignment"] != discovery_components["anchor_alignment"]
-    )
+    assert depth_components["anchor_alignment"] != discovery_components["anchor_alignment"]
     assert depth_components["discovery_fit"] != discovery_components["discovery_fit"]
 
 
@@ -658,19 +615,13 @@ def test_tension_flags_and_low_confidence_reduce_ranking_confidence() -> None:
         if _result_option_id(item) == "candidate:bundle:urban-culture"
     )
     assert "tension:pace-vs-depth" in result.confidence_summary.low_confidence_flags
-    assert (
-        "low_confidence:iconic_vs_discovery"
-        in result.confidence_summary.low_confidence_flags
-    )
+    assert "low_confidence:iconic_vs_discovery" in result.confidence_summary.low_confidence_flags
     assert any(
         penalty.reason_code == "low_confidence_profile"
         for penalty in result.score_breakdown.missing_data_penalties
     )
     assert any(
-        penalty.reason_code == "preference_tension"
-        for penalty in result.score_breakdown.penalties
+        penalty.reason_code == "preference_tension" for penalty in result.score_breakdown.penalties
     )
-    assert any(
-        record.record_type == "confidence" for record in result.explanation_records
-    )
+    assert any(record.record_type == "confidence" for record in result.explanation_records)
     assert any(record.record_type == "risk" for record in result.explanation_records)

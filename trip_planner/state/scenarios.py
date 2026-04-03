@@ -48,9 +48,7 @@ def _require_unique_strings(values: list[str], field_name: str) -> None:
         raise ValueError(f"{field_name} cannot contain duplicates")
 
 
-def _payload_list(
-    payload: dict[str, Any], field_name: str, default: list[Any]
-) -> list[Any]:
+def _payload_list(payload: dict[str, Any], field_name: str, default: list[Any]) -> list[Any]:
     value = payload.get(field_name, default)
     if not isinstance(value, list):
         raise ValueError(f"{field_name} must be a list")
@@ -104,9 +102,7 @@ class ScenarioArtifactRefs:
                 self.business_profile_id,
             )
         ):
-            raise ValueError(
-                "ScenarioArtifactRefs must capture at least one saved reference"
-            )
+            raise ValueError("ScenarioArtifactRefs must capture at least one saved reference")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -164,20 +160,11 @@ class ScenarioVersion:
 
         if self.label in {"compliant_first", "exception_nearest"}:
             if self.snapshot_refs.business_profile_id is None:
-                raise ValueError(
-                    f"{self.label} versions require snapshot_refs.business_profile_id"
-                )
+                raise ValueError(f"{self.label} versions require snapshot_refs.business_profile_id")
             if self.snapshot_refs.policy_state_id is None:
-                raise ValueError(
-                    f"{self.label} versions require snapshot_refs.policy_state_id"
-                )
-        if (
-            self.label == "in_trip_revision"
-            and self.snapshot_refs.session_state_id is None
-        ):
-            raise ValueError(
-                "in_trip_revision versions require snapshot_refs.session_state_id"
-            )
+                raise ValueError(f"{self.label} versions require snapshot_refs.policy_state_id")
+        if self.label == "in_trip_revision" and self.snapshot_refs.session_state_id is None:
+            raise ValueError("in_trip_revision versions require snapshot_refs.session_state_id")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -225,9 +212,7 @@ class ScenarioComparison:
         if self.outcome not in COMPARISON_OUTCOMES:
             raise ValueError(f"outcome must be one of {COMPARISON_OUTCOMES}")
         if self.baseline_scenario_id == self.candidate_scenario_id:
-            raise ValueError(
-                "candidate_scenario_id must differ from baseline_scenario_id"
-            )
+            raise ValueError("candidate_scenario_id must differ from baseline_scenario_id")
         _require_unique_strings(self.focus_areas, "focus_areas")
         _require_string_list(self.notes, "notes")
 
@@ -271,9 +256,7 @@ class SavedScenarioRecord:
         if any(not isinstance(item, ScenarioComparison) for item in self.comparisons):
             raise ValueError("comparisons must contain ScenarioComparison instances")
         if self.schema_version != SCENARIO_STATE_SCHEMA_VERSION:
-            raise ValueError(
-                f"schema_version must be {SCENARIO_STATE_SCHEMA_VERSION!r}"
-            )
+            raise ValueError(f"schema_version must be {SCENARIO_STATE_SCHEMA_VERSION!r}")
         _require_unique_strings(self.tags, "tags")
         _require_string_list(self.notes, "notes")
 
@@ -292,9 +275,7 @@ class SavedScenarioRecord:
             if comparison.trip_id != self.trip_id:
                 raise ValueError("comparisons must share the record trip_id")
             if comparison.baseline_scenario_id != self.saved_scenario_id:
-                raise ValueError(
-                    "comparisons must reference the record scenario as baseline"
-                )
+                raise ValueError("comparisons must reference the record scenario as baseline")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -306,8 +287,7 @@ class SavedScenarioRecord:
             trip_id=payload["trip_id"],
             current_version_id=payload["current_version_id"],
             versions=[
-                ScenarioVersion.from_dict(item)
-                for item in _payload_list(payload, "versions", [])
+                ScenarioVersion.from_dict(item) for item in _payload_list(payload, "versions", [])
             ],
             comparisons=[
                 ScenarioComparison.from_dict(item)

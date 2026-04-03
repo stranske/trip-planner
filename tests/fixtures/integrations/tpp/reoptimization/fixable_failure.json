@@ -1,0 +1,122 @@
+{
+  "proposal": {
+    "proposal_id": "proposal-553",
+    "trip_id": "trip-business-client-summit",
+    "mode": "business",
+    "traveler_context": {
+      "employee_type": "employee",
+      "traveler_experience": "frequent",
+      "home_airport": "ORD",
+      "loyalty_programs": ["United"],
+      "mobility_or_access_needs": []
+    },
+    "selected_options": [
+      {
+        "category": "lodging",
+        "option_id": "hotel-conference",
+        "label": "Conference Hotel",
+        "vendor": "Marriott",
+        "booking_channel": "Navan",
+        "estimated_cost": {
+          "currency": "USD",
+          "typical_amount": 265.0,
+          "min_amount": 265.0,
+          "max_amount": 265.0
+        },
+        "justification_refs": ["justification:lodging:venue-proximity"]
+      }
+    ],
+    "cost_summary": {
+      "currency": "USD",
+      "total_estimated_cost": 265.0,
+      "category_estimates": {
+        "lodging": 265.0
+      },
+      "notes": ["Venue-adjacent hotel keeps arrival window safe."]
+    },
+    "comparables": [
+      {
+        "category": "lodging",
+        "label": "Policy cap hotel",
+        "vendor": "Hilton",
+        "booking_channel": "Navan",
+        "estimated_cost": {
+          "currency": "USD",
+          "typical_amount": 209.0,
+          "min_amount": 209.0,
+          "max_amount": 209.0
+        },
+        "notes": ["Meets lodging cap but extends transfer time."]
+      }
+    ],
+    "justifications": [
+      {
+        "category": "lodging",
+        "summary": "Venue-adjacent lodging protects the keynote arrival window.",
+        "evidence": ["venue_adjacent", "late_checkin_buffer"]
+      }
+    ],
+    "booking_channel_summaries": [
+      {
+        "category": "lodging",
+        "selected_channel": "Navan",
+        "approved": true,
+        "rationale": "Required company booking channel"
+      }
+    ],
+    "approval_notes": [],
+    "constraint_set_id": "policy-q2-client-summit"
+  },
+  "evaluation_result": {
+    "evaluation_id": "eval-553-fixable",
+    "proposal_id": "proposal-553",
+    "status": "non_compliant",
+    "approval_requirements": [],
+    "failure_reasons": [
+      {
+        "code": "lodging_cap_exceeded",
+        "message": "Selected lodging exceeds the policy cap by $56.",
+        "severity": "blocking",
+        "related_category": "lodging"
+      }
+    ],
+    "preferred_alternatives": [],
+    "exception_guidance": [],
+    "notes": [
+      "Re-run with a lodging option that remains near the venue but stays under the cap."
+    ],
+    "compliance_score": 0.42
+  },
+  "source_version": {
+    "version_id": "saved-scenario:compliant-first-v1",
+    "saved_scenario_id": "saved-scenario:compliant-first",
+    "trip_id": "trip-business-client-summit",
+    "title": "Compliant-first client summit plan",
+    "label": "compliant_first",
+    "created_at": "2026-04-02T10:00:00Z",
+    "created_by": "policy-planner",
+    "scope": "route",
+    "snapshot_refs": {
+      "objective_id": "objective:client-summit",
+      "scenario_search_id": "scenario-search:client-summit",
+      "source_result_set_id": "ranked-result-set:client-summit",
+      "itinerary_scenario_id": "scenario:trip-business-client-summit:1",
+      "ranked_result_set_id": "ranked-result-set:client-summit",
+      "option_set_ids": ["option-set:lodging:conference"],
+      "policy_state_id": "policy-state:q2-client-summit",
+      "business_profile_id": "business-profile-consulting",
+      "notes": [
+        "Primary approval-ready path with compliant booking channels."
+      ]
+    },
+    "summary": "Primary scenario retains approved vendors and schedule protection.",
+    "tags": ["business", "approval-ready"],
+    "notes": ["Used as the baseline for business policy review."]
+  },
+  "comparable_refs": {
+    "lodging": ["comparable:lodging:policy-cap"]
+  },
+  "justification_refs": {
+    "lodging": ["justification:lodging:venue-proximity"]
+  }
+}

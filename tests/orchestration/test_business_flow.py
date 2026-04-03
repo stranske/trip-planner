@@ -42,21 +42,15 @@ def _load_scenario(name: str) -> dict:
 
 def _build_context(name: str) -> BusinessWorkflowContext:
     scenario = _load_scenario(name)
-    trip_payload = _load_json(
-        _fixture_root() / "state" / "trips" / scenario["trip_fixture"]
-    )
+    trip_payload = _load_json(_fixture_root() / "state" / "trips" / scenario["trip_fixture"])
     if "trip_overrides" in scenario:
         trip_payload = _deep_merge(trip_payload, scenario["trip_overrides"])
     trip_record = PersistedTripRecord.from_dict(trip_payload)
 
-    profile_payload = _load_json(
-        _fixture_root() / "business" / scenario["profile_fixture"]
-    )
+    profile_payload = _load_json(_fixture_root() / "business" / scenario["profile_fixture"])
     profile = BusinessTravelProfile.from_dict(profile_payload)
 
-    policy_payload = _load_json(
-        _fixture_root() / "business" / scenario["policy_fixture"]
-    )
+    policy_payload = _load_json(_fixture_root() / "business" / scenario["policy_fixture"])
     constraint_set = PolicyConstraintSet(**policy_payload["constraint_set"])
     objectives = derive_business_planning_objectives(
         profile,
@@ -99,9 +93,7 @@ def test_compliant_business_flow_transitions_to_policy_ready_booking_prep() -> N
     assert turn.next_step.recommended_action_id == "action-persist-business-state"
     assert turn.outputs[0].output_kind == "policy_summary"
     assert turn.outputs[0].payload["policy_state_id"] == "policy-state:conference-001"
-    assert turn.outputs[0].payload["saved_scenario_ids"] == [
-        "saved-scenario:conference-compliant"
-    ]
+    assert turn.outputs[0].payload["saved_scenario_ids"] == ["saved-scenario:conference-compliant"]
     assert turn.actions[4].status == "completed"
     assert turn.actions[6].status == "pending"
 
@@ -134,9 +126,7 @@ def test_missing_comparable_flow_surfaces_structured_pending_decisions() -> None
     )
 
 
-def test_comparable_only_gap_uses_structured_decision_ids_in_transition_and_warnings() -> (
-    None
-):
+def test_comparable_only_gap_uses_structured_decision_ids_in_transition_and_warnings() -> None:
     context = _build_context("missing_comparables_flow.json")
     context.collected_policy_inputs["need for in-person presence"] = (
         "Lead negotiator must be physically present for renewal terms."
@@ -158,9 +148,7 @@ def test_comparable_only_gap_uses_structured_decision_ids_in_transition_and_warn
         "missing-comparable:ground_transport",
         "missing-comparable:lodging",
     ]
-    warning_output = next(
-        output for output in turn.outputs if output.output_kind == "warning"
-    )
+    warning_output = next(output for output in turn.outputs if output.output_kind == "warning")
     assert warning_output.warnings == [
         "missing-comparable:airfare",
         "missing-comparable:ground_transport",
@@ -168,9 +156,7 @@ def test_comparable_only_gap_uses_structured_decision_ids_in_transition_and_warn
     ]
 
 
-def test_exception_path_without_proposal_stays_active_when_fallback_is_available() -> (
-    None
-):
+def test_exception_path_without_proposal_stays_active_when_fallback_is_available() -> None:
     context = _build_context("exception_prep_flow.json")
 
     turn = build_business_planner_turn(

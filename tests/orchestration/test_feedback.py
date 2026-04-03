@@ -14,13 +14,7 @@ from trip_planner.state import PlanningSessionState
 
 
 def _fixture_path(name: str) -> Path:
-    return (
-        Path(__file__).resolve().parents[1]
-        / "fixtures"
-        / "orchestration"
-        / "feedback"
-        / name
-    )
+    return Path(__file__).resolve().parents[1] / "fixtures" / "orchestration" / "feedback" / name
 
 
 def _load_event(name: str) -> OptionFeedbackEvent:
@@ -64,9 +58,7 @@ def test_accept_option_routes_feedback_into_checkpoint_state() -> None:
     assert presentation.selected_option_id == "option:kyoto-central"
     assert result.activity_event.event_kind == "decision_recorded"
     assert result.planner_turn.workflow_state.current_stage == "decision_checkpoint"
-    assert result.planner_turn.next_step.recommended_action_id == (
-        "action-request-decision"
-    )
+    assert result.planner_turn.next_step.recommended_action_id == ("action-request-decision")
     assert result.revealed_preference_updates[0].signal.reaction_type == "selected"
 
 
@@ -82,9 +74,7 @@ def test_reject_and_rerank_clears_checkpoint_and_updates_autonomy() -> None:
     assert result.updated_session_state.pending_decisions == []
     assert result.activity_event.event_kind == "rerank_requested"
     assert result.planner_turn.next_step.recommended_action_id == "action-rank-options"
-    assert (
-        result.updated_session_state.interaction_state.auto_advance_research_passes > 1
-    )
+    assert result.updated_session_state.interaction_state.auto_advance_research_passes > 1
     assert result.planner_turn.workflow_state.pending_decisions == []
 
 
@@ -100,12 +90,8 @@ def test_save_as_fallback_emits_structured_scenario_capture_request() -> None:
         "saved-scenario:osaka-weather-fallback"
     )
     assert result.activity_event.event_kind == "scenario_saved"
-    assert result.activity_event.saved_scenario_id == (
-        "saved-scenario:osaka-weather-fallback"
-    )
-    assert result.planner_turn.next_step.recommended_action_id == (
-        "action-persist-fallback"
-    )
+    assert result.activity_event.saved_scenario_id == ("saved-scenario:osaka-weather-fallback")
+    assert result.planner_turn.next_step.recommended_action_id == ("action-persist-fallback")
     presentation = result.updated_session_state.recent_option_presentations[0]
     assert presentation.selected_option_id is None
     assert presentation.rejected_option_ids == ["option:osaka-daytrip"]

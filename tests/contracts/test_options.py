@@ -92,9 +92,7 @@ def test_option_set_rejects_invalid_selection_limit() -> None:
     except ValueError as exc:
         assert "selection_limit" in str(exc)
     else:
-        raise AssertionError(
-            "OptionSet should reject selection_limit values above option count"
-        )
+        raise AssertionError("OptionSet should reject selection_limit values above option count")
 
 
 def test_option_rejects_invalid_kind() -> None:
