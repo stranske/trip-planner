@@ -91,6 +91,8 @@ Epic anchor: `#549` defines the execution and approval-readiness sequencing boun
 
 ### 9. Frontend Application Layer
 
+Epic anchor: `#555` defines the application-shell and planning-surface sequencing boundary for this layer. See [frontend-application-layer-epic.md](frontend-application-layer-epic.md).
+
 - `#556` frontend app shell
 - `#557` account and trip entry flows
 - `#558` trip workspace
