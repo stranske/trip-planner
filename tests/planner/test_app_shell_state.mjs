@@ -51,7 +51,10 @@ class FakeButton extends FakeHTMLElement {
   }
 
   closest(selector) {
-    if (selector === "[data-shell-route]" && this.dataset.shellRoute) {
+    if (
+      (selector === "[data-shell-route]" || selector === "button[data-shell-route]") &&
+      this.dataset.shellRoute
+    ) {
       return this;
     }
 
@@ -196,6 +199,7 @@ test("entry store switches launch flows and resumes saved sessions", () => {
   store.resumeSession("session-business-audit-approval");
   assert.equal(store.getState().active_trip_id, "trip-client-audit-sea");
   assert.equal(store.getState().active_route, "approval_center");
+  assert.equal(store.getState().workspace.status, "loading");
   assert.equal(
     store.getState().workspace.loading_message,
     "Rehydrating the saved session entry point."

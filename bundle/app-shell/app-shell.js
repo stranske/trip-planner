@@ -292,7 +292,7 @@ export function createAppShellStore(initialState) {
         workspace: {
           ...state.workspace,
           trip_id: session.trip_id,
-          status: "empty",
+          status: "loading",
           planner_panel_state: null,
           loading_message: "Rehydrating the saved session entry point.",
           error_message: null,
@@ -801,7 +801,7 @@ export function renderAppShellLayout(state) {
   const activeTrip = state.trips.find((trip) => trip.trip_id === state.active_trip_id) ?? null;
 
   return `
-    <section class="planner-app-shell" data-shell-route="${escapeAttribute(state.active_route)}">
+    <section class="planner-app-shell" data-shell-active-route="${escapeAttribute(state.active_route)}">
       <header class="shell-header">
         <div>
           <p class="shell-eyebrow">Trip planner application shell</p>
@@ -837,7 +837,7 @@ export function renderAppShell(mountNode, initialState) {
       return;
     }
 
-    const routeTarget = event.target.closest("[data-shell-route]");
+    const routeTarget = event.target.closest("button[data-shell-route]");
     if (routeTarget?.dataset.shellRoute) {
       store.setRoute(routeTarget.dataset.shellRoute);
       mountNode.dispatchEvent(
