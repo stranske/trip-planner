@@ -68,6 +68,9 @@ See [source-ingestion-epic.md](source-ingestion-epic.md) for the dependency chai
 
 ### 7. Orchestration And In-Trip Adjustment
 
+Epic `#543` is the sequencing contract for this phase.
+See [orchestration-interactive-planning-epic.md](orchestration-interactive-planning-epic.md) for the dependency chain, shared design rules, and acceptance mapping for issues `#544` through `#548`.
+
 - `#544` planner-turn and workflow contracts
 - `#545` leisure orchestration
 - `#546` feedback loops
