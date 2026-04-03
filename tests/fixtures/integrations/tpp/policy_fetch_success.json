@@ -1,0 +1,45 @@
+{
+  "request": {
+    "operation": "fetch_policy_constraints",
+    "request_id": "req-policy-001",
+    "correlation_id": {
+      "value": "corr-policy-001",
+      "issued_by": "trip-planner"
+    },
+    "payload": {
+      "organization_context": {
+        "organization_id": "org-acme",
+        "traveler_profile_id": "traveler-123"
+      }
+    },
+    "transport_pattern": "sync",
+    "organization_id": "org-acme",
+    "trip_id": "trip-100",
+    "submitted_at": "2026-04-03T00:40:00Z",
+    "metadata": {
+      "environment": "test"
+    }
+  },
+  "response": {
+    "operation": "fetch_policy_constraints",
+    "request_id": "req-policy-001",
+    "correlation_id": {
+      "value": "corr-policy-001",
+      "issued_by": "trip-planner"
+    },
+    "transport_pattern": "sync",
+    "execution_status": {
+      "state": "succeeded",
+      "terminal": true,
+      "summary": "Policy constraints imported",
+      "external_status": "200 OK",
+      "updated_at": "2026-04-03T00:40:01Z"
+    },
+    "result_payload": {
+      "policy_id": "policy-2026-01",
+      "organization_id": "org-acme",
+      "policy_version": "2026.1"
+    },
+    "received_at": "2026-04-03T00:40:01Z"
+  }
+}
