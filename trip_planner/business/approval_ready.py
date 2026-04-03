@@ -61,7 +61,9 @@ class ApprovalReadyPackage:
     scenario_posture: str
     traveler_context: TravelerContext
     business_justification: str
-    required_presence_windows: list[RequiredPresenceWindow] = field(default_factory=list)
+    required_presence_windows: list[RequiredPresenceWindow] = field(
+        default_factory=list
+    )
     selected_options: list[SelectedOptionSummary] = field(default_factory=list)
     comparables: list[ComparableOption] = field(default_factory=list)
     justifications: list[JustificationRecord] = field(default_factory=list)
@@ -84,9 +86,13 @@ class ApprovalReadyPackage:
         require_non_empty(self.proposal_id, "proposal_id")
         require_non_empty(self.trip_id, "trip_id")
         if self.package_status not in APPROVAL_PACKAGE_STATUSES:
-            raise ValueError(f"package_status must be one of {APPROVAL_PACKAGE_STATUSES}")
+            raise ValueError(
+                f"package_status must be one of {APPROVAL_PACKAGE_STATUSES}"
+            )
         if self.scenario_posture not in APPROVAL_PACKAGE_POSTURES:
-            raise ValueError(f"scenario_posture must be one of {APPROVAL_PACKAGE_POSTURES}")
+            raise ValueError(
+                f"scenario_posture must be one of {APPROVAL_PACKAGE_POSTURES}"
+            )
         if not isinstance(self.traveler_context, TravelerContext):
             raise ValueError("traveler_context must be a TravelerContext")
         require_non_empty(self.business_justification, "business_justification")
@@ -97,30 +103,61 @@ class ApprovalReadyPackage:
             raise ValueError(
                 "required_presence_windows must contain RequiredPresenceWindow instances"
             )
-        if any(not isinstance(item, SelectedOptionSummary) for item in self.selected_options):
-            raise ValueError("selected_options must contain SelectedOptionSummary instances")
+        if any(
+            not isinstance(item, SelectedOptionSummary)
+            for item in self.selected_options
+        ):
+            raise ValueError(
+                "selected_options must contain SelectedOptionSummary instances"
+            )
         if any(not isinstance(item, ComparableOption) for item in self.comparables):
             raise ValueError("comparables must contain ComparableOption instances")
-        if any(not isinstance(item, JustificationRecord) for item in self.justifications):
-            raise ValueError("justifications must contain JustificationRecord instances")
         if any(
-            not isinstance(item, BookingChannelSummary) for item in self.booking_channel_summaries
+            not isinstance(item, JustificationRecord) for item in self.justifications
+        ):
+            raise ValueError(
+                "justifications must contain JustificationRecord instances"
+            )
+        if any(
+            not isinstance(item, BookingChannelSummary)
+            for item in self.booking_channel_summaries
         ):
             raise ValueError(
                 "booking_channel_summaries must contain BookingChannelSummary instances"
             )
-        if any(not isinstance(item, ApprovalRequirement) for item in self.approval_requirements):
-            raise ValueError("approval_requirements must contain ApprovalRequirement instances")
-        if any(not isinstance(item, ApprovalReadinessCheck) for item in self.readiness_checks):
-            raise ValueError("readiness_checks must contain ApprovalReadinessCheck instances")
-        if any(not isinstance(item, PolicyFailureReason) for item in self.failure_reasons):
-            raise ValueError("failure_reasons must contain PolicyFailureReason instances")
-        if any(not isinstance(item, PreferredAlternative) for item in self.preferred_alternatives):
-            raise ValueError("preferred_alternatives must contain PreferredAlternative instances")
+        if any(
+            not isinstance(item, ApprovalRequirement)
+            for item in self.approval_requirements
+        ):
+            raise ValueError(
+                "approval_requirements must contain ApprovalRequirement instances"
+            )
+        if any(
+            not isinstance(item, ApprovalReadinessCheck)
+            for item in self.readiness_checks
+        ):
+            raise ValueError(
+                "readiness_checks must contain ApprovalReadinessCheck instances"
+            )
+        if any(
+            not isinstance(item, PolicyFailureReason) for item in self.failure_reasons
+        ):
+            raise ValueError(
+                "failure_reasons must contain PolicyFailureReason instances"
+            )
+        if any(
+            not isinstance(item, PreferredAlternative)
+            for item in self.preferred_alternatives
+        ):
+            raise ValueError(
+                "preferred_alternatives must contain PreferredAlternative instances"
+            )
         if self.requested_exception is not None and not isinstance(
             self.requested_exception, ExceptionRequest
         ):
-            raise ValueError("requested_exception must be an ExceptionRequest when provided")
+            raise ValueError(
+                "requested_exception must be an ExceptionRequest when provided"
+            )
         require_strings(self.approval_roles, "approval_roles")
         require_strings(self.required_receipt_categories, "required_receipt_categories")
         require_strings(self.justification_fields, "justification_fields")
@@ -178,7 +215,9 @@ def build_approval_ready_package(
         required_receipt_categories=list(
             profile.documentation_requirements.required_receipt_categories
         ),
-        justification_fields=list(profile.documentation_requirements.justification_fields),
+        justification_fields=list(
+            profile.documentation_requirements.justification_fields
+        ),
         approval_notes=list(proposal.approval_notes),
         package_summary=_build_package_summary(profile, proposal, evaluation, posture),
         readiness_checks=_build_readiness_checks(profile, proposal, evaluation),
@@ -219,7 +258,9 @@ def _build_package_summary(
     if evaluation.approval_requirements:
         summary.append(
             "Approval route: "
-            + ", ".join(requirement.role for requirement in evaluation.approval_requirements)
+            + ", ".join(
+                requirement.role for requirement in evaluation.approval_requirements
+            )
         )
     if proposal.requested_exception is not None:
         summary.append(
@@ -243,7 +284,9 @@ def _build_readiness_checks(
                 "ready"
                 if (
                     proposal.booking_channel_summaries
-                    and all(item.approved for item in proposal.booking_channel_summaries)
+                    and all(
+                        item.approved for item in proposal.booking_channel_summaries
+                    )
                 )
                 else "attention"
             ),
@@ -261,13 +304,18 @@ def _build_readiness_checks(
             label="Comparables attached when required",
             status=(
                 "ready"
-                if (not documentation_rules.comparable_capture_required or proposal.comparables)
+                if (
+                    not documentation_rules.comparable_capture_required
+                    or proposal.comparables
+                )
                 else "attention"
             ),
             notes=[
-                f"{len(proposal.comparables)} comparable option(s) attached"
-                if proposal.comparables
-                else "No comparable options attached"
+                (
+                    f"{len(proposal.comparables)} comparable option(s) attached"
+                    if proposal.comparables
+                    else "No comparable options attached"
+                )
             ],
         ),
         ApprovalReadinessCheck(
@@ -308,7 +356,10 @@ def _build_readiness_checks(
             ),
         ),
     ]
-    if proposal.requested_exception is not None or evaluation.status == "exception_required":
+    if (
+        proposal.requested_exception is not None
+        or evaluation.status == "exception_required"
+    ):
         checks.append(
             ApprovalReadinessCheck(
                 key="exception_packet",

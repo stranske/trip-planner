@@ -36,7 +36,9 @@ def test_builds_clean_approval_ready_package() -> None:
     assert package.package_status == expected["package_status"]
     assert package.scenario_posture == expected["scenario_posture"]
     assert package.approval_roles == expected["approval_roles"]
-    assert package.required_receipt_categories == expected["required_receipt_categories"]
+    assert (
+        package.required_receipt_categories == expected["required_receipt_categories"]
+    )
     assert package.justification_fields == expected["justification_fields"]
     assert package.package_summary[0].startswith("Business justification:")
     assert "Policy status: compliant" in package.package_summary
@@ -52,10 +54,14 @@ def test_builds_exception_ready_package() -> None:
     assert package.package_status == expected["package_status"]
     assert package.scenario_posture == expected["scenario_posture"]
     assert package.approval_roles == expected["approval_roles"]
-    assert package.required_receipt_categories == expected["required_receipt_categories"]
+    assert (
+        package.required_receipt_categories == expected["required_receipt_categories"]
+    )
     assert package.justification_fields == expected["justification_fields"]
     assert package.requested_exception is not None
-    assert package.preferred_alternatives[0].comparable_ref == "lodging:within-cap-motel"
+    assert (
+        package.preferred_alternatives[0].comparable_ref == "lodging:within-cap-motel"
+    )
     assert package.failure_reasons[0].severity == "warning"
 
     readiness_statuses = {item.key: item.status for item in package.readiness_checks}

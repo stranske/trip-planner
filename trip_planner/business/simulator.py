@@ -9,7 +9,11 @@ from typing import Any
 from trip_planner._validators import require_non_empty, require_strings
 
 from .approval_ready import ApprovalReadyPackage, build_approval_ready_package
-from .policy_contracts import PolicyConstraintSet, PolicyEvaluationResult, TripPlanProposal
+from .policy_contracts import (
+    PolicyConstraintSet,
+    PolicyEvaluationResult,
+    TripPlanProposal,
+)
 from .profile import BusinessTravelProfile
 
 
@@ -30,11 +34,15 @@ class PolicySimulationCase:
         if self.fixture_proposal is not None and not isinstance(
             self.fixture_proposal, TripPlanProposal
         ):
-            raise ValueError("fixture_proposal must be a TripPlanProposal when provided")
+            raise ValueError(
+                "fixture_proposal must be a TripPlanProposal when provided"
+            )
         if self.fixture_constraint_set is not None and not isinstance(
             self.fixture_constraint_set, PolicyConstraintSet
         ):
-            raise ValueError("fixture_constraint_set must be a PolicyConstraintSet when provided")
+            raise ValueError(
+                "fixture_constraint_set must be a PolicyConstraintSet when provided"
+            )
         require_strings(self.notes, "notes")
 
     def to_dict(self) -> dict[str, Any]:
@@ -48,7 +56,9 @@ class PolicySimulationCase:
         return cls(
             case_id=payload["case_id"],
             description=payload["description"],
-            evaluation_result=PolicyEvaluationResult.from_dict(payload["evaluation_result"]),
+            evaluation_result=PolicyEvaluationResult.from_dict(
+                payload["evaluation_result"]
+            ),
             fixture_proposal=(
                 TripPlanProposal.from_dict(payload["fixture_proposal"])
                 if payload.get("fixture_proposal")
@@ -96,7 +106,9 @@ class PolicyEvaluationSimulator:
     def case_ids(self) -> list[str]:
         return sorted(self._cases)
 
-    def evaluate(self, proposal: TripPlanProposal, *, case_id: str) -> PolicyEvaluationResult:
+    def evaluate(
+        self, proposal: TripPlanProposal, *, case_id: str
+    ) -> PolicyEvaluationResult:
         if case_id not in self._cases:
             available_case_ids = self.case_ids()
             raise ValueError(
@@ -144,7 +156,9 @@ def _validate_simulated_proposal_shape(
         raise ValueError(
             "proposal selected option categories do not match the simulator fixture case"
         )
-    if (proposal.requested_exception is None) != (fixture_proposal.requested_exception is None):
+    if (proposal.requested_exception is None) != (
+        fixture_proposal.requested_exception is None
+    ):
         raise ValueError(
             "proposal exception posture does not match the simulator fixture case"
         )
