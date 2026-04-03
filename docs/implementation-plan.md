@@ -60,6 +60,8 @@ See [source-ingestion-epic.md](source-ingestion-epic.md) for the dependency chai
 
 ### 6. Persistence And Workflow State
 
+Epic anchor: `#537` defines the persistence architecture and sequencing boundary for this layer. See `docs/persistence-architecture.md`.
+
 - `#538` account and traveler-profile persistence
 - `#539` trip persistence
 - `#540` saved scenarios and history
