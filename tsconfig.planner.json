@@ -10,5 +10,10 @@
     "lib": ["ES2022", "DOM"],
     "skipLibCheck": true
   },
-  "include": ["bundle/planner/**/*.js", "bundle/planner/**/*.d.ts"]
+  "include": [
+    "bundle/planner/**/*.js",
+    "bundle/planner/**/*.d.ts",
+    "bundle/app-shell/**/*.js",
+    "bundle/app-shell/**/*.d.ts"
+  ]
 }
