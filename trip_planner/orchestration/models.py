@@ -469,7 +469,9 @@ class PlannerTurn:
         ):
             raise ValueError("next_step.recommended_action_id must refer to an action")
         all_known_output_ids = set(output_ids)
-        if not set(self.workflow_state.recent_output_ids).issubset(all_known_output_ids):
+        if not set(self.workflow_state.recent_output_ids).issubset(
+            all_known_output_ids
+        ):
             raise ValueError("workflow_state.recent_output_ids must refer to outputs")
         if not set(self.next_step.expected_output_ids).issubset(all_known_output_ids):
             raise ValueError("next_step.expected_output_ids must refer to outputs")

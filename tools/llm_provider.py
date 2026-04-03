@@ -120,9 +120,7 @@ def build_langsmith_metadata(
             issue_or_pr_number = (
                 env_pr
                 if env_pr.isdigit()
-                else env_issue
-                if env_issue.isdigit()
-                else "unknown"
+                else env_issue if env_issue.isdigit() else "unknown"
             )
 
     _ensure_langsmith_enabled()

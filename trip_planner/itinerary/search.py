@@ -87,9 +87,9 @@ def _bundle_map(
 
 
 def _normalize_feasibility_outputs(
-    feasibility_outputs: Mapping[str, FeasibilityAssessment]
-    | Sequence[FeasibilityAssessment]
-    | None,
+    feasibility_outputs: (
+        Mapping[str, FeasibilityAssessment] | Sequence[FeasibilityAssessment] | None
+    ),
 ) -> dict[str, FeasibilityAssessment]:
     if feasibility_outputs is None:
         return {}
@@ -237,9 +237,9 @@ def assemble_itinerary_scenarios(
     candidate_set: CandidateSet | None = None,
     bundles: Sequence[InventoryBundle] | None = None,
     objectives: object | None = None,
-    feasibility_outputs: Mapping[str, FeasibilityAssessment]
-    | Sequence[FeasibilityAssessment]
-    | None = None,
+    feasibility_outputs: (
+        Mapping[str, FeasibilityAssessment] | Sequence[FeasibilityAssessment] | None
+    ) = None,
     max_scenarios: int = 3,
     title: str | None = None,
 ) -> ScenarioSearchResult:

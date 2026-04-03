@@ -142,9 +142,10 @@ def test_budget_plan_to_dict_preserves_scenario_derived_totals() -> None:
     scenario_payload = record.scenario_budgets[0].to_dict()
 
     assert "total_planned_amount" not in scenario_payload
-    assert BudgetPlan.from_dict(record.to_dict()).scenario_budgets[
-        0
-    ].total_planned_amount == record.scenario_budgets[0].total_planned_amount
+    assert (
+        BudgetPlan.from_dict(record.to_dict()).scenario_budgets[0].total_planned_amount
+        == record.scenario_budgets[0].total_planned_amount
+    )
 
 
 def test_budget_repository_protocol_can_store_plans_and_spend_events() -> None:
@@ -295,6 +296,9 @@ def test_budget_repository_protocol_can_store_plans_and_spend_events() -> None:
     assert spend_repo.list_spend_events(category_key="client_hospitality")[
         0
     ].trip_id == ("trip-business-client-summit")
-    assert spend_repo.list_spend_events(
-        scenario_budget_id="budget-scenario:client-summit-compliant"
-    )[0].category_key == "client_hospitality"
+    assert (
+        spend_repo.list_spend_events(
+            scenario_budget_id="budget-scenario:client-summit-compliant"
+        )[0].category_key
+        == "client_hospitality"
+    )

@@ -878,9 +878,9 @@ class LeisureRankingEngine:
                 ),
                 factor_keys=[item.contribution_id for item in dominant],
                 machine_context={
-                    "primary_axis": dominant[0].contribution_id
-                    if dominant
-                    else "anchor_alignment",
+                    "primary_axis": (
+                        dominant[0].contribution_id if dominant else "anchor_alignment"
+                    ),
                     "confidence": f"{confidence_summary.overall_confidence or 0.0:.2f}",
                 },
                 human_summary=[item.label for item in dominant]
@@ -972,9 +972,11 @@ class LeisureRankingEngine:
                 RiskFlag(
                     risk_id=f"risk:{assessment.bundle_id}:{blocking_reason}",
                     code=blocking_reason,
-                    severity="critical"
-                    if not assessment.recommended_for_ranking
-                    else "warning",
+                    severity=(
+                        "critical"
+                        if not assessment.recommended_for_ranking
+                        else "warning"
+                    ),
                     summary=f"Feasibility issue remains unresolved: {blocking_reason}.",
                     blocking=not assessment.recommended_for_ranking,
                 )

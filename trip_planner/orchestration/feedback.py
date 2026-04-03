@@ -212,9 +212,11 @@ def build_feedback_loop_result(
         context.session_state,
         updated_at=context.generated_at,
         recent_option_presentations=[
-            updated_presentation
-            if item.presentation_id == presentation.presentation_id
-            else item
+            (
+                updated_presentation
+                if item.presentation_id == presentation.presentation_id
+                else item
+            )
             for item in context.session_state.recent_option_presentations
         ],
     )

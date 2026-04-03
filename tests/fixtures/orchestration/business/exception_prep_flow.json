@@ -1,0 +1,51 @@
+{
+  "generated_at": "2026-04-02T18:40:00Z",
+  "trip_fixture": "business_active_trip.json",
+  "profile_fixture": "site_visit_profile.json",
+  "policy_fixture": "policy_round_trip_exception.json",
+  "proposal_policy_fixture": "policy_round_trip_exception.json",
+  "selected_path": "exception_nearest",
+  "collected_policy_inputs": {
+    "site access necessity": "The audit requires on-site inspection across two facilities.",
+    "inspection schedule rigidity": "Primary access begins at 07:30 and cannot move.",
+    "exception rationale": "An extra lodging night prevents unsafe overnight driving before the audit."
+  },
+  "comparable_inventory": {
+    "airfare": 2,
+    "lodging": 2,
+    "car_rental": 2
+  },
+  "trip_overrides": {
+    "trip": {
+      "trip_id": "trip-business-site-visit-001",
+      "title": "Operational audit site visit",
+      "summary": "Exception-nearest planning packet for fatigue-safe routing.",
+      "artifacts": {
+        "objective_id": "objective:site-visit-001",
+        "option_set_ids": [
+          "option-set:site-visit-airfare",
+          "option-set:site-visit-lodging",
+          "option-set:site-visit-car"
+        ],
+        "policy_state_id": "policy-state:site-visit-001"
+      }
+    },
+    "artifact_refs": {
+      "objective_id": "objective:site-visit-001",
+      "option_set_ids": [
+        "option-set:site-visit-airfare",
+        "option-set:site-visit-lodging",
+        "option-set:site-visit-car"
+      ],
+      "ranked_result_set_id": "ranked-results:site-visit-001",
+      "scenario_search_id": "scenario-search:site-visit-001",
+      "saved_scenario_ids": [
+        "saved-scenario:site-visit-compliant",
+        "saved-scenario:site-visit-exception"
+      ],
+      "policy_state_id": "policy-state:site-visit-001",
+      "session_state_id": "session-state:site-visit-001",
+      "activity_log_id": "activity-log:site-visit-001"
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "generated_at": "2026-04-02T18:00:00Z",
+  "trip_fixture": "business_active_trip.json",
+  "profile_fixture": "conference_profile.json",
+  "policy_fixture": "policy_round_trip_compliant.json",
+  "proposal_policy_fixture": "policy_round_trip_compliant.json",
+  "selected_path": "compliant_first",
+  "collected_policy_inputs": {
+    "conference relevance": "Conference sessions support FY26 partner roadmap priorities.",
+    "expected partner meetings": "Three partner meetings and one sponsor briefing are scheduled onsite."
+  },
+  "comparable_inventory": {
+    "airfare": 2,
+    "lodging": 2
+  },
+  "trip_overrides": {
+    "trip": {
+      "trip_id": "trip-business-conference-001",
+      "title": "Conference partner summit",
+      "summary": "Conference travel packet under active review.",
+      "artifacts": {
+        "objective_id": "objective:conference-001",
+        "option_set_ids": [
+          "option-set:conference-airfare",
+          "option-set:conference-lodging"
+        ],
+        "policy_state_id": "policy-state:conference-001"
+      }
+    },
+    "artifact_refs": {
+      "objective_id": "objective:conference-001",
+      "option_set_ids": [
+        "option-set:conference-airfare",
+        "option-set:conference-lodging"
+      ],
+      "ranked_result_set_id": "ranked-results:conference-001",
+      "scenario_search_id": "scenario-search:conference-001",
+      "saved_scenario_ids": [
+        "saved-scenario:conference-compliant"
+      ],
+      "policy_state_id": "policy-state:conference-001",
+      "session_state_id": "session-state:conference-001",
+      "activity_log_id": "activity-log:conference-001"
+    }
+  }
+}
