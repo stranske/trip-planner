@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -147,6 +148,7 @@ def test_reoptimization_rejects_mismatched_evaluation_result() -> None:
 
 def test_reoptimization_context_rejects_non_list_ref_mapping_values() -> None:
     _, _, context = _build_inputs("fixable_failure.json")
+    bad_mapping: dict[str, Any] = {"lodging": "comparable:lodging:policy-cap"}
 
     with pytest.raises(
         ValueError,
@@ -154,6 +156,6 @@ def test_reoptimization_context_rejects_non_list_ref_mapping_values() -> None:
     ):
         PolicyReoptimizationContext(
             source_version=context.source_version,
-            comparable_refs={"lodging": "comparable:lodging:policy-cap"},  # type: ignore[arg-type]
+            comparable_refs=bad_mapping,
             justification_refs=context.justification_refs,
         )
