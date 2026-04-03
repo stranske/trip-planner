@@ -1,0 +1,50 @@
+{
+  "request": {
+    "operation": "submit_proposal",
+    "request_id": "req-submit-001",
+    "correlation_id": {
+      "value": "corr-submit-001",
+      "issued_by": "trip-planner"
+    },
+    "payload": {
+      "proposal_ref": "proposal-123",
+      "submission_mode": "queue"
+    },
+    "transport_pattern": "deferred",
+    "organization_id": "org-acme",
+    "trip_id": "trip-100",
+    "proposal_id": "proposal-123",
+    "submitted_at": "2026-04-03T00:41:00Z"
+  },
+  "response": {
+    "operation": "submit_proposal",
+    "request_id": "req-submit-001",
+    "correlation_id": {
+      "value": "corr-submit-001",
+      "issued_by": "trip-planner"
+    },
+    "transport_pattern": "deferred",
+    "execution_status": {
+      "state": "deferred",
+      "terminal": false,
+      "summary": "Proposal queued for evaluation",
+      "poll_after_seconds": 30,
+      "external_status": "202 Accepted",
+      "updated_at": "2026-04-03T00:41:01Z"
+    },
+    "result_payload": {
+      "execution_id": "exec-001",
+      "queue_state": "waiting_for_policy_engine"
+    },
+    "retry": {
+      "attempt": 0,
+      "max_attempts": 5,
+      "retryable": true,
+      "backoff_seconds": 30,
+      "next_retry_at": "2026-04-03T00:41:31Z",
+      "reason": "Await evaluator completion"
+    },
+    "received_at": "2026-04-03T00:41:01Z",
+    "status_endpoint": "https://tpp.example.test/executions/exec-001"
+  }
+}

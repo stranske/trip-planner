@@ -1,0 +1,54 @@
+{
+  "request": {
+    "operation": "fetch_evaluation_result",
+    "request_id": "req-result-001",
+    "correlation_id": {
+      "value": "corr-result-001",
+      "issued_by": "trip-planner"
+    },
+    "payload": {
+      "execution_id": "exec-002"
+    },
+    "transport_pattern": "async",
+    "organization_id": "org-acme",
+    "trip_id": "trip-100",
+    "proposal_id": "proposal-123",
+    "submitted_at": "2026-04-03T00:42:00Z"
+  },
+  "response": {
+    "operation": "fetch_evaluation_result",
+    "request_id": "req-result-001",
+    "correlation_id": {
+      "value": "corr-result-001",
+      "issued_by": "trip-planner"
+    },
+    "transport_pattern": "async",
+    "execution_status": {
+      "state": "failed",
+      "terminal": true,
+      "summary": "Evaluator returned an integration error",
+      "external_status": "502 Bad Gateway",
+      "updated_at": "2026-04-03T00:42:02Z"
+    },
+    "error": {
+      "code": "upstream_unavailable",
+      "message": "Travel-Plan-Permission did not return a valid evaluation payload.",
+      "category": "upstream",
+      "retryable": true,
+      "details": {
+        "provider": "Travel-Plan-Permission",
+        "http_status": 502
+      }
+    },
+    "retry": {
+      "attempt": 1,
+      "max_attempts": 4,
+      "retryable": true,
+      "backoff_seconds": 60,
+      "next_retry_at": "2026-04-03T00:43:02Z",
+      "reason": "Transient upstream outage"
+    },
+    "received_at": "2026-04-03T00:42:02Z",
+    "status_endpoint": "https://tpp.example.test/executions/exec-002"
+  }
+}
