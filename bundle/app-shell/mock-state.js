@@ -541,6 +541,7 @@ const inTripRevisionBudgetSummary = {
 const leisureVisualizationScenarios = [
   {
     scenario_id: "scenario-lisbon-regional-loop",
+    mode: "leisure",
     title: "Lisbon regional loop",
     variant_label: "base route",
     summary: "Keeps Lisbon as the lodging anchor while layering one Sintra day and one riverfront recovery day.",
@@ -643,6 +644,7 @@ const leisureVisualizationScenarios = [
   },
   {
     scenario_id: "scenario-lisbon-scenic-transit",
+    mode: "leisure",
     title: "Scenic transit variant",
     variant_label: "scenic route",
     summary: "Trades one extra transfer for ferry and tram segments that turn the route itself into part of the trip value.",
@@ -721,6 +723,7 @@ const leisureVisualizationScenarios = [
 const businessVisualizationScenarios = [
   {
     scenario_id: "scenario-seattle-meeting-window",
+    mode: "business",
     title: "Meeting-window compliant route",
     variant_label: "business base route",
     summary: "Centers the hotel near the client site so the pre-dawn audit window stays resilient.",

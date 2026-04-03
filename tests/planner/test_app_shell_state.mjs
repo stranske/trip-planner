@@ -336,6 +336,14 @@ test("mounted app shell can switch between visualization scenarios", () => {
   );
   assert.match(mountNode.innerHTML, /Lisbon regional loop/);
   assert.match(mountNode.innerHTML, /Sintra day cluster/);
+  assert.match(
+    mountNode.innerHTML,
+    /data-shell-visualization-scenario="scenario-lisbon-regional-loop"[^>]*aria-pressed="true"/
+  );
+  assert.match(
+    mountNode.innerHTML,
+    /data-shell-visualization-scenario="scenario-lisbon-scenic-transit"[^>]*aria-pressed="false"/
+  );
 
   mountNode.click(
     new FakeButton({
@@ -349,7 +357,10 @@ test("mounted app shell can switch between visualization scenarios", () => {
   );
   assert.match(mountNode.innerHTML, /Scenic transit variant/);
   assert.match(mountNode.innerHTML, /River ferry stitch/);
-  assert.match(mountNode.innerHTML, /aria-pressed="true"/);
+  assert.match(
+    mountNode.innerHTML,
+    /data-shell-visualization-scenario="scenario-lisbon-scenic-transit"[^>]*aria-pressed="true"/
+  );
   assert.match(mountNode.innerHTML, /shell-mode-pill--leisure/);
 });
 
@@ -361,6 +372,7 @@ test("trip workspace keeps scenario switcher mode aligned to the active business
 
   assert.match(rendered, /shell-mode-pill--business/);
   assert.match(rendered, /aria-pressed="true"/);
+  assert.match(rendered, /shell-mode-pill--business">business base route/);
 });
 
 test("trip workspace falls back to textual guidance when map data is missing", () => {

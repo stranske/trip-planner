@@ -328,7 +328,6 @@ export function createAppShellStore(initialState) {
       }
 
       const isTripChange = state.workspace.trip_id !== session.trip_id;
-
       state = buildAppShellState({
         ...state,
         active_trip_id: session.trip_id,
@@ -748,11 +747,11 @@ function renderScenarioSwitcher(workspace, tripMode) {
                 type="button"
                 class="shell-trip-card shell-trip-card--launch${scenario.scenario_id === workspace.active_visualization_scenario_id ? " is-active" : ""}"
                 data-shell-visualization-scenario="${escapeAttribute(scenario.scenario_id)}"
-                aria-pressed="${scenario.scenario_id === workspace.active_visualization_scenario_id}"
+                aria-pressed="${scenario.scenario_id === workspace.active_visualization_scenario_id ? "true" : "false"}"
               >
                 <div class="shell-trip-card-header">
                   <strong>${escapeHtml(scenario.title)}</strong>
-                  <span class="shell-mode-pill shell-mode-pill--${escapeAttribute(tripMode)}">${escapeHtml(scenario.variant_label)}</span>
+                  <span class="shell-mode-pill shell-mode-pill--${escapeAttribute(scenario.mode)}">${escapeHtml(scenario.variant_label)}</span>
                 </div>
                 <p>${escapeHtml(scenario.summary)}</p>
                 <div class="shell-chip-row">

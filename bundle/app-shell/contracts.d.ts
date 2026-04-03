@@ -168,6 +168,7 @@ export interface FrontendVisualizationTimelineDayRecord {
 
 export interface FrontendScenarioVisualizationRecord {
   scenario_id: string;
+  mode: TripMode;
   title: string;
   variant_label: string;
   summary: string;
