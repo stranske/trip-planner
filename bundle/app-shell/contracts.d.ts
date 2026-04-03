@@ -14,13 +14,20 @@ export type AppRouteId =
   | "planner_workspace"
   | "approval_center";
 
+export type TripMode = "leisure" | "business";
+
+export type LaunchFlowId =
+  | "new_leisure_trip"
+  | "new_business_trip"
+  | "resume_existing_trip";
+
 export type WorkspaceStatus = "ready" | "loading" | "empty" | "error";
 
 export interface SessionUserRecord {
   user_id: string;
   display_name: string;
   organization?: string | null;
-  default_trip_mode: "leisure" | "business";
+  default_trip_mode: TripMode;
 }
 
 export interface FrontendTripSummaryRecord {
@@ -35,6 +42,45 @@ export interface FrontendTripSummaryRecord {
   scenario_count: number;
   pending_checkpoint_count: number;
   policy_state: PlannerPanelState["policy_evaluation"]["status"] | null;
+}
+
+export interface FrontendTravelerProfileRecord {
+  profile_id: string;
+  mode: TripMode;
+  label: string;
+  summary: string;
+  readiness: string;
+}
+
+export interface FrontendRecentSessionRecord {
+  session_id: string;
+  trip_id: TripRecord["trip_id"] | null;
+  mode: TripMode;
+  label: string;
+  summary: string;
+  last_active_label: string;
+  resume_route: AppRouteId;
+}
+
+export interface FrontendLaunchFlowRecord {
+  launch_id: LaunchFlowId;
+  mode: TripMode;
+  title: string;
+  summary: string;
+  cta_label: string;
+  starting_needs: string[];
+  profile_id: string | null;
+  trip_id: TripRecord["trip_id"] | null;
+  recent_session_id: string | null;
+  policy_context: string | null;
+}
+
+export interface FrontendAccountEntryRecord {
+  traveler_profiles: FrontendTravelerProfileRecord[];
+  recent_sessions: FrontendRecentSessionRecord[];
+  launch_flows: FrontendLaunchFlowRecord[];
+  selected_launch_id: LaunchFlowId | null;
+  empty_state_message: string | null;
 }
 
 export interface FrontendAppRouteRecord {
@@ -61,5 +107,6 @@ export interface FrontendShellState {
   active_route: AppRouteId;
   trips: FrontendTripSummaryRecord[];
   active_trip_id: string | null;
+  account_entry: FrontendAccountEntryRecord;
   workspace: FrontendWorkspaceRecord;
 }

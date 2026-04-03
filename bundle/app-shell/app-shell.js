@@ -3,9 +3,13 @@
  *
  * @import {
  *   AppRouteId,
- *   FrontendAppRouteRecord,
+  *   FrontendAppRouteRecord,
+ *   FrontendAccountEntryRecord,
+ *   FrontendLaunchFlowRecord,
+ *   FrontendRecentSessionRecord,
  *   FrontendShellState,
  *   FrontendTripSummaryRecord,
+ *   LaunchFlowId,
  *   FrontendWorkspaceRecord,
  *   WorkspaceStatus,
  * } from "./contracts"
@@ -72,6 +76,30 @@ function escapeAttribute(value) {
 
 /**
  * @param {FrontendShellState["session"]} session
+ * @param {FrontendAccountEntryRecord | Partial<FrontendAccountEntryRecord> | undefined} accountEntry
+ * @returns {FrontendAccountEntryRecord}
+ */
+function normalizeAccountEntry(session, accountEntry) {
+  const launchFlows = accountEntry?.launch_flows ?? [];
+  const selectedLaunchId = launchFlows.some(
+    (flow) => flow.launch_id === accountEntry?.selected_launch_id
+  )
+    ? accountEntry?.selected_launch_id
+    : launchFlows.find((flow) => flow.mode === session.default_trip_mode)?.launch_id ??
+      launchFlows[0]?.launch_id ??
+      null;
+
+  return {
+    traveler_profiles: accountEntry?.traveler_profiles ?? [],
+    recent_sessions: accountEntry?.recent_sessions ?? [],
+    launch_flows: launchFlows,
+    selected_launch_id: selectedLaunchId,
+    empty_state_message: accountEntry?.empty_state_message ?? null,
+  };
+}
+
+/**
+ * @param {FrontendShellState["session"]} session
  * @param {FrontendTripSummaryRecord[]} trips
  * @param {string | null} activeTripId
  * @returns {FrontendTripSummaryRecord | null}
@@ -132,6 +160,7 @@ function getDefaultRoute(activeTrip, workspace) {
  *   trips?: FrontendTripSummaryRecord[];
  *   active_trip_id?: string | null;
  *   active_route?: AppRouteId;
+ *   account_entry?: Partial<FrontendAccountEntryRecord>;
  *   workspace?: Partial<FrontendWorkspaceRecord>;
  * }} input
  * @returns {FrontendShellState}
@@ -139,6 +168,7 @@ function getDefaultRoute(activeTrip, workspace) {
 export function buildAppShellState(input) {
   const trips = input.trips ?? [];
   const activeTrip = resolveActiveTrip(input.session, trips, input.active_trip_id ?? null);
+  const accountEntry = normalizeAccountEntry(input.session, input.account_entry);
   const workspace = {
     trip_id: input.workspace?.trip_id ?? activeTrip?.trip_id ?? null,
     status:
@@ -160,6 +190,7 @@ export function buildAppShellState(input) {
     active_route: activeRoute,
     trips,
     active_trip_id: activeTrip?.trip_id ?? null,
+    account_entry: accountEntry,
     workspace,
   };
 }
@@ -209,6 +240,66 @@ export function createAppShellStore(initialState) {
       });
       notify();
     },
+    setEntryLaunch(launchId) {
+      if (!state.account_entry.launch_flows.some((flow) => flow.launch_id === launchId)) {
+        return;
+      }
+
+      state = buildAppShellState({
+        ...state,
+        active_route: "dashboard",
+        account_entry: {
+          ...state.account_entry,
+          selected_launch_id: launchId,
+        },
+        workspace: {
+          ...state.workspace,
+          status: "empty",
+          loading_message: null,
+          error_message: null,
+        },
+      });
+      notify();
+    },
+    resumeSession(sessionId) {
+      const session = state.account_entry.recent_sessions.find(
+        (candidate) => candidate.session_id === sessionId
+      );
+
+      if (!session?.trip_id) {
+        state = buildAppShellState({
+          ...state,
+          active_route: "dashboard",
+          workspace: {
+            ...state.workspace,
+            status: "error",
+            loading_message: null,
+            error_message: "Selected session is no longer available.",
+          },
+        });
+        notify();
+        return;
+      }
+
+      state = buildAppShellState({
+        ...state,
+        active_trip_id: session.trip_id,
+        active_route: session.resume_route,
+        account_entry: {
+          ...state.account_entry,
+          selected_launch_id: "resume_existing_trip",
+        },
+        workspace: {
+          ...state.workspace,
+          trip_id: session.trip_id,
+          status: "empty",
+          planner_panel_state: null,
+          loading_message: "Rehydrating the saved session entry point.",
+          error_message: null,
+        },
+      });
+      notify();
+    },
     setWorkspaceStatus(status, message = null) {
       state = buildAppShellState({
         ...state,
@@ -245,6 +336,26 @@ function formatStatusLabel(status) {
 }
 
 /**
+ * @param {FrontendRecentSessionRecord} session
+ * @returns {string}
+ */
+function renderRecentSessionCard(session) {
+  return `
+    <button type="button" class="shell-trip-card shell-trip-card--session" data-shell-session="${escapeAttribute(session.session_id)}">
+      <div class="shell-trip-card-header">
+        <strong>${escapeHtml(session.label)}</strong>
+        <span class="shell-mode-pill shell-mode-pill--${escapeAttribute(session.mode)}">${escapeHtml(session.mode)}</span>
+      </div>
+      <p>${escapeHtml(session.summary)}</p>
+      <div class="shell-chip-row">
+        <span class="shell-chip">${escapeHtml(session.last_active_label)}</span>
+        <span class="shell-chip">${escapeHtml(`resume ${session.resume_route}`)}</span>
+      </div>
+    </button>
+  `;
+}
+
+/**
  * @param {FrontendTripSummaryRecord} trip
  * @returns {string}
  */
@@ -263,6 +374,123 @@ function renderTripSummaryCard(trip) {
         <span class="shell-chip">${escapeHtml(`${trip.pending_checkpoint_count} checkpoints`)}</span>
       </div>
     </button>
+  `;
+}
+
+/**
+ * @param {FrontendLaunchFlowRecord} flow
+ * @param {boolean} isSelected
+ * @returns {string}
+ */
+function renderLaunchFlowCard(flow, isSelected) {
+  return `
+    <button
+      type="button"
+      class="shell-trip-card shell-trip-card--launch${isSelected ? " is-active" : ""}"
+      data-shell-launch="${escapeAttribute(flow.launch_id)}"
+    >
+      <div class="shell-trip-card-header">
+        <strong>${escapeHtml(flow.title)}</strong>
+        <span class="shell-mode-pill shell-mode-pill--${escapeAttribute(flow.mode)}">${escapeHtml(flow.mode)}</span>
+      </div>
+      <p>${escapeHtml(flow.summary)}</p>
+      <div class="shell-chip-row">
+        <span class="shell-chip">${escapeHtml(flow.cta_label)}</span>
+        <span class="shell-chip">${escapeHtml(`${flow.starting_needs.length} startup cues`)}</span>
+      </div>
+    </button>
+  `;
+}
+
+/**
+ * @param {FrontendShellState["account_entry"]["traveler_profiles"][number]} profile
+ * @returns {string}
+ */
+function renderTravelerProfileCard(profile) {
+  return `
+    <article class="shell-panel shell-panel--profile">
+      <div class="shell-panel-header">
+        <h3>${escapeHtml(profile.label)}</h3>
+        <span class="shell-meta">${escapeHtml(profile.mode)}</span>
+      </div>
+      <p>${escapeHtml(profile.summary)}</p>
+      <p class="shell-meta">${escapeHtml(profile.readiness)}</p>
+    </article>
+  `;
+}
+
+/**
+ * @param {FrontendShellState} state
+ * @returns {FrontendLaunchFlowRecord | null}
+ */
+function getSelectedLaunchFlow(state) {
+  return (
+    state.account_entry.launch_flows.find(
+      (flow) => flow.launch_id === state.account_entry.selected_launch_id
+    ) ?? null
+  );
+}
+
+/**
+ * @param {FrontendShellState} state
+ * @returns {string}
+ */
+function renderSelectedLaunchFlow(state) {
+  const flow = getSelectedLaunchFlow(state);
+  if (!flow) {
+    return `
+      <section class="shell-panel">
+        <div class="shell-panel-header">
+          <h3>Launch detail</h3>
+          <span class="shell-meta">no launch selected</span>
+        </div>
+        <p>Select a launch option to see the startup data the entry layer must persist.</p>
+      </section>
+    `;
+  }
+
+  const linkedSession = flow.recent_session_id
+    ? state.account_entry.recent_sessions.find(
+        (session) => session.session_id === flow.recent_session_id
+      )
+    : null;
+  const linkedTrip = flow.trip_id
+    ? state.trips.find((trip) => trip.trip_id === flow.trip_id) ?? null
+    : null;
+
+  return `
+    <section class="shell-panel">
+      <div class="shell-panel-header">
+        <h3>${escapeHtml(flow.title)}</h3>
+        <span class="shell-meta">${escapeHtml(flow.cta_label)}</span>
+      </div>
+      <p>${escapeHtml(flow.summary)}</p>
+      <ul class="shell-list">
+        ${flow.starting_needs.map((need) => `<li>${escapeHtml(need)}</li>`).join("")}
+      </ul>
+      <div class="shell-chip-row">
+        ${
+          flow.profile_id
+            ? `<span class="shell-chip">${escapeHtml(`profile ${flow.profile_id}`)}</span>`
+            : ""
+        }
+        ${
+          linkedSession
+            ? `<span class="shell-chip">${escapeHtml(`session ${linkedSession.label}`)}</span>`
+            : ""
+        }
+        ${
+          linkedTrip
+            ? `<span class="shell-chip">${escapeHtml(`trip ${linkedTrip.title}`)}</span>`
+            : ""
+        }
+      </div>
+      ${
+        flow.policy_context
+          ? `<p class="shell-meta">${escapeHtml(flow.policy_context)}</p>`
+          : ""
+      }
+    </section>
   `;
 }
 
@@ -319,27 +547,83 @@ export function renderWorkspaceStatusBoundary(workspace) {
  * @returns {string}
  */
 function renderDashboardView(state) {
+  const hasRecentSessions = state.account_entry.recent_sessions.length > 0;
+  const hasSavedTrips = state.trips.length > 0;
+
   return `
     <section class="shell-view shell-view--dashboard">
       <div class="shell-hero">
         <div>
           <p class="shell-eyebrow">Signed-in planning home</p>
           <h2>${escapeHtml(state.session.display_name)}</h2>
-          <p>${escapeHtml(state.session.organization ?? "Independent traveler")} can resume saved trips or launch a new flow once issue #557 adds entry screens.</p>
+          <p>${escapeHtml(state.session.organization ?? "Independent traveler")} can enter saved planning work, launch a new leisure or business trip, and keep mode-specific startup needs visible from the first screen.</p>
         </div>
         <div class="shell-chip-row">
           <span class="shell-chip">${escapeHtml(`${state.trips.length} saved trips`)}</span>
+          <span class="shell-chip">${escapeHtml(`${state.account_entry.recent_sessions.length} recent sessions`)}</span>
           <span class="shell-chip">${escapeHtml(`default ${state.session.default_trip_mode} mode`)}</span>
         </div>
       </div>
+      ${
+        state.account_entry.empty_state_message
+          ? `
+            <section class="shell-status shell-status--empty" aria-label="Entry empty state">
+              <strong>Trip entry is ready for first use</strong>
+              <p>${escapeHtml(state.account_entry.empty_state_message)}</p>
+            </section>
+          `
+          : ""
+      }
+      <section class="shell-panel">
+        <div class="shell-panel-header">
+          <h3>Recent sessions</h3>
+          <span class="shell-meta">resume the last planner or approval checkpoint</span>
+        </div>
+        ${
+          hasRecentSessions
+            ? `
+              <div class="shell-trip-grid">
+                ${state.account_entry.recent_sessions.map((session) => renderRecentSessionCard(session)).join("")}
+              </div>
+            `
+            : "<p class=\"shell-empty-state\">No resumable sessions yet. The next trip launch will create the first one.</p>"
+        }
+      </section>
+      <section class="shell-panel">
+        <div class="shell-panel-header">
+          <h3>Trip launch flows</h3>
+          <span class="shell-meta">new leisure, new business, and resume entry paths</span>
+        </div>
+        <div class="shell-trip-grid">
+          ${state.account_entry.launch_flows
+            .map((flow) => renderLaunchFlowCard(flow, flow.launch_id === state.account_entry.selected_launch_id))
+            .join("")}
+        </div>
+      </section>
+      ${renderSelectedLaunchFlow(state)}
+      <section class="shell-panel">
+        <div class="shell-panel-header">
+          <h3>Traveler profile context</h3>
+          <span class="shell-meta">what account-entry should carry into launch</span>
+        </div>
+        <div class="shell-trip-grid">
+          ${state.account_entry.traveler_profiles.map((profile) => renderTravelerProfileCard(profile)).join("")}
+        </div>
+      </section>
       <section class="shell-panel">
         <div class="shell-panel-header">
           <h3>Saved trips</h3>
           <span class="shell-meta">mode-aware shell entry points</span>
         </div>
-        <div class="shell-trip-grid">
-          ${state.trips.map((trip) => renderTripSummaryCard(trip)).join("")}
-        </div>
+        ${
+          hasSavedTrips
+            ? `
+              <div class="shell-trip-grid">
+                ${state.trips.map((trip) => renderTripSummaryCard(trip)).join("")}
+              </div>
+            `
+            : "<p class=\"shell-empty-state\">No saved trips yet. Launching a new trip should seed the first persisted trip summary.</p>"
+        }
       </section>
       <section class="shell-panel">
         <div class="shell-panel-header">
@@ -572,6 +856,28 @@ export function renderAppShell(mountNode, initialState) {
           detail: store.getState().active_trip_id,
         })
       );
+      return;
+    }
+
+    const launchTarget = event.target.closest("[data-shell-launch]");
+    if (launchTarget?.dataset.shellLaunch) {
+      store.setEntryLaunch(launchTarget.dataset.shellLaunch);
+      mountNode.dispatchEvent(
+        new CustomEvent("shell:launch-change", {
+          detail: store.getState().account_entry.selected_launch_id,
+        })
+      );
+      return;
+    }
+
+    const sessionTarget = event.target.closest("[data-shell-session]");
+    if (sessionTarget?.dataset.shellSession) {
+      store.resumeSession(sessionTarget.dataset.shellSession);
+      mountNode.dispatchEvent(
+        new CustomEvent("shell:session-resume", {
+          detail: store.getState().active_trip_id,
+        })
+      );
     }
   };
 
@@ -586,6 +892,12 @@ export function renderAppShell(mountNode, initialState) {
     },
     setActiveTrip(tripId) {
       store.setActiveTrip(tripId);
+    },
+    setEntryLaunch(launchId) {
+      store.setEntryLaunch(launchId);
+    },
+    resumeSession(sessionId) {
+      store.resumeSession(sessionId);
     },
     destroy() {
       unsubscribe();

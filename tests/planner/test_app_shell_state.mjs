@@ -59,6 +59,14 @@ class FakeButton extends FakeHTMLElement {
       return this;
     }
 
+    if (selector === "[data-shell-launch]" && this.dataset.shellLaunch) {
+      return this;
+    }
+
+    if (selector === "[data-shell-session]" && this.dataset.shellSession) {
+      return this;
+    }
+
     return null;
   }
 }
@@ -79,7 +87,9 @@ async function loadModule(relativePath) {
 
 const {
   appShellStateMocks,
+  firstTimeLeisureDashboardShellState,
   signedInDashboardShellState,
+  businessPolicyStartDashboardShellState,
   activeLeisureTripShellState,
   activeBusinessTripShellState,
 } = await loadModule("bundle/app-shell/mock-state.js");
@@ -93,7 +103,15 @@ const {
 } = await loadModule("bundle/app-shell/app-shell.js");
 
 test("app shell mock catalog exposes signed-in, leisure, and business contexts", () => {
+  assert.equal(
+    appShellStateMocks.first_time_leisure_dashboard,
+    firstTimeLeisureDashboardShellState
+  );
   assert.equal(appShellStateMocks.signed_in_dashboard, signedInDashboardShellState);
+  assert.equal(
+    appShellStateMocks.business_policy_start_dashboard,
+    businessPolicyStartDashboardShellState
+  );
   assert.equal(appShellStateMocks.active_leisure_trip, activeLeisureTripShellState);
   assert.equal(appShellStateMocks.active_business_trip, activeBusinessTripShellState);
 });
@@ -103,8 +121,18 @@ test("app shell derives a dashboard route when no active trip is selected", () =
 
   assert.equal(state.active_route, "dashboard");
   assert.equal(state.active_trip_id, "trip-leisure-lisbon-oct");
+  assert.equal(state.account_entry.selected_launch_id, "resume_existing_trip");
   assert.match(renderAppShellLayout(state), /Signed-in planning home/);
   assert.match(renderAppShellLayout(state), /Seattle audit trip with approval packet/);
+});
+
+test("first-time leisure entry defaults to a new leisure launch", () => {
+  const state = buildAppShellState(firstTimeLeisureDashboardShellState);
+
+  assert.equal(state.account_entry.selected_launch_id, "new_leisure_trip");
+  assert.match(renderAppShellLayout(state), /Trip entry is ready for first use/);
+  assert.match(renderAppShellLayout(state), /Start a new leisure trip/);
+  assert.match(renderAppShellLayout(state), /No saved trips yet/);
 });
 
 test("shell routes stay mode-aware for leisure and business trips", () => {
@@ -159,6 +187,33 @@ test("app shell store updates route and active trip while preserving visible she
   assert.equal(store.getState().active_route, "approval_center");
 });
 
+test("entry store switches launch flows and resumes saved sessions", () => {
+  const store = createAppShellStore(signedInDashboardShellState);
+
+  store.setEntryLaunch("new_business_trip");
+  assert.equal(store.getState().account_entry.selected_launch_id, "new_business_trip");
+
+  store.resumeSession("session-business-audit-approval");
+  assert.equal(store.getState().active_trip_id, "trip-client-audit-sea");
+  assert.equal(store.getState().active_route, "approval_center");
+  assert.equal(
+    store.getState().workspace.loading_message,
+    "Rehydrating the saved session entry point."
+  );
+});
+
+test("entry store reports a deterministic error for missing sessions", () => {
+  const store = createAppShellStore(firstTimeLeisureDashboardShellState);
+
+  store.resumeSession("missing-session");
+  assert.equal(store.getState().active_route, "dashboard");
+  assert.equal(store.getState().workspace.status, "error");
+  assert.equal(
+    store.getState().workspace.error_message,
+    "Selected session is no longer available."
+  );
+});
+
 test("mounted app shell rerenders on route and trip changes", () => {
   const mountNode = new FakeMountNode();
   const controller = renderAppShell(mountNode, activeBusinessTripShellState);
@@ -176,6 +231,24 @@ test("mounted app shell rerenders on route and trip changes", () => {
 
   controller.destroy();
   assert.equal(mountNode.listeners.has("click"), false);
+});
+
+test("mounted dashboard rerenders on launch and session entry interactions", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderAppShell(mountNode, signedInDashboardShellState);
+
+  assert.match(mountNode.innerHTML, /Resume an existing trip/);
+
+  mountNode.click(new FakeButton({ shellLaunch: "new_business_trip" }));
+  assert.equal(controller.getState().account_entry.selected_launch_id, "new_business_trip");
+  assert.match(
+    mountNode.innerHTML,
+    /Hotel zone, approval roles, and spend posture should be seeded/
+  );
+
+  mountNode.click(new FakeButton({ shellSession: "session-leisure-lisbon-planner" }));
+  assert.equal(controller.getState().active_trip_id, "trip-leisure-lisbon-oct");
+  assert.equal(controller.getState().active_route, "planner_workspace");
 });
 
 test("mounted app shell ignores click events from non-element targets", () => {
