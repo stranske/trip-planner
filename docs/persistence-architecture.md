@@ -6,7 +6,7 @@ The goal is to make saved trips, user state, scenario history, budgets, and long
 
 ## Design Intent
 
-- Keep persistence concerns aligned with the domain boundaries already established in `trip_planner/contracts/`, `trip_planner/preferences/`, `trip_planner/business/`, and later orchestration work.
+- Keep persistence concerns aligned with the domain boundaries already established in `trip_planner/contracts/`, `trip_planner/preferences/`, `trip_planner/business/`, and the persisted-state layer under `trip_planner/state/`.
 - Preserve version history and auditability for planning artifacts that are expected to change over time.
 - Keep repository and storage interfaces abstract so later implementation can target local files, SQL stores, document stores, or hybrid backends without redesigning the core records.
 
@@ -87,15 +87,15 @@ Every persistence context above should follow the same baseline rules:
 
 ## Recommended Repository Shape
 
-The implementation work for this epic should build toward a dedicated `trip_planner.persistence` package with submodules that map to the bounded contexts above:
+The implementation work for this epic should align with the current `trip_planner.state` module layout, with submodules that map to the bounded contexts above:
 
-- `profiles`
-- `trips`
-- `scenarios`
-- `budgets`
-- `sessions`
+- `trip_planner.state.profiles`
+- `trip_planner.state.trips`
+- `trip_planner.state.scenarios`
+- `trip_planner.state.budgets`
+- `trip_planner.state.sessions`
 
-That package should define repository contracts and storage-facing record shapes while continuing to reuse the planning contracts from `trip_planner/contracts/` as the canonical domain layer.
+Those `trip_planner.state.*` modules should define repository contracts and storage-facing record shapes while continuing to reuse the planning contracts from `trip_planner/contracts/` as the canonical domain layer. The lightweight `trip_planner.persistence` namespace in this PR is only a planning marker for the bounded contexts and child-issue map; it does not replace the existing `trip_planner.state` package.
 
 ## Child Issue Map
 

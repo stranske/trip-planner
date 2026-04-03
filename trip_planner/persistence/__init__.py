@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-PERSISTENCE_BOUNDED_CONTEXTS = (
+PERSISTENCE_BOUNDED_CONTEXTS: tuple[str, ...] = (
     "profiles",
     "trips",
     "scenarios",
@@ -10,7 +10,7 @@ PERSISTENCE_BOUNDED_CONTEXTS = (
     "sessions",
 )
 
-PERSISTENCE_CHILD_ISSUES = {
+PERSISTENCE_CHILD_ISSUES: dict[str, int] = {
     "profiles": 538,
     "trips": 539,
     "scenarios": 540,
