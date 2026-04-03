@@ -56,7 +56,7 @@ The first pass of this epic should stabilize the following surfaces before more 
 - `trip_planner/integrations/tpp/` for execution clients, sync services, and external exchange semantics
 - `docs/contracts/tpp-execution-contracts.md` for the shared execution-envelope vocabulary
 - `docs/contracts/tpp-policy-sync.md` plus later proposal-submission and approval-packaging docs for downstream consumer guidance
-- `tests/fixtures/tpp/`, `tests/business/`, and `tests/orchestration/` for deterministic execution, policy-sync, and approval-readiness examples
+- `tests/fixtures/integrations/tpp/`, `tests/business/`, and `tests/orchestration/` for deterministic execution, policy-sync, and approval-readiness examples
 
 This keeps later approval-readiness and exception-handling flows additive instead of forcing them to infer execution state from loosely documented service calls.
 
