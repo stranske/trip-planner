@@ -175,6 +175,9 @@ export function buildAppShellState(input) {
       input.workspace?.status ??
       (activeTrip ? "ready" : "empty"),
     planner_panel_state: input.workspace?.planner_panel_state ?? null,
+    scenario_summaries: input.workspace?.scenario_summaries ?? [],
+    checkpoint_history: input.workspace?.checkpoint_history ?? [],
+    budget_summary: input.workspace?.budget_summary ?? null,
     loading_message: input.workspace?.loading_message ?? null,
     error_message: input.workspace?.error_message ?? null,
     persistence_summary: input.workspace?.persistence_summary ?? [],
@@ -229,6 +232,9 @@ export function createAppShellStore(initialState) {
               trip_id: tripId,
               status: "empty",
               planner_panel_state: null,
+              scenario_summaries: [],
+              checkpoint_history: [],
+              budget_summary: null,
               loading_message: null,
               error_message: null,
               persistence_summary: state.workspace.persistence_summary,
@@ -252,12 +258,15 @@ export function createAppShellStore(initialState) {
           ...state.account_entry,
           selected_launch_id: launchId,
         },
-        workspace: {
-          ...state.workspace,
-          status: "empty",
-          loading_message: null,
-          error_message: null,
-        },
+          workspace: {
+            ...state.workspace,
+            status: "empty",
+            scenario_summaries: [],
+            checkpoint_history: [],
+            budget_summary: null,
+            loading_message: null,
+            error_message: null,
+          },
       });
       notify();
     },
@@ -273,6 +282,9 @@ export function createAppShellStore(initialState) {
           workspace: {
             ...state.workspace,
             status: "error",
+            scenario_summaries: [],
+            checkpoint_history: [],
+            budget_summary: null,
             loading_message: null,
             error_message: "Selected session is no longer available.",
           },
@@ -294,6 +306,9 @@ export function createAppShellStore(initialState) {
           trip_id: session.trip_id,
           status: "loading",
           planner_panel_state: null,
+          scenario_summaries: [],
+          checkpoint_history: [],
+          budget_summary: null,
           loading_message: "Rehydrating the saved session entry point.",
           error_message: null,
         },
@@ -653,6 +668,7 @@ function renderTripWorkspaceView(state) {
   const scenarioSummary = plannerState
     ? `${plannerState.outputs.length} outputs, ${plannerState.pending_decisions.length} decision checkpoint, ${plannerState.option_set.options.length} surfaced options`
     : "Planner payload not mounted yet.";
+  const budgetSummary = state.workspace.budget_summary;
 
   return `
     <section class="shell-view shell-view--workspace">
@@ -678,6 +694,101 @@ function renderTripWorkspaceView(state) {
         <ul class="shell-list">
           ${state.workspace.persistence_summary.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
         </ul>
+      </section>
+      <section class="shell-panel">
+        <div class="shell-panel-header">
+          <h3>Scenario comparison</h3>
+          <span class="shell-meta">${escapeHtml(`${state.workspace.scenario_summaries.length} saved scenario views`)}</span>
+        </div>
+        <div class="shell-trip-grid">
+          ${state.workspace.scenario_summaries
+            .map(
+              (scenario) => `
+                <article class="shell-panel shell-panel--profile">
+                  <div class="shell-panel-header">
+                    <h3>${escapeHtml(scenario.title)}</h3>
+                    <span class="shell-meta">${escapeHtml(scenario.status)}</span>
+                  </div>
+                  <p>${escapeHtml(scenario.summary)}</p>
+                  <p class="shell-meta">${escapeHtml(scenario.comparison_note)}</p>
+                  <div class="shell-chip-row">
+                    <span class="shell-chip">${escapeHtml(`${scenario.option_count} ranked options`)}</span>
+                    ${
+                      scenario.checkpoint_id
+                        ? `<span class="shell-chip">${escapeHtml(`checkpoint ${scenario.checkpoint_id}`)}</span>`
+                        : ""
+                    }
+                    ${
+                      scenario.budget_variant_id
+                        ? `<span class="shell-chip">${escapeHtml(`budget ${scenario.budget_variant_id}`)}</span>`
+                        : ""
+                    }
+                  </div>
+                </article>
+              `
+            )
+            .join("")}
+        </div>
+      </section>
+      <section class="shell-panel">
+        <div class="shell-panel-header">
+          <h3>Ranked alternatives</h3>
+          <span class="shell-meta">${escapeHtml(plannerState?.option_set.title ?? "planner option set pending")}</span>
+        </div>
+        ${
+          plannerState
+            ? `
+              <ul class="shell-list">
+                ${plannerState.option_set.options
+                  .map(
+                    (option) =>
+                      `<li><strong>${escapeHtml(option.label)}:</strong> ${escapeHtml(option.summary)} (${escapeHtml(option.explanation.join(" "))})</li>`
+                  )
+                  .join("")}
+              </ul>
+            `
+            : "<p class=\"shell-empty-state\">Ranked alternatives will appear once the planner payload mounts.</p>"
+        }
+      </section>
+      <section class="shell-panel">
+        <div class="shell-panel-header">
+          <h3>Checkpoint history</h3>
+          <span class="shell-meta">${escapeHtml(`${state.workspace.checkpoint_history.length} saved checkpoints`)}</span>
+        </div>
+        <ul class="shell-list">
+          ${state.workspace.checkpoint_history
+            .map(
+              (checkpoint) =>
+                `<li><strong>${escapeHtml(checkpoint.label)}:</strong> ${escapeHtml(checkpoint.summary)} (${escapeHtml(`${checkpoint.status} · ${checkpoint.updated_label}`)})</li>`
+            )
+            .join("")}
+        </ul>
+      </section>
+      <section class="shell-panel">
+        <div class="shell-panel-header">
+          <h3>Budget posture</h3>
+          <span class="shell-meta">${escapeHtml(budgetSummary?.status ?? "not loaded")}</span>
+        </div>
+        ${
+          budgetSummary
+            ? `
+              <p>${escapeHtml(`${budgetSummary.variance_label}. Selected plan ${budgetSummary.currency} ${budgetSummary.selected_total}.`)}</p>
+              <div class="shell-chip-row">
+                <span class="shell-chip">${escapeHtml(`baseline ${budgetSummary.currency} ${budgetSummary.baseline_total}`)}</span>
+                <span class="shell-chip">${escapeHtml(`actual ${budgetSummary.currency} ${budgetSummary.actual_total}`)}</span>
+                <span class="shell-chip">${escapeHtml(budgetSummary.categories.join(" · "))}</span>
+              </div>
+              <ul class="shell-list">
+                ${budgetSummary.variants
+                  .map(
+                    (variant) =>
+                      `<li><strong>${escapeHtml(variant.label)}:</strong> ${escapeHtml(`${budgetSummary.currency} ${variant.total_amount} (${variant.variance_label})`)}</li>`
+                  )
+                  .join("")}
+              </ul>
+            `
+            : "<p class=\"shell-empty-state\">Budget posture will appear once persisted budget state is attached.</p>"
+        }
       </section>
     </section>
   `;

@@ -331,6 +331,213 @@ const businessPlannerPanelState = {
   ],
 };
 
+const leisureWorkspaceScenarios = [
+  {
+    scenario_id: "scenario-lisbon-central",
+    title: "Central Lisbon base",
+    summary: "Keeps tram access and evening spontaneity high for the first half of the trip.",
+    status: "active",
+    comparison_note: "Best score for walkability and short decision loops.",
+    option_count: 3,
+    checkpoint_id: "checkpoint-lisbon-lodging",
+    budget_variant_id: "budget-lisbon-central",
+  },
+  {
+    scenario_id: "scenario-lisbon-riverside",
+    title: "Quiet riverside fallback",
+    summary: "Trades central access for quieter recovery nights and a larger room footprint.",
+    status: "fallback",
+    comparison_note: "Lower nightly spend with a longer first-leg transit pattern.",
+    option_count: 2,
+    checkpoint_id: "checkpoint-lisbon-lodging",
+    budget_variant_id: "budget-lisbon-riverside",
+  },
+];
+
+const leisureCheckpointHistory = [
+  {
+    checkpoint_id: "checkpoint-lisbon-lodging",
+    label: "Lodging tradeoff checkpoint",
+    summary: "Waiting on the central-versus-quiet base-camp preference.",
+    status: "current",
+    scenario_id: "scenario-lisbon-central",
+    updated_label: "Updated 2h ago",
+  },
+  {
+    checkpoint_id: "checkpoint-lisbon-seed",
+    label: "Trip brief capture",
+    summary: "Seeded walkability, fatigue, and soft-landing preferences into the workspace.",
+    status: "saved",
+    scenario_id: "scenario-lisbon-central",
+    updated_label: "Saved yesterday",
+  },
+];
+
+const leisureBudgetSummary = {
+  budget_state_id: "budget-lisbon-01",
+  currency: "USD",
+  baseline_total: 3200,
+  selected_total: 3110,
+  actual_total: 0,
+  status: "healthy",
+  variance_label: "$90 under target",
+  categories: ["lodging", "local transit", "dining"],
+  variants: [
+    {
+      variant_id: "budget-lisbon-central",
+      scenario_id: "scenario-lisbon-central",
+      label: "Central base",
+      total_amount: 3110,
+      variance_label: "$90 under target",
+    },
+    {
+      variant_id: "budget-lisbon-riverside",
+      scenario_id: "scenario-lisbon-riverside",
+      label: "Quiet fallback",
+      total_amount: 2960,
+      variance_label: "$240 under target",
+    },
+  ],
+};
+
+const businessWorkspaceScenarios = [
+  {
+    scenario_id: "scenario-sea-near-client",
+    title: "Primary exception-ready scenario",
+    summary: "Keeps the hotel close to the client site and preserves a low-risk arrival window.",
+    status: "active",
+    comparison_note: "Best operational fit, but requires a hotel-zone exception.",
+    option_count: 1,
+    checkpoint_id: "checkpoint-sea-approval",
+    budget_variant_id: "budget-sea-primary",
+  },
+  {
+    scenario_id: "scenario-sea-downtown",
+    title: "Compliant downtown fallback",
+    summary: "Avoids the exception packet at the cost of a 5:10am transfer and higher arrival risk.",
+    status: "fallback",
+    comparison_note: "Compliance-first alternative for travel-ops review.",
+    option_count: 1,
+    checkpoint_id: "checkpoint-sea-approval",
+    budget_variant_id: "budget-sea-fallback",
+  },
+];
+
+const businessCheckpointHistory = [
+  {
+    checkpoint_id: "checkpoint-sea-approval",
+    label: "Approval packet review",
+    summary: "Comparables and justification are ready for travel ops review.",
+    status: "current",
+    scenario_id: "scenario-sea-near-client",
+    updated_label: "Updated 30m ago",
+  },
+  {
+    checkpoint_id: "checkpoint-sea-kickoff",
+    label: "Policy-aware kickoff",
+    summary: "Captured traveler purpose, audit timing, and exception posture before planning.",
+    status: "saved",
+    scenario_id: "scenario-sea-near-client",
+    updated_label: "Saved yesterday",
+  },
+];
+
+const businessBudgetSummary = {
+  budget_state_id: "budget-sea-01",
+  currency: "USD",
+  baseline_total: 1850,
+  selected_total: 1810,
+  actual_total: 0,
+  status: "watch",
+  variance_label: "$40 under target before exception review",
+  categories: ["lodging", "air", "ground transport"],
+  variants: [
+    {
+      variant_id: "budget-sea-primary",
+      scenario_id: "scenario-sea-near-client",
+      label: "Near-client hotel",
+      total_amount: 1810,
+      variance_label: "$40 under target",
+    },
+    {
+      variant_id: "budget-sea-fallback",
+      scenario_id: "scenario-sea-downtown",
+      label: "Downtown fallback",
+      total_amount: 1725,
+      variance_label: "$125 under target",
+    },
+  ],
+};
+
+const inTripRevisionWorkspaceScenarios = [
+  {
+    scenario_id: "scenario-lisbon-rain-reset",
+    title: "Rain-adjusted active plan",
+    summary: "Rebalances the final two days around indoor stops and lower transfer friction.",
+    status: "revised",
+    comparison_note: "Current best fit after weather drift and spend pressure.",
+    option_count: 3,
+    checkpoint_id: "checkpoint-lisbon-replan",
+    budget_variant_id: "budget-lisbon-rain-reset",
+  },
+  {
+    scenario_id: "scenario-lisbon-central",
+    title: "Original central base",
+    summary: "The pre-replan scenario is still saved as a fallback if conditions improve.",
+    status: "fallback",
+    comparison_note: "Preserved for comparison against the revised route shape.",
+    option_count: 3,
+    checkpoint_id: "checkpoint-lisbon-lodging",
+    budget_variant_id: "budget-lisbon-central",
+  },
+];
+
+const inTripRevisionCheckpointHistory = [
+  {
+    checkpoint_id: "checkpoint-lisbon-replan",
+    label: "In-trip replanning checkpoint",
+    summary: "Weather drift and actual spend triggered a scenario refresh mid-trip.",
+    status: "current",
+    scenario_id: "scenario-lisbon-rain-reset",
+    updated_label: "Updated 20m ago",
+  },
+  {
+    checkpoint_id: "checkpoint-lisbon-lodging",
+    label: "Original lodging decision",
+    summary: "The initial stay-shape decision remains saved for comparison.",
+    status: "revisit",
+    scenario_id: "scenario-lisbon-central",
+    updated_label: "Saved 2 days ago",
+  },
+];
+
+const inTripRevisionBudgetSummary = {
+  budget_state_id: "budget-lisbon-02",
+  currency: "USD",
+  baseline_total: 3200,
+  selected_total: 3345,
+  actual_total: 1860,
+  status: "watch",
+  variance_label: "$145 over target unless the revised scenario holds",
+  categories: ["lodging", "rail", "museum swaps"],
+  variants: [
+    {
+      variant_id: "budget-lisbon-rain-reset",
+      scenario_id: "scenario-lisbon-rain-reset",
+      label: "Rain-adjusted plan",
+      total_amount: 3345,
+      variance_label: "$145 over target",
+    },
+    {
+      variant_id: "budget-lisbon-central",
+      scenario_id: "scenario-lisbon-central",
+      label: "Original plan",
+      total_amount: 3480,
+      variance_label: "$280 over target",
+    },
+  ],
+};
+
 /** @type {FrontendShellState} */
 export const firstTimeLeisureDashboardShellState = {
   session: firstTimeLeisureSession,
@@ -349,6 +556,9 @@ export const firstTimeLeisureDashboardShellState = {
     trip_id: null,
     status: "empty",
     planner_panel_state: null,
+    scenario_summaries: [],
+    checkpoint_history: [],
+    budget_summary: null,
     loading_message: null,
     error_message: null,
     persistence_summary: [
@@ -426,6 +636,9 @@ export const signedInDashboardShellState = {
     trip_id: null,
     status: "empty",
     planner_panel_state: null,
+    scenario_summaries: [],
+    checkpoint_history: [],
+    budget_summary: null,
     loading_message: null,
     error_message: null,
     persistence_summary: [
@@ -473,6 +686,9 @@ export const businessPolicyStartDashboardShellState = {
     trip_id: null,
     status: "empty",
     planner_panel_state: null,
+    scenario_summaries: [],
+    checkpoint_history: [],
+    budget_summary: null,
     loading_message: null,
     error_message: null,
     persistence_summary: [
@@ -494,11 +710,15 @@ export const activeLeisureTripShellState = {
     trip_id: leisurePlannerPanelState.trip.trip_id,
     status: "ready",
     planner_panel_state: leisurePlannerPanelState,
+    scenario_summaries: leisureWorkspaceScenarios,
+    checkpoint_history: leisureCheckpointHistory,
+    budget_summary: leisureBudgetSummary,
     loading_message: null,
     error_message: null,
     persistence_summary: [
       "Scenario history is available from saved-trip state.",
       "Planner checkpoints should reuse orchestration payloads rather than page-local copies.",
+      "Budget variants should stay linked to persisted budget-state ids rather than UI-only totals.",
     ],
   },
 };
@@ -515,11 +735,44 @@ export const activeBusinessTripShellState = {
     trip_id: businessPlannerPanelState.trip.trip_id,
     status: "ready",
     planner_panel_state: businessPlannerPanelState,
+    scenario_summaries: businessWorkspaceScenarios,
+    checkpoint_history: businessCheckpointHistory,
+    budget_summary: businessBudgetSummary,
     loading_message: null,
     error_message: null,
     persistence_summary: [
       "Approval comparables and packet metadata should remain attached to the proposal contract.",
       "Business approval surfaces should sit beside planner state, not replace it.",
+    ],
+  },
+};
+
+/** @type {FrontendShellState} */
+export const inTripRevisionShellState = {
+  session: signedInSession,
+  routes: [],
+  active_route: "trip_workspace",
+  trips: signedInDashboardShellState.trips,
+  active_trip_id: leisurePlannerPanelState.trip.trip_id,
+  account_entry: signedInDashboardShellState.account_entry,
+  workspace: {
+    trip_id: leisurePlannerPanelState.trip.trip_id,
+    status: "ready",
+    planner_panel_state: {
+      ...leisurePlannerPanelState,
+      trip: {
+        ...leisurePlannerPanelState.trip,
+        summary: "Mid-trip replanning is active after weather drift and a tighter spend posture.",
+      },
+    },
+    scenario_summaries: inTripRevisionWorkspaceScenarios,
+    checkpoint_history: inTripRevisionCheckpointHistory,
+    budget_summary: inTripRevisionBudgetSummary,
+    loading_message: null,
+    error_message: null,
+    persistence_summary: [
+      "Revised scenarios should stay linked to the same persisted trip id while checkpoint history keeps the original branch visible.",
+      "Budget drift should point to saved budget-state variants instead of mutating ranked option records.",
     ],
   },
 };
@@ -530,4 +783,5 @@ export const appShellStateMocks = {
   business_policy_start_dashboard: businessPolicyStartDashboardShellState,
   active_leisure_trip: activeLeisureTripShellState,
   active_business_trip: activeBusinessTripShellState,
+  in_trip_revision: inTripRevisionShellState,
 };

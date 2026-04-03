@@ -44,6 +44,46 @@ export interface FrontendTripSummaryRecord {
   policy_state: PlannerPanelState["policy_evaluation"]["status"] | null;
 }
 
+export interface FrontendWorkspaceScenarioRecord {
+  scenario_id: string;
+  title: string;
+  summary: string;
+  status: "active" | "fallback" | "revised";
+  comparison_note: string;
+  option_count: number;
+  checkpoint_id: string | null;
+  budget_variant_id: string | null;
+}
+
+export interface FrontendWorkspaceCheckpointRecord {
+  checkpoint_id: string;
+  label: string;
+  summary: string;
+  status: "current" | "saved" | "revisit";
+  scenario_id: string;
+  updated_label: string;
+}
+
+export interface FrontendWorkspaceBudgetVariantRecord {
+  variant_id: string;
+  scenario_id: string;
+  label: string;
+  total_amount: number;
+  variance_label: string;
+}
+
+export interface FrontendWorkspaceBudgetRecord {
+  budget_state_id: string;
+  currency: string;
+  baseline_total: number;
+  selected_total: number;
+  actual_total: number;
+  status: "healthy" | "watch" | "over";
+  variance_label: string;
+  categories: string[];
+  variants: FrontendWorkspaceBudgetVariantRecord[];
+}
+
 export interface FrontendTravelerProfileRecord {
   profile_id: string;
   mode: TripMode;
@@ -96,6 +136,9 @@ export interface FrontendWorkspaceRecord {
   trip_id: string | null;
   status: WorkspaceStatus;
   planner_panel_state: PlannerPanelState | null;
+  scenario_summaries: FrontendWorkspaceScenarioRecord[];
+  checkpoint_history: FrontendWorkspaceCheckpointRecord[];
+  budget_summary: FrontendWorkspaceBudgetRecord | null;
   loading_message: string | null;
   error_message: string | null;
   persistence_summary: string[];

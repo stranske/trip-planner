@@ -28,6 +28,7 @@
 - [Planner UI integration](docs/planner-ui-integration.md)
 - [Frontend app shell foundation](docs/frontend-app-shell-foundation.md)
 - [Frontend entry flows](docs/frontend-entry-flows.md)
+- [Frontend trip workspace](docs/frontend-trip-workspace.md)
 - [Source and quality model](docs/source-quality-model.md)
 - [Source channel strategy](docs/source-channel-strategy.md)
 - [Legacy itinerary methodology](docs/methodology.md)
