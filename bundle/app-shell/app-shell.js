@@ -46,6 +46,30 @@ const APP_ROUTES = /** @type {const} */ ([
   },
 ]);
 
+const HTML_ESCAPE_LOOKUP = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => HTML_ESCAPE_LOOKUP[character]);
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
+function escapeAttribute(value) {
+  return escapeHtml(value);
+}
+
 /**
  * @param {FrontendShellState["session"]} session
  * @param {FrontendTripSummaryRecord[]} trips
@@ -165,13 +189,23 @@ export function createAppShellStore(initialState) {
       notify();
     },
     setActiveTrip(tripId) {
+      const isTripChange = state.active_trip_id !== tripId;
       state = buildAppShellState({
         ...state,
         active_trip_id: tripId,
-        workspace: {
-          ...state.workspace,
-          trip_id: tripId,
-        },
+        workspace: isTripChange
+          ? {
+              trip_id: tripId,
+              status: "empty",
+              planner_panel_state: null,
+              loading_message: null,
+              error_message: null,
+              persistence_summary: state.workspace.persistence_summary,
+            }
+          : {
+              ...state.workspace,
+              trip_id: tripId,
+            },
       });
       notify();
     },
@@ -216,17 +250,17 @@ function formatStatusLabel(status) {
  */
 function renderTripSummaryCard(trip) {
   return `
-    <button type="button" class="shell-trip-card" data-shell-trip="${trip.trip_id}">
+    <button type="button" class="shell-trip-card" data-shell-trip="${escapeAttribute(trip.trip_id)}">
       <div class="shell-trip-card-header">
-        <strong>${trip.title}</strong>
-        <span class="shell-mode-pill shell-mode-pill--${trip.mode}">${trip.mode}</span>
+        <strong>${escapeHtml(trip.title)}</strong>
+        <span class="shell-mode-pill shell-mode-pill--${escapeAttribute(trip.mode)}">${escapeHtml(trip.mode)}</span>
       </div>
-      <p>${trip.summary}</p>
+      <p>${escapeHtml(trip.summary)}</p>
       <div class="shell-chip-row">
-        <span class="shell-chip">${trip.status}</span>
-        <span class="shell-chip">${trip.primary_regions.join(" · ")}</span>
-        <span class="shell-chip">${trip.scenario_count} scenarios</span>
-        <span class="shell-chip">${trip.pending_checkpoint_count} checkpoints</span>
+        <span class="shell-chip">${escapeHtml(trip.status)}</span>
+        <span class="shell-chip">${escapeHtml(trip.primary_regions.join(" · "))}</span>
+        <span class="shell-chip">${escapeHtml(`${trip.scenario_count} scenarios`)}</span>
+        <span class="shell-chip">${escapeHtml(`${trip.pending_checkpoint_count} checkpoints`)}</span>
       </div>
     </button>
   `;
@@ -245,11 +279,11 @@ function renderRouteTabs(state) {
             <button
               type="button"
               class="shell-route-tab${route.route_id === state.active_route ? " is-active" : ""}"
-              data-shell-route="${route.route_id}"
+              data-shell-route="${escapeAttribute(route.route_id)}"
               aria-pressed="${route.route_id === state.active_route}"
             >
-              <span>${route.label}</span>
-              <small>${route.description}</small>
+              <span>${escapeHtml(route.label)}</span>
+              <small>${escapeHtml(route.description)}</small>
             </button>
           `
         )
@@ -273,9 +307,9 @@ export function renderWorkspaceStatusBoundary(workspace) {
     "Select a trip to start the workspace shell.";
 
   return `
-    <section class="shell-status shell-status--${workspace.status}" aria-label="Workspace status">
-      <strong>${formatStatusLabel(workspace.status)}</strong>
-      <p>${message}</p>
+    <section class="shell-status shell-status--${escapeAttribute(workspace.status)}" aria-label="Workspace status">
+      <strong>${escapeHtml(formatStatusLabel(workspace.status))}</strong>
+      <p>${escapeHtml(message)}</p>
     </section>
   `;
 }
@@ -290,12 +324,12 @@ function renderDashboardView(state) {
       <div class="shell-hero">
         <div>
           <p class="shell-eyebrow">Signed-in planning home</p>
-          <h2>${state.session.display_name}</h2>
-          <p>${state.session.organization ?? "Independent traveler"} can resume saved trips or launch a new flow once issue #557 adds entry screens.</p>
+          <h2>${escapeHtml(state.session.display_name)}</h2>
+          <p>${escapeHtml(state.session.organization ?? "Independent traveler")} can resume saved trips or launch a new flow once issue #557 adds entry screens.</p>
         </div>
         <div class="shell-chip-row">
-          <span class="shell-chip">${state.trips.length} saved trips</span>
-          <span class="shell-chip">default ${state.session.default_trip_mode} mode</span>
+          <span class="shell-chip">${escapeHtml(`${state.trips.length} saved trips`)}</span>
+          <span class="shell-chip">${escapeHtml(`default ${state.session.default_trip_mode} mode`)}</span>
         </div>
       </div>
       <section class="shell-panel">
@@ -313,7 +347,7 @@ function renderDashboardView(state) {
           <span class="shell-meta">what later issues should plug into</span>
         </div>
         <ul class="shell-list">
-          ${state.workspace.persistence_summary.map((item) => `<li>${item}</li>`).join("")}
+          ${state.workspace.persistence_summary.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
         </ul>
       </section>
     </section>
@@ -341,24 +375,24 @@ function renderTripWorkspaceView(state) {
       ${boundary}
       <div class="shell-hero">
         <div>
-          <p class="shell-eyebrow">${activeTrip.mode} workspace</p>
-          <h2>${activeTrip.title}</h2>
-          <p>${activeTrip.summary}</p>
+          <p class="shell-eyebrow">${escapeHtml(`${activeTrip.mode} workspace`)}</p>
+          <h2>${escapeHtml(activeTrip.title)}</h2>
+          <p>${escapeHtml(activeTrip.summary)}</p>
         </div>
         <div class="shell-chip-row">
-          <span class="shell-chip">${activeTrip.start_date ?? "TBD"} to ${activeTrip.end_date ?? "TBD"}</span>
-          <span class="shell-chip">${activeTrip.primary_regions.join(" · ")}</span>
-          <span class="shell-chip">${activeTrip.scenario_count} scenarios</span>
+          <span class="shell-chip">${escapeHtml(`${activeTrip.start_date ?? "TBD"} to ${activeTrip.end_date ?? "TBD"}`)}</span>
+          <span class="shell-chip">${escapeHtml(activeTrip.primary_regions.join(" · "))}</span>
+          <span class="shell-chip">${escapeHtml(`${activeTrip.scenario_count} scenarios`)}</span>
         </div>
       </div>
       <section class="shell-panel">
         <div class="shell-panel-header">
           <h3>Workspace shell contract</h3>
-          <span class="shell-meta">${formatStatusLabel(state.workspace.status)}</span>
+          <span class="shell-meta">${escapeHtml(formatStatusLabel(state.workspace.status))}</span>
         </div>
-        <p>${scenarioSummary}</p>
+        <p>${escapeHtml(scenarioSummary)}</p>
         <ul class="shell-list">
-          ${state.workspace.persistence_summary.map((item) => `<li>${item}</li>`).join("")}
+          ${state.workspace.persistence_summary.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
         </ul>
       </section>
     </section>
@@ -382,13 +416,13 @@ function renderPlannerWorkspaceView(state) {
       <section class="shell-panel">
         <div class="shell-panel-header">
           <h3>Planner route</h3>
-          <span class="shell-meta">${plannerState.planner_behavior.trip_stage}</span>
+          <span class="shell-meta">${escapeHtml(plannerState.planner_behavior.trip_stage)}</span>
         </div>
-        <p>${plannerState.trip.summary}</p>
+        <p>${escapeHtml(plannerState.trip.summary)}</p>
         <div class="shell-chip-row">
-          <span class="shell-chip">${plannerState.outputs.length} outputs</span>
-          <span class="shell-chip">${plannerState.pending_decisions.length} pending decisions</span>
-          <span class="shell-chip">${plannerState.option_set.options.length} options</span>
+          <span class="shell-chip">${escapeHtml(`${plannerState.outputs.length} outputs`)}</span>
+          <span class="shell-chip">${escapeHtml(`${plannerState.pending_decisions.length} pending decisions`)}</span>
+          <span class="shell-chip">${escapeHtml(`${plannerState.option_set.options.length} options`)}</span>
         </div>
       </section>
       <section class="shell-panel">
@@ -398,7 +432,10 @@ function renderPlannerWorkspaceView(state) {
         </div>
         <ul class="shell-list">
           ${plannerState.next_step_actions
-            .map((action) => `<li><strong>${action.label}:</strong> ${action.description}</li>`)
+            .map(
+              (action) =>
+                `<li><strong>${escapeHtml(action.label)}:</strong> ${escapeHtml(action.description)}</li>`
+            )
             .join("")}
         </ul>
       </section>
@@ -425,13 +462,13 @@ function renderApprovalCenterView(state) {
       <section class="shell-panel">
         <div class="shell-panel-header">
           <h3>Approval posture</h3>
-          <span class="shell-meta">${policy.status}</span>
+          <span class="shell-meta">${escapeHtml(policy.status)}</span>
         </div>
-        <p>${state.workspace.planner_panel_state.trip.summary}</p>
+        <p>${escapeHtml(state.workspace.planner_panel_state.trip.summary)}</p>
         <div class="shell-chip-row">
-          <span class="shell-chip">${policy.approval_requirements.length} approvers</span>
-          <span class="shell-chip">${proposal.comparables.length} comparables</span>
-          <span class="shell-chip">${proposal.justifications?.length ?? 0} justifications</span>
+          <span class="shell-chip">${escapeHtml(`${policy.approval_requirements.length} approvers`)}</span>
+          <span class="shell-chip">${escapeHtml(`${proposal.comparables.length} comparables`)}</span>
+          <span class="shell-chip">${escapeHtml(`${proposal.justifications?.length ?? 0} justifications`)}</span>
         </div>
       </section>
       <section class="shell-panel">
@@ -441,7 +478,10 @@ function renderApprovalCenterView(state) {
         </div>
         <ul class="shell-list">
           ${policy.approval_requirements
-            .map((requirement) => `<li>${requirement.role}: ${requirement.reason}</li>`)
+            .map(
+              (requirement) =>
+                `<li>${escapeHtml(requirement.role)}: ${escapeHtml(requirement.reason)}</li>`
+            )
             .join("")}
         </ul>
       </section>
@@ -477,16 +517,16 @@ export function renderAppShellLayout(state) {
   const activeTrip = state.trips.find((trip) => trip.trip_id === state.active_trip_id) ?? null;
 
   return `
-    <section class="planner-app-shell" data-shell-route="${state.active_route}">
+    <section class="planner-app-shell" data-shell-route="${escapeAttribute(state.active_route)}">
       <header class="shell-header">
         <div>
           <p class="shell-eyebrow">Trip planner application shell</p>
           <h1>Mode-aware travel planning foundation</h1>
-          <p>${activeTrip ? `Active trip: ${activeTrip.title}` : "Choose a trip context to enter the workspace shell."}</p>
+          <p>${escapeHtml(activeTrip ? `Active trip: ${activeTrip.title}` : "Choose a trip context to enter the workspace shell.")}</p>
         </div>
         <div class="shell-account-summary">
-          <strong>${state.session.display_name}</strong>
-          <span>${state.session.organization ?? "Independent traveler"}</span>
+          <strong>${escapeHtml(state.session.display_name)}</strong>
+          <span>${escapeHtml(state.session.organization ?? "Independent traveler")}</span>
         </div>
       </header>
       ${renderRouteTabs(state)}
@@ -509,6 +549,10 @@ export function renderAppShell(mountNode, initialState) {
   };
 
   const handleClick = (event) => {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
     const routeTarget = event.target.closest("[data-shell-route]");
     if (routeTarget?.dataset.shellRoute) {
       store.setRoute(routeTarget.dataset.shellRoute);

@@ -151,6 +151,9 @@ test("app shell store updates route and active trip while preserving visible she
 
   store.setActiveTrip("trip-client-audit-sea");
   assert.equal(store.getState().active_trip_id, "trip-client-audit-sea");
+  assert.equal(store.getState().workspace.trip_id, "trip-client-audit-sea");
+  assert.equal(store.getState().workspace.status, "empty");
+  assert.equal(store.getState().workspace.planner_panel_state, null);
 
   store.setRoute("approval_center");
   assert.equal(store.getState().active_route, "approval_center");
@@ -173,4 +176,43 @@ test("mounted app shell rerenders on route and trip changes", () => {
 
   controller.destroy();
   assert.equal(mountNode.listeners.has("click"), false);
+});
+
+test("mounted app shell ignores click events from non-element targets", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderAppShell(mountNode, activeBusinessTripShellState);
+
+  mountNode.click({});
+  assert.equal(controller.getState().active_route, "approval_center");
+});
+
+test("app shell layout escapes user-provided HTML-sensitive content", () => {
+  const rendered = renderAppShellLayout({
+    ...activeBusinessTripShellState,
+    active_route: "dashboard",
+    session: {
+      ...activeBusinessTripShellState.session,
+      display_name: "<Admin>",
+      organization: "Ops & Risk",
+    },
+    workspace: {
+      ...activeBusinessTripShellState.workspace,
+      persistence_summary: ["Line <b>bold</b> & ready"],
+    },
+    trips: activeBusinessTripShellState.trips.map((trip, index) =>
+      index === 1
+        ? {
+            ...trip,
+            title: "<script>alert(1)</script>",
+            summary: "Line <b>bold</b> & ready",
+          }
+        : trip
+    ),
+  });
+
+  assert.match(rendered, /&lt;Admin&gt;/);
+  assert.match(rendered, /Ops &amp; Risk/);
+  assert.match(rendered, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.match(rendered, /Line &lt;b&gt;bold&lt;\/b&gt; &amp; ready/);
+  assert.doesNotMatch(rendered, /<script>alert\(1\)<\/script>/);
 });
