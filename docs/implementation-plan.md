@@ -76,6 +76,8 @@ See [source-ingestion-epic.md](source-ingestion-epic.md) for the dependency chai
 
 ### 8. Policy Integration Execution
 
+Epic anchor: `#549` defines the execution and approval-readiness sequencing boundary for this layer. See [policy-integration-execution-epic.md](policy-integration-execution-epic.md).
+
 - `#550` integration-client and execution contracts
 - `#551` policy sync
 - `#552` proposal submission and result ingestion
