@@ -13,6 +13,95 @@ const signedInSession = {
   default_trip_mode: "leisure",
 };
 
+const firstTimeLeisureSession = {
+  user_id: "user-26",
+  display_name: "Mina Patel",
+  organization: null,
+  default_trip_mode: "leisure",
+};
+
+const businessEntrySession = {
+  user_id: "user-44",
+  display_name: "Jordan Lee",
+  organization: "Northwind Advisory",
+  default_trip_mode: "business",
+};
+
+const travelerProfiles = {
+  leisure_primary: {
+    profile_id: "profile-leisure-17",
+    mode: "leisure",
+    label: "Leisure profile",
+    summary: "Prefers walkable neighborhoods, low-friction transit days, and one soft landing day.",
+    readiness: "Ready to seed a new leisure trip from learned pace and comfort preferences.",
+  },
+  leisure_new_user: {
+    profile_id: "profile-leisure-26",
+    mode: "leisure",
+    label: "Starter leisure profile",
+    summary: "No saved trips yet, but the account already captured destination style and pace preferences.",
+    readiness: "Needs a first trip brief to turn starter preferences into reusable trip state.",
+  },
+  business_primary: {
+    profile_id: "profile-business-4",
+    mode: "business",
+    label: "Business travel profile",
+    summary: "Carries traveler role, approval path, and hotel policy context for client-facing travel.",
+    readiness: "Ready to start a policy-aware trip with approval routing and purpose capture.",
+  },
+};
+
+const launchFlows = {
+  new_leisure_trip: {
+    launch_id: "new_leisure_trip",
+    mode: "leisure",
+    title: "Start a new leisure trip",
+    summary: "Translate traveler preferences into destination framing, pace, and budget-aware setup.",
+    cta_label: "Start leisure trip",
+    starting_needs: [
+      "Trip brief with dates, destination ideas, and traveler party context.",
+      "Preference cues for pace, walkability, comfort, and budget.",
+      "A seed itinerary question that tells the planner what to optimize first.",
+    ],
+    profile_id: travelerProfiles.leisure_primary.profile_id,
+    trip_id: null,
+    recent_session_id: null,
+    policy_context: null,
+  },
+  new_business_trip: {
+    launch_id: "new_business_trip",
+    mode: "business",
+    title: "Start a new business trip",
+    summary: "Capture travel purpose, employer policy context, and approval posture before workspace planning.",
+    cta_label: "Start business trip",
+    starting_needs: [
+      "Business purpose, traveler role, and client or event context.",
+      "Policy-linked lodging, airfare, or approval constraints from the business profile.",
+      "A routing decision for whether the planner should prepare approval evidence immediately.",
+    ],
+    profile_id: travelerProfiles.business_primary.profile_id,
+    trip_id: null,
+    recent_session_id: null,
+    policy_context: "Hotel zone, approval roles, and spend posture should be seeded from the business profile.",
+  },
+  resume_existing_trip: {
+    launch_id: "resume_existing_trip",
+    mode: "leisure",
+    title: "Resume an existing trip",
+    summary: "Re-enter the most recent session and rehydrate trip context without rebuilding the shell.",
+    cta_label: "Resume latest session",
+    starting_needs: [
+      "Most recent session id and the route it should reopen.",
+      "Saved trip summary and the last persisted workspace checkpoint.",
+      "A deterministic fallback if the session payload is no longer available.",
+    ],
+    profile_id: travelerProfiles.leisure_primary.profile_id,
+    trip_id: "trip-leisure-lisbon-oct",
+    recent_session_id: "session-leisure-lisbon-planner",
+    policy_context: null,
+  },
+};
+
 const leisurePlannerPanelState = {
   trip: {
     trip_id: "trip-leisure-lisbon-oct",
@@ -243,6 +332,33 @@ const businessPlannerPanelState = {
 };
 
 /** @type {FrontendShellState} */
+export const firstTimeLeisureDashboardShellState = {
+  session: firstTimeLeisureSession,
+  routes: [],
+  active_route: "dashboard",
+  trips: [],
+  active_trip_id: null,
+  account_entry: {
+    traveler_profiles: [travelerProfiles.leisure_new_user],
+    recent_sessions: [],
+    launch_flows: [launchFlows.new_leisure_trip, launchFlows.new_business_trip],
+    selected_launch_id: "new_leisure_trip",
+    empty_state_message: "No saved trips yet. Start with a leisure brief or open a policy-aware business launch.",
+  },
+  workspace: {
+    trip_id: null,
+    status: "empty",
+    planner_panel_state: null,
+    loading_message: null,
+    error_message: null,
+    persistence_summary: [
+      "First-trip launch should create persisted account, trip, and session records together.",
+      "Empty-state onboarding must stay deterministic until live identity and session APIs arrive.",
+    ],
+  },
+};
+
+/** @type {FrontendShellState} */
 export const signedInDashboardShellState = {
   session: signedInSession,
   routes: [],
@@ -276,6 +392,36 @@ export const signedInDashboardShellState = {
     },
   ],
   active_trip_id: null,
+  account_entry: {
+    traveler_profiles: [travelerProfiles.leisure_primary, travelerProfiles.business_primary],
+    recent_sessions: [
+      {
+        session_id: "session-leisure-lisbon-planner",
+        trip_id: leisurePlannerPanelState.trip.trip_id,
+        mode: "leisure",
+        label: "Resume Lisbon comparison",
+        summary: "Return to the lodging checkpoint with one open decision and three saved scenarios.",
+        last_active_label: "Worked 2h ago",
+        resume_route: "planner_workspace",
+      },
+      {
+        session_id: "session-business-audit-approval",
+        trip_id: businessPlannerPanelState.trip.trip_id,
+        mode: "business",
+        label: "Resume Seattle approval packet",
+        summary: "Reopen the exception packet and approval-ready comparables for travel ops review.",
+        last_active_label: "Worked yesterday",
+        resume_route: "approval_center",
+      },
+    ],
+    launch_flows: [
+      launchFlows.new_leisure_trip,
+      launchFlows.new_business_trip,
+      launchFlows.resume_existing_trip,
+    ],
+    selected_launch_id: "resume_existing_trip",
+    empty_state_message: null,
+  },
   workspace: {
     trip_id: null,
     status: "empty",
@@ -290,12 +436,60 @@ export const signedInDashboardShellState = {
 };
 
 /** @type {FrontendShellState} */
+export const businessPolicyStartDashboardShellState = {
+  session: businessEntrySession,
+  routes: [],
+  active_route: "dashboard",
+  trips: [signedInDashboardShellState.trips[1]],
+  active_trip_id: null,
+  account_entry: {
+    traveler_profiles: [travelerProfiles.business_primary, travelerProfiles.leisure_primary],
+    recent_sessions: [
+      {
+        session_id: "session-business-policy-start",
+        trip_id: businessPlannerPanelState.trip.trip_id,
+        mode: "business",
+        label: "Resume policy-linked kickoff",
+        summary: "Continue the trip-start flow with traveler purpose, policy posture, and approver context already loaded.",
+        last_active_label: "Worked 30m ago",
+        resume_route: "trip_workspace",
+      },
+    ],
+    launch_flows: [
+      launchFlows.new_business_trip,
+      {
+        ...launchFlows.resume_existing_trip,
+        mode: "business",
+        trip_id: businessPlannerPanelState.trip.trip_id,
+        recent_session_id: "session-business-policy-start",
+        summary: "Resume the latest business kickoff and keep policy-linked trip start intact.",
+      },
+      launchFlows.new_leisure_trip,
+    ],
+    selected_launch_id: "new_business_trip",
+    empty_state_message: null,
+  },
+  workspace: {
+    trip_id: null,
+    status: "empty",
+    planner_panel_state: null,
+    loading_message: null,
+    error_message: null,
+    persistence_summary: [
+      "Business launch should create the trip shell together with policy and approval capture.",
+      "Session-entry must preserve why the traveler is starting a policy-aware trip before the planner workspace mounts.",
+    ],
+  },
+};
+
+/** @type {FrontendShellState} */
 export const activeLeisureTripShellState = {
   session: signedInSession,
   routes: [],
   active_route: "trip_workspace",
   trips: signedInDashboardShellState.trips,
   active_trip_id: leisurePlannerPanelState.trip.trip_id,
+  account_entry: signedInDashboardShellState.account_entry,
   workspace: {
     trip_id: leisurePlannerPanelState.trip.trip_id,
     status: "ready",
@@ -316,6 +510,7 @@ export const activeBusinessTripShellState = {
   active_route: "approval_center",
   trips: signedInDashboardShellState.trips,
   active_trip_id: businessPlannerPanelState.trip.trip_id,
+  account_entry: signedInDashboardShellState.account_entry,
   workspace: {
     trip_id: businessPlannerPanelState.trip.trip_id,
     status: "ready",
@@ -330,7 +525,9 @@ export const activeBusinessTripShellState = {
 };
 
 export const appShellStateMocks = {
+  first_time_leisure_dashboard: firstTimeLeisureDashboardShellState,
   signed_in_dashboard: signedInDashboardShellState,
+  business_policy_start_dashboard: businessPolicyStartDashboardShellState,
   active_leisure_trip: activeLeisureTripShellState,
   active_business_trip: activeBusinessTripShellState,
 };

@@ -78,7 +78,7 @@ Later issues should extend those fixtures instead of replacing them with unrelat
 
 ## Handoff To Later Issues
 
-- `#557` should plug trip-entry and account-launch flows into the dashboard route.
+- `#557` now plugs trip-entry and account-launch flows into the dashboard route through `account_entry` launch, profile, and recent-session surfaces.
 - `#558` should deepen the trip workspace route with scenario, ranking, and budget panes.
 - `#559` should attach maps and timeline views to the trip workspace without changing the shell route contract.
 - `#560` should connect the planner and approval routes to the more detailed planner-side-panel surfaces already living under `bundle/planner/`.
