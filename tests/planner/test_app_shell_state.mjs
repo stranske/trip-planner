@@ -262,11 +262,15 @@ test("mounted dashboard rerenders on launch and session entry interactions", () 
 });
 
 test("trip workspace renders scenario, checkpoint, and budget surfaces for leisure and business contexts", () => {
-  const leisureWorkspace = renderAppShellLayout(activeLeisureTripShellState);
-  const businessWorkspace = renderAppShellLayout({
-    ...activeBusinessTripShellState,
-    active_route: "trip_workspace",
-  });
+  const leisureWorkspace = renderAppShellLayout(
+    buildAppShellState(activeLeisureTripShellState)
+  );
+  const businessWorkspace = renderAppShellLayout(
+    buildAppShellState({
+      ...activeBusinessTripShellState,
+      active_route: "trip_workspace",
+    })
+  );
 
   assert.match(leisureWorkspace, /Scenario comparison/);
   assert.match(leisureWorkspace, /Central Lisbon base/);
@@ -281,7 +285,9 @@ test("trip workspace renders scenario, checkpoint, and budget surfaces for leisu
 });
 
 test("trip workspace can render an in-trip revised scenario without losing saved history", () => {
-  const revisedWorkspace = renderAppShellLayout(inTripRevisionShellState);
+  const revisedWorkspace = renderAppShellLayout(
+    buildAppShellState(inTripRevisionShellState)
+  );
 
   assert.match(revisedWorkspace, /Rain-adjusted active plan/);
   assert.match(revisedWorkspace, /In-trip replanning checkpoint/);
@@ -297,28 +303,30 @@ test("mounted app shell ignores click events from non-element targets", () => {
 });
 
 test("app shell layout escapes user-provided HTML-sensitive content", () => {
-  const rendered = renderAppShellLayout({
-    ...activeBusinessTripShellState,
-    active_route: "dashboard",
-    session: {
-      ...activeBusinessTripShellState.session,
-      display_name: "<Admin>",
-      organization: "Ops & Risk",
-    },
-    workspace: {
-      ...activeBusinessTripShellState.workspace,
-      persistence_summary: ["Line <b>bold</b> & ready"],
-    },
-    trips: activeBusinessTripShellState.trips.map((trip, index) =>
-      index === 1
-        ? {
-            ...trip,
-            title: "<script>alert(1)</script>",
-            summary: "Line <b>bold</b> & ready",
-          }
-        : trip
-    ),
-  });
+  const rendered = renderAppShellLayout(
+    buildAppShellState({
+      ...activeBusinessTripShellState,
+      active_route: "dashboard",
+      session: {
+        ...activeBusinessTripShellState.session,
+        display_name: "<Admin>",
+        organization: "Ops & Risk",
+      },
+      workspace: {
+        ...activeBusinessTripShellState.workspace,
+        persistence_summary: ["Line <b>bold</b> & ready"],
+      },
+      trips: activeBusinessTripShellState.trips.map((trip, index) =>
+        index === 1
+          ? {
+              ...trip,
+              title: "<script>alert(1)</script>",
+              summary: "Line <b>bold</b> & ready",
+            }
+          : trip
+      ),
+    })
+  );
 
   assert.match(rendered, /&lt;Admin&gt;/);
   assert.match(rendered, /Ops &amp; Risk/);
