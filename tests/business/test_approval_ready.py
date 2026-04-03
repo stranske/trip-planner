@@ -9,9 +9,11 @@ from trip_planner.business import (
     build_approval_ready_package,
 )
 
+_FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "business"
+
 
 def _fixture_path(name: str) -> Path:
-    return Path("tests/fixtures/business") / name
+    return _FIXTURES_DIR / name
 
 
 def _load_fixture(name: str) -> dict:
@@ -78,3 +80,18 @@ def test_approval_ready_package_rejects_mismatched_proposal_ids() -> None:
         assert "proposal_id" in str(exc)
     else:
         raise AssertionError("mismatched proposal ids should fail approval packaging")
+
+
+def test_empty_booking_channels_require_attention() -> None:
+    payload = _load_fixture("approval_ready_clean.json")
+    profile = BusinessTravelProfile.from_dict(payload["profile"])
+    proposal = TripPlanProposal.from_dict(payload["proposal"])
+    proposal.booking_channel_summaries = []
+    evaluation = PolicyEvaluationResult.from_dict(payload["evaluation_result"])
+
+    package = build_approval_ready_package(profile, proposal, evaluation)
+
+    readiness_checks = {item.key: item for item in package.readiness_checks}
+    booking_channels = readiness_checks["booking_channels"]
+    assert booking_channels.status == "attention"
+    assert booking_channels.notes == ["No booking channels documented"]

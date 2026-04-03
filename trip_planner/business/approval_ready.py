@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from trip_planner.contracts._validators import (
+from trip_planner._validators import (
     require_non_empty,
     require_probability,
     require_strings,
@@ -241,13 +241,20 @@ def _build_readiness_checks(
             label="Booking channels documented",
             status=(
                 "ready"
-                if all(item.approved for item in proposal.booking_channel_summaries)
+                if (
+                    proposal.booking_channel_summaries
+                    and all(item.approved for item in proposal.booking_channel_summaries)
+                )
                 else "attention"
             ),
-            notes=[
-                item.rationale or f"{item.category} uses {item.selected_channel}"
-                for item in proposal.booking_channel_summaries
-            ],
+            notes=(
+                [
+                    item.rationale or f"{item.category} uses {item.selected_channel}"
+                    for item in proposal.booking_channel_summaries
+                ]
+                if proposal.booking_channel_summaries
+                else ["No booking channels documented"]
+            ),
         ),
         ApprovalReadinessCheck(
             key="comparables",

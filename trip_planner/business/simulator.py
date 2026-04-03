@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from trip_planner.contracts._validators import require_non_empty, require_strings
+from trip_planner._validators import require_non_empty, require_strings
 
 from .approval_ready import ApprovalReadyPackage, build_approval_ready_package
 from .policy_contracts import PolicyConstraintSet, PolicyEvaluationResult, TripPlanProposal
@@ -42,6 +42,9 @@ class PolicySimulationCase:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "PolicySimulationCase":
+        notes = payload.get("notes", [])
+        if not isinstance(notes, list):
+            raise ValueError("notes must be provided as a list")
         return cls(
             case_id=payload["case_id"],
             description=payload["description"],
@@ -56,7 +59,7 @@ class PolicySimulationCase:
                 if payload.get("fixture_constraint_set")
                 else None
             ),
-            notes=list(payload.get("notes", [])),
+            notes=list(notes),
         )
 
 
@@ -77,7 +80,10 @@ class PolicyEvaluationSimulator:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "PolicyEvaluationSimulator":
-        cases = [PolicySimulationCase.from_dict(item) for item in payload["cases"]]
+        cases_payload = payload["cases"]
+        if not isinstance(cases_payload, list):
+            raise ValueError("cases must be a list of case payloads")
+        cases = [PolicySimulationCase.from_dict(item) for item in cases_payload]
         return cls(cases)
 
     @classmethod
@@ -91,6 +97,11 @@ class PolicyEvaluationSimulator:
         return sorted(self._cases)
 
     def evaluate(self, proposal: TripPlanProposal, *, case_id: str) -> PolicyEvaluationResult:
+        if case_id not in self._cases:
+            available_case_ids = self.case_ids()
+            raise ValueError(
+                f"Unknown case_id {case_id!r}. Available case_ids: {available_case_ids}"
+            )
         case = self._cases[case_id]
         _validate_simulated_proposal_shape(proposal, case.fixture_proposal)
         payload = case.evaluation_result.to_dict()

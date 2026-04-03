@@ -7,9 +7,11 @@ from trip_planner.business import (
     TripPlanProposal,
 )
 
+_FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "business"
+
 
 def _fixture_path(name: str) -> Path:
-    return Path("tests/fixtures/business") / name
+    return _FIXTURES_DIR / name
 
 
 def _load_fixture(name: str) -> dict:
@@ -73,3 +75,19 @@ def test_simulator_rejects_case_shape_mismatch() -> None:
         assert "selected option categories" in str(exc)
     else:
         raise AssertionError("shape mismatch should fail simulator evaluation")
+
+
+def test_simulator_rejects_unknown_case_id() -> None:
+    simulator = PolicyEvaluationSimulator.from_json_file(
+        _fixture_path("policy_simulator_cases.json")
+    )
+    payload = _load_fixture("approval_ready_clean.json")
+    proposal = TripPlanProposal.from_dict(payload["proposal"])
+
+    try:
+        simulator.evaluate(proposal, case_id="missing-case")
+    except ValueError as exc:
+        assert "Unknown case_id" in str(exc)
+        assert "clean-approval" in str(exc)
+    else:
+        raise AssertionError("unknown case ids should fail with a clear error")
