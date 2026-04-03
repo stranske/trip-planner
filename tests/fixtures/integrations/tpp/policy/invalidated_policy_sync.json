@@ -1,0 +1,98 @@
+{
+  "request": {
+    "operation": "fetch_policy_constraints",
+    "request_id": "policy-sync-req-003",
+    "correlation_id": {
+      "value": "corr-policy-sync-003",
+      "issued_by": "trip-planner"
+    },
+    "payload": {
+      "policy_scope": "business_planning",
+      "organization_context": true
+    },
+    "transport_pattern": "sync",
+    "organization_id": "org-acme",
+    "submitted_at": "2026-02-18T10:00:00Z",
+    "metadata": {
+      "consumer": "ranking"
+    }
+  },
+  "response": {
+    "operation": "fetch_policy_constraints",
+    "request_id": "policy-sync-req-003",
+    "correlation_id": {
+      "value": "corr-policy-sync-003",
+      "issued_by": "tpp"
+    },
+    "transport_pattern": "sync",
+    "execution_status": {
+      "state": "succeeded",
+      "terminal": true,
+      "summary": "Policy snapshot has been invalidated.",
+      "external_status": "ok",
+      "updated_at": "2026-02-18T10:00:04Z"
+    },
+    "result_payload": {
+      "constraint_set": {
+        "policy_id": "policy-standard-2026-02",
+        "organization_id": "org-acme",
+        "policy_version": "2026.02",
+        "required_booking_channels": [
+          "Navan"
+        ],
+        "airfare_rules": {
+          "max_cabin": "premium_economy"
+        },
+        "lodging_rules": {
+          "max_nightly_rate_usd": 325
+        },
+        "ground_transport_rules": {},
+        "meal_rules": {
+          "per_diem_usd": 85
+        },
+        "approval_rules": [
+          "international_travel"
+        ],
+        "documentation_rules": [
+          "retain_receipts"
+        ],
+        "allowed_exception_types": [
+          "medical"
+        ]
+      },
+      "organization_context": {
+        "organization_id": "org-acme",
+        "approved_channels": [
+          "Navan"
+        ],
+        "comparable_requirements": {
+          "airfare": 2
+        },
+        "documentation_rules": [
+          "retain_receipts"
+        ],
+        "approval_triggers": [
+          "international_travel"
+        ],
+        "comfort_preferences": {
+          "seat_preference": "aisle"
+        },
+        "class_of_service_limits": {
+          "air": "premium_economy"
+        },
+        "metadata": {
+          "travel_program": "recall-test"
+        }
+      },
+      "freshness": {
+        "snapshot_version": "snapshot-2026-02-18-c",
+        "captured_at": "2026-02-18T09:55:00Z",
+        "fresh_until": "2026-02-19T09:55:00Z",
+        "invalidated_at": "2026-02-18T10:05:00Z",
+        "invalidation_reason": "manual_policy_recall",
+        "status": "invalidated"
+      }
+    },
+    "received_at": "2026-02-18T10:00:06Z"
+  }
+}

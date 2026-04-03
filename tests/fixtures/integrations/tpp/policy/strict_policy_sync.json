@@ -1,0 +1,112 @@
+{
+  "request": {
+    "operation": "fetch_policy_constraints",
+    "request_id": "policy-sync-req-002",
+    "correlation_id": {
+      "value": "corr-policy-sync-002",
+      "issued_by": "trip-planner"
+    },
+    "payload": {
+      "policy_scope": "business_planning",
+      "organization_context": true
+    },
+    "transport_pattern": "sync",
+    "organization_id": "org-strict",
+    "submitted_at": "2026-02-17T08:00:00Z",
+    "metadata": {
+      "consumer": "business-orchestration"
+    }
+  },
+  "response": {
+    "operation": "fetch_policy_constraints",
+    "request_id": "policy-sync-req-002",
+    "correlation_id": {
+      "value": "corr-policy-sync-002",
+      "issued_by": "tpp"
+    },
+    "transport_pattern": "sync",
+    "execution_status": {
+      "state": "succeeded",
+      "terminal": true,
+      "summary": "Strict policy constraint import ready.",
+      "external_status": "ok",
+      "updated_at": "2026-02-17T08:00:04Z"
+    },
+    "result_payload": {
+      "constraint_set": {
+        "policy_id": "policy-strict-2026-02",
+        "organization_id": "org-strict",
+        "policy_version": "2026.02.1",
+        "required_booking_channels": [
+          "Concur"
+        ],
+        "airfare_rules": {
+          "max_cabin": "economy",
+          "advance_purchase_days": 14
+        },
+        "lodging_rules": {
+          "max_nightly_rate_usd": 210,
+          "preferred_classes": [
+            "midscale"
+          ]
+        },
+        "ground_transport_rules": {
+          "approved_modes": [
+            "rail"
+          ]
+        },
+        "meal_rules": {
+          "per_diem_usd": 55
+        },
+        "approval_rules": [
+          "international_travel",
+          "vice_president_preapproval"
+        ],
+        "documentation_rules": [
+          "retain_receipts",
+          "manager_justification"
+        ],
+        "allowed_exception_types": [
+          "medical"
+        ]
+      },
+      "organization_context": {
+        "organization_id": "org-strict",
+        "approved_channels": [
+          "Concur"
+        ],
+        "comparable_requirements": {
+          "airfare": 3,
+          "lodging": 2,
+          "ground_transport": 1
+        },
+        "documentation_rules": [
+          "retain_receipts",
+          "manager_justification"
+        ],
+        "approval_triggers": [
+          "international_travel",
+          "lodging_above_cap",
+          "vice_president_preapproval"
+        ],
+        "comfort_preferences": {
+          "hotel_location": "walkable_to_meeting"
+        },
+        "class_of_service_limits": {
+          "air": "economy",
+          "lodging": "midscale"
+        },
+        "metadata": {
+          "travel_program": "global-enterprise"
+        }
+      },
+      "freshness": {
+        "snapshot_version": "snapshot-2026-02-17-b",
+        "captured_at": "2026-02-17T07:58:00Z",
+        "fresh_until": "2026-02-17T20:00:00Z",
+        "status": "current"
+      }
+    },
+    "received_at": "2026-02-17T08:00:05Z"
+  }
+}
