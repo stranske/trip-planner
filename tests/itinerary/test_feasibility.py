@@ -90,9 +90,9 @@ def test_malformed_times_do_not_crash_feasibility_evaluation() -> None:
     payload = json.loads(
         _fixture_path("coherent_low_friction_route.json").read_text(encoding="utf-8")
     )
-    payload["transport_options"][0]["timing_summary"]["arrival_local"] = (
-        "not-a-timestamp"
-    )
+    payload["transport_options"][0]["timing_summary"][
+        "arrival_local"
+    ] = "not-a-timestamp"
     payload["lodging_options"][0]["booking_terms"]["checkin_window"] = "not-a-window"
 
     assessment = evaluate_bundle_feasibility(InventoryBundle.from_dict(payload))
@@ -112,9 +112,9 @@ def test_candidate_seed_uses_representative_travel_totals() -> None:
     alternate_transport["option_id"] = "transport-kyoto-osaka-slow"
     alternate_transport["name"] = "Slow regional detour"
     alternate_transport["timing_summary"]["duration_minutes"] = 480
-    alternate_transport["timing_summary"]["departure_local"] = (
-        "2026-04-10T06:00:00+09:00"
-    )
+    alternate_transport["timing_summary"][
+        "departure_local"
+    ] = "2026-04-10T06:00:00+09:00"
     alternate_transport["timing_summary"]["arrival_local"] = "2026-04-10T14:00:00+09:00"
     alternate_transport["transfer_burden"]["transfer_count"] = 3
     alternate_transport["transfer_burden"]["self_navigation_burden_signal"] = 0.8

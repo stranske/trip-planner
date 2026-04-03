@@ -979,9 +979,11 @@ class BusinessRankingEngine:
                 RiskFlag(
                     risk_id=f"risk:{assessment.bundle_id}:{blocking_reason}",
                     code=blocking_reason,
-                    severity="critical"
-                    if not assessment.recommended_for_ranking
-                    else "warning",
+                    severity=(
+                        "critical"
+                        if not assessment.recommended_for_ranking
+                        else "warning"
+                    ),
                     summary=f"Feasibility issue remains unresolved: {blocking_reason}.",
                     blocking=not assessment.recommended_for_ranking,
                 )
