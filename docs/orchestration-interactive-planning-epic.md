@@ -6,7 +6,7 @@ The goal is to sequence the shared orchestration layer so planner turns, leisure
 
 ## Epic Boundary
 
-Epic `#543` exists to define the delivery order and dependency rules for the orchestration, interactive planning, and in-trip-adjustment layer.
+Epic `#543` exists to define the delivery order and dependency rules for the orchestration, interactive planning, and in-trip adjustment layer.
 
 It is complete when:
 
@@ -56,7 +56,7 @@ The first pass of this epic should stabilize the following surfaces before front
 - `trip_planner/orchestration/` for canonical workflow contracts and mode-specific orchestration scaffolds
 - `docs/contracts/orchestration-workflow.md` for the shared orchestration vocabulary and representative fixtures
 - `tests/orchestration/` plus `tests/fixtures/orchestration/` for mode-specific regression coverage and workflow examples
-- `docs/business-orchestration-boundary.md` and later planner-integration docs for downstream consumer guidance
+- `docs/business-orchestration-boundary.md` and later planner UI integration docs for downstream consumer guidance
 
 This keeps later UI and agent layers additive instead of forcing them to reverse-engineer planner state from scattered output payloads.
 
