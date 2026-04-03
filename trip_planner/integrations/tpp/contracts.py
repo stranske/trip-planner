@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from trip_planner.contracts._validators import require_non_empty, require_non_negative
+from trip_planner.contracts._validators import (
+    require_non_empty,
+    require_non_negative,
+    require_string_mapping,
+)
 
 TPP_OPERATION_TYPES: tuple[str, ...] = (
     "fetch_policy_constraints",
@@ -96,6 +100,7 @@ class TPPErrorRecord:
         require_non_empty(self.message, "message")
         require_non_empty(self.category, "category")
         self.details = _optional_mapping(self.details, "details")
+        require_string_mapping(self.details, "details")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -147,6 +152,7 @@ class TPPRequestEnvelope:
             )
         self.payload = _require_mapping(self.payload, "payload")
         self.metadata = _optional_mapping(self.metadata, "metadata")
+        require_string_mapping(self.metadata, "metadata")
         for field_name in ("organization_id", "trip_id", "proposal_id", "submitted_at"):
             value = getattr(self, field_name)
             if value is not None and not value:
@@ -203,6 +209,7 @@ class TPPResponseEnvelope:
         if not isinstance(self.execution_status, TPPExecutionStatus):
             raise ValueError("execution_status must be a TPPExecutionStatus")
         self.result_payload = _optional_mapping(self.result_payload, "result_payload")
+        require_string_mapping(self.result_payload, "result_payload")
         if self.error is not None and not isinstance(self.error, TPPErrorRecord):
             raise ValueError("error must be a TPPErrorRecord when provided")
         if self.retry is not None and not isinstance(self.retry, TPPRetryMetadata):

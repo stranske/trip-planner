@@ -42,6 +42,7 @@ def test_proposal_submit_deferred_fixture_round_trip() -> None:
     assert response.execution_status.terminal is False
     assert response.retry is not None
     assert response.retry.next_retry_at == "2026-04-03T00:41:31Z"
+    assert response.status_endpoint is not None
     assert response.status_endpoint.endswith("/exec-001")
 
 
