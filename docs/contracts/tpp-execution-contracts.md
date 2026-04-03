@@ -12,6 +12,7 @@ This contract layer owns transport and execution semantics for the `trip-planner
 
 - `trip_planner/integrations/tpp/contracts.py`
 - `trip_planner/integrations/tpp/client.py`
+- `trip_planner/integrations/tpp/policy_sync.py`
 
 ## Design Rules
 
@@ -22,7 +23,7 @@ This contract layer owns transport and execution semantics for the `trip-planner
 
 ## How Later Issues Build On This
 
-- issue `#551` should use these envelopes when importing policy constraints and organization context.
+- issue `#551` uses these envelopes when importing policy constraints and organization context.
 - issue `#552` should submit `TripPlanProposal` payloads inside these envelopes and read deferred or failed execution state from the same layer.
 - issue `#553` should consume retry and failure records when deciding whether to reoptimize or branch into exception handling.
 - issue `#554` should use the same client abstraction in test harnesses so approval-readiness flows can run against mocks or simulators.
