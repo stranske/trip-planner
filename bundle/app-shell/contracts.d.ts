@@ -132,6 +132,56 @@ export interface FrontendAppRouteRecord {
   modes: Array<"leisure" | "business">;
 }
 
+export interface FrontendVisualizationAnchorRecord {
+  anchor_id: string;
+  label: string;
+  kind: "destination" | "lodging" | "activity" | "meeting" | "transfer";
+  summary: string;
+}
+
+export interface FrontendVisualizationRouteSegmentRecord {
+  segment_id: string;
+  label: string;
+  mode: "walk" | "rail" | "car" | "flight" | "ferry" | "tram" | "rideshare";
+  from_label: string;
+  to_label: string;
+  duration_label: string;
+  burden_label: string;
+  warning: string | null;
+}
+
+export interface FrontendVisualizationTimelineBlockRecord {
+  block_id: string;
+  label: string;
+  kind: "arrival" | "recovery" | "transit" | "stay" | "meeting" | "buffer" | "activity";
+  time_label: string;
+  summary: string;
+}
+
+export interface FrontendVisualizationTimelineDayRecord {
+  day_id: string;
+  label: string;
+  posture: string;
+  movement_summary: string;
+  blocks: FrontendVisualizationTimelineBlockRecord[];
+}
+
+export interface FrontendScenarioVisualizationRecord {
+  scenario_id: string;
+  title: string;
+  variant_label: string;
+  summary: string;
+  route_shape: string;
+  movement_burden: string;
+  tradeoff_summary: string;
+  map_status: "ready" | "fallback";
+  map_summary: string;
+  route_warnings: string[];
+  anchors: FrontendVisualizationAnchorRecord[];
+  route_segments: FrontendVisualizationRouteSegmentRecord[];
+  timeline_days: FrontendVisualizationTimelineDayRecord[];
+}
+
 export interface FrontendWorkspaceRecord {
   trip_id: string | null;
   status: WorkspaceStatus;
@@ -142,6 +192,8 @@ export interface FrontendWorkspaceRecord {
   loading_message: string | null;
   error_message: string | null;
   persistence_summary: string[];
+  visualization_scenarios: FrontendScenarioVisualizationRecord[];
+  active_visualization_scenario_id: string | null;
 }
 
 export interface FrontendShellState {

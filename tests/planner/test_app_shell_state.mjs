@@ -70,6 +70,13 @@ class FakeButton extends FakeHTMLElement {
       return this;
     }
 
+    if (
+      selector === "[data-shell-visualization-scenario]" &&
+      this.dataset.shellVisualizationScenario
+    ) {
+      return this;
+    }
+
     return null;
   }
 }
@@ -209,6 +216,8 @@ test("entry store switches launch flows and resumes saved sessions", () => {
     store.getState().workspace.loading_message,
     "Rehydrating the saved session entry point."
   );
+  assert.deepEqual(store.getState().workspace.visualization_scenarios, []);
+  assert.equal(store.getState().workspace.active_visualization_scenario_id, null);
 });
 
 test("entry store reports a deterministic error for missing sessions", () => {
@@ -292,6 +301,83 @@ test("trip workspace can render an in-trip revised scenario without losing saved
   assert.match(revisedWorkspace, /Rain-adjusted active plan/);
   assert.match(revisedWorkspace, /In-trip replanning checkpoint/);
   assert.match(revisedWorkspace, /\$145 over target unless the revised scenario holds/);
+});
+
+test("trip workspace renders map and timeline surfaces for route alternatives", () => {
+  const rendered = renderAppShellLayout(activeLeisureTripShellState);
+
+  assert.match(rendered, /Scenario route alternatives/);
+  assert.match(rendered, /Scenario map surface/);
+  assert.match(rendered, /Timeline structure/);
+  assert.match(rendered, /Lisbon regional loop/);
+  assert.match(rendered, /Scenic transit variant/);
+  assert.match(rendered, /Sintra day cluster/);
+  assert.match(rendered, /Day 3 Sintra excursion/);
+});
+
+test("planner workspace surfaces route coherence warnings from the selected visualization scenario", () => {
+  const rendered = renderAppShellLayout({
+    ...activeLeisureTripShellState,
+    active_route: "planner_workspace",
+  });
+
+  assert.match(rendered, /Route coherence and burden/);
+  assert.match(rendered, /Best route coherence with one medium-transfer excursion day/);
+  assert.match(rendered, /Sintra day can stack hill fatigue after a late arrival evening/);
+});
+
+test("mounted app shell can switch between visualization scenarios", () => {
+  const mountNode = new FakeMountNode();
+  const controller = renderAppShell(mountNode, activeLeisureTripShellState);
+
+  assert.equal(
+    controller.getState().workspace.active_visualization_scenario_id,
+    "scenario-lisbon-regional-loop"
+  );
+  assert.match(mountNode.innerHTML, /Lisbon regional loop/);
+  assert.match(mountNode.innerHTML, /Sintra day cluster/);
+
+  mountNode.click(
+    new FakeButton({
+      shellVisualizationScenario: "scenario-lisbon-scenic-transit",
+    })
+  );
+
+  assert.equal(
+    controller.getState().workspace.active_visualization_scenario_id,
+    "scenario-lisbon-scenic-transit"
+  );
+  assert.match(mountNode.innerHTML, /Scenic transit variant/);
+  assert.match(mountNode.innerHTML, /River ferry stitch/);
+  assert.match(mountNode.innerHTML, /aria-pressed="true"/);
+  assert.match(mountNode.innerHTML, /shell-mode-pill--leisure/);
+});
+
+test("trip workspace keeps scenario switcher mode aligned to the active business trip", () => {
+  const rendered = renderAppShellLayout({
+    ...activeBusinessTripShellState,
+    active_route: "trip_workspace",
+  });
+
+  assert.match(rendered, /shell-mode-pill--business/);
+  assert.match(rendered, /aria-pressed="true"/);
+});
+
+test("trip workspace falls back to textual guidance when map data is missing", () => {
+  const rendered = renderAppShellLayout({
+    ...activeLeisureTripShellState,
+    workspace: {
+      ...activeLeisureTripShellState.workspace,
+      visualization_scenarios: [],
+      active_visualization_scenario_id: null,
+    },
+  });
+
+  assert.match(rendered, /missing route visualization payload/);
+  assert.match(
+    rendered,
+    /Map provider data is unavailable, so the shell should fall back to textual route summaries/
+  );
 });
 
 test("mounted app shell ignores click events from non-element targets", () => {

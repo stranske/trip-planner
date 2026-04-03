@@ -538,6 +538,276 @@ const inTripRevisionBudgetSummary = {
   ],
 };
 
+const leisureVisualizationScenarios = [
+  {
+    scenario_id: "scenario-lisbon-regional-loop",
+    title: "Lisbon regional loop",
+    variant_label: "base route",
+    summary: "Keeps Lisbon as the lodging anchor while layering one Sintra day and one riverfront recovery day.",
+    route_shape: "regional cluster",
+    movement_burden: "low transfer burden",
+    tradeoff_summary: "Best route coherence with one medium-transfer excursion day.",
+    map_status: "ready",
+    map_summary: "Map surface should emphasize the Lisbon core, Sintra rail branch, and recovery-friendly riverside fallback anchors.",
+    route_warnings: [
+      "Sintra day can stack hill fatigue after a late arrival evening.",
+    ],
+    anchors: [
+      {
+        anchor_id: "anchor-lisbon-base",
+        label: "Baixa base hotel",
+        kind: "lodging",
+        summary: "Central lodging anchor for walkable dinners and tram access.",
+      },
+      {
+        anchor_id: "anchor-sintra",
+        label: "Sintra day cluster",
+        kind: "destination",
+        summary: "Regional excursion anchor with a single rail transfer.",
+      },
+      {
+        anchor_id: "anchor-riverside",
+        label: "Belém recovery block",
+        kind: "activity",
+        summary: "Low-friction afternoon fallback for a lighter day.",
+      },
+    ],
+    route_segments: [
+      {
+        segment_id: "segment-arrival",
+        label: "Arrival to base",
+        mode: "tram",
+        from_label: "Airport",
+        to_label: "Baixa base hotel",
+        duration_label: "35 min",
+        burden_label: "light arrival burden",
+        warning: null,
+      },
+      {
+        segment_id: "segment-sintra",
+        label: "Regional day loop",
+        mode: "rail",
+        from_label: "Rossio",
+        to_label: "Sintra day cluster",
+        duration_label: "45 min each way",
+        burden_label: "moderate day-trip burden",
+        warning: "Watch hill fatigue if the prior night runs late.",
+      },
+    ],
+    timeline_days: [
+      {
+        day_id: "day-1",
+        label: "Day 1 arrival",
+        posture: "soft landing",
+        movement_summary: "Keep the first evening compact and fully walkable.",
+        blocks: [
+          {
+            block_id: "block-1",
+            label: "Hotel check-in",
+            kind: "arrival",
+            time_label: "15:00",
+            summary: "Drop bags and keep the first neighborhood radius small.",
+          },
+          {
+            block_id: "block-2",
+            label: "Baixa dinner loop",
+            kind: "activity",
+            time_label: "19:00",
+            summary: "Short walk loop with low commitment if arrival runs late.",
+          },
+        ],
+      },
+      {
+        day_id: "day-3",
+        label: "Day 3 Sintra excursion",
+        posture: "regional move day",
+        movement_summary: "One out-and-back rail segment plus hill-heavy exploration.",
+        blocks: [
+          {
+            block_id: "block-3",
+            label: "Rossio departure",
+            kind: "transit",
+            time_label: "08:15",
+            summary: "Board the first rail leg before the station crowds build.",
+          },
+          {
+            block_id: "block-4",
+            label: "Castle + garden cluster",
+            kind: "activity",
+            time_label: "10:00",
+            summary: "Keep one recovery break between hill sections.",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    scenario_id: "scenario-lisbon-scenic-transit",
+    title: "Scenic transit variant",
+    variant_label: "scenic route",
+    summary: "Trades one extra transfer for ferry and tram segments that turn the route itself into part of the trip value.",
+    route_shape: "scenic transit chain",
+    movement_burden: "medium transfer burden",
+    tradeoff_summary: "Higher route delight, but more transfer exposure and less slack for late starts.",
+    map_status: "ready",
+    map_summary: "Map should emphasize the ferry stitch, tram spine, and where scenic movement increases transfer exposure.",
+    route_warnings: [
+      "Ferry timing narrows the margin for a slow morning.",
+      "Scenic route variant adds one extra transfer on the river crossing.",
+    ],
+    anchors: [
+      {
+        anchor_id: "anchor-ferry",
+        label: "River ferry stitch",
+        kind: "transfer",
+        summary: "The scenic crossing is part of the route value, not just transit overhead.",
+      },
+      {
+        anchor_id: "anchor-tram",
+        label: "Historic tram spine",
+        kind: "activity",
+        summary: "Route keeps hillside access scenic rather than taxi-heavy.",
+      },
+    ],
+    route_segments: [
+      {
+        segment_id: "segment-ferry",
+        label: "River crossing",
+        mode: "ferry",
+        from_label: "Cais do Sodré",
+        to_label: "Cacilhas",
+        duration_label: "15 min",
+        burden_label: "light scenic burden",
+        warning: "Missing the ferry pushes the afternoon sequence off by 30 minutes.",
+      },
+      {
+        segment_id: "segment-tram",
+        label: "Hillside tram arc",
+        mode: "tram",
+        from_label: "Cacilhas return",
+        to_label: "Alfama ridge",
+        duration_label: "30 min",
+        burden_label: "moderate crowding risk",
+        warning: null,
+      },
+    ],
+    timeline_days: [
+      {
+        day_id: "day-2",
+        label: "Day 2 scenic transfer day",
+        posture: "route-first day",
+        movement_summary: "The movement experience is the headline, so the route needs visible slack markers.",
+        blocks: [
+          {
+            block_id: "block-5",
+            label: "Ferry boarding buffer",
+            kind: "buffer",
+            time_label: "09:10",
+            summary: "Hold a 20-minute margin so the scenic chain stays intact.",
+          },
+          {
+            block_id: "block-6",
+            label: "Riverfront lunch",
+            kind: "stay",
+            time_label: "12:30",
+            summary: "Pause between ferry and tram segments to cut transfer fatigue.",
+          },
+        ],
+      },
+    ],
+  },
+];
+
+const businessVisualizationScenarios = [
+  {
+    scenario_id: "scenario-seattle-meeting-window",
+    title: "Meeting-window compliant route",
+    variant_label: "business base route",
+    summary: "Centers the hotel near the client site so the pre-dawn audit window stays resilient.",
+    route_shape: "hub and spoke",
+    movement_burden: "low morning risk",
+    tradeoff_summary: "Best for arrival certainty, but requires exception-ready lodging context.",
+    map_status: "ready",
+    map_summary: "Map should foreground the hotel-to-client corridor, Bellevue meeting window, and return buffer for the approval packet.",
+    route_warnings: [
+      "Hotel zone exception remains the main non-route blocker.",
+      "Cross-lake traffic can erase the evening buffer if departure slips.",
+    ],
+    anchors: [
+      {
+        anchor_id: "anchor-hotel",
+        label: "Client-adjacent hotel",
+        kind: "lodging",
+        summary: "Chosen to preserve the 5:45am arrival window.",
+      },
+      {
+        anchor_id: "anchor-client",
+        label: "Audit site",
+        kind: "meeting",
+        summary: "Hard arrival target with no acceptable late window.",
+      },
+      {
+        anchor_id: "anchor-bellevue",
+        label: "Bellevue follow-up",
+        kind: "meeting",
+        summary: "Secondary meeting block that tightens the afternoon transfer sequence.",
+      },
+    ],
+    route_segments: [
+      {
+        segment_id: "segment-audit-drive",
+        label: "Pre-dawn audit corridor",
+        mode: "car",
+        from_label: "Client-adjacent hotel",
+        to_label: "Audit site",
+        duration_label: "12 min",
+        burden_label: "low arrival risk",
+        warning: null,
+      },
+      {
+        segment_id: "segment-bellevue",
+        label: "Cross-lake meeting hop",
+        mode: "rideshare",
+        from_label: "Audit site",
+        to_label: "Bellevue follow-up",
+        duration_label: "28 min",
+        burden_label: "medium traffic burden",
+        warning: "Traffic spikes can consume the lunch buffer.",
+      },
+    ],
+    timeline_days: [
+      {
+        day_id: "day-1",
+        label: "Audit day",
+        posture: "constrained meeting window",
+        movement_summary: "Very little slack until the primary audit block is complete.",
+        blocks: [
+          {
+            block_id: "block-7",
+            label: "Hotel departure",
+            kind: "transit",
+            time_label: "05:20",
+            summary: "Leave before the road network starts shifting into commuter congestion.",
+          },
+          {
+            block_id: "block-8",
+            label: "Client audit",
+            kind: "meeting",
+            time_label: "05:45",
+            summary: "Primary hard-window work block that anchors the route choice.",
+          },
+          {
+            block_id: "block-9",
+            label: "Bellevue debrief",
+            kind: "meeting",
+            time_label: "14:00",
+            summary: "Secondary meeting with a narrow traffic buffer.",
+          },
+        ],
+      },
+    ],
+  },
+];
 /** @type {FrontendShellState} */
 export const firstTimeLeisureDashboardShellState = {
   session: firstTimeLeisureSession,
@@ -565,6 +835,8 @@ export const firstTimeLeisureDashboardShellState = {
       "First-trip launch should create persisted account, trip, and session records together.",
       "Empty-state onboarding must stay deterministic until live identity and session APIs arrive.",
     ],
+    visualization_scenarios: [],
+    active_visualization_scenario_id: null,
   },
 };
 
@@ -645,6 +917,8 @@ export const signedInDashboardShellState = {
       "Account is signed in and can resume saved leisure or business trips.",
       "Trip launch should branch into issue #557 once account and entry flows land.",
     ],
+    visualization_scenarios: [],
+    active_visualization_scenario_id: null,
   },
 };
 
@@ -695,6 +969,8 @@ export const businessPolicyStartDashboardShellState = {
       "Business launch should create the trip shell together with policy and approval capture.",
       "Session-entry must preserve why the traveler is starting a policy-aware trip before the planner workspace mounts.",
     ],
+    visualization_scenarios: [],
+    active_visualization_scenario_id: null,
   },
 };
 
@@ -720,6 +996,8 @@ export const activeLeisureTripShellState = {
       "Planner checkpoints should reuse orchestration payloads rather than page-local copies.",
       "Budget variants should stay linked to persisted budget-state ids rather than UI-only totals.",
     ],
+    visualization_scenarios: leisureVisualizationScenarios,
+    active_visualization_scenario_id: "scenario-lisbon-regional-loop",
   },
 };
 
@@ -744,6 +1022,8 @@ export const activeBusinessTripShellState = {
       "Approval comparables and packet metadata should remain attached to the proposal contract.",
       "Business approval surfaces should sit beside planner state, not replace it.",
     ],
+    visualization_scenarios: businessVisualizationScenarios,
+    active_visualization_scenario_id: "scenario-seattle-meeting-window",
   },
 };
 

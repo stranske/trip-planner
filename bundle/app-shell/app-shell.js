@@ -8,6 +8,7 @@
  *   FrontendLaunchFlowRecord,
  *   FrontendRecentSessionRecord,
  *   FrontendShellState,
+ *   FrontendScenarioVisualizationRecord,
  *   FrontendTripSummaryRecord,
  *   LaunchFlowId,
  *   FrontendWorkspaceRecord,
@@ -99,6 +100,32 @@ function normalizeAccountEntry(session, accountEntry) {
 }
 
 /**
+ * @param {FrontendWorkspaceRecord | Partial<FrontendWorkspaceRecord> | undefined} workspace
+ * @returns {FrontendWorkspaceRecord["visualization_scenarios"]}
+ */
+function normalizeVisualizationScenarios(workspace) {
+  return workspace?.visualization_scenarios ?? [];
+}
+
+/**
+ * @param {FrontendWorkspaceRecord | Partial<FrontendWorkspaceRecord> | undefined} workspace
+ * @returns {string | null}
+ */
+function resolveActiveVisualizationScenarioId(workspace) {
+  const scenarios = normalizeVisualizationScenarios(workspace);
+  if (scenarios.length === 0) {
+    return null;
+  }
+
+  const requestedScenarioId = workspace?.active_visualization_scenario_id;
+  if (requestedScenarioId && scenarios.some((scenario) => scenario.scenario_id === requestedScenarioId)) {
+    return requestedScenarioId;
+  }
+
+  return scenarios[0].scenario_id;
+}
+
+/**
  * @param {FrontendShellState["session"]} session
  * @param {FrontendTripSummaryRecord[]} trips
  * @param {string | null} activeTripId
@@ -169,6 +196,7 @@ export function buildAppShellState(input) {
   const trips = input.trips ?? [];
   const activeTrip = resolveActiveTrip(input.session, trips, input.active_trip_id ?? null);
   const accountEntry = normalizeAccountEntry(input.session, input.account_entry);
+  const visualizationScenarios = normalizeVisualizationScenarios(input.workspace);
   const workspace = {
     trip_id: input.workspace?.trip_id ?? activeTrip?.trip_id ?? null,
     status:
@@ -181,6 +209,8 @@ export function buildAppShellState(input) {
     loading_message: input.workspace?.loading_message ?? null,
     error_message: input.workspace?.error_message ?? null,
     persistence_summary: input.workspace?.persistence_summary ?? [],
+    visualization_scenarios: visualizationScenarios,
+    active_visualization_scenario_id: resolveActiveVisualizationScenarioId(input.workspace),
   };
   const routes = getShellRoutes(activeTrip, workspace);
   const defaultRoute = getDefaultRoute(activeTrip, workspace);
@@ -238,6 +268,8 @@ export function createAppShellStore(initialState) {
               loading_message: null,
               error_message: null,
               persistence_summary: state.workspace.persistence_summary,
+              visualization_scenarios: [],
+              active_visualization_scenario_id: null,
             }
           : {
               ...state.workspace,
@@ -258,15 +290,17 @@ export function createAppShellStore(initialState) {
           ...state.account_entry,
           selected_launch_id: launchId,
         },
-          workspace: {
-            ...state.workspace,
-            status: "empty",
-            scenario_summaries: [],
-            checkpoint_history: [],
-            budget_summary: null,
-            loading_message: null,
-            error_message: null,
-          },
+        workspace: {
+          ...state.workspace,
+          status: "empty",
+          scenario_summaries: [],
+          checkpoint_history: [],
+          budget_summary: null,
+          loading_message: null,
+          error_message: null,
+          visualization_scenarios: [],
+          active_visualization_scenario_id: null,
+        },
       });
       notify();
     },
@@ -293,6 +327,8 @@ export function createAppShellStore(initialState) {
         return;
       }
 
+      const isTripChange = state.workspace.trip_id !== session.trip_id;
+
       state = buildAppShellState({
         ...state,
         active_trip_id: session.trip_id,
@@ -306,11 +342,33 @@ export function createAppShellStore(initialState) {
           trip_id: session.trip_id,
           status: "loading",
           planner_panel_state: null,
-          scenario_summaries: [],
-          checkpoint_history: [],
-          budget_summary: null,
+          scenario_summaries: isTripChange ? [] : state.workspace.scenario_summaries,
+          checkpoint_history: isTripChange ? [] : state.workspace.checkpoint_history,
+          budget_summary: isTripChange ? null : state.workspace.budget_summary,
           loading_message: "Rehydrating the saved session entry point.",
           error_message: null,
+          visualization_scenarios: isTripChange ? [] : state.workspace.visualization_scenarios,
+          active_visualization_scenario_id: isTripChange
+            ? null
+            : state.workspace.active_visualization_scenario_id,
+        },
+      });
+      notify();
+    },
+    setVisualizationScenario(scenarioId) {
+      if (
+        !state.workspace.visualization_scenarios.some(
+          (scenario) => scenario.scenario_id === scenarioId
+        )
+      ) {
+        return;
+      }
+
+      state = buildAppShellState({
+        ...state,
+        workspace: {
+          ...state.workspace,
+          active_visualization_scenario_id: scenarioId,
         },
       });
       notify();
@@ -536,6 +594,181 @@ function renderRouteTabs(state) {
 }
 
 /**
+ * @param {FrontendScenarioVisualizationRecord | null} scenario
+ * @returns {string}
+ */
+function renderScenarioMapPanel(scenario) {
+  if (!scenario) {
+    return `
+      <section class="shell-panel">
+        <div class="shell-panel-header">
+          <h3>Scenario map surface</h3>
+          <span class="shell-meta">waiting for route context</span>
+        </div>
+        <p class="shell-empty-state">Select a visualization scenario to render anchors, route segments, and travel-burden signals.</p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="shell-panel">
+      <div class="shell-panel-header">
+        <h3>Scenario map surface</h3>
+        <span class="shell-meta">${escapeHtml(scenario.map_status === "ready" ? "map-ready" : "fallback schematic")}</span>
+      </div>
+      <p>${escapeHtml(scenario.map_summary)}</p>
+      <div class="shell-chip-row">
+        <span class="shell-chip">${escapeHtml(scenario.route_shape)}</span>
+        <span class="shell-chip">${escapeHtml(scenario.movement_burden)}</span>
+        <span class="shell-chip">${escapeHtml(scenario.tradeoff_summary)}</span>
+      </div>
+      <section class="shell-panel shell-panel--sub">
+        <div class="shell-panel-header">
+          <h3>Route anchors</h3>
+          <span class="shell-meta">${escapeHtml(`${scenario.anchors.length} major stops`)}</span>
+        </div>
+        <ul class="shell-list">
+          ${scenario.anchors
+            .map(
+              (anchor) =>
+                `<li><strong>${escapeHtml(anchor.label)}:</strong> ${escapeHtml(anchor.kind)} · ${escapeHtml(anchor.summary)}</li>`
+            )
+            .join("")}
+        </ul>
+      </section>
+      <section class="shell-panel shell-panel--sub">
+        <div class="shell-panel-header">
+          <h3>Route segments</h3>
+          <span class="shell-meta">movement burden and transfer risk</span>
+        </div>
+        <ul class="shell-list">
+          ${scenario.route_segments
+            .map(
+              (segment) =>
+                `<li><strong>${escapeHtml(segment.label)}:</strong> ${escapeHtml(`${segment.from_label} to ${segment.to_label}`)} · ${escapeHtml(segment.mode)} · ${escapeHtml(segment.duration_label)} · ${escapeHtml(segment.burden_label)}${segment.warning ? ` · ${escapeHtml(segment.warning)}` : ""}</li>`
+            )
+            .join("")}
+        </ul>
+      </section>
+    </section>
+  `;
+}
+
+/**
+ * @param {FrontendScenarioVisualizationRecord | null} scenario
+ * @returns {string}
+ */
+function renderScenarioTimelinePanel(scenario) {
+  if (!scenario) {
+    return `
+      <section class="shell-panel">
+        <div class="shell-panel-header">
+          <h3>Timeline structure</h3>
+          <span class="shell-meta">waiting for day plan</span>
+        </div>
+        <p class="shell-empty-state">Timeline views will appear after the planner publishes day blocks and movement posture.</p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="shell-panel">
+      <div class="shell-panel-header">
+        <h3>Timeline structure</h3>
+        <span class="shell-meta">${escapeHtml(`${scenario.timeline_days.length} mapped days`)}</span>
+      </div>
+      <div class="shell-trip-grid">
+        ${scenario.timeline_days
+          .map(
+            (day) => `
+              <article class="shell-panel shell-panel--sub">
+                <div class="shell-panel-header">
+                  <h3>${escapeHtml(day.label)}</h3>
+                  <span class="shell-meta">${escapeHtml(day.posture)}</span>
+                </div>
+                <p>${escapeHtml(day.movement_summary)}</p>
+                <ul class="shell-list">
+                  ${day.blocks
+                    .map(
+                      (block) =>
+                        `<li><strong>${escapeHtml(block.time_label)} · ${escapeHtml(block.label)}:</strong> ${escapeHtml(block.kind)} · ${escapeHtml(block.summary)}</li>`
+                    )
+                    .join("")}
+                </ul>
+              </article>
+            `
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+/**
+ * @param {FrontendWorkspaceRecord} workspace
+ * @returns {FrontendScenarioVisualizationRecord | null}
+ */
+function getActiveVisualizationScenario(workspace) {
+  return (
+    workspace.visualization_scenarios.find(
+      (scenario) => scenario.scenario_id === workspace.active_visualization_scenario_id
+    ) ?? null
+  );
+}
+
+/**
+ * @param {FrontendWorkspaceRecord} workspace
+ * @param {"leisure" | "business"} tripMode
+ * @returns {string}
+ */
+function renderScenarioSwitcher(workspace, tripMode) {
+  if (workspace.visualization_scenarios.length === 0) {
+    return `
+      <section class="shell-panel">
+        <div class="shell-panel-header">
+          <h3>Scenario route alternatives</h3>
+          <span class="shell-meta">missing route visualization payload</span>
+        </div>
+        <p class="shell-empty-state">Map provider data is unavailable, so the shell should fall back to textual route summaries until route outputs are present.</p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="shell-panel">
+      <div class="shell-panel-header">
+        <h3>Scenario route alternatives</h3>
+        <span class="shell-meta">switch between rendered route variants</span>
+      </div>
+      <div class="shell-trip-grid">
+        ${workspace.visualization_scenarios
+          .map(
+            (scenario) => `
+              <button
+                type="button"
+                class="shell-trip-card shell-trip-card--launch${scenario.scenario_id === workspace.active_visualization_scenario_id ? " is-active" : ""}"
+                data-shell-visualization-scenario="${escapeAttribute(scenario.scenario_id)}"
+                aria-pressed="${scenario.scenario_id === workspace.active_visualization_scenario_id}"
+              >
+                <div class="shell-trip-card-header">
+                  <strong>${escapeHtml(scenario.title)}</strong>
+                  <span class="shell-mode-pill shell-mode-pill--${escapeAttribute(tripMode)}">${escapeHtml(scenario.variant_label)}</span>
+                </div>
+                <p>${escapeHtml(scenario.summary)}</p>
+                <div class="shell-chip-row">
+                  <span class="shell-chip">${escapeHtml(scenario.route_shape)}</span>
+                  <span class="shell-chip">${escapeHtml(scenario.movement_burden)}</span>
+                </div>
+              </button>
+            `
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+/**
  * @param {FrontendWorkspaceRecord} workspace
  * @returns {string}
  */
@@ -665,6 +898,7 @@ function renderTripWorkspaceView(state) {
   }
 
   const plannerState = state.workspace.planner_panel_state;
+  const activeScenario = getActiveVisualizationScenario(state.workspace);
   const scenarioSummary = plannerState
     ? `${plannerState.outputs.length} outputs, ${plannerState.pending_decisions.length} decision checkpoint, ${plannerState.option_set.options.length} surfaced options`
     : "Planner payload not mounted yet.";
@@ -790,6 +1024,9 @@ function renderTripWorkspaceView(state) {
             : "<p class=\"shell-empty-state\">Budget posture will appear once persisted budget state is attached.</p>"
         }
       </section>
+      ${renderScenarioSwitcher(state.workspace, activeTrip.mode)}
+      ${renderScenarioMapPanel(activeScenario)}
+      ${renderScenarioTimelinePanel(activeScenario)}
     </section>
   `;
 }
@@ -801,6 +1038,7 @@ function renderTripWorkspaceView(state) {
 function renderPlannerWorkspaceView(state) {
   const boundary = renderWorkspaceStatusBoundary(state.workspace);
   const plannerState = state.workspace.planner_panel_state;
+  const activeScenario = getActiveVisualizationScenario(state.workspace);
   if (!plannerState) {
     return `${boundary}<p class="shell-empty-state">Planner route will hydrate once orchestration state is available.</p>`;
   }
@@ -834,6 +1072,27 @@ function renderPlannerWorkspaceView(state) {
             .join("")}
         </ul>
       </section>
+      <section class="shell-panel">
+        <div class="shell-panel-header">
+          <h3>Route coherence and burden</h3>
+          <span class="shell-meta">planner-facing visualization summary</span>
+        </div>
+        ${
+          activeScenario
+            ? `
+              <p>${escapeHtml(activeScenario.tradeoff_summary)}</p>
+              <ul class="shell-list">
+                ${activeScenario.route_warnings.length
+                  ? activeScenario.route_warnings
+                      .map((warning) => `<li>${escapeHtml(warning)}</li>`)
+                      .join("")
+                  : "<li>No route warnings for the selected scenario.</li>"}
+              </ul>
+            `
+            : '<p class="shell-empty-state">Map provider data is unavailable, so planner review should rely on textual burden summaries until route outputs hydrate.</p>'
+        }
+      </section>
+      ${renderScenarioTimelinePanel(activeScenario)}
     </section>
   `;
 }
@@ -989,6 +1248,17 @@ export function renderAppShell(mountNode, initialState) {
           detail: store.getState().active_trip_id,
         })
       );
+      return;
+    }
+
+    const visualizationTarget = event.target.closest("[data-shell-visualization-scenario]");
+    if (visualizationTarget?.dataset.shellVisualizationScenario) {
+      store.setVisualizationScenario(visualizationTarget.dataset.shellVisualizationScenario);
+      mountNode.dispatchEvent(
+        new CustomEvent("shell:visualization-change", {
+          detail: store.getState().workspace.active_visualization_scenario_id,
+        })
+      );
     }
   };
 
@@ -1009,6 +1279,9 @@ export function renderAppShell(mountNode, initialState) {
     },
     resumeSession(sessionId) {
       store.resumeSession(sessionId);
+    },
+    setVisualizationScenario(scenarioId) {
+      store.setVisualizationScenario(scenarioId);
     },
     destroy() {
       unsubscribe();
