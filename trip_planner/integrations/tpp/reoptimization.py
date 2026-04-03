@@ -31,6 +31,8 @@ def _validate_ref_mapping(mapping: dict[str, list[str]], field_name: str) -> Non
         raise ValueError(f"{field_name} must be a mapping")
     for key, values in mapping.items():
         require_non_empty(key, f"{field_name} key")
+        if not isinstance(values, list):
+            raise ValueError(f"{field_name}[{key}] must be a list of strings")
         require_strings(values, f"{field_name}[{key}]")
 
 
@@ -215,6 +217,14 @@ class TPPReoptimizationService:
                 ref
                 for category in candidate_categories
                 for ref in context.comparable_refs.get(category, [])
+            ]
+        )
+        preserved_comparable_refs = _dedupe(
+            preserved_comparable_refs
+            + [
+                item.comparable_ref
+                for item in evaluation_result.preferred_alternatives
+                if item.comparable_ref and item.category in candidate_categories
             ]
         )
         preserved_justification_refs = _dedupe(

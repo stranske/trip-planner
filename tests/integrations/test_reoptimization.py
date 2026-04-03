@@ -87,6 +87,23 @@ def test_reoptimization_uses_preferred_alternative_guidance_to_narrow_candidates
     ]
 
 
+def test_reoptimization_preserves_preferred_alternative_refs_without_context_seed() -> None:
+    proposal, evaluation_result, context = _build_inputs("preferred_alternative.json")
+    service = TPPReoptimizationService()
+    context = PolicyReoptimizationContext(
+        source_version=context.source_version,
+        comparable_refs={},
+        justification_refs=context.justification_refs,
+    )
+
+    plan = service.plan_reoptimization(proposal, evaluation_result, context)
+
+    assert plan.preserved_comparable_refs == [
+        "comparable:airfare:preferred-channel",
+        "comparable:lodging:policy-cap",
+    ]
+
+
 def test_reoptimization_generates_exception_candidate_with_preserved_context() -> None:
     proposal, evaluation_result, context = _build_inputs("exception_required.json")
     service = TPPReoptimizationService()
@@ -125,4 +142,18 @@ def test_reoptimization_rejects_mismatched_evaluation_result() -> None:
             proposal,
             PolicyEvaluationResult.from_dict(payload),
             context,
+        )
+
+
+def test_reoptimization_context_rejects_non_list_ref_mapping_values() -> None:
+    _, _, context = _build_inputs("fixable_failure.json")
+
+    with pytest.raises(
+        ValueError,
+        match=r"comparable_refs\[lodging\] must be a list of strings",
+    ):
+        PolicyReoptimizationContext(
+            source_version=context.source_version,
+            comparable_refs={"lodging": "comparable:lodging:policy-cap"},  # type: ignore[arg-type]
+            justification_refs=context.justification_refs,
         )
