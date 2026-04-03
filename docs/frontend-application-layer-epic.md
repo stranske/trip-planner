@@ -76,6 +76,7 @@ The epic acceptance criteria from `#555` map to child issue outcomes as follows:
 Use these documents together when implementing the child issues:
 
 - [Product architecture brief](product-architecture-brief.md)
+- [Frontend app shell foundation](frontend-app-shell-foundation.md)
 - [Planner UI integration](planner-ui-integration.md)
 - [Orchestration, interactive planning, and in-trip adjustment epic](orchestration-interactive-planning-epic.md)
 - [Policy integration execution epic](policy-integration-execution-epic.md)

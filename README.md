@@ -26,6 +26,7 @@
 - [Core domain contracts](docs/domain-contracts.md)
 - [Business travel profile](docs/business-travel-profile.md)
 - [Planner UI integration](docs/planner-ui-integration.md)
+- [Frontend app shell foundation](docs/frontend-app-shell-foundation.md)
 - [Source and quality model](docs/source-quality-model.md)
 - [Source channel strategy](docs/source-channel-strategy.md)
 - [Legacy itinerary methodology](docs/methodology.md)
