@@ -273,6 +273,10 @@ class RankedResult:
             if self.target_bundle_id is not None:
                 raise ValueError("item results cannot provide target_bundle_id")
         else:
+            if self.target_option is not None:
+                raise ValueError(
+                    "bundle and route results cannot provide target_option"
+                )
             if not self.target_bundle_id:
                 raise ValueError("bundle and route results must provide target_bundle_id")
             if self.result_kind == "route" and not self.route_sequence:
