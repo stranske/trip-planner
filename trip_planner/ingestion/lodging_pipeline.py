@@ -170,7 +170,6 @@ def ingest_lodging_snapshot(
                 option.notes.extend(record_warnings)
         lodging_options.append(option)
         emitted_ids.update(record.record_id for record in candidate_records)
-        filtered_record_ids.extend(record.record_id for record in candidate_records[1:])
         provenance_refs.extend(option.source_refs)
 
     for record in snapshot.records:

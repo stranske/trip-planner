@@ -89,8 +89,8 @@ def test_lodging_pipeline_merges_duplicates_and_keeps_conflicts_visible() -> Non
     assert result.handoff is not None
     assert result.handoff.status == "partial"
     assert result.summary.emitted_options == 1
-    assert result.summary.skipped_records == 1
-    assert result.summary.filtered_record_ids == ["record-lodging-b"]
+    assert result.summary.skipped_records == 0
+    assert result.summary.filtered_record_ids == []
     assert result.summary.low_confidence_option_ids == ["lodging-ams-canal-house"]
     assert len(result.lodging_options[0].source_refs) == 2
     assert result.unresolved_conflicts[0].attribute_path == "booking_terms.refundable"

@@ -167,7 +167,6 @@ def ingest_transport_snapshot(
                 option.notes.extend(record_warnings)
         transport_options.append(option)
         emitted_ids.update(record.record_id for record in records)
-        filtered_record_ids.extend(record.record_id for record in records[1:])
         provenance_refs.extend(option.source_refs)
 
     for record in snapshot.records:
