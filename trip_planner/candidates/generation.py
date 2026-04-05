@@ -188,6 +188,13 @@ def _build_candidate_seeds(
             key=lambda item: item.significance_summary.overall_signal or 0.0,
             reverse=True,
         )
+        if not _should_emit_seed(
+            destination=destination,
+            destination_lodging=destination_lodging,
+            destination_transport=destination_transport,
+            destination_activity=destination_activity,
+        ):
+            continue
         if not (destination_lodging or destination_transport or destination_activity):
             continue
         bundle_destinations = _bundle_destinations(
@@ -576,6 +583,21 @@ def _bundle_tradeoffs(
     for activity_option in activity_options:
         risks.extend(activity_option.feasibility.constraints)
     return _dedupe_strings(risks)
+
+
+def _should_emit_seed(
+    *,
+    destination: Destination,
+    destination_lodging: list[LodgingOption],
+    destination_transport: list[TransportOption],
+    destination_activity: list[ActivityOption],
+) -> bool:
+    if destination_lodging or destination_activity:
+        return True
+    return any(
+        option.destination_id == destination.destination_id
+        for option in destination_transport
+    )
 
 
 def _bundle_dependencies(
