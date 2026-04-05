@@ -40,13 +40,22 @@ class TransportIngestionResult:
     def __post_init__(self) -> None:
         require_non_empty(self.pipeline_id, "pipeline_id")
         require_non_empty(self.snapshot_id, "snapshot_id")
-        if any(not isinstance(item, TransportOption) for item in self.transport_options):
+        if any(
+            not isinstance(item, TransportOption) for item in self.transport_options
+        ):
             raise ValueError("transport_options must contain TransportOption instances")
-        if any(not isinstance(item, AttributeConflict) for item in self.unresolved_conflicts):
-            raise ValueError("unresolved_conflicts must contain AttributeConflict instances")
+        if any(
+            not isinstance(item, AttributeConflict)
+            for item in self.unresolved_conflicts
+        ):
+            raise ValueError(
+                "unresolved_conflicts must contain AttributeConflict instances"
+            )
         if any(not isinstance(item, IngestionWarning) for item in self.warnings):
             raise ValueError("warnings must contain IngestionWarning instances")
-        if self.handoff is not None and not isinstance(self.handoff, NormalizationHandoff):
+        if self.handoff is not None and not isinstance(
+            self.handoff, NormalizationHandoff
+        ):
             raise ValueError("handoff must be a NormalizationHandoff when provided")
         if not isinstance(self.summary, IngestionSummary):
             raise ValueError("summary must be an IngestionSummary")
@@ -70,7 +79,9 @@ def ingest_transport_snapshot(
     resolutions = resolutions or []
     dedup_decisions = dedup_decisions or []
     warnings = [warning_from_issue(issue) for issue in snapshot.issues]
-    resolution_map = {resolution.resolution_id: resolution for resolution in resolutions}
+    resolution_map = {
+        resolution.resolution_id: resolution for resolution in resolutions
+    }
     emitted_ids: set[str] = set()
     filtered_record_ids: list[str] = []
     low_confidence_option_ids: list[str] = []
@@ -79,21 +90,69 @@ def ingest_transport_snapshot(
     provenance_refs = []
 
     for decision in dedup_decisions:
-        if decision.entity_scope != "transport" or decision.option_kind != snapshot.option_kind:
+        if (
+            decision.entity_scope != "transport"
+            or decision.option_kind != snapshot.option_kind
+        ):
             continue
         record_ids = _record_ids_for_decision(decision, resolution_map)
+        records = _records_for_decision(snapshot.records, decision, resolution_map)
         preserved_conflicts.extend(unresolved_conflicts(decision.preserved_conflicts))
         if decision.decision == "suppress":
             emitted_ids.update(record_ids)
             filtered_record_ids.extend(
-                record_id for record_id in record_ids if record_id not in filtered_record_ids
+                record_id
+                for record_id in record_ids
+                if record_id not in filtered_record_ids
             )
             continue
         if decision.decision in {"keep_separate", "needs_review"}:
+            if not records:
+                warnings.append(
+                    IngestionWarning(
+                        warning_id=f"{decision.decision_id}:missing-records",
+                        severity="warning",
+                        code="missing_decision_records",
+                        message="Dedup decision did not map to any raw transport records.",
+                    )
+                )
+                continue
+            unresolved = unresolved_conflicts(decision.preserved_conflicts)
+            for record in records:
+                option = _transport_option_from_records(
+                    [record],
+                    snapshot,
+                    _separate_option_id(decision.canonical_entity_id, record),
+                )
+                option.notes.extend(
+                    [f"dedup_decision:{decision.decision_id}", *decision.notes]
+                )
+                option.feasibility.constraints.extend(
+                    [
+                        f"{conflict.attribute_path}:{conflict.reason}"
+                        for conflict in unresolved
+                    ]
+                )
+                record_warnings = record.payload.get("normalization_warnings", [])
+                if record_warnings:
+                    warnings.append(
+                        IngestionWarning(
+                            warning_id=f"{record.record_id}:normalization",
+                            severity="warning",
+                            code="normalization_warning",
+                            message="; ".join(record_warnings),
+                            record_ids=[record.record_id],
+                        )
+                    )
+                    option.notes.extend(record_warnings)
+                transport_options.append(option)
+                provenance_refs.extend(option.source_refs)
+                emitted_ids.add(record.record_id)
+                if decision.decision == "needs_review" or decision.confidence < 0.75:
+                    low_confidence_option_ids.append(option.option_id)
             continue
         if decision.decision != "merge":
             continue
-        records = _records_for_decision(snapshot.records, decision, resolution_map)
         if not records:
             warnings.append(
                 IngestionWarning(
@@ -104,7 +163,9 @@ def ingest_transport_snapshot(
                 )
             )
             continue
-        option = _transport_option_from_records(records, snapshot, decision.canonical_entity_id)
+        option = _transport_option_from_records(
+            records, snapshot, decision.canonical_entity_id
+        )
         option.notes.extend([f"dedup_decision:{decision.decision_id}", *decision.notes])
         option.feasibility.constraints.extend(
             [
@@ -129,7 +190,6 @@ def ingest_transport_snapshot(
                 option.notes.extend(record_warnings)
         transport_options.append(option)
         emitted_ids.update(record.record_id for record in records)
-        filtered_record_ids.extend(record.record_id for record in records[1:])
         provenance_refs.extend(option.source_refs)
 
     for record in snapshot.records:
@@ -140,13 +200,21 @@ def ingest_transport_snapshot(
             [record], snapshot, _canonical_option_id(record, resolution)
         )
         if resolution is not None:
-            option.notes.extend([f"resolution:{resolution.resolution_id}", *resolution.notes])
+            option.notes.extend(
+                [f"resolution:{resolution.resolution_id}", *resolution.notes]
+            )
             unresolved = unresolved_conflicts(resolution.conflicts)
             preserved_conflicts.extend(unresolved)
             option.feasibility.constraints.extend(
-                [f"{conflict.attribute_path}:{conflict.reason}" for conflict in unresolved]
+                [
+                    f"{conflict.attribute_path}:{conflict.reason}"
+                    for conflict in unresolved
+                ]
             )
-            if resolution.review_required or _lowest_match_confidence(resolution) < 0.75:
+            if (
+                resolution.review_required
+                or _lowest_match_confidence(resolution) < 0.75
+            ):
                 low_confidence_option_ids.append(option.option_id)
         record_warnings = record.payload.get("normalization_warnings", [])
         if record_warnings:
@@ -173,7 +241,7 @@ def ingest_transport_snapshot(
     summary = IngestionSummary(
         total_records=len(snapshot.records),
         emitted_options=len(transport_options),
-        skipped_records=max(0, len(snapshot.records) - len(transport_options)),
+        skipped_records=len(filtered_record_ids),
         degraded_options=sum(1 for option in transport_options if option.notes),
         unresolved_conflicts=len(preserved_conflicts),
         low_confidence_option_ids=sorted(set(low_confidence_option_ids)),
@@ -188,7 +256,9 @@ def ingest_transport_snapshot(
             warning.warning_id for warning in warnings if warning.severity == "error"
         ],
         provenance_refs=provenance_refs,
-        notes=["Transport ingestion scaffolding emitted normalized options from raw snapshots."],
+        notes=[
+            "Transport ingestion scaffolding emitted normalized options from raw snapshots."
+        ],
     )
     return TransportIngestionResult(
         pipeline_id=f"transport-ingestion:{snapshot.snapshot_id}",
@@ -271,10 +341,16 @@ def _resolution_for_record(
     return None
 
 
-def _canonical_option_id(record: RawSourceRecord, resolution: EntityResolution | None) -> str:
+def _canonical_option_id(
+    record: RawSourceRecord, resolution: EntityResolution | None
+) -> str:
     if resolution is not None:
         return resolution.canonical_entity_id
     return f"transport-{record.provider_entity_id}"
+
+
+def _separate_option_id(canonical_entity_id: str, record: RawSourceRecord) -> str:
+    return f"{canonical_entity_id}-{record.record_id}"
 
 
 def _lowest_match_confidence(resolution: EntityResolution) -> float:

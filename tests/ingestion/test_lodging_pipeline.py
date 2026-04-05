@@ -42,7 +42,9 @@ def _build_resolution(payload: dict[str, Any]) -> EntityResolution:
         status=payload["status"],
         canonical_entity_id=payload["canonical_entity_id"],
         summary=payload["summary"],
-        match_candidates=[MatchCandidate(**item) for item in payload.get("match_candidates", [])],
+        match_candidates=[
+            MatchCandidate(**item) for item in payload.get("match_candidates", [])
+        ],
         conflicts=[AttributeConflict(**item) for item in payload.get("conflicts", [])],
         review_required=payload.get("review_required", False),
     )
@@ -89,7 +91,8 @@ def test_lodging_pipeline_merges_duplicates_and_keeps_conflicts_visible() -> Non
     assert result.handoff is not None
     assert result.handoff.status == "partial"
     assert result.summary.emitted_options == 1
-    assert result.summary.filtered_record_ids == ["record-lodging-b"]
+    assert result.summary.skipped_records == 0
+    assert result.summary.filtered_record_ids == []
     assert result.summary.low_confidence_option_ids == ["lodging-ams-canal-house"]
     assert len(result.lodging_options[0].source_refs) == 2
     assert result.unresolved_conflicts[0].attribute_path == "booking_terms.refundable"
@@ -109,11 +112,12 @@ def test_lodging_pipeline_keeps_separate_decisions_as_individual_options() -> No
 
     assert result.handoff is not None
     assert result.summary.emitted_options == 2
+    assert result.summary.skipped_records == 0
     assert result.summary.filtered_record_ids == []
     assert len(result.unresolved_conflicts) == 1
     assert sorted(option.option_id for option in result.lodging_options) == [
-        "lodging-ams-canal-house",
-        "lodging-ams-canal-house",
+        "lodging-ams-canal-house-record-lodging-a",
+        "lodging-ams-canal-house-record-lodging-b",
     ]
 
 
@@ -131,6 +135,7 @@ def test_lodging_pipeline_suppresses_records_from_suppressed_decisions() -> None
     assert result.handoff is not None
     assert result.handoff.status == "blocked"
     assert result.summary.emitted_options == 0
+    assert result.summary.skipped_records == 2
     assert result.summary.filtered_record_ids == [
         "record-lodging-a",
         "record-lodging-b",

@@ -44,7 +44,9 @@ def _build_resolution(payload: dict[str, Any]) -> EntityResolution:
         status=payload["status"],
         canonical_entity_id=payload["canonical_entity_id"],
         summary=payload["summary"],
-        match_candidates=[MatchCandidate(**item) for item in payload.get("match_candidates", [])],
+        match_candidates=[
+            MatchCandidate(**item) for item in payload.get("match_candidates", [])
+        ],
         conflicts=[AttributeConflict(**item) for item in payload.get("conflicts", [])],
         review_required=payload.get("review_required", False),
     )
@@ -91,8 +93,11 @@ def test_transport_pipeline_merges_duplicates_and_retains_review_gaps() -> None:
     assert result.handoff is not None
     assert result.handoff.status == "partial"
     assert result.summary.emitted_options == 1
-    assert result.summary.filtered_record_ids == ["record-transport-b"]
-    assert result.summary.low_confidence_option_ids == ["transport-paris-amsterdam-eurostar"]
+    assert result.summary.skipped_records == 0
+    assert result.summary.filtered_record_ids == []
+    assert result.summary.low_confidence_option_ids == [
+        "transport-paris-amsterdam-eurostar"
+    ]
     assert len(result.transport_options[0].source_refs) == 2
     assert len(result.unresolved_conflicts) == 1
     assert {warning.code for warning in result.warnings} == {
@@ -114,11 +119,12 @@ def test_transport_pipeline_keeps_separate_decisions_as_individual_options() -> 
 
     assert result.handoff is not None
     assert result.summary.emitted_options == 2
+    assert result.summary.skipped_records == 0
     assert result.summary.filtered_record_ids == []
     assert len(result.unresolved_conflicts) == 1
     assert sorted(option.option_id for option in result.transport_options) == [
-        "transport-paris-amsterdam-eurostar",
-        "transport-paris-amsterdam-eurostar",
+        "transport-paris-amsterdam-eurostar-record-transport-a",
+        "transport-paris-amsterdam-eurostar-record-transport-b",
     ]
 
 
@@ -136,6 +142,7 @@ def test_transport_pipeline_suppresses_records_from_suppressed_decisions() -> No
     assert result.handoff is not None
     assert result.handoff.status == "blocked"
     assert result.summary.emitted_options == 0
+    assert result.summary.skipped_records == 2
     assert result.summary.filtered_record_ids == [
         "record-transport-a",
         "record-transport-b",
