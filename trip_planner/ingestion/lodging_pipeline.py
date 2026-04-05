@@ -83,6 +83,7 @@ def ingest_lodging_snapshot(
         if decision.entity_scope != "lodging" or decision.option_kind != snapshot.option_kind:
             continue
         record_ids = _record_ids_for_decision(decision, resolution_map)
+        candidate_records = _records_for_decision(snapshot.records, decision, resolution_map)
         preserved_conflicts.extend(unresolved_conflicts(decision.preserved_conflicts))
         if decision.decision == "suppress":
             emitted_ids.update(record_ids)
@@ -91,10 +92,47 @@ def ingest_lodging_snapshot(
             )
             continue
         if decision.decision in {"keep_separate", "needs_review"}:
+            if not candidate_records:
+                warnings.append(
+                    IngestionWarning(
+                        warning_id=f"{decision.decision_id}:missing-records",
+                        severity="warning",
+                        code="missing_decision_records",
+                        message="Dedup decision did not map to any raw lodging records.",
+                    )
+                )
+                continue
+            unresolved = unresolved_conflicts(decision.preserved_conflicts)
+            for record in candidate_records:
+                option = _lodging_option_from_records(
+                    [record],
+                    snapshot,
+                    _separate_option_id(decision.canonical_entity_id, record),
+                )
+                option.notes.extend([f"dedup_decision:{decision.decision_id}", *decision.notes])
+                option.feasibility.constraints.extend(
+                    [f"{conflict.attribute_path}:{conflict.reason}" for conflict in unresolved]
+                )
+                record_warnings = record.payload.get("normalization_warnings", [])
+                if record_warnings:
+                    warnings.append(
+                        IngestionWarning(
+                            warning_id=f"{record.record_id}:normalization",
+                            severity="warning",
+                            code="normalization_warning",
+                            message="; ".join(record_warnings),
+                            record_ids=[record.record_id],
+                        )
+                    )
+                    option.notes.extend(record_warnings)
+                lodging_options.append(option)
+                provenance_refs.extend(option.source_refs)
+                emitted_ids.add(record.record_id)
+                if decision.decision == "needs_review" or decision.confidence < 0.75:
+                    low_confidence_option_ids.append(option.option_id)
             continue
         if decision.decision != "merge":
             continue
-        candidate_records = _records_for_decision(snapshot.records, decision, resolution_map)
         if not candidate_records:
             warnings.append(
                 IngestionWarning(
@@ -176,7 +214,7 @@ def ingest_lodging_snapshot(
     summary = IngestionSummary(
         total_records=len(snapshot.records),
         emitted_options=len(lodging_options),
-        skipped_records=max(0, len(snapshot.records) - len(lodging_options)),
+        skipped_records=len(filtered_record_ids),
         degraded_options=sum(1 for option in lodging_options if option.notes),
         unresolved_conflicts=len(preserved_conflicts),
         low_confidence_option_ids=sorted(set(low_confidence_option_ids)),
@@ -281,6 +319,10 @@ def _canonical_option_id(record: RawSourceRecord, resolution: EntityResolution |
     if resolution is not None:
         return resolution.canonical_entity_id
     return f"lodging-{record.provider_entity_id}"
+
+
+def _separate_option_id(canonical_entity_id: str, record: RawSourceRecord) -> str:
+    return f"{canonical_entity_id}-{record.record_id}"
 
 
 def _lowest_match_confidence(resolution: EntityResolution) -> float:
