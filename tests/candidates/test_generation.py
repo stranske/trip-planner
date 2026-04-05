@@ -106,6 +106,9 @@ def test_business_candidate_generation_filters_policy_violations_and_marks_polic
 
     assert candidate_set.purpose == "policy_comparison"
     assert candidate_set.filter_summary.policy_exclusion_count == 1
+    assert [seed.bundle.composition_summary.primary_destination_id for seed in candidate_set.seeds] == [
+        "dest-city-chicago"
+    ]
     assert candidate_set.seeds[0].policy_ready is True
     assert candidate_set.seeds[0].bundle.transport_options[0].origin_id == "dest-home-ord"
     assert candidate_set.seeds[0].bundle.lodging_options[0].option_id == (
@@ -116,6 +119,15 @@ def test_business_candidate_generation_filters_policy_violations_and_marks_polic
         for exclusion in candidate_set.exclusions
     )
     assert candidate_set.to_option_set().comparison_axes[-1].key == "policy_ready"
+
+
+def test_business_candidate_generation_skips_origin_only_transport_seed() -> None:
+    scenario = _load_scenario("business_initial_candidates.json")
+
+    candidate_set = generate_candidate_set(**scenario)
+
+    assert len(candidate_set.seeds) == 1
+    assert candidate_set.seeds[0].candidate_id == "candidate:dest-city-chicago:policy_comparison"
 
 
 def test_business_candidate_generation_excludes_non_usd_lodging_for_usd_policy_cap() -> None:
