@@ -83,6 +83,7 @@ def ingest_activity_snapshot(
         if decision.entity_scope != "activity" or decision.option_kind != snapshot.option_kind:
             continue
         record_ids = _record_ids_for_decision(decision, resolution_map)
+        records = _records_for_decision(snapshot.records, decision, resolution_map)
         preserved_conflicts.extend(unresolved_conflicts(decision.preserved_conflicts))
         if decision.decision == "suppress":
             emitted_ids.update(record_ids)
@@ -91,10 +92,52 @@ def ingest_activity_snapshot(
             )
             continue
         if decision.decision in {"keep_separate", "needs_review"}:
+            if not records:
+                warnings.append(
+                    IngestionWarning(
+                        warning_id=f"{decision.decision_id}:missing-records",
+                        severity="warning",
+                        code="missing_decision_records",
+                        message="Dedup decision did not map to any raw activity records.",
+                    )
+                )
+                continue
+            unresolved = unresolved_conflicts(decision.preserved_conflicts)
+            for record in records:
+                option = _activity_option_from_records(
+                    [record],
+                    snapshot,
+                    _separate_option_id(decision.canonical_entity_id, record),
+                )
+                option.notes.extend(
+                    [f"dedup_decision:{decision.decision_id}", *decision.notes]
+                )
+                option.feasibility.constraints.extend(
+                    [
+                        f"{conflict.attribute_path}:{conflict.reason}"
+                        for conflict in unresolved
+                    ]
+                )
+                record_warnings = record.payload.get("normalization_warnings", [])
+                if record_warnings:
+                    warnings.append(
+                        IngestionWarning(
+                            warning_id=f"{record.record_id}:normalization",
+                            severity="warning",
+                            code="normalization_warning",
+                            message="; ".join(record_warnings),
+                            record_ids=[record.record_id],
+                        )
+                    )
+                    option.notes.extend(record_warnings)
+                activity_options.append(option)
+                provenance_refs.extend(option.source_refs)
+                emitted_ids.add(record.record_id)
+                if decision.decision == "needs_review" or decision.confidence < 0.75:
+                    low_confidence_option_ids.append(option.option_id)
             continue
         if decision.decision != "merge":
             continue
-        records = _records_for_decision(snapshot.records, decision, resolution_map)
         if not records:
             warnings.append(
                 IngestionWarning(
@@ -130,7 +173,6 @@ def ingest_activity_snapshot(
                 option.notes.extend(record_warnings)
         activity_options.append(option)
         emitted_ids.update(record.record_id for record in records)
-        filtered_record_ids.extend(record.record_id for record in records[1:])
         provenance_refs.extend(option.source_refs)
 
     for record in snapshot.records:
@@ -174,7 +216,7 @@ def ingest_activity_snapshot(
     summary = IngestionSummary(
         total_records=len(snapshot.records),
         emitted_options=len(activity_options),
-        skipped_records=max(0, len(snapshot.records) - len(activity_options)),
+        skipped_records=len(filtered_record_ids),
         degraded_options=sum(1 for option in activity_options if option.notes),
         unresolved_conflicts=len(preserved_conflicts),
         low_confidence_option_ids=sorted(set(low_confidence_option_ids)),
@@ -297,6 +339,10 @@ def _canonical_option_id(record: RawSourceRecord, resolution: EntityResolution |
     if isinstance(payload_option_id, str) and payload_option_id:
         return payload_option_id
     return record.provider_entity_id
+
+
+def _separate_option_id(canonical_entity_id: str, record: RawSourceRecord) -> str:
+    return f"{canonical_entity_id}-{record.record_id}"
 
 
 def _lowest_match_confidence(resolution: EntityResolution) -> float:

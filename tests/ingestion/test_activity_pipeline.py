@@ -92,7 +92,8 @@ def test_activity_pipeline_merges_duplicates_and_preserves_review_gaps() -> None
     assert result.handoff is not None
     assert result.handoff.status == "partial"
     assert result.summary.emitted_options == 1
-    assert result.summary.filtered_record_ids == ["record-activity-b"]
+    assert result.summary.skipped_records == 0
+    assert result.summary.filtered_record_ids == []
     assert result.summary.low_confidence_option_ids == ["activity-kyoto-night-market"]
     assert len(result.activity_options[0].source_refs) == 2
     assert len(result.unresolved_conflicts) == 1
@@ -115,11 +116,12 @@ def test_activity_pipeline_keeps_separate_decisions_as_individual_options() -> N
 
     assert result.handoff is not None
     assert result.summary.emitted_options == 2
+    assert result.summary.skipped_records == 0
     assert result.summary.filtered_record_ids == []
     assert len(result.unresolved_conflicts) == 1
     assert sorted(option.option_id for option in result.activity_options) == [
-        "activity-kyoto-night-market",
-        "activity-kyoto-night-market",
+        "activity-kyoto-night-market-record-activity-a",
+        "activity-kyoto-night-market-record-activity-b",
     ]
 
 
@@ -137,6 +139,7 @@ def test_activity_pipeline_suppresses_records_from_suppressed_decisions() -> Non
     assert result.handoff is not None
     assert result.handoff.status == "blocked"
     assert result.summary.emitted_options == 0
+    assert result.summary.skipped_records == 2
     assert result.summary.filtered_record_ids == [
         "record-activity-a",
         "record-activity-b",

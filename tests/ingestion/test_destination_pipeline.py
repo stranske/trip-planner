@@ -95,9 +95,11 @@ def test_destination_pipeline_merges_duplicates_and_preserves_operational_gaps()
     assert result.handoff is not None
     assert result.handoff.status == "partial"
     assert result.summary.emitted_options == 1
-    assert result.summary.filtered_record_ids == ["record-destination-b"]
+    assert result.summary.skipped_records == 0
+    assert result.summary.filtered_record_ids == []
     assert result.summary.low_confidence_option_ids == ["dest-city-kyoto"]
-    assert len(result.destinations[0].source_refs) == 2
+    assert len(result.destinations[0].source_refs) == 3
+    assert result.destinations[0].source_refs[2].contribution_kind == "comparison"
     assert result.destinations[0].operational_notes[0].summary.startswith("Bus crowding")
     assert (
         "Operational source notes shoulder-season crowding can spike around festivals."
@@ -146,11 +148,12 @@ def test_destination_pipeline_keeps_separate_decisions_as_individual_destination
 
     assert result.handoff is not None
     assert result.summary.emitted_options == 2
+    assert result.summary.skipped_records == 0
     assert result.summary.filtered_record_ids == []
     assert len(result.unresolved_conflicts) == 1
     assert sorted(destination.destination_id for destination in result.destinations) == [
-        "dest-city-kyoto",
-        "dest-city-kyoto",
+        "dest-city-kyoto-record-destination-a",
+        "dest-city-kyoto-record-destination-b",
     ]
 
 
@@ -168,6 +171,7 @@ def test_destination_pipeline_suppresses_records_from_suppressed_decisions() -> 
     assert result.handoff is not None
     assert result.handoff.status == "blocked"
     assert result.summary.emitted_options == 0
+    assert result.summary.skipped_records == 2
     assert result.summary.filtered_record_ids == [
         "record-destination-a",
         "record-destination-b",

@@ -83,6 +83,7 @@ def ingest_destination_snapshot(
         if decision.entity_scope != "destination" or decision.option_kind != snapshot.option_kind:
             continue
         record_ids = _record_ids_for_decision(decision, resolution_map)
+        records = _records_for_decision(snapshot.records, decision, resolution_map)
         preserved_conflicts.extend(unresolved_conflicts(decision.preserved_conflicts))
         if decision.decision == "suppress":
             emitted_ids.update(record_ids)
@@ -91,10 +92,38 @@ def ingest_destination_snapshot(
             )
             continue
         if decision.decision in {"keep_separate", "needs_review"}:
+            if not records:
+                warnings.append(
+                    IngestionWarning(
+                        warning_id=f"{decision.decision_id}:missing-records",
+                        severity="warning",
+                        code="missing_decision_records",
+                        message="Dedup decision did not map to any raw destination records.",
+                    )
+                )
+                continue
+            unresolved = unresolved_conflicts(decision.preserved_conflicts)
+            for record in records:
+                destination, refs = _destination_from_records(
+                    [record],
+                    snapshot,
+                    _separate_destination_id(decision.canonical_entity_id, record),
+                )
+                destination = _append_resolution_refs(
+                    destination,
+                    snapshot,
+                    _resolutions_for_record(record.record_id, resolutions),
+                )
+                _append_record_warnings(destination, [record], warnings)
+                destinations.append(destination)
+                provenance_refs.extend(refs)
+                emitted_ids.add(record.record_id)
+                if decision.decision == "needs_review" or decision.confidence < 0.75:
+                    low_confidence_destination_ids.append(destination.destination_id)
+                preserved_conflicts.extend(unresolved)
             continue
         if decision.decision != "merge":
             continue
-        records = _records_for_decision(snapshot.records, decision, resolution_map)
         if not records:
             warnings.append(
                 IngestionWarning(
@@ -111,9 +140,13 @@ def ingest_destination_snapshot(
         _append_record_warnings(destination, records, warnings)
         if decision.confidence < 0.75:
             low_confidence_destination_ids.append(destination.destination_id)
+        destination = _append_resolution_refs(
+            destination,
+            snapshot,
+            _resolutions_for_decision(decision, resolution_map),
+        )
         destinations.append(destination)
         emitted_ids.update(record.record_id for record in records)
-        filtered_record_ids.extend(record.record_id for record in records[1:])
         provenance_refs.extend(refs)
 
     for record in snapshot.records:
@@ -123,8 +156,10 @@ def ingest_destination_snapshot(
         destination_id = _canonical_destination_id(record, resolution)
         destination, refs = _destination_from_records([record], snapshot, destination_id)
         if resolution is not None:
-            destination.source_refs.extend(
-                _resolution_source_ref(snapshot, resolution, destination_id)
+            destination = _append_resolution_refs(
+                destination,
+                snapshot,
+                [resolution],
             )
             unresolved = unresolved_conflicts(resolution.conflicts)
             preserved_conflicts.extend(unresolved)
@@ -144,7 +179,7 @@ def ingest_destination_snapshot(
     summary = IngestionSummary(
         total_records=len(snapshot.records),
         emitted_options=len(destinations),
-        skipped_records=max(0, len(snapshot.records) - len(destinations)),
+        skipped_records=len(filtered_record_ids),
         degraded_options=sum(
             1
             for destination in destinations
@@ -304,6 +339,24 @@ def _resolution_source_ref(
     ]
 
 
+def _append_resolution_refs(
+    destination: Destination,
+    snapshot: RawSnapshot,
+    resolutions: list[EntityResolution],
+) -> Destination:
+    existing_ids = {ref.provenance_id for ref in destination.source_refs}
+    for resolution in resolutions:
+        for ref in _resolution_source_ref(
+            snapshot,
+            resolution,
+            destination.destination_id,
+        ):
+            if ref.provenance_id not in existing_ids:
+                destination.source_refs.append(ref)
+                existing_ids.add(ref.provenance_id)
+    return destination
+
+
 def _records_for_decision(
     records: list[RawSourceRecord],
     decision: DeduplicationDecision,
@@ -330,6 +383,38 @@ def _record_ids_for_decision(
     return list(dict.fromkeys(record_ids))
 
 
+def _resolutions_for_decision(
+    decision: DeduplicationDecision,
+    resolution_map: dict[str, EntityResolution],
+) -> list[EntityResolution]:
+    seen: set[str] = set()
+    matched: list[EntityResolution] = []
+    for resolution_id in decision.resolution_ids:
+        resolution = resolution_map.get(resolution_id)
+        if resolution is None or resolution.resolution_id in seen:
+            continue
+        seen.add(resolution.resolution_id)
+        matched.append(resolution)
+    return matched
+
+
+def _resolutions_for_record(
+    record_id: str,
+    resolutions: list[EntityResolution],
+) -> list[EntityResolution]:
+    seen: set[str] = set()
+    matched: list[EntityResolution] = []
+    for resolution in resolutions:
+        if resolution.resolution_id in seen:
+            continue
+        for candidate in resolution.match_candidates:
+            if record_id in candidate.source_record_ids:
+                seen.add(resolution.resolution_id)
+                matched.append(resolution)
+                break
+    return matched
+
+
 def _resolution_for_record(
     record_id: str,
     resolutions: list[EntityResolution],
@@ -348,6 +433,10 @@ def _canonical_destination_id(record: RawSourceRecord, resolution: EntityResolut
     if isinstance(payload_destination_id, str) and payload_destination_id:
         return payload_destination_id
     return record.provider_entity_id
+
+
+def _separate_destination_id(canonical_entity_id: str, record: RawSourceRecord) -> str:
+    return f"{canonical_entity_id}-{record.record_id}"
 
 
 def _lowest_match_confidence(resolution: EntityResolution) -> float:
