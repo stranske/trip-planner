@@ -53,11 +53,13 @@ trip_planner.egg-info/dependency_links.txt
 trip_planner.egg-info/requires.txt
 trip_planner.egg-info/top_level.txt
 trip_planner/business/__init__.py
+trip_planner/business/approval_ready.py
 trip_planner/business/objective_derivation.py
 trip_planner/business/objectives.py
 trip_planner/business/policy_contracts.py
 trip_planner/business/profile.py
 trip_planner/business/schema.py
+trip_planner/business/simulator.py
 trip_planner/candidates/__init__.py
 trip_planner/candidates/generation.py
 trip_planner/candidates/models.py
@@ -76,6 +78,14 @@ trip_planner/ingestion/activity_pipeline.py
 trip_planner/ingestion/destination_pipeline.py
 trip_planner/ingestion/lodging_pipeline.py
 trip_planner/ingestion/transport_pipeline.py
+trip_planner/integrations/__init__.py
+trip_planner/integrations/tpp/__init__.py
+trip_planner/integrations/tpp/client.py
+trip_planner/integrations/tpp/contracts.py
+trip_planner/integrations/tpp/policy_sync.py
+trip_planner/integrations/tpp/reoptimization.py
+trip_planner/integrations/tpp/results.py
+trip_planner/integrations/tpp/submission.py
 trip_planner/itinerary/__init__.py
 trip_planner/itinerary/feasibility.py
 trip_planner/itinerary/move_costs.py
@@ -95,6 +105,7 @@ trip_planner/orchestration/feedback.py
 trip_planner/orchestration/in_trip.py
 trip_planner/orchestration/leisure.py
 trip_planner/orchestration/models.py
+trip_planner/persistence/__init__.py
 trip_planner/preferences/__init__.py
 trip_planner/preferences/autonomy.py
 trip_planner/preferences/evidence.py
