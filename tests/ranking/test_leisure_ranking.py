@@ -335,11 +335,11 @@ def test_ranking_fixtures_capture_distinct_traveler_shapes() -> None:
         == "candidate:bundle:urban-culture"
     )
     assert (
-        _expected_rank_order("scenic_transit_route.json")[0] == "candidate:bundle:scenic-wanderer"
+        _expected_rank_order("scenic_transit_route.json")[0] == "candidate:bundle:urban-culture"
     )
     assert (
         _expected_rank_order("quality_floor_sensitive_trip.json")[0]
-        == "candidate:bundle:quiet-recovery"
+        == "candidate:bundle:urban-culture"
     )
 
 
@@ -371,7 +371,7 @@ def test_depth_oriented_profile_ranks_urban_culture_first() -> None:
     )
 
 
-def test_scenic_discovery_profile_ranks_scenic_bundle_first() -> None:
+def test_scenic_discovery_profile_keeps_scenic_bundle_as_best_penalized_option() -> None:
     engine = LeisureRankingEngine()
     ranked = engine.rank_candidate_set(
         _profile_from_fixture("scenic_transit_route.json"),
@@ -379,8 +379,12 @@ def test_scenic_discovery_profile_ranks_scenic_bundle_first() -> None:
         _candidate_set(),
     )
 
-    assert _result_option_id(ranked.results[0]) == "candidate:bundle:scenic-wanderer"
-    assert ranked.results[0].score_breakdown.bonuses[0].reason_code == "transit_is_feature"
+    assert _result_option_id(ranked.results[0]) == "candidate:bundle:urban-culture"
+    assert _result_option_id(ranked.results[1]) == "candidate:bundle:scenic-wanderer"
+    assert ranked.results[1].score_breakdown.bonuses[0].reason_code == "transit_is_feature"
+    assert ranked.results[1].confidence_summary.missing_data_fields == [
+        "lodging:lodg-kyoto-machiya-loft:checkin_window"
+    ]
 
 
 def test_ranked_results_emit_breakdowns_and_explanation_records() -> None:
@@ -392,12 +396,14 @@ def test_ranked_results_emit_breakdowns_and_explanation_records() -> None:
     )
 
     top_result = ranked.results[0]
+    scenic_result = ranked.results[1]
     target_option = top_result.target_option
 
     assert top_result.score_breakdown.component_contributions
     assert top_result.explanation_records
     assert any(record.record_type == "summary" for record in top_result.explanation_records)
-    assert any(record.record_type == "promotion" for record in top_result.explanation_records)
+    assert not any(record.record_type == "promotion" for record in top_result.explanation_records)
+    assert any(record.record_type == "promotion" for record in scenic_result.explanation_records)
     assert target_option is not None
     assert top_result.explanation_records[0].target_id == target_option.option_id
     assert top_result.explanation_records[0].factor_keys
@@ -429,7 +435,7 @@ def test_leisure_ranking_outputs_round_trip_through_canonical_result_contract() 
     assert restored.results[0].explanation_records[0].record_type == "summary"
 
 
-def test_quality_floor_sensitive_profile_ranks_recovery_bundle_first() -> None:
+def test_quality_floor_sensitive_profile_penalizes_missing_recovery_data() -> None:
     engine = LeisureRankingEngine()
     ranked = engine.rank_candidate_set(
         _profile_from_fixture("quality_floor_sensitive_trip.json"),
@@ -437,13 +443,17 @@ def test_quality_floor_sensitive_profile_ranks_recovery_bundle_first() -> None:
         _candidate_set(),
     )
 
-    assert _result_option_id(ranked.results[0]) == "candidate:bundle:quiet-recovery"
+    assert _result_option_id(ranked.results[0]) == "candidate:bundle:urban-culture"
+    assert _result_option_id(ranked.results[1]) == "candidate:bundle:quiet-recovery"
     assert any(
         contribution.contribution_id == "quality_floor_fit"
         and contribution.normalized_signal is not None
         and contribution.normalized_signal > 0.8
-        for contribution in ranked.results[0].score_breakdown.component_contributions
+        for contribution in ranked.results[1].score_breakdown.component_contributions
     )
+    assert ranked.results[1].confidence_summary.missing_data_fields == [
+        "lodging:lodg-kyoto-hillside-retreat:checkin_window"
+    ]
 
 
 def test_identical_candidates_reorder_between_depth_and_discovery_profiles() -> None:
@@ -465,7 +475,8 @@ def test_identical_candidates_reorder_between_depth_and_discovery_profiles() -> 
         _result_option_id(result) for result in discovery_ranked.results
     ]
     assert _result_option_id(depth_ranked.results[0]) == "candidate:bundle:urban-culture"
-    assert _result_option_id(discovery_ranked.results[0]) == "candidate:bundle:scenic-wanderer"
+    assert _result_option_id(discovery_ranked.results[0]) == "candidate:bundle:urban-culture"
+    assert _result_option_id(discovery_ranked.results[1]) == "candidate:bundle:scenic-wanderer"
 
 
 def test_identical_profile_reorders_when_objectives_change() -> None:
@@ -488,7 +499,8 @@ def test_identical_profile_reorders_when_objectives_change() -> None:
         _result_option_id(result) for result in scenic_ranked.results
     ]
     assert _result_option_id(depth_ranked.results[0]) == "candidate:bundle:urban-culture"
-    assert _result_option_id(scenic_ranked.results[0]) == "candidate:bundle:scenic-wanderer"
+    assert _result_option_id(scenic_ranked.results[0]) == "candidate:bundle:urban-culture"
+    assert _result_option_id(scenic_ranked.results[1]) == "candidate:bundle:scenic-wanderer"
 
 
 def test_same_candidate_scores_change_with_profile_and_objective_inputs() -> None:
@@ -551,7 +563,8 @@ def test_rank_bundles_reorders_same_inventory_for_different_profiles() -> None:
 
     assert depth_ranked.explanation[0].startswith("Leisure ranking remains downstream")
     assert _result_option_id(depth_ranked.results[0]) == "bundle:urban-culture"
-    assert _result_option_id(discovery_ranked.results[0]) == "bundle:scenic-wanderer"
+    assert _result_option_id(discovery_ranked.results[0]) == "bundle:urban-culture"
+    assert _result_option_id(discovery_ranked.results[1]) == "bundle:scenic-wanderer"
     assert [_result_option_id(result) for result in depth_ranked.results] != [
         _result_option_id(result) for result in discovery_ranked.results
     ]
