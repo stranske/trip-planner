@@ -16,22 +16,40 @@ from trip_planner.options import InventoryBundle
 from .move_costs import MoveCostSummary, TravelTimeEstimate, build_move_cost_summaries
 
 
-def _dt(value: str) -> datetime | None:
+def _dt(
+    value: str,
+    *,
+    field_key: str | None = None,
+    missing_data_fields: set[str] | None = None,
+) -> datetime | None:
     if not value:
+        if field_key and missing_data_fields is not None:
+            missing_data_fields.add(field_key)
         return None
     try:
         return datetime.fromisoformat(value)
     except ValueError:
+        if field_key and missing_data_fields is not None:
+            missing_data_fields.add(field_key)
         return None
 
 
-def _parse_window(value: str) -> tuple[time, time] | None:
+def _parse_window(
+    value: str,
+    *,
+    field_key: str | None = None,
+    missing_data_fields: set[str] | None = None,
+) -> tuple[time, time] | None:
     if not value or "-" not in value:
+        if field_key and missing_data_fields is not None:
+            missing_data_fields.add(field_key)
         return None
     start_text, end_text = [piece.strip() for piece in value.split("-", 1)]
     try:
         return time.fromisoformat(start_text), time.fromisoformat(end_text)
     except ValueError:
+        if field_key and missing_data_fields is not None:
+            missing_data_fields.add(field_key)
         return None
 
 
@@ -138,19 +156,32 @@ def _schedule_protection_required(bundle: InventoryBundle) -> bool:
     )
 
 
-def _arrival_conflicts(bundle: InventoryBundle) -> list[TimingConflict]:
+def _arrival_conflicts(bundle: InventoryBundle) -> tuple[list[TimingConflict], list[str]]:
     conflicts: list[TimingConflict] = []
+    missing_data_fields: set[str] = set()
     for transport in bundle.transport_options:
-        arrival = _dt(transport.timing_summary.arrival_local)
-        if arrival is None:
-            continue
         matching_lodging = [
             lodging
             for lodging in bundle.lodging_options
             if lodging.destination_id == transport.destination_id
         ]
+        parsed_windows = {
+            lodging.option_id: _parse_window(
+                lodging.booking_terms.checkin_window,
+                field_key=f"lodging:{lodging.option_id}:checkin_window",
+                missing_data_fields=missing_data_fields,
+            )
+            for lodging in matching_lodging
+        }
+        arrival = _dt(
+            transport.timing_summary.arrival_local,
+            field_key=f"transport:{transport.option_id}:arrival_local",
+            missing_data_fields=missing_data_fields,
+        )
+        if arrival is None:
+            continue
         for lodging in matching_lodging:
-            window = _parse_window(lodging.booking_terms.checkin_window)
+            window = parsed_windows[lodging.option_id]
             if window is None:
                 continue
             _, end_time = window
@@ -168,7 +199,7 @@ def _arrival_conflicts(bundle: InventoryBundle) -> list[TimingConflict]:
                         related_option_ids=[transport.option_id, lodging.option_id],
                     )
                 )
-    return conflicts
+    return conflicts, sorted(missing_data_fields)
 
 
 def _activity_timing_conflicts(
@@ -177,19 +208,26 @@ def _activity_timing_conflicts(
     schedule_protection_required: bool,
 ) -> tuple[list[TimingConflict], list[str]]:
     conflicts: list[TimingConflict] = []
-    missing_data_fields: list[str] = []
+    missing_data_fields: set[str] = set()
     arrival_by_destination: dict[str, datetime] = {}
     for transport in bundle.transport_options:
-        arrival = _dt(transport.timing_summary.arrival_local)
+        arrival = _dt(
+            transport.timing_summary.arrival_local,
+            field_key=f"transport:{transport.option_id}:arrival_local",
+            missing_data_fields=missing_data_fields,
+        )
         if arrival is not None:
             current = arrival_by_destination.get(transport.destination_id)
             if current is None or arrival < current:
                 arrival_by_destination[transport.destination_id] = arrival
 
     for activity in bundle.activity_options:
-        window = _parse_window(activity.timing_summary.typical_start_window)
+        window = _parse_window(
+            activity.timing_summary.typical_start_window,
+            field_key=f"activity:{activity.option_id}:typical_start_window",
+            missing_data_fields=missing_data_fields,
+        )
         if window is None:
-            missing_data_fields.append(f"activity:{activity.option_id}:typical_start_window")
             continue
         arrival = arrival_by_destination.get(activity.destination_id)
         if arrival is None:
@@ -212,7 +250,7 @@ def _activity_timing_conflicts(
             continue
         available_minutes = max(
             0,
-            (datetime.combine(arrival.date(), end_time, arrival.tzinfo) - arrival).seconds // 60,
+            int((datetime.combine(arrival.date(), end_time, arrival.tzinfo) - arrival).total_seconds() // 60),
         )
         if available_minutes < activity.timing_summary.duration_minutes:
             conflicts.append(
@@ -245,7 +283,7 @@ def _activity_timing_conflicts(
                 )
             )
 
-    return conflicts, sorted(set(missing_data_fields))
+    return conflicts, sorted(missing_data_fields)
 
 
 def _route_warnings(
@@ -318,19 +356,36 @@ def _representative_travel_totals(
     )
 
 
+def _recommended_for_ranking(
+    *,
+    blocking_reasons: list[str],
+    missing_data_fields: list[str],
+    friction_penalty_total: float,
+    confidence_signal: float | None,
+) -> bool:
+    if blocking_reasons or missing_data_fields:
+        return False
+    if confidence_signal is not None and confidence_signal < 0.65:
+        return False
+    return friction_penalty_total < 1.25
+
+
 def evaluate_bundle_feasibility(bundle: InventoryBundle) -> FeasibilityAssessment:
     schedule_protection_required = _schedule_protection_required(bundle)
-    travel_estimates, move_costs = build_move_cost_summaries(
+    travel_estimates, move_costs, move_missing_data_fields = build_move_cost_summaries(
         bundle,
         schedule_protection_required=schedule_protection_required,
     )
 
-    timing_conflicts = _arrival_conflicts(bundle)
-    activity_conflicts, missing_data_fields = _activity_timing_conflicts(
+    timing_conflicts, arrival_missing_data_fields = _arrival_conflicts(bundle)
+    activity_conflicts, activity_missing_data_fields = _activity_timing_conflicts(
         bundle,
         schedule_protection_required=schedule_protection_required,
     )
     timing_conflicts.extend(activity_conflicts)
+    missing_data_fields = sorted(
+        set(move_missing_data_fields + arrival_missing_data_fields + activity_missing_data_fields)
+    )
 
     blocking_reasons = list(bundle.feasibility.blocking_reasons)
     blocking_reasons.extend(
@@ -369,12 +424,22 @@ def evaluate_bundle_feasibility(bundle: InventoryBundle) -> FeasibilityAssessmen
     if schedule_protection_required:
         notes.append("Business-style schedule protection thresholds were applied.")
     notes.extend(aggregate_notes)
+    recommended_for_ranking = _recommended_for_ranking(
+        blocking_reasons=blocking_reasons,
+        missing_data_fields=missing_data_fields,
+        friction_penalty_total=friction_penalty_total,
+        confidence_signal=confidence_signal,
+    )
+    if not blocking_reasons and not recommended_for_ranking:
+        notes.append(
+            "Bundle remains feasible but should be deprioritized until missing data or travel friction is resolved."
+        )
 
     return FeasibilityAssessment(
         assessment_id=f"feasibility:{bundle.bundle_id}",
         bundle_id=bundle.bundle_id,
         feasible=not blocking_reasons,
-        recommended_for_ranking=not blocking_reasons,
+        recommended_for_ranking=recommended_for_ranking,
         schedule_protection_required=schedule_protection_required,
         total_travel_minutes=total_travel_minutes,
         total_transfer_count=total_transfer_count,

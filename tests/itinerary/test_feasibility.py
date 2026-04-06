@@ -64,6 +64,7 @@ def test_missing_activity_window_is_reported_without_hard_block() -> None:
     assessment = evaluate_bundle_feasibility(InventoryBundle.from_dict(payload))
 
     assert assessment.feasible is True
+    assert assessment.recommended_for_ranking is False
     assert "activity:activity-kyoto-museum:typical_start_window" in assessment.missing_data_fields
 
 
@@ -77,8 +78,11 @@ def test_malformed_times_do_not_crash_feasibility_evaluation() -> None:
     assessment = evaluate_bundle_feasibility(InventoryBundle.from_dict(payload))
 
     assert assessment.feasible is True
+    assert assessment.recommended_for_ranking is False
     assert assessment.total_travel_minutes == 32
     assert "late_arrival_checkin_conflict" not in assessment.blocking_reasons
+    assert "transport:transport-osaka-kyoto-direct:arrival_local" in assessment.missing_data_fields
+    assert "lodging:lodg-kyoto-central:checkin_window" in assessment.missing_data_fields
 
 
 def test_candidate_seed_uses_representative_travel_totals() -> None:

@@ -14,12 +14,21 @@ from trip_planner._validators import (
 from trip_planner.options import InventoryBundle, TransportOption
 
 
-def _dt(value: str) -> datetime | None:
+def _dt(
+    value: str,
+    *,
+    field_key: str | None = None,
+    missing_data_fields: set[str] | None = None,
+) -> datetime | None:
     if not value:
+        if field_key and missing_data_fields is not None:
+            missing_data_fields.add(field_key)
         return None
     try:
         return datetime.fromisoformat(value)
     except ValueError:
+        if field_key and missing_data_fields is not None:
+            missing_data_fields.add(field_key)
         return None
 
 
@@ -148,9 +157,10 @@ def build_move_cost_summaries(
     bundle: InventoryBundle,
     *,
     schedule_protection_required: bool = False,
-) -> tuple[list[TravelTimeEstimate], list[MoveCostSummary]]:
+) -> tuple[list[TravelTimeEstimate], list[MoveCostSummary], list[str]]:
     estimates: list[TravelTimeEstimate] = []
     summaries: list[MoveCostSummary] = []
+    missing_data_fields: set[str] = set()
 
     for option in bundle.transport_options:
         estimate = _estimate_from_transport(option)
@@ -192,8 +202,16 @@ def build_move_cost_summaries(
         if schedule_protection_required and (schedule_pressure or 0.0) >= 0.55:
             warnings.append("schedule_protection_gap")
 
-        departure = _dt(option.timing_summary.departure_local)
-        arrival = _dt(option.timing_summary.arrival_local)
+        departure = _dt(
+            option.timing_summary.departure_local,
+            field_key=f"transport:{option.option_id}:departure_local",
+            missing_data_fields=missing_data_fields,
+        )
+        arrival = _dt(
+            option.timing_summary.arrival_local,
+            field_key=f"transport:{option.option_id}:arrival_local",
+            missing_data_fields=missing_data_fields,
+        )
         if departure and arrival and departure.date() == arrival.date():
             if arrival.hour >= 22:
                 warnings.append("late_arrival_move")
@@ -219,4 +237,4 @@ def build_move_cost_summaries(
             )
         )
 
-    return estimates, summaries
+    return estimates, summaries, sorted(missing_data_fields)
