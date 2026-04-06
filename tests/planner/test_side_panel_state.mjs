@@ -19,6 +19,7 @@ class FakeMountNode extends FakeHTMLElement {
     this.innerHTML = "";
     this.listeners = new Map();
     this.dispatchedEvents = [];
+    this.lastFocusedSection = null;
   }
 
   addEventListener(type, listener) {
@@ -53,12 +54,27 @@ class FakeMountNode extends FakeHTMLElement {
     this.dispatchedEvents.push(event);
     return true;
   }
+
+  querySelector(selector) {
+    const sectionMatch = selector.match(/^\[data-planner-section="([^"]+)"\]$/);
+    if (!sectionMatch) {
+      return null;
+    }
+
+    return new FakeButton(
+      { plannerSection: sectionMatch[1] },
+      () => {
+        this.lastFocusedSection = sectionMatch[1];
+      }
+    );
+  }
 }
 
 class FakeButton extends FakeHTMLElement {
-  constructor(dataset) {
+  constructor(dataset, onFocus = null) {
     super();
     this.dataset = dataset;
+    this.onFocus = onFocus;
   }
 
   closest(selector) {
@@ -75,6 +91,10 @@ class FakeButton extends FakeHTMLElement {
     }
 
     return null;
+  }
+
+  focus() {
+    this.onFocus?.();
   }
 }
 
@@ -195,6 +215,7 @@ test("planner side panel controller rerenders on section and decision changes", 
 
   mountNode.keydown(new FakeButton({ plannerSection: "outputs" }), "ArrowRight");
   assert.equal(controller.getState().ui.active_section, "decisions");
+  assert.equal(mountNode.lastFocusedSection, "decisions");
   assert.match(mountNode.innerHTML, /Pending Decisions/);
 
   mountNode.click(new FakeButton({ plannerDecision: "lodging-signal" }));
@@ -211,9 +232,9 @@ test("planner side panel renders the leisure feedback loop scenario across its i
   const controller = renderPlannerSidePanel(mountNode, leisureFeedbackLoopState);
 
   assert.match(mountNode.innerHTML, /Lisbon reset with room to wander/);
-  assert.match(mountNode.innerHTML, /role="tablist"/);
-  assert.match(mountNode.innerHTML, /role="tab"/);
-  assert.match(mountNode.innerHTML, /role="tabpanel"/);
+  assert.ok(mountNode.innerHTML.includes('role="tablist"'));
+  assert.ok(mountNode.innerHTML.includes('role="tab"'));
+  assert.ok(mountNode.innerHTML.includes('role="tabpanel"'));
   assert.match(mountNode.innerHTML, /Choose the better base camp/);
   assert.match(mountNode.innerHTML, /Answer the lodging decision/);
 
@@ -440,6 +461,39 @@ test("proposal readiness indicator component renders readiness status and checkl
   assert.match(markup, /Ready:<\/strong> Comparables attached\. 2 options in the approval packet\./);
   assert.match(markup, /Ready:<\/strong> Submission path defined\. Exception request is attached\./);
   assert.match(markup, /No additional actions are required before submission\./);
+});
+
+test("proposal readiness indicator component lists blocking next actions from failure messages", () => {
+  const markup = renderProposalReadinessIndicatorComponent(
+    {
+      proposal_id: "proposal-blocked",
+      comparables: [],
+      justifications: [],
+      approval_notes: [],
+      requested_exception: null,
+    },
+    {
+      ...businessApprovalState.policy_evaluation,
+      status: "exception_required",
+      approval_requirements: [],
+      failure_reasons: [
+        {
+          code: "missing-approver",
+          message: "Manager approval is still missing for the selected exception path.",
+          severity: "blocking",
+          related_category: "approval",
+        },
+      ],
+    }
+  );
+
+  assert.match(markup, /data-proposal-readiness="blocked"/);
+  assert.match(markup, /Manager approval is still missing for the selected exception path\./);
+  assert.match(markup, /Attach an exception request with required approver roles\./);
+  assert.match(markup, /Add at least one comparable option to the approval packet\./);
+  assert.match(markup, /Add at least one business justification record\./);
+  assert.match(markup, /Identify approver roles for the selected policy path\./);
+  assert.match(markup, /5 items/);
 });
 
 test("proposal readiness indicator component matches the approval snapshot", async () => {

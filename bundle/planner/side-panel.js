@@ -208,6 +208,27 @@ function renderSectionTabs(state) {
 }
 
 /**
+ * @param {PlannerPanelSection} section
+ * @param {PlannerPanelViewState} state
+ * @returns {string}
+ */
+function renderSectionContent(section, state) {
+  if (section === "decisions") {
+    return renderPendingDecisions(state);
+  }
+
+  if (section === "options") {
+    return renderOptions(state);
+  }
+
+  if (section === "approval") {
+    return renderPolicyStatus(state);
+  }
+
+  return renderOutputs(state);
+}
+
+/**
  * @param {PlannerOutputRecord[]} outputs
  * @returns {string}
  */
@@ -859,7 +880,8 @@ export function renderProposalReadinessIndicatorComponent(proposal, policyEvalua
     nextRequiredActions.push(
       ...policyEvaluation.failure_reasons
         .filter((failure) => failure.severity === "blocking")
-        .map((failure) => failure.summary)
+        .map((failure) => failure.message)
+        .filter((message) => typeof message === "string" && message.trim().length > 0)
     );
   }
   if (!hasExceptionPath && policyEvaluation.status === "exception_required") {
@@ -1069,26 +1091,6 @@ function createStructuredResponseEvent(data, actionType, optionId, decisionId) {
  * @param {PlannerPanelViewState} state
  * @returns {string}
  */
-function renderActiveSection(state) {
-  if (state.ui.active_section === "decisions") {
-    return renderPendingDecisions(state);
-  }
-
-  if (state.ui.active_section === "options") {
-    return renderOptions(state);
-  }
-
-  if (state.ui.active_section === "approval") {
-    return renderPolicyStatus(state);
-  }
-
-  return renderOutputs(state);
-}
-
-/**
- * @param {PlannerPanelViewState} state
- * @returns {string}
- */
 function renderActiveSectionMeta(state) {
   if (state.ui.active_section === "decisions") {
     return `${state.data.pending_decisions.length} waiting`;
@@ -1129,18 +1131,23 @@ function renderPlannerMarkup(state) {
         ${renderBehaviorSummary(state.data.planner_behavior)}
         ${renderSectionTabs(state)}
         <div class="planner-sections">
-          <section
-            class="planner-section"
-            id="${getSectionPanelId(state.ui.active_section)}"
-            role="tabpanel"
-            aria-labelledby="${getSectionTabId(state.ui.active_section)}"
-          >
-            <div class="planner-section-header">
-              <h3 id="planner-active-section-title">${formatSectionLabel(state.ui.active_section)}</h3>
-              <span class="planner-meta">${renderActiveSectionMeta(state)}</span>
-            </div>
-            ${renderActiveSection(state)}
-          </section>
+          ${PANEL_SECTIONS.map(
+            (section) => `
+              <section
+                class="planner-section"
+                id="${getSectionPanelId(section)}"
+                role="tabpanel"
+                aria-labelledby="${getSectionTabId(section)}"
+                ${state.ui.active_section === section ? "" : "hidden"}
+              >
+                <div class="planner-section-header">
+                  <h3>${formatSectionLabel(section)}</h3>
+                  <span class="planner-meta">${section === state.ui.active_section ? renderActiveSectionMeta(state) : ""}</span>
+                </div>
+                ${renderSectionContent(section, state)}
+              </section>
+            `
+          ).join("")}
           <section class="planner-section" aria-labelledby="planner-next-step-title">
             <div class="planner-section-header">
               <h3 id="planner-next-step-title">Next-Step Actions</h3>
@@ -1326,6 +1333,10 @@ export function renderPlannerSidePanel(mountNode, initialState) {
       event.preventDefault();
       store.setActiveSection(nextSection);
       render();
+      const nextSectionButton = mountNode.querySelector(`[data-planner-section="${nextSection}"]`);
+      if (nextSectionButton instanceof HTMLElement) {
+        nextSectionButton.focus();
+      }
     }
   }
 
