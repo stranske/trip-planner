@@ -47,8 +47,8 @@
     "transit_is_feature": false
   },
   "expected_rank_order": [
+    "candidate:bundle:urban-culture",
     "candidate:bundle:quiet-recovery",
-    "candidate:bundle:scenic-wanderer",
-    "candidate:bundle:urban-culture"
+    "candidate:bundle:scenic-wanderer"
   ]
 }
