@@ -126,6 +126,9 @@ def test_overnight_checkin_window_accepts_late_evening_arrival() -> None:
         _fixture_path("coherent_low_friction_route.json").read_text(encoding="utf-8")
     )
     payload["transport_options"][0]["timing_summary"][
+        "departure_local"
+    ] = "2026-04-10T21:45:00+09:00"
+    payload["transport_options"][0]["timing_summary"][
         "arrival_local"
     ] = "2026-04-10T23:30:00+09:00"
     payload["lodging_options"][0]["booking_terms"]["checkin_window"] = "15:00-01:00"
@@ -135,6 +138,27 @@ def test_overnight_checkin_window_accepts_late_evening_arrival() -> None:
     assert "late_arrival_checkin_conflict" not in assessment.blocking_reasons
     assert all(
         conflict.code != "late_arrival_checkin_conflict"
+        for conflict in assessment.timing_conflicts
+    )
+
+
+def test_overnight_checkin_window_blocks_next_day_post_cutoff_arrival() -> None:
+    payload = json.loads(
+        _fixture_path("coherent_low_friction_route.json").read_text(encoding="utf-8")
+    )
+    payload["transport_options"][0]["timing_summary"][
+        "departure_local"
+    ] = "2026-04-10T22:00:00+09:00"
+    payload["transport_options"][0]["timing_summary"][
+        "arrival_local"
+    ] = "2026-04-11T01:30:00+09:00"
+    payload["lodging_options"][0]["booking_terms"]["checkin_window"] = "15:00-01:00"
+
+    assessment = evaluate_bundle_feasibility(InventoryBundle.from_dict(payload))
+
+    assert "late_arrival_checkin_conflict" in assessment.blocking_reasons
+    assert any(
+        conflict.code == "late_arrival_checkin_conflict"
         for conflict in assessment.timing_conflicts
     )
 
