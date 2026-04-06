@@ -106,6 +106,22 @@ function formatSectionLabel(section) {
 }
 
 /**
+ * @param {PlannerPanelSection} section
+ * @returns {string}
+ */
+function getSectionTabId(section) {
+  return `planner-section-tab-${section}`;
+}
+
+/**
+ * @param {PlannerPanelSection} section
+ * @returns {string}
+ */
+function getSectionPanelId(section) {
+  return `planner-section-panel-${section}`;
+}
+
+/**
  * @param {PlannerBehaviorRecord} behavior
  * @returns {string}
  */
@@ -169,14 +185,18 @@ function renderSectionTabs(state) {
   };
 
   return `
-    <nav class="planner-tab-list" aria-label="Planner panel sections">
+    <nav class="planner-tab-list" aria-label="Planner panel sections" role="tablist">
       ${PANEL_SECTIONS.map(
         (section) => `
           <button
             type="button"
             class="planner-tab${state.ui.active_section === section ? " is-active" : ""}"
             data-planner-section="${section}"
-            aria-pressed="${state.ui.active_section === section}"
+            id="${getSectionTabId(section)}"
+            role="tab"
+            aria-selected="${state.ui.active_section === section}"
+            aria-controls="${getSectionPanelId(section)}"
+            tabindex="${state.ui.active_section === section ? "0" : "-1"}"
           >
             <span>${formatSectionLabel(section)}</span>
             <span class="planner-tab-count">${counts[section]}</span>
@@ -185,6 +205,27 @@ function renderSectionTabs(state) {
       ).join("")}
     </nav>
   `;
+}
+
+/**
+ * @param {PlannerPanelSection} section
+ * @param {PlannerPanelViewState} state
+ * @returns {string}
+ */
+function renderSectionContent(section, state) {
+  if (section === "decisions") {
+    return renderPendingDecisions(state);
+  }
+
+  if (section === "options") {
+    return renderOptions(state);
+  }
+
+  if (section === "approval") {
+    return renderPolicyStatus(state);
+  }
+
+  return renderOutputs(state);
 }
 
 /**
@@ -834,6 +875,28 @@ export function renderProposalReadinessIndicatorComponent(proposal, policyEvalua
           ? "exception packet ready"
           : "ready to submit"
         : "needs completion";
+  const nextRequiredActions = [];
+  if (blockingFailureCount > 0) {
+    nextRequiredActions.push(
+      ...policyEvaluation.failure_reasons
+        .filter((failure) => failure.severity === "blocking")
+        .map((failure) => failure.message)
+        .filter((message) => typeof message === "string" && message.trim().length > 0)
+    );
+  }
+  if (!hasExceptionPath && policyEvaluation.status === "exception_required") {
+    nextRequiredActions.push("Attach an exception request with required approver roles.");
+  }
+  if (comparableCount === 0) {
+    nextRequiredActions.push("Add at least one comparable option to the approval packet.");
+  }
+  if (justificationCount === 0) {
+    nextRequiredActions.push("Add at least one business justification record.");
+  }
+  if (approvalRoleCount === 0 && policyEvaluation.status !== "compliant") {
+    nextRequiredActions.push("Identify approver roles for the selected policy path.");
+  }
+  const dedupedNextActions = [...new Set(nextRequiredActions)];
 
   return `
     <div class="planner-feedback-layout" aria-label="Proposal readiness indicator">
@@ -878,6 +941,21 @@ export function renderProposalReadinessIndicatorComponent(proposal, policyEvalua
             )
             .join("")}
         </ul>
+      </article>
+      <article class="planner-output-card">
+        <div class="planner-section-header">
+          <h4>Next required actions</h4>
+          <span class="planner-meta">${dedupedNextActions.length} item${dedupedNextActions.length === 1 ? "" : "s"}</span>
+        </div>
+        ${
+          dedupedNextActions.length
+            ? `
+              <ul class="planner-list" aria-label="Proposal next required actions">
+                ${dedupedNextActions.map((action) => `<li data-proposal-next-action="required">${action}</li>`).join("")}
+              </ul>
+            `
+            : '<p class="planner-empty-state">No additional actions are required before submission.</p>'
+        }
       </article>
     </div>
   `;
@@ -1013,26 +1091,6 @@ function createStructuredResponseEvent(data, actionType, optionId, decisionId) {
  * @param {PlannerPanelViewState} state
  * @returns {string}
  */
-function renderActiveSection(state) {
-  if (state.ui.active_section === "decisions") {
-    return renderPendingDecisions(state);
-  }
-
-  if (state.ui.active_section === "options") {
-    return renderOptions(state);
-  }
-
-  if (state.ui.active_section === "approval") {
-    return renderPolicyStatus(state);
-  }
-
-  return renderOutputs(state);
-}
-
-/**
- * @param {PlannerPanelViewState} state
- * @returns {string}
- */
 function renderActiveSectionMeta(state) {
   if (state.ui.active_section === "decisions") {
     return `${state.data.pending_decisions.length} waiting`;
@@ -1073,13 +1131,23 @@ function renderPlannerMarkup(state) {
         ${renderBehaviorSummary(state.data.planner_behavior)}
         ${renderSectionTabs(state)}
         <div class="planner-sections">
-          <section class="planner-section" aria-labelledby="planner-active-section-title">
-            <div class="planner-section-header">
-              <h3 id="planner-active-section-title">${formatSectionLabel(state.ui.active_section)}</h3>
-              <span class="planner-meta">${renderActiveSectionMeta(state)}</span>
-            </div>
-            ${renderActiveSection(state)}
-          </section>
+          ${PANEL_SECTIONS.map(
+            (section) => `
+              <section
+                class="planner-section"
+                id="${getSectionPanelId(section)}"
+                role="tabpanel"
+                aria-labelledby="${getSectionTabId(section)}"
+                ${state.ui.active_section === section ? "" : "hidden"}
+              >
+                <div class="planner-section-header">
+                  <h3>${formatSectionLabel(section)}</h3>
+                  <span class="planner-meta">${section === state.ui.active_section ? renderActiveSectionMeta(state) : ""}</span>
+                </div>
+                ${renderSectionContent(section, state)}
+              </section>
+            `
+          ).join("")}
           <section class="planner-section" aria-labelledby="planner-next-step-title">
             <div class="planner-section-header">
               <h3 id="planner-next-step-title">Next-Step Actions</h3>
@@ -1229,8 +1297,52 @@ export function renderPlannerSidePanel(mountNode, initialState) {
     }
   }
 
+  /**
+   * @param {KeyboardEvent} event
+   */
+  function handleKeydown(event) {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const sectionButton = target.closest("[data-planner-section]");
+    if (!(sectionButton instanceof HTMLElement) || !sectionButton.dataset.plannerSection) {
+      return;
+    }
+
+    const currentSection = /** @type {PlannerPanelSection} */ (sectionButton.dataset.plannerSection);
+    const currentIndex = PANEL_SECTIONS.indexOf(currentSection);
+    if (currentIndex === -1) {
+      return;
+    }
+
+    /** @type {PlannerPanelSection | null} */
+    let nextSection = null;
+    if (event.key === "ArrowRight") {
+      nextSection = PANEL_SECTIONS[(currentIndex + 1) % PANEL_SECTIONS.length];
+    } else if (event.key === "ArrowLeft") {
+      nextSection = PANEL_SECTIONS[(currentIndex - 1 + PANEL_SECTIONS.length) % PANEL_SECTIONS.length];
+    } else if (event.key === "Home") {
+      nextSection = PANEL_SECTIONS[0];
+    } else if (event.key === "End") {
+      nextSection = PANEL_SECTIONS[PANEL_SECTIONS.length - 1];
+    }
+
+    if (nextSection) {
+      event.preventDefault();
+      store.setActiveSection(nextSection);
+      render();
+      const nextSectionButton = mountNode.querySelector(`[data-planner-section="${nextSection}"]`);
+      if (nextSectionButton instanceof HTMLElement) {
+        nextSectionButton.focus();
+      }
+    }
+  }
+
   render();
   mountNode.addEventListener("click", handleClick);
+  mountNode.addEventListener("keydown", handleKeydown);
 
   return {
     getState: store.getState,
@@ -1251,6 +1363,7 @@ export function renderPlannerSidePanel(mountNode, initialState) {
     },
     destroy() {
       mountNode.removeEventListener("click", handleClick);
+      mountNode.removeEventListener("keydown", handleKeydown);
     },
   };
 }
