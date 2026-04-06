@@ -199,8 +199,11 @@ def _arrival_conflicts(
             window = parsed_windows[lodging.option_id]
             if window is None:
                 continue
-            _, end_time = window
-            if arrival.time() > end_time:
+            start_time, end_time = window
+            arrival_time = arrival.timetz().replace(tzinfo=None)
+            if end_time < start_time:
+                continue
+            if arrival_time > end_time:
                 conflicts.append(
                     TimingConflict(
                         conflict_id=f"timing:{transport.option_id}:{lodging.option_id}:arrival",

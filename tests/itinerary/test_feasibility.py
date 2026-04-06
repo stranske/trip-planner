@@ -121,6 +121,24 @@ def test_malformed_times_do_not_crash_feasibility_evaluation() -> None:
     assert "lodging:lodg-kyoto-central:checkin_window" in assessment.missing_data_fields
 
 
+def test_overnight_checkin_window_accepts_late_evening_arrival() -> None:
+    payload = json.loads(
+        _fixture_path("coherent_low_friction_route.json").read_text(encoding="utf-8")
+    )
+    payload["transport_options"][0]["timing_summary"][
+        "arrival_local"
+    ] = "2026-04-10T23:30:00+09:00"
+    payload["lodging_options"][0]["booking_terms"]["checkin_window"] = "15:00-01:00"
+
+    assessment = evaluate_bundle_feasibility(InventoryBundle.from_dict(payload))
+
+    assert "late_arrival_checkin_conflict" not in assessment.blocking_reasons
+    assert all(
+        conflict.code != "late_arrival_checkin_conflict"
+        for conflict in assessment.timing_conflicts
+    )
+
+
 def test_candidate_seed_uses_representative_travel_totals() -> None:
     payload = json.loads(
         _fixture_path("coherent_low_friction_route.json").read_text(encoding="utf-8")
