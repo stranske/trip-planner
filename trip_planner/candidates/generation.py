@@ -595,8 +595,7 @@ def _should_emit_seed(
     if destination_lodging or destination_activity:
         return True
     return any(
-        option.destination_id == destination.destination_id
-        for option in destination_transport
+        option.destination_id == destination.destination_id for option in destination_transport
     )
 
 
