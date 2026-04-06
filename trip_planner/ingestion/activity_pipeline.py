@@ -109,14 +109,9 @@ def ingest_activity_snapshot(
                     snapshot,
                     _separate_option_id(decision.canonical_entity_id, record),
                 )
-                option.notes.extend(
-                    [f"dedup_decision:{decision.decision_id}", *decision.notes]
-                )
+                option.notes.extend([f"dedup_decision:{decision.decision_id}", *decision.notes])
                 option.feasibility.constraints.extend(
-                    [
-                        f"{conflict.attribute_path}:{conflict.reason}"
-                        for conflict in unresolved
-                    ]
+                    [f"{conflict.attribute_path}:{conflict.reason}" for conflict in unresolved]
                 )
                 record_warnings = record.payload.get("normalization_warnings", [])
                 if record_warnings:

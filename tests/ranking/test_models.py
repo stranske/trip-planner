@@ -7,13 +7,7 @@ from trip_planner.ranking import RankedResultSet
 
 
 def _fixture_path(name: str) -> Path:
-    return (
-        Path(__file__).resolve().parent.parent
-        / "fixtures"
-        / "ranking"
-        / "results"
-        / name
-    )
+    return Path(__file__).resolve().parent.parent / "fixtures" / "ranking" / "results" / name
 
 
 def _load_result_set(name: str) -> RankedResultSet:

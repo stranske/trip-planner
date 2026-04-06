@@ -132,23 +132,14 @@ class FeasibilityAssessment:
         require_strings(self.missing_data_fields, "missing_data_fields")
         require_strings(self.blocking_reasons, "blocking_reasons")
         require_strings(self.notes, "notes")
-        if any(
-            not isinstance(item, TravelTimeEstimate)
-            for item in self.travel_time_estimates
-        ):
-            raise ValueError(
-                "travel_time_estimates must contain TravelTimeEstimate instances"
-            )
+        if any(not isinstance(item, TravelTimeEstimate) for item in self.travel_time_estimates):
+            raise ValueError("travel_time_estimates must contain TravelTimeEstimate instances")
         if any(not isinstance(item, MoveCostSummary) for item in self.move_costs):
             raise ValueError("move_costs must contain MoveCostSummary instances")
         if any(not isinstance(item, TimingConflict) for item in self.timing_conflicts):
             raise ValueError("timing_conflicts must contain TimingConflict instances")
-        if any(
-            not isinstance(item, RouteContinuityWarning) for item in self.route_warnings
-        ):
-            raise ValueError(
-                "route_warnings must contain RouteContinuityWarning instances"
-            )
+        if any(not isinstance(item, RouteContinuityWarning) for item in self.route_warnings):
+            raise ValueError("route_warnings must contain RouteContinuityWarning instances")
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -320,9 +311,7 @@ def _route_warnings(
 ) -> list[RouteContinuityWarning]:
     warnings: list[RouteContinuityWarning] = []
     destination_sequence = [item.origin_id for item in bundle.transport_options]
-    destination_sequence.extend(
-        item.destination_id for item in bundle.transport_options
-    )
+    destination_sequence.extend(item.destination_id for item in bundle.transport_options)
     backtracking = any(
         destination_sequence[index] == destination_sequence[index + 2]
         for index in range(len(destination_sequence) - 2)
@@ -417,20 +406,14 @@ def evaluate_bundle_feasibility(bundle: InventoryBundle) -> FeasibilityAssessmen
     )
     timing_conflicts.extend(activity_conflicts)
     missing_data_fields = sorted(
-        set(
-            move_missing_data_fields
-            + arrival_missing_data_fields
-            + activity_missing_data_fields
-        )
+        set(move_missing_data_fields + arrival_missing_data_fields + activity_missing_data_fields)
     )
 
     blocking_reasons = list(bundle.feasibility.blocking_reasons)
     blocking_reasons.extend(
         reason for move_cost in move_costs for reason in move_cost.blocking_reasons
     )
-    blocking_reasons.extend(
-        conflict.code for conflict in timing_conflicts if conflict.blocking
-    )
+    blocking_reasons.extend(conflict.code for conflict in timing_conflicts if conflict.blocking)
     if not bundle.feasibility.available:
         blocking_reasons.append("bundle_unavailable")
     if not bundle.feasibility.internally_consistent:
@@ -439,12 +422,10 @@ def evaluate_bundle_feasibility(bundle: InventoryBundle) -> FeasibilityAssessmen
 
     route_warnings = _route_warnings(bundle, move_costs)
     friction_penalty_total = round(sum(item.friction_penalty for item in move_costs), 4)
-    total_travel_minutes, total_transfer_count, aggregate_notes = (
-        _representative_travel_totals(
-            bundle,
-            travel_estimates,
-            move_costs,
-        )
+    total_travel_minutes, total_transfer_count, aggregate_notes = _representative_travel_totals(
+        bundle,
+        travel_estimates,
+        move_costs,
     )
     warning_pressure = (
         len([conflict for conflict in timing_conflicts if not conflict.blocking])

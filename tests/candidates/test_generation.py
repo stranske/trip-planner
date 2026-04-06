@@ -106,9 +106,9 @@ def test_business_candidate_generation_filters_policy_violations_and_marks_polic
 
     assert candidate_set.purpose == "policy_comparison"
     assert candidate_set.filter_summary.policy_exclusion_count == 1
-    assert [seed.bundle.composition_summary.primary_destination_id for seed in candidate_set.seeds] == [
-        "dest-city-chicago"
-    ]
+    assert [
+        seed.bundle.composition_summary.primary_destination_id for seed in candidate_set.seeds
+    ] == ["dest-city-chicago"]
     assert candidate_set.seeds[0].policy_ready is True
     assert candidate_set.seeds[0].bundle.transport_options[0].origin_id == "dest-home-ord"
     assert candidate_set.seeds[0].bundle.lodging_options[0].option_id == (
