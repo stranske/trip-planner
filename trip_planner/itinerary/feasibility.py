@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 from trip_planner._validators import (
     require_non_empty,
@@ -188,6 +188,11 @@ def _arrival_conflicts(
             )
             for lodging in matching_lodging
         }
+        departure = _dt(
+            transport.timing_summary.departure_local,
+            field_key=f"transport:{transport.option_id}:departure_local",
+            missing_data_fields=missing_data_fields,
+        )
         arrival = _dt(
             transport.timing_summary.arrival_local,
             field_key=f"transport:{transport.option_id}:arrival_local",
@@ -200,10 +205,11 @@ def _arrival_conflicts(
             if window is None:
                 continue
             start_time, end_time = window
-            arrival_time = arrival.timetz().replace(tzinfo=None)
+            anchor_date = departure.date() if departure is not None else arrival.date()
+            window_close = datetime.combine(anchor_date, end_time, arrival.tzinfo)
             if end_time < start_time:
-                continue
-            if arrival_time > end_time:
+                window_close += timedelta(days=1)
+            if arrival > window_close:
                 conflicts.append(
                     TimingConflict(
                         conflict_id=f"timing:{transport.option_id}:{lodging.option_id}:arrival",
