@@ -5,7 +5,6 @@ from trip_planner.app import APP_VERSION
 from trip_planner.app.routes.health import router as health_router
 from trip_planner.app.routes.workspace import router as workspace_router
 
-
 app = FastAPI(
     title="Trip Planner API",
     version=APP_VERSION,

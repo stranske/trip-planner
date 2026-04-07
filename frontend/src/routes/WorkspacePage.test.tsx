@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLoaderData } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { ApiClientError } from "../lib/api/errors";
 import { WorkspacePage } from "./WorkspacePage";
 
 vi.mock("react-router-dom", async () => {
@@ -158,5 +159,25 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByText("Timeline data is not ready")).toBeInTheDocument();
     });
+  });
+
+  it("renders the shared route error card when the workspace loader rejects", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.reject(
+        new ApiClientError("Backend warming up", {
+          path: "/api/workspace/trip-leisure-kyoto-draft",
+          status: 503,
+          statusText: "Service Unavailable",
+        })
+      ),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Workspace request failed" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Backend warming up")).toBeInTheDocument();
   });
 });

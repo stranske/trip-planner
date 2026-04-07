@@ -1,4 +1,4 @@
-import { useLoaderData, useParams } from "react-router-dom";
+import { useLoaderData } from "react-router-dom";
 
 import { fetchWorkspace, type SavedScenarioRecord, type WorkspaceData } from "../api/workspace";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";

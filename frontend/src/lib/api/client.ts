@@ -5,12 +5,12 @@ type JsonRequestOptions = RequestInit & {
 };
 
 export async function fetchJson<T>({ path, headers, ...init }: JsonRequestOptions): Promise<T> {
+  const normalizedHeaders = new Headers(headers);
+  normalizedHeaders.set("Accept", "application/json");
+
   const response = await fetch(path, {
     ...init,
-    headers: {
-      Accept: "application/json",
-      ...headers,
-    },
+    headers: normalizedHeaders,
   });
 
   if (!response.ok) {

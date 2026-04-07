@@ -10,5 +10,7 @@ router = APIRouter(tags=["workspace"])
 def read_workspace(trip_id: str) -> WorkspaceResponse:
     payload = get_workspace_payload(trip_id)
     if payload is None:
-        raise HTTPException(status_code=404, detail=f"Workspace for trip '{trip_id}' was not found.")
+        raise HTTPException(
+            status_code=404, detail=f"Workspace for trip '{trip_id}' was not found."
+        )
     return WorkspaceResponse.model_validate(payload)

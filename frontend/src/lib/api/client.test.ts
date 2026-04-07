@@ -21,12 +21,31 @@ describe("fetchJson", () => {
       service: "trip-planner-api",
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/health",
-      expect.objectContaining({
-        headers: expect.objectContaining({ Accept: "application/json" }),
-      })
-    );
+    const request = fetchMock.mock.calls[0]?.[1];
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/health", expect.any(Object));
+    expect(request?.headers).toBeInstanceOf(Headers);
+    expect((request?.headers as Headers).get("Accept")).toBe("application/json");
+  });
+
+  it("preserves custom headers passed as a Headers instance", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({ ok: true }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const headers = new Headers({ Authorization: "Bearer token" });
+
+    await fetchJson<{ ok: boolean }>({ path: "/api/health", headers });
+
+    const request = fetchMock.mock.calls[0]?.[1];
+
+    expect(request?.headers).toBeInstanceOf(Headers);
+    expect((request?.headers as Headers).get("Accept")).toBe("application/json");
+    expect((request?.headers as Headers).get("Authorization")).toBe("Bearer token");
   });
 
   it("throws an ApiClientError when the response is not ok", async () => {
