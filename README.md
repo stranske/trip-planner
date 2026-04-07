@@ -50,6 +50,8 @@ The first canonical application packages now start in:
 - `trip_planner/contracts/`
 - `trip_planner/business/`
 - `trip_planner/sources/`
+- `trip_planner/app/`
+- `frontend/`
 
 The old script flow is not the default design path for new work. It remains only where a narrow compatibility bridge is still useful, and older static-demo artifacts have been moved under `archive/legacy-static-demo/`.
 That legacy work is still useful as seed logic for scoring and itinerary generation, but it is no longer the full intended product.
@@ -62,4 +64,27 @@ pip install -r requirements.txt
 python scripts/validate_request.py
 python scripts/generate_itins.py
 python scripts/build_html.py
+```
+
+## App Runtime Quick Start
+
+Backend:
+
+```bash
+uvicorn trip_planner.app.main:app --reload
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Validation:
+
+```bash
+pytest tests/app/test_health.py
+cd frontend && npm test
 ```
