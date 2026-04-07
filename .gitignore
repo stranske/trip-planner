@@ -11,3 +11,6 @@ verifier-context.md
 __pycache__/
 *.py[cod]
 .mypy_cache/
+node_modules/
+dist/
+*.tsbuildinfo
