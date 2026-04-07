@@ -52,6 +52,15 @@ trip_planner.egg-info/SOURCES.txt
 trip_planner.egg-info/dependency_links.txt
 trip_planner.egg-info/requires.txt
 trip_planner.egg-info/top_level.txt
+trip_planner/app/__init__.py
+trip_planner/app/main.py
+trip_planner/app/routes/__init__.py
+trip_planner/app/routes/health.py
+trip_planner/app/routes/workspace.py
+trip_planner/app/schemas/__init__.py
+trip_planner/app/schemas/health.py
+trip_planner/app/schemas/workspace.py
+trip_planner/app/services/workspace.py
 trip_planner/business/__init__.py
 trip_planner/business/approval_ready.py
 trip_planner/business/objective_derivation.py
