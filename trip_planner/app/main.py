@@ -1,12 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from trip_planner.app import APP_VERSION
 from trip_planner.app.routes.health import router as health_router
 
 
 app = FastAPI(
     title="Trip Planner API",
-    version="0.1.0",
+    version=APP_VERSION,
     description="Initial FastAPI runtime for the Trip Planner full-stack application.",
 )
 
@@ -24,4 +25,3 @@ app.include_router(health_router, prefix="/api")
 @app.get("/")
 def read_root() -> dict[str, str]:
     return {"message": "Trip Planner API is running."}
-

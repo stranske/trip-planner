@@ -71,7 +71,8 @@ python scripts/build_html.py
 Backend:
 
 ```bash
-uvicorn trip_planner.app.main:app --reload
+python -m pip install -e ".[dev]"
+python -m uvicorn trip_planner.app.main:app --reload
 ```
 
 Frontend:
