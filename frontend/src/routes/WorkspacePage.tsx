@@ -1,10 +1,7 @@
 import { useLoaderData } from "react-router-dom";
 
-import { fetchWorkspace, type SavedScenarioRecord, type WorkspaceData } from "../api/workspace";
+import { type SavedScenarioRecord, type WorkspaceData } from "../api/workspace";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
-import { createDeferredLoader } from "../lib/routes/loaders";
-
-const DEFAULT_TRIP_ID = "trip-leisure-kyoto-draft";
 
 type LoaderData = {
   workspace: Promise<WorkspaceData>;
@@ -119,10 +116,6 @@ export function WorkspacePage() {
     </AsyncRouteContent>
   );
 }
-
-export const workspaceLoader = createDeferredLoader("workspace", async ({ params }) =>
-  fetchWorkspace(params.tripId ?? DEFAULT_TRIP_ID)
-);
 
 function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
   const timelineStops = buildTimelineStops(workspace);
