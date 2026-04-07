@@ -95,6 +95,14 @@ Epic `#676` is the current runtime-backed sequencing contract for the first usab
 - `#688` integrate the planner side panel into the React workspace with real trip context
 - `#689` persist planner decisions and option-feedback actions across reloads
 
+### 10. Maps, Timeline, And Comparison Application Surfaces
+
+Epic `#679` is the current runtime-backed sequencing contract for the first dedicated visualization layer above the runtime, persistence, and planner workspace spine. It turns the broader frontend visualization goals into a concrete delivery lane sized around timeline rendering, route/context maps, and saved-scenario or trip comparison surfaces. Use [maps-timeline-comparison-epic.md](maps-timeline-comparison-epic.md) as the parent contract, and treat [frontend-application-layer-epic.md](frontend-application-layer-epic.md), [frontend-trip-workspace.md](frontend-trip-workspace.md), [planner-ui-integration.md](planner-ui-integration.md), and [workspace_timeline_contract.md](workspace_timeline_contract.md) as design references rather than the active issue lane.
+
+- `#698` timeline view for trip structure and day sequencing
+- `#699` map surface for route and option context
+- `#700` saved-scenario and trip comparison views
+
 ## Cross-Cutting Runtime Foundation
 
 Epic `#674` is an enabling track for the first runnable full-stack application surface. It should stay distinct from the deeper product layers above and below it, because its job is to make the repo executable end to end without collapsing backend bootstrap, frontend route loading, and local/CI workflow support into one change.
