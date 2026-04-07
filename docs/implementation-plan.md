@@ -49,7 +49,7 @@ See [shared-business-foundation-epic.md](shared-business-foundation-epic.md) for
 Epic `#525` is the sequencing contract for this phase.
 See [source-ingestion-epic.md](source-ingestion-epic.md) for the dependency chain, shared design rules, and acceptance mapping for issues `#526` through `#530`.
 
-### 5. Ranking And Route Assembly
+### 5. Runtime Planning Services
 
 Epic `#677` is the current runtime-backed sequencing contract for the service layer above normalized options, itinerary objectives, and planner workspace state. It turns the earlier planning and ranking design work into a concrete workspace-consumed services lane. Use [runtime-planning-services-epic.md](runtime-planning-services-epic.md) as the parent contract, and treat [ranking-route-search-epic.md](ranking-route-search-epic.md) plus the lower-level contract docs as design references rather than the active issue lane.
 

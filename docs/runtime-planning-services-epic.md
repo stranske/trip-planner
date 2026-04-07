@@ -17,7 +17,7 @@ It is complete when:
 
 ## Dependency Chain
 
-This epic depends on the normalized contracts and candidate-shaping work from `#519`, `#525`, and `#531`, plus the runtime workspace slice from `#676`, because the service layer should consume explicit option, objective, and workspace boundaries instead of reaching back into raw provider payloads or frontend-only state.
+This epic depends on the normalized contracts from `#519` and `#525`, the runtime workspace slice from `#676`, and the specific planning-service contract surfaces for candidate shaping, itinerary feasibility, and ranking results, because the service layer should consume explicit option, objective, service-output, and workspace boundaries instead of reaching back into raw provider payloads or frontend-only state. Issue `#531` remains a design reference for those candidate-shaping surfaces, but it is not a delivery prerequisite for epic `#677`.
 
 Within the epic itself, the expected order is:
 
