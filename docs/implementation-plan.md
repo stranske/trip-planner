@@ -90,13 +90,11 @@ Epic anchor: `#549` defines the execution and approval-readiness sequencing boun
 
 ### 9. Frontend Application Layer
 
-Epic anchor: `#555` defines the application-shell and planning-surface sequencing boundary for this layer. See [frontend-application-layer-epic.md](frontend-application-layer-epic.md).
+Epic `#676` is the current runtime-backed sequencing contract for the first usable planner workspace slice. It turns the broader frontend application design into a concrete delivery lane sized around trip launch, workspace composition, and persisted planner actions. Use [planner-workspace-vertical-slice-epic.md](planner-workspace-vertical-slice-epic.md) as the parent contract, and treat [frontend-application-layer-epic.md](frontend-application-layer-epic.md) plus the existing frontend boundary docs as broader design references.
 
-- `#556` frontend app shell
-- `#557` account and trip entry flows
-- `#558` trip workspace
-- `#559` maps and timeline visualization
-- `#560` planner interaction and business approval-readiness UI
+- `#687` build the trip entry flow that launches users into the planner workspace
+- `#688` integrate the planner side panel into the React workspace with real trip context
+- `#689` persist planner decisions and option-feedback actions across reloads
 
 ## Cross-Cutting Runtime Foundation
 
@@ -109,6 +107,10 @@ The expected order inside that epic is:
 3. `#682` full-stack local development and CI workflow support
 
 Use [application-foundation-epic.md](application-foundation-epic.md) as the contract for those runtime-focused child issues.
+
+## Broader Frontend Design References
+
+Epic `#555` still defines the larger application-shell and planning-surface design envelope for the eventual frontend layer. Use [frontend-application-layer-epic.md](frontend-application-layer-epic.md), [frontend-app-shell-foundation.md](frontend-app-shell-foundation.md), [frontend-entry-flows.md](frontend-entry-flows.md), and [frontend-trip-workspace.md](frontend-trip-workspace.md) as design references while the near-term implementation lane runs through `#676`.
 
 ## Working Rule
 

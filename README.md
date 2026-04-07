@@ -10,6 +10,7 @@
 - [Implementation plan](docs/implementation-plan.md)
 - [Application foundation epic plan](docs/application-foundation-epic.md)
 - [Accounts, persistence, and workflow state epic plan](docs/accounts-persistence-workflow-state-epic.md)
+- [Planner workspace vertical slice epic plan](docs/planner-workspace-vertical-slice-epic.md)
 - [Leisure preference epic plan](docs/leisure-preference-epic.md)
 - [Shared planning and business foundation epic plan](docs/shared-business-foundation-epic.md)
 - [Source ingestion epic plan](docs/source-ingestion-epic.md)
