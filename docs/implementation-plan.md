@@ -99,6 +99,18 @@ Epic anchor: `#555` defines the application-shell and planning-surface sequencin
 - `#559` maps and timeline visualization
 - `#560` planner interaction and business approval-readiness UI
 
+## Cross-Cutting Runtime Foundation
+
+Epic `#674` is an enabling track for the first runnable full-stack application surface. It should stay distinct from the deeper product layers above and below it, because its job is to make the repo executable end to end without collapsing backend bootstrap, frontend route loading, and local/CI workflow support into one change.
+
+The expected order inside that epic is:
+
+1. `#680` FastAPI runtime, React shell, and live health integration
+2. `#681` typed frontend API client and route/data-loading foundation
+3. `#682` full-stack local development and CI workflow support
+
+Use [application-foundation-epic.md](application-foundation-epic.md) as the contract for those runtime-focused child issues.
+
 ## Working Rule
 
 The preferred delivery pattern is:
