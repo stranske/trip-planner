@@ -50,9 +50,36 @@ jobs:
       enable-soft-gate: true
     secrets: inherit
 
+  runtime-ci:
+    name: Runtime CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install backend dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Verify full-stack runtime
+        run: ./scripts/check_full_stack_runtime.sh
+
   summary:
     name: gate-summary
-    needs: [python-ci]
+    needs: [python-ci, runtime-ci]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -74,35 +101,40 @@ jobs:
         id: summarize
         env:
           PYTHON_RESULT: ${{ needs.python-ci.result || 'skipped' }}
+          RUNTIME_RESULT: ${{ needs.runtime-ci.result || 'skipped' }}
         run: |
           set -euo pipefail
 
           python_result="${PYTHON_RESULT:-skipped}"
+          runtime_result="${RUNTIME_RESULT:-skipped}"
           state="success"
           description="All checks passed"
 
-          case "$python_result" in
-            success)
-              state="success"
-              description="Python CI passed"
-              ;;
-            failure)
-              state="failure"
-              description="Python CI failed"
-              ;;
-            cancelled)
-              state="error"
-              description="Python CI was cancelled"
-              ;;
-            skipped)
-              state="success"
-              description="Python CI skipped (no relevant changes)"
-              ;;
-            *)
-              state="pending"
-              description="Python CI status unknown"
-              ;;
-          esac
+          if [ "$python_result" = "failure" ]; then
+            state="failure"
+            description="Python CI failed"
+          elif [ "$runtime_result" = "failure" ]; then
+            state="failure"
+            description="Runtime CI failed"
+          elif [ "$python_result" = "cancelled" ] || [ "$runtime_result" = "cancelled" ]; then
+            state="error"
+            description="Checks were cancelled"
+          elif [ "$python_result" = "success" ] && [ "$runtime_result" = "success" ]; then
+            state="success"
+            description="Python and runtime CI passed"
+          elif [ "$python_result" = "success" ] && [ "$runtime_result" = "skipped" ]; then
+            state="success"
+            description="Python CI passed; runtime CI skipped"
+          elif [ "$python_result" = "skipped" ] && [ "$runtime_result" = "success" ]; then
+            state="success"
+            description="Runtime CI passed; Python CI skipped"
+          elif [ "$python_result" = "skipped" ] && [ "$runtime_result" = "skipped" ]; then
+            state="success"
+            description="Checks skipped (no relevant changes)"
+          else
+            state="pending"
+            description="Checks still running"
+          fi
 
           echo "state=${state}" >> "$GITHUB_OUTPUT"
           echo "description=${description}" >> "$GITHUB_OUTPUT"
