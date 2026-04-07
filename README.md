@@ -13,6 +13,7 @@
 - [Planner workspace vertical slice epic plan](docs/planner-workspace-vertical-slice-epic.md)
 - [Runtime planning services epic plan](docs/runtime-planning-services-epic.md)
 - [Budget and business policy execution epic plan](docs/budget-business-policy-execution-epic.md)
+- [Maps, timeline, and comparison application surfaces epic plan](docs/maps-timeline-comparison-epic.md)
 - [Leisure preference epic plan](docs/leisure-preference-epic.md)
 - [Shared planning and business foundation epic plan](docs/shared-business-foundation-epic.md)
 - [Source ingestion epic plan](docs/source-ingestion-epic.md)
