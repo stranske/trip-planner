@@ -6,7 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 backend_host="${BACKEND_HOST:-127.0.0.1}"
 backend_port="${BACKEND_PORT:-8000}"
 backend_url="http://${backend_host}:${backend_port}"
-backend_log="$(mktemp -t trip-planner-runtime)"
+backend_log="$(mktemp -d "${TMPDIR:-/tmp}/trip-planner-runtime.XXXXXX")/backend.log"
 smoke_only="false"
 backend_pid=""
 
@@ -18,6 +18,10 @@ cleanup() {
   if [ -n "${backend_pid}" ] && kill -0 "${backend_pid}" 2>/dev/null; then
     kill "${backend_pid}" 2>/dev/null || true
     wait "${backend_pid}" 2>/dev/null || true
+  fi
+  if [ -n "${backend_log}" ] && [ -f "${backend_log}" ]; then
+    rm -f "${backend_log}"
+    rmdir "$(dirname "${backend_log}")" 2>/dev/null || true
   fi
 }
 

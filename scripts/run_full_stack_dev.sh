@@ -9,8 +9,13 @@ frontend_host="${FRONTEND_HOST:-127.0.0.1}"
 frontend_port="${FRONTEND_PORT:-5173}"
 
 backend_pid=""
+frontend_pid=""
 
 cleanup() {
+  if [ -n "${frontend_pid}" ] && kill -0 "${frontend_pid}" 2>/dev/null; then
+    kill "${frontend_pid}" 2>/dev/null || true
+    wait "${frontend_pid}" 2>/dev/null || true
+  fi
   if [ -n "${backend_pid}" ] && kill -0 "${backend_pid}" 2>/dev/null; then
     kill "${backend_pid}" 2>/dev/null || true
     wait "${backend_pid}" 2>/dev/null || true
@@ -35,7 +40,10 @@ Trip Planner runtime is starting.
 Press Ctrl+C to stop both processes.
 EOF
 
-exec npm --prefix "${repo_root}/frontend" run dev -- \
+npm --prefix "${repo_root}/frontend" run dev -- \
   --host "${frontend_host}" \
   --port "${frontend_port}" \
-  --strictPort
+  --strictPort &
+frontend_pid=$!
+
+wait "${frontend_pid}"

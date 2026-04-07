@@ -6,6 +6,7 @@ import { ApiClientError } from "./errors";
 describe("fetchJson", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("returns typed JSON payloads from the shared client", async () => {
@@ -67,6 +68,45 @@ describe("fetchJson", () => {
       name: "ApiClientError",
       message: "Backend warming up",
       path: "/api/health",
+      status: 503,
+    } satisfies Partial<ApiClientError>);
+  });
+
+  it("resolves request URLs against VITE_API_BASE_URL when configured", async () => {
+    vi.stubEnv("VITE_API_BASE_URL", "https://api.example.test/base/");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({ ok: true }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchJson<{ ok: boolean }>({ path: "/api/health" })).resolves.toEqual({ ok: true });
+
+    expect(fetchMock).toHaveBeenCalledWith("https://api.example.test/api/health", expect.any(Object));
+  });
+
+  it("reports the resolved request URL in ApiClientError details", async () => {
+    vi.stubEnv("VITE_API_BASE_URL", "https://api.example.test/base/");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        clone() {
+          return this;
+        },
+        json: async () => ({ detail: "Backend warming up" }),
+        text: async () => "Backend warming up",
+      })
+    );
+
+    await expect(fetchJson({ path: "/api/health" })).rejects.toMatchObject({
+      name: "ApiClientError",
+      message: "Backend warming up",
+      path: "https://api.example.test/api/health",
       status: 503,
     } satisfies Partial<ApiClientError>);
   });

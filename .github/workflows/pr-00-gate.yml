@@ -122,6 +122,12 @@ jobs:
           elif [ "$python_result" = "success" ] && [ "$runtime_result" = "success" ]; then
             state="success"
             description="Python and runtime CI passed"
+          elif [ "$python_result" = "success" ] && [ "$runtime_result" = "skipped" ]; then
+            state="success"
+            description="Python CI passed; runtime CI skipped"
+          elif [ "$python_result" = "skipped" ] && [ "$runtime_result" = "success" ]; then
+            state="success"
+            description="Runtime CI passed; Python CI skipped"
           elif [ "$python_result" = "skipped" ] && [ "$runtime_result" = "skipped" ]; then
             state="success"
             description="Checks skipped (no relevant changes)"
