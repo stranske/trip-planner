@@ -1,3 +1,5 @@
+import { fetchJson } from "../lib/api/client";
+
 export type TripFrame = {
   start_date: string;
   end_date: string;
@@ -91,9 +93,5 @@ export type WorkspaceData = {
 };
 
 export async function fetchWorkspace(tripId: string): Promise<WorkspaceData> {
-  const response = await fetch(`/api/workspace/${tripId}`);
-  if (!response.ok) {
-    throw new Error(`Workspace request failed with status ${response.status}`);
-  }
-  return (await response.json()) as WorkspaceData;
+  return fetchJson<WorkspaceData>({ path: `/api/workspace/${tripId}` });
 }

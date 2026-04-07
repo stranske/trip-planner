@@ -1,8 +1,19 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter, useLoaderData } from "react-router-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import App from "../App";
+import { ApiClientError } from "../lib/api/errors";
+import { WorkspacePage } from "./WorkspacePage";
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return {
+    ...actual,
+    useLoaderData: vi.fn(),
+  };
+});
+
+const mockedUseLoaderData = vi.mocked(useLoaderData);
 
 const workspacePayload = {
   trip_record: {
@@ -101,45 +112,25 @@ const workspacePayload = {
   },
 };
 
+function renderWorkspacePage() {
+  return render(
+    <MemoryRouter>
+      <WorkspacePage />
+    </MemoryRouter>
+  );
+}
+
 describe("WorkspacePage", () => {
-  beforeEach(() => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.includes("/api/workspace/")) {
-          return {
-            ok: true,
-            json: async () => workspacePayload,
-          };
-        }
-
-        return {
-          ok: true,
-          json: async () => ({
-            service: "trip-planner-api",
-            status: "ok",
-            environment: "local",
-            version: "0.1.0",
-          }),
-        };
-      })
-    );
-  });
-
   afterEach(() => {
-    vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
   it("renders timeline structure from persisted trip and scenario state", async () => {
-    render(
-      <MemoryRouter
-        initialEntries={["/workspace/trip-leisure-kyoto-draft"]}
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-      >
-        <App />
-      </MemoryRouter>
-    );
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+    });
+
+    renderWorkspacePage();
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Spring Kyoto anniversary draft" })).toBeInTheDocument();
@@ -152,47 +143,41 @@ describe("WorkspacePage", () => {
   });
 
   it("shows an empty-state message when no route sequence is available", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.includes("/api/workspace/")) {
-          return {
-            ok: true,
-            json: async () => ({
-              ...workspacePayload,
-              saved_scenarios: [],
-              scenario_search: {
-                ...workspacePayload.scenario_search,
-                scenarios: [],
-              },
-            }),
-          };
-        }
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        saved_scenarios: [],
+        scenario_search: {
+          ...workspacePayload.scenario_search,
+          scenarios: [],
+        },
+      }),
+    });
 
-        return {
-          ok: true,
-          json: async () => ({
-            service: "trip-planner-api",
-            status: "ok",
-            environment: "local",
-            version: "0.1.0",
-          }),
-        };
-      })
-    );
-
-    render(
-      <MemoryRouter
-        initialEntries={["/workspace/trip-leisure-kyoto-draft"]}
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-      >
-        <App />
-      </MemoryRouter>
-    );
+    renderWorkspacePage();
 
     await waitFor(() => {
       expect(screen.getByText("Timeline data is not ready")).toBeInTheDocument();
     });
+  });
+
+  it("renders the shared route error card when the workspace loader rejects", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.reject(
+        new ApiClientError("Backend warming up", {
+          path: "/api/workspace/trip-leisure-kyoto-draft",
+          status: 503,
+          statusText: "Service Unavailable",
+        })
+      ),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Workspace request failed" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Backend warming up")).toBeInTheDocument();
   });
 });

@@ -1,7 +1,4 @@
-import { NavLink, Route, Routes } from "react-router-dom";
-
-import { HealthPage } from "./routes/HealthPage";
-import { WorkspacePage } from "./routes/WorkspacePage";
+import { NavLink, Outlet } from "react-router-dom";
 
 const DEFAULT_WORKSPACE_TRIP = "trip-leisure-kyoto-draft";
 
@@ -25,10 +22,7 @@ export default function App() {
         </nav>
       </header>
       <main>
-        <Routes>
-          <Route path="/" element={<HealthPage />} />
-          <Route path="/workspace/:tripId" element={<WorkspacePage />} />
-        </Routes>
+        <Outlet />
       </main>
     </div>
   );

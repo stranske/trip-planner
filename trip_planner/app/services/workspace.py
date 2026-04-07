@@ -13,7 +13,12 @@ from trip_planner.itinerary import (
     ScenarioTradeoff,
 )
 from trip_planner.ranking import ExplanationRecord
-from trip_planner.state import PersistedTripRecord, PlanningSessionState, SavedScenarioRecord, ScenarioComparison
+from trip_planner.state import (
+    PersistedTripRecord,
+    PlanningSessionState,
+    SavedScenarioRecord,
+    ScenarioComparison,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,7 +136,9 @@ def _leisure_search_result(trip_id: str) -> ScenarioSearchResult:
                         summary="The baseline preserves depth in Kyoto with one lighter excursion day.",
                         factor_keys=["cultural_depth", "moderate_pace"],
                         machine_context={"planner_mode": "leisure"},
-                        human_summary=["Moderate travel friction with a clear cultural center of gravity."],
+                        human_summary=[
+                            "Moderate travel friction with a clear cultural center of gravity."
+                        ],
                         source_refs=["ranked-results:kyoto-spring"],
                     )
                 ],
