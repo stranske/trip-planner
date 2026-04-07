@@ -1,6 +1,9 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 
 import { HealthPage } from "./routes/HealthPage";
+import { WorkspacePage } from "./routes/WorkspacePage";
+
+const DEFAULT_WORKSPACE_TRIP = "trip-leisure-kyoto-draft";
 
 export default function App() {
   return (
@@ -8,21 +11,23 @@ export default function App() {
       <header className="app-header">
         <div>
           <p className="eyebrow">Trip Planner Runtime</p>
-          <h1>First runnable full-stack slice</h1>
+          <h1>Persisted planner workspace</h1>
           <p className="lede">
-            The React shell is now wired to a live FastAPI backend instead of static-only planner
-            mocks.
+            The React shell now consumes persisted trip, session, and scenario state from the live
+            FastAPI runtime.
           </p>
         </div>
         <nav aria-label="Primary">
           <NavLink to="/" end>
             Health
           </NavLink>
+          <NavLink to={`/workspace/${DEFAULT_WORKSPACE_TRIP}`}>Workspace</NavLink>
         </nav>
       </header>
       <main>
         <Routes>
           <Route path="/" element={<HealthPage />} />
+          <Route path="/workspace/:tripId" element={<WorkspacePage />} />
         </Routes>
       </main>
     </div>
