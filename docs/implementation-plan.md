@@ -60,13 +60,12 @@ See [source-ingestion-epic.md](source-ingestion-epic.md) for the dependency chai
 
 ### 6. Persistence And Workflow State
 
-Epic anchor: `#537` defines the persistence architecture and sequencing boundary for this layer. See [persistence-architecture.md](persistence-architecture.md).
+Epic `#675` is the current runtime-backed sequencing contract for this layer. It turns the earlier persistence design work into a concrete application lane sized around small-business account access and durable planning state. Use [accounts-persistence-workflow-state-epic.md](accounts-persistence-workflow-state-epic.md) as the parent contract, and treat [persistence-architecture.md](persistence-architecture.md) plus the state-boundary docs as design references rather than the active issue lane.
 
-- `#538` account and traveler-profile persistence
-- `#539` trip persistence
-- `#540` saved scenarios and history
-- `#541` budgets and actual spend
-- `#542` planning sessions and activity logs
+- `#683` account registration, login, and session-backed app access
+- `#684` database-backed trip creation, list, and detail flows
+- `#685` saved scenario and planning-history persistence with UI access
+- `#686` planning-session and activity-log persistence with a visible audit trail
 
 ### 7. Orchestration And In-Trip Adjustment
 
