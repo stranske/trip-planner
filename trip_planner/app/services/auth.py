@@ -68,7 +68,7 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, encoded_hash: str) -> bool:
     try:
         decoded = base64.b64decode(encoded_hash.encode("ascii"), validate=True)
-    except (binascii.Error, UnicodeEncodeError, ValueError):
+    except (TypeError, binascii.Error, UnicodeEncodeError, ValueError):
         return False
 
     salt = decoded[:16]

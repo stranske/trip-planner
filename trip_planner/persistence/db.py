@@ -41,16 +41,20 @@ def _sqlite_database_path(url: str) -> Path | None:
         return None
     if parsed_url.database == ":memory:":
         return None
-    return Path(parsed_url.database)
+    return Path(parsed_url.database).expanduser()
+
+
+def _ensure_sqlite_parent_dir(url: str) -> None:
+    database_path = _sqlite_database_path(url)
+    if database_path is not None:
+        database_path.parent.mkdir(parents=True, exist_ok=True)
 
 
 def get_engine(url: str | None = None) -> Engine:
     resolved_url = url or get_database_url()
     engine = _ENGINE_CACHE.get(resolved_url)
     if engine is None:
-        database_path = _sqlite_database_path(resolved_url)
-        if database_path is not None:
-            database_path.parent.mkdir(parents=True, exist_ok=True)
+        _ensure_sqlite_parent_dir(resolved_url)
         engine = create_engine(
             resolved_url, future=True, **_engine_options(resolved_url)
         )
@@ -87,9 +91,7 @@ def ensure_database_ready(url: str | None = None) -> None:
 
     from trip_planner.persistence.models import account, session  # noqa: F401
 
-    database_path = _sqlite_database_path(resolved_url)
-    if database_path is not None:
-        database_path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_sqlite_parent_dir(resolved_url)
 
     config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
     config.attributes["configure_logger"] = False
