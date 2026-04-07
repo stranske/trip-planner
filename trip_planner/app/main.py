@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from trip_planner.app import APP_VERSION
 from trip_planner.app.routes.health import router as health_router
+from trip_planner.app.routes.workspace import router as workspace_router
 
 
 app = FastAPI(
@@ -20,6 +21,7 @@ app.add_middleware(
 )
 
 app.include_router(health_router, prefix="/api")
+app.include_router(workspace_router, prefix="/api")
 
 
 @app.get("/")

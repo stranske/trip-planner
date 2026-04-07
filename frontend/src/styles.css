@@ -91,6 +91,140 @@ a {
   margin-bottom: 1rem;
 }
 
+.workspace-layout {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.workspace-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.workspace-hero {
+  overflow: hidden;
+  position: relative;
+}
+
+.workspace-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto -5% -40% 45%;
+  height: 180px;
+  background: radial-gradient(circle, rgba(56, 117, 107, 0.22), transparent 70%);
+  pointer-events: none;
+}
+
+.workspace-meta {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin: 1.5rem 0 0;
+}
+
+.workspace-meta div {
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  background: rgba(19, 33, 44, 0.04);
+}
+
+.workspace-meta dt {
+  font-size: 0.85rem;
+  color: #577186;
+}
+
+.workspace-meta dd {
+  margin: 0.3rem 0 0;
+  font-weight: 600;
+}
+
+.timeline-list {
+  list-style: none;
+  display: grid;
+  gap: 0.9rem;
+  padding: 0;
+  margin: 1.5rem 0 0;
+}
+
+.timeline-stop {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 1rem;
+  align-items: start;
+  padding: 1rem;
+  border-radius: 20px;
+  background: rgba(19, 33, 44, 0.04);
+}
+
+.timeline-stop h3,
+.scenario-card h3,
+.decision-card h3 {
+  margin: 0 0 0.35rem;
+}
+
+.timeline-stop p,
+.scenario-card p,
+.decision-card p {
+  margin: 0;
+  color: #365063;
+}
+
+.timeline-dayband {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 16px;
+  background: #13212c;
+  color: #f7f1e5;
+  font-size: 0.9rem;
+}
+
+.scenario-stack,
+.decision-stack,
+.focus-area-list {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.25rem;
+}
+
+.scenario-card,
+.decision-card {
+  padding: 1rem;
+  border-radius: 20px;
+  background: rgba(19, 33, 44, 0.04);
+}
+
+.scenario-card-active {
+  border: 1px solid rgba(56, 117, 107, 0.25);
+  background: rgba(56, 117, 107, 0.08);
+}
+
+.scenario-kicker {
+  margin: 0 0 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.75rem;
+  color: #845623;
+}
+
+.focus-area-list {
+  list-style: none;
+  padding: 0;
+}
+
+.focus-area-list li {
+  padding: 0.7rem 0.9rem;
+  border-radius: 999px;
+  width: fit-content;
+  background: rgba(132, 86, 35, 0.12);
+  text-transform: capitalize;
+}
+
+.muted-copy {
+  color: #577186;
+}
+
 .status-grid {
   display: grid;
   gap: 1rem;
@@ -122,5 +256,9 @@ a {
 
   .app-header {
     flex-direction: column;
+  }
+
+  .timeline-stop {
+    grid-template-columns: 1fr;
   }
 }
