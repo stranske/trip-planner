@@ -78,15 +78,14 @@ See [orchestration-interactive-planning-epic.md](orchestration-interactive-plann
 - `#547` in-trip replanning
 - `#548` business orchestration and policy prep
 
-### 8. Policy Integration Execution
+### 8. Budget And Business Policy Execution
 
-Epic anchor: `#549` defines the execution and approval-readiness sequencing boundary for this layer. See [policy-integration-execution-epic.md](policy-integration-execution-epic.md).
+Epic `#678` is the current runtime-backed sequencing contract for the business workflow layer above planner state, runtime planning services, and the lower-level policy integration contracts. It turns earlier business-policy design work into a concrete application lane sized around budget editing, approval readiness, proposal handling, and reoptimization. Use [budget-business-policy-execution-epic.md](budget-business-policy-execution-epic.md) as the parent contract, and treat [policy-integration-execution-epic.md](policy-integration-execution-epic.md) plus the policy-facing contract docs as design references rather than the active issue lane.
 
-- `#550` integration-client and execution contracts
-- `#551` policy sync
-- `#552` proposal submission and result ingestion
-- `#553` reoptimization and exception handling
-- `#554` approval-ready packaging and integration harnesses
+- `#694` budget editing and actual-spend capture with workspace-visible totals
+- `#695` policy constraint sync/import and approval-readiness display
+- `#696` proposal submission, result ingestion, and approval-packet UI
+- `#697` reoptimization and exception-handling flows after policy results
 
 ### 9. Frontend Application Layer
 
