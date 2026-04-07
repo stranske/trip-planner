@@ -18,12 +18,16 @@ def upgrade() -> None:
         sa.Column("email", sa.String(length=320), nullable=False),
         sa.Column("display_name", sa.String(length=120), nullable=False),
         sa.Column("password_hash", sa.String(length=512), nullable=False),
-        sa.Column("status", sa.String(length=32), nullable=False, server_default="active"),
+        sa.Column(
+            "status", sa.String(length=32), nullable=False, server_default="active"
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("user_id"),
     )
-    op.create_index(op.f("ix_user_accounts_email"), "user_accounts", ["email"], unique=True)
+    op.create_index(
+        op.f("ix_user_accounts_email"), "user_accounts", ["email"], unique=True
+    )
     op.create_table(
         "auth_sessions",
         sa.Column("session_id", sa.String(length=64), nullable=False),
@@ -33,10 +37,17 @@ def upgrade() -> None:
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["user_id"], ["user_accounts.user_id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["user_accounts.user_id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("session_id"),
     )
-    op.create_index(op.f("ix_auth_sessions_token_hash"), "auth_sessions", ["token_hash"], unique=True)
+    op.create_index(
+        op.f("ix_auth_sessions_token_hash"),
+        "auth_sessions",
+        ["token_hash"],
+        unique=True,
+    )
 
 
 def downgrade() -> None:

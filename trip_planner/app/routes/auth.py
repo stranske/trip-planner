@@ -36,7 +36,9 @@ def _set_session_cookie(response: Response, token: str) -> None:
     )
 
 
-@router.post("/auth/signup", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/auth/signup", response_model=SessionResponse, status_code=status.HTTP_201_CREATED
+)
 def signup(
     payload: SignupRequest,
     response: Response,
@@ -77,7 +79,9 @@ def read_session(
     if user is None:
         from fastapi import HTTPException
 
-        raise HTTPException(status_code=401, detail="No active planner session was found.")
+        raise HTTPException(
+            status_code=401, detail="No active planner session was found."
+        )
     return SessionResponse(user=SessionUserResponse.model_validate(user))
 
 

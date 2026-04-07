@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +23,9 @@ class Base(DeclarativeBase):
 
 
 def get_database_url() -> str:
-    return os.environ.get("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{_DEFAULT_SQLITE_PATH}")
+    return os.environ.get(
+        "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{_DEFAULT_SQLITE_PATH}"
+    )
 
 
 def _engine_options(url: str) -> dict[str, Any]:
@@ -37,7 +40,9 @@ def get_engine(url: str | None = None) -> Engine:
     if engine is None:
         if resolved_url.startswith("sqlite"):
             _DEFAULT_SQLITE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        engine = create_engine(resolved_url, future=True, **_engine_options(resolved_url))
+        engine = create_engine(
+            resolved_url, future=True, **_engine_options(resolved_url)
+        )
         _ENGINE_CACHE[resolved_url] = engine
     return engine
 
@@ -56,7 +61,7 @@ def get_session_factory(url: str | None = None) -> sessionmaker[Session]:
     return session_factory
 
 
-def get_db_session() -> Session:
+def get_db_session() -> Iterator[Session]:
     session = get_session_factory()()
     try:
         yield session
