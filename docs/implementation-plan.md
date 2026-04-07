@@ -51,12 +51,12 @@ See [source-ingestion-epic.md](source-ingestion-epic.md) for the dependency chai
 
 ### 5. Ranking And Route Assembly
 
-- [Epic `#531`: ranking, route feasibility, and explainable search](ranking-route-search-epic.md)
-- `#532` ranking and explanation contracts
-- `#533` feasibility and move-cost evaluation
-- `#534` leisure ranking
-- `#535` business ranking
-- `#536` route-search and multi-scenario assembly
+Epic `#677` is the current runtime-backed sequencing contract for the service layer above normalized options, itinerary objectives, and planner workspace state. It turns the earlier planning and ranking design work into a concrete workspace-consumed services lane. Use [runtime-planning-services-epic.md](runtime-planning-services-epic.md) as the parent contract, and treat [ranking-route-search-epic.md](ranking-route-search-epic.md) plus the lower-level contract docs as design references rather than the active issue lane.
+
+- `#690` inventory bundle assembly surfaced in the workspace
+- `#691` feasibility and move-cost evaluation surfaced in planner outputs
+- `#692` ranking and scenario-generation services with workspace-visible results
+- `#693` route-search and scenario-comparison behavior in the workspace
 
 ### 6. Persistence And Workflow State
 
