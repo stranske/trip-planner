@@ -15,6 +15,7 @@ import { SignupPage } from "./routes/SignupPage";
 import { WorkspacePage } from "./routes/WorkspacePage";
 
 const DEFAULT_WORKSPACE_TRIP = "trip-leisure-kyoto-draft";
+const sessionLoadCache = new Map<string, Promise<RootLoaderData>>();
 
 export type RootLoaderData = {
   session: Awaited<ReturnType<typeof fetchCurrentSession>> | null;
@@ -24,27 +25,48 @@ function isUnauthorized(error: unknown): error is ApiClientError {
   return error instanceof ApiClientError && error.status === 401;
 }
 
-export async function rootLoader(): Promise<RootLoaderData> {
-  try {
-    return { session: await fetchCurrentSession() };
-  } catch (error) {
-    if (isUnauthorized(error)) {
-      return { session: null };
-    }
-    throw error;
+function loadSession(request: Request): Promise<RootLoaderData> {
+  const cached = sessionLoadCache.get(request.url);
+  if (cached) {
+    return cached;
   }
+
+  const pending = (async () => {
+    try {
+      return { session: await fetchCurrentSession() };
+    } catch (error) {
+      if (isUnauthorized(error)) {
+        return { session: null };
+      }
+      throw error;
+    }
+  })();
+
+  sessionLoadCache.set(request.url, pending);
+  pending.finally(() => {
+    queueMicrotask(() => {
+      if (sessionLoadCache.get(request.url) === pending) {
+        sessionLoadCache.delete(request.url);
+      }
+    });
+  });
+  return pending;
 }
 
-export async function indexLoader() {
-  const { session } = await rootLoader();
+export async function rootLoader({ request }: LoaderFunctionArgs): Promise<RootLoaderData> {
+  return loadSession(request);
+}
+
+export async function indexLoader({ request }: LoaderFunctionArgs) {
+  const { session } = await loadSession(request);
   if (session) {
     throw redirect(`/workspace/${DEFAULT_WORKSPACE_TRIP}`);
   }
   throw redirect("/login");
 }
 
-export async function authPageLoader() {
-  const { session } = await rootLoader();
+export async function authPageLoader({ request }: LoaderFunctionArgs) {
+  const { session } = await loadSession(request);
   if (session) {
     throw redirect(`/workspace/${DEFAULT_WORKSPACE_TRIP}`);
   }
@@ -52,14 +74,10 @@ export async function authPageLoader() {
 }
 
 export async function protectedWorkspaceLoader({ params, request }: LoaderFunctionArgs) {
-  try {
-    await fetchCurrentSession();
-  } catch (error) {
-    if (isUnauthorized(error)) {
-      const nextPath = new URL(request.url).pathname;
-      throw redirect(`/login?next=${encodeURIComponent(nextPath)}`);
-    }
-    throw error;
+  const { session } = await loadSession(request);
+  if (!session) {
+    const nextPath = new URL(request.url).pathname;
+    throw redirect(`/login?next=${encodeURIComponent(nextPath)}`);
   }
 
   return {

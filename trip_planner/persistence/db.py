@@ -10,6 +10,7 @@ from typing import Any
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import Engine, create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 _DEFAULT_SQLITE_PATH = Path(__file__).resolve().parents[2] / ".tmp" / "trip_planner.db"
@@ -34,12 +35,22 @@ def _engine_options(url: str) -> dict[str, Any]:
     return {}
 
 
+def _sqlite_database_path(url: str) -> Path | None:
+    parsed_url = make_url(url)
+    if parsed_url.get_backend_name() != "sqlite" or not parsed_url.database:
+        return None
+    if parsed_url.database == ":memory:":
+        return None
+    return Path(parsed_url.database)
+
+
 def get_engine(url: str | None = None) -> Engine:
     resolved_url = url or get_database_url()
     engine = _ENGINE_CACHE.get(resolved_url)
     if engine is None:
-        if resolved_url.startswith("sqlite"):
-            _DEFAULT_SQLITE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        database_path = _sqlite_database_path(resolved_url)
+        if database_path is not None:
+            database_path.parent.mkdir(parents=True, exist_ok=True)
         engine = create_engine(
             resolved_url, future=True, **_engine_options(resolved_url)
         )
@@ -76,8 +87,8 @@ def ensure_database_ready(url: str | None = None) -> None:
 
     from trip_planner.persistence.models import account, session  # noqa: F401
 
-    if resolved_url.startswith("sqlite"):
-        database_path = Path(resolved_url.replace("sqlite:///", "", 1))
+    database_path = _sqlite_database_path(resolved_url)
+    if database_path is not None:
         database_path.parent.mkdir(parents=True, exist_ok=True)
 
     config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))

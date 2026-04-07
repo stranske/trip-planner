@@ -1,13 +1,10 @@
 import { startTransition, useState } from "react";
 import { NavLink, Outlet, useLoaderData, useNavigate } from "react-router-dom";
 
-import { logout, type SessionPayload } from "./api/auth";
+import { logout } from "./api/auth";
+import type { RootLoaderData } from "./router";
 
 const DEFAULT_WORKSPACE_TRIP = "trip-leisure-kyoto-draft";
-
-type RootLoaderData = {
-  session: SessionPayload | null;
-};
 
 export default function App() {
   const { session } = useLoaderData() as RootLoaderData;

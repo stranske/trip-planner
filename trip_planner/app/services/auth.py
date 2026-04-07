@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import re
@@ -65,9 +66,16 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, encoded_hash: str) -> bool:
-    decoded = base64.b64decode(encoded_hash.encode("ascii"))
+    try:
+        decoded = base64.b64decode(encoded_hash.encode("ascii"), validate=True)
+    except (binascii.Error, UnicodeEncodeError, ValueError):
+        return False
+
     salt = decoded[:16]
     stored_digest = decoded[16:]
+    if len(salt) != 16 or not stored_digest:
+        return False
+
     provided_digest = hashlib.scrypt(
         password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1
     )

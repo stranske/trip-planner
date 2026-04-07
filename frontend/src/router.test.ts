@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
@@ -20,6 +20,10 @@ import { ApiClientError } from "./lib/api/errors";
 import { authPageLoader, protectedWorkspaceLoader, rootLoader } from "./router";
 
 describe("router auth loaders", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("restores the signed-in session during app bootstrap", async () => {
     const { fetchCurrentSession } = await import("./api/auth");
     vi.mocked(fetchCurrentSession).mockResolvedValueOnce({
@@ -30,7 +34,13 @@ describe("router auth loaders", () => {
       },
     });
 
-    await expect(rootLoader()).resolves.toEqual({
+    await expect(
+      rootLoader({
+        params: {},
+        request: new Request("http://localhost/"),
+        context: undefined,
+      })
+    ).resolves.toEqual({
       session: {
         user: {
           user_id: "user:test",
@@ -51,7 +61,47 @@ describe("router auth loaders", () => {
       })
     );
 
-    await expect(authPageLoader()).resolves.toBeNull();
+    await expect(
+      authPageLoader({
+        params: {},
+        request: new Request("http://localhost/login"),
+        context: undefined,
+      })
+    ).resolves.toBeNull();
+  });
+
+  it("reuses the same session lookup within a navigation", async () => {
+    const { fetchCurrentSession } = await import("./api/auth");
+    vi.mocked(fetchCurrentSession).mockResolvedValue({
+      user: {
+        user_id: "user:test",
+        email: "owner@example.com",
+        display_name: "Owner",
+      },
+    });
+
+    const request = new Request("http://localhost/login");
+
+    const results = await Promise.allSettled([
+      rootLoader({ params: {}, request, context: undefined }),
+      authPageLoader({ params: {}, request, context: undefined }),
+    ]);
+
+    expect(results[0]).toMatchObject({
+      status: "fulfilled",
+      value: {
+        session: {
+          user: {
+            user_id: "user:test",
+          },
+        },
+      },
+    });
+    expect(results[1]).toMatchObject({
+      status: "rejected",
+      reason: expect.any(Response),
+    });
+    expect(fetchCurrentSession).toHaveBeenCalledTimes(1);
   });
 
   it("redirects protected workspace routes back to sign-in when the session check fails", async () => {

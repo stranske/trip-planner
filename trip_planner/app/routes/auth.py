@@ -24,14 +24,14 @@ from trip_planner.persistence.db import get_db_session
 router = APIRouter(tags=["auth"])
 
 
-def _set_session_cookie(response: Response, token: str) -> None:
+def _set_session_cookie(request: Request, response: Response, token: str) -> None:
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
         max_age=SESSION_TTL_DAYS * 24 * 60 * 60,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=request.url.scheme != "http",
         path="/",
     )
 
@@ -41,6 +41,7 @@ def _set_session_cookie(response: Response, token: str) -> None:
 )
 def signup(
     payload: SignupRequest,
+    request: Request,
     response: Response,
     db_session: Session = Depends(get_db_session),
 ) -> SessionResponse:
@@ -51,19 +52,20 @@ def signup(
         display_name=payload.display_name,
     )
     token, _ = create_session_for_user(db_session, user=user)
-    _set_session_cookie(response, token)
+    _set_session_cookie(request, response, token)
     return SessionResponse(user=SessionUserResponse.model_validate(user))
 
 
 @router.post("/auth/login", response_model=SessionResponse)
 def login(
     payload: LoginRequest,
+    request: Request,
     response: Response,
     db_session: Session = Depends(get_db_session),
 ) -> SessionResponse:
     user = authenticate_user(db_session, email=payload.email, password=payload.password)
     token, _ = create_session_for_user(db_session, user=user)
-    _set_session_cookie(response, token)
+    _set_session_cookie(request, response, token)
     return SessionResponse(user=SessionUserResponse.model_validate(user))
 
 

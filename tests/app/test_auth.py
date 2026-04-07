@@ -5,8 +5,11 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from trip_planner.app.main import create_app
+from trip_planner.persistence.db import get_session_factory
+from trip_planner.persistence.models.account import UserAccount
 from trip_planner.persistence.db import reset_database_state
 
 
@@ -82,3 +85,60 @@ def test_login_logout_and_workspace_auth_gate(client: TestClient) -> None:
     assert logout.status_code == 200
     assert logout.json() == {"signed_out": True}
     assert client.get("/api/auth/session").status_code == 401
+
+
+def test_login_with_corrupted_password_hash_returns_unauthorized(
+    client: TestClient,
+) -> None:
+    client.post(
+        "/api/auth/signup",
+        json={
+            "email": "traveler@example.com",
+            "password": "password123",
+            "display_name": "Traveler",
+        },
+    )
+
+    with get_session_factory()() as db_session:
+        user = db_session.scalar(
+            select(UserAccount).where(UserAccount.email == "traveler@example.com")
+        )
+        assert user is not None
+        user.password_hash = "not-valid-base64"
+        db_session.commit()
+
+    response = client.post(
+        "/api/auth/login",
+        json={
+            "email": "traveler@example.com",
+            "password": "password123",
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_signup_sets_secure_cookie_for_https_requests(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'trip-planner.db'}"
+    )
+    reset_database_state()
+    app = create_app()
+
+    with TestClient(app, base_url="https://testserver") as secure_client:
+        response = secure_client.post(
+            "/api/auth/signup",
+            json={
+                "email": "owner@example.com",
+                "password": "password123",
+                "display_name": "Owner",
+            },
+        )
+
+    reset_database_state()
+
+    assert response.status_code == 201
+    assert "Secure" in response.headers["set-cookie"]
