@@ -1,3 +1,5 @@
+import { fetchJson } from "../lib/api/client";
+
 export type HealthStatus = {
   service: string;
   status: string;
@@ -6,9 +8,5 @@ export type HealthStatus = {
 };
 
 export async function fetchHealthStatus(): Promise<HealthStatus> {
-  const response = await fetch("/api/health");
-  if (!response.ok) {
-    throw new Error(`Health request failed with status ${response.status}`);
-  }
-  return (await response.json()) as HealthStatus;
+  return fetchJson<HealthStatus>({ path: "/api/health" });
 }

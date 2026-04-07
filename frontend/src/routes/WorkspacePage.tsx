@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useLoaderData, useParams } from "react-router-dom";
 
 import { fetchWorkspace, type SavedScenarioRecord, type WorkspaceData } from "../api/workspace";
+import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
+import { createDeferredLoader } from "../lib/routes/loaders";
 
 const DEFAULT_TRIP_ID = "trip-leisure-kyoto-draft";
 
-type ViewState =
-  | { kind: "loading" }
-  | { kind: "ready"; workspace: WorkspaceData }
-  | { kind: "error"; message: string };
+type LoaderData = {
+  workspace: Promise<WorkspaceData>;
+};
 
 type TimelineStop = {
   key: string;
@@ -99,50 +99,32 @@ function ScenarioSummaryCard({
 }
 
 export function WorkspacePage() {
-  const { tripId = DEFAULT_TRIP_ID } = useParams();
-  const [state, setState] = useState<ViewState>({ kind: "loading" });
+  const { workspace } = useLoaderData() as LoaderData;
 
-  useEffect(() => {
-    let active = true;
+  return (
+    <AsyncRouteContent
+      resolve={workspace}
+      loading={{
+        label: "Workspace",
+        title: "Loading persisted trip state",
+        message: "Hydrating trip, session, and saved-scenario records for the timeline surface.",
+      }}
+      error={{
+        label: "Workspace",
+        title: "Workspace request failed",
+        message: "The shared API client could not load the workspace payload.",
+      }}
+    >
+      {(resolvedWorkspace) => <WorkspacePageContent workspace={resolvedWorkspace} />}
+    </AsyncRouteContent>
+  );
+}
 
-    fetchWorkspace(tripId)
-      .then((workspace) => {
-        if (active) {
-          setState({ kind: "ready", workspace });
-        }
-      })
-      .catch((error: Error) => {
-        if (active) {
-          setState({ kind: "error", message: error.message });
-        }
-      });
+export const workspaceLoader = createDeferredLoader("workspace", async ({ params }) =>
+  fetchWorkspace(params.tripId ?? DEFAULT_TRIP_ID)
+);
 
-    return () => {
-      active = false;
-    };
-  }, [tripId]);
-
-  if (state.kind === "loading") {
-    return (
-      <section className="status-card">
-        <p className="status-label">Workspace</p>
-        <h2>Loading persisted trip state</h2>
-        <p>Hydrating trip, session, and saved-scenario records for the timeline surface.</p>
-      </section>
-    );
-  }
-
-  if (state.kind === "error") {
-    return (
-      <section className="status-card status-card-error">
-        <p className="status-label">Workspace</p>
-        <h2>Workspace request failed</h2>
-        <p>{state.message}</p>
-      </section>
-    );
-  }
-
-  const { workspace } = state;
+function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
   const timelineStops = buildTimelineStops(workspace);
   const { trip } = workspace.trip_record;
   const activeScenario = resolveActiveScenario(workspace);

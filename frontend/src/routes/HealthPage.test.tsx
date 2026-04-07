@@ -1,38 +1,43 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter, useLoaderData } from "react-router-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import App from "../App";
+import { HealthPage } from "./HealthPage";
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return {
+    ...actual,
+    useLoaderData: vi.fn(),
+  };
+});
+
+const mockedUseLoaderData = vi.mocked(useLoaderData);
+
+function renderHealthPage() {
+  return render(
+    <MemoryRouter>
+      <HealthPage />
+    </MemoryRouter>
+  );
+}
 
 describe("HealthPage", () => {
-  beforeEach(() => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          service: "trip-planner-api",
-          status: "ok",
-          environment: "local",
-          version: "0.1.0",
-        }),
-      })
-    );
-  });
-
   afterEach(() => {
-    vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
   it("renders the live backend health status", async () => {
-    render(
-      <MemoryRouter
-        initialEntries={["/"]}
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-      >
-        <App />
-      </MemoryRouter>
-    );
+    mockedUseLoaderData.mockReturnValue({
+      health: Promise.resolve({
+        service: "trip-planner-api",
+        status: "ok",
+        environment: "local",
+        version: "0.1.0",
+      }),
+    });
+
+    renderHealthPage();
 
     expect(screen.getByText("Checking the live runtime")).toBeInTheDocument();
 
@@ -43,5 +48,26 @@ describe("HealthPage", () => {
     expect(screen.getByText("ok")).toBeInTheDocument();
     expect(screen.getByText("local")).toBeInTheDocument();
     expect(screen.getByText("0.1.0")).toBeInTheDocument();
+  });
+
+  it("renders route-level loading and error treatment through the shared client seam", async () => {
+    let rejectRequest: ((reason?: unknown) => void) | undefined;
+    mockedUseLoaderData.mockReturnValue({
+      health: new Promise((_, reject) => {
+        rejectRequest = reject;
+      }),
+    });
+
+    renderHealthPage();
+
+    expect(screen.getByText("Checking the live runtime")).toBeInTheDocument();
+
+    rejectRequest?.(new Error("Backend offline"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Health request failed")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Backend offline")).toBeInTheDocument();
   });
 });

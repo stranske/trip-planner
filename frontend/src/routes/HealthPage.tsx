@@ -1,73 +1,56 @@
-import { useEffect, useState } from "react";
+import { useLoaderData } from "react-router-dom";
 
+import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
+import { createDeferredLoader } from "../lib/routes/loaders";
 import { fetchHealthStatus, type HealthStatus } from "../api/health";
 
-type ViewState =
-  | { kind: "loading" }
-  | { kind: "ready"; health: HealthStatus }
-  | { kind: "error"; message: string };
+type LoaderData = {
+  health: Promise<HealthStatus>;
+};
 
-export function HealthPage() {
-  const [state, setState] = useState<ViewState>({ kind: "loading" });
+export const healthLoader = createDeferredLoader("health", async () => fetchHealthStatus());
 
-  useEffect(() => {
-    let active = true;
-
-    fetchHealthStatus()
-      .then((health) => {
-        if (active) {
-          setState({ kind: "ready", health });
-        }
-      })
-      .catch((error: Error) => {
-        if (active) {
-          setState({ kind: "error", message: error.message });
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  if (state.kind === "loading") {
-    return (
-      <section className="status-card">
-        <p className="status-label">Backend status</p>
-        <h2>Checking the live runtime</h2>
-        <p>Fetching the FastAPI health endpoint.</p>
-      </section>
-    );
-  }
-
-  if (state.kind === "error") {
-    return (
-      <section className="status-card status-card-error">
-        <p className="status-label">Backend status</p>
-        <h2>Health request failed</h2>
-        <p>{state.message}</p>
-      </section>
-    );
-  }
-
+function HealthStatusCard({ health }: { health: HealthStatus }) {
   return (
     <section className="status-card">
       <p className="status-label">Backend status</p>
-      <h2>{state.health.service}</h2>
+      <h2>{health.service}</h2>
       <dl className="status-grid">
         <div>
           <dt>State</dt>
-          <dd>{state.health.status}</dd>
+          <dd>{health.status}</dd>
         </div>
         <div>
           <dt>Environment</dt>
-          <dd>{state.health.environment}</dd>
+          <dd>{health.environment}</dd>
         </div>
         <div>
           <dt>Version</dt>
-          <dd>{state.health.version}</dd>
+          <dd>{health.version}</dd>
         </div>
       </dl>
     </section>
+  );
+}
+
+export function HealthPage() {
+  const { health } = useLoaderData() as LoaderData;
+
+  return (
+    <AsyncRouteContent
+      resolve={health}
+      loading={{
+        label: "Backend status",
+        title: "Checking the live runtime",
+        message: "Fetching the FastAPI health endpoint.",
+      }}
+      error={{
+        label: "Backend status",
+        title: "Health request failed",
+        message: "The shared API client could not load backend health.",
+      }}
+    >
+      {(resolvedHealth) => <HealthStatusCard health={resolvedHealth} />}
+    </AsyncRouteContent>
   );
 }
