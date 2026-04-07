@@ -32,7 +32,7 @@ Issue `#684` should build on the session-aware app access from `#683` so trip ow
 
 Every child issue in this epic should preserve these rules:
 
-- Keep `trip_planner/persistence/` as the storage-facing package root for runtime-backed persistence work.
+- Keep `trip_planner.state.*` as the canonical contract and repository boundary already established in the repo, and treat `trip_planner/persistence/` as the storage-facing implementation layer for runtime-backed persistence work.
 - Keep `trip_planner/app/routes/` as the canonical backend route surface for persistence access.
 - Keep `frontend/` as the user-facing application shell for auth, trip, scenario, and activity surfaces.
 - Use `SQLAlchemy` + `Alembic` with `SQLite` for the first production-quality baseline and optimize for correctness over scale theater.
