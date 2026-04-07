@@ -42,7 +42,7 @@ Every child issue in this epic should preserve these rules:
 
 | Issue | Role | Must Consume | Must Produce |
 |---:|---|---|---|
-| `#698` | Timeline view for trip structure and day sequencing | persisted trip/session state from `#675`, planner workspace seams from `#676`, runtime trip outputs from `#680` through `#682` | timeline components, day-sequencing view model, workspace-visible trip structure surfaces |
+| `#698` | Timeline view for trip structure and day sequencing | persisted trip/session state from `#675`, planner workspace seams from `#676`, runtime app shell/bootstrap from `#680`, and typed API client/data-loading seams from `#681` | timeline components, day-sequencing view model, workspace-visible trip structure surfaces |
 | `#699` | Map surface for route and option context | timeline/trip structure from `#698`, typed route/loading seams from `#681`, workspace route context from `#676` | route/context map surface, option-location visualization, map-ready route context contracts |
 | `#700` | Saved-scenario and trip comparison views | persisted scenario history from `#675`, timeline/map primitives from `#698` and `#699`, workspace-visible planner state from `#676` | saved-scenario comparison UI, trip-to-trip comparison surfaces, persisted comparison context rendered in the app |
 
