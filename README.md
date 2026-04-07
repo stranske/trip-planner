@@ -69,24 +69,30 @@ python scripts/build_html.py
 
 ## App Runtime Quick Start
 
-Backend:
+Install the backend and frontend dependencies once:
 
 ```bash
 python -m pip install -e ".[dev]"
-python -m uvicorn trip_planner.app.main:app --reload
+npm --prefix frontend install
 ```
 
-Frontend:
+Run the full stack together from the repo root:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+make runtime-dev
 ```
 
-Validation:
+That starts the FastAPI runtime on `http://127.0.0.1:8000` and the Vite app on
+`http://127.0.0.1:5173` with the frontend proxying `/api` requests to the backend.
+
+Validate the runtime surfaces from the repo root:
 
 ```bash
-pytest tests/app/test_health.py
-cd frontend && npm test
+make runtime-check
 ```
+
+The verification path covers:
+
+- backend runtime tests for the live FastAPI routes
+- frontend unit/build checks
+- a smoke test that runs the frontend client against a live backend process
