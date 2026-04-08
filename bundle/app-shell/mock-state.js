@@ -362,6 +362,7 @@ const leisureRuntimeScenarioComparison = {
     { key: "score", label: "Planner score", direction: "higher_better" },
     { key: "travel_minutes", label: "Travel minutes", direction: "lower_better" },
     { key: "transfers", label: "Transfers", direction: "lower_better" },
+    { key: "estimated_total", label: "Estimated total", direction: "lower_better" },
   ],
   lead_scenario_id: "scenario-lisbon-central",
   scenarios: leisureWorkspaceScenarios.map((scenario, index) => ({
@@ -383,7 +384,7 @@ const leisureRuntimeScenarioComparison = {
     delta: {
       score_delta: index === 0 ? 0 : -0.09,
       travel_minutes_delta: index === 0 ? 0 : 45,
-      transfer_delta: index === 0 ? 0 : 1,
+      transfers_delta: index === 0 ? 0 : 1,
       estimated_total_delta: index === 0 ? 0 : -150,
     },
     highlights:
@@ -479,6 +480,7 @@ const businessRuntimeScenarioComparison = {
     { key: "score", label: "Planner score", direction: "higher_better" },
     { key: "travel_minutes", label: "Travel minutes", direction: "lower_better" },
     { key: "transfers", label: "Transfers", direction: "lower_better" },
+    { key: "estimated_total", label: "Estimated total", direction: "lower_better" },
   ],
   lead_scenario_id: "scenario-sea-near-client",
   scenarios: businessWorkspaceScenarios.map((scenario, index) => ({
@@ -501,7 +503,7 @@ const businessRuntimeScenarioComparison = {
     delta: {
       score_delta: index === 0 ? 0 : -0.08,
       travel_minutes_delta: index === 0 ? 0 : 70,
-      transfer_delta: index === 0 ? 0 : 1,
+      transfers_delta: index === 0 ? 0 : 1,
       estimated_total_delta: index === 0 ? 0 : -85,
     },
     highlights:
@@ -643,6 +645,7 @@ const inTripRevisionRuntimeScenarioComparison = {
     { key: "score", label: "Planner score", direction: "higher_better" },
     { key: "travel_minutes", label: "Travel minutes", direction: "lower_better" },
     { key: "transfers", label: "Transfers", direction: "lower_better" },
+    { key: "estimated_total", label: "Estimated total", direction: "lower_better" },
   ],
   lead_scenario_id: "scenario-lisbon-rain-reset",
   scenarios: inTripRevisionWorkspaceScenarios.map((scenario, index) => ({
@@ -665,7 +668,7 @@ const inTripRevisionRuntimeScenarioComparison = {
     delta: {
       score_delta: index === 0 ? 0 : -0.09,
       travel_minutes_delta: index === 0 ? 0 : 60,
-      transfer_delta: index === 0 ? 0 : 2,
+      transfers_delta: index === 0 ? 0 : 2,
       estimated_total_delta: index === 0 ? 0 : 135,
     },
     highlights:

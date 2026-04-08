@@ -206,7 +206,7 @@ export interface FrontendRuntimeScenarioComparisonRecord {
   delta: {
     score_delta: number;
     travel_minutes_delta: number;
-    transfer_delta: number;
+    transfers_delta: number;
     estimated_total_delta: number | null;
   };
   highlights: string[];
