@@ -1,6 +1,12 @@
+import { startTransition, useEffect, useState } from "react";
 import { useLoaderData } from "react-router-dom";
 
-import { type SavedScenarioRecord, type WorkspaceData } from "../api/workspace";
+import {
+  answerPlannerDecision,
+  submitPlannerOptionFeedback,
+  type SavedScenarioRecord,
+  type WorkspaceData,
+} from "../api/workspace";
 import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
 
@@ -130,9 +136,60 @@ export function WorkspacePage() {
 }
 
 function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
-  const timelineStops = buildTimelineStops(workspace);
-  const { trip } = workspace.trip_record;
-  const activeScenario = resolveActiveScenario(workspace);
+  const [currentWorkspace, setCurrentWorkspace] = useState(workspace);
+  const [plannerError, setPlannerError] = useState<string | null>(null);
+  const [plannerBusyLabel, setPlannerBusyLabel] = useState<string | null>(null);
+  useEffect(() => {
+    setCurrentWorkspace(workspace);
+  }, [workspace]);
+
+  const timelineStops = buildTimelineStops(currentWorkspace);
+  const { trip } = currentWorkspace.trip_record;
+  const activeScenario = resolveActiveScenario(currentWorkspace);
+
+  async function handleDecisionAnswer(decisionId: string, choice: string) {
+    setPlannerError(null);
+    setPlannerBusyLabel("Saving planner decision...");
+    try {
+      const nextWorkspace = await answerPlannerDecision(trip.trip_id, decisionId, choice);
+      startTransition(() => {
+        setCurrentWorkspace(nextWorkspace);
+      });
+    } catch (error) {
+      setPlannerError(error instanceof Error ? error.message : "Planner decision update failed.");
+    } finally {
+      setPlannerBusyLabel(null);
+    }
+  }
+
+  async function handleOptionFeedback(
+    optionId: string,
+    actionType: string,
+    decisionId: string | null
+  ) {
+    setPlannerError(null);
+    setPlannerBusyLabel("Saving planner feedback...");
+    try {
+      const nextWorkspace = await submitPlannerOptionFeedback(
+        trip.trip_id,
+        optionId,
+        actionType as
+          | "accept"
+          | "reject"
+          | "revise"
+          | "save_as_fallback"
+          | "do_more_before_asking_again",
+        decisionId
+      );
+      startTransition(() => {
+        setCurrentWorkspace(nextWorkspace);
+      });
+    } catch (error) {
+      setPlannerError(error instanceof Error ? error.message : "Planner feedback update failed.");
+    } finally {
+      setPlannerBusyLabel(null);
+    }
+  }
 
   return (
     <section className="workspace-layout">
@@ -169,7 +226,13 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
           <p className="muted-copy">
             The existing planner side panel now mounts inside the workspace route and reads trip-scoped API data.
           </p>
-          <PlannerSidePanelSurface state={workspace.planner_panel_state} />
+          {plannerBusyLabel ? <p className="muted-copy">{plannerBusyLabel}</p> : null}
+          {plannerError ? <p className="planner-inline-error">{plannerError}</p> : null}
+          <PlannerSidePanelSurface
+            state={currentWorkspace.planner_panel_state}
+            onDecisionAnswer={handleDecisionAnswer}
+            onOptionFeedback={handleOptionFeedback}
+          />
         </section>
 
         <section className="status-card">
@@ -235,9 +298,9 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
 
         <section className="status-card">
           <p className="status-label">Scenario context</p>
-          <h2>{workspace.scenario_search.title}</h2>
+          <h2>{currentWorkspace.scenario_search.title}</h2>
           <div className="scenario-stack">
-            {workspace.saved_scenarios.map((savedScenario) => {
+            {currentWorkspace.saved_scenarios.map((savedScenario) => {
               const activeVersion = savedScenario.versions.find(
                 (version) => version.version_id === savedScenario.current_version_id
               );
@@ -247,11 +310,13 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
                   key={savedScenario.saved_scenario_id}
                   savedScenario={savedScenario}
                   activeVersion={activeVersion}
-                  isActive={savedScenario.saved_scenario_id === workspace.session.current_saved_scenario_id}
+                  isActive={
+                    savedScenario.saved_scenario_id === currentWorkspace.session.current_saved_scenario_id
+                  }
                 />
               );
             })}
-            {workspace.saved_scenarios.length === 0 ? (
+            {currentWorkspace.saved_scenarios.length === 0 ? (
               <p className="muted-copy">
                 No saved scenarios exist yet. The mounted planner panel carries the bootstrap context until planner
                 history is persisted.
@@ -268,22 +333,22 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
           <dl className="workspace-meta">
             <div>
               <dt>Interaction</dt>
-              <dd>{workspace.session.interaction_state.interaction_style}</dd>
+              <dd>{currentWorkspace.session.interaction_state.interaction_style}</dd>
             </div>
             <div>
               <dt>Initiative</dt>
-              <dd>{workspace.session.interaction_state.initiative_level}</dd>
+              <dd>{currentWorkspace.session.interaction_state.initiative_level}</dd>
             </div>
             <div>
               <dt>Checkpointing</dt>
-              <dd>{workspace.session.interaction_state.checkpoint_frequency}</dd>
+              <dd>{currentWorkspace.session.interaction_state.checkpoint_frequency}</dd>
             </div>
           </dl>
           <div className="decision-stack">
-            {workspace.session.pending_decisions.length === 0 ? (
+            {currentWorkspace.session.pending_decisions.length === 0 ? (
               <p className="muted-copy">No blocking decisions are currently waiting on the traveler.</p>
             ) : (
-              workspace.session.pending_decisions.map((decision) => (
+              currentWorkspace.session.pending_decisions.map((decision) => (
                 <article key={decision.decision_id} className="decision-card">
                   <h3>{decision.title}</h3>
                   <p>{decision.prompt}</p>
@@ -295,12 +360,12 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
 
         <section className="status-card">
           <p className="status-label">Comparison</p>
-          <h2>{workspace.scenario_comparison?.summary ?? "No comparison saved yet"}</h2>
-          {workspace.scenario_comparison ? (
+          <h2>{currentWorkspace.scenario_comparison?.summary ?? "No comparison saved yet"}</h2>
+          {currentWorkspace.scenario_comparison ? (
             <>
-              <p>Outcome: {workspace.scenario_comparison.outcome}</p>
+              <p>Outcome: {currentWorkspace.scenario_comparison.outcome}</p>
               <ul className="focus-area-list">
-                {workspace.scenario_comparison.focus_areas.map((focusArea) => (
+                {currentWorkspace.scenario_comparison.focus_areas.map((focusArea) => (
                   <li key={focusArea}>{focusArea.replace(/_/g, " ")}</li>
                 ))}
               </ul>
@@ -308,6 +373,23 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
           ) : (
             <p className="muted-copy">The workspace will surface durable scenario tradeoff comparisons here.</p>
           )}
+        </section>
+
+        <section className="status-card">
+          <p className="status-label">Activity trail</p>
+          <h2>Persisted planner actions</h2>
+          <div className="decision-stack">
+            {currentWorkspace.activity_log.length === 0 ? (
+              <p className="muted-copy">Planner actions will appear here after the first persisted decision or feedback event.</p>
+            ) : (
+              currentWorkspace.activity_log.slice(0, 4).map((entry) => (
+                <article key={entry.activity_event_id} className="decision-card">
+                  <h3>{entry.event_kind.replace(/_/g, " ")}</h3>
+                  <p>{entry.summary}</p>
+                </article>
+              ))
+            )}
+          </div>
         </section>
       </div>
     </section>

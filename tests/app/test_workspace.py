@@ -53,6 +53,7 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
     assert payload["planner_panel_state"]["option_set"]["options"][0]["option_id"].startswith(
         "scenario:"
     )
+    assert payload["activity_log"] == []
 
 
 def test_workspace_endpoint_returns_not_found_for_unknown_trip(
@@ -95,11 +96,80 @@ def test_workspace_endpoint_returns_minimal_payload_for_persisted_trip(
     assert payload["trip_record"]["trip"]["title"] == "Chicago kickoff"
     assert payload["trip_record"]["artifact_refs"]["session_state_id"] == f"session:{trip_id}"
     assert payload["session"]["trip_id"] == trip_id
+    assert payload["session"]["pending_decisions"][0]["decision_id"].startswith("decision:")
     assert payload["saved_scenarios"] == []
     assert payload["scenario_search"]["scenarios"] == []
     assert payload["inventory_summary"]["bundle_count"] == 0
+    assert payload["activity_log"] == []
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_bootstrap"
+
+
+def test_workspace_planner_decision_answer_persists_across_reload(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Austin workshop",
+            "summary": "Bootstrap the workspace flow.",
+            "mode": "business",
+            "trip_frame": {"duration_days": 2, "primary_regions": ["Austin"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    initial = client.get(f"/api/workspace/{trip_id}")
+    decision = initial.json()["session"]["pending_decisions"][0]
+
+    answered = client.post(
+        f"/api/workspace/{trip_id}/planner/decisions/{decision['decision_id']}/answer",
+        json={"choice": decision["choices"][0]},
+    )
+
+    assert answered.status_code == 200
+    payload = answered.json()
+    assert payload["session"]["pending_decisions"] == []
+    assert payload["activity_log"][0]["event_kind"] == "decision_recorded"
+    assert decision["title"] in payload["activity_log"][0]["summary"]
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    reloaded_payload = reloaded.json()
+    assert reloaded_payload["session"]["pending_decisions"] == []
+    assert reloaded_payload["activity_log"][0]["event_kind"] == "decision_recorded"
+
+
+def test_workspace_option_feedback_persists_across_reload(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Kyoto revisit",
+            "summary": "Exercise option feedback persistence.",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 5, "primary_regions": ["Kyoto"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    initial = client.get(f"/api/workspace/{trip_id}")
+    option_id = initial.json()["planner_panel_state"]["option_set"]["options"][0]["option_id"]
+
+    updated = client.post(
+        f"/api/workspace/{trip_id}/planner/options/{option_id}/feedback",
+        json={"action_type": "save_as_fallback", "decision_id": None},
+    )
+
+    assert updated.status_code == 200
+    payload = updated.json()
+    assert payload["activity_log"][0]["event_kind"] == "decision_recorded"
+    assert payload["planner_panel_state"]["option_set"]["options"][0]["label"].endswith(
+        "(fallback)"
+    )
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    reloaded_payload = reloaded.json()
+    assert reloaded_payload["activity_log"][0]["summary"] == payload["activity_log"][0]["summary"]
+    assert reloaded_payload["planner_panel_state"]["option_set"]["options"][0]["label"].endswith(
+        "(fallback)"
+    )
 
 
 def test_workspace_endpoint_hides_other_users_persisted_trips(

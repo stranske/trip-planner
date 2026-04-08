@@ -91,6 +91,12 @@ export type WorkspaceData = {
     focus_areas: string[];
   } | null;
   scenario_search: ScenarioSearchResult;
+  activity_log: Array<{
+    activity_event_id: string;
+    occurred_at: string;
+    event_kind: string;
+    summary: string;
+  }>;
   planner_panel_state: PlannerPanelState;
   inventory_summary: {
     bundle_count: number;
@@ -112,5 +118,41 @@ export async function fetchWorkspace(tripId: string): Promise<WorkspaceData> {
   return fetchJson<WorkspaceData>({
     path: `/api/workspace/${tripId}`,
     credentials: "include",
+  });
+}
+
+export async function answerPlannerDecision(
+  tripId: string,
+  decisionId: string,
+  choice: string
+): Promise<WorkspaceData> {
+  return fetchJson<WorkspaceData>({
+    path: `/api/workspace/${tripId}/planner/decisions/${decisionId}/answer`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ choice }),
+  });
+}
+
+export async function submitPlannerOptionFeedback(
+  tripId: string,
+  optionId: string,
+  actionType: "accept" | "reject" | "revise" | "save_as_fallback" | "do_more_before_asking_again",
+  decisionId: string | null
+): Promise<WorkspaceData> {
+  return fetchJson<WorkspaceData>({
+    path: `/api/workspace/${tripId}/planner/options/${optionId}/feedback`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      action_type: actionType,
+      decision_id: decisionId,
+    }),
   });
 }

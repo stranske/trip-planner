@@ -90,6 +90,7 @@ const workspacePayload = {
     outcome: "preferred",
     focus_areas: ["recovery", "route_coherence", "weather_resilience"],
   },
+  activity_log: [],
   scenario_search: {
     title: "Kyoto leisure scenario comparison",
     scenarios: [

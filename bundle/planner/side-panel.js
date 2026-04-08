@@ -310,9 +310,22 @@ export function renderPendingDecisionsComponent(pendingDecisions, selectedDecisi
       <article class="planner-decision-card">
         <h4>${selectedDecision.title}</h4>
         <p>${selectedDecision.prompt}</p>
-        <ul class="planner-option-list">
-          ${selectedDecision.choices.map((choice) => `<li>${choice}</li>`).join("")}
-        </ul>
+        <div class="planner-chip-row" aria-label="Decision choices">
+          ${selectedDecision.choices
+            .map(
+              (choice) => `
+                <button
+                  type="button"
+                  class="planner-feedback-action planner-feedback-action--structured"
+                  data-planner-decision-answer="${selectedDecision.decision_id}"
+                  data-planner-decision-choice="${choice}"
+                >
+                  ${choice}
+                </button>
+              `
+            )
+            .join("")}
+        </div>
       </article>
     </div>
   `;
@@ -1088,6 +1101,24 @@ function createStructuredResponseEvent(data, actionType, optionId, decisionId) {
 }
 
 /**
+ * @param {PlannerPanelState} data
+ * @param {string} decisionId
+ * @param {string} choice
+ * @returns {{ eventName: string, detail: Record<string, unknown> }}
+ */
+function createDecisionAnswerEvent(data, decisionId, choice) {
+  return {
+    eventName: "planner-decision-answer",
+    detail: {
+      trip_id: data.trip.trip_id,
+      decision_id: decisionId,
+      choice,
+      source_section: "decisions",
+    },
+  };
+}
+
+/**
  * @param {PlannerPanelViewState} state
  * @returns {string}
  */
@@ -1293,6 +1324,21 @@ export function renderPlannerSidePanel(mountNode, initialState) {
         responseButton.dataset.plannerDecisionId || null
       );
 
+      mountNode.dispatchEvent(new CustomEvent(eventName, { detail }));
+      return;
+    }
+
+    const decisionAnswerButton = target.closest("[data-planner-decision-answer]");
+    if (
+      decisionAnswerButton instanceof HTMLElement &&
+      decisionAnswerButton.dataset.plannerDecisionAnswer &&
+      decisionAnswerButton.dataset.plannerDecisionChoice
+    ) {
+      const { eventName, detail } = createDecisionAnswerEvent(
+        store.getState().data,
+        decisionAnswerButton.dataset.plannerDecisionAnswer,
+        decisionAnswerButton.dataset.plannerDecisionChoice
+      );
       mountNode.dispatchEvent(new CustomEvent(eventName, { detail }));
     }
   }

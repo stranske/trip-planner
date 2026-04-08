@@ -90,6 +90,10 @@ class FakeButton extends FakeHTMLElement {
       return this;
     }
 
+    if (selector === "[data-planner-decision-answer]" && this.dataset.plannerDecisionAnswer) {
+      return this;
+    }
+
     return null;
   }
 
@@ -541,6 +545,25 @@ test("pending decisions component respects explicit decision selection when mult
   assert.match(markup, /How much structure should Day 2 have after arrival\?/);
   assert.match(markup, /Lock in one museum and one long dinner\./);
   assert.doesNotMatch(markup, /Which tradeoff feels more like the trip you want\?/);
+});
+
+test("planner side panel dispatches a structured decision-answer event", () => {
+  const mountNode = new FakeMountNode();
+  renderPlannerSidePanel(mountNode, leisureFeedbackLoopState);
+
+  mountNode.click(
+    new FakeButton({
+      plannerDecisionAnswer: "lodging-signal",
+      plannerDecisionChoice: "Stay central and accept tighter rooms.",
+    })
+  );
+
+  assert.equal(mountNode.dispatchedEvents[0].type, "planner-decision-answer");
+  assert.equal(mountNode.dispatchedEvents[0].detail.decision_id, "lodging-signal");
+  assert.equal(
+    mountNode.dispatchedEvents[0].detail.choice,
+    "Stay central and accept tighter rooms."
+  );
 });
 
 test("pending decisions component renders an empty state when no prompts exist", () => {

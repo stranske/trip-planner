@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -20,9 +20,28 @@ class WorkspaceResponse(BaseModel):
     scenario_search: dict[str, Any] = Field(
         description="ScenarioSearchResult payload whose route_sequence drives the timeline UI.",
     )
+    activity_log: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Recent persisted workspace activity entries tied to the trip/session trail.",
+    )
     planner_panel_state: dict[str, Any] = Field(
         description="Workspace-scoped planner panel payload for the mounted side-panel UI.",
     )
     inventory_summary: dict[str, Any] = Field(
         description="Bundle summary assembled from normalized option/domain records for the workspace surface."
     )
+
+
+class PlannerDecisionAnswerRequest(BaseModel):
+    choice: str = Field(min_length=1, max_length=160)
+
+
+class PlannerOptionFeedbackRequest(BaseModel):
+    action_type: Literal[
+        "accept",
+        "reject",
+        "revise",
+        "save_as_fallback",
+        "do_more_before_asking_again",
+    ]
+    decision_id: str | None = Field(default=None, max_length=96)

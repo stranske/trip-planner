@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,9 +23,17 @@ from trip_planner.itinerary import (
     ScenarioSummary,
     ScenarioTradeoff,
 )
+from trip_planner.persistence.models.scenario import (
+    PersistedActivityLogEvent,
+    PersistedSavedScenario,
+)
+from trip_planner.persistence.models.session import PersistedPlanningSessionState
 from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.ranking import ExplanationRecord
 from trip_planner.state import (
+    ActivityLogEvent,
+    OptionPresentationRecord,
+    PendingDecision,
     PersistedTripRecord,
     PersistedTripArtifactRefs,
     PlanningSessionState,
@@ -366,9 +375,43 @@ def _serialize_persisted_trip_record(record: PersistedTrip) -> dict[str, Any]:
     ).to_dict()
 
 
-def _build_persisted_trip_workspace(record: PersistedTrip) -> dict[str, Any]:
+def _default_workspace_decisions(trip_id: str) -> list[PendingDecision]:
+    return [
+        PendingDecision(
+            decision_id=f"decision:{trip_id}:bootstrap-direction",
+            title="Set the first planner direction",
+            prompt="Should the workspace keep the current trip frame narrow, or compare another planner-backed option first?",
+            created_at=_isoformat(datetime.now(UTC)),
+            choices=[
+                "Keep the current direction.",
+                "Compare another planner-backed option first.",
+            ],
+            blocking=True,
+            related_option_set_id=f"option-set:{trip_id}:workspace-bootstrap",
+            notes=["Workspace bootstrap decision seeded for persisted planner interaction."],
+        )
+    ]
+
+
+def _default_workspace_presentation(trip_id: str, shown_at: str) -> OptionPresentationRecord:
+    return OptionPresentationRecord(
+        presentation_id=f"presentation:{trip_id}:workspace-bootstrap",
+        option_set_id=f"option-set:{trip_id}:workspace-bootstrap",
+        shown_at=shown_at,
+        surface_kind="scenario_comparison",
+        surfaced_option_ids=[
+            f"bootstrap:{trip_id}:keep-frame",
+            f"bootstrap:{trip_id}:broaden-frame",
+        ],
+        highlighted_option_id=f"bootstrap:{trip_id}:keep-frame",
+        summary="Workspace bootstrap options are ready for the first persisted planner action.",
+        notes=["Initial workspace planner presentation."],
+    )
+
+
+def _default_workspace_session(record: PersistedTrip) -> PlanningSessionState:
     timestamp = _isoformat(record.updated_at)
-    session = PlanningSessionState(
+    return PlanningSessionState(
         session_state_id=f"session:{record.trip_id}",
         trip_id=record.trip_id,
         user_id=record.user_id,
@@ -376,10 +419,111 @@ def _build_persisted_trip_workspace(record: PersistedTrip) -> dict[str, Any]:
         mode=record.mode,
         started_at=_isoformat(record.created_at),
         updated_at=timestamp,
+        recent_option_presentations=[_default_workspace_presentation(record.trip_id, timestamp)],
+        pending_decisions=_default_workspace_decisions(record.trip_id),
+        activity_log_id=f"activity-log:{record.trip_id}",
         notes=["Workspace opened before any saved scenarios or planner turns existed."],
     )
 
+
+def _serialize_session_record(record: PersistedPlanningSessionState) -> dict[str, Any]:
+    return PlanningSessionState.from_dict(
+        {
+            "session_state_id": record.session_state_id,
+            "trip_id": record.trip_id,
+            "user_id": record.user_id,
+            "owner_profile_id": record.owner_profile_id,
+            "mode": record.mode,
+            "started_at": record.started_at,
+            "updated_at": record.last_updated_at,
+            "interaction_state": dict(record.interaction_state),
+            "recent_option_presentations": list(record.recent_option_presentations),
+            "pending_decisions": list(record.pending_decisions),
+            "status": record.status,
+            "current_checkpoint_id": record.current_checkpoint_id,
+            "current_saved_scenario_id": record.current_saved_scenario_id,
+            "active_budget_plan_id": record.active_budget_plan_id,
+            "activity_log_id": record.activity_log_id,
+            "schema_version": record.schema_version,
+            "tags": list(record.tags),
+            "notes": list(record.notes),
+        }
+    ).to_dict()
+
+
+def _serialize_activity_record(record: PersistedActivityLogEvent) -> dict[str, Any]:
+    return ActivityLogEvent.from_dict(
+        {
+            "activity_event_id": record.activity_event_id,
+            "trip_id": record.trip_id,
+            "session_state_id": record.session_state_id,
+            "occurred_at": record.occurred_at,
+            "event_kind": record.event_kind,
+            "summary": record.summary,
+            "actor": record.actor,
+            "related_decision_id": record.related_decision_id,
+            "related_option_set_id": record.related_option_set_id,
+            "saved_scenario_id": record.saved_scenario_id,
+            "budget_plan_id": record.budget_plan_id,
+            "scenario_budget_id": record.scenario_budget_id,
+            "checkpoint_id": record.checkpoint_id,
+            "metadata": dict(record.metadata_payload),
+            "tags": list(record.tags),
+            "notes": list(record.notes),
+        }
+    ).to_dict()
+
+
+def _session_feedback_state(
+    session: dict[str, Any],
+    option_set_id: str,
+) -> tuple[set[str], str | None, set[str]]:
+    rejected_option_ids: set[str] = set()
+    selected_option_id: str | None = None
+    fallback_option_ids: set[str] = set()
+
+    for presentation in reversed(session.get("recent_option_presentations", [])):
+        if presentation.get("option_set_id") != option_set_id:
+            continue
+        rejected_option_ids.update(presentation.get("rejected_option_ids", []))
+        if selected_option_id is None:
+            selected_option_id = presentation.get("selected_option_id")
+        for note in presentation.get("notes", []):
+            if note.startswith("fallback:"):
+                fallback_option_ids.add(note.split(":", 1)[1])
+        break
+
+    return rejected_option_ids, selected_option_id, fallback_option_ids
+
+
+def _workspace_activity_outputs(
+    trip_id: str,
+    activity_log: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    outputs: list[dict[str, Any]] = []
+    for entry in activity_log[:2]:
+        outputs.append(
+            {
+                "output_id": f"output:{trip_id}:activity:{entry['activity_event_id']}",
+                "title": entry["event_kind"].replace("_", " ").title(),
+                "body": entry["summary"],
+                "tags": ["activity", entry["event_kind"]],
+            }
+        )
+    return outputs
+
+
+def _build_persisted_trip_workspace(
+    record: PersistedTrip,
+    *,
+    session: dict[str, Any] | None = None,
+    saved_scenarios: list[dict[str, Any]] | None = None,
+    activity_log: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    resolved_session = session or _default_workspace_session(record).to_dict()
     trip_record = _serialize_persisted_trip_record(record)
+    resolved_saved_scenarios = saved_scenarios or []
+    resolved_activity_log = activity_log or []
     scenario_search = {
         "title": "Trip setup workspace",
         "scenarios": [],
@@ -397,14 +541,16 @@ def _build_persisted_trip_workspace(record: PersistedTrip) -> dict[str, Any]:
 
     return {
         "trip_record": trip_record,
-        "session": session.to_dict(),
-        "saved_scenarios": [],
+        "session": resolved_session,
+        "saved_scenarios": resolved_saved_scenarios,
         "scenario_comparison": None,
         "scenario_search": scenario_search,
+        "activity_log": resolved_activity_log,
         "planner_panel_state": _build_planner_panel_state(
             trip=trip_record["trip"],
             scenario_search=scenario_search,
-            pending_decisions=[],
+            session=resolved_session,
+            activity_log=resolved_activity_log,
         ),
         "inventory_summary": build_inventory_summary_payload(inventory_bundles),
     }
@@ -414,7 +560,8 @@ def _build_planner_panel_state(
     *,
     trip: dict[str, Any],
     scenario_search: dict[str, Any],
-    pending_decisions: list[dict[str, Any]],
+    session: dict[str, Any],
+    activity_log: list[dict[str, Any]],
 ) -> dict[str, Any]:
     scenarios = list(scenario_search.get("scenarios", []))
     primary_regions = list(trip["trip_frame"].get("primary_regions") or [])
@@ -521,18 +668,55 @@ def _build_planner_panel_state(
             },
         ]
 
+    rejected_option_ids, selected_option_id, fallback_option_ids = _session_feedback_state(
+        session,
+        option_set["option_set_id"],
+    )
+    option_set["options"] = [
+        {
+            **option,
+            "label": (
+                f"{option['label']} (saved direction)"
+                if option["option_id"] == selected_option_id
+                else (
+                    f"{option['label']} (fallback)"
+                    if option["option_id"] in fallback_option_ids
+                    else option["label"]
+                )
+            ),
+            "explanation": (
+                ["You already chose this direction in the workspace."] + option["explanation"]
+                if option["option_id"] == selected_option_id
+                else (
+                    ["This option was kept as an explicit fallback for later comparison."]
+                    + option["explanation"]
+                    if option["option_id"] in fallback_option_ids
+                    else option["explanation"]
+                )
+            ),
+        }
+        for option in option_set["options"]
+        if option["option_id"] not in rejected_option_ids
+    ] or option_set["options"]
+
     mapped_decisions = [
         {
             "decision_id": decision["decision_id"],
             "title": decision["title"],
             "prompt": decision["prompt"],
-            "choices": [
-                "Keep the current direction.",
-                "Compare another planner-backed option first.",
-            ],
+            "choices": (
+                list(decision["choices"])
+                if isinstance(decision.get("choices"), list) and decision["choices"]
+                else [
+                    "Keep the current direction.",
+                    "Compare another planner-backed option first.",
+                ]
+            ),
         }
-        for decision in pending_decisions
+        for decision in session.get("pending_decisions", [])
     ]
+
+    outputs = _workspace_activity_outputs(trip["trip_id"], activity_log) + outputs
 
     next_step_actions = [
         {
@@ -574,10 +758,20 @@ def _build_planner_panel_state(
         "outputs": outputs,
         "planner_behavior": {
             "trip_stage": "compare" if scenarios else "bootstrap",
-            "ask_before_next_major_change": True,
-            "target_research_passes": 3,
+            "ask_before_next_major_change": session["interaction_state"].get(
+                "ask_before_major_change",
+                True,
+            ),
+            "target_research_passes": max(
+                1,
+                session["interaction_state"].get("auto_advance_research_passes", 1) + 1,
+            ),
             "target_options_before_checkpoint": max(2, min(3, len(option_set["options"]))),
-            "surface_options_early": True,
+            "surface_options_early": session["interaction_state"].get(
+                "option_preview_timing",
+                "balanced",
+            )
+            != "deferred",
             "explanation_density": "standard",
         },
         "next_step_actions": next_step_actions,
@@ -608,10 +802,12 @@ def get_workspace_payload(
             "saved_scenarios": [record.to_dict() for record in saved_scenarios],
             "scenario_comparison": scenario_comparison.to_dict() if scenario_comparison else None,
             "scenario_search": scenario_search.to_dict(),
+            "activity_log": [],
             "planner_panel_state": _build_planner_panel_state(
                 trip=trip_record.to_dict()["trip"],
                 scenario_search=scenario_search.to_dict(),
-                pending_decisions=session.to_dict().get("pending_decisions", []),
+                session=session.to_dict(),
+                activity_log=[],
             ),
             "inventory_summary": build_inventory_summary_payload(inventory_bundles),
         }
@@ -623,4 +819,252 @@ def get_workspace_payload(
     )
     if record is None:
         return None
-    return _build_persisted_trip_workspace(record)
+    session_record = db_session.get(PersistedPlanningSessionState, f"session:{trip_id}")
+    saved_scenarios = db_session.scalars(
+        select(PersistedSavedScenario)
+        .where(PersistedSavedScenario.trip_id == trip_id)
+        .order_by(PersistedSavedScenario.updated_at.desc())
+    ).all()
+    activity_records = db_session.scalars(
+        select(PersistedActivityLogEvent)
+        .where(PersistedActivityLogEvent.trip_id == trip_id)
+        .order_by(PersistedActivityLogEvent.occurred_at.desc())
+    ).all()
+    return _build_persisted_trip_workspace(
+        record,
+        session=(
+            _serialize_session_record(session_record)
+            if session_record is not None
+            else None
+        ),
+        saved_scenarios=[
+            {
+                "saved_scenario_id": scenario.saved_scenario_id,
+                "trip_id": scenario.trip_id,
+                "current_version_id": scenario.current_version_id,
+                "versions": list(scenario.versions),
+                "comparisons": list(scenario.comparisons),
+                "tags": list(scenario.tags),
+                "notes": list(scenario.notes),
+            }
+            for scenario in saved_scenarios
+        ],
+        activity_log=[_serialize_activity_record(item) for item in activity_records],
+    )
+
+
+def _get_owned_trip_record(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+) -> PersistedTrip:
+    record = db_session.scalar(
+        select(PersistedTrip)
+        .where(PersistedTrip.trip_id == trip_id)
+        .where(PersistedTrip.user_id == user.user_id)
+    )
+    if record is None:
+        raise ValueError(f"Trip '{trip_id}' was not found.")
+    return record
+
+
+def _get_or_create_workspace_session_record(
+    db_session: Session,
+    *,
+    record: PersistedTrip,
+) -> PersistedPlanningSessionState:
+    session_state_id = f"session:{record.trip_id}"
+    existing = db_session.get(PersistedPlanningSessionState, session_state_id)
+    if existing is not None:
+        return existing
+
+    default_session = _default_workspace_session(record)
+    persisted = PersistedPlanningSessionState(
+        session_state_id=default_session.session_state_id,
+        trip_id=default_session.trip_id,
+        user_id=default_session.user_id,
+        owner_profile_id=default_session.owner_profile_id,
+        mode=default_session.mode,
+        started_at=default_session.started_at,
+        last_updated_at=default_session.updated_at,
+        interaction_state=default_session.interaction_state.to_dict(),
+        recent_option_presentations=[
+            item.to_dict() for item in default_session.recent_option_presentations
+        ],
+        pending_decisions=[item.to_dict() for item in default_session.pending_decisions],
+        status=default_session.status,
+        current_checkpoint_id=default_session.current_checkpoint_id,
+        current_saved_scenario_id=default_session.current_saved_scenario_id,
+        active_budget_plan_id=default_session.active_budget_plan_id,
+        activity_log_id=default_session.activity_log_id,
+        schema_version=default_session.schema_version,
+        tags=list(default_session.tags),
+        notes=list(default_session.notes),
+    )
+    db_session.add(persisted)
+    db_session.flush()
+    return persisted
+
+
+def _append_activity_event(
+    db_session: Session,
+    *,
+    trip_id: str,
+    session_state_id: str,
+    event_kind: str,
+    summary: str,
+    related_decision_id: str | None = None,
+    related_option_set_id: str | None = None,
+    metadata: dict[str, str] | None = None,
+) -> None:
+    db_session.add(
+        PersistedActivityLogEvent(
+            activity_event_id=f"activity:{trip_id}:{secrets.token_hex(4)}",
+            trip_id=trip_id,
+            session_state_id=session_state_id,
+            occurred_at=_isoformat(datetime.now(UTC)),
+            event_kind=event_kind,
+            summary=summary,
+            actor="traveler",
+            related_decision_id=related_decision_id,
+            related_option_set_id=related_option_set_id,
+            metadata_payload=metadata or {},
+            tags=["workspace", "planner-action"],
+            notes=[],
+        )
+    )
+
+
+def answer_workspace_planner_decision(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    decision_id: str,
+    choice: str,
+) -> dict[str, Any]:
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
+    matching = next(
+        (decision for decision in session.pending_decisions if decision.decision_id == decision_id),
+        None,
+    )
+    if matching is None:
+        raise ValueError(f"Decision '{decision_id}' was not found in the workspace session.")
+    if choice not in matching.choices:
+        raise ValueError(f"Choice '{choice}' is not valid for decision '{decision_id}'.")
+
+    session.pending_decisions = [
+        decision for decision in session.pending_decisions if decision.decision_id != decision_id
+    ]
+    session.updated_at = _isoformat(datetime.now(UTC))
+    session.notes.append(f"decision:{decision_id}:{choice}")
+    session_record.pending_decisions = [item.to_dict() for item in session.pending_decisions]
+    session_record.notes = list(session.notes)
+    session_record.last_updated_at = session.updated_at
+    record.updated_at = datetime.now(UTC)
+    _append_activity_event(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        event_kind="decision_recorded",
+        summary=f"Traveler answered '{matching.title}' with '{choice}'.",
+        related_decision_id=decision_id,
+        related_option_set_id=matching.related_option_set_id,
+        metadata={"choice": choice},
+    )
+    db_session.commit()
+    return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
+
+
+def submit_workspace_option_feedback(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    option_id: str,
+    action_type: str,
+    decision_id: str | None = None,
+) -> dict[str, Any]:
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
+    option_set_id = (
+        session.recent_option_presentations[0].option_set_id
+        if session.recent_option_presentations
+        else f"option-set:{trip_id}:workspace-bootstrap"
+    )
+    presentation = (
+        session.recent_option_presentations[0]
+        if session.recent_option_presentations
+        else _default_workspace_presentation(trip_id, session.updated_at)
+    )
+    presentation.surfaced_option_ids = list(dict.fromkeys(presentation.surfaced_option_ids + [option_id]))
+    presentation.option_set_id = option_set_id
+
+    if action_type == "accept":
+        presentation.selected_option_id = option_id
+        presentation.rejected_option_ids = [
+            item for item in presentation.rejected_option_ids if item != option_id
+        ]
+        event_kind = "decision_recorded"
+        summary = f"Traveler accepted option '{option_id}' from the workspace planner panel."
+    elif action_type == "reject":
+        if option_id not in presentation.rejected_option_ids:
+            presentation.rejected_option_ids.append(option_id)
+        if presentation.selected_option_id == option_id:
+            presentation.selected_option_id = None
+        event_kind = "option_rejected"
+        summary = f"Traveler rejected option '{option_id}' from the workspace planner panel."
+    elif action_type == "save_as_fallback":
+        presentation.notes = [note for note in presentation.notes if not note.startswith("fallback:")]
+        presentation.notes.append(f"fallback:{option_id}")
+        event_kind = "decision_recorded"
+        summary = f"Traveler saved option '{option_id}' as a fallback in the workspace planner panel."
+    else:
+        session.interaction_state.auto_advance_research_passes += 1
+        event_kind = "rerank_requested"
+        summary = f"Traveler requested '{action_type}' for option '{option_id}' in the workspace planner panel."
+
+    presentation.summary = summary
+    session.recent_option_presentations = [presentation]
+    session.updated_at = _isoformat(datetime.now(UTC))
+    session.notes.append(f"feedback:{action_type}:{option_id}")
+    if action_type in {"revise", "do_more_before_asking_again"} and not session.pending_decisions:
+        session.pending_decisions = [
+            PendingDecision(
+                decision_id=f"decision:{trip_id}:follow-up",
+                title="Confirm the next planner pass",
+                prompt="Should the planner keep iterating before another checkpoint?",
+                created_at=session.updated_at,
+                choices=[
+                    "Keep the current direction.",
+                    "Compare another planner-backed option first.",
+                ],
+                related_option_set_id=option_set_id,
+                notes=["Generated after workspace option feedback."],
+            )
+        ]
+
+    session_record.recent_option_presentations = [
+        item.to_dict() for item in session.recent_option_presentations
+    ]
+    session_record.pending_decisions = [item.to_dict() for item in session.pending_decisions]
+    session_record.interaction_state = session.interaction_state.to_dict()
+    session_record.notes = list(session.notes)
+    session_record.last_updated_at = session.updated_at
+    record.updated_at = datetime.now(UTC)
+    _append_activity_event(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        event_kind=event_kind,
+        summary=summary,
+        related_decision_id=decision_id,
+        related_option_set_id=option_set_id,
+        metadata={"action_type": action_type, "option_id": option_id},
+    )
+    db_session.commit()
+    return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
