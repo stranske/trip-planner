@@ -17,7 +17,7 @@ vi.mock("react-router-dom", async () => {
   return {
     ...actual,
     useNavigate: () => mockedNavigate,
-    useSearchParams: () => [new URLSearchParams("next=%2Fworkspace%2Ftrip-leisure-kyoto-draft"), vi.fn()],
+    useSearchParams: () => [new URLSearchParams("next=%2Ftrips"), vi.fn()],
   };
 });
 
@@ -53,7 +53,7 @@ describe("LoginPage", () => {
         password: "password123",
       });
     });
-    expect(mockedNavigate).toHaveBeenCalledWith("/workspace/trip-leisure-kyoto-draft");
+    expect(mockedNavigate).toHaveBeenCalledWith("/trips");
   });
 
   it("renders API errors inline", async () => {

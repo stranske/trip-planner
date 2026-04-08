@@ -7,7 +7,7 @@ import { getErrorMessage } from "../lib/api/errors";
 function resolveNextPath(searchParams: URLSearchParams): string {
   const next = searchParams.get("next");
   if (!next || !next.startsWith("/")) {
-    return "/workspace/trip-leisure-kyoto-draft";
+    return "/trips";
   }
   return next;
 }

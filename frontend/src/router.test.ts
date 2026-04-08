@@ -12,12 +12,23 @@ vi.mock("./api/auth", () => ({
   fetchCurrentSession: vi.fn(),
 }));
 
+vi.mock("./api/trips", () => ({
+  fetchTrip: vi.fn().mockResolvedValue({ trip_id: "trip-1" }),
+  fetchTrips: vi.fn().mockResolvedValue([{ trip_id: "trip-1" }]),
+}));
+
 vi.mock("./api/workspace", () => ({
   fetchWorkspace: vi.fn().mockResolvedValue({ trip_record: { trip: { trip_id: "trip-1" } } }),
 }));
 
 import { ApiClientError } from "./lib/api/errors";
-import { authPageLoader, protectedWorkspaceLoader, rootLoader } from "./router";
+import {
+  authPageLoader,
+  protectedTripDetailLoader,
+  protectedTripsLoader,
+  protectedWorkspaceLoader,
+  rootLoader,
+} from "./router";
 
 describe("router auth loaders", () => {
   beforeEach(() => {
@@ -128,5 +139,47 @@ describe("router auth loaders", () => {
     expect(response).toBeInstanceOf(Response);
     expect(response?.status).toBe(302);
     expect(response?.headers.get("Location")).toBe("/login?next=%2Fworkspace%2Ftrip-1");
+  });
+
+  it("loads the persisted trip list for signed-in users", async () => {
+    const { fetchCurrentSession } = await import("./api/auth");
+    const { fetchTrips } = await import("./api/trips");
+    vi.mocked(fetchCurrentSession).mockResolvedValueOnce({
+      user: {
+        user_id: "user:test",
+        email: "owner@example.com",
+        display_name: "Owner",
+      },
+    });
+
+    const result = await protectedTripsLoader({
+      params: {},
+      request: new Request("http://localhost/trips"),
+      context: undefined,
+    });
+
+    expect(fetchTrips).toHaveBeenCalledTimes(1);
+    await expect(result.trips).resolves.toEqual([{ trip_id: "trip-1" }]);
+  });
+
+  it("loads a persisted trip detail for signed-in users", async () => {
+    const { fetchCurrentSession } = await import("./api/auth");
+    const { fetchTrip } = await import("./api/trips");
+    vi.mocked(fetchCurrentSession).mockResolvedValueOnce({
+      user: {
+        user_id: "user:test",
+        email: "owner@example.com",
+        display_name: "Owner",
+      },
+    });
+
+    const result = await protectedTripDetailLoader({
+      params: { tripId: "trip-1" },
+      request: new Request("http://localhost/trips/trip-1"),
+      context: undefined,
+    });
+
+    expect(fetchTrip).toHaveBeenCalledWith("trip-1");
+    await expect(result.trip).resolves.toEqual({ trip_id: "trip-1" });
   });
 });

@@ -274,6 +274,14 @@ a {
   background: rgba(255, 255, 255, 0.95);
 }
 
+.auth-form select {
+  border: 1px solid rgba(19, 33, 44, 0.16);
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  font: inherit;
+  background: rgba(255, 255, 255, 0.95);
+}
+
 .auth-form button {
   border: 0;
   border-radius: 999px;
@@ -298,6 +306,29 @@ a {
 .auth-switch {
   margin-bottom: 0;
   color: #365063;
+}
+
+.trip-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.trip-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.cta-link {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  padding: 0.8rem 1rem;
+  border-radius: 999px;
+  background: #13212c;
+  color: #f7f1e5;
+  font-weight: 600;
 }
 
 .status-grid {

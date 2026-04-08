@@ -6,15 +6,20 @@ import {
 } from "react-router-dom";
 
 import { fetchCurrentSession } from "./api/auth";
+import { fetchTrip, fetchTrips } from "./api/trips";
 import { fetchWorkspace } from "./api/workspace";
 import App from "./App";
 import { ApiClientError } from "./lib/api/errors";
 import { healthLoader, HealthPage } from "./routes/HealthPage";
 import { LoginPage } from "./routes/LoginPage";
+import { NewTripPage } from "./routes/NewTripPage";
 import { SignupPage } from "./routes/SignupPage";
+import { TripDetailPage } from "./routes/TripDetailPage";
+import { TripsPage } from "./routes/TripsPage";
 import { WorkspacePage } from "./routes/WorkspacePage";
 
 const DEFAULT_WORKSPACE_TRIP = "trip-leisure-kyoto-draft";
+const DEFAULT_SIGNED_IN_ROUTE = "/trips";
 const sessionLoadCache = new Map<string, Promise<RootLoaderData>>();
 
 export type RootLoaderData = {
@@ -60,7 +65,7 @@ export async function rootLoader({ request }: LoaderFunctionArgs): Promise<RootL
 export async function indexLoader({ request }: LoaderFunctionArgs) {
   const { session } = await loadSession(request);
   if (session) {
-    throw redirect(`/workspace/${DEFAULT_WORKSPACE_TRIP}`);
+    throw redirect(DEFAULT_SIGNED_IN_ROUTE);
   }
   throw redirect("/login");
 }
@@ -68,7 +73,45 @@ export async function indexLoader({ request }: LoaderFunctionArgs) {
 export async function authPageLoader({ request }: LoaderFunctionArgs) {
   const { session } = await loadSession(request);
   if (session) {
-    throw redirect(`/workspace/${DEFAULT_WORKSPACE_TRIP}`);
+    throw redirect(DEFAULT_SIGNED_IN_ROUTE);
+  }
+  return null;
+}
+
+function redirectToLogin(request: Request): never {
+  const nextPath = new URL(request.url).pathname;
+  throw redirect(`/login?next=${encodeURIComponent(nextPath)}`);
+}
+
+export async function protectedTripsLoader({ request }: LoaderFunctionArgs) {
+  const { session } = await loadSession(request);
+  if (!session) {
+    redirectToLogin(request);
+  }
+
+  return {
+    trips: fetchTrips(),
+  };
+}
+
+export async function protectedTripDetailLoader({
+  params,
+  request,
+}: LoaderFunctionArgs) {
+  const { session } = await loadSession(request);
+  if (!session) {
+    redirectToLogin(request);
+  }
+
+  return {
+    trip: fetchTrip(params.tripId ?? ""),
+  };
+}
+
+export async function protectedCreateTripLoader({ request }: LoaderFunctionArgs) {
+  const { session } = await loadSession(request);
+  if (!session) {
+    redirectToLogin(request);
   }
   return null;
 }
@@ -76,8 +119,7 @@ export async function authPageLoader({ request }: LoaderFunctionArgs) {
 export async function protectedWorkspaceLoader({ params, request }: LoaderFunctionArgs) {
   const { session } = await loadSession(request);
   if (!session) {
-    const nextPath = new URL(request.url).pathname;
-    throw redirect(`/login?next=${encodeURIComponent(nextPath)}`);
+    redirectToLogin(request);
   }
 
   return {
@@ -110,6 +152,21 @@ export const appRoutes: RouteObject[] = [
         path: "signup",
         element: <SignupPage />,
         loader: authPageLoader,
+      },
+      {
+        path: "trips",
+        element: <TripsPage />,
+        loader: protectedTripsLoader,
+      },
+      {
+        path: "trips/new",
+        element: <NewTripPage />,
+        loader: protectedCreateTripLoader,
+      },
+      {
+        path: "trips/:tripId",
+        element: <TripDetailPage />,
+        loader: protectedTripDetailLoader,
       },
       {
         path: "workspace/:tripId",

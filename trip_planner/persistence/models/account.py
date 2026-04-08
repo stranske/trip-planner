@@ -12,6 +12,7 @@ from trip_planner.persistence.db import Base
 
 if TYPE_CHECKING:
     from trip_planner.persistence.models.session import AuthSession
+    from trip_planner.persistence.models.trip import PersistedTrip
 
 
 def _utcnow() -> datetime:
@@ -36,6 +37,10 @@ class UserAccount(Base):
         onupdate=_utcnow,
     )
     sessions: Mapped[list["AuthSession"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    trips: Mapped[list["PersistedTrip"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
     )

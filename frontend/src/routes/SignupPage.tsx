@@ -23,7 +23,7 @@ export function SignupPage() {
         password: String(formData.get("password") ?? ""),
       });
       startTransition(() => {
-        navigate("/workspace/trip-leisure-kyoto-draft");
+        navigate("/trips");
       });
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "Sign-up failed."));
