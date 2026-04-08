@@ -126,25 +126,28 @@ def build_workspace_scenario_search(
         bundle.bundle_id: evaluate_bundle_feasibility(bundle) for bundle in bundles
     }
 
+    scenario_objectives: object
+
     if trip_mode == "leisure":
         traveler_fixture = load_fixture_map()[fixture_seed.leisure_fixture_id or ""]
         resolved_profile = resolve_leisure_profile(
             traveler_fixture.profile,
             traveler_fixture.evidence,
         )
-        objectives = derive_itinerary_objectives(
+        leisure_objectives = derive_itinerary_objectives(
             resolved_profile,
             trip_id=trip_id,
             objective_id=f"objective:{trip_id}:ranking",
         )
         ranked_results = LeisureRankingEngine().rank_bundles(
             traveler_fixture.profile,
-            objectives,
+            leisure_objectives,
             bundles,
             trip_id=trip_id,
             title=fixture_seed.title,
             feasibility_outputs=feasibility_outputs,
         )
+        scenario_objectives = leisure_objectives
     else:
         profile = BusinessTravelProfile.from_dict(
             _load_json(_business_fixture_dir() / (fixture_seed.business_profile_fixture or ""))
@@ -153,25 +156,26 @@ def build_workspace_scenario_search(
             _business_fixture_dir() / (fixture_seed.business_constraint_fixture or "")
         )
         constraint_set = PolicyConstraintSet(**constraint_payload["constraint_set"])
-        objectives = derive_business_planning_objectives(
+        business_objectives = derive_business_planning_objectives(
             profile,
             trip_id=trip_id,
             constraint_set=constraint_set,
         )
         ranked_results = BusinessRankingEngine().rank_bundles(
             profile,
-            objectives,
+            business_objectives,
             bundles,
             trip_id=trip_id,
             title=fixture_seed.title,
             constraint_set=constraint_set,
             feasibility_outputs=feasibility_outputs,
         )
+        scenario_objectives = business_objectives
 
     return assemble_itinerary_scenarios(
         _bundle_ranked_results(ranked_results, bundles),
         bundles=bundles,
-        objectives=objectives,
+        objectives=scenario_objectives,
         feasibility_outputs=feasibility_outputs,
         title=fixture_seed.title,
     )
