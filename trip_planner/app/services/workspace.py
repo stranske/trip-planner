@@ -11,6 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.app.services.feasibility import (
+    build_feasibility_planner_outputs,
+    build_feasibility_summary_payload,
+)
 from trip_planner.app.services.inventory import (
     assemble_inventory_bundles_for_trip,
     build_inventory_summary_payload,
@@ -545,6 +549,7 @@ def _build_persisted_trip_workspace(
         trip_id=record.trip_id,
         trip_mode=record.mode,
     )
+    feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
 
     return {
         "trip_record": trip_record,
@@ -558,7 +563,9 @@ def _build_persisted_trip_workspace(
             scenario_search=scenario_search,
             session=resolved_session,
             activity_log=resolved_activity_log,
+            feasibility_summary=feasibility_summary,
         ),
+        "feasibility_summary": feasibility_summary,
         "inventory_summary": build_inventory_summary_payload(inventory_bundles),
     }
 
@@ -569,6 +576,7 @@ def _build_planner_panel_state(
     scenario_search: dict[str, Any],
     session: dict[str, Any],
     activity_log: list[dict[str, Any]],
+    feasibility_summary: dict[str, Any],
 ) -> dict[str, Any]:
     scenarios = list(scenario_search.get("scenarios", []))
     primary_regions = list(trip["trip_frame"].get("primary_regions") or [])
@@ -723,7 +731,14 @@ def _build_planner_panel_state(
         for decision in session.get("pending_decisions", [])
     ]
 
-    outputs = _workspace_activity_outputs(trip["trip_id"], activity_log) + outputs
+    outputs = (
+        _workspace_activity_outputs(trip["trip_id"], activity_log)
+        + build_feasibility_planner_outputs(
+            trip_id=trip["trip_id"],
+            feasibility_summary=feasibility_summary,
+        )
+        + outputs
+    )
 
     next_step_actions = [
         {
@@ -802,6 +817,7 @@ def get_workspace_payload(
             trip_id=trip_id,
             trip_mode=trip_record.trip.mode,
         )
+        feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
 
         return {
             "trip_record": trip_record.to_dict(),
@@ -815,7 +831,9 @@ def get_workspace_payload(
                 scenario_search=scenario_search.to_dict(),
                 session=session.to_dict(),
                 activity_log=[],
+                feasibility_summary=feasibility_summary,
             ),
+            "feasibility_summary": feasibility_summary,
             "inventory_summary": build_inventory_summary_payload(inventory_bundles),
         }
 

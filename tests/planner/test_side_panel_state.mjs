@@ -301,6 +301,8 @@ test("planner outputs display renders messages and output metadata", () => {
   assert.match(markup, /data-planner-output-id="summary-01"/);
   assert.match(markup, /Planner read/);
   assert.match(markup, /quality where it changes the day/);
+  assert.match(markup, /planner-status-pill--caution/);
+  assert.match(markup, /Feasibility remains visible in planner outputs/);
   assert.match(markup, /feedback-loop/);
 });
 

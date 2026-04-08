@@ -266,9 +266,22 @@ export function renderPlannerOutputsDisplay(outputs) {
         <article class="planner-output-card" role="listitem" data-planner-output-id="${output.output_id}">
           <div class="planner-section-header">
             <h4>${output.title}</h4>
-            <span class="planner-meta">message</span>
+            ${
+              output.status
+                ? `<span class="planner-status-pill planner-status-pill--${output.status}">${output.status}</span>`
+                : '<span class="planner-meta">message</span>'
+            }
           </div>
           <p>${output.body}</p>
+          ${
+            output.highlights?.length
+              ? `
+                <ul class="planner-list" aria-label="Planner output highlights">
+                  ${output.highlights.map((highlight) => `<li>${highlight}</li>`).join("")}
+                </ul>
+              `
+              : ""
+          }
           ${
             output.tags.length
               ? `

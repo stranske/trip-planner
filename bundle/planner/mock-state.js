@@ -85,6 +85,10 @@ export const leisureFeedbackLoopState = {
       title: "Planner read",
       body: "Your evidence points to quality where it changes the day, not blanket upgrades everywhere.",
       tags: ["leisure", "feedback-loop"],
+      status: "caution",
+      highlights: [
+        "Feasibility remains visible in planner outputs instead of hiding in backend-only state.",
+      ],
     },
     {
       output_id: "summary-02",
