@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from dataclasses import dataclass
+from importlib import resources
 from typing import Any
 
 from sqlalchemy import select
@@ -11,32 +12,41 @@ from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.options import InventoryBundle, MixedOption
 from trip_planner.persistence.models.trip import PersistedTrip
 
-_FIXTURE_BUNDLE_INPUTS: dict[str, tuple[str, ...]] = {
-    "trip-leisure-kyoto-draft": ("route_level_mixed_option.json",),
-    "trip-business-client-summit": ("transport_lodging_bundle.json",),
+_BUNDLE_RESOURCE_PACKAGE = "trip_planner.resources.options.bundles"
+
+
+@dataclass(frozen=True)
+class InventoryFixtureSeed:
+    trip_mode: str
+    fixture_names: tuple[str, ...]
+
+
+_FIXTURE_BUNDLE_INPUTS: dict[str, InventoryFixtureSeed] = {
+    "trip-leisure-kyoto-draft": InventoryFixtureSeed(
+        trip_mode="leisure",
+        fixture_names=("route_level_mixed_option.json",),
+    ),
+    "trip-business-client-summit": InventoryFixtureSeed(
+        trip_mode="business",
+        fixture_names=("transport_lodging_bundle.json",),
+    ),
 }
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
-def _bundle_fixture_dir() -> Path:
-    return _repo_root() / "tests" / "fixtures" / "options" / "bundles"
-
-
 def _load_mixed_option_fixture(name: str) -> MixedOption:
-    payload = json.loads((_bundle_fixture_dir() / name).read_text(encoding="utf-8"))
+    payload = json.loads(
+        resources.files(_BUNDLE_RESOURCE_PACKAGE).joinpath(name).read_text(encoding="utf-8")
+    )
     return MixedOption.from_dict(payload)
 
 
 def assemble_inventory_bundles_for_trip(*, trip_id: str, trip_mode: str) -> list[InventoryBundle]:
-    fixture_names = _FIXTURE_BUNDLE_INPUTS.get(trip_id)
-    if fixture_names is None:
+    fixture_seed = _FIXTURE_BUNDLE_INPUTS.get(trip_id)
+    if fixture_seed is None or fixture_seed.trip_mode != trip_mode:
         return []
 
     bundles: list[InventoryBundle] = []
-    for fixture_name in fixture_names:
+    for fixture_name in fixture_seed.fixture_names:
         mixed_option = _load_mixed_option_fixture(fixture_name)
         bundles.extend(mixed_option.bundles)
     return bundles
@@ -76,8 +86,9 @@ def get_inventory_payload(
     user: AuthenticatedUser,
     trip_id: str,
 ) -> dict[str, Any] | None:
-    if trip_id in _FIXTURE_BUNDLE_INPUTS:
-        trip_mode = "business" if "business" in trip_id else "leisure"
+    fixture_seed = _FIXTURE_BUNDLE_INPUTS.get(trip_id)
+    if fixture_seed is not None:
+        trip_mode = fixture_seed.trip_mode
     else:
         record = db_session.scalar(
             select(PersistedTrip)
