@@ -8,6 +8,7 @@ from trip_planner.app.schemas.workspace import (
 )
 from trip_planner.app.services.auth import AuthenticatedUser, require_authenticated_user
 from trip_planner.app.services.workspace import (
+    WorkspaceTripNotFoundError,
     answer_workspace_planner_decision,
     get_workspace_payload,
     submit_workspace_option_feedback,
@@ -47,6 +48,8 @@ def answer_planner_decision(
             decision_id=decision_id,
             choice=payload.choice,
         )
+    except WorkspaceTripNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return WorkspaceResponse.model_validate(result)
@@ -69,6 +72,8 @@ def record_planner_option_feedback(
             action_type=payload.action_type,
             decision_id=payload.decision_id,
         )
+    except WorkspaceTripNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return WorkspaceResponse.model_validate(result)

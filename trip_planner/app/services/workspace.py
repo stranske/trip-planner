@@ -51,6 +51,13 @@ class WorkspaceFixture:
     scenario_search_variant: str
 
 
+WORKSPACE_ACTIVITY_LOG_LIMIT = 50
+
+
+class WorkspaceTripNotFoundError(ValueError):
+    """Raised when a workspace trip does not exist for the authenticated user."""
+
+
 _FIXTURES: dict[str, WorkspaceFixture] = {
     "trip-leisure-kyoto-draft": WorkspaceFixture(
         trip_fixture="leisure_draft_trip.json",
@@ -829,6 +836,7 @@ def get_workspace_payload(
         select(PersistedActivityLogEvent)
         .where(PersistedActivityLogEvent.trip_id == trip_id)
         .order_by(PersistedActivityLogEvent.occurred_at.desc())
+        .limit(WORKSPACE_ACTIVITY_LOG_LIMIT)
     ).all()
     return _build_persisted_trip_workspace(
         record,
@@ -865,7 +873,7 @@ def _get_owned_trip_record(
         .where(PersistedTrip.user_id == user.user_id)
     )
     if record is None:
-        raise ValueError(f"Trip '{trip_id}' was not found.")
+        raise WorkspaceTripNotFoundError(f"Trip '{trip_id}' was not found.")
     return record
 
 

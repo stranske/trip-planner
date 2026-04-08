@@ -547,6 +547,24 @@ test("pending decisions component respects explicit decision selection when mult
   assert.doesNotMatch(markup, /Which tradeoff feels more like the trip you want\?/);
 });
 
+test("pending decisions component escapes structured decision markup content", () => {
+  const markup = renderPendingDecisionsComponent([
+    {
+      decision_id: 'decision"><svg/onload=alert(1)>',
+      title: 'Choose <script>alert("x")</script>',
+      prompt: "What's safer: \"museum\" or <beach>?",
+      choices: ['"quoted" <choice>', "Use O'Reilly's pick"],
+    },
+  ]);
+
+  assert.match(markup, /Choose &lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/);
+  assert.match(markup, /What&#39;s safer: &quot;museum&quot; or &lt;beach&gt;\?/);
+  assert.match(markup, /data-planner-decision-answer="decision&quot;&gt;&lt;svg\/onload=alert\(1\)&gt;"/);
+  assert.match(markup, /&quot;quoted&quot; &lt;choice&gt;/);
+  assert.match(markup, /Use O&#39;Reilly&#39;s pick/);
+  assert.doesNotMatch(markup, /<script>/);
+});
+
 test("planner side panel dispatches a structured decision-answer event", () => {
   const mountNode = new FakeMountNode();
   renderPlannerSidePanel(mountNode, leisureFeedbackLoopState);

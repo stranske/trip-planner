@@ -137,6 +137,17 @@ def test_workspace_planner_decision_answer_persists_across_reload(client: TestCl
     assert reloaded_payload["activity_log"][0]["event_kind"] == "decision_recorded"
 
 
+def test_workspace_planner_decision_answer_returns_not_found_for_unknown_trip(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/workspace/trip-unknown/planner/decisions/decision:missing/answer",
+        json={"choice": "Anything"},
+    )
+
+    assert response.status_code == 404
+
+
 def test_workspace_option_feedback_persists_across_reload(client: TestClient) -> None:
     created = client.post(
         "/api/trips",
@@ -170,6 +181,35 @@ def test_workspace_option_feedback_persists_across_reload(client: TestClient) ->
     assert reloaded_payload["planner_panel_state"]["option_set"]["options"][0]["label"].endswith(
         "(fallback)"
     )
+
+
+def test_workspace_activity_log_is_capped_for_persisted_trips(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Tokyo sprint",
+            "summary": "Exercise workspace activity log caps.",
+            "mode": "business",
+            "trip_frame": {"duration_days": 2, "primary_regions": ["Tokyo"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    option_id = client.get(f"/api/workspace/{trip_id}").json()["planner_panel_state"]["option_set"][
+        "options"
+    ][0]["option_id"]
+
+    for index in range(55):
+        action_type = "save_as_fallback" if index % 2 == 0 else "reject"
+        response = client.post(
+            f"/api/workspace/{trip_id}/planner/options/{option_id}/feedback",
+            json={"action_type": action_type, "decision_id": None},
+        )
+        assert response.status_code == 200
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+
+    assert reloaded.status_code == 200
+    assert len(reloaded.json()["activity_log"]) == 50
 
 
 def test_workspace_endpoint_hides_other_users_persisted_trips(

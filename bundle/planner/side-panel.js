@@ -106,6 +106,27 @@ function formatSectionLabel(section) {
 }
 
 /**
+ * @param {string} value
+ * @returns {string}
+ */
+function escapeHtml(value) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+function escapeAttribute(value) {
+  return escapeHtml(value);
+}
+
+/**
  * @param {PlannerPanelSection} section
  * @returns {string}
  */
@@ -287,43 +308,49 @@ export function renderPendingDecisionsComponent(pendingDecisions, selectedDecisi
   const selectedDecision =
     pendingDecisions.find((decision) => decision.decision_id === resolvedSelectedDecisionId) ??
     pendingDecisions[0];
+  const escapedSelectedTitle = escapeHtml(selectedDecision.title);
+  const escapedSelectedPrompt = escapeHtml(selectedDecision.prompt);
 
   return `
     <div class="planner-decision-layout">
       <div class="planner-decision-list" role="list" aria-label="Pending decisions">
         ${pendingDecisions
-          .map(
-            (decision) => `
+          .map((decision) => {
+            const escapedDecisionId = escapeAttribute(decision.decision_id);
+            const escapedDecisionTitle = escapeHtml(decision.title);
+            return `
               <button
                 type="button"
                 class="planner-decision-link${decision.decision_id === selectedDecision.decision_id ? " is-active" : ""}"
-                data-planner-decision="${decision.decision_id}"
+                data-planner-decision="${escapedDecisionId}"
                 aria-pressed="${decision.decision_id === selectedDecision.decision_id}"
               >
-                <strong>${decision.title}</strong>
+                <strong>${escapedDecisionTitle}</strong>
                 <span>${decision.choices.length} choices</span>
               </button>
-            `
-          )
+            `;
+          })
           .join("")}
       </div>
       <article class="planner-decision-card">
-        <h4>${selectedDecision.title}</h4>
-        <p>${selectedDecision.prompt}</p>
+        <h4>${escapedSelectedTitle}</h4>
+        <p>${escapedSelectedPrompt}</p>
         <div class="planner-chip-row" aria-label="Decision choices">
           ${selectedDecision.choices
-            .map(
-              (choice) => `
+            .map((choice) => {
+              const escapedChoice = escapeHtml(choice);
+              const escapedChoiceAttribute = escapeAttribute(choice);
+              return `
                 <button
                   type="button"
                   class="planner-feedback-action planner-feedback-action--structured"
-                  data-planner-decision-answer="${selectedDecision.decision_id}"
-                  data-planner-decision-choice="${choice}"
+                  data-planner-decision-answer="${escapeAttribute(selectedDecision.decision_id)}"
+                  data-planner-decision-choice="${escapedChoiceAttribute}"
                 >
-                  ${choice}
+                  ${escapedChoice}
                 </button>
-              `
-            )
+              `;
+            })
             .join("")}
         </div>
       </article>
