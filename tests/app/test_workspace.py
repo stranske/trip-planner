@@ -59,11 +59,16 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
         ":feasibility-summary"
     )
     assert payload["planner_panel_state"]["outputs"][0]["tags"][0] == "feasibility"
-    output_titles = [
-        output["title"] for output in payload["planner_panel_state"]["outputs"]
-    ]
-    assert "Scenario ranking summary" in output_titles
-    assert any(title.startswith("Rank #1 ") for title in output_titles)
+    assert payload["planner_panel_state"]["outputs"][3]["title"] == "Scenario ranking summary"
+    assert payload["planner_panel_state"]["outputs"][4]["title"].startswith("Rank #1 ")
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == payload["scenario_search"][
+        "scenarios"
+    ][0]["scenario_id"]
+    assert payload["runtime_scenario_comparison"]["comparison_axes"][-1]["key"] == "estimated_total"
+    assert payload["runtime_scenario_comparison"]["scenarios"][0]["delta"]["transfers_delta"] == 0
+    assert payload["runtime_scenario_comparison"]["scenarios"][0]["route_summary"] == (
+        "dest-city-osaka -> dest-city-kyoto"
+    )
     assert payload["planner_panel_state"]["trip"]["trip_id"] == "trip-leisure-kyoto-draft"
     assert payload["planner_panel_state"]["option_set"]["options"][0]["option_id"].startswith(
         "scenario:"
@@ -78,12 +83,28 @@ def test_workspace_endpoint_surfaces_business_ranked_scenarios(client: TestClien
     payload = response.json()
     assert payload["scenario_search"]["title"] == "Client summit ranked scenarios"
     assert payload["scenario_search"]["scenarios"][0]["title"] == "Airport arrival bundle"
-    output_titles = [
-        output["title"] for output in payload["planner_panel_state"]["outputs"]
-    ]
-    assert "Scenario ranking summary" in output_titles
-    assert "Rank #1 Airport arrival bundle" in output_titles
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == payload["runtime_scenario_comparison"][
+        "scenarios"
+    ][0]["scenario_id"]
+    assert payload["runtime_scenario_comparison"]["scenarios"][0]["status"] == "fallback"
+    assert payload["planner_panel_state"]["outputs"][2]["title"] == "Scenario ranking summary"
+    assert payload["planner_panel_state"]["outputs"][3]["title"] == "Rank #1 Airport arrival bundle"
     assert payload["planner_panel_state"]["option_set"]["options"][0]["label"] == "Airport arrival bundle"
+
+
+def test_workspace_scenario_comparison_endpoint_returns_runtime_surface(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/workspace/trip-leisure-kyoto-draft/scenarios/compare")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["trip_id"] == "trip-leisure-kyoto-draft"
+    assert payload["comparison_axes"][0]["key"] == "score"
+    assert payload["comparison_axes"][-1]["key"] == "estimated_total"
+    assert payload["scenarios"][0]["delta"]["transfers_delta"] == 0
+    assert payload["lead_scenario_id"] == payload["scenarios"][0]["scenario_id"]
+    assert "runtime scenario" in payload["summary"].lower()
 
 
 def test_workspace_endpoint_returns_not_found_for_unknown_trip(
@@ -92,6 +113,10 @@ def test_workspace_endpoint_returns_not_found_for_unknown_trip(
     response = client.get("/api/workspace/trip-unknown")
 
     assert response.status_code == 404
+
+    comparison_response = client.get("/api/workspace/trip-unknown/scenarios/compare")
+
+    assert comparison_response.status_code == 404
 
 
 def test_workspace_endpoint_returns_minimal_payload_for_persisted_trip(
@@ -129,6 +154,7 @@ def test_workspace_endpoint_returns_minimal_payload_for_persisted_trip(
     assert payload["session"]["pending_decisions"][0]["decision_id"].startswith("decision:")
     assert payload["saved_scenarios"] == []
     assert payload["scenario_search"]["scenarios"] == []
+    assert payload["runtime_scenario_comparison"]["scenarios"] == []
     assert payload["inventory_summary"]["bundle_count"] == 0
     assert payload["feasibility_summary"]["assessment_count"] == 0
     assert payload["activity_log"] == []

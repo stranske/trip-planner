@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from importlib import resources
+from pathlib import Path
 from typing import Any
 
 from trip_planner.business import (
@@ -17,15 +17,13 @@ from trip_planner.itinerary import (
 )
 from trip_planner.options import InventoryBundle
 from trip_planner.preferences import resolve_leisure_profile
-from trip_planner.preferences.fixture_corpus import load_fixture_map
 from trip_planner.ranking import (
     BusinessRankingEngine,
     LeisureRankingEngine,
     RankedResult,
     RankedResultSet,
 )
-
-_BUSINESS_RESOURCE_PACKAGE = "trip_planner.resources.business"
+from tests.preferences.fixture_corpus import load_fixture_map
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,10 +49,17 @@ _SCENARIO_FIXTURE_SEEDS: dict[str, ScenarioFixtureSeed] = {
     ),
 }
 
-def _load_business_fixture(name: str) -> dict[str, Any]:
-    return json.loads(
-        resources.files(_BUSINESS_RESOURCE_PACKAGE).joinpath(name).read_text(encoding="utf-8")
-    )
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _business_fixture_dir() -> Path:
+    return _repo_root() / "tests" / "fixtures" / "business"
 
 
 def _bundle_ranked_results(
@@ -120,7 +125,6 @@ def build_workspace_scenario_search(
     feasibility_outputs = {
         bundle.bundle_id: evaluate_bundle_feasibility(bundle) for bundle in bundles
     }
-    objectives: object
 
     if trip_mode == "leisure":
         traveler_fixture = load_fixture_map()[fixture_seed.leisure_fixture_id or ""]
@@ -143,10 +147,10 @@ def build_workspace_scenario_search(
         )
     else:
         profile = BusinessTravelProfile.from_dict(
-            _load_business_fixture(fixture_seed.business_profile_fixture or "")
+            _load_json(_business_fixture_dir() / (fixture_seed.business_profile_fixture or ""))
         )
-        constraint_payload = _load_business_fixture(
-            fixture_seed.business_constraint_fixture or ""
+        constraint_payload = _load_json(
+            _business_fixture_dir() / (fixture_seed.business_constraint_fixture or "")
         )
         constraint_set = PolicyConstraintSet(**constraint_payload["constraint_set"])
         objectives = derive_business_planning_objectives(

@@ -4,12 +4,14 @@ from sqlalchemy.orm import Session
 from trip_planner.app.schemas.workspace import (
     PlannerDecisionAnswerRequest,
     PlannerOptionFeedbackRequest,
+    ScenarioComparisonSurfaceResponse,
     WorkspaceResponse,
 )
 from trip_planner.app.services.auth import AuthenticatedUser, require_authenticated_user
 from trip_planner.app.services.workspace import (
     WorkspaceTripNotFoundError,
     answer_workspace_planner_decision,
+    get_workspace_scenario_comparison_payload,
     get_workspace_payload,
     submit_workspace_option_feedback,
 )
@@ -30,6 +32,23 @@ def read_workspace(
             status_code=404, detail=f"Workspace for trip '{trip_id}' was not found."
     )
     return WorkspaceResponse.model_validate(payload)
+
+
+@router.get(
+    "/workspace/{trip_id}/scenarios/compare",
+    response_model=ScenarioComparisonSurfaceResponse,
+)
+def read_workspace_scenario_comparison(
+    trip_id: str,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> ScenarioComparisonSurfaceResponse:
+    payload = get_workspace_scenario_comparison_payload(db_session, user=user, trip_id=trip_id)
+    if payload is None:
+        raise HTTPException(
+            status_code=404, detail=f"Workspace for trip '{trip_id}' was not found."
+        )
+    return ScenarioComparisonSurfaceResponse.model_validate(payload)
 
 
 @router.post("/workspace/{trip_id}/planner/decisions/{decision_id}/answer", response_model=WorkspaceResponse)

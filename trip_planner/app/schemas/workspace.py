@@ -20,6 +20,9 @@ class WorkspaceResponse(BaseModel):
     scenario_search: dict[str, Any] = Field(
         description="ScenarioSearchResult payload whose route_sequence drives the timeline UI.",
     )
+    runtime_scenario_comparison: dict[str, Any] = Field(
+        description="Comparison-ready runtime scenario payload derived from the current scenario search."
+    )
     activity_log: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Recent persisted workspace activity entries tied to the trip/session trail.",
@@ -33,6 +36,16 @@ class WorkspaceResponse(BaseModel):
     inventory_summary: dict[str, Any] = Field(
         description="Bundle summary assembled from normalized option/domain records for the workspace surface."
     )
+
+
+class ScenarioComparisonSurfaceResponse(BaseModel):
+    trip_id: str
+    title: str
+    summary: str
+    comparison_axes: list[dict[str, Any]] = Field(default_factory=list)
+    lead_scenario_id: str | None = None
+    scenarios: list[dict[str, Any]] = Field(default_factory=list)
+    source_refs: list[str] = Field(default_factory=list)
 
 
 class PlannerDecisionAnswerRequest(BaseModel):

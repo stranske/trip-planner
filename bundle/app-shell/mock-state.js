@@ -354,6 +354,54 @@ const leisureWorkspaceScenarios = [
   },
 ];
 
+const leisureRuntimeScenarioComparison = {
+  trip_id: "trip-leisure-lisbon-oct",
+  title: "Lisbon ranked runtime scenarios",
+  summary: "2 runtime scenario(s) are available for side-by-side comparison in Lisbon reset with room to wander.",
+  comparison_axes: [
+    { key: "score", label: "Planner score", direction: "higher_better" },
+    { key: "travel_minutes", label: "Travel minutes", direction: "lower_better" },
+    { key: "transfers", label: "Transfers", direction: "lower_better" },
+  ],
+  lead_scenario_id: "scenario-lisbon-central",
+  scenarios: leisureWorkspaceScenarios.map((scenario, index) => ({
+    ...scenario,
+    rank: index + 1,
+    route_summary: index === 0 ? "Lisbon -> Sintra -> Lisbon" : "Lisbon -> Cais do Sodre -> Lisbon",
+    route_sequence:
+      index === 0
+        ? ["Lisbon", "Sintra", "Lisbon"]
+        : ["Lisbon", "Cais do Sodre", "Lisbon"],
+    recommended_for_selection: index === 0,
+    feasible: true,
+    metrics: {
+      score: index === 0 ? 0.93 : 0.84,
+      travel_minutes: index === 0 ? 210 : 255,
+      transfers: index === 0 ? 3 : 4,
+      estimated_total: { currency: "USD", typical_amount: index === 0 ? 3110 : 2960 },
+    },
+    delta: {
+      score_delta: index === 0 ? 0 : -0.09,
+      travel_minutes_delta: index === 0 ? 0 : 45,
+      transfer_delta: index === 0 ? 0 : 1,
+      estimated_total_delta: index === 0 ? 0 : -150,
+    },
+    highlights:
+      index === 0
+        ? [
+            "Route: Lisbon -> Sintra -> Lisbon.",
+            "Travel 210 minutes with 3 transfer(s).",
+            "Lead scenario for the current workspace comparison set.",
+          ]
+        : [
+            "Route: Lisbon -> Cais do Sodre -> Lisbon.",
+            "Travel 255 minutes with 4 transfer(s).",
+            "Alternative route preserved for direct scenario comparison.",
+          ],
+  })),
+  source_refs: ["fixture:runtime:lisbon"],
+};
+
 const leisureCheckpointHistory = [
   {
     checkpoint_id: "checkpoint-lisbon-lodging",
@@ -422,6 +470,55 @@ const businessWorkspaceScenarios = [
     budget_variant_id: "budget-sea-fallback",
   },
 ];
+
+const businessRuntimeScenarioComparison = {
+  trip_id: "trip-client-audit-sea",
+  title: "Seattle ranked runtime scenarios",
+  summary: "2 runtime scenario(s) are available for side-by-side comparison in Seattle audit trip with approval packet.",
+  comparison_axes: [
+    { key: "score", label: "Planner score", direction: "higher_better" },
+    { key: "travel_minutes", label: "Travel minutes", direction: "lower_better" },
+    { key: "transfers", label: "Transfers", direction: "lower_better" },
+  ],
+  lead_scenario_id: "scenario-sea-near-client",
+  scenarios: businessWorkspaceScenarios.map((scenario, index) => ({
+    ...scenario,
+    rank: index + 1,
+    route_summary:
+      index === 0 ? "Airport -> Bellevue -> Seattle" : "Airport -> Downtown -> Bellevue",
+    route_sequence:
+      index === 0
+        ? ["Airport", "Bellevue", "Seattle"]
+        : ["Airport", "Downtown", "Bellevue"],
+    recommended_for_selection: index === 0,
+    feasible: true,
+    metrics: {
+      score: index === 0 ? 0.97 : 0.89,
+      travel_minutes: index === 0 ? 185 : 255,
+      transfers: index === 0 ? 2 : 3,
+      estimated_total: { currency: "USD", typical_amount: index === 0 ? 1810 : 1725 },
+    },
+    delta: {
+      score_delta: index === 0 ? 0 : -0.08,
+      travel_minutes_delta: index === 0 ? 0 : 70,
+      transfer_delta: index === 0 ? 0 : 1,
+      estimated_total_delta: index === 0 ? 0 : -85,
+    },
+    highlights:
+      index === 0
+        ? [
+            "Route: Airport -> Bellevue -> Seattle.",
+            "Travel 185 minutes with 2 transfer(s).",
+            "Lead scenario for the current workspace comparison set.",
+          ]
+        : [
+            "Route: Airport -> Downtown -> Bellevue.",
+            "Travel 255 minutes with 3 transfer(s).",
+            "Alternative route preserved for direct scenario comparison.",
+          ],
+  })),
+  source_refs: ["fixture:runtime:seattle"],
+};
 
 const businessCheckpointHistory = [
   {
@@ -536,6 +633,55 @@ const inTripRevisionBudgetSummary = {
       variance_label: "$280 over target",
     },
   ],
+};
+
+const inTripRevisionRuntimeScenarioComparison = {
+  trip_id: "trip-leisure-lisbon-oct",
+  title: "Lisbon revised runtime scenarios",
+  summary: "2 runtime scenario(s) are available for side-by-side comparison after the in-trip replanning pass.",
+  comparison_axes: [
+    { key: "score", label: "Planner score", direction: "higher_better" },
+    { key: "travel_minutes", label: "Travel minutes", direction: "lower_better" },
+    { key: "transfers", label: "Transfers", direction: "lower_better" },
+  ],
+  lead_scenario_id: "scenario-lisbon-rain-reset",
+  scenarios: inTripRevisionWorkspaceScenarios.map((scenario, index) => ({
+    ...scenario,
+    rank: index + 1,
+    route_summary:
+      index === 0 ? "Lisbon -> Alfama -> Chiado" : "Lisbon -> Sintra -> Lisbon",
+    route_sequence:
+      index === 0
+        ? ["Lisbon", "Alfama", "Chiado"]
+        : ["Lisbon", "Sintra", "Lisbon"],
+    recommended_for_selection: index === 0,
+    feasible: true,
+    metrics: {
+      score: index === 0 ? 0.9 : 0.81,
+      travel_minutes: index === 0 ? 175 : 235,
+      transfers: index === 0 ? 2 : 4,
+      estimated_total: { currency: "USD", typical_amount: index === 0 ? 3345 : 3480 },
+    },
+    delta: {
+      score_delta: index === 0 ? 0 : -0.09,
+      travel_minutes_delta: index === 0 ? 0 : 60,
+      transfer_delta: index === 0 ? 0 : 2,
+      estimated_total_delta: index === 0 ? 0 : 135,
+    },
+    highlights:
+      index === 0
+        ? [
+            "Route: Lisbon -> Alfama -> Chiado.",
+            "Travel 175 minutes with 2 transfer(s).",
+            "Lead scenario for the current workspace comparison set.",
+          ]
+        : [
+            "Route: Lisbon -> Sintra -> Lisbon.",
+            "Travel 235 minutes with 4 transfer(s).",
+            "Alternative route preserved for direct scenario comparison.",
+          ],
+  })),
+  source_refs: ["fixture:runtime:lisbon-revision"],
 };
 
 const leisureVisualizationScenarios = [
@@ -990,6 +1136,7 @@ export const activeLeisureTripShellState = {
     status: "ready",
     planner_panel_state: leisurePlannerPanelState,
     scenario_summaries: leisureWorkspaceScenarios,
+    runtime_scenario_comparison: leisureRuntimeScenarioComparison,
     checkpoint_history: leisureCheckpointHistory,
     budget_summary: leisureBudgetSummary,
     loading_message: null,
@@ -1017,6 +1164,7 @@ export const activeBusinessTripShellState = {
     status: "ready",
     planner_panel_state: businessPlannerPanelState,
     scenario_summaries: businessWorkspaceScenarios,
+    runtime_scenario_comparison: businessRuntimeScenarioComparison,
     checkpoint_history: businessCheckpointHistory,
     budget_summary: businessBudgetSummary,
     loading_message: null,
@@ -1049,6 +1197,7 @@ export const inTripRevisionShellState = {
       },
     },
     scenario_summaries: inTripRevisionWorkspaceScenarios,
+    runtime_scenario_comparison: inTripRevisionRuntimeScenarioComparison,
     checkpoint_history: inTripRevisionCheckpointHistory,
     budget_summary: inTripRevisionBudgetSummary,
     loading_message: null,

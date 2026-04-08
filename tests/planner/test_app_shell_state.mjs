@@ -282,13 +282,18 @@ test("trip workspace renders scenario, checkpoint, and budget surfaces for leisu
   );
 
   assert.match(leisureWorkspace, /Scenario comparison/);
+  assert.match(leisureWorkspace, /ranked runtime scenarios/);
   assert.match(leisureWorkspace, /Central Lisbon base/);
   assert.match(leisureWorkspace, /Quiet riverside fallback/);
+  assert.match(leisureWorkspace, /Lisbon ranked runtime scenarios/);
+  assert.match(leisureWorkspace, /Lisbon -&gt; Sintra -&gt; Lisbon/);
   assert.match(leisureWorkspace, /Budget posture/);
   assert.match(leisureWorkspace, /\$90 under target/);
 
   assert.match(businessWorkspace, /Primary exception-ready scenario/);
   assert.match(businessWorkspace, /Compliant downtown fallback/);
+  assert.match(businessWorkspace, /Seattle ranked runtime scenarios/);
+  assert.match(businessWorkspace, /Airport -&gt; Bellevue -&gt; Seattle/);
   assert.match(businessWorkspace, /Approval-ready lodging set/);
   assert.match(businessWorkspace, /\$40 under target before exception review/);
 });
