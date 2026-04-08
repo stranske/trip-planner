@@ -127,6 +127,18 @@ function escapeAttribute(value) {
 }
 
 /**
+ * @param {import("./orchestration-contracts").PlannerOutputRecord["status"] | string | undefined} status
+ * @returns {"positive" | "caution" | "critical" | "neutral"}
+ */
+function normalizeOutputStatusTone(status) {
+  if (status === "positive" || status === "caution" || status === "critical") {
+    return status;
+  }
+
+  return "neutral";
+}
+
+/**
  * @param {PlannerPanelSection} section
  * @returns {string}
  */
@@ -262,22 +274,33 @@ export function renderPlannerOutputsDisplay(outputs) {
     <div class="planner-output-feed" role="list" aria-label="Planner outputs">
       ${outputs
     .map(
-      (output) => `
-        <article class="planner-output-card" role="listitem" data-planner-output-id="${output.output_id}">
+      (output) => {
+        const escapedOutputId = escapeAttribute(output.output_id);
+        const escapedTitle = escapeHtml(output.title);
+        const escapedBody = escapeHtml(output.body);
+        const escapedHighlights =
+          output.highlights?.map((highlight) => `<li>${escapeHtml(highlight)}</li>`).join("") ?? "";
+        const escapedTags =
+          output.tags.map((tag) => `<span class="planner-chip">${escapeHtml(tag)}</span>`).join("");
+        const statusTone = normalizeOutputStatusTone(output.status);
+        const escapedStatusLabel = output.status ? escapeHtml(output.status) : "";
+
+        return `
+        <article class="planner-output-card" role="listitem" data-planner-output-id="${escapedOutputId}">
           <div class="planner-section-header">
-            <h4>${output.title}</h4>
+            <h4>${escapedTitle}</h4>
             ${
               output.status
-                ? `<span class="planner-status-pill planner-status-pill--${output.status}">${output.status}</span>`
+                ? `<span class="planner-status-pill planner-status-pill--${statusTone}">${escapedStatusLabel}</span>`
                 : '<span class="planner-meta">message</span>'
             }
           </div>
-          <p>${output.body}</p>
+          <p>${escapedBody}</p>
           ${
             output.highlights?.length
               ? `
                 <ul class="planner-list" aria-label="Planner output highlights">
-                  ${output.highlights.map((highlight) => `<li>${highlight}</li>`).join("")}
+                  ${escapedHighlights}
                 </ul>
               `
               : ""
@@ -286,13 +309,14 @@ export function renderPlannerOutputsDisplay(outputs) {
             output.tags.length
               ? `
                 <div class="planner-chip-row" aria-label="Output tags">
-                  ${output.tags.map((tag) => `<span class="planner-chip">${tag}</span>`).join("")}
+                  ${escapedTags}
                 </div>
               `
               : ""
           }
         </article>
       `
+      }
     )
     .join("")}
     </div>
