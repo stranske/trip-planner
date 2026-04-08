@@ -50,9 +50,8 @@ describe("runtime smoke", () => {
     });
     expect(workspace.trip_record.trip.trip_id).toBe("trip-leisure-kyoto-draft");
     expect(workspace.scenario_search.scenarios[0]?.scenario_summary.route_sequence).toEqual([
-      "kyoto",
-      "uji",
-      "kyoto",
+      "dest-city-osaka",
+      "dest-city-kyoto",
     ]);
   });
 });

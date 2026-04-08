@@ -125,6 +125,7 @@ def build_workspace_scenario_search(
     feasibility_outputs = {
         bundle.bundle_id: evaluate_bundle_feasibility(bundle) for bundle in bundles
     }
+    objectives: object
 
     if trip_mode == "leisure":
         traveler_fixture = load_fixture_map()[fixture_seed.leisure_fixture_id or ""]
