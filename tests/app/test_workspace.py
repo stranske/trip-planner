@@ -47,6 +47,8 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
         "uji",
         "kyoto",
     ]
+    assert payload["inventory_summary"]["bundle_count"] == 2
+    assert payload["inventory_summary"]["bundles"][0]["title"] == "Osaka arrival buffer"
     assert payload["planner_panel_state"]["trip"]["trip_id"] == "trip-leisure-kyoto-draft"
     assert payload["planner_panel_state"]["option_set"]["options"][0]["option_id"].startswith(
         "scenario:"
@@ -95,6 +97,7 @@ def test_workspace_endpoint_returns_minimal_payload_for_persisted_trip(
     assert payload["session"]["trip_id"] == trip_id
     assert payload["saved_scenarios"] == []
     assert payload["scenario_search"]["scenarios"] == []
+    assert payload["inventory_summary"]["bundle_count"] == 0
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_bootstrap"
 

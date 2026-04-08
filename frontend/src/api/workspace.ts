@@ -92,6 +92,20 @@ export type WorkspaceData = {
   } | null;
   scenario_search: ScenarioSearchResult;
   planner_panel_state: PlannerPanelState;
+  inventory_summary: {
+    bundle_count: number;
+    bundles: Array<{
+      bundle_id: string;
+      title: string;
+      bundle_context: string;
+      summary: string;
+      destination_names: string[];
+      option_count: number;
+      strengths: string[];
+      tradeoffs: string[];
+    }>;
+    notes: string[];
+  };
 };
 
 export async function fetchWorkspace(tripId: string): Promise<WorkspaceData> {

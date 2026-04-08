@@ -10,6 +10,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.app.services.inventory import (
+    assemble_inventory_bundles_for_trip,
+    build_inventory_summary_payload,
+)
 from trip_planner.contracts.trip import Trip
 from trip_planner.contracts import MoneyRange
 from trip_planner.itinerary import (
@@ -386,6 +390,11 @@ def _build_persisted_trip_workspace(record: PersistedTrip) -> dict[str, Any]:
         "source_refs": [],
     }
 
+    inventory_bundles = assemble_inventory_bundles_for_trip(
+        trip_id=record.trip_id,
+        trip_mode=record.mode,
+    )
+
     return {
         "trip_record": trip_record,
         "session": session.to_dict(),
@@ -397,6 +406,7 @@ def _build_persisted_trip_workspace(record: PersistedTrip) -> dict[str, Any]:
             scenario_search=scenario_search,
             pending_decisions=[],
         ),
+        "inventory_summary": build_inventory_summary_payload(inventory_bundles),
     }
 
 
@@ -587,6 +597,10 @@ def get_workspace_payload(
         session = _load_session(fixture.session_fixture)
         _canonicalize_saved_scenario_ids(session, saved_scenarios)
         scenario_search = _build_scenario_search(trip_id, fixture.scenario_search_variant)
+        inventory_bundles = assemble_inventory_bundles_for_trip(
+            trip_id=trip_id,
+            trip_mode=trip_record.trip.mode,
+        )
 
         return {
             "trip_record": trip_record.to_dict(),
@@ -599,6 +613,7 @@ def get_workspace_payload(
                 scenario_search=scenario_search.to_dict(),
                 pending_decisions=session.to_dict().get("pending_decisions", []),
             ),
+            "inventory_summary": build_inventory_summary_payload(inventory_bundles),
         }
 
     record = db_session.scalar(

@@ -173,6 +173,31 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
         </section>
 
         <section className="status-card">
+          <p className="status-label">Inventory bundles</p>
+          <h2>Assembled inventory layer</h2>
+          <p className="muted-copy">{workspace.inventory_summary.notes[0]}</p>
+          {workspace.inventory_summary.bundle_count === 0 ? (
+            <p className="muted-copy">
+              Bundle assembly has not started yet for this trip.
+            </p>
+          ) : (
+            <div className="scenario-stack">
+              {workspace.inventory_summary.bundles.map((bundle) => (
+                <article key={bundle.bundle_id} className="scenario-card">
+                  <p className="scenario-kicker">{bundle.bundle_context.replace(/_/g, " ")}</p>
+                  <h3>{bundle.title}</h3>
+                  <p>{bundle.summary}</p>
+                  <p className="muted-copy">
+                    {bundle.destination_names.join(" -> ")} · {bundle.option_count} normalized option
+                    {bundle.option_count === 1 ? "" : "s"}
+                  </p>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="status-card">
           <p className="status-label">Timeline</p>
           {timelineStops.length === 0 || activeScenario.scenario === null ? (
             <>

@@ -25,6 +25,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["scripts*", "trip_planner*"]
 
+[tool.setuptools.package-data]
+trip_planner = ["resources/options/bundles/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 norecursedirs = ["1. tests", "scripts"]

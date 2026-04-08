@@ -1,0 +1,210 @@
+{
+  "option_id": "mixed-osaka-rail-arrival",
+  "trip_id": "trip-kansai-connector",
+  "title": "Rail arrival with station-area lodging",
+  "supported_purposes": ["inventory_narrowing"],
+  "comparison_label": "Low-friction transport-plus-lodging bundle",
+  "summary": "Cross-category bundle that keeps the transport chain and destination lodging explicit.",
+  "route_coherence": {
+    "overall_signal": 0.81,
+    "route_shape": "gateway_transfer",
+    "movement_summary": "Direct airport-to-city movement with one destination lodging handoff.",
+    "destination_sequence": ["dest-kix", "dest-city-osaka"],
+    "base_change_count": 1,
+    "cohesion_signal": 0.83,
+    "recovery_signal": 0.71
+  },
+  "schedule_fit": {
+    "overall_signal": 0.79,
+    "pacing_signal": 0.76,
+    "arrival_alignment_signal": 0.86,
+    "recovery_window_signal": 0.66,
+    "buffer_signal": 0.78,
+    "overcommitment_risk_signal": 0.24
+  },
+  "budget_posture": {
+    "estimated_total": {"currency": "USD", "typical_amount": 467.0},
+    "lodging_total": {"currency": "USD", "typical_amount": 438.0},
+    "transport_total": {"currency": "USD", "typical_amount": 29.0},
+    "overall_signal": 0.83,
+    "within_target_budget": true
+  },
+  "composition_summary": {
+    "sequence_index": 0,
+    "assembly_role": "arrival_bundle_candidate",
+    "primary_destination_id": "dest-city-osaka",
+    "component_option_ids": ["lodg-osaka-station-hotel", "transport-kix-osaka-rail"]
+  },
+  "provenance_summary": {
+    "source_refs": ["prov-haruka"],
+    "booking_links": ["https://example.com/haruka"]
+  },
+  "quality_value_fit": {
+    "quality_signal": 0.79,
+    "value_signal": 0.83,
+    "fit_signal": 0.8
+  },
+  "explanation": {
+    "headline": "Keeps arrival movement and first-night stay in one inspectable bundle.",
+    "strengths": ["Low transport friction.", "Policy-friendly rail option."],
+    "tradeoffs": ["Station-area stay is more functional than atmospheric."]
+  },
+  "bundles": [
+    {
+      "bundle_id": "bundle-osaka-arrival",
+      "title": "Airport arrival bundle",
+      "bundle_context": "transport_lodging",
+      "destinations": [
+        {
+          "destination_id": "dest-kix",
+          "place_kind": "site",
+          "name": "KIX Airport",
+          "geo": {
+            "latitude": 34.4342,
+            "longitude": 135.244,
+            "country_code": "JP",
+            "time_zone": "Asia/Tokyo"
+          }
+        },
+        {
+          "destination_id": "dest-city-osaka",
+          "place_kind": "city",
+          "name": "Osaka",
+          "geo": {
+            "latitude": 34.6937,
+            "longitude": 135.5023,
+            "country_code": "JP",
+            "region_code": "JP-27",
+            "time_zone": "Asia/Tokyo"
+          }
+        }
+      ],
+      "lodging_options": [
+        {
+          "option_id": "lodg-osaka-station-hotel",
+          "name": "Osaka Station Business Hotel",
+          "destination_id": "dest-city-osaka",
+          "location_summary": {
+            "destination_id": "dest-city-osaka",
+            "location_context": "urban_core",
+            "neighborhood": "Umeda",
+            "access_summary": "Five-minute walk from Osaka Station.",
+            "walk_minutes_to_anchor": 5,
+            "quiet_signal": 0.47,
+            "recovery_signal": 0.58,
+            "business_access_signal": 0.93,
+            "place_context_ids": ["dest-city-osaka"]
+          },
+          "room_summary": {
+            "lodging_kind": "hotel",
+            "room_type": "Compact queen",
+            "workspace_signal": 0.74,
+            "comfort_signal": 0.69,
+            "cleanliness_signal": 0.82,
+            "privacy_signal": 0.75
+          },
+          "cost_summary": {
+            "nightly": {"currency": "USD", "typical_amount": 219.0},
+            "total": {"currency": "USD", "typical_amount": 438.0}
+          },
+          "fit_summary": {"overall_signal": 0.74, "location_fit_signal": 0.94},
+          "feasibility": {
+            "inventory_status": "available",
+            "available": true,
+            "business_approval_status": "preferred"
+          }
+        }
+      ],
+      "transport_options": [
+        {
+          "option_id": "transport-kix-osaka-rail",
+          "name": "Haruka + local rail transfer",
+          "transport_kind": "rail",
+          "origin_id": "dest-kix",
+          "destination_id": "dest-city-osaka",
+          "timing_summary": {
+            "departure_local": "2026-04-05T09:05:00+09:00",
+            "arrival_local": "2026-04-05T10:33:00+09:00",
+            "duration_minutes": 88,
+            "departure_timezone": "Asia/Tokyo",
+            "arrival_timezone": "Asia/Tokyo"
+          },
+          "segments": [
+            {
+              "segment_id": "seg-haruka",
+              "mode": "rail",
+              "origin_label": "KIX Airport Station",
+              "destination_label": "Osaka Station",
+              "departure_local": "2026-04-05T09:16:00+09:00",
+              "arrival_local": "2026-04-05T10:31:00+09:00",
+              "carrier": "JR West",
+              "service_number": "Haruka 14",
+              "duration_minutes": 75
+            }
+          ],
+          "transfer_burden": {
+            "transfer_count": 0,
+            "self_navigation_burden_signal": 0.18,
+            "baggage_complexity_signal": 0.2,
+            "schedule_protection_signal": 0.84
+          },
+          "cost_summary": {
+            "total": {"currency": "USD", "typical_amount": 29.0}
+          },
+          "fit_summary": {
+            "overall_signal": 0.86,
+            "schedule_fit_signal": 0.84,
+            "friction_fit_signal": 0.88,
+            "policy_fit_signal": 0.95
+          },
+          "policy_summary": {
+            "business_approval_status": "preferred",
+            "approved_booking_channel": true,
+            "class_of_service": "standard"
+          },
+          "feasibility": {
+            "available": true,
+            "availability_status": "available"
+          },
+          "booking_links": ["https://example.com/haruka"],
+          "source_refs": [
+            {
+              "provenance_id": "prov-haruka",
+              "source_id": "jr-west-haruka",
+              "source_category": "official_operational",
+              "subject_kind": "option",
+              "subject_id": "transport-kix-osaka-rail",
+              "contribution_kind": "operational",
+              "summary": "Official timetable confirms airport express timings."
+            }
+          ]
+        }
+      ],
+      "composition_summary": {
+        "sequence_index": 0,
+        "assembly_role": "gateway_arrival",
+        "primary_destination_id": "dest-city-osaka",
+        "component_option_ids": ["lodg-osaka-station-hotel", "transport-kix-osaka-rail"]
+      },
+      "provenance_summary": {
+        "source_refs": ["prov-haruka"],
+        "booking_links": ["https://example.com/haruka"]
+      },
+      "quality_value_fit": {
+        "quality_signal": 0.78,
+        "value_signal": 0.84,
+        "fit_signal": 0.81
+      },
+      "feasibility": {
+        "available": true,
+        "internally_consistent": true
+      },
+      "explanation": {
+        "headline": "One-touch arrival bundle.",
+        "strengths": ["Transport and lodging line up on the same destination.", "Clear policy posture."],
+        "tradeoffs": ["Lodging emphasizes convenience over atmosphere."]
+      }
+    }
+  ],
+  "tags": ["transport-plus-lodging", "arrival-bundle"]
+}

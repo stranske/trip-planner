@@ -23,3 +23,6 @@ class WorkspaceResponse(BaseModel):
     planner_panel_state: dict[str, Any] = Field(
         description="Workspace-scoped planner panel payload for the mounted side-panel UI.",
     )
+    inventory_summary: dict[str, Any] = Field(
+        description="Bundle summary assembled from normalized option/domain records for the workspace surface."
+    )
