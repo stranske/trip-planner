@@ -110,6 +110,88 @@ const workspacePayload = {
       },
     ],
   },
+  planner_panel_state: {
+    trip: {
+      trip_id: "trip-leisure-kyoto-draft",
+      user_id: "user:test",
+      mode: "leisure",
+      status: "draft",
+      trip_frame: {
+        start_date: "2026-04-10",
+        end_date: "2026-04-24",
+        duration_days: 14,
+        primary_regions: ["JP-26", "JP-27"],
+        traveler_party: {
+          kind: "pair",
+          traveler_count: 2,
+          notes: "Anniversary planning",
+        },
+      },
+      profile_refs: {
+        leisure_profile_id: "profile:kyoto",
+      },
+      title: "Spring Kyoto anniversary draft",
+      summary: "Initial leisure trip shell with routing and lodging options.",
+    },
+    option_set: {
+      option_set_id: "option-set:workspace-panel",
+      trip_id: "trip-leisure-kyoto-draft",
+      purpose: "workspace_review",
+      scope: "scenario_selection",
+      title: "Kyoto leisure scenario comparison",
+      comparison_axes: [
+        { key: "score", label: "Planner score", direction: "higher_better" },
+        { key: "travel_minutes", label: "Travel minutes", direction: "lower_better" },
+      ],
+      explanation: ["Workspace panel mirrors the current scenario feed."],
+      options: [
+        {
+          option_id: "scenario:trip-leisure-kyoto-draft:1",
+          kind: "scenario",
+          label: "Kyoto base with Uji day trip",
+          summary: "Balanced Kyoto culture baseline",
+          drawbacks: ["Evening variety is lower than the Osaka-heavy fallback."],
+          explanation: ["Rank #1 with score 0.93."],
+        },
+      ],
+    },
+    proposal: null,
+    policy_evaluation: null,
+    pending_decisions: [
+      {
+        decision_id: "decision:save-baseline",
+        title: "Save baseline scenario",
+        prompt: "Should the current Kyoto route become the saved baseline?",
+        choices: ["Keep the current direction.", "Compare another planner-backed option first."],
+      },
+    ],
+    outputs: [
+      {
+        output_id: "output:workspace-summary",
+        title: "Workspace scenario feed",
+        body: "Planner-side-panel content is now mounted inside the workspace route.",
+        tags: ["workspace", "planner-panel"],
+      },
+    ],
+    planner_behavior: {
+      trip_stage: "compare",
+      ask_before_next_major_change: true,
+      target_research_passes: 3,
+      target_options_before_checkpoint: 2,
+      surface_options_early: true,
+      explanation_density: "standard",
+    },
+    next_step_actions: [
+      {
+        action_id: "action:answer-decision",
+        action_kind: "answer_decision",
+        label: "Answer the current planner decision",
+        description: "Resolve the active planner question before the next planning checkpoint.",
+        emphasis: "primary",
+        target_section: "decisions",
+      },
+    ],
+  },
 };
 
 function renderWorkspacePage() {
@@ -140,6 +222,10 @@ describe("WorkspacePage", () => {
     expect(screen.getAllByText("Kyoto")).toHaveLength(2);
     expect(screen.getByText("Uji")).toBeInTheDocument();
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
+    expect(screen.getByText("Trip-scoped planner surface")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText("Planner side panel")).toBeInTheDocument();
+    });
   });
 
   it("shows an empty-state message when no route sequence is available", async () => {
@@ -150,6 +236,33 @@ describe("WorkspacePage", () => {
         scenario_search: {
           ...workspacePayload.scenario_search,
           scenarios: [],
+        },
+        planner_panel_state: {
+          ...workspacePayload.planner_panel_state,
+          option_set: {
+            ...workspacePayload.planner_panel_state.option_set,
+            title: "Planner workspace bootstrap",
+            purpose: "workspace_bootstrap",
+            options: [
+              {
+                option_id: "bootstrap:keep-frame",
+                kind: "trip_setup",
+                label: "Keep the current trip frame narrow",
+                summary: "Use the current trip shell as the first planner boundary.",
+                drawbacks: ["You may need another pass if the trip should span more regions."],
+                explanation: ["Best when the user wants to iterate later."],
+              },
+            ],
+          },
+          pending_decisions: [],
+          outputs: [
+            {
+              output_id: "output:bootstrap-ready",
+              title: "Workspace bootstrap is ready",
+              body: "The workspace has enough persisted trip context to mount the planner surface.",
+              tags: ["bootstrap"],
+            },
+          ],
         },
       }),
     });
@@ -164,6 +277,7 @@ describe("WorkspacePage", () => {
         "Trip context is ready now, so the next planning pass can attach saved scenarios and timeline stops."
       )
     ).toBeInTheDocument();
+    expect(screen.getByText("Workspace bootstrap is ready")).toBeInTheDocument();
   });
 
   it("shows created-trip metadata even when the workspace has no seeded scenario state yet", async () => {
@@ -200,6 +314,33 @@ describe("WorkspacePage", () => {
           title: "Trip setup workspace",
           scenarios: [],
         },
+        planner_panel_state: {
+          ...workspacePayload.planner_panel_state,
+          trip: {
+            ...workspacePayload.planner_panel_state.trip,
+            trip_id: "trip-chicago-kickoff",
+            title: "Chicago kickoff",
+            summary: "Get into the workspace quickly.",
+            mode: "business",
+            trip_frame: {
+              start_date: null,
+              end_date: null,
+              duration_days: null,
+              primary_regions: ["Chicago"],
+              traveler_party: {
+                kind: "team",
+                traveler_count: 3,
+                notes: "Customer kickoff",
+              },
+            },
+          },
+          option_set: {
+            ...workspacePayload.planner_panel_state.option_set,
+            purpose: "workspace_bootstrap",
+            title: "Planner workspace bootstrap",
+          },
+          pending_decisions: [],
+        },
       }),
     });
 
@@ -211,6 +352,7 @@ describe("WorkspacePage", () => {
 
     expect(screen.getByText("Dates not set yet")).toBeInTheDocument();
     expect(screen.getByText("Duration not set yet")).toBeInTheDocument();
+    expect(screen.getAllByText("Planner workspace bootstrap").length).toBeGreaterThan(0);
   });
 
   it("renders the shared route error card when the workspace loader rejects", async () => {

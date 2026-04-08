@@ -23,7 +23,12 @@ vi.mock("./api/trips", () => ({
 }));
 
 vi.mock("./api/workspace", () => ({
-  fetchWorkspace: vi.fn().mockResolvedValue({ trip_record: { trip: { trip_id: "trip-1" } } }),
+  fetchWorkspace: vi.fn().mockResolvedValue({
+    trip_record: { trip: { trip_id: "trip-1" } },
+    planner_panel_state: {
+      trip: { trip_id: "trip-1" },
+    },
+  }),
 }));
 
 import { ApiClientError } from "./lib/api/errors";

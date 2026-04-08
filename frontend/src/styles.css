@@ -121,6 +121,14 @@ a {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
+.planner-panel-card {
+  grid-column: 1 / -1;
+}
+
+.planner-panel-host {
+  margin-top: 1.25rem;
+}
+
 .workspace-hero {
   overflow: hidden;
   position: relative;
@@ -242,6 +250,10 @@ a {
 
 .muted-copy {
   color: #577186;
+}
+
+.planner-panel-host .planner-panel {
+  min-height: 100%;
 }
 
 .auth-layout {
