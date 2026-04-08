@@ -1,9 +1,20 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+function fileUrlToFsPath(relativePath: string): string {
+  const fileUrl = new URL(relativePath, import.meta.url);
+  const pathname = decodeURI(fileUrl.pathname);
+  return pathname.replace(/^\/([A-Za-z]:\/)/, "$1");
+}
+
+const bundleDirectory = fileUrlToFsPath("../bundle");
+
 export default defineConfig({
   plugins: [react()],
   server: {
+    fs: {
+      allow: [bundleDirectory],
+    },
     port: 5173,
     proxy: {
       "/api": {

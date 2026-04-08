@@ -231,6 +231,12 @@ function renderWorkspacePage() {
   );
 }
 
+function getPlannerHost() {
+  const plannerHost = document.querySelector(".planner-panel-host");
+  expect(plannerHost).toBeTruthy();
+  return plannerHost as HTMLDivElement;
+}
+
 describe("WorkspacePage", () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -256,7 +262,10 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Osaka arrival buffer")).toBeInTheDocument();
     expect(screen.getByText("Kyoto cultural anchor")).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByLabelText("Planner side panel")).toBeInTheDocument();
+      const plannerPanel = getPlannerHost().shadowRoot?.querySelector(
+        '[aria-label="Planner side panel"]'
+      );
+      expect(plannerPanel).toBeTruthy();
     });
   });
 
@@ -309,7 +318,9 @@ describe("WorkspacePage", () => {
         "Trip context is ready now, so the next planning pass can attach saved scenarios and timeline stops."
       )
     ).toBeInTheDocument();
-    expect(screen.getByText("Workspace bootstrap is ready")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getPlannerHost().shadowRoot?.querySelector('[aria-label="Planner side panel"]')).toBeTruthy();
+    });
   });
 
   it("shows created-trip metadata even when the workspace has no seeded scenario state yet", async () => {
@@ -389,8 +400,10 @@ describe("WorkspacePage", () => {
 
     expect(screen.getByText("Dates not set yet")).toBeInTheDocument();
     expect(screen.getByText("Duration not set yet")).toBeInTheDocument();
-    expect(screen.getAllByText("Planner workspace bootstrap").length).toBeGreaterThan(0);
     expect(screen.getByText("Bundle assembly has not started yet for this trip.")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getPlannerHost().shadowRoot?.querySelector('[aria-label="Planner side panel"]')).toBeTruthy();
+    });
   });
 
   it("renders the shared route error card when the workspace loader rejects", async () => {

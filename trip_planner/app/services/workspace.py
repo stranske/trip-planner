@@ -932,7 +932,7 @@ def _build_planner_panel_state(
             "prompt": decision["prompt"],
             "choices": (
                 list(decision["choices"])
-                if isinstance(decision.get("choices"), list) and decision["choices"]
+                if isinstance(decision.get("choices"), (list, tuple)) and decision["choices"]
                 else [
                     "Keep the current direction.",
                     "Compare another planner-backed option first.",
