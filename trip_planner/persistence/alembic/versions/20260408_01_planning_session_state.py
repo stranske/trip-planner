@@ -52,33 +52,36 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index(
-        "ix_persisted_planning_session_states_trip_id",
+        op.f("ix_persisted_planning_session_states_trip_id"),
         "persisted_planning_session_states",
         ["trip_id"],
+        unique=False,
     )
     op.create_index(
-        "ix_persisted_planning_session_states_user_id",
+        op.f("ix_persisted_planning_session_states_user_id"),
         "persisted_planning_session_states",
         ["user_id"],
+        unique=False,
     )
     op.create_index(
-        "ix_persisted_planning_session_states_last_updated_at",
+        op.f("ix_persisted_planning_session_states_last_updated_at"),
         "persisted_planning_session_states",
         ["last_updated_at"],
+        unique=False,
     )
 
 
 def downgrade() -> None:
     op.drop_index(
-        "ix_persisted_planning_session_states_last_updated_at",
+        op.f("ix_persisted_planning_session_states_last_updated_at"),
         table_name="persisted_planning_session_states",
     )
     op.drop_index(
-        "ix_persisted_planning_session_states_user_id",
+        op.f("ix_persisted_planning_session_states_user_id"),
         table_name="persisted_planning_session_states",
     )
     op.drop_index(
-        "ix_persisted_planning_session_states_trip_id",
+        op.f("ix_persisted_planning_session_states_trip_id"),
         table_name="persisted_planning_session_states",
     )
     op.drop_table("persisted_planning_session_states")

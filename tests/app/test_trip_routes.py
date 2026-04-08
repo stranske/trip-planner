@@ -252,6 +252,81 @@ def test_trip_scenario_history_create_list_and_reload_flow(client: TestClient) -
     assert repeat_listing.json() == payload
 
 
+def test_trip_scenario_history_orders_planning_sessions_by_payload_updated_at(
+    client: TestClient,
+) -> None:
+    signup(client, email="owner@example.com", display_name="Owner")
+    create_trip = client.post(
+        "/api/trips",
+        json={
+            "title": "Kyoto Spring",
+            "summary": "Food and gardens",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 7},
+        },
+    )
+    trip_id = create_trip.json()["trip"]["trip_id"]
+
+    older = client.post(
+        f"/api/trips/{trip_id}/planning-sessions",
+        json={
+            "session_state_id": "session-state:older",
+            "started_at": "2026-04-10T15:00:00Z",
+            "updated_at": "2026-04-10T15:05:00Z",
+        },
+    )
+    assert older.status_code == 201
+
+    newer = client.post(
+        f"/api/trips/{trip_id}/planning-sessions",
+        json={
+            "session_state_id": "session-state:newer",
+            "started_at": "2026-04-10T14:00:00Z",
+            "updated_at": "2026-04-10T16:05:00Z",
+        },
+    )
+    assert newer.status_code == 201
+
+    listing = client.get(f"/api/trips/{trip_id}/scenario-history")
+    assert listing.status_code == 200
+    assert [item["session_state_id"] for item in listing.json()["planning_sessions"]] == [
+        "session-state:newer",
+        "session-state:older",
+    ]
+
+
+def test_trip_planning_session_create_rejects_malformed_nested_payloads(
+    client: TestClient,
+) -> None:
+    signup(client, email="owner@example.com", display_name="Owner")
+    create_trip = client.post(
+        "/api/trips",
+        json={
+            "title": "Kyoto Spring",
+            "summary": "Food and gardens",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 7},
+        },
+    )
+    trip_id = create_trip.json()["trip"]["trip_id"]
+
+    response = client.post(
+        f"/api/trips/{trip_id}/planning-sessions",
+        json={
+            "recent_option_presentations": [
+                {
+                    "presentation_id": "presentation:kyoto-1",
+                    "option_set_id": "option-set:kyoto-1",
+                    "surfaced_option_ids": ["lodging:gion", "lodging:downtown"],
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "shown_at is required"
+
+
 def test_trip_scenario_history_create_truncates_generated_ids_to_model_limits(
     client: TestClient,
 ) -> None:

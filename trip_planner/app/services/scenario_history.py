@@ -79,6 +79,16 @@ def _domain_payload_error(error: ValueError) -> HTTPException:
     return _unprocessable(str(error))
 
 
+def _domain_payload_exception(error: Exception) -> HTTPException:
+    if isinstance(error, KeyError) and error.args:
+        return _unprocessable(f"{error.args[0]} is required")
+    if isinstance(error, TypeError):
+        return _unprocessable(str(error))
+    if isinstance(error, ValueError):
+        return _domain_payload_error(error)
+    raise TypeError(f"Unsupported domain payload exception: {type(error)!r}")
+
+
 def _get_owned_trip(
     db_session: Session,
     *,
@@ -193,7 +203,7 @@ def list_trip_scenario_history(
         select(PersistedPlanningSessionState)
         .where(PersistedPlanningSessionState.trip_id == trip_id)
         .order_by(
-            PersistedPlanningSessionState.updated_at.desc(),
+            PersistedPlanningSessionState.last_updated_at.desc(),
             PersistedPlanningSessionState.session_state_id.asc(),
         )
     ).all()
@@ -384,8 +394,8 @@ def create_planning_session(
                 "notes": payload.get("notes", []),
             }
         )
-    except ValueError as error:
-        raise _domain_payload_error(error) from error
+    except (KeyError, TypeError, ValueError) as error:
+        raise _domain_payload_exception(error) from error
 
     record = PersistedPlanningSessionState(
         session_state_id=session_state.session_state_id,
