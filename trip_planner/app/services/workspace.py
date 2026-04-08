@@ -827,7 +827,7 @@ def get_workspace_payload(
     if record is None:
         return None
     session_record = db_session.get(PersistedPlanningSessionState, f"session:{trip_id}")
-    saved_scenarios = db_session.scalars(
+    persisted_saved_scenarios = db_session.scalars(
         select(PersistedSavedScenario)
         .where(PersistedSavedScenario.trip_id == trip_id)
         .order_by(PersistedSavedScenario.updated_at.desc())
@@ -855,7 +855,7 @@ def get_workspace_payload(
                 "tags": list(scenario.tags),
                 "notes": list(scenario.notes),
             }
-            for scenario in saved_scenarios
+            for scenario in persisted_saved_scenarios
         ],
         activity_log=[_serialize_activity_record(item) for item in activity_records],
     )
