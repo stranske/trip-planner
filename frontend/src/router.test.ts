@@ -14,6 +14,10 @@ vi.mock("./api/auth", () => ({
 
 vi.mock("./api/trips", () => ({
   fetchTrip: vi.fn().mockResolvedValue({ trip_id: "trip-1" }),
+  fetchTripScenarioHistory: vi.fn().mockResolvedValue({
+    saved_scenarios: [],
+    planning_history: [],
+  }),
   fetchTrips: vi.fn().mockResolvedValue([{ trip_id: "trip-1" }]),
 }));
 
@@ -164,7 +168,7 @@ describe("router auth loaders", () => {
 
   it("loads a persisted trip detail for signed-in users", async () => {
     const { fetchCurrentSession } = await import("./api/auth");
-    const { fetchTrip } = await import("./api/trips");
+    const { fetchTrip, fetchTripScenarioHistory } = await import("./api/trips");
     vi.mocked(fetchCurrentSession).mockResolvedValueOnce({
       user: {
         user_id: "user:test",
@@ -180,6 +184,13 @@ describe("router auth loaders", () => {
     });
 
     expect(fetchTrip).toHaveBeenCalledWith("trip-1");
-    await expect(result.trip).resolves.toEqual({ trip_id: "trip-1" });
+    expect(fetchTripScenarioHistory).toHaveBeenCalledWith("trip-1");
+    await expect(result.tripDetail).resolves.toEqual({
+      trip: { trip_id: "trip-1" },
+      scenarioHistory: {
+        saved_scenarios: [],
+        planning_history: [],
+      },
+    });
   });
 });

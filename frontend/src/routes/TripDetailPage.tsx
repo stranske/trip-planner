@@ -48,11 +48,21 @@ function formatScenarioLabel(label: string): string {
 }
 
 function renderCurrentVersion(savedScenario: SavedScenarioRecord) {
-  return (
+  const currentVersion =
     savedScenario.versions.find(
       (version) => version.version_id === savedScenario.current_version_id
-    ) ?? savedScenario.versions[0]
-  );
+    ) ?? savedScenario.versions[0];
+
+  if (currentVersion) {
+    return currentVersion;
+  }
+
+  return {
+    version_id: savedScenario.current_version_id,
+    label: "unavailable",
+    title: "Unavailable",
+    summary: "This saved scenario is missing version details.",
+  };
 }
 
 function summarizeHistory(entry: PlanningHistoryEntry): string {

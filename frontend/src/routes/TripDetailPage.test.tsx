@@ -95,4 +95,63 @@ describe("TripDetailPage", () => {
       screen.getByText("Saved the Kyoto baseline after the first planning pass.")
     ).toBeInTheDocument();
   });
+
+  it("renders a defensive fallback when a saved scenario has no versions", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      tripDetail: Promise.resolve({
+        trip: {
+          trip_id: "trip-kyoto-123abc",
+          user_id: "user:test",
+          title: "Kyoto Spring",
+          summary: "Food and gardens",
+          mode: "leisure",
+          status: "draft",
+          trip_frame: {
+            start_date: "2026-04-20",
+            end_date: "2026-04-26",
+            duration_days: 7,
+            primary_regions: ["Kyoto"],
+            traveler_party: { kind: "solo", traveler_count: 1, notes: "" },
+          },
+          profile_refs: {
+            leisure_profile_id: "profile:trip-kyoto-123abc:leisure",
+            business_profile_id: null,
+          },
+          artifacts: {
+            objective_id: null,
+            option_set_ids: [],
+            itinerary_state_id: null,
+            budget_state_id: null,
+            policy_state_id: null,
+          },
+        },
+        scenarioHistory: {
+          saved_scenarios: [
+            {
+              saved_scenario_id: "saved-scenario:kyoto-empty",
+              current_version_id: "saved-scenario:kyoto-empty-v1",
+              versions: [],
+              comparisons: [],
+            },
+          ],
+          planning_history: [],
+        },
+      }),
+    });
+
+    render(
+      <MemoryRouter>
+        <TripDetailPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Kyoto Spring" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText("This saved scenario is missing version details.")
+    ).toBeInTheDocument();
+  });
 });

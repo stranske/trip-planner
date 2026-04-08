@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from trip_planner._option_contracts import OPTION_SET_SCOPES
+from trip_planner.state import ACTIVITY_LOG_EVENT_KINDS, SAVED_SCENARIO_LABELS
 
 
 class CreateSavedScenarioRequest(BaseModel):
@@ -21,6 +24,27 @@ class CreateSavedScenarioRequest(BaseModel):
     comparisons: list[dict[str, Any]] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
+
+    @field_validator("label")
+    @classmethod
+    def validate_label(cls, value: str) -> str:
+        if value not in SAVED_SCENARIO_LABELS:
+            raise ValueError(f"label must be one of {SAVED_SCENARIO_LABELS}")
+        return value
+
+    @field_validator("scope")
+    @classmethod
+    def validate_scope(cls, value: str) -> str:
+        if value not in OPTION_SET_SCOPES:
+            raise ValueError(f"scope must be one of {OPTION_SET_SCOPES}")
+        return value
+
+    @field_validator("snapshot_refs")
+    @classmethod
+    def validate_snapshot_refs(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if not value:
+            raise ValueError("snapshot_refs must capture at least one saved reference")
+        return value
 
 
 class CreatePlanningHistoryRequest(BaseModel):
@@ -39,6 +63,13 @@ class CreatePlanningHistoryRequest(BaseModel):
     metadata: dict[str, str] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
+
+    @field_validator("event_kind")
+    @classmethod
+    def validate_event_kind(cls, value: str) -> str:
+        if value not in ACTIVITY_LOG_EVENT_KINDS:
+            raise ValueError(f"event_kind must be one of {ACTIVITY_LOG_EVENT_KINDS}")
+        return value
 
 
 class SavedScenarioResponse(BaseModel):

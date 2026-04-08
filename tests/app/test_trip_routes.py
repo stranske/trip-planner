@@ -223,6 +223,75 @@ def test_trip_scenario_history_create_list_and_reload_flow(client: TestClient) -
     assert repeat_listing.json() == payload
 
 
+def test_trip_scenario_history_create_truncates_generated_ids_to_model_limits(
+    client: TestClient,
+) -> None:
+    signup(client, email="owner@example.com", display_name="Owner")
+    create_trip = client.post(
+        "/api/trips",
+        json={
+            "title": "Kyoto Spring",
+            "summary": "Food and gardens",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 7},
+        },
+    )
+    trip_id = create_trip.json()["trip"]["trip_id"]
+
+    create_scenario = client.post(
+        f"/api/trips/{trip_id}/saved-scenarios",
+        json={
+            "title": "a" * 160,
+            "label": "baseline",
+            "snapshot_refs": {
+                "itinerary_scenario_id": f"scenario:{trip_id}:1",
+            },
+        },
+    )
+
+    assert create_scenario.status_code == 201
+    payload = create_scenario.json()["saved_scenario"]
+    assert len(payload["saved_scenario_id"]) <= 93
+    assert len(payload["current_version_id"]) <= 96
+
+
+def test_trip_scenario_history_rejects_invalid_domain_payloads_with_422(
+    client: TestClient,
+) -> None:
+    signup(client, email="owner@example.com", display_name="Owner")
+    create_trip = client.post(
+        "/api/trips",
+        json={
+            "title": "Kyoto Spring",
+            "summary": "Food and gardens",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 7},
+        },
+    )
+    trip_id = create_trip.json()["trip"]["trip_id"]
+
+    invalid_scenario = client.post(
+        f"/api/trips/{trip_id}/saved-scenarios",
+        json={
+            "title": "Kyoto baseline",
+            "label": "invalid",
+            "snapshot_refs": {
+                "itinerary_scenario_id": f"scenario:{trip_id}:1",
+            },
+        },
+    )
+    assert invalid_scenario.status_code == 422
+
+    invalid_history = client.post(
+        f"/api/trips/{trip_id}/planning-history",
+        json={
+            "event_kind": "invalid_kind",
+            "summary": "Bad payload",
+        },
+    )
+    assert invalid_history.status_code == 422
+
+
 def test_trip_scenario_history_routes_hide_other_users_records(client: TestClient) -> None:
     signup(client, email="owner@example.com", display_name="Owner")
     create_trip = client.post(
