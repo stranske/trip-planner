@@ -1,10 +1,18 @@
 import { useLoaderData } from "react-router-dom";
 
-import type { TripRecord } from "../api/trips";
+import type {
+  PlanningHistoryEntry,
+  SavedScenarioRecord,
+  TripRecord,
+  TripScenarioHistoryData,
+} from "../api/trips";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
 
 type LoaderData = {
-  trip: Promise<TripRecord>;
+  tripDetail: Promise<{
+    trip: TripRecord;
+    scenarioHistory: TripScenarioHistoryData;
+  }>;
 };
 
 function formatValue(value: string | null): string {
@@ -12,15 +20,15 @@ function formatValue(value: string | null): string {
 }
 
 export function TripDetailPage() {
-  const { trip } = useLoaderData() as LoaderData;
+  const { tripDetail } = useLoaderData() as LoaderData;
 
   return (
     <AsyncRouteContent
-      resolve={trip}
+      resolve={tripDetail}
       loading={{
         label: "Trip detail",
         title: "Loading saved trip",
-        message: "Restoring the persisted trip payload and ownership-aware metadata.",
+        message: "Restoring the persisted trip, saved-scenario history, and ownership-aware metadata.",
       }}
       error={{
         label: "Trip detail",
@@ -28,12 +36,46 @@ export function TripDetailPage() {
         message: "The app could not load this trip record.",
       }}
     >
-      {(resolvedTrip) => <TripDetailContent trip={resolvedTrip} />}
+      {({ trip, scenarioHistory }) => (
+        <TripDetailContent trip={trip} scenarioHistory={scenarioHistory} />
+      )}
     </AsyncRouteContent>
   );
 }
 
-function TripDetailContent({ trip }: { trip: TripRecord }) {
+function formatScenarioLabel(label: string): string {
+  return label.split("_").join(" ");
+}
+
+function renderCurrentVersion(savedScenario: SavedScenarioRecord) {
+  const currentVersion =
+    savedScenario.versions.find(
+      (version) => version.version_id === savedScenario.current_version_id
+    ) ?? savedScenario.versions[0];
+
+  if (currentVersion) {
+    return currentVersion;
+  }
+
+  return {
+    version_id: savedScenario.current_version_id,
+    label: "unavailable",
+    title: "Unavailable",
+    summary: "This saved scenario is missing version details.",
+  };
+}
+
+function summarizeHistory(entry: PlanningHistoryEntry): string {
+  return entry.event_kind.split("_").join(" ");
+}
+
+function TripDetailContent({
+  trip,
+  scenarioHistory,
+}: {
+  trip: TripRecord;
+  scenarioHistory: TripScenarioHistoryData;
+}) {
   return (
     <section className="workspace-layout">
       <article className="status-card workspace-hero">
@@ -93,6 +135,69 @@ function TripDetailContent({ trip }: { trip: TripRecord }) {
               <dd>{trip.trip_frame.traveler_party.notes || "No extra notes yet."}</dd>
             </div>
           </dl>
+        </section>
+
+        <section className="status-card">
+          <p className="status-label">Saved scenarios</p>
+          <h2>Persisted scenario shelf</h2>
+          {scenarioHistory.saved_scenarios.length === 0 ? (
+            <p className="muted-copy">
+              No saved scenarios have been persisted for this trip yet.
+            </p>
+          ) : (
+            <div className="scenario-stack">
+              {scenarioHistory.saved_scenarios.map((savedScenario) => {
+                const currentVersion = renderCurrentVersion(savedScenario);
+                return (
+                  <article
+                    key={savedScenario.saved_scenario_id}
+                    className="scenario-card scenario-card-active"
+                  >
+                    <p className="scenario-kicker">
+                      {formatScenarioLabel(currentVersion.label)}
+                    </p>
+                    <h3>{currentVersion.title}</h3>
+                    <p>{currentVersion.summary || "No scenario summary captured yet."}</p>
+                    <dl className="workspace-meta">
+                      <div>
+                        <dt>Versions</dt>
+                        <dd>{savedScenario.versions.length}</dd>
+                      </div>
+                      <div>
+                        <dt>Scenario ID</dt>
+                        <dd>{savedScenario.saved_scenario_id}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="status-card">
+          <p className="status-label">Planning history</p>
+          <h2>Trip-level activity timeline</h2>
+          {scenarioHistory.planning_history.length === 0 ? (
+            <p className="muted-copy">
+              No planning-history entries have been recorded for this trip yet.
+            </p>
+          ) : (
+            <div className="decision-stack">
+              {scenarioHistory.planning_history.map((entry) => (
+                <article
+                  key={entry.activity_event_id}
+                  className="decision-card"
+                >
+                  <p className="scenario-kicker">{summarizeHistory(entry)}</p>
+                  <h3>{entry.summary}</h3>
+                  <p>
+                    {entry.actor} at {entry.occurred_at}
+                  </p>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </section>
