@@ -109,6 +109,14 @@ function normalizeVisualizationScenarios(workspace) {
 
 /**
  * @param {FrontendWorkspaceRecord | Partial<FrontendWorkspaceRecord> | undefined} workspace
+ * @returns {FrontendWorkspaceRecord["runtime_scenario_comparison"]}
+ */
+function normalizeRuntimeScenarioComparison(workspace) {
+  return workspace?.runtime_scenario_comparison ?? null;
+}
+
+/**
+ * @param {FrontendWorkspaceRecord | Partial<FrontendWorkspaceRecord> | undefined} workspace
  * @returns {string | null}
  */
 function resolveActiveVisualizationScenarioId(workspace) {
@@ -197,6 +205,7 @@ export function buildAppShellState(input) {
   const activeTrip = resolveActiveTrip(input.session, trips, input.active_trip_id ?? null);
   const accountEntry = normalizeAccountEntry(input.session, input.account_entry);
   const visualizationScenarios = normalizeVisualizationScenarios(input.workspace);
+  const runtimeScenarioComparison = normalizeRuntimeScenarioComparison(input.workspace);
   const workspace = {
     trip_id: input.workspace?.trip_id ?? activeTrip?.trip_id ?? null,
     status:
@@ -204,6 +213,7 @@ export function buildAppShellState(input) {
       (activeTrip ? "ready" : "empty"),
     planner_panel_state: input.workspace?.planner_panel_state ?? null,
     scenario_summaries: input.workspace?.scenario_summaries ?? [],
+    runtime_scenario_comparison: runtimeScenarioComparison,
     checkpoint_history: input.workspace?.checkpoint_history ?? [],
     budget_summary: input.workspace?.budget_summary ?? null,
     loading_message: input.workspace?.loading_message ?? null,
@@ -263,6 +273,7 @@ export function createAppShellStore(initialState) {
               status: "empty",
               planner_panel_state: null,
               scenario_summaries: [],
+              runtime_scenario_comparison: null,
               checkpoint_history: [],
               budget_summary: null,
               loading_message: null,
@@ -294,6 +305,7 @@ export function createAppShellStore(initialState) {
           ...state.workspace,
           status: "empty",
           scenario_summaries: [],
+          runtime_scenario_comparison: null,
           checkpoint_history: [],
           budget_summary: null,
           loading_message: null,
@@ -317,6 +329,7 @@ export function createAppShellStore(initialState) {
             ...state.workspace,
             status: "error",
             scenario_summaries: [],
+            runtime_scenario_comparison: null,
             checkpoint_history: [],
             budget_summary: null,
             loading_message: null,
@@ -342,6 +355,9 @@ export function createAppShellStore(initialState) {
           status: "loading",
           planner_panel_state: null,
           scenario_summaries: isTripChange ? [] : state.workspace.scenario_summaries,
+          runtime_scenario_comparison: isTripChange
+            ? null
+            : state.workspace.runtime_scenario_comparison,
           checkpoint_history: isTripChange ? [] : state.workspace.checkpoint_history,
           budget_summary: isTripChange ? null : state.workspace.budget_summary,
           loading_message: "Rehydrating the saved session entry point.",
@@ -898,6 +914,10 @@ function renderTripWorkspaceView(state) {
 
   const plannerState = state.workspace.planner_panel_state;
   const activeScenario = getActiveVisualizationScenario(state.workspace);
+  const runtimeComparison = state.workspace.runtime_scenario_comparison;
+  const comparisonRows = runtimeComparison?.scenarios?.length
+    ? runtimeComparison.scenarios
+    : state.workspace.scenario_summaries;
   const scenarioSummary = plannerState
     ? `${plannerState.outputs.length} outputs, ${plannerState.pending_decisions.length} decision checkpoint, ${plannerState.option_set.options.length} surfaced options`
     : "Planner payload not mounted yet.";
@@ -931,10 +951,16 @@ function renderTripWorkspaceView(state) {
       <section class="shell-panel">
         <div class="shell-panel-header">
           <h3>Scenario comparison</h3>
-          <span class="shell-meta">${escapeHtml(`${state.workspace.scenario_summaries.length} saved scenario views`)}</span>
+          <span class="shell-meta">${escapeHtml(
+            runtimeComparison?.scenarios?.length
+              ? `${runtimeComparison.scenarios.length} ranked runtime scenarios`
+              : `${state.workspace.scenario_summaries.length} saved scenario views`
+          )}</span>
         </div>
+        ${runtimeComparison?.title ? `<p class="shell-meta">${escapeHtml(runtimeComparison.title)}</p>` : ""}
+        ${runtimeComparison?.summary ? `<p>${escapeHtml(runtimeComparison.summary)}</p>` : ""}
         <div class="shell-trip-grid">
-          ${state.workspace.scenario_summaries
+          ${comparisonRows
             .map(
               (scenario) => `
                 <article class="shell-panel shell-panel--profile">
@@ -946,6 +972,8 @@ function renderTripWorkspaceView(state) {
                   <p class="shell-meta">${escapeHtml(scenario.comparison_note)}</p>
                   <div class="shell-chip-row">
                     <span class="shell-chip">${escapeHtml(`${scenario.option_count} ranked options`)}</span>
+                    ${scenario.rank ? `<span class="shell-chip">${escapeHtml(`rank ${scenario.rank}`)}</span>` : ""}
+                    ${scenario.route_summary ? `<span class="shell-chip">${escapeHtml(scenario.route_summary)}</span>` : ""}
                     ${
                       scenario.checkpoint_id
                         ? `<span class="shell-chip">${escapeHtml(`checkpoint ${scenario.checkpoint_id}`)}</span>`
@@ -957,6 +985,15 @@ function renderTripWorkspaceView(state) {
                         : ""
                     }
                   </div>
+                  ${
+                    scenario.highlights?.length
+                      ? `
+                        <ul class="shell-list">
+                          ${scenario.highlights.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+                        </ul>
+                      `
+                      : ""
+                  }
                 </article>
               `
             )

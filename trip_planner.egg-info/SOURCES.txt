@@ -69,8 +69,10 @@ trip_planner/app/schemas/scenario_history.py
 trip_planner/app/schemas/trips.py
 trip_planner/app/schemas/workspace.py
 trip_planner/app/services/auth.py
+trip_planner/app/services/feasibility.py
 trip_planner/app/services/inventory.py
 trip_planner/app/services/scenario_history.py
+trip_planner/app/services/scenarios.py
 trip_planner/app/services/trips.py
 trip_planner/app/services/workspace.py
 trip_planner/business/__init__.py
@@ -143,6 +145,7 @@ trip_planner/preferences/autonomy.py
 trip_planner/preferences/evidence.py
 trip_planner/preferences/evidence_catalog.py
 trip_planner/preferences/explanations.py
+trip_planner/preferences/fixture_corpus.py
 trip_planner/preferences/interactions.py
 trip_planner/preferences/legacy_request_adapter.py
 trip_planner/preferences/models.py
@@ -155,10 +158,15 @@ trip_planner/ranking/explanations.py
 trip_planner/ranking/leisure.py
 trip_planner/ranking/models.py
 trip_planner/resources/__init__.py
+trip_planner/resources/business/__init__.py
+trip_planner/resources/business/client_meeting_profile.json
+trip_planner/resources/business/policy_round_trip_exception.json
 trip_planner/resources/options/__init__.py
 trip_planner/resources/options/bundles/__init__.py
 trip_planner/resources/options/bundles/route_level_mixed_option.json
 trip_planner/resources/options/bundles/transport_lodging_bundle.json
+trip_planner/resources/preferences/__init__.py
+trip_planner/resources/preferences/leisure_fixture_corpus.json
 trip_planner/sources/__init__.py
 trip_planner/sources/dedup.py
 trip_planner/sources/models.py

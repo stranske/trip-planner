@@ -183,11 +183,55 @@ export interface FrontendScenarioVisualizationRecord {
   timeline_days: FrontendVisualizationTimelineDayRecord[];
 }
 
+export interface FrontendRuntimeScenarioComparisonRecord {
+  scenario_id: string;
+  title: string;
+  rank: number;
+  status: string;
+  summary: string;
+  comparison_note: string;
+  option_count: number;
+  checkpoint_id: string | null;
+  budget_variant_id: string | null;
+  route_sequence: string[];
+  route_summary: string;
+  recommended_for_selection: boolean;
+  feasible: boolean;
+  metrics: {
+    score: number;
+    travel_minutes: number;
+    transfers: number;
+    estimated_total: { currency: string; typical_amount: number } | null;
+  };
+  delta: {
+    score_delta: number;
+    travel_minutes_delta: number;
+    transfers_delta: number;
+    estimated_total_delta: number | null;
+  };
+  highlights: string[];
+}
+
+export interface FrontendRuntimeScenarioComparisonSurface {
+  trip_id: string;
+  title: string;
+  summary: string;
+  comparison_axes: Array<{
+    key: string;
+    label: string;
+    direction: "higher_better" | "lower_better";
+  }>;
+  lead_scenario_id: string | null;
+  scenarios: FrontendRuntimeScenarioComparisonRecord[];
+  source_refs: string[];
+}
+
 export interface FrontendWorkspaceRecord {
   trip_id: string | null;
   status: WorkspaceStatus;
   planner_panel_state: PlannerPanelState | null;
   scenario_summaries: FrontendWorkspaceScenarioRecord[];
+  runtime_scenario_comparison: FrontendRuntimeScenarioComparisonSurface | null;
   checkpoint_history: FrontendWorkspaceCheckpointRecord[];
   budget_summary: FrontendWorkspaceBudgetRecord | null;
   loading_message: string | null;
