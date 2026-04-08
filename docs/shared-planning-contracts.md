@@ -12,6 +12,8 @@ These contracts are the first cross-mode planning layer that sits above the leis
   - `Trip`, `TripFrameSummary`, mode-specific profile references, and artifact references
 - `trip_planner/contracts/options.py`
   - `OptionSet`, `Option`, comparison axes, and cost/quality summaries
+- `trip_planner/contracts/bundles.py`
+  - `InventoryBundle` and mixed-option assembly records that sit above normalized destination and option entities
 - `trip_planner/contracts/objectives.py`
   - `ItineraryObjectives` and the deterministic objective subcontracts used by later search and ranking work
 
@@ -21,6 +23,7 @@ These contracts are the first cross-mode planning layer that sits above the leis
 - `Destination` is the normalized place entity that upstream geography, hierarchy, and provenance work should share before generating options.
 - Leisure and business profiles stay separate; `Trip` references them rather than collapsing them into one schema.
 - `OptionSet` is first-class because the planner is expected to learn from concrete choices, not only from direct statements.
+- `InventoryBundle` is the assembly boundary between raw normalized option records and trip-scoped workspace surfaces.
 - `ItineraryObjectives` is the handoff contract between profile resolution and later ranking or route assembly.
 
 ## Current Boundaries
@@ -35,5 +38,7 @@ The contracts added here are intentionally lightweight:
 ## Usage Guidance
 
 - New cross-mode planning work should import from `trip_planner/contracts/`.
+- Build bundle assembly from `trip_planner/options/` destination/lodging/transport/activity models, then surface the assembled result through workspace-facing APIs.
+- Do not treat raw option records as if they were already a trip-scoped bundle; the bundle layer is the runtime handoff for workspace and ranking surfaces.
 - Preference-specific logic should continue to use `trip_planner/preferences/`.
 - Legacy script JSON should not be treated as the source of truth for new planning code.

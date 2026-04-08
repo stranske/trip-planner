@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from trip_planner.app import APP_VERSION
 from trip_planner.app.routes.auth import router as auth_router
 from trip_planner.app.routes.health import router as health_router
+from trip_planner.app.routes.inventory import router as inventory_router
 from trip_planner.app.routes.scenario_history import router as scenario_history_router
 from trip_planner.app.routes.trips import router as trips_router
 from trip_planner.app.routes.workspace import router as workspace_router
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router, prefix="/api")
     app.include_router(trips_router, prefix="/api")
+    app.include_router(inventory_router, prefix="/api")
     app.include_router(scenario_history_router, prefix="/api")
     app.include_router(workspace_router, prefix="/api")
 

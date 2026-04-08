@@ -110,6 +110,34 @@ const workspacePayload = {
       },
     ],
   },
+  inventory_summary: {
+    bundle_count: 2,
+    bundles: [
+      {
+        bundle_id: "bundle-osaka-gateway",
+        title: "Osaka arrival buffer",
+        bundle_context: "transport_lodging",
+        summary: "Front-load the airport arrival and first-night stay into one inspectable bundle.",
+        destination_names: ["KIX Airport", "Osaka"],
+        option_count: 2,
+        strengths: ["Low-friction arrival handoff"],
+        tradeoffs: ["Station-area stay is functional rather than atmospheric."],
+      },
+      {
+        bundle_id: "bundle-kyoto-culture-day",
+        title: "Kyoto cultural anchor",
+        bundle_context: "route_level",
+        summary: "Expose the Kyoto cultural day as a normalized mixed inventory bundle.",
+        destination_names: ["Osaka", "Kyoto"],
+        option_count: 3,
+        strengths: ["Preserves activity detail"],
+        tradeoffs: ["Requires a base change."],
+      },
+    ],
+    notes: [
+      "Bundle summaries are assembled from normalized destination, lodging, transport, and activity records.",
+    ],
+  },
   planner_panel_state: {
     trip: {
       trip_id: "trip-leisure-kyoto-draft",
@@ -223,6 +251,9 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Uji")).toBeInTheDocument();
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
     expect(screen.getByText("Trip-scoped planner surface")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Assembled inventory layer" })).toBeInTheDocument();
+    expect(screen.getByText("Osaka arrival buffer")).toBeInTheDocument();
+    expect(screen.getByText("Kyoto cultural anchor")).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByLabelText("Planner side panel")).toBeInTheDocument();
     });
@@ -314,6 +345,11 @@ describe("WorkspacePage", () => {
           title: "Trip setup workspace",
           scenarios: [],
         },
+        inventory_summary: {
+          bundle_count: 0,
+          bundles: [],
+          notes: ["Bundle assembly will appear here once normalized option inputs are available for the trip."],
+        },
         planner_panel_state: {
           ...workspacePayload.planner_panel_state,
           trip: {
@@ -353,6 +389,7 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Dates not set yet")).toBeInTheDocument();
     expect(screen.getByText("Duration not set yet")).toBeInTheDocument();
     expect(screen.getAllByText("Planner workspace bootstrap").length).toBeGreaterThan(0);
+    expect(screen.getByText("Bundle assembly has not started yet for this trip.")).toBeInTheDocument();
   });
 
   it("renders the shared route error card when the workspace loader rejects", async () => {
