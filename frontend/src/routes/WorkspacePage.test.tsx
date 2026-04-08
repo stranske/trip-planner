@@ -1,8 +1,15 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLoaderData } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiClientError } from "../lib/api/errors";
+import {
+  answerPlannerDecision,
+  recordWorkspaceSpendEvent,
+  saveWorkspaceBudget,
+  submitPlannerOptionFeedback,
+} from "../api/workspace";
 import { WorkspacePage } from "./WorkspacePage";
 
 vi.mock("react-router-dom", async () => {
@@ -13,7 +20,22 @@ vi.mock("react-router-dom", async () => {
   };
 });
 
+vi.mock("../api/workspace", async () => {
+  const actual = await vi.importActual<typeof import("../api/workspace")>("../api/workspace");
+  return {
+    ...actual,
+    answerPlannerDecision: vi.fn(),
+    submitPlannerOptionFeedback: vi.fn(),
+    saveWorkspaceBudget: vi.fn(),
+    recordWorkspaceSpendEvent: vi.fn(),
+  };
+});
+
 const mockedUseLoaderData = vi.mocked(useLoaderData);
+const mockedAnswerPlannerDecision = vi.mocked(answerPlannerDecision);
+const mockedSubmitPlannerOptionFeedback = vi.mocked(submitPlannerOptionFeedback);
+const mockedSaveWorkspaceBudget = vi.mocked(saveWorkspaceBudget);
+const mockedRecordWorkspaceSpendEvent = vi.mocked(recordWorkspaceSpendEvent);
 
 const workspacePayload = {
   trip_record: {
@@ -34,10 +56,12 @@ const workspacePayload = {
       saved_scenario_ids: ["saved-scenario:kyoto-baseline", "saved-scenario:osaka-fallback"],
       scenario_search_id: "scenario-search:kyoto-spring",
       session_state_id: "session-state:kyoto-spring",
+      budget_state_id: null,
     },
   },
   session: {
     current_saved_scenario_id: "saved-scenario:kyoto-baseline",
+    active_budget_plan_id: null,
     pending_decisions: [
       {
         decision_id: "decision:save-baseline",
@@ -139,6 +163,43 @@ const workspacePayload = {
       "Bundle summaries are assembled from normalized destination, lodging, transport, and activity records.",
     ],
   },
+  budget_state: {
+    budget_plan: null,
+    versions: [],
+    spend_events: [],
+    summary: {
+      currency: "USD",
+      has_budget_plan: false,
+      current_scenario_budget_id: null,
+      current_scenario_title: null,
+      planned_total: 0,
+      actual_total: 0,
+      remaining_total: 0,
+      spend_event_count: 0,
+      version_count: 0,
+      suggested_categories: ["lodging", "food", "activities", "local_mobility"],
+      category_summaries: [
+        {
+          category_key: "lodging",
+          label: "Lodging",
+          currency: "USD",
+          planned_amount: 0,
+          actual_amount: 0,
+          remaining_amount: 0,
+          flexibility: "guardrail",
+        },
+        {
+          category_key: "food",
+          label: "Food",
+          currency: "USD",
+          planned_amount: 0,
+          actual_amount: 0,
+          remaining_amount: 0,
+          flexibility: "flexible",
+        },
+      ],
+    },
+  },
   planner_panel_state: {
     trip: {
       trip_id: "trip-leisure-kyoto-draft",
@@ -239,7 +300,12 @@ function getPlannerHost() {
 
 describe("WorkspacePage", () => {
   afterEach(() => {
+    cleanup();
     vi.clearAllMocks();
+    mockedAnswerPlannerDecision.mockReset();
+    mockedSubmitPlannerOptionFeedback.mockReset();
+    mockedSaveWorkspaceBudget.mockReset();
+    mockedRecordWorkspaceSpendEvent.mockReset();
   });
 
   it("renders timeline structure from persisted trip and scenario state", async () => {
@@ -345,11 +411,13 @@ describe("WorkspacePage", () => {
             saved_scenario_ids: [],
             scenario_search_id: null,
             session_state_id: "session:trip-chicago-kickoff",
+            budget_state_id: null,
           },
         },
         session: {
           ...workspacePayload.session,
           current_saved_scenario_id: null,
+          active_budget_plan_id: null,
           pending_decisions: [],
         },
         saved_scenarios: [],
@@ -404,6 +472,297 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(getPlannerHost().shadowRoot?.querySelector('[aria-label="Planner side panel"]')).toBeTruthy();
     });
+  });
+
+  it("saves a budget plan and refreshes the workspace totals", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+    });
+    mockedSaveWorkspaceBudget.mockResolvedValue({
+      budget_plan: {
+        budget_plan_id: "budget-plan:trip-leisure-kyoto-draft",
+        trip_id: "trip-leisure-kyoto-draft",
+        owner_profile_id: "profile:kyoto",
+        title: "Kyoto spring guardrails",
+        mode: "leisure",
+        created_at: "2026-04-10T15:00:00Z",
+        updated_at: "2026-04-10T15:10:00Z",
+        scenario_budgets: [
+          {
+            scenario_budget_id: "budget-scenario:kyoto-baseline",
+            saved_scenario_id: null,
+            title: "Baseline budget",
+            summary: "",
+            tags: [],
+            notes: [],
+            allocations: [
+              {
+                category_key: "lodging",
+                label: "Lodging",
+                planned_amount: 600,
+                currency: "USD",
+                flexibility: "guardrail",
+                notes: [],
+              },
+              {
+                category_key: "food",
+                label: "Food",
+                planned_amount: 180,
+                currency: "USD",
+                flexibility: "flexible",
+                notes: [],
+              },
+            ],
+          },
+        ],
+        current_scenario_budget_id: "budget-scenario:kyoto-baseline",
+        currency: "USD",
+        schema_version: "v1",
+        tags: [],
+        notes: [],
+      },
+      versions: [
+        {
+          version_id: "budget-plan:trip-leisure-kyoto-draft-v1",
+          budget_plan_id: "budget-plan:trip-leisure-kyoto-draft",
+          recorded_at: "2026-04-10T15:10:00Z",
+          summary: "Initial workspace budget",
+        },
+      ],
+      spend_events: [],
+      summary: {
+        currency: "USD",
+        has_budget_plan: true,
+        current_scenario_budget_id: "budget-scenario:kyoto-baseline",
+        current_scenario_title: "Baseline budget",
+        planned_total: 780,
+        actual_total: 0,
+        remaining_total: 780,
+        spend_event_count: 0,
+        version_count: 1,
+        suggested_categories: ["lodging", "food", "activities", "local_mobility"],
+        category_summaries: [
+          {
+            category_key: "lodging",
+            label: "Lodging",
+            currency: "USD",
+            planned_amount: 600,
+            actual_amount: 0,
+            remaining_amount: 600,
+            flexibility: "guardrail",
+          },
+          {
+            category_key: "food",
+            label: "Food",
+            currency: "USD",
+            planned_amount: 180,
+            actual_amount: 0,
+            remaining_amount: 180,
+            flexibility: "flexible",
+          },
+        ],
+      },
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Budget vs actual" })).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.clear(screen.getByLabelText("Budget title"));
+    await user.type(screen.getByLabelText("Budget title"), "Kyoto spring guardrails");
+    await user.clear(screen.getByLabelText("Lodging cap"));
+    await user.type(screen.getByLabelText("Lodging cap"), "600");
+    await user.clear(screen.getByLabelText("Food cap"));
+    await user.type(screen.getByLabelText("Food cap"), "180");
+    await user.click(screen.getByRole("button", { name: "Save budget plan" }));
+
+    await waitFor(() => {
+      expect(mockedSaveWorkspaceBudget).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        expect.objectContaining({
+          title: "Kyoto spring guardrails",
+        })
+      );
+    });
+
+    expect(screen.getAllByText("$780.00").length).toBeGreaterThan(0);
+    expect(screen.getByDisplayValue("Baseline budget")).toBeInTheDocument();
+  });
+
+  it("records a spend event and surfaces the updated merchant entry", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        budget_state: {
+          budget_plan: {
+            budget_plan_id: "budget-plan:trip-leisure-kyoto-draft",
+            trip_id: "trip-leisure-kyoto-draft",
+            owner_profile_id: "profile:kyoto",
+            title: "Kyoto spring guardrails",
+            mode: "leisure",
+            created_at: "2026-04-10T15:00:00Z",
+            updated_at: "2026-04-10T15:10:00Z",
+            scenario_budgets: [
+              {
+                scenario_budget_id: "budget-scenario:kyoto-baseline",
+                saved_scenario_id: null,
+                title: "Baseline budget",
+                summary: "",
+                tags: [],
+                notes: [],
+                allocations: [
+                  {
+                    category_key: "food",
+                    label: "Food",
+                    planned_amount: 180,
+                    currency: "USD",
+                    flexibility: "flexible",
+                    notes: [],
+                  },
+                ],
+              },
+            ],
+            current_scenario_budget_id: "budget-scenario:kyoto-baseline",
+            currency: "USD",
+            schema_version: "v1",
+            tags: [],
+            notes: [],
+          },
+          versions: [],
+          spend_events: [],
+          summary: {
+            currency: "USD",
+            has_budget_plan: true,
+            current_scenario_budget_id: "budget-scenario:kyoto-baseline",
+            current_scenario_title: "Baseline budget",
+            planned_total: 180,
+            actual_total: 0,
+            remaining_total: 180,
+            spend_event_count: 0,
+            version_count: 1,
+            suggested_categories: ["food"],
+            category_summaries: [
+              {
+                category_key: "food",
+                label: "Food",
+                currency: "USD",
+                planned_amount: 180,
+                actual_amount: 0,
+                remaining_amount: 180,
+                flexibility: "flexible",
+              },
+            ],
+          },
+        },
+      }),
+    });
+    mockedRecordWorkspaceSpendEvent.mockResolvedValue({
+      budget_plan: {
+        budget_plan_id: "budget-plan:trip-leisure-kyoto-draft",
+        trip_id: "trip-leisure-kyoto-draft",
+        owner_profile_id: "profile:kyoto",
+        title: "Kyoto spring guardrails",
+        mode: "leisure",
+        created_at: "2026-04-10T15:00:00Z",
+        updated_at: "2026-04-10T15:10:00Z",
+        scenario_budgets: [
+          {
+            scenario_budget_id: "budget-scenario:kyoto-baseline",
+            saved_scenario_id: null,
+            title: "Baseline budget",
+            summary: "",
+            tags: [],
+            notes: [],
+            allocations: [
+              {
+                category_key: "food",
+                label: "Food",
+                planned_amount: 180,
+                currency: "USD",
+                flexibility: "flexible",
+                notes: [],
+              },
+            ],
+          },
+        ],
+        current_scenario_budget_id: "budget-scenario:kyoto-baseline",
+        currency: "USD",
+        schema_version: "v1",
+        tags: [],
+        notes: [],
+      },
+      versions: [],
+      spend_events: [
+        {
+          spend_event_id: "spend:trip-leisure-kyoto-draft:1",
+          trip_id: "trip-leisure-kyoto-draft",
+          budget_plan_id: "budget-plan:trip-leisure-kyoto-draft",
+          category_key: "food",
+          amount: 42.5,
+          currency: "USD",
+          occurred_at: "2026-04-10T16:00:00Z",
+          source_kind: "manual",
+          source_context: "Dinner near Gion",
+          scenario_budget_id: "budget-scenario:kyoto-baseline",
+          saved_scenario_id: null,
+          merchant_name: "Kyoto Kitchen",
+          source_ref: null,
+          notes: [],
+        },
+      ],
+      summary: {
+        currency: "USD",
+        has_budget_plan: true,
+        current_scenario_budget_id: "budget-scenario:kyoto-baseline",
+        current_scenario_title: "Baseline budget",
+        planned_total: 180,
+        actual_total: 42.5,
+        remaining_total: 137.5,
+        spend_event_count: 1,
+        version_count: 1,
+        suggested_categories: ["food"],
+        category_summaries: [
+          {
+            category_key: "food",
+            label: "Food",
+            currency: "USD",
+            planned_amount: 180,
+            actual_amount: 42.5,
+            remaining_amount: 137.5,
+            flexibility: "flexible",
+          },
+        ],
+      },
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Record spend event" })).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Amount"), "42.5");
+    await user.type(screen.getByLabelText("Spend context"), "Dinner near Gion");
+    await user.type(screen.getByLabelText("Merchant"), "Kyoto Kitchen");
+    await user.click(screen.getByRole("button", { name: "Record spend event" }));
+
+    await waitFor(() => {
+      expect(mockedRecordWorkspaceSpendEvent).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        expect.objectContaining({
+          amount: 42.5,
+          source_context: "Dinner near Gion",
+          merchant_name: "Kyoto Kitchen",
+        })
+      );
+    });
+
+    expect(screen.getByText("Kyoto Kitchen")).toBeInTheDocument();
+    expect(screen.getAllByText("$137.50").length).toBeGreaterThan(0);
   });
 
   it("renders the shared route error card when the workspace loader rejects", async () => {
