@@ -20,3 +20,6 @@ class WorkspaceResponse(BaseModel):
     scenario_search: dict[str, Any] = Field(
         description="ScenarioSearchResult payload whose route_sequence drives the timeline UI.",
     )
+    planner_panel_state: dict[str, Any] = Field(
+        description="Workspace-scoped planner panel payload for the mounted side-panel UI.",
+    )

@@ -1,6 +1,7 @@
 import { useLoaderData } from "react-router-dom";
 
 import { type SavedScenarioRecord, type WorkspaceData } from "../api/workspace";
+import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
 
 type LoaderData = {
@@ -162,6 +163,15 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
       </div>
 
       <div className="workspace-grid">
+        <section className="status-card planner-panel-card">
+          <p className="status-label">Planner panel</p>
+          <h2>Trip-scoped planner surface</h2>
+          <p className="muted-copy">
+            The existing planner side panel now mounts inside the workspace route and reads trip-scoped API data.
+          </p>
+          <PlannerSidePanelSurface state={workspace.planner_panel_state} />
+        </section>
+
         <section className="status-card">
           <p className="status-label">Timeline</p>
           {timelineStops.length === 0 || activeScenario.scenario === null ? (
@@ -216,6 +226,12 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
                 />
               );
             })}
+            {workspace.saved_scenarios.length === 0 ? (
+              <p className="muted-copy">
+                No saved scenarios exist yet. The mounted planner panel carries the bootstrap context until planner
+                history is persisted.
+              </p>
+            ) : null}
           </div>
         </section>
       </div>

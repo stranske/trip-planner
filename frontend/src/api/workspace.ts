@@ -1,4 +1,5 @@
 import { fetchJson } from "../lib/api/client";
+import type { PlannerPanelState } from "../../../bundle/planner/orchestration-contracts";
 
 export type TripFrame = {
   start_date: string | null;
@@ -90,6 +91,7 @@ export type WorkspaceData = {
     focus_areas: string[];
   } | null;
   scenario_search: ScenarioSearchResult;
+  planner_panel_state: PlannerPanelState;
 };
 
 export async function fetchWorkspace(tripId: string): Promise<WorkspaceData> {

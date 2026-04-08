@@ -375,20 +375,202 @@ def _build_persisted_trip_workspace(record: PersistedTrip) -> dict[str, Any]:
         notes=["Workspace opened before any saved scenarios or planner turns existed."],
     )
 
+    trip_record = _serialize_persisted_trip_record(record)
+    scenario_search = {
+        "title": "Trip setup workspace",
+        "scenarios": [],
+        "explanation": [
+            "This workspace was opened from a newly created persisted trip.",
+            "Scenario search and comparisons will appear after planning begins.",
+        ],
+        "source_refs": [],
+    }
+
     return {
-        "trip_record": _serialize_persisted_trip_record(record),
+        "trip_record": trip_record,
         "session": session.to_dict(),
         "saved_scenarios": [],
         "scenario_comparison": None,
-        "scenario_search": {
-            "title": "Trip setup workspace",
-            "scenarios": [],
-            "explanation": [
-                "This workspace was opened from a newly created persisted trip.",
-                "Scenario search and comparisons will appear after planning begins.",
+        "scenario_search": scenario_search,
+        "planner_panel_state": _build_planner_panel_state(
+            trip=trip_record["trip"],
+            scenario_search=scenario_search,
+            pending_decisions=[],
+        ),
+    }
+
+
+def _build_planner_panel_state(
+    *,
+    trip: dict[str, Any],
+    scenario_search: dict[str, Any],
+    pending_decisions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    scenarios = list(scenario_search.get("scenarios", []))
+    primary_regions = list(trip["trip_frame"].get("primary_regions") or [])
+    region_summary = ", ".join(primary_regions[:2]) if primary_regions else "the current trip frame"
+
+    if scenarios:
+        option_set = {
+            "option_set_id": f"option-set:{trip['trip_id']}:workspace-panel",
+            "trip_id": trip["trip_id"],
+            "purpose": "workspace_review",
+            "scope": "scenario_selection",
+            "title": scenario_search.get("title") or "Workspace planner scenarios",
+            "comparison_axes": [
+                {"key": "score", "label": "Planner score", "direction": "higher_better"},
+                {"key": "travel_minutes", "label": "Travel minutes", "direction": "lower_better"},
+                {"key": "transfers", "label": "Transfers", "direction": "lower_better"},
             ],
-            "source_refs": [],
+            "explanation": list(scenario_search.get("explanation") or [])
+            or [
+                "This panel mirrors the current workspace scenarios through the app runtime.",
+            ],
+            "options": [
+                {
+                    "option_id": scenario["scenario_id"],
+                    "kind": "scenario",
+                    "label": scenario["title"],
+                    "summary": scenario["scenario_summary"]["headline"],
+                    "drawbacks": [
+                        tradeoff["summary"] for tradeoff in scenario.get("unresolved_tradeoffs", [])
+                    ]
+                    or ["No explicit unresolved tradeoffs were recorded for this scenario yet."],
+                    "explanation": [
+                        f"Rank #{scenario['rank']} with score {scenario['score']:.2f}.",
+                        f"Route sequence: {' -> '.join(scenario['scenario_summary'].get('route_sequence', [])) or 'not surfaced yet'}.",
+                    ],
+                }
+                for scenario in scenarios[:3]
+            ],
+        }
+        outputs = [
+            {
+                "output_id": f"output:{trip['trip_id']}:workspace-summary",
+                "title": "Workspace scenario feed",
+                "body": f"The workspace now renders planner-side-panel content for {trip['title']} using trip-scoped API data.",
+                "tags": ["workspace", "planner-panel"],
+            },
+            {
+                "output_id": f"output:{trip['trip_id']}:scenario-count",
+                "title": "Scenario coverage",
+                "body": f"{len(scenarios)} scenario option(s) are currently available for {region_summary}.",
+                "tags": ["scenarios", trip["mode"]],
+            },
+        ]
+    else:
+        option_set = {
+            "option_set_id": f"option-set:{trip['trip_id']}:workspace-bootstrap",
+            "trip_id": trip["trip_id"],
+            "purpose": "workspace_bootstrap",
+            "scope": "trip_setup",
+            "title": "Planner workspace bootstrap",
+            "comparison_axes": [
+                {"key": "scope", "label": "Planning scope", "direction": "higher_better"},
+                {"key": "specificity", "label": "Trip specificity", "direction": "higher_better"},
+            ],
+            "explanation": [
+                "This starter panel is seeded from the persisted trip record until ranked planner scenarios exist.",
+                "Later planner issues can replace these bootstrap options with live orchestration outputs.",
+            ],
+            "options": [
+                {
+                    "option_id": f"bootstrap:{trip['trip_id']}:keep-frame",
+                    "kind": "trip_setup",
+                    "label": "Keep the current trip frame narrow",
+                    "summary": f"Use {region_summary} as the first planner pass boundary.",
+                    "drawbacks": ["You may need another pass if the trip should span more regions."],
+                    "explanation": [
+                        "Best when the user wants to start from one durable trip container and iterate later.",
+                    ],
+                },
+                {
+                    "option_id": f"bootstrap:{trip['trip_id']}:broaden-frame",
+                    "kind": "trip_setup",
+                    "label": "Broaden the first planner pass",
+                    "summary": "Expand regions, dates, or traveler notes before the first ranked scenario run.",
+                    "drawbacks": ["A broader scope can delay the first saved scenario comparison."],
+                    "explanation": [
+                        "Best when the trip shell is real but still intentionally under-specified.",
+                    ],
+                },
+            ],
+        }
+        outputs = [
+            {
+                "output_id": f"output:{trip['trip_id']}:bootstrap-ready",
+                "title": "Workspace bootstrap is ready",
+                "body": f"{trip['title']} has enough persisted trip context to mount the planner surface inside the app.",
+                "tags": ["bootstrap", "workspace"],
+            },
+            {
+                "output_id": f"output:{trip['trip_id']}:next-pass",
+                "title": "Next planning pass",
+                "body": "Scenario search, ranking, and persistence issues can now build on a real workspace-mounted planner panel.",
+                "tags": ["handoff", trip["mode"]],
+            },
+        ]
+
+    mapped_decisions = [
+        {
+            "decision_id": decision["decision_id"],
+            "title": decision["title"],
+            "prompt": decision["prompt"],
+            "choices": [
+                "Keep the current direction.",
+                "Compare another planner-backed option first.",
+            ],
+        }
+        for decision in pending_decisions
+    ]
+
+    next_step_actions = [
+        {
+            "action_id": f"action:{trip['trip_id']}:review-outputs",
+            "action_kind": "review_outputs",
+            "label": "Review planner outputs",
+            "description": "Read the trip-scoped planner summary before saving or revising the workspace direction.",
+            "emphasis": "secondary",
+            "target_section": "outputs",
         },
+        {
+            "action_id": f"action:{trip['trip_id']}:compare-options",
+            "action_kind": "compare_options",
+            "label": "Compare planner options",
+            "description": "Inspect the mounted planner options without leaving the workspace route.",
+            "emphasis": "primary",
+            "target_section": "options",
+        },
+    ]
+    if mapped_decisions:
+        next_step_actions.insert(
+            0,
+            {
+                "action_id": f"action:{trip['trip_id']}:answer-decision",
+                "action_kind": "answer_decision",
+                "label": "Answer the current planner decision",
+                "description": "Resolve the active planner question before the next planning checkpoint.",
+                "emphasis": "primary",
+                "target_section": "decisions",
+            },
+        )
+
+    return {
+        "trip": trip,
+        "option_set": option_set,
+        "proposal": None,
+        "policy_evaluation": None,
+        "pending_decisions": mapped_decisions,
+        "outputs": outputs,
+        "planner_behavior": {
+            "trip_stage": "compare" if scenarios else "bootstrap",
+            "ask_before_next_major_change": True,
+            "target_research_passes": 3,
+            "target_options_before_checkpoint": max(2, min(3, len(option_set["options"]))),
+            "surface_options_early": True,
+            "explanation_density": "standard",
+        },
+        "next_step_actions": next_step_actions,
     }
 
 
@@ -412,6 +594,11 @@ def get_workspace_payload(
             "saved_scenarios": [record.to_dict() for record in saved_scenarios],
             "scenario_comparison": scenario_comparison.to_dict() if scenario_comparison else None,
             "scenario_search": scenario_search.to_dict(),
+            "planner_panel_state": _build_planner_panel_state(
+                trip=trip_record.to_dict()["trip"],
+                scenario_search=scenario_search.to_dict(),
+                pending_decisions=session.to_dict().get("pending_decisions", []),
+            ),
         }
 
     record = db_session.scalar(
