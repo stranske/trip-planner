@@ -5,6 +5,8 @@
 - recreational trip planning for serious independent leisure travelers
 - business trip planning that optimizes against company travel constraints and exports policy-ready plans
 
+The runtime baseline now treats the saved trip record as the durable planning container. New scenario, budget, workspace, and policy work should attach to a persisted trip instead of inventing a parallel root object.
+
 ## Key Docs
 
 - [Implementation plan](docs/implementation-plan.md)

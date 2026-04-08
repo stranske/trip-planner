@@ -27,7 +27,7 @@ describe("SignupPage", () => {
     mockedNavigate.mockReset();
   });
 
-  it("creates an account and routes into the protected workspace", async () => {
+  it("creates an account and routes into the protected trip list", async () => {
     mockedSignup.mockResolvedValue({
       user: {
         user_id: "user:test",
@@ -54,6 +54,6 @@ describe("SignupPage", () => {
         password: "password123",
       });
     });
-    expect(mockedNavigate).toHaveBeenCalledWith("/workspace/trip-leisure-kyoto-draft");
+    expect(mockedNavigate).toHaveBeenCalledWith("/trips");
   });
 });
