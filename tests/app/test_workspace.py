@@ -46,13 +46,11 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
         payload["session"]["current_saved_scenario_id"]
         == "saved-scenario:kyoto-baseline"
     )
+    assert payload["scenario_search"]["title"] == "Kyoto ranked scenario workspace"
+    assert payload["scenario_search"]["scenarios"][0]["title"] == "Kyoto cultural anchor"
     assert payload["scenario_search"]["scenarios"][0]["scenario_summary"][
         "route_sequence"
-    ] == [
-        "kyoto",
-        "uji",
-        "kyoto",
-    ]
+    ] == ["dest-city-osaka", "dest-city-kyoto"]
     assert payload["inventory_summary"]["bundle_count"] == 2
     assert payload["inventory_summary"]["bundles"][0]["title"] == "Osaka arrival buffer"
     assert payload["feasibility_summary"]["assessment_count"] == 2
@@ -61,11 +59,31 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
         ":feasibility-summary"
     )
     assert payload["planner_panel_state"]["outputs"][0]["tags"][0] == "feasibility"
+    output_titles = [
+        output["title"] for output in payload["planner_panel_state"]["outputs"]
+    ]
+    assert "Scenario ranking summary" in output_titles
+    assert any(title.startswith("Rank #1 ") for title in output_titles)
     assert payload["planner_panel_state"]["trip"]["trip_id"] == "trip-leisure-kyoto-draft"
     assert payload["planner_panel_state"]["option_set"]["options"][0]["option_id"].startswith(
         "scenario:"
     )
     assert payload["activity_log"] == []
+
+
+def test_workspace_endpoint_surfaces_business_ranked_scenarios(client: TestClient) -> None:
+    response = client.get("/api/workspace/trip-business-client-summit")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scenario_search"]["title"] == "Client summit ranked scenarios"
+    assert payload["scenario_search"]["scenarios"][0]["title"] == "Airport arrival bundle"
+    output_titles = [
+        output["title"] for output in payload["planner_panel_state"]["outputs"]
+    ]
+    assert "Scenario ranking summary" in output_titles
+    assert "Rank #1 Airport arrival bundle" in output_titles
+    assert payload["planner_panel_state"]["option_set"]["options"][0]["label"] == "Airport arrival bundle"
 
 
 def test_workspace_endpoint_returns_not_found_for_unknown_trip(
