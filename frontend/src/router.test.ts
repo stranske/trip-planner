@@ -17,6 +17,7 @@ vi.mock("./api/trips", () => ({
   fetchTripScenarioHistory: vi.fn().mockResolvedValue({
     saved_scenarios: [],
     planning_history: [],
+    planning_sessions: [],
   }),
   fetchTrips: vi.fn().mockResolvedValue([{ trip_id: "trip-1" }]),
 }));
@@ -190,6 +191,7 @@ describe("router auth loaders", () => {
       scenarioHistory: {
         saved_scenarios: [],
         planning_history: [],
+        planning_sessions: [],
       },
     });
   });

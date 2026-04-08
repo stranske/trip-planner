@@ -57,12 +57,38 @@ export type PlanningHistoryEntry = {
   event_kind: string;
   summary: string;
   actor: string;
+  session_state_id: string;
   saved_scenario_id: string | null;
+};
+
+export type PlanningSessionRecord = {
+  session_state_id: string;
+  owner_profile_id: string;
+  mode: string;
+  started_at: string;
+  updated_at: string;
+  status: string;
+  current_saved_scenario_id: string | null;
+  activity_log_id: string | null;
+  interaction_state: {
+    initiative_level: string;
+    summary_granularity: string;
+    checkpoint_frequency: string;
+  };
+  pending_decisions: Array<{
+    decision_id: string;
+    prompt: string;
+  }>;
+  recent_option_presentations: Array<{
+    presentation_id: string;
+    option_set_id: string;
+  }>;
 };
 
 export type TripScenarioHistoryData = {
   saved_scenarios: SavedScenarioRecord[];
   planning_history: PlanningHistoryEntry[];
+  planning_sessions: PlanningSessionRecord[];
 };
 
 export type CreateTripPayload = {

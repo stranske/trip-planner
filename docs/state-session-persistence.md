@@ -33,4 +33,28 @@ Repository implementations should treat:
 - option-presentation history as a bounded recent-history slice on the session record
 - activity-log events as append-only records that can be filtered by trip, session, decision, or option set
 
+## Event Writing Guidance
+
+Later workspace, orchestration, and policy features should append `ActivityLogEvent`
+records whenever they create user-visible planning state transitions. The event trail is
+the durable explanation surface for why a trip changed, so later issues should reuse it
+instead of creating side-channel audit notes.
+
+The first pass expects new writers to:
+
+- attach every event to the owning `trip_id`
+- include `session_state_id` whenever the action came from an active planning session
+- keep `event_kind` stable and specific enough for filtering, such as
+  `scenario_saved`, `policy_review_requested`, or `budget_recomputed`
+- write a concise `summary` that is suitable for direct UI rendering in the trip activity
+  timeline
+- populate related ids like `saved_scenario_id`, `related_decision_id`, or
+  `related_option_set_id` when that context exists instead of burying it only in metadata
+- treat `metadata` as optional supporting detail, not the only place the core event meaning
+  lives
+
+Future policy and workspace issues should prefer appending a new event over mutating prior
+history. Session state may evolve in place, but the audit trail should remain chronological
+and additive so reload, verification, and later incident review can explain what happened.
+
 The first pass stays backend-neutral. The goal is to lock the persistence contract before later UI, orchestration, and notification work depends on it.

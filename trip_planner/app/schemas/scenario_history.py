@@ -72,6 +72,25 @@ class CreatePlanningHistoryRequest(BaseModel):
         return value
 
 
+class CreatePlanningSessionRequest(BaseModel):
+    session_state_id: str | None = Field(default=None, max_length=96)
+    owner_profile_id: str | None = Field(default=None, max_length=96)
+    mode: str | None = Field(default=None, min_length=1, max_length=32)
+    started_at: str | None = Field(default=None, max_length=64)
+    updated_at: str | None = Field(default=None, max_length=64)
+    interaction_state: dict[str, Any] = Field(default_factory=dict)
+    recent_option_presentations: list[dict[str, Any]] = Field(default_factory=list)
+    pending_decisions: list[dict[str, Any]] = Field(default_factory=list)
+    status: str = Field(default="active", min_length=1, max_length=32)
+    current_checkpoint_id: str | None = Field(default=None, max_length=96)
+    current_saved_scenario_id: str | None = Field(default=None, max_length=96)
+    active_budget_plan_id: str | None = Field(default=None, max_length=96)
+    activity_log_id: str | None = Field(default=None, max_length=96)
+    schema_version: str | None = Field(default=None, max_length=16)
+    tags: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
 class SavedScenarioResponse(BaseModel):
     saved_scenario: dict[str, Any]
 
@@ -80,6 +99,11 @@ class PlanningHistoryResponse(BaseModel):
     planning_history_entry: dict[str, Any]
 
 
+class PlanningSessionResponse(BaseModel):
+    planning_session: dict[str, Any]
+
+
 class TripScenarioHistoryResponse(BaseModel):
     saved_scenarios: list[dict[str, Any]]
     planning_history: list[dict[str, Any]]
+    planning_sessions: list[dict[str, Any]]
