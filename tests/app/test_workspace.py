@@ -78,6 +78,9 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
         "save baseline",
         "keep exploring",
     ]
+    assert payload["budget_state"]["summary"]["planned_total"] > 0
+    assert payload["budget_state"]["summary"]["actual_total"] > 0
+    assert payload["budget_state"]["summary"]["current_scenario_title"]
 
 
 def test_workspace_endpoint_surfaces_business_ranked_scenarios(client: TestClient) -> None:
@@ -163,6 +166,9 @@ def test_workspace_endpoint_returns_minimal_payload_for_persisted_trip(
     assert payload["inventory_summary"]["bundle_count"] == 0
     assert payload["feasibility_summary"]["assessment_count"] == 0
     assert payload["activity_log"] == []
+    assert payload["budget_state"]["summary"]["planned_total"] == 0
+    assert payload["budget_state"]["summary"]["actual_total"] == 0
+    assert payload["budget_state"]["summary"]["has_budget_plan"] is False
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_bootstrap"
 

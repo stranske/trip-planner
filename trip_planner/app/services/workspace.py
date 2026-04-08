@@ -11,6 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.app.services.budget import (
+    build_fixture_budget_payload,
+    load_budget_payload_for_workspace,
+)
 from trip_planner.app.services.feasibility import (
     build_feasibility_planner_outputs,
     build_feasibility_summary_payload,
@@ -598,6 +602,7 @@ def _default_workspace_session(record: PersistedTrip) -> PlanningSessionState:
         recent_option_presentations=[_default_workspace_presentation(record.trip_id, timestamp)],
         pending_decisions=_default_workspace_decisions(record.trip_id),
         activity_log_id=f"activity-log:{record.trip_id}",
+        active_budget_plan_id=record.budget_state_id,
         notes=["Workspace opened before any saved scenarios or planner turns existed."],
     )
 
@@ -695,11 +700,30 @@ def _build_persisted_trip_workspace(
     session: dict[str, Any] | None = None,
     saved_scenarios: list[dict[str, Any]] | None = None,
     activity_log: list[dict[str, Any]] | None = None,
+    budget_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     resolved_session = session or _default_workspace_session(record).to_dict()
     trip_record = _serialize_persisted_trip_record(record)
     resolved_saved_scenarios = saved_scenarios or []
     resolved_activity_log = activity_log or []
+    resolved_budget_state = budget_state or {
+        "budget_plan": None,
+        "versions": [],
+        "spend_events": [],
+        "summary": {
+            "currency": "USD",
+            "has_budget_plan": False,
+            "current_scenario_budget_id": None,
+            "current_scenario_title": None,
+            "planned_total": 0.0,
+            "actual_total": 0.0,
+            "remaining_total": 0.0,
+            "spend_event_count": 0,
+            "version_count": 0,
+            "suggested_categories": [],
+            "category_summaries": [],
+        },
+    }
     scenario_search = _empty_workspace_scenario_search()
 
     inventory_bundles = assemble_inventory_bundles_for_trip(
@@ -730,6 +754,7 @@ def _build_persisted_trip_workspace(
         ),
         "feasibility_summary": feasibility_summary,
         "inventory_summary": build_inventory_summary_payload(inventory_bundles),
+        "budget_state": resolved_budget_state,
     }
 
 
@@ -1060,6 +1085,10 @@ def get_workspace_payload(
             ),
             "feasibility_summary": feasibility_summary,
             "inventory_summary": build_inventory_summary_payload(inventory_bundles),
+            "budget_state": build_fixture_budget_payload(
+                trip_id=trip_id,
+                trip_mode=trip_record.trip.mode,
+            ),
         }
 
     record = db_session.scalar(
@@ -1101,6 +1130,7 @@ def get_workspace_payload(
             for scenario in persisted_saved_scenarios
         ],
         activity_log=[_serialize_activity_record(item) for item in activity_records],
+        budget_state=load_budget_payload_for_workspace(db_session, record=record),
     )
 
 
