@@ -35,6 +35,36 @@ export type TripRecord = {
   };
 };
 
+export type SavedScenarioRecord = {
+  saved_scenario_id: string;
+  current_version_id: string;
+  versions: Array<{
+    version_id: string;
+    title: string;
+    label: string;
+    summary: string;
+  }>;
+  comparisons: Array<{
+    comparison_id: string;
+    summary: string;
+    outcome: string;
+  }>;
+};
+
+export type PlanningHistoryEntry = {
+  activity_event_id: string;
+  occurred_at: string;
+  event_kind: string;
+  summary: string;
+  actor: string;
+  saved_scenario_id: string | null;
+};
+
+export type TripScenarioHistoryData = {
+  saved_scenarios: SavedScenarioRecord[];
+  planning_history: PlanningHistoryEntry[];
+};
+
 export type CreateTripPayload = {
   title: string;
   summary: string;
@@ -56,6 +86,15 @@ export async function fetchTrip(tripId: string): Promise<TripRecord> {
     credentials: "include",
   });
   return response.trip;
+}
+
+export async function fetchTripScenarioHistory(
+  tripId: string,
+): Promise<TripScenarioHistoryData> {
+  return fetchJson<TripScenarioHistoryData>({
+    path: `/api/trips/${tripId}/scenario-history`,
+    credentials: "include",
+  });
 }
 
 export async function createTrip(payload: CreateTripPayload): Promise<TripRecord> {

@@ -89,7 +89,7 @@ def ensure_database_ready(url: str | None = None) -> None:
     if resolved_url in _MIGRATED_URLS:
         return
 
-    from trip_planner.persistence.models import account, session, trip  # noqa: F401
+    from trip_planner.persistence.models import account, scenario, session, trip  # noqa: F401
 
     _ensure_sqlite_parent_dir(resolved_url)
 

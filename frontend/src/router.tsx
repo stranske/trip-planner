@@ -6,7 +6,11 @@ import {
 } from "react-router-dom";
 
 import { fetchCurrentSession } from "./api/auth";
-import { fetchTrip, fetchTrips } from "./api/trips";
+import {
+  fetchTrip,
+  fetchTripScenarioHistory,
+  fetchTrips,
+} from "./api/trips";
 import { fetchWorkspace } from "./api/workspace";
 import App from "./App";
 import { ApiClientError } from "./lib/api/errors";
@@ -104,7 +108,13 @@ export async function protectedTripDetailLoader({
   }
 
   return {
-    trip: fetchTrip(params.tripId ?? ""),
+    tripDetail: Promise.all([
+      fetchTrip(params.tripId ?? ""),
+      fetchTripScenarioHistory(params.tripId ?? ""),
+    ]).then(([trip, scenarioHistory]) => ({
+      trip,
+      scenarioHistory,
+    })),
   };
 }
 
