@@ -44,7 +44,7 @@ export function TripDetailPage() {
 }
 
 function formatScenarioLabel(label: string): string {
-  return label.replaceAll("_", " ");
+  return label.split("_").join(" ");
 }
 
 function renderCurrentVersion(savedScenario: SavedScenarioRecord) {
@@ -66,7 +66,7 @@ function renderCurrentVersion(savedScenario: SavedScenarioRecord) {
 }
 
 function summarizeHistory(entry: PlanningHistoryEntry): string {
-  return entry.event_kind.replaceAll("_", " ");
+  return entry.event_kind.split("_").join(" ");
 }
 
 function TripDetailContent({
