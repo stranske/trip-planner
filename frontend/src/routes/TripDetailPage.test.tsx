@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLoaderData } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -16,6 +16,8 @@ const mockedUseLoaderData = vi.mocked(useLoaderData);
 
 describe("TripDetailPage", () => {
   afterEach(() => {
+    cleanup();
+    mockedUseLoaderData.mockReset();
     vi.clearAllMocks();
   });
 
