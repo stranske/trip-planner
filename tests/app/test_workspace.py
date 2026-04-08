@@ -1,10 +1,16 @@
 from collections.abc import Iterator
+import json
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
+from trip_planner.app.services.feasibility import (
+    build_feasibility_planner_outputs,
+    build_feasibility_summary_payload,
+)
+from trip_planner.options import InventoryBundle
 from trip_planner.persistence.db import reset_database_state
 
 
@@ -49,6 +55,12 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
     ]
     assert payload["inventory_summary"]["bundle_count"] == 2
     assert payload["inventory_summary"]["bundles"][0]["title"] == "Osaka arrival buffer"
+    assert payload["feasibility_summary"]["assessment_count"] == 2
+    assert payload["feasibility_summary"]["attention_bundle_count"] == 2
+    assert payload["planner_panel_state"]["outputs"][0]["output_id"].endswith(
+        ":feasibility-summary"
+    )
+    assert payload["planner_panel_state"]["outputs"][0]["tags"][0] == "feasibility"
     assert payload["planner_panel_state"]["trip"]["trip_id"] == "trip-leisure-kyoto-draft"
     assert payload["planner_panel_state"]["option_set"]["options"][0]["option_id"].startswith(
         "scenario:"
@@ -100,6 +112,7 @@ def test_workspace_endpoint_returns_minimal_payload_for_persisted_trip(
     assert payload["saved_scenarios"] == []
     assert payload["scenario_search"]["scenarios"] == []
     assert payload["inventory_summary"]["bundle_count"] == 0
+    assert payload["feasibility_summary"]["assessment_count"] == 0
     assert payload["activity_log"] == []
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_bootstrap"
@@ -239,3 +252,45 @@ def test_workspace_endpoint_hides_other_users_persisted_trips(
     response = client.get(f"/api/workspace/{trip_id}")
 
     assert response.status_code == 404
+
+
+def _load_feasibility_fixture(name: str) -> InventoryBundle:
+    fixture_path = (
+        Path(__file__).resolve().parents[1] / "fixtures" / "itinerary" / "feasibility" / name
+    )
+    return InventoryBundle.from_dict(json.loads(fixture_path.read_text(encoding="utf-8")))
+
+
+def test_feasibility_summary_payload_keeps_ready_and_blocked_bundles_distinct() -> None:
+    payload = build_feasibility_summary_payload(
+        [
+            _load_feasibility_fixture("coherent_low_friction_route.json"),
+            _load_feasibility_fixture("unrealistic_same_day_chaining.json"),
+        ]
+    )
+
+    assert payload["assessment_count"] == 2
+    assert payload["recommended_bundle_count"] == 1
+    assert payload["blocking_bundle_count"] == 1
+    statuses = {assessment["bundle_id"]: assessment["status"] for assessment in payload["assessments"]}
+    assert statuses["bundle:kyoto-low-friction"] == "positive"
+    assert statuses["bundle:unrealistic-same-day"] == "critical"
+
+
+def test_feasibility_planner_outputs_surface_blocking_transition_details() -> None:
+    summary = build_feasibility_summary_payload(
+        [_load_feasibility_fixture("unrealistic_same_day_chaining.json")]
+    )
+
+    outputs = build_feasibility_planner_outputs(
+        trip_id="trip-test-feasibility",
+        feasibility_summary=summary,
+    )
+
+    assert outputs[0]["status"] == "critical"
+    assert outputs[1]["status"] == "critical"
+    assert any(
+        "activity_start_window_missed" in highlight.lower().replace(" ", "_")
+        or "cannot be reached inside its advertised start window" in highlight.lower()
+        for highlight in outputs[1]["highlights"]
+    )

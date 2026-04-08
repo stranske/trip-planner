@@ -138,6 +138,8 @@ export interface PlannerOutputRecord {
   title: string;
   body: string;
   tags: string[];
+  status?: "positive" | "caution" | "critical" | "neutral";
+  highlights?: string[];
 }
 
 export interface PlannerBehaviorRecord {

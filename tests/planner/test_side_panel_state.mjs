@@ -301,6 +301,8 @@ test("planner outputs display renders messages and output metadata", () => {
   assert.match(markup, /data-planner-output-id="summary-01"/);
   assert.match(markup, /Planner read/);
   assert.match(markup, /quality where it changes the day/);
+  assert.match(markup, /planner-status-pill--caution/);
+  assert.match(markup, /Feasibility remains visible in planner outputs/);
   assert.match(markup, /feedback-loop/);
 });
 
@@ -308,6 +310,28 @@ test("planner outputs display renders an empty state when no outputs exist", () 
   const markup = renderPlannerOutputsDisplay([]);
 
   assert.match(markup, /No planner outputs yet\./);
+});
+
+test("planner outputs display escapes output strings and normalizes unexpected status tones", () => {
+  const markup = renderPlannerOutputsDisplay([
+    {
+      output_id: 'summary-"><svg/onload=alert(1)>',
+      title: 'Unsafe <title>',
+      body: 'Body with <script>alert(1)</script>',
+      tags: ['tag<script>', 'safe'],
+      status: 'critical" onclick="alert(1)',
+      highlights: ['<img src=x onerror=alert(1)>', 'safe highlight'],
+    },
+  ]);
+
+  assert.doesNotMatch(markup, /<script>alert\(1\)<\/script>/);
+  assert.doesNotMatch(markup, /<img src=x onerror=alert\(1\)>/);
+  assert.match(markup, /Unsafe &lt;title&gt;/);
+  assert.match(markup, /Body with &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.match(markup, /planner-status-pill--neutral/);
+  assert.match(markup, /critical&quot; onclick=&quot;alert\(1\)/);
+  assert.match(markup, /tag&lt;script&gt;/);
+  assert.match(markup, /summary-&quot;&gt;&lt;svg\/onload=alert\(1\)&gt;/);
 });
 
 test("option feedback prompts component renders collection fields and pacing suggestions", () => {
