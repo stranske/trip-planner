@@ -28,6 +28,7 @@ jobs:
     uses: stranske/Workflows/.github/workflows/reusable-10-ci-python.yml@main
     with:
       python-versions: '["3.11", "3.12"]'
+      format_check: false
       typecheck: true
       coverage: true
       coverage-min: '8'

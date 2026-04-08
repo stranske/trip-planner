@@ -93,5 +93,8 @@ export type WorkspaceData = {
 };
 
 export async function fetchWorkspace(tripId: string): Promise<WorkspaceData> {
-  return fetchJson<WorkspaceData>({ path: `/api/workspace/${tripId}` });
+  return fetchJson<WorkspaceData>({
+    path: `/api/workspace/${tripId}`,
+    credentials: "include",
+  });
 }
