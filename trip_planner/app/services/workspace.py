@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.contracts.trip import Trip
 from trip_planner.contracts import MoneyRange
 from trip_planner.itinerary import (
     ItineraryScenario,
@@ -12,12 +18,15 @@ from trip_planner.itinerary import (
     ScenarioSummary,
     ScenarioTradeoff,
 )
+from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.ranking import ExplanationRecord
 from trip_planner.state import (
     PersistedTripRecord,
+    PersistedTripArtifactRefs,
     PlanningSessionState,
     SavedScenarioRecord,
     ScenarioComparison,
+    TripLifecycle,
 )
 
 
@@ -297,21 +306,119 @@ def _build_scenario_search(trip_id: str, variant: str) -> ScenarioSearchResult:
     raise KeyError(f"Unsupported scenario search variant: {variant}")
 
 
-def get_workspace_payload(trip_id: str) -> dict[str, Any] | None:
-    fixture = _FIXTURES.get(trip_id)
-    if fixture is None:
-        return None
+def _isoformat(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
-    trip_record = _load_trip_record(fixture.trip_fixture)
-    saved_scenarios, scenario_comparison = _load_saved_scenarios(fixture.scenarios_fixture)
-    session = _load_session(fixture.session_fixture)
-    _canonicalize_saved_scenario_ids(session, saved_scenarios)
-    scenario_search = _build_scenario_search(trip_id, fixture.scenario_search_variant)
+
+def _owner_profile_id(record: PersistedTrip) -> str:
+    if record.mode == "business" and record.business_profile_id:
+        return record.business_profile_id
+    if record.leisure_profile_id:
+        return record.leisure_profile_id
+    return f"profile:{record.trip_id}:{record.mode}"
+
+
+def _serialize_persisted_trip_record(record: PersistedTrip) -> dict[str, Any]:
+    trip = Trip.from_dict(
+        {
+            "trip_id": record.trip_id,
+            "user_id": record.user_id,
+            "title": record.title,
+            "summary": record.summary,
+            "mode": record.mode,
+            "status": record.status,
+            "trip_frame": {
+                "start_date": record.start_date,
+                "end_date": record.end_date,
+                "duration_days": record.duration_days,
+                "primary_regions": list(record.primary_regions),
+                "traveler_party": {
+                    "kind": record.traveler_party_kind,
+                    "traveler_count": record.traveler_count,
+                    "notes": record.traveler_notes,
+                },
+            },
+            "profile_refs": record.profile_refs_payload(),
+            "artifacts": record.artifacts_payload(),
+        }
+    )
+    return PersistedTripRecord(
+        trip=trip,
+        owner_profile_id=_owner_profile_id(record),
+        lifecycle=TripLifecycle(
+            created_at=_isoformat(record.created_at),
+            updated_at=_isoformat(record.updated_at),
+        ),
+        artifact_refs=PersistedTripArtifactRefs(
+            objective_id=record.objective_id,
+            option_set_ids=list(record.option_set_ids),
+            itinerary_state_id=record.itinerary_state_id,
+            budget_state_id=record.budget_state_id,
+            policy_state_id=record.policy_state_id,
+            session_state_id=f"session:{record.trip_id}",
+            notes=["Workspace shell opened from persisted trip creation."],
+        ),
+        notes=["Minimal persisted workspace payload until scenario state exists."],
+    ).to_dict()
+
+
+def _build_persisted_trip_workspace(record: PersistedTrip) -> dict[str, Any]:
+    timestamp = _isoformat(record.updated_at)
+    session = PlanningSessionState(
+        session_state_id=f"session:{record.trip_id}",
+        trip_id=record.trip_id,
+        user_id=record.user_id,
+        owner_profile_id=_owner_profile_id(record),
+        mode=record.mode,
+        started_at=_isoformat(record.created_at),
+        updated_at=timestamp,
+        notes=["Workspace opened before any saved scenarios or planner turns existed."],
+    )
 
     return {
-        "trip_record": trip_record.to_dict(),
+        "trip_record": _serialize_persisted_trip_record(record),
         "session": session.to_dict(),
-        "saved_scenarios": [record.to_dict() for record in saved_scenarios],
-        "scenario_comparison": scenario_comparison.to_dict() if scenario_comparison else None,
-        "scenario_search": scenario_search.to_dict(),
+        "saved_scenarios": [],
+        "scenario_comparison": None,
+        "scenario_search": {
+            "title": "Trip setup workspace",
+            "scenarios": [],
+            "explanation": [
+                "This workspace was opened from a newly created persisted trip.",
+                "Scenario search and comparisons will appear after planning begins.",
+            ],
+            "source_refs": [],
+        },
     }
+
+
+def get_workspace_payload(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+) -> dict[str, Any] | None:
+    fixture = _FIXTURES.get(trip_id)
+    if fixture is not None:
+        trip_record = _load_trip_record(fixture.trip_fixture)
+        saved_scenarios, scenario_comparison = _load_saved_scenarios(fixture.scenarios_fixture)
+        session = _load_session(fixture.session_fixture)
+        _canonicalize_saved_scenario_ids(session, saved_scenarios)
+        scenario_search = _build_scenario_search(trip_id, fixture.scenario_search_variant)
+
+        return {
+            "trip_record": trip_record.to_dict(),
+            "session": session.to_dict(),
+            "saved_scenarios": [record.to_dict() for record in saved_scenarios],
+            "scenario_comparison": scenario_comparison.to_dict() if scenario_comparison else None,
+            "scenario_search": scenario_search.to_dict(),
+        }
+
+    record = db_session.scalar(
+        select(PersistedTrip)
+        .where(PersistedTrip.trip_id == trip_id)
+        .where(PersistedTrip.user_id == user.user_id)
+    )
+    if record is None:
+        return None
+    return _build_persisted_trip_workspace(record)

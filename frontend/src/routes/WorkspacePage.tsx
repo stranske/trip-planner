@@ -14,6 +14,16 @@ type TimelineStop = {
   endDay: number;
 };
 
+function formatDateRange(startDate: string | null, endDate: string | null): string {
+  if (!startDate && !endDate) {
+    return "Dates not set yet";
+  }
+  if (!startDate || !endDate) {
+    return startDate ?? endDate ?? "Dates not set yet";
+  }
+  return `${formatDate(startDate)} to ${formatDate(endDate)}`;
+}
+
 function titleCaseStop(stop: string): string {
   return stop
     .split(/[-_]/g)
@@ -46,12 +56,13 @@ function resolveActiveScenario(workspace: WorkspaceData) {
 
 function buildTimelineStops(workspace: WorkspaceData): TimelineStop[] {
   const { scenario } = resolveActiveScenario(workspace);
-  const duration = workspace.trip_record.trip.trip_frame.duration_days;
+  const tripDuration = workspace.trip_record.trip.trip_frame.duration_days;
   const routeSequence = scenario?.scenario_summary.route_sequence ?? [];
 
-  if (duration <= 0 || routeSequence.length === 0) {
+  if (tripDuration == null || tripDuration <= 0 || routeSequence.length === 0) {
     return [];
   }
+  const duration = tripDuration;
 
   const baseSpan = Math.floor(duration / routeSequence.length);
   let remainder = duration % routeSequence.length;
@@ -131,13 +142,13 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
         <dl className="workspace-meta">
           <div>
             <dt>Dates</dt>
-            <dd>
-              {formatDate(trip.trip_frame.start_date)} to {formatDate(trip.trip_frame.end_date)}
-            </dd>
+            <dd>{formatDateRange(trip.trip_frame.start_date, trip.trip_frame.end_date)}</dd>
           </div>
           <div>
             <dt>Duration</dt>
-            <dd>{trip.trip_frame.duration_days} days</dd>
+            <dd>
+              {trip.trip_frame.duration_days ? `${trip.trip_frame.duration_days} days` : "Duration not set yet"}
+            </dd>
           </div>
           <div>
             <dt>Mode</dt>
@@ -158,6 +169,9 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
               <h2>Timeline data is not ready</h2>
               <p>
                 The workspace needs a scenario route sequence before it can render day-by-day pacing.
+              </p>
+              <p className="muted-copy">
+                Trip context is ready now, so the next planning pass can attach saved scenarios and timeline stops.
               </p>
             </>
           ) : (

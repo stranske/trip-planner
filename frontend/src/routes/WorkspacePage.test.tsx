@@ -159,6 +159,58 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByText("Timeline data is not ready")).toBeInTheDocument();
     });
+    expect(
+      screen.getByText(
+        "Trip context is ready now, so the next planning pass can attach saved scenarios and timeline stops."
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("shows created-trip metadata even when the workspace has no seeded scenario state yet", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        trip_record: {
+          trip: {
+            ...workspacePayload.trip_record.trip,
+            trip_id: "trip-chicago-kickoff",
+            title: "Chicago kickoff",
+            summary: "Get into the workspace quickly.",
+            mode: "business",
+            trip_frame: {
+              start_date: null,
+              end_date: null,
+              duration_days: null,
+              primary_regions: ["Chicago"],
+            },
+          },
+          artifact_refs: {
+            saved_scenario_ids: [],
+            scenario_search_id: null,
+            session_state_id: "session:trip-chicago-kickoff",
+          },
+        },
+        session: {
+          ...workspacePayload.session,
+          current_saved_scenario_id: null,
+          pending_decisions: [],
+        },
+        saved_scenarios: [],
+        scenario_search: {
+          title: "Trip setup workspace",
+          scenarios: [],
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Chicago kickoff" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Dates not set yet")).toBeInTheDocument();
+    expect(screen.getByText("Duration not set yet")).toBeInTheDocument();
   });
 
   it("renders the shared route error card when the workspace loader rejects", async () => {

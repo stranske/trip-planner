@@ -1,9 +1,9 @@
 import { fetchJson } from "../lib/api/client";
 
 export type TripFrame = {
-  start_date: string;
-  end_date: string;
-  duration_days: number;
+  start_date: string | null;
+  end_date: string | null;
+  duration_days: number | null;
   primary_regions: string[];
 };
 

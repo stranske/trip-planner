@@ -37,7 +37,7 @@ export function NewTripPage() {
         },
       });
       startTransition(() => {
-        navigate(`/trips/${trip.trip_id}`);
+        navigate(`/workspace/${trip.trip_id}`);
       });
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "Trip creation failed."));
