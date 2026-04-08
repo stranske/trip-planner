@@ -26,7 +26,11 @@ build-backend = "setuptools.build_meta"
 include = ["scripts*", "trip_planner*"]
 
 [tool.setuptools.package-data]
-trip_planner = ["resources/options/bundles/*.json"]
+trip_planner = [
+    "resources/business/*.json",
+    "resources/options/bundles/*.json",
+    "resources/preferences/*.json",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,127 @@
+{
+  "schema_version": "0.1.0",
+  "fixtures": [
+    {
+      "id": "urban-historian",
+      "fixture_kind": "archetype",
+      "summary": "Depth-oriented city traveler who values historic layers, museums, and urban walking more than broad destination coverage.",
+      "tags": ["history", "cities", "depth", "culture"],
+      "raw_inputs": {
+        "trip_brief": "I would rather spend five dense days in one great city than race through four capitals. I care about museums, neighborhoods, and historic texture.",
+        "stated_constraints": ["trip length around 21 days"],
+        "planning_style_notes": [
+          "comfortable with transit-rich cities",
+          "prefers a researched daily structure"
+        ]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 21,
+          "traveler_party": "pair",
+          "season_window": ["April", "May"],
+          "trip_stage": "first_visit",
+          "regions_in_scope": ["Italy", "Austria", "Czech Republic"],
+          "special_themes": ["urban history", "museums", "historic neighborhoods"]
+        },
+        "anchors": {
+          "place_anchors": [
+            {
+              "type": "place",
+              "label": "Rome",
+              "strength": 0.95,
+              "flexibility": 0.1,
+              "notes": "Major anchor city."
+            }
+          ],
+          "experience_anchors": [
+            {
+              "type": "experience",
+              "label": "Museum and old-city days",
+              "strength": 0.82,
+              "flexibility": 0.3,
+              "notes": "Historic urban immersion matters more than countryside exposure."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "movement_vs_friction": {"value": 0.46, "confidence": 0.7, "salience": 0.68, "stability": 0.72},
+          "nature_vs_culture": {"value": 0.86, "confidence": 0.9, "salience": 0.92, "stability": 0.86},
+          "structure_vs_elasticity": {"value": -0.58, "confidence": 0.72, "salience": 0.74, "stability": 0.78},
+          "breadth_vs_depth": {"value": 0.84, "confidence": 0.9, "salience": 0.94, "stability": 0.88},
+          "historic_vs_contemporary": {"value": -0.88, "confidence": 0.94, "salience": 0.9, "stability": 0.86},
+          "iconic_vs_discovery": {"value": -0.38, "confidence": 0.68, "salience": 0.58, "stability": 0.64}
+        },
+        "hybrid_factors": {
+          "food": {
+            "mode": "tradeoff",
+            "salience": 0.52,
+            "tradeoff_role": "cost",
+            "preferences": {"destination_meals": 0.64}
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "urban_historian_depth_x_history",
+            "dimensions": ["breadth_vs_depth", "historic_vs_contemporary"],
+            "activation": {
+              "all_of": [
+                {"dimension": "breadth_vs_depth", "min_value": 0.65},
+                {"dimension": "historic_vs_contemporary", "max_value": -0.6}
+              ]
+            },
+            "effect": {
+              "prioritize": [
+                "longer stays in heritage-rich cities",
+                "walkable districts",
+                "museum clusters"
+              ]
+            },
+            "strength": 0.86,
+            "priority": 0.84
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": "urban-historian-ev-1",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": [
+            "breadth_vs_depth",
+            "nature_vs_culture",
+            "historic_vs_contemporary"
+          ],
+          "sequence": 1,
+          "confidence_hint": 0.9,
+          "salience_hint": 0.94,
+          "note": "Traveler explicitly rejects fast multi-city hopping in favor of depth."
+        },
+        {
+          "id": "urban-historian-ev-2",
+          "evidence_type": "scenario_reaction",
+          "source_type": "scenario_prompt",
+          "affected_dimensions": ["structure_vs_elasticity"],
+          "sequence": 2,
+          "confidence_hint": 0.74,
+          "salience_hint": 0.7,
+          "note": "Traveler reacts positively to a museum district day with preselected targets."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "Depth and cultural-historic attention dominate this profile, so route sprawl should be penalized early.",
+        "dominant_dimensions": [
+          "breadth_vs_depth",
+          "nature_vs_culture",
+          "historic_vs_contemporary"
+        ],
+        "expected_tensions": [
+          "Iconic sites matter, but they are acceptable mainly when they fit a deeper urban immersion plan."
+        ],
+        "planning_implications": [
+          "Use fewer bases with denser local cultural menus.",
+          "Prefer neighborhood and museum clustering over broader regional coverage."
+        ]
+      }
+    }
+  ]
+}

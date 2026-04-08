@@ -59,8 +59,11 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
         ":feasibility-summary"
     )
     assert payload["planner_panel_state"]["outputs"][0]["tags"][0] == "feasibility"
-    assert payload["planner_panel_state"]["outputs"][3]["title"] == "Scenario ranking summary"
-    assert payload["planner_panel_state"]["outputs"][4]["title"].startswith("Rank #1 ")
+    output_titles = [
+        output["title"] for output in payload["planner_panel_state"]["outputs"]
+    ]
+    assert "Scenario ranking summary" in output_titles
+    assert any(title.startswith("Rank #1 ") for title in output_titles)
     assert payload["planner_panel_state"]["trip"]["trip_id"] == "trip-leisure-kyoto-draft"
     assert payload["planner_panel_state"]["option_set"]["options"][0]["option_id"].startswith(
         "scenario:"
@@ -75,8 +78,11 @@ def test_workspace_endpoint_surfaces_business_ranked_scenarios(client: TestClien
     payload = response.json()
     assert payload["scenario_search"]["title"] == "Client summit ranked scenarios"
     assert payload["scenario_search"]["scenarios"][0]["title"] == "Airport arrival bundle"
-    assert payload["planner_panel_state"]["outputs"][2]["title"] == "Scenario ranking summary"
-    assert payload["planner_panel_state"]["outputs"][3]["title"] == "Rank #1 Airport arrival bundle"
+    output_titles = [
+        output["title"] for output in payload["planner_panel_state"]["outputs"]
+    ]
+    assert "Scenario ranking summary" in output_titles
+    assert "Rank #1 Airport arrival bundle" in output_titles
     assert payload["planner_panel_state"]["option_set"]["options"][0]["label"] == "Airport arrival bundle"
 
 

@@ -1,0 +1,91 @@
+{
+  "constraint_set": {
+    "policy_id": "policy-003",
+    "organization_id": "org-001",
+    "policy_version": "2026.1",
+    "required_booking_channels": ["Concur"],
+    "airfare_rules": {"cabin": "economy", "nonstop_priority": true},
+    "lodging_rules": {"max_nightly_rate_usd": 240},
+    "ground_transport_rules": {"rental_car_default": true},
+    "meal_rules": {"per_diem": "standard"},
+    "approval_rules": ["manager review", "finance review for approved exceptions"],
+    "documentation_rules": ["retain comparables", "retain site agenda"],
+    "allowed_exception_types": ["fatigue_management", "fare_cap", "lodging_cap"]
+  },
+  "proposal": {
+    "proposal_id": "proposal-003",
+    "trip_id": "trip-business-003",
+    "mode": "business",
+    "constraint_set_id": "policy-003",
+    "traveler_context": {
+      "employee_type": "contractor",
+      "traveler_experience": "occasional",
+      "home_airport": "MSP",
+      "loyalty_programs": [],
+      "mobility_or_access_needs": ["avoid unsafe overnight routing"]
+    },
+    "selected_options": [
+      {
+        "category": "lodging",
+        "option_id": "hotel-201",
+        "label": "Extra night near site",
+        "vendor": "Hilton Garden Inn",
+        "booking_channel": "Concur",
+        "estimated_cost": {"currency": "USD", "typical_amount": 310.0},
+        "justification_refs": ["just-201"]
+      }
+    ],
+    "cost_summary": {
+      "currency": "USD",
+      "total_estimated_cost": 1460.0,
+      "category_estimates": {"lodging": 310.0, "airfare": 560.0, "car_rental": 420.0},
+      "notes": ["Adds an extra lodging night to avoid fatigued driving before the audit."]
+    },
+    "comparables": [
+      {
+        "category": "lodging",
+        "label": "Within-cap motel",
+        "vendor": "Budget Inn",
+        "booking_channel": "Concur",
+        "estimated_cost": {"currency": "USD", "typical_amount": 185.0},
+        "notes": ["Requires late-night arrival and pre-dawn site transfer."]
+      }
+    ],
+    "justifications": [
+      {
+        "category": "lodging",
+        "summary": "Extra night protects safe arrival and audit readiness.",
+        "evidence": ["site access begins at 07:30", "same-day routing would require overnight drive"]
+      }
+    ],
+    "booking_channel_summaries": [
+      {"category": "lodging", "selected_channel": "Concur", "approved": true, "rationale": "Policy-required booking tool."}
+    ],
+    "approval_notes": ["Exception requested for fatigue-management lodging overage."],
+    "requested_exception": {
+      "exception_type": "fatigue_management",
+      "reason": "Extra lodging night is needed to avoid unsafe routing and preserve site-visit readiness.",
+      "requested_approval_roles": ["manager", "finance"],
+      "notes": ["Comparable lower-cost option remains attached for review."]
+    }
+  },
+  "evaluation_result": {
+    "evaluation_id": "eval-003",
+    "proposal_id": "proposal-003",
+    "status": "exception_required",
+    "approval_requirements": [
+      {"role": "manager", "reason": "Operational exception requires manager approval", "mandatory": true},
+      {"role": "finance", "reason": "Lodging cap exception requires finance review", "mandatory": true}
+    ],
+    "failure_reasons": [
+      {"code": "lodging_rate_cap", "message": "Selected lodging exceeds the nightly cap but includes an operational-safety justification.", "severity": "warning", "related_category": "lodging"}
+    ],
+    "preferred_alternatives": [],
+    "exception_guidance": [
+      "Retain the lower-cost comparable in the approval packet.",
+      "Document the operational-safety rationale in the manager approval request."
+    ],
+    "notes": ["Proposal is exception-eligible if the fatigue-management rationale is approved."],
+    "compliance_score": 0.68
+  }
+}
