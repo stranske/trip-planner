@@ -210,9 +210,38 @@ def test_trip_scenario_history_create_list_and_reload_flow(client: TestClient) -
     )
     assert create_history.status_code == 201
 
+    create_session = client.post(
+        f"/api/trips/{trip_id}/planning-sessions",
+        json={
+            "activity_log_id": "activity-log:kyoto-spring",
+            "current_saved_scenario_id": saved_scenario["saved_scenario_id"],
+            "pending_decisions": [
+                {
+                    "decision_id": "decision:lodging",
+                    "prompt": "Choose the Kyoto base neighborhood.",
+                    "created_at": "2026-04-10T15:15:00Z",
+                    "choices": ["Gion", "Downtown"],
+                }
+            ],
+            "recent_option_presentations": [
+                {
+                    "presentation_id": "presentation:kyoto-1",
+                    "option_set_id": "option-set:kyoto-1",
+                    "shown_at": "2026-04-10T15:10:00Z",
+                    "surfaced_option_ids": ["lodging:gion", "lodging:downtown"],
+                }
+            ],
+        },
+    )
+    assert create_session.status_code == 201
+
     listing = client.get(f"/api/trips/{trip_id}/scenario-history")
     assert listing.status_code == 200
     payload = listing.json()
+    assert payload["planning_sessions"][0]["activity_log_id"] == "activity-log:kyoto-spring"
+    assert payload["planning_sessions"][0]["current_saved_scenario_id"] == (
+        saved_scenario["saved_scenario_id"]
+    )
     assert payload["saved_scenarios"][0]["saved_scenario_id"] == saved_scenario["saved_scenario_id"]
     assert payload["saved_scenarios"][0]["versions"][0]["title"] == "Kyoto baseline"
     assert payload["planning_history"][0]["event_kind"] == "scenario_saved"
@@ -291,6 +320,14 @@ def test_trip_scenario_history_rejects_invalid_domain_payloads_with_422(
     )
     assert invalid_history.status_code == 422
 
+    invalid_session = client.post(
+        f"/api/trips/{trip_id}/planning-sessions",
+        json={
+            "status": "invalid",
+        },
+    )
+    assert invalid_session.status_code == 422
+
 
 def test_trip_scenario_history_routes_hide_other_users_records(client: TestClient) -> None:
     signup(client, email="owner@example.com", display_name="Owner")
@@ -345,6 +382,13 @@ def test_trip_scenario_history_routes_hide_other_users_records(client: TestClien
                 "event_kind": "scenario_saved",
                 "summary": "Blocked by ownership guard.",
             },
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            f"/api/trips/{trip_id}/planning-sessions",
+            json={},
         ).status_code
         == 404
     )

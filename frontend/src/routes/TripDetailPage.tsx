@@ -2,6 +2,7 @@ import { useLoaderData } from "react-router-dom";
 
 import type {
   PlanningHistoryEntry,
+  PlanningSessionRecord,
   SavedScenarioRecord,
   TripRecord,
   TripScenarioHistoryData,
@@ -28,7 +29,8 @@ export function TripDetailPage() {
       loading={{
         label: "Trip detail",
         title: "Loading saved trip",
-        message: "Restoring the persisted trip, saved-scenario history, and ownership-aware metadata.",
+        message:
+          "Restoring the persisted trip, planning-session context, and trip-level audit trail.",
       }}
       error={{
         label: "Trip detail",
@@ -67,6 +69,10 @@ function renderCurrentVersion(savedScenario: SavedScenarioRecord) {
 
 function summarizeHistory(entry: PlanningHistoryEntry): string {
   return entry.event_kind.split("_").join(" ");
+}
+
+function summarizeSession(session: PlanningSessionRecord): string {
+  return session.status.split("_").join(" ");
 }
 
 function TripDetailContent({
@@ -176,6 +182,40 @@ function TripDetailContent({
         </section>
 
         <section className="status-card">
+          <p className="status-label">Planning session</p>
+          <h2>Active workflow memory</h2>
+          {scenarioHistory.planning_sessions.length === 0 ? (
+            <p className="muted-copy">
+              No planning session has been persisted for this trip yet.
+            </p>
+          ) : (
+            <div className="decision-stack">
+              {scenarioHistory.planning_sessions.map((session) => (
+                <article key={session.session_state_id} className="decision-card">
+                  <p className="scenario-kicker">{summarizeSession(session)}</p>
+                  <h3>{session.session_state_id}</h3>
+                  <p>
+                    Initiative {session.interaction_state.initiative_level} with{" "}
+                    {session.pending_decisions.length} pending decisions and{" "}
+                    {session.recent_option_presentations.length} recent option surfaces.
+                  </p>
+                  <dl className="workspace-meta">
+                    <div>
+                      <dt>Updated</dt>
+                      <dd>{session.updated_at}</dd>
+                    </div>
+                    <div>
+                      <dt>Activity log</dt>
+                      <dd>{session.activity_log_id || "Not linked yet"}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="status-card">
           <p className="status-label">Planning history</p>
           <h2>Trip-level activity timeline</h2>
           {scenarioHistory.planning_history.length === 0 ? (
@@ -194,6 +234,7 @@ function TripDetailContent({
                   <p>
                     {entry.actor} at {entry.occurred_at}
                   </p>
+                  <p>Session {entry.session_state_id}</p>
                 </article>
               ))}
             </div>

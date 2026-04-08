@@ -5,12 +5,16 @@ from trip_planner.persistence.models.scenario import (
     PersistedActivityLogEvent,
     PersistedSavedScenario,
 )
-from trip_planner.persistence.models.session import AuthSession
+from trip_planner.persistence.models.session import (
+    AuthSession,
+    PersistedPlanningSessionState,
+)
 from trip_planner.persistence.models.trip import PersistedTrip
 
 __all__ = [
     "AuthSession",
     "PersistedActivityLogEvent",
+    "PersistedPlanningSessionState",
     "PersistedSavedScenario",
     "PersistedTrip",
     "UserAccount",

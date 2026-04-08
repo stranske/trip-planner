@@ -51,6 +51,35 @@ describe("TripDetailPage", () => {
           },
         },
         scenarioHistory: {
+          planning_sessions: [
+            {
+              session_state_id: "session-state:kyoto-spring-abc123",
+              owner_profile_id: "profile:trip-kyoto-123abc:leisure",
+              mode: "leisure",
+              started_at: "2026-04-10T15:00:00Z",
+              updated_at: "2026-04-10T15:35:00Z",
+              status: "active",
+              current_saved_scenario_id: "saved-scenario:kyoto-baseline",
+              activity_log_id: "activity-log:kyoto-spring",
+              interaction_state: {
+                initiative_level: "balanced",
+                summary_granularity: "balanced",
+                checkpoint_frequency: "milestone",
+              },
+              pending_decisions: [
+                {
+                  decision_id: "decision:lodging",
+                  prompt: "Choose the Kyoto base neighborhood.",
+                },
+              ],
+              recent_option_presentations: [
+                {
+                  presentation_id: "presentation:kyoto-1",
+                  option_set_id: "option-set:kyoto-1",
+                },
+              ],
+            },
+          ],
           saved_scenarios: [
             {
               saved_scenario_id: "saved-scenario:kyoto-baseline",
@@ -73,6 +102,7 @@ describe("TripDetailPage", () => {
               event_kind: "scenario_saved",
               summary: "Saved the Kyoto baseline after the first planning pass.",
               actor: "planner",
+              session_state_id: "session-state:kyoto-spring-abc123",
               saved_scenario_id: "saved-scenario:kyoto-baseline",
             },
           ],
@@ -93,6 +123,8 @@ describe("TripDetailPage", () => {
     expect(screen.getByText("trip-kyoto-123abc")).toBeInTheDocument();
     expect(screen.getByText("Window seat preferred")).toBeInTheDocument();
     expect(screen.getByText("Kyoto baseline")).toBeInTheDocument();
+    expect(screen.getByText("session-state:kyoto-spring-abc123")).toBeInTheDocument();
+    expect(screen.getByText("activity-log:kyoto-spring")).toBeInTheDocument();
     expect(
       screen.getByText("Saved the Kyoto baseline after the first planning pass.")
     ).toBeInTheDocument();
@@ -128,6 +160,7 @@ describe("TripDetailPage", () => {
           },
         },
         scenarioHistory: {
+          planning_sessions: [],
           saved_scenarios: [
             {
               saved_scenario_id: "saved-scenario:kyoto-empty",
@@ -154,6 +187,9 @@ describe("TripDetailPage", () => {
     expect(screen.getByText("Unavailable")).toBeInTheDocument();
     expect(
       screen.getByText("This saved scenario is missing version details.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("No planning session has been persisted for this trip yet.")
     ).toBeInTheDocument();
   });
 });

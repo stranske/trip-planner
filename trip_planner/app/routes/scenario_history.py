@@ -3,14 +3,17 @@ from sqlalchemy.orm import Session
 
 from trip_planner.app.schemas.scenario_history import (
     CreatePlanningHistoryRequest,
+    CreatePlanningSessionRequest,
     CreateSavedScenarioRequest,
     PlanningHistoryResponse,
+    PlanningSessionResponse,
     SavedScenarioResponse,
     TripScenarioHistoryResponse,
 )
 from trip_planner.app.services.auth import AuthenticatedUser, require_authenticated_user
 from trip_planner.app.services.scenario_history import (
     create_planning_history_entry,
+    create_planning_session,
     create_saved_scenario,
     list_trip_scenario_history,
 )
@@ -64,6 +67,27 @@ def create_trip_planning_history(
 ) -> PlanningHistoryResponse:
     return PlanningHistoryResponse(
         planning_history_entry=create_planning_history_entry(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            payload=payload.model_dump(),
+        )
+    )
+
+
+@router.post(
+    "/trips/{trip_id}/planning-sessions",
+    response_model=PlanningSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_trip_planning_session(
+    trip_id: str,
+    payload: CreatePlanningSessionRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> PlanningSessionResponse:
+    return PlanningSessionResponse(
+        planning_session=create_planning_session(
             db_session,
             user=user,
             trip_id=trip_id,
