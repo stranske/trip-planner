@@ -26,7 +26,8 @@ function formatDateRange(startDate: string | null, endDate: string | null): stri
     return "Dates not set yet";
   }
   if (!startDate || !endDate) {
-    return startDate ?? endDate ?? "Dates not set yet";
+    const singleDate = startDate ?? endDate;
+    return singleDate ? formatDate(singleDate) : "Dates not set yet";
   }
   return `${formatDate(startDate)} to ${formatDate(endDate)}`;
 }
@@ -205,7 +206,9 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
           <div>
             <dt>Duration</dt>
             <dd>
-              {trip.trip_frame.duration_days ? `${trip.trip_frame.duration_days} days` : "Duration not set yet"}
+              {trip.trip_frame.duration_days == null
+                ? "Duration not set yet"
+                : `${trip.trip_frame.duration_days} days`}
             </dd>
           </div>
           <div>
