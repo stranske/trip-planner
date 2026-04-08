@@ -55,3 +55,68 @@ def test_workspace_endpoint_returns_not_found_for_unknown_trip(
     response = client.get("/api/workspace/trip-unknown")
 
     assert response.status_code == 404
+
+
+def test_workspace_endpoint_returns_minimal_payload_for_persisted_trip(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Chicago kickoff",
+            "summary": "Get into the workspace quickly.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+                "traveler_party": {
+                    "kind": "team",
+                    "traveler_count": 3,
+                    "notes": "Customer kickoff",
+                },
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/workspace/{trip_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["trip_record"]["trip"]["trip_id"] == trip_id
+    assert payload["trip_record"]["trip"]["title"] == "Chicago kickoff"
+    assert payload["trip_record"]["artifact_refs"]["session_state_id"] == f"session:{trip_id}"
+    assert payload["session"]["trip_id"] == trip_id
+    assert payload["saved_scenarios"] == []
+    assert payload["scenario_search"]["scenarios"] == []
+
+
+def test_workspace_endpoint_hides_other_users_persisted_trips(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Kyoto Spring",
+            "summary": "Food and gardens",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 7},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    client.post("/api/auth/logout")
+    client.post(
+        "/api/auth/signup",
+        json={
+            "email": "other@example.com",
+            "password": "password123",
+            "display_name": "Other User",
+        },
+    )
+
+    response = client.get(f"/api/workspace/{trip_id}")
+
+    assert response.status_code == 404

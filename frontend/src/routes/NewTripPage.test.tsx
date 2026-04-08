@@ -27,7 +27,7 @@ describe("NewTripPage", () => {
     mockedNavigate.mockReset();
   });
 
-  it("creates a trip and navigates to the detail route", async () => {
+  it("creates a trip and navigates to the workspace route", async () => {
     mockedCreateTrip.mockResolvedValue({
       trip_id: "trip-kyoto-123abc",
       user_id: "user:test",
@@ -74,6 +74,6 @@ describe("NewTripPage", () => {
         })
       );
     });
-    expect(mockedNavigate).toHaveBeenCalledWith("/trips/trip-kyoto-123abc");
+    expect(mockedNavigate).toHaveBeenCalledWith("/workspace/trip-kyoto-123abc");
   });
 });

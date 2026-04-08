@@ -38,3 +38,17 @@ These fixtures live in `bundle/app-shell/mock-state.js` so later route work can 
 
 - `#559` should attach maps and route/timeline views to these workspace summaries.
 - `#560` should let the planner side panel drive the same scenario and checkpoint records instead of replacing them.
+
+## Minimum Trip Data To Open The Workspace
+
+Issue `#687` extends the shell so a freshly created persisted trip can open `/workspace/:tripId` before any saved scenarios exist.
+
+The minimum required data is:
+
+- a persisted `trip_id`
+- `mode`
+- `title`
+- traveler-party basics (`kind`, `traveler_count`)
+- whichever trip-frame fields are already known (`start_date`, `end_date`, `duration_days`, `primary_regions`)
+
+Everything else may remain empty on first load. The workspace should still render the trip shell, initialize a minimal session reference, and show timeline/scenario empty states until later planning issues attach saved scenarios, comparisons, and activity history.
