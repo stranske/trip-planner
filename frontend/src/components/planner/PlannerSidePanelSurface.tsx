@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { PlannerPanelState } from "../../../../bundle/planner/orchestration-contracts";
 
@@ -19,6 +19,8 @@ type PlannerResponseEvent = CustomEvent<{
   decision_id: string | null;
 }>;
 
+const plannerStylesheetHref = new URL("../../../../bundle/style.css", import.meta.url).href;
+
 export function PlannerSidePanelSurface({
   state,
   onDecisionAnswer,
@@ -30,14 +32,27 @@ export function PlannerSidePanelSurface({
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<PlannerSidePanelController | null>(null);
+  const [plannerMountNode, setPlannerMountNode] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let isCancelled = false;
 
     async function mountPlannerPanel() {
-      if (!mountRef.current) {
+      const host = mountRef.current;
+      if (!host) {
         return;
       }
+
+      const shadowRoot = host.shadowRoot ?? host.attachShadow({ mode: "open" });
+      shadowRoot.replaceChildren();
+
+      const stylesheet = document.createElement("link");
+      stylesheet.rel = "stylesheet";
+      stylesheet.href = plannerStylesheetHref;
+
+      const plannerMount = document.createElement("div");
+      shadowRoot.append(stylesheet, plannerMount);
+      setPlannerMountNode(plannerMount);
 
       // @ts-expect-error The planner bundle ships as plain JS outside the frontend package.
       const plannerModule = await import("../../../../bundle/planner/side-panel.js");
@@ -46,7 +61,7 @@ export function PlannerSidePanelSurface({
         return;
       }
 
-      controllerRef.current = plannerModule.renderPlannerSidePanel(mountRef.current, state);
+      controllerRef.current = plannerModule.renderPlannerSidePanel(plannerMount, state);
     }
 
     void mountPlannerPanel();
@@ -55,6 +70,8 @@ export function PlannerSidePanelSurface({
       isCancelled = true;
       controllerRef.current?.destroy();
       controllerRef.current = null;
+      setPlannerMountNode(null);
+      mountRef.current?.shadowRoot?.replaceChildren();
     };
   }, []);
 
@@ -63,7 +80,7 @@ export function PlannerSidePanelSurface({
   }, [state]);
 
   useEffect(() => {
-    const mountNode = mountRef.current;
+    const mountNode = plannerMountNode;
     if (!mountNode) {
       return;
     }
@@ -108,7 +125,7 @@ export function PlannerSidePanelSurface({
         handlePlannerResponse as EventListener
       );
     };
-  }, [onDecisionAnswer, onOptionFeedback]);
+  }, [onDecisionAnswer, onOptionFeedback, plannerMountNode]);
 
   return <div ref={mountRef} className="planner-panel-host" />;
 }

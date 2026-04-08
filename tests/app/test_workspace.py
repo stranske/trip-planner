@@ -74,6 +74,10 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
         "scenario:"
     )
     assert payload["activity_log"] == []
+    assert payload["planner_panel_state"]["pending_decisions"][0]["choices"] == [
+        "save baseline",
+        "keep exploring",
+    ]
 
 
 def test_workspace_endpoint_surfaces_business_ranked_scenarios(client: TestClient) -> None:
