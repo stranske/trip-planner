@@ -19,6 +19,10 @@ from trip_planner.app.services.inventory import (
     assemble_inventory_bundles_for_trip,
     build_inventory_summary_payload,
 )
+from trip_planner.app.services.scenarios import (
+    build_scenario_ranking_outputs,
+    build_workspace_scenario_search,
+)
 from trip_planner.contracts.trip import Trip
 from trip_planner.contracts import MoneyRange
 from trip_planner.itinerary import (
@@ -322,12 +326,17 @@ def _business_search_result(trip_id: str) -> ScenarioSearchResult:
     )
 
 
-def _build_scenario_search(trip_id: str, variant: str) -> ScenarioSearchResult:
-    if variant == "leisure":
-        return _leisure_search_result(trip_id)
-    if variant == "business":
-        return _business_search_result(trip_id)
-    raise KeyError(f"Unsupported scenario search variant: {variant}")
+def _build_scenario_search(
+    *,
+    trip_id: str,
+    trip_mode: str,
+    bundles: list[Any],
+) -> ScenarioSearchResult:
+    return build_workspace_scenario_search(
+        trip_id=trip_id,
+        trip_mode=trip_mode,
+        bundles=bundles,
+    )
 
 
 def _isoformat(value: datetime) -> str:
@@ -737,6 +746,10 @@ def _build_planner_panel_state(
             trip_id=trip["trip_id"],
             feasibility_summary=feasibility_summary,
         )
+        + build_scenario_ranking_outputs(
+            trip_id=trip["trip_id"],
+            scenario_search=scenario_search,
+        )
         + outputs
     )
 
@@ -812,10 +825,14 @@ def get_workspace_payload(
         saved_scenarios, scenario_comparison = _load_saved_scenarios(fixture.scenarios_fixture)
         session = _load_session(fixture.session_fixture)
         _canonicalize_saved_scenario_ids(session, saved_scenarios)
-        scenario_search = _build_scenario_search(trip_id, fixture.scenario_search_variant)
         inventory_bundles = assemble_inventory_bundles_for_trip(
             trip_id=trip_id,
             trip_mode=trip_record.trip.mode,
+        )
+        scenario_search = _build_scenario_search(
+            trip_id=trip_id,
+            trip_mode=trip_record.trip.mode,
+            bundles=inventory_bundles,
         )
         feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
 
