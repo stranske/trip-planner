@@ -20,6 +20,12 @@ from trip_planner.contracts.trip import (
 from trip_planner.persistence.models.trip import PersistedTrip
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
+_TRIP_ID_PREFIX = "trip-"
+_TRIP_ID_RANDOM_HEX_LENGTH = 6
+_MAX_TRIP_ID_LENGTH = 96
+_MAX_TRIP_ID_SLUG_LENGTH = (
+    _MAX_TRIP_ID_LENGTH - len(_TRIP_ID_PREFIX) - 1 - _TRIP_ID_RANDOM_HEX_LENGTH
+)
 
 
 def _bad_request(detail: str) -> HTTPException:
@@ -28,11 +34,12 @@ def _bad_request(detail: str) -> HTTPException:
 
 def _slugify_title(title: str) -> str:
     slug = _SLUG_RE.sub("-", title.strip().lower()).strip("-")
+    slug = slug[:_MAX_TRIP_ID_SLUG_LENGTH].strip("-")
     return slug or "trip"
 
 
 def _generate_trip_id(title: str) -> str:
-    return f"trip-{_slugify_title(title)}-{secrets.token_hex(3)}"
+    return f"{_TRIP_ID_PREFIX}{_slugify_title(title)}-{secrets.token_hex(3)}"
 
 
 def _default_profile_refs(mode: str, trip_id: str) -> ProfileRefs:

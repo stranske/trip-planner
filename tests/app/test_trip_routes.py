@@ -128,3 +128,42 @@ def test_trip_create_rejects_invalid_mode(client: TestClient) -> None:
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Trip mode must be either 'leisure' or 'business'."
+
+
+def test_trip_create_truncates_generated_trip_id_to_model_limit(client: TestClient) -> None:
+    signup(client, email="owner@example.com", display_name="Owner")
+
+    response = client.post(
+        "/api/trips",
+        json={
+            "title": "a" * 160,
+            "summary": "",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 7},
+        },
+    )
+
+    assert response.status_code == 201
+    assert len(response.json()["trip"]["trip_id"]) <= 96
+
+
+def test_trip_create_rejects_invalid_traveler_party_kind(client: TestClient) -> None:
+    signup(client, email="owner@example.com", display_name="Owner")
+
+    response = client.post(
+        "/api/trips",
+        json={
+            "title": "Kyoto Spring",
+            "summary": "",
+            "mode": "leisure",
+            "trip_frame": {
+                "traveler_party": {
+                    "kind": "unsupported",
+                    "traveler_count": 2,
+                    "notes": "",
+                }
+            },
+        },
+    )
+
+    assert response.status_code == 422

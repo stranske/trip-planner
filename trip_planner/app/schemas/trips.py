@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+from trip_planner.contracts.trip import TRAVELER_PARTY_KINDS
+
+TravelerPartyKind = Literal["solo", "pair", "family", "friends", "team"]
 
 
 class TravelerPartyRequest(BaseModel):
-    kind: str = Field(default="solo", min_length=1, max_length=32)
+    kind: TravelerPartyKind = Field(default=TRAVELER_PARTY_KINDS[0])
     traveler_count: int = Field(default=1, ge=1, le=50)
     notes: str = Field(default="", max_length=240)
 
