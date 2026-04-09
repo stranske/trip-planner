@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLoaderData } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -133,7 +133,99 @@ const workspacePayload = {
         },
         unresolved_tradeoffs: [],
       },
+      {
+        scenario_id: "scenario:trip-leisure-kyoto-draft:2",
+        title: "Kyoto plus Osaka fallback",
+        rank: 2,
+        score: 0.88,
+        scenario_summary: {
+          headline: "Higher-energy fallback with extra transfers",
+          scenario_kind: "alternative",
+          recommended_for_selection: false,
+          total_travel_minutes: 360,
+          total_transfer_count: 7,
+          route_sequence: ["kyoto", "osaka", "kyoto"],
+        },
+        unresolved_tradeoffs: [
+          {
+            tradeoff_id: "tradeoff:osaka-nightlife",
+            summary: "Higher transfer load to preserve nightlife breadth.",
+            severity: "info",
+          },
+        ],
+      },
     ],
+  },
+  runtime_scenario_comparison: {
+    title: "Kyoto leisure scenario comparison",
+    summary: "Two runtime scenarios are available for map-backed comparison.",
+    lead_scenario_id: "scenario:trip-leisure-kyoto-draft:1",
+    comparison_axes: [
+      { key: "score", label: "Planner score", direction: "higher_better" },
+      { key: "travel_minutes", label: "Travel minutes", direction: "lower_better" },
+      { key: "transfers", label: "Transfers", direction: "lower_better" },
+    ],
+    scenarios: [
+      {
+        scenario_id: "scenario:trip-leisure-kyoto-draft:1",
+        title: "Kyoto base with Uji day trip",
+        rank: 1,
+        status: "lead",
+        summary: "Balanced Kyoto culture baseline",
+        comparison_note: "Lead route for the current workspace comparison set.",
+        option_count: 2,
+        route_sequence: ["kyoto", "uji", "kyoto"],
+        route_summary: "kyoto -> uji -> kyoto",
+        recommended_for_selection: true,
+        feasible: true,
+        metrics: {
+          score: 0.93,
+          travel_minutes: 265,
+          transfers: 4,
+          estimated_total: {
+            currency: "JPY",
+            typical_amount: 3400,
+          },
+        },
+        delta: {
+          score_delta: 0,
+          travel_minutes_delta: 0,
+          transfers_delta: 0,
+          estimated_total_delta: 0,
+        },
+        highlights: ["Moderate travel friction with a clear cultural center of gravity."],
+      },
+      {
+        scenario_id: "scenario:trip-leisure-kyoto-draft:2",
+        title: "Kyoto plus Osaka fallback",
+        rank: 2,
+        status: "alternative",
+        summary: "Higher-energy fallback with extra transfers",
+        comparison_note: "Alternative route preserved for direct scenario comparison.",
+        option_count: 2,
+        route_sequence: ["kyoto", "osaka", "kyoto"],
+        route_summary: "kyoto -> osaka -> kyoto",
+        recommended_for_selection: false,
+        feasible: true,
+        metrics: {
+          score: 0.88,
+          travel_minutes: 360,
+          transfers: 7,
+          estimated_total: {
+            currency: "JPY",
+            typical_amount: 3250,
+          },
+        },
+        delta: {
+          score_delta: -0.05,
+          travel_minutes_delta: 95,
+          transfers_delta: 3,
+          estimated_total_delta: -150,
+        },
+        highlights: ["Higher transfer load to preserve nightlife breadth."],
+      },
+    ],
+    source_refs: ["ranked-results:kyoto-spring"],
   },
   inventory_summary: {
     bundle_count: 2,
@@ -161,6 +253,33 @@ const workspacePayload = {
     ],
     notes: [
       "Bundle summaries are assembled from normalized destination, lodging, transport, and activity records.",
+    ],
+  },
+  feasibility_summary: {
+    assessment_count: 2,
+    recommended_bundle_count: 1,
+    blocking_bundle_count: 0,
+    attention_bundle_count: 1,
+    notes: ["Route feasibility is available for the current workspace bundle set."],
+    assessments: [
+      {
+        bundle_id: "bundle-osaka-gateway",
+        bundle_title: "Osaka arrival buffer",
+        bundle_context: "transport_lodging",
+        status: "positive",
+        total_travel_minutes: 90,
+        total_transfer_count: 1,
+        friction_penalty_total: 0.4,
+      },
+      {
+        bundle_id: "bundle-kyoto-culture-day",
+        bundle_title: "Kyoto cultural anchor",
+        bundle_context: "route_level",
+        status: "caution",
+        total_travel_minutes: 175,
+        total_transfer_count: 3,
+        friction_penalty_total: 1.2,
+      },
     ],
   },
   budget_state: {
@@ -387,11 +506,16 @@ describe("WorkspacePage", () => {
       expect(screen.getByRole("heading", { name: "Spring Kyoto anniversary draft" })).toBeInTheDocument();
     });
 
+    const routeContextMap = screen.getByLabelText("Route context map");
+
     expect(screen.getByRole("heading", { name: "Kyoto base with Uji day trip" })).toBeInTheDocument();
-    expect(screen.getAllByText("Kyoto")).toHaveLength(2);
-    expect(screen.getByText("Uji")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })).toBeInTheDocument();
+    expect(within(routeContextMap).getAllByRole("heading", { name: "Kyoto" })).toHaveLength(2);
+    expect(within(routeContextMap).getByRole("heading", { name: "Uji" })).toBeInTheDocument();
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
     expect(screen.getByText("Trip-scoped planner surface")).toBeInTheDocument();
+    expect(routeContextMap).toBeInTheDocument();
+    expect(screen.getByText("Destination anchors")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Assembled inventory layer" })).toBeInTheDocument();
     expect(screen.getByText("Osaka arrival buffer")).toBeInTheDocument();
     expect(screen.getByText("Kyoto cultural anchor")).toBeInTheDocument();
@@ -407,6 +531,30 @@ describe("WorkspacePage", () => {
     });
   });
 
+  it("updates the map surface when a different scenario preview is selected", async () => {
+    const user = userEvent.setup();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" })).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Map preview for Kyoto plus Osaka fallback" })
+    ).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Route context map")).getByRole("heading", { name: "Osaka" })).toBeInTheDocument();
+    expect(screen.getByText("Higher transfer load to preserve nightlife breadth.")).toBeInTheDocument();
+  });
+
   it("shows an empty-state message when no route sequence is available", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
@@ -414,6 +562,11 @@ describe("WorkspacePage", () => {
         saved_scenarios: [],
         scenario_search: {
           ...workspacePayload.scenario_search,
+          scenarios: [],
+        },
+        runtime_scenario_comparison: {
+          ...workspacePayload.runtime_scenario_comparison,
+          lead_scenario_id: null,
           scenarios: [],
         },
         planner_panel_state: {

@@ -15,6 +15,13 @@ Issue `#559` adds visualization-oriented shell surfaces that consume route and f
 - `active_visualization_scenario_id` selects the currently rendered scenario. Switching scenarios in the shell changes presentation only.
 - When map provider output is absent, the shell should degrade to textual route summaries instead of synthesizing route logic locally.
 
+## Current runtime contract
+
+- `frontend/src/components/maps/TripMap.tsx` is the current first-pass route/context map surface for workspace rendering.
+- The component consumes `runtime_scenario_comparison.scenarios[*].route_sequence`, `route_summary`, `metrics`, and `inventory_summary.bundles[*].destination_names`.
+- `feasibility_summary.assessments` remains the source of route-attention and bundle-readiness signals; the map surface may summarize those signals, but it must not recalculate feasibility in the browser.
+- Scenario preview changes are local presentation changes. The selected map preview should start from persisted workspace state and then update the rendered map surface without mutating backend route logic.
+
 ## Representative states
 
 - Leisure regional loop: low-friction base with one regional excursion.
