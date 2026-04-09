@@ -36,6 +36,10 @@ class WorkspaceResponse(BaseModel):
     inventory_summary: dict[str, Any] = Field(
         description="Bundle summary assembled from normalized option/domain records for the workspace surface."
     )
+    budget_state: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Persisted budget plan, actual spend entries, and budget-vs-actual summary for the workspace.",
+    )
 
 
 class ScenarioComparisonSurfaceResponse(BaseModel):

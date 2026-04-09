@@ -3,10 +3,16 @@ import { useLoaderData } from "react-router-dom";
 
 import {
   answerPlannerDecision,
+  recordWorkspaceSpendEvent,
+  saveWorkspaceBudget,
+  type ActualSpendEventUpsertPayload,
+  type BudgetPlanUpsertPayload,
+  type BudgetWorkspaceState,
   submitPlannerOptionFeedback,
   type SavedScenarioRecord,
   type WorkspaceData,
 } from "../api/workspace";
+import { WorkspaceBudgetPanel } from "../components/budget/WorkspaceBudgetPanel";
 import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
 
@@ -114,6 +120,29 @@ function ScenarioSummaryCard({
   );
 }
 
+function mergeWorkspaceBudgetState(
+  workspace: WorkspaceData,
+  budgetState: BudgetWorkspaceState
+): WorkspaceData {
+  const budgetPlanId = budgetState.budget_plan?.budget_plan_id ?? null;
+
+  return {
+    ...workspace,
+    budget_state: budgetState,
+    trip_record: {
+      ...workspace.trip_record,
+      artifact_refs: {
+        ...workspace.trip_record.artifact_refs,
+        budget_state_id: budgetPlanId,
+      },
+    },
+    session: {
+      ...workspace.session,
+      active_budget_plan_id: budgetPlanId,
+    },
+  };
+}
+
 export function WorkspacePage() {
   const { workspace } = useLoaderData() as LoaderData;
 
@@ -140,6 +169,8 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
   const [currentWorkspace, setCurrentWorkspace] = useState(workspace);
   const [plannerError, setPlannerError] = useState<string | null>(null);
   const [plannerBusyLabel, setPlannerBusyLabel] = useState<string | null>(null);
+  const [budgetError, setBudgetError] = useState<string | null>(null);
+  const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
   useEffect(() => {
     setCurrentWorkspace(workspace);
   }, [workspace]);
@@ -192,6 +223,36 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
     }
   }
 
+  async function handleBudgetSave(payload: BudgetPlanUpsertPayload) {
+    setBudgetError(null);
+    setBudgetBusyLabel("Saving workspace budget...");
+    try {
+      const nextBudgetState = await saveWorkspaceBudget(trip.trip_id, payload);
+      startTransition(() => {
+        setCurrentWorkspace((current) => mergeWorkspaceBudgetState(current, nextBudgetState));
+      });
+    } catch (error) {
+      setBudgetError(error instanceof Error ? error.message : "Budget plan update failed.");
+    } finally {
+      setBudgetBusyLabel(null);
+    }
+  }
+
+  async function handleSpendRecord(payload: ActualSpendEventUpsertPayload) {
+    setBudgetError(null);
+    setBudgetBusyLabel("Recording actual spend...");
+    try {
+      const nextBudgetState = await recordWorkspaceSpendEvent(trip.trip_id, payload);
+      startTransition(() => {
+        setCurrentWorkspace((current) => mergeWorkspaceBudgetState(current, nextBudgetState));
+      });
+    } catch (error) {
+      setBudgetError(error instanceof Error ? error.message : "Spend entry failed.");
+    } finally {
+      setBudgetBusyLabel(null);
+    }
+  }
+
   return (
     <section className="workspace-layout">
       <div className="workspace-hero status-card">
@@ -237,6 +298,15 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
             onOptionFeedback={handleOptionFeedback}
           />
         </section>
+
+        <WorkspaceBudgetPanel
+          budgetState={currentWorkspace.budget_state}
+          tripMode={trip.mode}
+          busyLabel={budgetBusyLabel}
+          errorMessage={budgetError}
+          onSaveBudget={handleBudgetSave}
+          onRecordSpend={handleSpendRecord}
+        />
 
         <section className="status-card">
           <p className="status-label">Inventory bundles</p>

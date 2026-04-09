@@ -21,11 +21,13 @@ export type TripRecord = {
     saved_scenario_ids: string[];
     scenario_search_id: string | null;
     session_state_id: string | null;
+    budget_state_id: string | null;
   };
 };
 
 export type SessionState = {
   current_saved_scenario_id: string | null;
+  active_budget_plan_id: string | null;
   pending_decisions: Array<{
     decision_id: string;
     title: string;
@@ -42,6 +44,96 @@ export type SessionState = {
     summary: string;
     surfaced_option_ids: string[];
   }>;
+};
+
+export type BudgetCategorySummary = {
+  category_key: string;
+  label: string;
+  currency: string;
+  planned_amount: number;
+  actual_amount: number;
+  remaining_amount: number;
+  flexibility: string;
+};
+
+export type BudgetCategoryAllocation = {
+  category_key: string;
+  label: string;
+  planned_amount: number;
+  currency: string;
+  flexibility: string;
+  notes: string[];
+};
+
+export type BudgetScenario = {
+  scenario_budget_id: string;
+  saved_scenario_id: string | null;
+  title: string;
+  summary: string;
+  tags: string[];
+  notes: string[];
+  allocations: BudgetCategoryAllocation[];
+};
+
+export type BudgetPlan = {
+  budget_plan_id: string;
+  trip_id: string;
+  owner_profile_id: string;
+  title: string;
+  mode: string;
+  created_at: string;
+  updated_at: string;
+  scenario_budgets: BudgetScenario[];
+  current_scenario_budget_id: string | null;
+  currency: string;
+  schema_version: string;
+  tags: string[];
+  notes: string[];
+};
+
+export type BudgetVersion = {
+  version_id: string;
+  budget_plan_id: string;
+  recorded_at: string;
+  summary: string;
+};
+
+export type ActualSpendEvent = {
+  spend_event_id: string;
+  trip_id: string;
+  budget_plan_id: string;
+  category_key: string;
+  amount: number;
+  currency: string;
+  occurred_at: string;
+  source_kind: string;
+  source_context: string;
+  scenario_budget_id: string | null;
+  saved_scenario_id: string | null;
+  merchant_name: string;
+  source_ref: string | null;
+  notes: string[];
+};
+
+export type BudgetSummary = {
+  currency: string;
+  has_budget_plan: boolean;
+  current_scenario_budget_id: string | null;
+  current_scenario_title: string | null;
+  planned_total: number;
+  actual_total: number;
+  remaining_total: number;
+  spend_event_count: number;
+  version_count: number;
+  suggested_categories: string[];
+  category_summaries: BudgetCategorySummary[];
+};
+
+export type BudgetWorkspaceState = {
+  budget_plan: BudgetPlan | null;
+  versions: BudgetVersion[];
+  spend_events: ActualSpendEvent[];
+  summary: BudgetSummary;
 };
 
 export type SavedScenarioRecord = {
@@ -112,6 +204,46 @@ export type WorkspaceData = {
     }>;
     notes: string[];
   };
+  budget_state: BudgetWorkspaceState;
+};
+
+export type BudgetPlanUpsertPayload = {
+  title: string;
+  currency: string;
+  current_scenario_budget_id?: string | null;
+  tags?: string[];
+  notes?: string[];
+  scenario_budgets: Array<{
+    scenario_budget_id?: string | null;
+    saved_scenario_id?: string | null;
+    title: string;
+    summary?: string;
+    tags?: string[];
+    notes?: string[];
+    allocations: Array<{
+      category_key: string;
+      label: string;
+      planned_amount: number;
+      currency?: string;
+      flexibility?: string;
+      notes?: string[];
+    }>;
+  }>;
+  summary?: string;
+};
+
+export type ActualSpendEventUpsertPayload = {
+  category_key: string;
+  amount: number;
+  currency?: string | null;
+  occurred_at?: string | null;
+  source_kind: string;
+  source_context: string;
+  scenario_budget_id?: string | null;
+  saved_scenario_id?: string | null;
+  merchant_name?: string;
+  source_ref?: string | null;
+  notes?: string[];
 };
 
 export async function fetchWorkspace(tripId: string): Promise<WorkspaceData> {
@@ -154,5 +286,35 @@ export async function submitPlannerOptionFeedback(
       action_type: actionType,
       decision_id: decisionId,
     }),
+  });
+}
+
+export async function saveWorkspaceBudget(
+  tripId: string,
+  payload: BudgetPlanUpsertPayload
+): Promise<BudgetWorkspaceState> {
+  return fetchJson<BudgetWorkspaceState>({
+    path: `/api/workspace/${tripId}/budget`,
+    method: "PUT",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function recordWorkspaceSpendEvent(
+  tripId: string,
+  payload: ActualSpendEventUpsertPayload
+): Promise<BudgetWorkspaceState> {
+  return fetchJson<BudgetWorkspaceState>({
+    path: `/api/workspace/${tripId}/budget/spend-events`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
   });
 }
