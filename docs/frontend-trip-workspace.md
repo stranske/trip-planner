@@ -24,6 +24,22 @@ The workspace intentionally composes existing backend-facing seams instead of in
 
 The practical rule is that the workspace may summarize scenario, checkpoint, and budget state, but it should not redefine canonical trip, planner, ranking, or budget contracts.
 
+## Budget Reasoning Handoff
+
+Issue `#694` adds the first workspace UI that can mutate persisted budget state instead of only rendering a summary. That UI should remain a thin editor over the canonical budget records:
+
+- category allocations and caps stay in the persisted budget plan
+- actual-spend entries append durable spend events instead of mutating planner outputs
+- workspace totals and variance labels are derived views over the saved budget state
+
+Later planner and policy issues should consume that saved state rather than reading transient form state from the page:
+
+1. scenario comparison and budget-variant work should read `budget_state_id`, `current_scenario_budget_id`, and the saved category totals to explain which scenario remains within the intended budget posture
+2. in-trip adjustment flows should treat actual-spend drift as an explicit trigger for replanning instead of recalculating against ad hoc UI-only numbers
+3. policy and approval surfaces should reuse the same persisted budget categories and variance signals so readiness checks, proposal payloads, and exception handling stay aligned with the planner workspace
+
+The boundary matters because the workspace owns capture and display, while later planner reasoning owns interpretation. If a later issue needs richer budget heuristics, it should build on the persisted plan and spend ledgers produced here instead of introducing a second budget model inside the frontend.
+
 ## Representative Fixtures
 
 Issue `#558` extends the shell fixtures with three route-ready workspace contexts:
