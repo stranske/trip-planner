@@ -475,6 +475,8 @@ describe("WorkspacePage", () => {
   });
 
   it("formats single persisted trip dates without shifting date-only values across time zones", async () => {
+    expect(process.env.TZ).toBe("America/Los_Angeles");
+
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
         ...workspacePayload,
