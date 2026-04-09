@@ -88,6 +88,8 @@ def _derive_follow_up_state(
     requested_exception = proposal_payload.get("requested_exception")
     status = evaluation_result.get("status")
 
+    follow_up: dict[str, Any]
+
     if status == "compliant":
         follow_up = {
             "status": "resolved",
