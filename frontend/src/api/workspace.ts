@@ -173,6 +173,61 @@ export type ScenarioSearchResult = {
   }>;
 };
 
+export type RuntimeScenarioComparison = {
+  title: string;
+  summary: string;
+  lead_scenario_id: string | null;
+  comparison_axes: Array<{
+    key: string;
+    label: string;
+    direction: string;
+  }>;
+  scenarios: Array<{
+    scenario_id: string;
+    title: string;
+    rank: number;
+    status: string;
+    summary: string;
+    comparison_note: string;
+    option_count: number;
+    route_sequence: string[];
+    route_summary: string;
+    recommended_for_selection: boolean;
+    feasible: boolean;
+    metrics: {
+      score: number;
+      travel_minutes: number;
+      transfers: number;
+      estimated_total: number | null;
+    };
+    delta: {
+      score_delta: number;
+      travel_minutes_delta: number;
+      transfers_delta: number;
+      estimated_total_delta: number | null;
+    };
+    highlights: string[];
+  }>;
+  source_refs: string[];
+};
+
+export type FeasibilitySummary = {
+  assessment_count: number;
+  recommended_bundle_count: number;
+  blocking_bundle_count: number;
+  attention_bundle_count: number;
+  notes: string[];
+  assessments: Array<{
+    bundle_id: string;
+    bundle_title: string;
+    bundle_context: string;
+    status: string;
+    total_travel_minutes: number;
+    total_transfer_count: number;
+    friction_penalty_total: number;
+  }>;
+};
+
 export type WorkspaceData = {
   trip_record: TripRecord;
   session: SessionState;
@@ -183,6 +238,7 @@ export type WorkspaceData = {
     focus_areas: string[];
   } | null;
   scenario_search: ScenarioSearchResult;
+  runtime_scenario_comparison: RuntimeScenarioComparison;
   activity_log: Array<{
     activity_event_id: string;
     occurred_at: string;
@@ -190,6 +246,7 @@ export type WorkspaceData = {
     summary: string;
   }>;
   planner_panel_state: PlannerPanelState;
+  feasibility_summary: FeasibilitySummary;
   inventory_summary: {
     bundle_count: number;
     bundles: Array<{

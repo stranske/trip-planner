@@ -13,6 +13,7 @@ import {
   type WorkspaceData,
 } from "../api/workspace";
 import { WorkspaceBudgetPanel } from "../components/budget/WorkspaceBudgetPanel";
+import { TripMap } from "../components/maps/TripMap";
 import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
 
@@ -66,6 +67,14 @@ function resolveActiveScenario(workspace: WorkspaceData) {
     activeVersion,
     scenario: matchedScenario ?? workspace.scenario_search.scenarios[0] ?? null,
   };
+}
+
+function resolveMapScenarioId(workspace: WorkspaceData): string | null {
+  const activeScenario = resolveActiveScenario(workspace).scenario;
+  if (activeScenario?.scenario_id) {
+    return activeScenario.scenario_id;
+  }
+  return workspace.runtime_scenario_comparison.lead_scenario_id;
 }
 
 function buildTimelineStops(workspace: WorkspaceData): TimelineStop[] {
@@ -198,12 +207,16 @@ export function WorkspacePage() {
 
 function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
   const [currentWorkspace, setCurrentWorkspace] = useState(workspace);
+  const [selectedMapScenarioId, setSelectedMapScenarioId] = useState(() =>
+    resolveMapScenarioId(workspace)
+  );
   const [plannerError, setPlannerError] = useState<string | null>(null);
   const [plannerBusyLabel, setPlannerBusyLabel] = useState<string | null>(null);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
   useEffect(() => {
     setCurrentWorkspace(workspace);
+    setSelectedMapScenarioId(resolveMapScenarioId(workspace));
   }, [workspace]);
 
   const timelineStops = buildTimelineStops(currentWorkspace);
@@ -341,6 +354,14 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
           errorMessage={budgetError}
           onSaveBudget={handleBudgetSave}
           onRecordSpend={handleSpendRecord}
+        />
+
+        <TripMap
+          comparison={currentWorkspace.runtime_scenario_comparison}
+          activeScenarioId={selectedMapScenarioId}
+          onSelectScenario={setSelectedMapScenarioId}
+          bundles={currentWorkspace.inventory_summary.bundles}
+          feasibilitySummary={currentWorkspace.feasibility_summary}
         />
 
         <section className="status-card">
