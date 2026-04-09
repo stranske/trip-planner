@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLoaderData } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -501,7 +501,8 @@ describe("WorkspacePage", () => {
     });
 
     expect(screen.getByRole("heading", { name: "Kyoto base with Uji day trip" })).toBeInTheDocument();
-    expect(screen.getAllByText("Kyoto")).toHaveLength(2);
+    expect(screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto")).toHaveLength(2);
     expect(screen.getByText("Uji")).toBeInTheDocument();
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
     expect(screen.getByText("Trip-scoped planner surface")).toBeInTheDocument();
@@ -534,10 +535,14 @@ describe("WorkspacePage", () => {
       expect(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" })).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Balanced Kyoto culture baseline")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 
-    expect(screen.getByText("Higher-energy fallback with extra transfers")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Map preview for Kyoto plus Osaka fallback" })
+    ).toBeInTheDocument();
     expect(screen.getByText("Osaka")).toBeInTheDocument();
     expect(screen.getByText("Higher transfer load to preserve nightlife breadth.")).toBeInTheDocument();
   });
