@@ -205,6 +205,58 @@ export type WorkspaceData = {
     notes: string[];
   };
   budget_state: BudgetWorkspaceState;
+  proposal_state: {
+    proposal_state_id: string;
+    trip_id: string;
+    proposal_id: string;
+    proposal_version: string;
+    scenario_id: string | null;
+    execution_id: string | null;
+    submission_status: string;
+    evaluation_status: string | null;
+    proposal: {
+      proposal_id: string;
+      approval_notes?: string[];
+      comparables?: Array<{
+        category: string;
+        label: string;
+        vendor: string;
+        booking_channel: string;
+        estimated_cost: {
+          currency: string;
+          typical_amount: number;
+        };
+        notes: string[];
+      }>;
+    };
+    evaluation: {
+      evaluation_result?: {
+        evaluation_id: string;
+        status: string;
+        approval_requirements: Array<{
+          role: string;
+          reason: string;
+          mandatory: boolean;
+        }>;
+        failure_reasons: Array<{
+          code: string;
+          message: string;
+          severity: string;
+          related_category: string;
+        }>;
+        notes: string[];
+        compliance_score: number;
+      };
+    };
+    summary: {
+      submission_status?: string;
+      submission_summary?: string;
+      evaluation_result_status?: string;
+      approval_ready?: boolean;
+      comparable_count?: number;
+      highlights?: string[];
+    };
+  } | null;
 };
 
 export type BudgetPlanUpsertPayload = {

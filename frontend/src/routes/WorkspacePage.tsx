@@ -102,6 +102,14 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(value));
 }
 
+function formatCurrency(amount: number, currency: string): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 function ScenarioSummaryCard({
   savedScenario,
   activeVersion,
@@ -309,6 +317,49 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
         />
 
         <section className="status-card">
+          <p className="status-label">Approval packet</p>
+          <h2>
+            {currentWorkspace.proposal_state?.summary.approval_ready
+              ? "Approval packet is ready"
+              : "Proposal lifecycle in progress"}
+          </h2>
+          {currentWorkspace.proposal_state == null ? (
+            <p className="muted-copy">
+              Proposal submission and evaluation records have not been persisted for this workspace yet.
+            </p>
+          ) : (
+            <>
+              <dl className="workspace-meta">
+                <div>
+                  <dt>Submission</dt>
+                  <dd>{currentWorkspace.proposal_state.summary.submission_status ?? "unknown"}</dd>
+                </div>
+                <div>
+                  <dt>Evaluation</dt>
+                  <dd>{currentWorkspace.proposal_state.summary.evaluation_result_status ?? "pending"}</dd>
+                </div>
+                <div>
+                  <dt>Comparables</dt>
+                  <dd>{currentWorkspace.proposal_state.summary.comparable_count ?? 0}</dd>
+                </div>
+                <div>
+                  <dt>Proposal version</dt>
+                  <dd>{currentWorkspace.proposal_state.proposal_version}</dd>
+                </div>
+              </dl>
+              <p>{currentWorkspace.proposal_state.summary.submission_summary ?? "Submission stored for later review."}</p>
+              <div className="decision-stack">
+                {(currentWorkspace.proposal_state.summary.highlights ?? []).map((highlight) => (
+                  <article key={highlight} className="decision-card">
+                    <p>{highlight}</p>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+
+        <section className="status-card">
           <p className="status-label">Inventory bundles</p>
           <h2>Assembled inventory layer</h2>
           <p className="muted-copy">{workspace.inventory_summary.notes[0]}</p>
@@ -445,6 +496,49 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
             </>
           ) : (
             <p className="muted-copy">The workspace will surface durable scenario tradeoff comparisons here.</p>
+          )}
+        </section>
+
+        <section className="status-card">
+          <p className="status-label">Proposal details</p>
+          <h2>Comparables and readiness signals</h2>
+          {currentWorkspace.proposal_state == null ? (
+            <p className="muted-copy">Approval-packet details will render here once a proposal is submitted.</p>
+          ) : (
+            <div className="decision-stack">
+              {(currentWorkspace.proposal_state.proposal.comparables ?? []).map((comparable) => (
+                <article
+                  key={`${comparable.category}-${comparable.label}`}
+                  className="decision-card"
+                >
+                  <h3>{comparable.label}</h3>
+                  <p>
+                    {comparable.vendor} via {comparable.booking_channel} ·{" "}
+                    {formatCurrency(
+                      comparable.estimated_cost.typical_amount,
+                      comparable.estimated_cost.currency
+                    )}
+                  </p>
+                  <p className="muted-copy">{comparable.notes.join(" ")}</p>
+                </article>
+              ))}
+              {(currentWorkspace.proposal_state.evaluation.evaluation_result?.approval_requirements ?? []).map(
+                (requirement) => (
+                  <article key={requirement.role} className="decision-card">
+                    <h3>{requirement.role}</h3>
+                    <p>{requirement.reason}</p>
+                  </article>
+                )
+              )}
+              {(currentWorkspace.proposal_state.evaluation.evaluation_result?.failure_reasons ?? []).map(
+                (failure) => (
+                  <article key={failure.code} className="decision-card">
+                    <h3>{failure.code.replace(/_/g, " ")}</h3>
+                    <p>{failure.message}</p>
+                  </article>
+                )
+              )}
+            </div>
           )}
         </section>
 

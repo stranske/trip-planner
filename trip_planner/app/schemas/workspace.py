@@ -44,6 +44,10 @@ class WorkspaceResponse(BaseModel):
         default=None,
         description="Persisted policy constraint import and readiness summary for business-workspace flows.",
     )
+    proposal_state: dict[str, Any] | None = Field(
+        default=None,
+        description="Persisted proposal submission and evaluation lifecycle state for business-workspace flows.",
+    )
 
 
 class ScenarioComparisonSurfaceResponse(BaseModel):

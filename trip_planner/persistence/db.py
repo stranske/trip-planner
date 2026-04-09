@@ -93,6 +93,7 @@ def ensure_database_ready(url: str | None = None) -> None:
     from trip_planner.persistence.models import (  # noqa: F401
         account,
         policy,
+        proposal,
         scenario,
         session,
         trip,

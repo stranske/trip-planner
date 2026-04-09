@@ -24,6 +24,7 @@ from trip_planner.app.services.inventory import (
     build_inventory_summary_payload,
 )
 from trip_planner.app.services.policy import get_workspace_policy_payload
+from trip_planner.app.services.proposal import get_workspace_proposal_payload
 from trip_planner.app.services.scenarios import (
     build_scenario_ranking_outputs,
     build_workspace_scenario_search,
@@ -703,6 +704,7 @@ def _build_persisted_trip_workspace(
     activity_log: list[dict[str, Any]] | None = None,
     budget_state: dict[str, Any] | None = None,
     policy_context: dict[str, Any] | None = None,
+    proposal_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     resolved_session = session or _default_workspace_session(record).to_dict()
     trip_record = _serialize_persisted_trip_record(record)
@@ -754,11 +756,13 @@ def _build_persisted_trip_workspace(
             activity_log=resolved_activity_log,
             feasibility_summary=feasibility_summary,
             policy_context=policy_context,
+            proposal_context=proposal_context,
         ),
         "feasibility_summary": feasibility_summary,
         "inventory_summary": build_inventory_summary_payload(inventory_bundles),
         "budget_state": resolved_budget_state,
         "policy_state": (policy_context or {}).get("policy_state"),
+        "proposal_state": (proposal_context or {}).get("proposal_state"),
     }
 
 
@@ -818,6 +822,7 @@ def _build_planner_panel_state(
     activity_log: list[dict[str, Any]],
     feasibility_summary: dict[str, Any],
     policy_context: dict[str, Any] | None = None,
+    proposal_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     scenarios = list(scenario_search.get("scenarios", []))
     primary_regions = list(trip["trip_frame"].get("primary_regions") or [])
@@ -1016,15 +1021,30 @@ def _build_planner_panel_state(
             },
         )
 
-    policy_evaluation = (
-        dict(policy_context["policy_evaluation"])
-        if policy_context is not None and policy_context.get("policy_evaluation") is not None
+    proposal_state = (
+        dict(proposal_context["proposal_state"])
+        if proposal_context is not None and proposal_context.get("proposal_state") is not None
         else None
     )
+    policy_evaluation = (
+        dict(proposal_state["evaluation"].get("evaluation_result"))
+        if proposal_state is not None
+        and proposal_state.get("evaluation") is not None
+        and proposal_state["evaluation"].get("evaluation_result") is not None
+        else (
+            dict(policy_context["policy_evaluation"])
+            if policy_context is not None and policy_context.get("policy_evaluation") is not None
+            else None
+        )
+    )
     proposal = (
-        dict(policy_context["proposal"])
-        if policy_context is not None and policy_context.get("proposal") is not None
-        else None
+        dict(proposal_state["proposal"])
+        if proposal_state is not None and proposal_state.get("proposal") is not None
+        else (
+            dict(policy_context["proposal"])
+            if policy_context is not None and policy_context.get("proposal") is not None
+            else None
+        )
     )
     if policy_evaluation is not None:
         outputs.append(
@@ -1049,6 +1069,22 @@ def _build_planner_panel_state(
                 "emphasis": "primary",
                 "target_section": "approval",
             },
+        )
+    if proposal_state is not None:
+        summary = dict(proposal_state.get("summary") or {})
+        outputs.append(
+            {
+                "output_id": f"output:{trip['trip_id']}:proposal-lifecycle",
+                "title": "Proposal lifecycle loaded",
+                "body": "The workspace now carries persisted proposal submission and evaluation state.",
+                "tags": ["proposal", "approval", trip["mode"]],
+                "status": (
+                    "positive"
+                    if summary.get("approval_ready")
+                    else ("caution" if summary.get("evaluation_transport_status") else "neutral")
+                ),
+                "highlights": list(summary.get("highlights") or [])[:3],
+            }
         )
 
     return {
@@ -1123,6 +1159,7 @@ def get_workspace_payload(
                 activity_log=[],
                 feasibility_summary=feasibility_summary,
                 policy_context=None,
+                proposal_context=None,
             ),
             "feasibility_summary": feasibility_summary,
             "inventory_summary": build_inventory_summary_payload(inventory_bundles),
@@ -1131,6 +1168,7 @@ def get_workspace_payload(
                 trip_mode=trip_record.trip.mode,
             ),
             "policy_state": None,
+            "proposal_state": None,
         }
 
     record = db_session.scalar(
@@ -1175,6 +1213,11 @@ def get_workspace_payload(
         budget_state=load_budget_payload_for_workspace(db_session, record=record),
         policy_context=(
             get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
+            if record.mode == "business"
+            else None
+        ),
+        proposal_context=(
+            get_workspace_proposal_payload(db_session, user=user, trip_id=trip_id)
             if record.mode == "business"
             else None
         ),
