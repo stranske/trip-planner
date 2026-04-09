@@ -330,7 +330,6 @@ def save_workspace_proposal_submission(
     proposal_state_id = (
         existing.proposal_state_id if existing is not None else f"proposal-state:{trip_id}"
     )
-    evaluation_record = dict(existing.evaluation_record) if existing is not None else {}
     record = existing or PersistedProposalState(
         proposal_state_id=proposal_state_id,
         trip_id=trip_id,
@@ -345,7 +344,7 @@ def save_workspace_proposal_submission(
         evaluation_status=None,
         proposal_payload=proposal.to_dict(),
         submission_record=submission.to_dict(),
-        evaluation_record=evaluation_record,
+        evaluation_record={},
         summary={},
     )
     record.owner_profile_id = _owner_profile_id(trip_record)
@@ -357,9 +356,10 @@ def save_workspace_proposal_submission(
     record.submission_status = submission.execution_status.state
     record.proposal_payload = proposal.to_dict()
     record.submission_record = submission.to_dict()
+    _reset_evaluation_state(record)
     record.summary = _build_summary(
         submission_record=record.submission_record,
-        evaluation_record=evaluation_record,
+        evaluation_record={},
         proposal_payload=record.proposal_payload,
         persisted_follow_up=dict(existing.summary.get("follow_up") or {}) if existing else None,
     )
@@ -405,6 +405,14 @@ def save_workspace_proposal_evaluation(
     )
     if request.trip_id is not None and request.trip_id != trip_id:
         raise ValueError("evaluation request.trip_id must match the workspace trip.")
+    if evaluation.linkage.trip_id != trip_id:
+        raise ValueError("evaluation linkage.trip_id must match the workspace trip.")
+    if evaluation.linkage.proposal_id != existing.proposal_id:
+        raise ValueError("evaluation linkage.proposal_id must match the persisted proposal.")
+    if evaluation.linkage.proposal_version != existing.proposal_version:
+        raise ValueError(
+            "evaluation linkage.proposal_version must match the persisted proposal version."
+        )
 
     existing.proposal_version = evaluation.linkage.proposal_version
     existing.scenario_id = evaluation.linkage.scenario_id
