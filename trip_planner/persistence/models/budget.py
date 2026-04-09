@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from trip_planner.persistence.db import Base
@@ -79,7 +80,7 @@ class PersistedActualSpendEvent(Base):
         index=True,
     )
     category_key: Mapped[str] = mapped_column(String(64), index=True)
-    amount: Mapped[float] = mapped_column(Float)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     currency: Mapped[str] = mapped_column(String(3))
     occurred_at: Mapped[str] = mapped_column(String(64), index=True)
     source_kind: Mapped[str] = mapped_column(String(32), index=True)

@@ -176,3 +176,116 @@ def test_workspace_budget_spend_event_can_be_updated(client: TestClient) -> None
         if item["category_key"] == "client_hospitality"
     )
     assert hospitality_row["remaining_amount"] == 55
+
+
+def test_workspace_budget_spend_event_rejects_currency_drift(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Budget guardrails",
+            "summary": "Reject cross-currency spend capture.",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 3, "primary_regions": ["Lisbon"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    client.put(
+        f"/api/workspace/{trip_id}/budget",
+        json={
+            "title": "Lisbon budget",
+            "currency": "USD",
+            "scenario_budgets": [
+                {
+                    "title": "Baseline",
+                    "allocations": [
+                        {
+                            "category_key": "food",
+                            "label": "Food",
+                            "planned_amount": 150,
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    recorded = client.post(
+        f"/api/workspace/{trip_id}/budget/spend-events",
+        json={
+            "category_key": "food",
+            "amount": 30,
+            "currency": "eur",
+            "source_kind": "manual",
+            "source_context": "Lunch",
+        },
+    )
+
+    assert recorded.status_code == 400
+    assert recorded.json()["detail"] == "currency must match the persisted budget plan currency"
+
+
+def test_workspace_budget_spend_event_updates_session_timestamp(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Timestamp guardrails",
+            "summary": "Budget spend updates should refresh workspace session state.",
+            "mode": "business",
+            "trip_frame": {"duration_days": 2, "primary_regions": ["Austin"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    client.put(
+        f"/api/workspace/{trip_id}/budget",
+        json={
+            "title": "Austin budget",
+            "currency": "USD",
+            "scenario_budgets": [
+                {
+                    "title": "Baseline",
+                    "allocations": [
+                        {
+                            "category_key": "workspace",
+                            "label": "Workspace",
+                            "planned_amount": 120,
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    workspace_before = client.get(f"/api/workspace/{trip_id}").json()
+    before_timestamp = workspace_before["session"]["updated_at"]
+
+    recorded = client.post(
+        f"/api/workspace/{trip_id}/budget/spend-events",
+        json={
+            "category_key": "workspace",
+            "amount": 45,
+            "source_kind": "manual",
+            "source_context": "Coworking day pass",
+        },
+    )
+
+    assert recorded.status_code == 200
+    workspace_after_create = client.get(f"/api/workspace/{trip_id}").json()
+    after_create_timestamp = workspace_after_create["session"]["updated_at"]
+    assert after_create_timestamp > before_timestamp
+
+    spend_event_id = recorded.json()["spend_events"][0]["spend_event_id"]
+    updated = client.patch(
+        f"/api/workspace/{trip_id}/budget/spend-events/{spend_event_id}",
+        json={
+            "category_key": "workspace",
+            "amount": 55,
+            "source_kind": "receipt",
+            "source_context": "Final receipt",
+            "currency": "USD",
+        },
+    )
+
+    assert updated.status_code == 200
+    workspace_after_update = client.get(f"/api/workspace/{trip_id}").json()
+    assert workspace_after_update["session"]["updated_at"] > after_create_timestamp

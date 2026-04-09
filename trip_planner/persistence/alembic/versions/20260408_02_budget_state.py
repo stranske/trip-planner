@@ -121,7 +121,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("category_key", sa.String(length=64), nullable=False),
-        sa.Column("amount", sa.Float(), nullable=False),
+        sa.Column("amount", sa.Numeric(precision=12, scale=2), nullable=False),
         sa.Column("currency", sa.String(length=3), nullable=False),
         sa.Column("occurred_at", sa.String(length=64), nullable=False),
         sa.Column("source_kind", sa.String(length=32), nullable=False),

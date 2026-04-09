@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -48,12 +49,60 @@ def _isoformat(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _to_currency_amount(value: float | Decimal) -> float:
+    return round(float(value), 2)
+
+
+def _next_session_timestamp(current_value: str | None) -> str:
+    now = datetime.now(UTC)
+    if current_value:
+        current_dt = datetime.fromisoformat(current_value.replace("Z", "+00:00"))
+        if now <= current_dt:
+            now = current_dt + timedelta(microseconds=1)
+    return _isoformat(now)
+
+
 def _owner_profile_id(record: PersistedTrip) -> str:
     if record.mode == "business" and record.business_profile_id:
         return record.business_profile_id
     if record.leisure_profile_id:
         return record.leisure_profile_id
     return f"profile:{record.trip_id}:{record.mode}"
+
+
+def _ensure_session_record(
+    db_session: Session,
+    *,
+    record: PersistedTrip,
+    timestamp: str,
+) -> PersistedPlanningSessionState:
+    session_record = db_session.get(PersistedPlanningSessionState, f"session:{record.trip_id}")
+    if session_record is not None:
+        return session_record
+
+    session_record = PersistedPlanningSessionState(
+        session_state_id=f"session:{record.trip_id}",
+        trip_id=record.trip_id,
+        user_id=record.user_id,
+        owner_profile_id=_owner_profile_id(record),
+        mode=record.mode,
+        started_at=_isoformat(record.created_at),
+        last_updated_at=timestamp,
+        interaction_state={},
+        recent_option_presentations=[],
+        pending_decisions=[],
+        status="active",
+        current_checkpoint_id=None,
+        current_saved_scenario_id=None,
+        active_budget_plan_id=record.budget_state_id,
+        activity_log_id=f"activity-log:{record.trip_id}",
+        schema_version="0.1.0",
+        tags=[],
+        notes=["Workspace budget state initialized before planner session activity."],
+    )
+    db_session.add(session_record)
+    db_session.flush()
+    return session_record
 
 
 def _suggested_categories(mode: str) -> list[str]:
@@ -92,7 +141,7 @@ def _serialize_spend_event(record: PersistedActualSpendEvent) -> dict[str, Any]:
             "trip_id": record.trip_id,
             "budget_plan_id": record.budget_plan_id,
             "category_key": record.category_key,
-            "amount": record.amount,
+            "amount": _to_currency_amount(record.amount),
             "currency": record.currency,
             "occurred_at": record.occurred_at,
             "source_kind": record.source_kind,
@@ -320,7 +369,7 @@ def upsert_workspace_budget_plan(
         .where(PersistedBudgetPlan.trip_id == record.trip_id)
         .where(PersistedBudgetPlan.user_id == record.user_id)
     )
-    now = _isoformat(datetime.now(UTC))
+    now = _next_session_timestamp(None)
     plan_id = existing.budget_plan_id if existing is not None else f"budget-plan:{record.trip_id}"
     normalized_scenarios: list[dict[str, Any]] = []
     for index, scenario_payload in enumerate(scenario_budgets):
@@ -399,10 +448,10 @@ def upsert_workspace_budget_plan(
         existing.updated_at = budget_plan.updated_at
 
     record.budget_state_id = budget_plan.budget_plan_id
-    session_record = db_session.get(PersistedPlanningSessionState, f"session:{record.trip_id}")
-    if session_record is not None:
-        session_record.active_budget_plan_id = budget_plan.budget_plan_id
-        session_record.last_updated_at = now
+    session_record = _ensure_session_record(db_session, record=record, timestamp=now)
+    session_record.active_budget_plan_id = budget_plan.budget_plan_id
+    session_record.last_updated_at = now
+    record.updated_at = datetime.now(UTC)
 
     db_session.add(
         PersistedBudgetPlanVersion(
@@ -445,14 +494,23 @@ def record_workspace_spend_event(
         raise WorkspaceBudgetNotFoundError(
             f"Trip '{trip_id}' does not have a persisted budget plan yet."
         )
+    event_currency = plan_record.currency
+    if currency is not None:
+        normalized_currency = currency.strip().upper()
+        if len(normalized_currency) != 3 or not normalized_currency.isalpha():
+            raise ValueError("currency must be a 3-letter ISO currency code")
+        if normalized_currency != plan_record.currency:
+            raise ValueError("currency must match the persisted budget plan currency")
+        event_currency = normalized_currency
+    now = _isoformat(datetime.now(UTC))
     event = ActualSpendEvent(
         spend_event_id=f"spend:{record.trip_id}:{secrets.token_hex(4)}",
         trip_id=record.trip_id,
         budget_plan_id=plan_record.budget_plan_id,
         category_key=category_key,
         amount=amount,
-        currency=currency or plan_record.currency,
-        occurred_at=occurred_at or _isoformat(datetime.now(UTC)),
+        currency=event_currency,
+        occurred_at=occurred_at or now,
         source_kind=source_kind,
         source_context=source_context,
         scenario_budget_id=scenario_budget_id,
@@ -479,6 +537,10 @@ def record_workspace_spend_event(
             notes=list(event.notes),
         )
     )
+    session_record = _ensure_session_record(db_session, record=record, timestamp=now)
+    session_record.active_budget_plan_id = plan_record.budget_plan_id
+    session_record.last_updated_at = _next_session_timestamp(session_record.last_updated_at)
+    record.updated_at = datetime.now(UTC)
     db_session.commit()
     return _load_budget_payload_for_record(db_session, record=record)
 
@@ -511,9 +573,18 @@ def update_workspace_spend_event(
         raise ValueError(f"source_kind must be one of {ACTUAL_SPEND_SOURCE_KINDS}")
     if category_key not in BUDGET_CATEGORY_KEYS:
         raise ValueError(f"category_key must be one of {BUDGET_CATEGORY_KEYS}")
+    updated_currency = event_record.currency
+    if currency is not None:
+        normalized_currency = currency.strip().upper()
+        if len(normalized_currency) != 3 or not normalized_currency.isalpha():
+            raise ValueError("currency must be a 3-letter ISO currency code")
+        if normalized_currency != event_record.currency:
+            raise ValueError("currency cannot be changed for an existing spend event")
+        updated_currency = normalized_currency
+    now = _next_session_timestamp(None)
     event_record.category_key = category_key
     event_record.amount = amount
-    event_record.currency = currency or event_record.currency
+    event_record.currency = updated_currency
     event_record.occurred_at = occurred_at or event_record.occurred_at
     event_record.source_kind = source_kind
     event_record.source_context = source_context
@@ -522,5 +593,9 @@ def update_workspace_spend_event(
     event_record.merchant_name = merchant_name
     event_record.source_ref = source_ref
     event_record.notes = list(notes)
+    session_record = _ensure_session_record(db_session, record=record, timestamp=now)
+    session_record.active_budget_plan_id = event_record.budget_plan_id
+    session_record.last_updated_at = _next_session_timestamp(session_record.last_updated_at)
+    record.updated_at = datetime.now(UTC)
     db_session.commit()
     return _load_budget_payload_for_record(db_session, record=record)
