@@ -200,6 +200,57 @@ const workspacePayload = {
       ],
     },
   },
+  proposal_state: {
+    proposal_state_id: "proposal-state:trip-leisure-kyoto-draft",
+    trip_id: "trip-leisure-kyoto-draft",
+    proposal_id: "proposal:trip-leisure-kyoto-draft",
+    proposal_version: "proposal-v3",
+    scenario_id: "scenario:trip-leisure-kyoto-draft:1",
+    execution_id: "exec-approved-001",
+    submission_status: "succeeded",
+    evaluation_status: "succeeded",
+    proposal: {
+      proposal_id: "proposal:trip-leisure-kyoto-draft",
+      comparables: [
+        {
+          category: "lodging",
+          label: "Conference Hotel",
+          vendor: "Marriott",
+          booking_channel: "Navan",
+          estimated_cost: {
+            currency: "USD",
+            typical_amount: 245,
+          },
+          notes: ["Near the venue."],
+        },
+      ],
+      approval_notes: ["Manager review required."],
+    },
+    evaluation: {
+      evaluation_result: {
+        evaluation_id: "eval-approved-001",
+        status: "compliant",
+        approval_requirements: [
+          {
+            role: "manager",
+            reason: "International travel",
+            mandatory: true,
+          },
+        ],
+        failure_reasons: [],
+        notes: ["Policy constraints satisfied."],
+        compliance_score: 0.98,
+      },
+    },
+    summary: {
+      submission_status: "succeeded",
+      submission_summary: "Proposal submitted to the policy engine.",
+      evaluation_result_status: "compliant",
+      approval_ready: true,
+      comparable_count: 1,
+      highlights: ["Policy constraints satisfied."],
+    },
+  },
   planner_panel_state: {
     trip: {
       trip_id: "trip-leisure-kyoto-draft",
@@ -327,6 +378,9 @@ describe("WorkspacePage", () => {
     expect(screen.getByRole("heading", { name: "Assembled inventory layer" })).toBeInTheDocument();
     expect(screen.getByText("Osaka arrival buffer")).toBeInTheDocument();
     expect(screen.getByText("Kyoto cultural anchor")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Approval packet is ready" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Comparables and readiness signals" })).toBeInTheDocument();
+    expect(screen.getByText("Conference Hotel")).toBeInTheDocument();
     await waitFor(() => {
       const plannerPanel = getPlannerHost().shadowRoot?.querySelector(
         '[aria-label="Planner side panel"]'
