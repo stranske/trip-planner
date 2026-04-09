@@ -98,8 +98,16 @@ def save_workspace_proposal_follow_up_state(
             summary=payload.summary,
             title=payload.title,
             notes=payload.notes,
-            selected_alternative=payload.selected_alternative,
-            requested_exception=payload.requested_exception,
+            selected_alternative=(
+                payload.selected_alternative.model_dump(mode="python")
+                if payload.selected_alternative is not None
+                else None
+            ),
+            requested_exception=(
+                payload.requested_exception.model_dump(mode="python")
+                if payload.requested_exception is not None
+                else None
+            ),
         )
     except WorkspaceProposalNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error

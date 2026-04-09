@@ -275,7 +275,7 @@ export type WorkspaceData = {
         requested_approval_roles: string[];
         notes: string[];
       } | null;
-    };
+    } | null;
     summary: {
       submission_status?: string;
       submission_summary?: string;

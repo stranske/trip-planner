@@ -216,7 +216,43 @@ def _build_summary(
     }
 
 
+_FOLLOW_UP_PATH_BY_STATUS: dict[str, str] = {
+    "reoptimization_required": "reoptimization",
+    "reoptimized": "reoptimization",
+    "exception_required": "exception",
+    "exception_requested": "exception",
+}
+_FOLLOW_UP_STATUSES_USING_EXISTING_PATH = {"approval_pending", "resolved"}
+
+
+def _resolved_follow_up_payload(record: PersistedProposalState) -> dict[str, Any]:
+    follow_up = dict(record.summary.get("follow_up") or {})
+    if follow_up:
+        return follow_up
+    return _derive_follow_up_state(
+        proposal_payload=dict(record.proposal_payload),
+        evaluation_record=dict(record.evaluation_record),
+        submission_record=dict(record.submission_record),
+    )
+
+
+def _resolve_manual_follow_up_path(
+    *, existing_follow_up: dict[str, Any], status: str
+) -> str:
+    if status in _FOLLOW_UP_PATH_BY_STATUS:
+        return _FOLLOW_UP_PATH_BY_STATUS[status]
+    if status in _FOLLOW_UP_STATUSES_USING_EXISTING_PATH:
+        existing_path = existing_follow_up.get("path")
+        if existing_path in {"approval", "exception", "reoptimization"}:
+            return str(existing_path)
+        raise ValueError(
+            f"Cannot store follow-up status '{status}' without an existing follow-up path."
+        )
+    raise ValueError(f"Unsupported workspace proposal follow-up status: {status}")
+
+
 def _serialize_proposal_state(record: PersistedProposalState) -> dict[str, Any]:
+    follow_up = _resolved_follow_up_payload(record)
     return {
         "proposal_state_id": record.proposal_state_id,
         "trip_id": record.trip_id,
@@ -232,7 +268,7 @@ def _serialize_proposal_state(record: PersistedProposalState) -> dict[str, Any]:
         "submission": dict(record.submission_record),
         "evaluation": dict(record.evaluation_record),
         "summary": dict(record.summary),
-        "follow_up": dict(record.summary.get("follow_up") or {}),
+        "follow_up": follow_up,
     }
 
 
@@ -407,6 +443,7 @@ def save_workspace_proposal_follow_up(
             "Proposal follow-up cannot be stored before a proposal submission exists."
         )
 
+    existing_follow_up = _resolved_follow_up_payload(existing)
     proposal_payload = dict(existing.proposal_payload)
     serialized_exception: dict[str, Any] | None = None
     if requested_exception is not None:
@@ -416,7 +453,10 @@ def save_workspace_proposal_follow_up(
     manual_follow_up = {
         "manual": True,
         "status": status,
-        "path": "exception" if "exception" in status else "reoptimization",
+        "path": _resolve_manual_follow_up_path(
+            existing_follow_up=existing_follow_up,
+            status=status,
+        ),
         "title": title or existing.summary.get("follow_up_title") or "Workspace follow-up updated",
         "summary": summary,
         "notes": list(notes),
