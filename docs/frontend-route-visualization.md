@@ -18,7 +18,7 @@ Issue `#559` adds visualization-oriented shell surfaces that consume route and f
 ## Current runtime contract
 
 - `frontend/src/components/maps/TripMap.tsx` is the current first-pass route/context map surface for workspace rendering.
-- The component consumes `runtime_scenario_comparison.scenarios[*].route_sequence`, `route_summary`, metric deltas, and `inventory_summary.bundles[*].destination_names`.
+- The component consumes `runtime_scenario_comparison.scenarios[*].route_sequence`, `route_summary`, `metrics`, and `inventory_summary.bundles[*].destination_names`.
 - `feasibility_summary.assessments` remains the source of route-attention and bundle-readiness signals; the map surface may summarize those signals, but it must not recalculate feasibility in the browser.
 - Scenario preview changes are local presentation changes. The selected map preview should start from persisted workspace state and then update the rendered map surface without mutating backend route logic.
 

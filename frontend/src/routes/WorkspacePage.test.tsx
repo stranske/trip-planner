@@ -182,7 +182,10 @@ const workspacePayload = {
           score: 0.93,
           travel_minutes: 265,
           transfers: 4,
-          estimated_total: 3400,
+          estimated_total: {
+            currency: "JPY",
+            typical_amount: 3400,
+          },
         },
         delta: {
           score_delta: 0,
@@ -208,7 +211,10 @@ const workspacePayload = {
           score: 0.88,
           travel_minutes: 360,
           transfers: 7,
-          estimated_total: 3250,
+          estimated_total: {
+            currency: "JPY",
+            typical_amount: 3250,
+          },
         },
         delta: {
           score_delta: -0.05,
@@ -500,13 +506,15 @@ describe("WorkspacePage", () => {
       expect(screen.getByRole("heading", { name: "Spring Kyoto anniversary draft" })).toBeInTheDocument();
     });
 
+    const routeContextMap = screen.getByLabelText("Route context map");
+
     expect(screen.getByRole("heading", { name: "Kyoto base with Uji day trip" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })).toBeInTheDocument();
-    expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto")).toHaveLength(2);
-    expect(screen.getByText("Uji")).toBeInTheDocument();
+    expect(within(routeContextMap).getAllByRole("heading", { name: "Kyoto" })).toHaveLength(2);
+    expect(within(routeContextMap).getByRole("heading", { name: "Uji" })).toBeInTheDocument();
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
     expect(screen.getByText("Trip-scoped planner surface")).toBeInTheDocument();
-    expect(screen.getByLabelText("Route context map")).toBeInTheDocument();
+    expect(routeContextMap).toBeInTheDocument();
     expect(screen.getByText("Destination anchors")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Assembled inventory layer" })).toBeInTheDocument();
     expect(screen.getByText("Osaka arrival buffer")).toBeInTheDocument();
@@ -543,7 +551,7 @@ describe("WorkspacePage", () => {
     expect(
       screen.getByRole("heading", { name: "Map preview for Kyoto plus Osaka fallback" })
     ).toBeInTheDocument();
-    expect(screen.getByText("Osaka")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Route context map")).getByRole("heading", { name: "Osaka" })).toBeInTheDocument();
     expect(screen.getByText("Higher transfer load to preserve nightlife breadth.")).toBeInTheDocument();
   });
 

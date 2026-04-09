@@ -18,15 +18,18 @@ function humanizeStop(stop: string): string {
     .join(" ");
 }
 
-function formatEstimatedTotal(value: number | null): string {
+function formatEstimatedTotal(
+  value: RuntimeScenarioComparison["scenarios"][number]["metrics"]["estimated_total"]
+): string {
   if (value == null) {
     return "Pending";
   }
+
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: value.currency,
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(value.typical_amount);
 }
 
 function summarizeFeasibility(

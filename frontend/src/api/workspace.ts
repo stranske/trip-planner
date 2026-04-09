@@ -180,7 +180,7 @@ export type RuntimeScenarioComparison = {
   comparison_axes: Array<{
     key: string;
     label: string;
-    direction: string;
+    direction: "higher_better" | "lower_better";
   }>;
   scenarios: Array<{
     scenario_id: string;
@@ -198,7 +198,10 @@ export type RuntimeScenarioComparison = {
       score: number;
       travel_minutes: number;
       transfers: number;
-      estimated_total: number | null;
+      estimated_total: {
+        currency: string;
+        typical_amount: number;
+      } | null;
     };
     delta: {
       score_delta: number;
