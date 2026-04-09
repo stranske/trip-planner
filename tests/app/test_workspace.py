@@ -145,6 +145,7 @@ def test_workspace_endpoint_returns_minimal_payload_for_persisted_trip(
             },
         },
     )
+    assert created.status_code == 201
     trip_id = created.json()["trip"]["trip_id"]
 
     response = client.get(f"/api/workspace/{trip_id}")
@@ -176,6 +177,7 @@ def test_workspace_planner_decision_answer_persists_across_reload(client: TestCl
             "trip_frame": {"duration_days": 2, "primary_regions": ["Austin"]},
         },
     )
+    assert created.status_code == 201
     trip_id = created.json()["trip"]["trip_id"]
 
     initial = client.get(f"/api/workspace/{trip_id}")
@@ -219,6 +221,7 @@ def test_workspace_option_feedback_persists_across_reload(client: TestClient) ->
             "trip_frame": {"duration_days": 5, "primary_regions": ["Kyoto"]},
         },
     )
+    assert created.status_code == 201
     trip_id = created.json()["trip"]["trip_id"]
 
     initial = client.get(f"/api/workspace/{trip_id}")
@@ -254,6 +257,7 @@ def test_workspace_activity_log_is_capped_for_persisted_trips(client: TestClient
             "trip_frame": {"duration_days": 2, "primary_regions": ["Tokyo"]},
         },
     )
+    assert created.status_code == 201
     trip_id = created.json()["trip"]["trip_id"]
     option_id = client.get(f"/api/workspace/{trip_id}").json()["planner_panel_state"]["option_set"][
         "options"
@@ -285,6 +289,7 @@ def test_workspace_endpoint_hides_other_users_persisted_trips(
             "trip_frame": {"duration_days": 7},
         },
     )
+    assert created.status_code == 201
     trip_id = created.json()["trip"]["trip_id"]
 
     client.post("/api/auth/logout")
