@@ -171,6 +171,57 @@ def test_workspace_endpoint_returns_minimal_payload_for_persisted_trip(
     assert payload["budget_state"]["summary"]["has_budget_plan"] is False
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_bootstrap"
+    assert payload["policy_state"] is None
+
+
+def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_trip(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Policy-backed workspace",
+            "summary": "Business workspace should load stored policy posture.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "fixtures"
+            / "integrations"
+            / "tpp"
+            / "policy"
+            / "standard_policy_sync.json"
+        ).read_text(encoding="utf-8")
+    )
+    imported = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={
+            "request": fixture["request"],
+            "response": fixture["response"],
+            "notes": ["Policy-backed workspace test import."],
+        },
+    )
+    assert imported.status_code == 200
+
+    response = client.get(f"/api/workspace/{trip_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["policy_state"]["policy_id"] == "policy-standard-2026-02"
+    assert payload["planner_panel_state"]["policy_evaluation"]["status"] == "compliant"
+    assert payload["planner_panel_state"]["proposal"]["constraint_set_id"] == "policy-standard-2026-02"
+    assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Policy posture loaded"
+    assert payload["planner_panel_state"]["next_step_actions"][0]["target_section"] == "approval"
+    assert "Navan" in payload["planner_panel_state"]["policy_evaluation"]["notes"][-2]
 
 
 def test_workspace_planner_decision_answer_persists_across_reload(client: TestClient) -> None:

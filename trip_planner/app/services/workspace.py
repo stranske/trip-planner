@@ -23,6 +23,7 @@ from trip_planner.app.services.inventory import (
     assemble_inventory_bundles_for_trip,
     build_inventory_summary_payload,
 )
+from trip_planner.app.services.policy import get_workspace_policy_payload
 from trip_planner.app.services.scenarios import (
     build_scenario_ranking_outputs,
     build_workspace_scenario_search,
@@ -701,6 +702,7 @@ def _build_persisted_trip_workspace(
     saved_scenarios: list[dict[str, Any]] | None = None,
     activity_log: list[dict[str, Any]] | None = None,
     budget_state: dict[str, Any] | None = None,
+    policy_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     resolved_session = session or _default_workspace_session(record).to_dict()
     trip_record = _serialize_persisted_trip_record(record)
@@ -751,10 +753,12 @@ def _build_persisted_trip_workspace(
             session=resolved_session,
             activity_log=resolved_activity_log,
             feasibility_summary=feasibility_summary,
+            policy_context=policy_context,
         ),
         "feasibility_summary": feasibility_summary,
         "inventory_summary": build_inventory_summary_payload(inventory_bundles),
         "budget_state": resolved_budget_state,
+        "policy_state": (policy_context or {}).get("policy_state"),
     }
 
 
@@ -813,6 +817,7 @@ def _build_planner_panel_state(
     session: dict[str, Any],
     activity_log: list[dict[str, Any]],
     feasibility_summary: dict[str, Any],
+    policy_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     scenarios = list(scenario_search.get("scenarios", []))
     primary_regions = list(trip["trip_frame"].get("primary_regions") or [])
@@ -1011,11 +1016,46 @@ def _build_planner_panel_state(
             },
         )
 
+    policy_evaluation = (
+        dict(policy_context["policy_evaluation"])
+        if policy_context is not None and policy_context.get("policy_evaluation") is not None
+        else None
+    )
+    proposal = (
+        dict(policy_context["proposal"])
+        if policy_context is not None and policy_context.get("proposal") is not None
+        else None
+    )
+    if policy_evaluation is not None:
+        outputs.append(
+            {
+                "output_id": f"output:{trip['trip_id']}:policy-ready",
+                "title": "Policy posture loaded",
+                "body": "The workspace is using persisted policy inputs instead of mock approval-readiness state.",
+                "tags": ["policy", "workspace", trip["mode"]],
+                "status": "positive"
+                if policy_evaluation["status"] == "compliant"
+                else ("critical" if policy_evaluation["status"] == "non_compliant" else "caution"),
+                "highlights": list(policy_evaluation.get("notes") or [])[:3],
+            }
+        )
+        next_step_actions.insert(
+            0,
+            {
+                "action_id": f"action:{trip['trip_id']}:review-policy",
+                "action_kind": "prepare_approval",
+                "label": "Review policy posture",
+                "description": "Inspect imported policy constraints and approval-readiness before moving to submission work.",
+                "emphasis": "primary",
+                "target_section": "approval",
+            },
+        )
+
     return {
         "trip": trip,
         "option_set": option_set,
-        "proposal": None,
-        "policy_evaluation": None,
+        "proposal": proposal,
+        "policy_evaluation": policy_evaluation,
         "pending_decisions": mapped_decisions,
         "outputs": outputs,
         "planner_behavior": {
@@ -1082,6 +1122,7 @@ def get_workspace_payload(
                 session=session.to_dict(),
                 activity_log=[],
                 feasibility_summary=feasibility_summary,
+                policy_context=None,
             ),
             "feasibility_summary": feasibility_summary,
             "inventory_summary": build_inventory_summary_payload(inventory_bundles),
@@ -1089,6 +1130,7 @@ def get_workspace_payload(
                 trip_id=trip_id,
                 trip_mode=trip_record.trip.mode,
             ),
+            "policy_state": None,
         }
 
     record = db_session.scalar(
@@ -1131,6 +1173,11 @@ def get_workspace_payload(
         ],
         activity_log=[_serialize_activity_record(item) for item in activity_records],
         budget_state=load_budget_payload_for_workspace(db_session, record=record),
+        policy_context=(
+            get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
+            if record.mode == "business"
+            else None
+        ),
     )
 
 
