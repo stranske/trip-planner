@@ -1072,6 +1072,7 @@ def _build_planner_panel_state(
         )
     if proposal_state is not None:
         summary = dict(proposal_state.get("summary") or {})
+        follow_up = dict(proposal_state.get("follow_up") or {})
         outputs.append(
             {
                 "output_id": f"output:{trip['trip_id']}:proposal-lifecycle",
@@ -1086,6 +1087,34 @@ def _build_planner_panel_state(
                 "highlights": list(summary.get("highlights") or [])[:3],
             }
         )
+        if follow_up:
+            outputs.append(
+                {
+                    "output_id": f"output:{trip['trip_id']}:proposal-follow-up",
+                    "title": follow_up.get("title") or "Proposal follow-up",
+                    "body": follow_up.get("summary")
+                    or "The workspace has a persisted follow-up path after policy evaluation.",
+                    "tags": ["proposal", "follow-up", trip["mode"]],
+                    "status": (
+                        "positive"
+                        if follow_up.get("status") in {"resolved", "approval_pending"}
+                        else ("critical" if follow_up.get("status") == "reoptimization_required" else "caution")
+                    ),
+                    "highlights": list(follow_up.get("guidance") or [])[:2],
+                }
+            )
+            next_step_actions.insert(
+                0,
+                {
+                    "action_id": f"action:{trip['trip_id']}:proposal-follow-up",
+                    "action_kind": follow_up.get("recommended_action") or "review_follow_up",
+                    "label": follow_up.get("recommended_label") or "Review proposal follow-up",
+                    "description": follow_up.get("summary")
+                    or "Inspect the persisted follow-up lane for the latest policy result.",
+                    "emphasis": "primary",
+                    "target_section": "approval",
+                },
+            )
 
     return {
         "trip": trip,

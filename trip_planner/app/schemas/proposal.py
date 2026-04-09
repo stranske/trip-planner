@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -26,6 +26,22 @@ class WorkspaceProposalEvaluationRequest(BaseModel):
     )
     proposal_version: str = Field(min_length=1, max_length=96)
     scenario_id: str | None = Field(default=None, max_length=96)
+
+
+class WorkspaceProposalFollowUpRequest(BaseModel):
+    status: Literal[
+        "reoptimization_required",
+        "reoptimized",
+        "exception_required",
+        "exception_requested",
+        "approval_pending",
+        "resolved",
+    ]
+    summary: str = Field(min_length=1, max_length=280)
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    notes: list[str] = Field(default_factory=list)
+    selected_alternative: dict[str, Any] | None = None
+    requested_exception: dict[str, Any] | None = None
 
 
 class WorkspaceProposalResponse(BaseModel):

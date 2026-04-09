@@ -248,6 +248,34 @@ export type WorkspaceData = {
         compliance_score: number;
       };
     };
+    follow_up: {
+      status: string;
+      path: string;
+      title: string;
+      summary: string;
+      recommended_action?: string;
+      recommended_label?: string;
+      alternatives?: Array<{
+        category: string;
+        summary: string;
+        rationale: string;
+        comparable_ref?: string | null;
+      }>;
+      guidance?: string[];
+      notes?: string[];
+      selected_alternative?: {
+        category?: string;
+        summary?: string;
+        rationale?: string;
+        comparable_ref?: string | null;
+      } | null;
+      requested_exception?: {
+        exception_type: string;
+        reason: string;
+        requested_approval_roles: string[];
+        notes: string[];
+      } | null;
+    };
     summary: {
       submission_status?: string;
       submission_summary?: string;
@@ -255,6 +283,9 @@ export type WorkspaceData = {
       approval_ready?: boolean;
       comparable_count?: number;
       highlights?: string[];
+      follow_up_status?: string;
+      follow_up_title?: string;
+      follow_up_summary?: string;
     };
   } | null;
 };
