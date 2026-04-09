@@ -413,6 +413,18 @@ def save_workspace_proposal_evaluation(
         raise ValueError(
             "evaluation linkage.proposal_version must match the persisted proposal version."
         )
+    if (
+        existing.scenario_id is not None
+        and evaluation.linkage.scenario_id is not None
+        and evaluation.linkage.scenario_id != existing.scenario_id
+    ):
+        raise ValueError("evaluation linkage.scenario_id must match the persisted proposal.")
+    if (
+        existing.organization_id is not None
+        and evaluation.linkage.organization_id is not None
+        and evaluation.linkage.organization_id != existing.organization_id
+    ):
+        raise ValueError("evaluation linkage.organization_id must match the persisted proposal.")
 
     existing.proposal_version = evaluation.linkage.proposal_version
     existing.scenario_id = evaluation.linkage.scenario_id

@@ -1026,26 +1026,29 @@ def _build_planner_panel_state(
         if proposal_context is not None and proposal_context.get("proposal_state") is not None
         else None
     )
-    policy_evaluation = (
-        dict(proposal_state["evaluation"].get("evaluation_result"))
-        if proposal_state is not None
-        and proposal_state.get("evaluation") is not None
-        and proposal_state["evaluation"].get("evaluation_result") is not None
-        else (
+    if proposal_state is not None:
+        policy_evaluation = (
+            dict(proposal_state["evaluation"].get("evaluation_result"))
+            if proposal_state.get("evaluation") is not None
+            and proposal_state["evaluation"].get("evaluation_result") is not None
+            else None
+        )
+        proposal = (
+            dict(proposal_state["proposal"])
+            if proposal_state.get("proposal") is not None
+            else None
+        )
+    else:
+        policy_evaluation = (
             dict(policy_context["policy_evaluation"])
             if policy_context is not None and policy_context.get("policy_evaluation") is not None
             else None
         )
-    )
-    proposal = (
-        dict(proposal_state["proposal"])
-        if proposal_state is not None and proposal_state.get("proposal") is not None
-        else (
+        proposal = (
             dict(policy_context["proposal"])
             if policy_context is not None and policy_context.get("proposal") is not None
             else None
         )
-    )
     if policy_evaluation is not None:
         outputs.append(
             {
