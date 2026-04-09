@@ -134,6 +134,7 @@ export async function protectedWorkspaceLoader({ params, request }: LoaderFuncti
 
   return {
     workspace: fetchWorkspace(params.tripId ?? DEFAULT_WORKSPACE_TRIP),
+    trips: fetchTrips(),
   };
 }
 

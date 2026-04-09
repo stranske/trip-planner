@@ -1,6 +1,7 @@
 import { startTransition, useEffect, useState } from "react";
 import { useLoaderData } from "react-router-dom";
 
+import type { TripRecord } from "../api/trips";
 import {
   answerPlannerDecision,
   recordWorkspaceSpendEvent,
@@ -15,10 +16,13 @@ import {
 import { WorkspaceBudgetPanel } from "../components/budget/WorkspaceBudgetPanel";
 import { TripMap } from "../components/maps/TripMap";
 import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
+import { TripComparison } from "../components/trips/TripComparison";
+import { ScenarioComparison } from "../components/workspace/ScenarioComparison";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
 
 type LoaderData = {
   workspace: Promise<WorkspaceData>;
+  trips?: Promise<TripRecord[]>;
 };
 
 type TimelineStop = {
@@ -184,11 +188,11 @@ function mergeWorkspaceBudgetState(
 }
 
 export function WorkspacePage() {
-  const { workspace } = useLoaderData() as LoaderData;
+  const { workspace, trips } = useLoaderData() as LoaderData;
 
   return (
     <AsyncRouteContent
-      resolve={workspace}
+      resolve={Promise.all([workspace, trips ?? Promise.resolve([] as TripRecord[])])}
       loading={{
         label: "Workspace",
         title: "Loading persisted trip state",
@@ -200,15 +204,29 @@ export function WorkspacePage() {
         message: "The shared API client could not load the workspace payload.",
       }}
     >
-      {(resolvedWorkspace) => <WorkspacePageContent workspace={resolvedWorkspace} />}
+      {([resolvedWorkspace, resolvedTrips]) => (
+        <WorkspacePageContent workspace={resolvedWorkspace} trips={resolvedTrips} />
+      )}
     </AsyncRouteContent>
   );
 }
 
-function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
+function WorkspacePageContent({
+  workspace,
+  trips,
+}: {
+  workspace: WorkspaceData;
+  trips: TripRecord[];
+}) {
   const [currentWorkspace, setCurrentWorkspace] = useState(workspace);
   const [selectedMapScenarioId, setSelectedMapScenarioId] = useState(() =>
     resolveMapScenarioId(workspace)
+  );
+  const [selectedScenarioComparisonId, setSelectedScenarioComparisonId] = useState<string | null>(
+    () => workspace.runtime_scenario_comparison.lead_scenario_id
+  );
+  const [selectedTripComparisonId, setSelectedTripComparisonId] = useState<string | null>(
+    () => trips.find((trip) => trip.trip_id !== workspace.trip_record.trip.trip_id)?.trip_id ?? null
   );
   const [plannerError, setPlannerError] = useState<string | null>(null);
   const [plannerBusyLabel, setPlannerBusyLabel] = useState<string | null>(null);
@@ -217,7 +235,13 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
   useEffect(() => {
     setCurrentWorkspace(workspace);
     setSelectedMapScenarioId(resolveMapScenarioId(workspace));
-  }, [workspace]);
+    setSelectedScenarioComparisonId(
+      workspace.runtime_scenario_comparison.lead_scenario_id
+    );
+    setSelectedTripComparisonId(
+      trips.find((trip) => trip.trip_id !== workspace.trip_record.trip.trip_id)?.trip_id ?? null
+    );
+  }, [trips, workspace]);
 
   const timelineStops = buildTimelineStops(currentWorkspace);
   const { trip } = currentWorkspace.trip_record;
@@ -362,6 +386,20 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
           onSelectScenario={setSelectedMapScenarioId}
           bundles={currentWorkspace.inventory_summary.bundles}
           feasibilitySummary={currentWorkspace.feasibility_summary}
+        />
+
+        <ScenarioComparison
+          comparison={currentWorkspace.runtime_scenario_comparison}
+          savedScenarios={currentWorkspace.saved_scenarios}
+          selectedScenarioId={selectedScenarioComparisonId}
+          onSelectScenario={setSelectedScenarioComparisonId}
+        />
+
+        <TripComparison
+          currentTrip={currentWorkspace.trip_record.trip}
+          trips={trips}
+          selectedTripId={selectedTripComparisonId}
+          onSelectTrip={setSelectedTripComparisonId}
         />
 
         <section className="status-card">

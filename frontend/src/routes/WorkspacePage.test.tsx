@@ -10,6 +10,7 @@ import {
   saveWorkspaceBudget,
   submitPlannerOptionFeedback,
 } from "../api/workspace";
+import type { TripRecord } from "../api/trips";
 import { WorkspacePage } from "./WorkspacePage";
 
 vi.mock("react-router-dom", async () => {
@@ -36,6 +37,98 @@ const mockedAnswerPlannerDecision = vi.mocked(answerPlannerDecision);
 const mockedSubmitPlannerOptionFeedback = vi.mocked(submitPlannerOptionFeedback);
 const mockedSaveWorkspaceBudget = vi.mocked(saveWorkspaceBudget);
 const mockedRecordWorkspaceSpendEvent = vi.mocked(recordWorkspaceSpendEvent);
+const tripComparisonPayload: TripRecord[] = [
+  {
+    trip_id: "trip-leisure-kyoto-draft",
+    user_id: "user:test",
+    title: "Spring Kyoto anniversary draft",
+    summary: "Initial leisure trip shell with routing and lodging options.",
+    mode: "leisure",
+    status: "draft",
+    trip_frame: {
+      start_date: "2026-04-10",
+      end_date: "2026-04-24",
+      duration_days: 14,
+      primary_regions: ["JP-26", "JP-27"],
+      traveler_party: {
+        kind: "pair",
+        traveler_count: 2,
+        notes: "Anniversary planning",
+      },
+    },
+    profile_refs: {
+      leisure_profile_id: "profile:kyoto",
+      business_profile_id: null,
+    },
+    artifacts: {
+      objective_id: null,
+      option_set_ids: [],
+      itinerary_state_id: null,
+      budget_state_id: null,
+      policy_state_id: null,
+    },
+  },
+  {
+    trip_id: "trip-business-tokyo-summit",
+    user_id: "user:test",
+    title: "Tokyo client summit",
+    summary: "Business trip with denser approval posture and shorter duration.",
+    mode: "business",
+    status: "active",
+    trip_frame: {
+      start_date: "2026-05-02",
+      end_date: "2026-05-06",
+      duration_days: 5,
+      primary_regions: ["Tokyo", "Yokohama"],
+      traveler_party: {
+        kind: "team",
+        traveler_count: 3,
+        notes: "Client summit team",
+      },
+    },
+    profile_refs: {
+      leisure_profile_id: null,
+      business_profile_id: "profile:tokyo-business",
+    },
+    artifacts: {
+      objective_id: null,
+      option_set_ids: [],
+      itinerary_state_id: null,
+      budget_state_id: null,
+      policy_state_id: "policy:tokyo",
+    },
+  },
+  {
+    trip_id: "trip-leisure-seoul-weekend",
+    user_id: "user:test",
+    title: "Seoul gallery weekend",
+    summary: "Shorter leisure trip with a tighter route envelope.",
+    mode: "leisure",
+    status: "draft",
+    trip_frame: {
+      start_date: "2026-06-12",
+      end_date: "2026-06-15",
+      duration_days: 4,
+      primary_regions: ["Seoul"],
+      traveler_party: {
+        kind: "solo",
+        traveler_count: 1,
+        notes: "Gallery weekend",
+      },
+    },
+    profile_refs: {
+      leisure_profile_id: "profile:seoul",
+      business_profile_id: null,
+    },
+    artifacts: {
+      objective_id: null,
+      option_set_ids: [],
+      itinerary_state_id: null,
+      budget_state_id: null,
+      policy_state_id: null,
+    },
+  },
+];
 
 const workspacePayload = {
   trip_record: {
@@ -498,12 +591,13 @@ describe("WorkspacePage", () => {
   it("renders timeline structure from persisted trip and scenario state", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
     });
 
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Spring Kyoto anniversary draft" })).toBeInTheDocument();
+      expect(screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length).toBeGreaterThan(0);
     });
 
     const routeContextMap = screen.getByLabelText("Route context map");
@@ -523,6 +617,9 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Approval-ready proposal")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Comparables and readiness signals" })).toBeInTheDocument();
     expect(screen.getByText("Conference Hotel")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Compare this workspace with other saved trips" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Compare with Tokyo client summit" })).toBeInTheDocument();
     await waitFor(() => {
       const plannerPanel = getPlannerHost().shadowRoot?.querySelector(
         '[aria-label="Planner side panel"]'
@@ -535,6 +632,7 @@ describe("WorkspacePage", () => {
     const user = userEvent.setup();
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
     });
 
     renderWorkspacePage();
@@ -553,6 +651,30 @@ describe("WorkspacePage", () => {
     ).toBeInTheDocument();
     expect(within(screen.getByLabelText("Route context map")).getByRole("heading", { name: "Osaka" })).toBeInTheDocument();
     expect(screen.getByText("Higher transfer load to preserve nightlife breadth.")).toBeInTheDocument();
+  });
+
+  it("updates the dedicated comparison surfaces when scenario and trip selections change", async () => {
+    const user = userEvent.setup();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" })).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("Moderate travel friction with a clear cultural center of gravity.").length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" }));
+    expect(screen.getAllByText("Osaka rainy-day fallback").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Higher transfer load to preserve nightlife breadth.").length).toBeGreaterThan(0);
+
+    expect(screen.getByText("Tokyo client summit")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Compare with Seoul gallery weekend" }));
+    expect(screen.getByText("Compared trip: Seoul")).toBeInTheDocument();
+    expect(screen.getByText("Seoul gallery weekend is stored as a leisure trip with 1 traveler(s).")).toBeInTheDocument();
   });
 
   it("shows an empty-state message when no route sequence is available", async () => {
@@ -597,6 +719,7 @@ describe("WorkspacePage", () => {
           ],
         },
       }),
+      trips: Promise.resolve([tripComparisonPayload[0]]),
     });
 
     renderWorkspacePage();
@@ -683,12 +806,13 @@ describe("WorkspacePage", () => {
           pending_decisions: [],
         },
       }),
+      trips: Promise.resolve(tripComparisonPayload),
     });
 
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Chicago kickoff" })).toBeInTheDocument();
+      expect(screen.getAllByRole("heading", { name: "Chicago kickoff" }).length).toBeGreaterThan(0);
     });
 
     expect(screen.getByText("Dates not set yet")).toBeInTheDocument();
