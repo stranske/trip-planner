@@ -53,6 +53,10 @@ def _to_currency_amount(value: float | Decimal) -> float:
     return round(float(value), 2)
 
 
+def _to_decimal_amount(value: float) -> Decimal:
+    return Decimal(f"{value:.2f}")
+
+
 def _next_session_timestamp(current_value: str | None) -> str:
     now = datetime.now(UTC)
     if current_value:
@@ -525,7 +529,7 @@ def record_workspace_spend_event(
             trip_id=event.trip_id,
             budget_plan_id=event.budget_plan_id,
             category_key=event.category_key,
-            amount=event.amount,
+            amount=_to_decimal_amount(event.amount),
             currency=event.currency,
             occurred_at=event.occurred_at,
             source_kind=event.source_kind,
@@ -583,7 +587,7 @@ def update_workspace_spend_event(
         updated_currency = normalized_currency
     now = _next_session_timestamp(None)
     event_record.category_key = category_key
-    event_record.amount = amount
+    event_record.amount = _to_decimal_amount(amount)
     event_record.currency = updated_currency
     event_record.occurred_at = occurred_at or event_record.occurred_at
     event_record.source_kind = source_kind
