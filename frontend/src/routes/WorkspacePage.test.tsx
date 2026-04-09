@@ -677,6 +677,37 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Seoul gallery weekend is stored as a leisure trip with 1 traveler(s).")).toBeInTheDocument();
   });
 
+  it("falls back to plain number formatting when comparable currency codes are invalid", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          proposal: {
+            ...workspacePayload.proposal_state.proposal,
+            comparables: [
+              {
+                ...workspacePayload.proposal_state.proposal.comparables[0],
+                estimated_cost: {
+                  ...workspacePayload.proposal_state.proposal.comparables[0].estimated_cost,
+                  currency: "INVALID",
+                },
+              },
+            ],
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Comparables and readiness signals" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/Marriott via Navan · 245/)).toBeInTheDocument();
+  });
+
   it("shows an empty-state message when no route sequence is available", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({

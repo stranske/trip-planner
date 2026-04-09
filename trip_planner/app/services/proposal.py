@@ -253,6 +253,11 @@ def _resolve_manual_follow_up_path(
     raise ValueError(f"Unsupported workspace proposal follow-up status: {status}")
 
 
+def _reset_evaluation_state(record: PersistedProposalState) -> None:
+    record.evaluation_status = None
+    record.evaluation_record = {}
+
+
 def _serialize_proposal_state(record: PersistedProposalState) -> dict[str, Any]:
     follow_up = _resolved_follow_up_payload(record)
     return {

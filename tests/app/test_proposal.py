@@ -223,6 +223,140 @@ def test_workspace_proposal_evaluation_derives_reoptimization_follow_up(client: 
     assert follow_up["alternatives"][0]["category"] == "lodging"
 
 
+def test_workspace_proposal_submission_clears_stale_evaluation_state(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Proposal resubmission workspace",
+            "summary": "New proposal submissions should reset evaluation state.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+
+    first_submission = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v1",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert first_submission.status_code == 200
+
+    evaluation_fixture = _load_fixture("results", "approved_evaluation.json")
+    evaluation_fixture["request"]["trip_id"] = trip_id
+    evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_fixture["response"]["result_payload"]["trip_id"] = trip_id
+    evaluation_fixture["response"]["result_payload"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_fixture["response"]["result_payload"]["proposal_version"] = "proposal-v1"
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["proposal_id"] = (
+        f"proposal:{trip_id}"
+    )
+
+    evaluated = client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation_fixture["request"],
+            "response": evaluation_fixture["response"],
+            "proposal_version": "proposal-v1",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert evaluated.status_code == 200
+    assert evaluated.json()["proposal_state"]["summary"]["approval_ready"] is True
+
+    resubmitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v2",
+            "scenario_id": "scenario-b",
+        },
+    )
+    assert resubmitted.status_code == 200
+    proposal_state = resubmitted.json()["proposal_state"]
+    assert proposal_state["proposal_version"] == "proposal-v2"
+    assert proposal_state["evaluation"] == {}
+    assert proposal_state["evaluation_status"] is None
+    assert proposal_state["summary"]["approval_ready"] is False
+    assert proposal_state["summary"]["evaluation_result_status"] is None
+
+
+def test_workspace_proposal_evaluation_rejects_mismatched_submission_linkage(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Proposal evaluation linkage",
+            "summary": "Evaluation linkage must match the stored submission.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+
+    submitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert submitted.status_code == 200
+
+    evaluation_fixture = _load_fixture("results", "approved_evaluation.json")
+    evaluation_fixture["request"]["trip_id"] = trip_id
+    evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_fixture["response"]["result_payload"]["trip_id"] = trip_id
+    evaluation_fixture["response"]["result_payload"]["proposal_id"] = "proposal:other-trip"
+    evaluation_fixture["response"]["result_payload"]["proposal_version"] = "proposal-v3"
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["proposal_id"] = (
+        "proposal:other-trip"
+    )
+
+    evaluated = client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation_fixture["request"],
+            "response": evaluation_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert evaluated.status_code == 400
+    assert "persisted proposal" in evaluated.json()["detail"]
+
+
 def test_workspace_proposal_follow_up_patch_persists_exception_request(client: TestClient) -> None:
     created = client.post(
         "/api/trips",
