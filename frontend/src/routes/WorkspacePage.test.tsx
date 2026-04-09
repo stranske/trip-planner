@@ -474,6 +474,36 @@ describe("WorkspacePage", () => {
     });
   });
 
+  it("formats single persisted trip dates without shifting date-only values across time zones", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        trip_record: {
+          ...workspacePayload.trip_record,
+          trip: {
+            ...workspacePayload.trip_record.trip,
+            trip_id: "trip-chicago-arrival",
+            title: "Chicago arrival",
+            trip_frame: {
+              ...workspacePayload.trip_record.trip.trip_frame,
+              start_date: "2026-05-04",
+              end_date: null,
+            },
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Chicago arrival" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("May 4")).toBeInTheDocument();
+    expect(screen.queryByText("2026-05-04")).not.toBeInTheDocument();
+  });
+
   it("saves a budget plan and refreshes the workspace totals", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve(workspacePayload),
