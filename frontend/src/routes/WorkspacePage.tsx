@@ -138,6 +138,19 @@ function ScenarioSummaryCard({
   );
 }
 
+function formatFollowUpStatus(status: string | undefined): string {
+  if (!status) {
+    return "pending";
+  }
+  return status.replace(/_/g, " ");
+}
+
+function hasRenderableFollowUp(
+  followUp: NonNullable<WorkspaceData["proposal_state"]>["follow_up"]
+): followUp is NonNullable<NonNullable<WorkspaceData["proposal_state"]>["follow_up"]> {
+  return Boolean(followUp?.status && followUp?.title && followUp?.summary);
+}
+
 function mergeWorkspaceBudgetState(
   workspace: WorkspaceData,
   budgetState: BudgetWorkspaceState
@@ -196,6 +209,10 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
   const timelineStops = buildTimelineStops(currentWorkspace);
   const { trip } = currentWorkspace.trip_record;
   const activeScenario = resolveActiveScenario(currentWorkspace);
+  const proposalFollowUp = currentWorkspace.proposal_state?.follow_up ?? null;
+  const renderableProposalFollowUp = hasRenderableFollowUp(proposalFollowUp)
+    ? proposalFollowUp
+    : null;
 
   async function handleDecisionAnswer(decisionId: string, choice: string) {
     setPlannerError(null);
@@ -356,8 +373,27 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
                   <dt>Proposal version</dt>
                   <dd>{currentWorkspace.proposal_state.proposal_version}</dd>
                 </div>
+                <div>
+                  <dt>Next step</dt>
+                  <dd>
+                    {formatFollowUpStatus(
+                      renderableProposalFollowUp?.status ??
+                        currentWorkspace.proposal_state.summary.follow_up_status
+                    )}
+                  </dd>
+                </div>
               </dl>
               <p>{currentWorkspace.proposal_state.summary.submission_summary ?? "Submission stored for later review."}</p>
+              {renderableProposalFollowUp ? (
+                <article className="decision-card">
+                  <h3>{renderableProposalFollowUp.title}</h3>
+                  <p>{renderableProposalFollowUp.summary}</p>
+                  {renderableProposalFollowUp.guidance &&
+                  renderableProposalFollowUp.guidance.length > 0 ? (
+                    <p className="muted-copy">{renderableProposalFollowUp.guidance[0]}</p>
+                  ) : null}
+                </article>
+              ) : null}
               <div className="decision-stack">
                 {(currentWorkspace.proposal_state.summary.highlights ?? []).map((highlight) => (
                   <article key={highlight} className="decision-card">
@@ -516,6 +552,31 @@ function WorkspacePageContent({ workspace }: { workspace: WorkspaceData }) {
             <p className="muted-copy">Approval-packet details will render here once a proposal is submitted.</p>
           ) : (
             <div className="decision-stack">
+              {proposalFollowUp ? (
+                <article className="decision-card">
+                  <h3>{proposalFollowUp.recommended_label ?? proposalFollowUp.title}</h3>
+                  <p>{proposalFollowUp.summary}</p>
+                  {proposalFollowUp.selected_alternative?.summary ? (
+                    <p className="muted-copy">
+                      Selected alternative: {proposalFollowUp.selected_alternative.summary}
+                    </p>
+                  ) : null}
+                  {proposalFollowUp.requested_exception?.reason ? (
+                    <p className="muted-copy">
+                      Exception rationale: {proposalFollowUp.requested_exception.reason}
+                    </p>
+                  ) : null}
+                </article>
+              ) : null}
+              {(proposalFollowUp?.alternatives ?? []).map((alternative) => (
+                <article
+                  key={`${alternative.category}-${alternative.summary}`}
+                  className="decision-card"
+                >
+                  <h3>{alternative.summary}</h3>
+                  <p>{alternative.rationale}</p>
+                </article>
+              ))}
               {(currentWorkspace.proposal_state.proposal.comparables ?? []).map((comparable) => (
                 <article
                   key={`${comparable.category}-${comparable.label}`}

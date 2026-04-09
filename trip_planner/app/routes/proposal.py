@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from trip_planner.app.schemas.proposal import (
+    WorkspaceProposalFollowUpRequest,
     WorkspaceProposalEvaluationRequest,
     WorkspaceProposalResponse,
     WorkspaceProposalSubmissionRequest,
@@ -10,6 +11,7 @@ from trip_planner.app.services.auth import AuthenticatedUser, require_authentica
 from trip_planner.app.services.proposal import (
     WorkspaceProposalNotFoundError,
     get_workspace_proposal_payload,
+    save_workspace_proposal_follow_up,
     save_workspace_proposal_evaluation,
     save_workspace_proposal_submission,
 )
@@ -72,6 +74,40 @@ def save_workspace_proposal_result(
             response_payload=payload.response,
             proposal_version=payload.proposal_version,
             scenario_id=payload.scenario_id,
+        )
+    except WorkspaceProposalNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return WorkspaceProposalResponse.model_validate(result)
+
+
+@router.patch("/workspace/{trip_id}/proposal/follow-up", response_model=WorkspaceProposalResponse)
+def save_workspace_proposal_follow_up_state(
+    trip_id: str,
+    payload: WorkspaceProposalFollowUpRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> WorkspaceProposalResponse:
+    try:
+        result = save_workspace_proposal_follow_up(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            status=payload.status,
+            summary=payload.summary,
+            title=payload.title,
+            notes=payload.notes,
+            selected_alternative=(
+                payload.selected_alternative.model_dump(mode="python")
+                if payload.selected_alternative is not None
+                else None
+            ),
+            requested_exception=(
+                payload.requested_exception.model_dump(mode="python")
+                if payload.requested_exception is not None
+                else None
+            ),
         )
     except WorkspaceProposalNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error

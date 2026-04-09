@@ -353,7 +353,138 @@ def test_workspace_endpoint_prefers_persisted_proposal_lifecycle_for_business_tr
     assert payload["proposal_state"]["summary"]["approval_ready"] is True
     assert payload["planner_panel_state"]["proposal"]["proposal_id"] == f"proposal:{trip_id}"
     assert payload["planner_panel_state"]["policy_evaluation"]["evaluation_id"] == "eval-approved-001"
-    assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Proposal lifecycle loaded"
+    titles = [item["title"] for item in payload["planner_panel_state"]["outputs"]]
+    assert "Proposal lifecycle loaded" in titles
+    assert "Approval-ready proposal" in titles
+    assert payload["proposal_state"]["follow_up"]["status"] == "resolved"
+
+
+def test_workspace_endpoint_surfaces_reoptimization_follow_up_for_non_compliant_results(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Non-compliant workspace",
+            "summary": "Workspace should expose the next follow-up action.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    submission_fixture = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "fixtures"
+            / "integrations"
+            / "tpp"
+            / "proposal_submit_deferred.json"
+        ).read_text(encoding="utf-8")
+    )
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+    evaluation_fixture = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "fixtures"
+            / "integrations"
+            / "tpp"
+            / "results"
+            / "non_compliant_evaluation.json"
+        ).read_text(encoding="utf-8")
+    )
+    evaluation_fixture["request"]["trip_id"] = trip_id
+    evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_fixture["response"]["result_payload"]["trip_id"] = trip_id
+    evaluation_fixture["response"]["result_payload"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["proposal_id"] = (
+        f"proposal:{trip_id}"
+    )
+    proposal_payload = {
+        "proposal_id": f"proposal:{trip_id}",
+        "trip_id": trip_id,
+        "mode": "business",
+        "traveler_context": {
+            "employee_type": "employee",
+            "traveler_experience": "frequent",
+            "home_airport": "ORD",
+            "loyalty_programs": ["United"],
+            "mobility_or_access_needs": [],
+        },
+        "selected_options": [
+            {
+                "category": "airfare",
+                "option_id": "flight-1",
+                "label": "United 123",
+                "vendor": "United",
+                "booking_channel": "Navan",
+                "estimated_cost": {
+                    "currency": "USD",
+                    "typical_amount": 620.0,
+                    "min_amount": 620.0,
+                    "max_amount": 620.0,
+                },
+                "justification_refs": ["fare-policy"],
+            }
+        ],
+        "cost_summary": {
+            "currency": "USD",
+            "total_estimated_cost": 620.0,
+            "category_estimates": {"airfare": 620.0},
+            "notes": ["Costs include taxes."],
+        },
+        "comparables": [
+            {
+                "category": "lodging",
+                "label": "Downtown compliant hotel",
+                "vendor": "Hilton",
+                "booking_channel": "Navan",
+                "estimated_cost": {
+                    "currency": "USD",
+                    "typical_amount": 245.0,
+                    "min_amount": 245.0,
+                    "max_amount": 245.0,
+                },
+                "notes": ["Compliant alternative for resubmission."],
+            }
+        ],
+        "approval_notes": ["Manager review required before booking."],
+        "constraint_set_id": "policy-standard-2026-02",
+    }
+
+    client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": proposal_payload,
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation_fixture["request"],
+            "response": evaluation_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+
+    response = client.get(f"/api/workspace/{trip_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["proposal_state"]["follow_up"]["status"] == "reoptimization_required"
+    assert payload["planner_panel_state"]["next_step_actions"][0]["action_kind"] == "reoptimize"
+    assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Reoptimization path required"
 
 
 def test_workspace_planner_decision_answer_persists_across_reload(client: TestClient) -> None:

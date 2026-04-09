@@ -242,6 +242,19 @@ const workspacePayload = {
         compliance_score: 0.98,
       },
     },
+    follow_up: {
+      status: "resolved",
+      path: "approval",
+      title: "Approval-ready proposal",
+      summary: "Policy evaluation passed. Move the workspace packet into final approval handling.",
+      recommended_action: "prepare_approval",
+      recommended_label: "Advance to approval",
+      alternatives: [],
+      guidance: [],
+      notes: [],
+      selected_alternative: null,
+      requested_exception: null,
+    },
     summary: {
       submission_status: "succeeded",
       submission_summary: "Proposal submitted to the policy engine.",
@@ -249,6 +262,10 @@ const workspacePayload = {
       approval_ready: true,
       comparable_count: 1,
       highlights: ["Policy constraints satisfied."],
+      follow_up_status: "resolved",
+      follow_up_title: "Approval-ready proposal",
+      follow_up_summary:
+        "Policy evaluation passed. Move the workspace packet into final approval handling.",
     },
   },
   planner_panel_state: {
@@ -379,6 +396,7 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Osaka arrival buffer")).toBeInTheDocument();
     expect(screen.getByText("Kyoto cultural anchor")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Approval packet is ready" })).toBeInTheDocument();
+    expect(screen.getByText("Approval-ready proposal")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Comparables and readiness signals" })).toBeInTheDocument();
     expect(screen.getByText("Conference Hotel")).toBeInTheDocument();
     await waitFor(() => {
@@ -560,6 +578,98 @@ describe("WorkspacePage", () => {
 
     expect(screen.getByText("May 4")).toBeInTheDocument();
     expect(screen.queryByText("2026-05-04")).not.toBeInTheDocument();
+  });
+
+  it("surfaces reoptimization follow-up guidance for non-compliant policy results", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          follow_up: {
+            status: "reoptimization_required",
+            path: "reoptimization",
+            title: "Reoptimization path required",
+            summary: "Use a compliant downtown property before resubmitting the approval packet.",
+            recommended_action: "reoptimize",
+            recommended_label: "Reoptimize plan",
+            alternatives: [
+              {
+                category: "lodging",
+                summary: "Use a compliant downtown property",
+                rationale: "Alternative meets nightly cap and booking-channel requirements.",
+                comparable_ref: "lodging-alt-2",
+              },
+            ],
+            guidance: ["Keep the policy-safe lodging alternative attached to the next submission."],
+            notes: [],
+            selected_alternative: {
+              category: "lodging",
+              summary: "Use a compliant downtown property",
+              rationale: "Alternative meets nightly cap and booking-channel requirements.",
+              comparable_ref: "lodging-alt-2",
+            },
+            requested_exception: null,
+          },
+          evaluation: {
+            evaluation_result: {
+              ...workspacePayload.proposal_state.evaluation.evaluation_result,
+              status: "non_compliant",
+              failure_reasons: [
+                {
+                  code: "lodging_cap_exceeded",
+                  message: "Nightly lodging exceeds the allowed cap.",
+                  severity: "blocking",
+                  related_category: "lodging",
+                },
+              ],
+              notes: ["Proposal requires lodging changes before submission can pass."],
+              compliance_score: 0.42,
+            },
+          },
+          summary: {
+            ...workspacePayload.proposal_state.summary,
+            approval_ready: false,
+            evaluation_result_status: "non_compliant",
+            follow_up_status: "reoptimization_required",
+            follow_up_title: "Reoptimization path required",
+            follow_up_summary:
+              "Use a compliant downtown property before resubmitting the approval packet.",
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Reoptimization path required")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Reoptimize plan")).toBeInTheDocument();
+    expect(screen.getByText("Use a compliant downtown property")).toBeInTheDocument();
+    expect(screen.getByText("Nightly lodging exceeds the allowed cap.")).toBeInTheDocument();
+  });
+
+  it("skips the follow-up card when legacy records expose an empty follow-up object", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          follow_up: {} as typeof workspacePayload.proposal_state.follow_up,
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Approval packet is ready" })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("heading", { name: "Approval-ready proposal" })).not.toBeInTheDocument();
+    expect(screen.getByText("resolved")).toBeInTheDocument();
+    expect(screen.queryByText("undefined")).not.toBeInTheDocument();
   });
 
   it("saves a budget plan and refreshes the workspace totals", async () => {
