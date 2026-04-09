@@ -359,6 +359,118 @@ def test_workspace_endpoint_prefers_persisted_proposal_lifecycle_for_business_tr
     assert payload["proposal_state"]["follow_up"]["status"] == "resolved"
 
 
+def test_workspace_endpoint_does_not_mix_policy_preview_with_pending_proposal_state(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Pending proposal workspace",
+            "summary": "Workspace should not mix policy preview artifacts with persisted proposals.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    policy_fixture = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "fixtures"
+            / "integrations"
+            / "tpp"
+            / "policy"
+            / "standard_policy_sync.json"
+        ).read_text(encoding="utf-8")
+    )
+    imported = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={
+            "request": policy_fixture["request"],
+            "response": policy_fixture["response"],
+            "notes": ["Policy-backed workspace test import."],
+        },
+    )
+    assert imported.status_code == 200
+
+    submission_fixture = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "fixtures"
+            / "integrations"
+            / "tpp"
+            / "proposal_submit_deferred.json"
+        ).read_text(encoding="utf-8")
+    )
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+    proposal_payload = {
+        "proposal_id": f"proposal:{trip_id}",
+        "trip_id": trip_id,
+        "mode": "business",
+        "traveler_context": {
+            "employee_type": "employee",
+            "traveler_experience": "frequent",
+            "home_airport": "ORD",
+            "loyalty_programs": ["United"],
+            "mobility_or_access_needs": [],
+        },
+        "selected_options": [
+            {
+                "category": "airfare",
+                "option_id": "flight-1",
+                "label": "United 123",
+                "vendor": "United",
+                "booking_channel": "Navan",
+                "estimated_cost": {
+                    "currency": "USD",
+                    "typical_amount": 620.0,
+                    "min_amount": 620.0,
+                    "max_amount": 620.0,
+                },
+                "justification_refs": ["fare-policy"],
+            }
+        ],
+        "cost_summary": {
+            "currency": "USD",
+            "total_estimated_cost": 620.0,
+            "category_estimates": {"airfare": 620.0},
+            "notes": ["Costs include taxes."],
+        },
+        "comparables": [],
+        "approval_notes": ["Manager review required before booking."],
+        "constraint_set_id": "policy-standard-2026-02",
+    }
+
+    submitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": proposal_payload,
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert submitted.status_code == 200
+
+    response = client.get(f"/api/workspace/{trip_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["planner_panel_state"]["proposal"]["proposal_id"] == f"proposal:{trip_id}"
+    assert payload["planner_panel_state"]["policy_evaluation"] is None
+    assert "Policy posture loaded" not in [
+        item["title"] for item in payload["planner_panel_state"]["outputs"]
+    ]
+
+
 def test_workspace_endpoint_surfaces_reoptimization_follow_up_for_non_compliant_results(
     client: TestClient,
 ) -> None:
