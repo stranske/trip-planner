@@ -81,6 +81,17 @@ class _PassiveTPPClient:
     def fetch_policy_constraints(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         return self.response
 
+    def submit_proposal(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
+        raise NotImplementedError("Passive policy import client does not submit proposals.")
+
+    def fetch_evaluation_result(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
+        raise NotImplementedError(
+            "Passive policy import client does not fetch evaluation results."
+        )
+
+    def poll_execution_status(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
+        raise NotImplementedError("Passive policy import client does not poll execution status.")
+
 
 def _is_effectively_stale(imported: PolicyConstraintImport) -> bool:
     return imported.freshness.status != "current" or imported.freshness.invalidated_at is not None
