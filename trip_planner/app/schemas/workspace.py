@@ -40,6 +40,10 @@ class WorkspaceResponse(BaseModel):
         default_factory=dict,
         description="Persisted budget plan, actual spend entries, and budget-vs-actual summary for the workspace.",
     )
+    policy_state: dict[str, Any] | None = Field(
+        default=None,
+        description="Persisted policy constraint import and readiness summary for business-workspace flows.",
+    )
 
 
 class ScenarioComparisonSurfaceResponse(BaseModel):

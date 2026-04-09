@@ -90,7 +90,13 @@ def ensure_database_ready(url: str | None = None) -> None:
         return
 
     from trip_planner.persistence.models import budget  # noqa: F401
-    from trip_planner.persistence.models import account, scenario, session, trip  # noqa: F401
+    from trip_planner.persistence.models import (  # noqa: F401
+        account,
+        policy,
+        scenario,
+        session,
+        trip,
+    )
 
     _ensure_sqlite_parent_dir(resolved_url)
 

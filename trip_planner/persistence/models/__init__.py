@@ -6,6 +6,7 @@ from trip_planner.persistence.models.budget import (
     PersistedBudgetPlan,
     PersistedBudgetPlanVersion,
 )
+from trip_planner.persistence.models.policy import PersistedPolicyState
 from trip_planner.persistence.models.scenario import (
     PersistedActivityLogEvent,
     PersistedSavedScenario,
@@ -23,6 +24,7 @@ __all__ = [
     "PersistedBudgetPlan",
     "PersistedBudgetPlanVersion",
     "PersistedPlanningSessionState",
+    "PersistedPolicyState",
     "PersistedSavedScenario",
     "PersistedTrip",
     "UserAccount",

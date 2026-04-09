@@ -22,6 +22,12 @@ This scaffold imports policy constraints and organization context from `Travel-P
 - Imported policy data must stay advisory inside `trip-planner`; final compliance decisions still belong to `Travel-Plan-Permission`.
 - When a snapshot is stale or invalidated, the planner should treat it as unsuitable for final business recommendations and request a fresh import rather than silently trusting it.
 
+## Persisted Workspace Boundary
+
+- Persisted workspace policy state stores imported constraint sets, organization context, freshness metadata, and approval-readiness guidance for the current business trip.
+- That storage is intentionally not the proposal-submission system of record. It exists so the workspace can load real policy posture and required constraints before submission APIs are wired.
+- Proposal submission, final policy evaluation, and exception-resolution workflows remain later execution stages and should consume the stored constraint-state as input rather than overwrite its boundary.
+
 ## Issue Boundary
 
 - issue `#551` owns import and normalization only
