@@ -151,6 +151,35 @@ describe("router auth loaders", () => {
     expect(response?.headers.get("Location")).toBe("/login?next=%2Fworkspace%2Ftrip-1");
   });
 
+  it("loads workspace data and persisted trips for signed-in users", async () => {
+    const { fetchCurrentSession } = await import("./api/auth");
+    const { fetchTrips } = await import("./api/trips");
+    const { fetchWorkspace } = await import("./api/workspace");
+    vi.mocked(fetchCurrentSession).mockResolvedValueOnce({
+      user: {
+        user_id: "user:test",
+        email: "owner@example.com",
+        display_name: "Owner",
+      },
+    });
+
+    const result = await protectedWorkspaceLoader({
+      params: { tripId: "trip-1" },
+      request: new Request("http://localhost/workspace/trip-1"),
+      context: undefined,
+    });
+
+    expect(fetchWorkspace).toHaveBeenCalledWith("trip-1");
+    expect(fetchTrips).toHaveBeenCalledTimes(1);
+    await expect(result.workspace).resolves.toEqual({
+      trip_record: { trip: { trip_id: "trip-1" } },
+      planner_panel_state: {
+        trip: { trip_id: "trip-1" },
+      },
+    });
+    await expect(result.trips).resolves.toEqual([{ trip_id: "trip-1" }]);
+  });
+
   it("loads the persisted trip list for signed-in users", async () => {
     const { fetchCurrentSession } = await import("./api/auth");
     const { fetchTrips } = await import("./api/trips");
