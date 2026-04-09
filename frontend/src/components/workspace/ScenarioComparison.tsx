@@ -63,7 +63,10 @@ function findSavedScenarioDetails(
     const activeVersion =
       savedScenario.versions.find((version) => version.version_id === savedScenario.current_version_id) ??
       savedScenario.versions[0];
-    if (activeVersion?.snapshot_refs.itinerary_scenario_id === scenarioId) {
+    if (
+      activeVersion &&
+      activeVersion.snapshot_refs.itinerary_scenario_id === scenarioId
+    ) {
       return {
         label: activeVersion.label,
         title: activeVersion.title,

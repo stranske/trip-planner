@@ -1,9 +1,14 @@
 import type { TripRecord } from "../../api/trips";
 
+type TripComparisonTripFrame = Pick<TripRecord["trip_frame"], "duration_days"> &
+  Partial<Pick<TripRecord["trip_frame"], "primary_regions" | "traveler_party">>;
+
 type TripComparisonRecord = Pick<
   TripRecord,
-  "trip_id" | "title" | "summary" | "mode" | "status" | "trip_frame"
->;
+  "trip_id" | "title" | "summary" | "mode" | "status"
+> & {
+  trip_frame: TripComparisonTripFrame;
+};
 
 function summarizeRegions(regions: string[]): string {
   if (regions.length === 0) {
@@ -92,7 +97,7 @@ export function TripComparison({
               </div>
               <div>
                 <dt>Regions</dt>
-                <dd>{summarizeRegions(trip.trip_frame.primary_regions)}</dd>
+                <dd>{summarizeRegions(trip.trip_frame.primary_regions ?? [])}</dd>
               </div>
             </dl>
           </article>
@@ -103,13 +108,14 @@ export function TripComparison({
           <h3>Trip frame delta</h3>
           <p>{buildTripDelta(currentTrip, selectedTrip)}</p>
           <p className="muted-copy">
-            {selectedTrip.title} is stored as a {selectedTrip.mode} trip with {selectedTrip.trip_frame.traveler_party.traveler_count} traveler(s).
+            {selectedTrip.title} is stored as a {selectedTrip.mode} trip with{" "}
+            {selectedTrip.trip_frame.traveler_party?.traveler_count ?? "unknown"} traveler(s).
           </p>
         </article>
         <article className="decision-card">
           <h3>Region overlap</h3>
           <p>
-            Current trip: {summarizeRegions(currentTrip.trip_frame.primary_regions)}
+            Current trip: {summarizeRegions(currentTrip.trip_frame.primary_regions ?? [])}
           </p>
           <p>
             Compared trip: {summarizeRegions(selectedTrip.trip_frame.primary_regions)}
