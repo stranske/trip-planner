@@ -219,6 +219,7 @@ def _build_summary(
 
 
 _FOLLOW_UP_PATH_BY_STATUS: dict[str, str] = {
+    "awaiting_evaluation": "pending",
     "reoptimization_required": "reoptimization",
     "reoptimized": "reoptimization",
     "exception_required": "exception",
