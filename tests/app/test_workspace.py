@@ -679,6 +679,36 @@ def test_workspace_option_feedback_persists_across_reload(client: TestClient) ->
     )
 
 
+def test_workspace_option_feedback_rejects_unknown_option_ids(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Kyoto invalid option",
+            "summary": "Reject workspace feedback for unknown options.",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 5, "primary_regions": ["Kyoto"]},
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.post(
+        f"/api/workspace/{trip_id}/planner/options/option:missing/feedback",
+        json={"action_type": "save_as_fallback", "decision_id": None},
+    )
+
+    assert response.status_code == 400
+    assert "not available in the current workspace planner state" in response.json()["detail"]
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    payload = reloaded.json()
+    assert payload["activity_log"] == []
+    assert not any(
+        option["label"].endswith("(fallback)")
+        for option in payload["planner_panel_state"]["option_set"]["options"]
+    )
+
+
 def test_workspace_activity_log_is_capped_for_persisted_trips(client: TestClient) -> None:
     created = client.post(
         "/api/trips",

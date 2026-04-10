@@ -16,6 +16,7 @@ The React workspace now mounts the existing planner side-panel bundle instead of
 - Decision answers now POST through `/api/workspace/:tripId/planner/decisions/:decisionId/answer`.
 - Structured option feedback now POST through `/api/workspace/:tripId/planner/options/:optionId/feedback`.
 - The backend stores planner action state in the persisted planning-session record and appends activity entries tied to the trip/session trail.
+- The persisted activity trail currently uses `PersistedActivityLogEvent` in `trip_planner/persistence/models/scenario.py`; there is no separate `trip_planner/persistence/models/activity.py` model in this repo.
 - Reloading the workspace rehydrates the side panel from those persisted session/activity records instead of recomputing from local browser state.
 
 ## Data Contract

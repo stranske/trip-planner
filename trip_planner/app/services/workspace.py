@@ -1355,6 +1355,16 @@ def _append_activity_event(
     )
 
 
+def _workspace_option_ids_from_payload(payload: dict[str, Any]) -> set[str]:
+    planner_panel_state = payload.get("planner_panel_state") or {}
+    option_set = planner_panel_state.get("option_set") or {}
+    return {
+        option["option_id"]
+        for option in option_set.get("options", [])
+        if isinstance(option, dict) and isinstance(option.get("option_id"), str)
+    }
+
+
 def answer_workspace_planner_decision(
     db_session: Session,
     *,
@@ -1410,6 +1420,8 @@ def submit_workspace_option_feedback(
     record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
+    current_payload = get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
+    valid_option_ids = _workspace_option_ids_from_payload(current_payload)
     option_set_id = (
         session.recent_option_presentations[0].option_set_id
         if session.recent_option_presentations
@@ -1420,6 +1432,10 @@ def submit_workspace_option_feedback(
         if session.recent_option_presentations
         else _default_workspace_presentation(trip_id, session.updated_at)
     )
+    if option_id not in valid_option_ids:
+        raise ValueError(
+            f"Option '{option_id}' is not available in the current workspace planner state."
+        )
     presentation.surfaced_option_ids = list(dict.fromkeys(presentation.surfaced_option_ids + [option_id]))
     presentation.option_set_id = option_set_id
 
