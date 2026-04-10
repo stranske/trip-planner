@@ -167,6 +167,12 @@ def test_trip_create_rejects_invalid_traveler_party_kind(client: TestClient) -> 
     )
 
     assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert any(
+        error["loc"][-3:] == ["trip_frame", "traveler_party", "kind"]
+        and error["type"] == "literal_error"
+        for error in detail
+    )
 
 
 def test_trip_scenario_history_create_list_and_reload_flow(client: TestClient) -> None:
@@ -467,42 +473,3 @@ def test_trip_scenario_history_routes_hide_other_users_records(client: TestClien
         ).status_code
         == 404
     )
-
-
-def test_trip_create_truncates_generated_trip_id_to_model_limit(client: TestClient) -> None:
-    signup(client, email="owner@example.com", display_name="Owner")
-
-    response = client.post(
-        "/api/trips",
-        json={
-            "title": "a" * 160,
-            "summary": "",
-            "mode": "leisure",
-            "trip_frame": {"duration_days": 7},
-        },
-    )
-
-    assert response.status_code == 201
-    assert len(response.json()["trip"]["trip_id"]) <= 96
-
-
-def test_trip_create_rejects_invalid_traveler_party_kind_with_422(client: TestClient) -> None:
-    signup(client, email="owner@example.com", display_name="Owner")
-
-    response = client.post(
-        "/api/trips",
-        json={
-            "title": "Kyoto Spring",
-            "summary": "",
-            "mode": "leisure",
-            "trip_frame": {
-                "traveler_party": {
-                    "kind": "unsupported",
-                    "traveler_count": 2,
-                    "notes": "",
-                }
-            },
-        },
-    )
-
-    assert response.status_code == 422

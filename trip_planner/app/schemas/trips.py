@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 from trip_planner.contracts.trip import TRAVELER_PARTY_KINDS
+
 TravelerPartyKind = Literal["solo", "pair", "family", "friends", "team"]
 
 
