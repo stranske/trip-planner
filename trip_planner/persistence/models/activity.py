@@ -48,7 +48,11 @@ class PersistedPlannerAction(Base):
         index=True,
     )
     session_state_id: Mapped[str] = mapped_column(String(96), index=True)
-    activity_event_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    activity_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("persisted_activity_log_events.activity_event_id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
     occurred_at: Mapped[str] = mapped_column(String(64), index=True)
     action_type: Mapped[str] = mapped_column(String(64))
     decision_id: Mapped[str | None] = mapped_column(String(96), nullable=True)

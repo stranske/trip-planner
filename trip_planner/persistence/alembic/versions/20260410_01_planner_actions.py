@@ -28,7 +28,12 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("session_state_id", sa.String(length=96), nullable=False),
-        sa.Column("activity_event_id", sa.String(length=96), nullable=True),
+        sa.Column(
+            "activity_event_id",
+            sa.String(length=96),
+            sa.ForeignKey("persisted_activity_log_events.activity_event_id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("occurred_at", sa.String(length=64), nullable=False),
         sa.Column("action_type", sa.String(length=64), nullable=False),
         sa.Column("decision_id", sa.String(length=96), nullable=True),
@@ -51,6 +56,12 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
+        op.f("ix_persisted_planner_actions_activity_event_id"),
+        "persisted_planner_actions",
+        ["activity_event_id"],
+        unique=False,
+    )
+    op.create_index(
         op.f("ix_persisted_planner_actions_occurred_at"),
         "persisted_planner_actions",
         ["occurred_at"],
@@ -59,6 +70,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index(
+        op.f("ix_persisted_planner_actions_activity_event_id"),
+        table_name="persisted_planner_actions",
+    )
     op.drop_index(
         op.f("ix_persisted_planner_actions_occurred_at"),
         table_name="persisted_planner_actions",

@@ -643,6 +643,8 @@ def test_workspace_planner_decision_answer_persists_across_reload(client: TestCl
     assert actions[0].action_type == "decision_answer"
     assert actions[0].decision_id == decision["decision_id"]
     assert actions[0].choice == decision["choices"][0]
+    assert actions[0].activity_event_id == payload["activity_log"][0]["activity_event_id"]
+    assert actions[0].occurred_at == payload["activity_log"][0]["occurred_at"]
 
 
 def test_workspace_planner_decision_answer_returns_not_found_for_unknown_trip(
@@ -700,6 +702,35 @@ def test_workspace_option_feedback_persists_across_reload(client: TestClient) ->
 
     assert actions[0].action_type == "save_as_fallback"
     assert actions[0].option_id == option_id
+    assert actions[0].activity_event_id == payload["activity_log"][0]["activity_event_id"]
+    assert actions[0].occurred_at == payload["activity_log"][0]["occurred_at"]
+
+
+def test_workspace_option_feedback_reuses_recent_presentation_ids(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Kyoto revisit",
+            "summary": "Exercise option feedback persistence.",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 5, "primary_regions": ["Kyoto"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    initial = client.get(f"/api/workspace/{trip_id}")
+    option_id = initial.json()["planner_panel_state"]["option_set"]["options"][1]["option_id"]
+
+    updated = client.post(
+        f"/api/workspace/{trip_id}/planner/options/{option_id}/feedback",
+        json={"action_type": "accept", "decision_id": None},
+    )
+
+    assert updated.status_code == 200
+    payload = updated.json()
+    assert payload["planner_panel_state"]["option_set"]["options"][1]["label"].endswith(
+        "(saved direction)"
+    )
 
 
 def test_workspace_option_feedback_rejects_unknown_option_id(client: TestClient) -> None:
