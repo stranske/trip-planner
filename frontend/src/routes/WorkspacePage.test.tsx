@@ -979,7 +979,7 @@ describe("WorkspacePage", () => {
     expect(screen.queryByRole("heading", { name: "Approval-ready proposal" })).not.toBeInTheDocument();
     expect(screen.getByText("resolved")).toBeInTheDocument();
     expect(screen.queryByText("undefined")).not.toBeInTheDocument();
-    expect(screen.queryByText("Selected alternative:")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Selected alternative:/)).not.toBeInTheDocument();
   });
 
   it("saves a budget plan and refreshes the workspace totals", async () => {
