@@ -167,6 +167,12 @@ def test_trip_create_rejects_invalid_traveler_party_kind(client: TestClient) -> 
     )
 
     assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert any(
+        error["loc"][-3:] == ["trip_frame", "traveler_party", "kind"]
+        and error["type"] == "literal_error"
+        for error in detail
+    )
 
 
 def test_trip_scenario_history_create_list_and_reload_flow(client: TestClient) -> None:
