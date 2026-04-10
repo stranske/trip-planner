@@ -11,8 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.persistence.models.activity import PersistedActivityLogEvent
 from trip_planner.persistence.models.scenario import (
-    PersistedActivityLogEvent,
     PersistedSavedScenario,
 )
 from trip_planner.persistence.models.session import PersistedPlanningSessionState

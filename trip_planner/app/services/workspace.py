@@ -37,8 +37,11 @@ from trip_planner.itinerary import (
     ScenarioSummary,
     ScenarioTradeoff,
 )
-from trip_planner.persistence.models.scenario import (
+from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
+    PersistedPlannerAction,
+)
+from trip_planner.persistence.models.scenario import (
     PersistedSavedScenario,
 )
 from trip_planner.persistence.models.session import PersistedPlanningSessionState
@@ -1326,11 +1329,28 @@ def _get_or_create_workspace_session_record(
     return persisted
 
 
+def _current_workspace_option_set(
+    session: PlanningSessionState,
+    *,
+    trip_id: str,
+) -> tuple[str, list[str]]:
+    presentation = (
+        session.recent_option_presentations[0]
+        if session.recent_option_presentations
+        else _default_workspace_presentation(trip_id, session.updated_at)
+    )
+    option_set_id = presentation.option_set_id or f"option-set:{trip_id}:workspace-bootstrap"
+    option_ids = [option_id for option_id in presentation.surfaced_option_ids if option_id]
+    return option_set_id, option_ids
+
+
 def _append_activity_event(
     db_session: Session,
     *,
+    activity_event_id: str,
     trip_id: str,
     session_state_id: str,
+    occurred_at: str,
     event_kind: str,
     summary: str,
     related_decision_id: str | None = None,
@@ -1339,10 +1359,10 @@ def _append_activity_event(
 ) -> None:
     db_session.add(
         PersistedActivityLogEvent(
-            activity_event_id=f"activity:{trip_id}:{secrets.token_hex(4)}",
+            activity_event_id=activity_event_id,
             trip_id=trip_id,
             session_state_id=session_state_id,
-            occurred_at=_isoformat(datetime.now(UTC)),
+            occurred_at=occurred_at,
             event_kind=event_kind,
             summary=summary,
             actor="traveler",
@@ -1351,6 +1371,37 @@ def _append_activity_event(
             metadata_payload=metadata or {},
             tags=["workspace", "planner-action"],
             notes=[],
+        )
+    )
+
+
+def _record_planner_action(
+    db_session: Session,
+    *,
+    trip_id: str,
+    session_state_id: str,
+    activity_event_id: str,
+    occurred_at: str,
+    action_type: str,
+    decision_id: str | None = None,
+    option_set_id: str | None = None,
+    option_id: str | None = None,
+    choice: str | None = None,
+    payload: dict[str, str] | None = None,
+) -> None:
+    db_session.add(
+        PersistedPlannerAction(
+            planner_action_id=f"planner-action:{trip_id}:{secrets.token_hex(4)}",
+            trip_id=trip_id,
+            session_state_id=session_state_id,
+            activity_event_id=activity_event_id,
+            occurred_at=occurred_at,
+            action_type=action_type,
+            decision_id=decision_id,
+            option_set_id=option_set_id,
+            option_id=option_id,
+            choice=choice,
+            payload=payload or {},
         )
     )
 
@@ -1384,15 +1435,31 @@ def answer_workspace_planner_decision(
     session_record.notes = list(session.notes)
     session_record.last_updated_at = session.updated_at
     record.updated_at = datetime.now(UTC)
+    activity_event_id = f"activity:{trip_id}:{secrets.token_hex(4)}"
+    occurred_at = _isoformat(datetime.now(UTC))
     _append_activity_event(
         db_session,
+        activity_event_id=activity_event_id,
         trip_id=trip_id,
         session_state_id=session.session_state_id,
+        occurred_at=occurred_at,
         event_kind="decision_recorded",
         summary=f"Traveler answered '{matching.title}' with '{choice}'.",
         related_decision_id=decision_id,
         related_option_set_id=matching.related_option_set_id,
         metadata={"choice": choice},
+    )
+    _record_planner_action(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        activity_event_id=activity_event_id,
+        occurred_at=occurred_at,
+        action_type="decision_answer",
+        decision_id=decision_id,
+        option_set_id=matching.related_option_set_id,
+        choice=choice,
+        payload={"decision_title": matching.title},
     )
     db_session.commit()
     return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
@@ -1410,18 +1477,23 @@ def submit_workspace_option_feedback(
     record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
-    option_set_id = (
-        session.recent_option_presentations[0].option_set_id
-        if session.recent_option_presentations
-        else f"option-set:{trip_id}:workspace-bootstrap"
-    )
+    option_set_id, valid_option_ids = _current_workspace_option_set(session, trip_id=trip_id)
+    if option_id not in valid_option_ids:
+        raise ValueError(f"Option '{option_id}' is not available in the current workspace option set.")
     presentation = (
         session.recent_option_presentations[0]
         if session.recent_option_presentations
         else _default_workspace_presentation(trip_id, session.updated_at)
     )
-    presentation.surfaced_option_ids = list(dict.fromkeys(presentation.surfaced_option_ids + [option_id]))
+    presentation.surfaced_option_ids = valid_option_ids
     presentation.option_set_id = option_set_id
+    if presentation.highlighted_option_id not in valid_option_ids:
+        presentation.highlighted_option_id = valid_option_ids[0]
+    if presentation.selected_option_id not in valid_option_ids:
+        presentation.selected_option_id = None
+    presentation.rejected_option_ids = [
+        item for item in presentation.rejected_option_ids if item in valid_option_ids
+    ]
 
     if action_type == "accept":
         presentation.selected_option_id = option_id
@@ -1475,15 +1547,31 @@ def submit_workspace_option_feedback(
     session_record.notes = list(session.notes)
     session_record.last_updated_at = session.updated_at
     record.updated_at = datetime.now(UTC)
+    activity_event_id = f"activity:{trip_id}:{secrets.token_hex(4)}"
+    occurred_at = _isoformat(datetime.now(UTC))
     _append_activity_event(
         db_session,
+        activity_event_id=activity_event_id,
         trip_id=trip_id,
         session_state_id=session.session_state_id,
+        occurred_at=occurred_at,
         event_kind=event_kind,
         summary=summary,
         related_decision_id=decision_id,
         related_option_set_id=option_set_id,
         metadata={"action_type": action_type, "option_id": option_id},
+    )
+    _record_planner_action(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        activity_event_id=activity_event_id,
+        occurred_at=occurred_at,
+        action_type=action_type,
+        decision_id=decision_id,
+        option_set_id=option_set_id,
+        option_id=option_id,
+        payload={"summary": summary},
     )
     db_session.commit()
     return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
