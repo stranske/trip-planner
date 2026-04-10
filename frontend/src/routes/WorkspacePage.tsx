@@ -617,23 +617,23 @@ function WorkspacePageContent({
             <p className="muted-copy">Approval-packet details will render here once a proposal is submitted.</p>
           ) : (
             <div className="decision-stack">
-              {proposalFollowUp ? (
+              {renderableProposalFollowUp ? (
                 <article className="decision-card">
-                  <h3>{proposalFollowUp.recommended_label ?? proposalFollowUp.title}</h3>
-                  <p>{proposalFollowUp.summary}</p>
-                  {proposalFollowUp.selected_alternative?.summary ? (
+                  <h3>{renderableProposalFollowUp.recommended_label ?? renderableProposalFollowUp.title}</h3>
+                  <p>{renderableProposalFollowUp.summary}</p>
+                  {renderableProposalFollowUp.selected_alternative?.summary ? (
                     <p className="muted-copy">
-                      Selected alternative: {proposalFollowUp.selected_alternative.summary}
+                      Selected alternative: {renderableProposalFollowUp.selected_alternative.summary}
                     </p>
                   ) : null}
-                  {proposalFollowUp.requested_exception?.reason ? (
+                  {renderableProposalFollowUp.requested_exception?.reason ? (
                     <p className="muted-copy">
-                      Exception rationale: {proposalFollowUp.requested_exception.reason}
+                      Exception rationale: {renderableProposalFollowUp.requested_exception.reason}
                     </p>
                   ) : null}
                 </article>
               ) : null}
-              {(proposalFollowUp?.alternatives ?? []).map((alternative) => (
+              {(renderableProposalFollowUp?.alternatives ?? []).map((alternative) => (
                 <article
                   key={`${alternative.category}-${alternative.summary}`}
                   className="decision-card"

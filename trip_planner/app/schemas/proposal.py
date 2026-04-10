@@ -44,6 +44,7 @@ class WorkspaceProposalExceptionRequest(BaseModel):
 
 class WorkspaceProposalFollowUpRequest(BaseModel):
     status: Literal[
+        "awaiting_evaluation",
         "reoptimization_required",
         "reoptimized",
         "exception_required",

@@ -495,6 +495,56 @@ def test_workspace_proposal_follow_up_patch_persists_exception_request(client: T
     assert payload["proposal"]["requested_exception"]["requested_approval_roles"] == ["manager"]
 
 
+def test_workspace_proposal_follow_up_patch_accepts_awaiting_evaluation_status(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Pending evaluation workspace",
+            "summary": "Allow explicit pending follow-up updates before the policy result arrives.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+    client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+
+    updated = client.patch(
+        f"/api/workspace/{trip_id}/proposal/follow-up",
+        json={
+            "status": "awaiting_evaluation",
+            "title": "Awaiting policy verdict",
+            "summary": "Carrier response is stored while the workspace waits for policy evaluation.",
+            "notes": ["Keep the current proposal visible until the evaluator posts a result."],
+        },
+    )
+
+    assert updated.status_code == 200
+    payload = updated.json()["proposal_state"]
+    assert payload["follow_up"]["status"] == "awaiting_evaluation"
+    assert payload["follow_up"]["path"] == "pending"
+
+
 def test_workspace_proposal_follow_up_patch_rejects_malformed_exception_payload(
     client: TestClient,
 ) -> None:
