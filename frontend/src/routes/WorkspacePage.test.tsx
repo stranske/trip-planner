@@ -9,6 +9,7 @@ import {
   recordWorkspaceSpendEvent,
   saveWorkspaceBudget,
   submitPlannerOptionFeedback,
+  type WorkspaceData,
 } from "../api/workspace";
 import type { TripRecord } from "../api/trips";
 import { WorkspacePage } from "./WorkspacePage";
@@ -562,7 +563,7 @@ const workspacePayload = {
       },
     ],
   },
-};
+} satisfies WorkspaceData;
 
 function renderWorkspacePage() {
   return render(
@@ -1296,7 +1297,7 @@ describe("WorkspacePage", () => {
           ],
         },
       },
-    };
+    } satisfies WorkspaceData;
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve(workspacePayload),
     });
