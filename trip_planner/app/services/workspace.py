@@ -1365,6 +1365,16 @@ def _workspace_option_ids_from_payload(payload: dict[str, Any]) -> set[str]:
     }
 
 
+def _workspace_known_option_ids(
+    payload: dict[str, Any],
+    session: PlanningSessionState,
+) -> set[str]:
+    option_ids = _workspace_option_ids_from_payload(payload)
+    for presentation in session.recent_option_presentations:
+        option_ids.update(presentation.surfaced_option_ids)
+    return option_ids
+
+
 def answer_workspace_planner_decision(
     db_session: Session,
     *,
@@ -1421,7 +1431,7 @@ def submit_workspace_option_feedback(
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
     current_payload = get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
-    valid_option_ids = _workspace_option_ids_from_payload(current_payload)
+    valid_option_ids = _workspace_known_option_ids(current_payload, session)
     option_set_id = (
         session.recent_option_presentations[0].option_set_id
         if session.recent_option_presentations
