@@ -1,5 +1,9 @@
 """Persistence models for runtime-backed storage."""
 
+from trip_planner.persistence.models.activity import (
+    PersistedActivityLogEvent,
+    PersistedPlannerAction,
+)
 from trip_planner.persistence.models.account import UserAccount
 from trip_planner.persistence.models.budget import (
     PersistedActualSpendEvent,
@@ -8,10 +12,7 @@ from trip_planner.persistence.models.budget import (
 )
 from trip_planner.persistence.models.policy import PersistedPolicyState
 from trip_planner.persistence.models.proposal import PersistedProposalState
-from trip_planner.persistence.models.scenario import (
-    PersistedActivityLogEvent,
-    PersistedSavedScenario,
-)
+from trip_planner.persistence.models.scenario import PersistedSavedScenario
 from trip_planner.persistence.models.session import (
     AuthSession,
     PersistedPlanningSessionState,
@@ -24,6 +25,7 @@ __all__ = [
     "PersistedActualSpendEvent",
     "PersistedBudgetPlan",
     "PersistedBudgetPlanVersion",
+    "PersistedPlannerAction",
     "PersistedPlanningSessionState",
     "PersistedPolicyState",
     "PersistedProposalState",

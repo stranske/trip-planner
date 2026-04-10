@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLoaderData } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,14 +13,6 @@ import {
 import type { TripRecord } from "../api/trips";
 import { WorkspacePage } from "./WorkspacePage";
 
-vi.mock("react-router-dom", async () => {
-  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
-  return {
-    ...actual,
-    useLoaderData: vi.fn(),
-  };
-});
-
 vi.mock("../api/workspace", async () => {
   const actual = await vi.importActual<typeof import("../api/workspace")>("../api/workspace");
   return {
@@ -29,6 +21,14 @@ vi.mock("../api/workspace", async () => {
     submitPlannerOptionFeedback: vi.fn(),
     saveWorkspaceBudget: vi.fn(),
     recordWorkspaceSpendEvent: vi.fn(),
+  };
+});
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return {
+    ...actual,
+    useLoaderData: vi.fn(),
   };
 });
 
@@ -1269,6 +1269,80 @@ describe("WorkspacePage", () => {
 
     expect(screen.getByText("Kyoto Kitchen")).toBeInTheDocument();
     expect(screen.getAllByText("$137.50").length).toBeGreaterThan(0);
+  });
+
+  it("restores persisted planner feedback after a workspace reload", async () => {
+    const updatedWorkspace = {
+      ...workspacePayload,
+      activity_log: [
+        {
+          activity_event_id: "activity:trip-leisure-kyoto-draft:1",
+          occurred_at: "2026-04-10T05:40:00Z",
+          event_kind: "decision_recorded",
+          summary:
+            "Traveler saved option 'scenario:trip-leisure-kyoto-draft:1' as a fallback in the workspace planner panel.",
+        },
+      ],
+      planner_panel_state: {
+        ...workspacePayload.planner_panel_state,
+        option_set: {
+          ...workspacePayload.planner_panel_state.option_set,
+          options: [
+            {
+              ...workspacePayload.planner_panel_state.option_set.options[0],
+              label: "Kyoto base with Uji day trip (fallback)",
+              explanation: ["This option was kept as an explicit fallback for later comparison."],
+            },
+          ],
+        },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+    });
+    mockedSubmitPlannerOptionFeedback.mockResolvedValue(updatedWorkspace);
+
+    const view = renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Planner side panel")).toBeInTheDocument();
+    });
+
+    const host = view.container.querySelector(".planner-panel-host");
+    expect(host).not.toBeNull();
+    fireEvent(
+      host as Element,
+      new CustomEvent("planner-response-save-as-fallback", {
+        detail: {
+          option_id: "scenario:trip-leisure-kyoto-draft:1",
+          action_type: "save_as_fallback",
+          decision_id: null,
+        },
+      })
+    );
+
+    await waitFor(() => {
+      expect(mockedSubmitPlannerOptionFeedback).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        "scenario:trip-leisure-kyoto-draft:1",
+        "save_as_fallback",
+        null
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Kyoto base with Uji day trip (fallback)")).toBeInTheDocument();
+    });
+
+    view.unmount();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(updatedWorkspace),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Kyoto base with Uji day trip (fallback)")).toBeInTheDocument();
+    });
   });
 
   it("renders the shared route error card when the workspace loader rejects", async () => {

@@ -1,4 +1,4 @@
-"""SQLAlchemy models for persisted saved-scenario and planning-history state."""
+"""SQLAlchemy models for persisted saved-scenario state."""
 
 from __future__ import annotations
 
@@ -33,28 +33,3 @@ class PersistedSavedScenario(Base):
         default=_utcnow,
         onupdate=_utcnow,
     )
-
-
-class PersistedActivityLogEvent(Base):
-    __tablename__ = "persisted_activity_log_events"
-
-    activity_event_id: Mapped[str] = mapped_column(String(96), primary_key=True)
-    trip_id: Mapped[str] = mapped_column(
-        ForeignKey("persisted_trips.trip_id", ondelete="CASCADE"),
-        index=True,
-    )
-    session_state_id: Mapped[str] = mapped_column(String(96))
-    occurred_at: Mapped[str] = mapped_column(String(64), index=True)
-    event_kind: Mapped[str] = mapped_column(String(64))
-    summary: Mapped[str] = mapped_column(String(600))
-    actor: Mapped[str] = mapped_column(String(64), default="system")
-    related_decision_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
-    related_option_set_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
-    saved_scenario_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
-    budget_plan_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
-    scenario_budget_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
-    checkpoint_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
-    metadata_payload: Mapped[dict[str, str]] = mapped_column("metadata", JSON, default=dict)
-    tags: Mapped[list[str]] = mapped_column(JSON, default=list)
-    notes: Mapped[list[str]] = mapped_column(JSON, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
