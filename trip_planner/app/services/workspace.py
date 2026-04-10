@@ -1489,6 +1489,13 @@ def submit_workspace_option_feedback(
     )
     presentation.surfaced_option_ids = valid_option_ids
     presentation.option_set_id = option_set_id
+    if presentation.highlighted_option_id not in valid_option_ids:
+        presentation.highlighted_option_id = valid_option_ids[0]
+    if presentation.selected_option_id not in valid_option_ids:
+        presentation.selected_option_id = None
+    presentation.rejected_option_ids = [
+        item for item in presentation.rejected_option_ids if item in valid_option_ids
+    ]
 
     if action_type == "accept":
         presentation.selected_option_id = option_id

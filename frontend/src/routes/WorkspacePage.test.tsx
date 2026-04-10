@@ -1305,13 +1305,14 @@ describe("WorkspacePage", () => {
     const view = renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Planner side panel")).toBeInTheDocument();
+      expect(getPlannerHost().shadowRoot?.querySelector('[aria-label="Planner side panel"]')).toBeTruthy();
     });
 
     const host = view.container.querySelector(".planner-panel-host");
-    expect(host).not.toBeNull();
+    const plannerMountNode = host?.shadowRoot?.lastElementChild;
+    expect(plannerMountNode).not.toBeNull();
     fireEvent(
-      host as Element,
+      plannerMountNode as Element,
       new CustomEvent("planner-response-save-as-fallback", {
         detail: {
           option_id: "scenario:trip-leisure-kyoto-draft:1",
@@ -1330,7 +1331,9 @@ describe("WorkspacePage", () => {
       );
     });
     await waitFor(() => {
-      expect(screen.getByText("Kyoto base with Uji day trip (fallback)")).toBeInTheDocument();
+      expect(getPlannerHost().shadowRoot?.textContent).toContain(
+        "Kyoto base with Uji day trip (fallback)"
+      );
     });
 
     view.unmount();
@@ -1341,7 +1344,9 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByText("Kyoto base with Uji day trip (fallback)")).toBeInTheDocument();
+      expect(getPlannerHost().shadowRoot?.textContent).toContain(
+        "Kyoto base with Uji day trip (fallback)"
+      );
     });
   });
 

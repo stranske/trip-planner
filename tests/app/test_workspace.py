@@ -735,11 +735,10 @@ def test_workspace_activity_log_is_capped_for_persisted_trips(client: TestClient
     )
     assert created.status_code == 201
     trip_id = created.json()["trip"]["trip_id"]
-    option_id = client.get(f"/api/workspace/{trip_id}").json()["planner_panel_state"]["option_set"][
-        "options"
-    ][0]["option_id"]
-
     for index in range(55):
+        option_id = client.get(f"/api/workspace/{trip_id}").json()["planner_panel_state"][
+            "option_set"
+        ]["options"][0]["option_id"]
         action_type = "save_as_fallback" if index % 2 == 0 else "reject"
         response = client.post(
             f"/api/workspace/{trip_id}/planner/options/{option_id}/feedback",
