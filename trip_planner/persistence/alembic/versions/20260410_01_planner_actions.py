@@ -1,7 +1,7 @@
 """add persisted planner actions
 
 Revision ID: 20260410_01
-Revises: 20260408_01
+Revises: 20260409_01
 Create Date: 2026-04-10 00:00:00.000000
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 revision = "20260410_01"
-down_revision = "20260408_01"
+down_revision = "20260409_01"
 branch_labels = None
 depends_on = None
 
