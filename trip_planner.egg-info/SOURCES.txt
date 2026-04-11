@@ -147,10 +147,8 @@ trip_planner/persistence/alembic/versions/20260408_01_planning_session_state.py
 trip_planner/persistence/alembic/versions/20260408_02_budget_state.py
 trip_planner/persistence/alembic/versions/20260408_03_policy_state.py
 trip_planner/persistence/alembic/versions/20260409_01_proposal_state.py
-trip_planner/persistence/alembic/versions/20260410_01_planner_actions.py
 trip_planner/persistence/models/__init__.py
 trip_planner/persistence/models/account.py
-trip_planner/persistence/models/activity.py
 trip_planner/persistence/models/budget.py
 trip_planner/persistence/models/policy.py
 trip_planner/persistence/models/proposal.py
