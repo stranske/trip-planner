@@ -63,7 +63,12 @@ The app-side work in this epic depends on a stable planner-facing API from `Trav
 - correlation and result lookup semantics must stay stable enough for the app to resume, refresh, or inspect a policy round-trip
 - returned evaluation payloads must preserve the structured decision, failure, preferred-alternative, and approval-guidance fields already modeled in this repo's contracts
 
-If `trip-planner` needs additional remote fields or endpoints, document the dependency and link the matching `Travel-Plan-Permission` work instead of papering over the gap with local heuristics.
+Known cross-repo dependency records for this epic should be maintained here as they are confirmed in the child issues:
+
+- `#763` -> matching `Travel-Plan-Permission` issue/PR for real HTTP policy/proposal submission and result lookup support
+- `#764` -> matching `Travel-Plan-Permission` issue/PR for structured evaluation-result fields and any follow-up or reoptimization inputs consumed by `trip-planner`
+
+If `trip-planner` needs additional remote fields or endpoints, document the dependency under the relevant child issue above and link the matching `Travel-Plan-Permission` work instead of papering over the gap with local heuristics.
 
 ## Contract Surface
 
