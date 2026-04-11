@@ -55,7 +55,9 @@ from trip_planner.state import (
     PersistedTripArtifactRefs,
     PlanningSessionState,
     SavedScenarioRecord,
+    ScenarioArtifactRefs,
     ScenarioComparison,
+    ScenarioVersion,
     TripLifecycle,
 )
 
@@ -612,6 +614,243 @@ def _default_workspace_session(record: PersistedTrip) -> PlanningSessionState:
     )
 
 
+def _bootstrap_saved_scenario_summary(
+    *,
+    record: PersistedTrip,
+    kind: str,
+    primary_regions: list[str],
+) -> str:
+    region_summary = ", ".join(primary_regions[:2]) if primary_regions else "the current trip frame"
+    if kind == "baseline":
+        return (
+            f"Keep {region_summary} as the first persisted planning frame for {record.title} "
+            "while richer route search arrives."
+        )
+    return (
+        "Broaden the next planning pass before committing to a fully ranked route comparison "
+        f"for {record.title}."
+    )
+
+
+def _default_workspace_saved_scenarios(
+    record: PersistedTrip,
+    *,
+    session_state_id: str,
+) -> list[SavedScenarioRecord]:
+    timestamp = _isoformat(record.updated_at)
+    option_set_id = f"option-set:{record.trip_id}:workspace-bootstrap"
+    primary_regions = list(record.primary_regions)
+    shared_snapshot = ScenarioArtifactRefs(
+        objective_id=record.objective_id,
+        option_set_ids=[option_set_id],
+        budget_state_id=record.budget_state_id,
+        policy_state_id=record.policy_state_id,
+        session_state_id=session_state_id,
+        leisure_profile_id=record.leisure_profile_id,
+        business_profile_id=record.business_profile_id,
+        notes=["Generated from the persisted workspace bootstrap path."],
+    )
+    baseline_id = f"saved-scenario:{record.trip_id}:baseline"
+    broadened_id = f"saved-scenario:{record.trip_id}:broadened"
+    comparison = ScenarioComparison(
+        comparison_id=f"comparison:{record.trip_id}:workspace-bootstrap",
+        trip_id=record.trip_id,
+        baseline_scenario_id=baseline_id,
+        candidate_scenario_id=broadened_id,
+        compared_at=timestamp,
+        outcome="tradeoff",
+        summary=(
+            "Compare the current trip frame against a broader first planning pass while "
+            "ranked scenarios are still bootstrapping."
+        ),
+        focus_areas=["scope", "specificity"],
+        notes=["Persisted workspace comparison scaffold."],
+    )
+    baseline_version = ScenarioVersion(
+        version_id=f"{baseline_id}:v1",
+        saved_scenario_id=baseline_id,
+        trip_id=record.trip_id,
+        title="Current trip frame",
+        label="baseline",
+        created_at=timestamp,
+        snapshot_refs=shared_snapshot,
+        scope="mixed",
+        summary=_bootstrap_saved_scenario_summary(
+            record=record,
+            kind="baseline",
+            primary_regions=primary_regions,
+        ),
+        tags=[record.mode, "workspace-bootstrap", "baseline"],
+        notes=["Seeded from persisted trip creation."],
+    )
+    broadened_version = ScenarioVersion(
+        version_id=f"{broadened_id}:v1",
+        saved_scenario_id=broadened_id,
+        trip_id=record.trip_id,
+        title="Broadened planning pass",
+        label="fallback",
+        created_at=timestamp,
+        snapshot_refs=shared_snapshot,
+        scope="mixed",
+        summary=_bootstrap_saved_scenario_summary(
+            record=record,
+            kind="broadened",
+            primary_regions=primary_regions,
+        ),
+        tags=[record.mode, "workspace-bootstrap", "fallback"],
+        notes=["Seeded from persisted trip creation."],
+    )
+    return [
+        SavedScenarioRecord(
+            saved_scenario_id=baseline_id,
+            trip_id=record.trip_id,
+            current_version_id=baseline_version.version_id,
+            versions=[baseline_version],
+            comparisons=[comparison],
+            tags=[record.mode, "workspace-bootstrap", "baseline"],
+            notes=["Persisted bootstrap scenario scaffold."],
+        ),
+        SavedScenarioRecord(
+            saved_scenario_id=broadened_id,
+            trip_id=record.trip_id,
+            current_version_id=broadened_version.version_id,
+            versions=[broadened_version],
+            tags=[record.mode, "workspace-bootstrap", "fallback"],
+            notes=["Persisted bootstrap scenario scaffold."],
+        ),
+    ]
+
+
+def _serialize_saved_scenario_record(record: PersistedSavedScenario) -> dict[str, Any]:
+    return SavedScenarioRecord.from_dict(
+        {
+            "saved_scenario_id": record.saved_scenario_id,
+            "trip_id": record.trip_id,
+            "current_version_id": record.current_version_id,
+            "versions": list(record.versions),
+            "comparisons": list(record.comparisons),
+            "tags": list(record.tags),
+            "notes": list(record.notes),
+        }
+    ).to_dict()
+
+
+def _workspace_scenario_comparison_from_saved_scenarios(
+    saved_scenarios: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    for record in saved_scenarios:
+        comparisons = list(record.get("comparisons") or [])
+        if comparisons:
+            return dict(comparisons[0])
+    return None
+
+
+def _build_runtime_scenario_comparison_from_saved_scenarios(
+    *,
+    trip_id: str,
+    trip_title: str,
+    primary_regions: list[str],
+    saved_scenarios: list[dict[str, Any]],
+) -> dict[str, Any]:
+    comparison_axes = [
+        {"key": "score", "label": "Planner score", "direction": "higher_better"},
+        {"key": "travel_minutes", "label": "Travel minutes", "direction": "lower_better"},
+        {"key": "transfers", "label": "Transfers", "direction": "lower_better"},
+        {"key": "estimated_total", "label": "Estimated total", "direction": "lower_better"},
+    ]
+    if not saved_scenarios:
+        return {
+            "trip_id": trip_id,
+            "title": "Workspace scenario comparison",
+            "summary": (
+                f"{trip_title} does not have runtime scenario comparison data yet. "
+                "Run ranking and route assembly before rendering comparison views."
+            ),
+            "comparison_axes": comparison_axes,
+            "lead_scenario_id": None,
+            "scenarios": [],
+            "source_refs": [],
+        }
+
+    route_sequence = primary_regions or ["trip-shell"]
+    rows: list[dict[str, Any]] = []
+    for index, record in enumerate(saved_scenarios[:2], start=1):
+        versions = list(record.get("versions") or [])
+        version = next(
+            (
+                item
+                for item in versions
+                if item.get("version_id") == record.get("current_version_id")
+            ),
+            versions[0] if versions else {},
+        )
+        travel_minutes = 45 * max(len(route_sequence) - 1, 0) + ((index - 1) * 30)
+        transfers = max(len(route_sequence) - 1, 0) + (index - 1)
+        score = round(1.0 - ((index - 1) * 0.12), 2)
+        rows.append(
+            {
+                "scenario_id": record["saved_scenario_id"],
+                "title": version.get("title") or f"Workspace scaffold {index}",
+                "rank": index,
+                "status": "recommended" if index == 1 else "alternative",
+                "summary": version.get("summary")
+                or "Workspace comparison scaffold is ready for a persisted trip.",
+                "comparison_note": (
+                    "Lead workspace bootstrap direction."
+                    if index == 1
+                    else "Alternative planning direction preserved for direct comparison."
+                ),
+                "option_count": 1,
+                "checkpoint_id": None,
+                "budget_variant_id": None,
+                "route_sequence": list(route_sequence),
+                "route_summary": " -> ".join(route_sequence),
+                "recommended_for_selection": index == 1,
+                "feasible": True,
+                "metrics": {
+                    "score": score,
+                    "travel_minutes": travel_minutes,
+                    "transfers": transfers,
+                    "estimated_total": None,
+                },
+                "source_result_id": version.get("version_id"),
+                "objective_refs": [
+                    objective_id
+                    for objective_id in [version.get("snapshot_refs", {}).get("objective_id")]
+                    if objective_id
+                ],
+                "highlights": [
+                    version.get("summary")
+                    or "Persisted workspace bootstrap keeps a durable comparison surface ready.",
+                    "Generated from persisted saved-scenario scaffolds rather than seeded trip fixtures.",
+                ],
+            }
+        )
+
+    lead = rows[0]
+    for row in rows:
+        row["delta"] = {
+            "score_delta": round(row["metrics"]["score"] - lead["metrics"]["score"], 2),
+            "travel_minutes_delta": row["metrics"]["travel_minutes"]
+            - lead["metrics"]["travel_minutes"],
+            "transfers_delta": row["metrics"]["transfers"] - lead["metrics"]["transfers"],
+            "estimated_total_delta": None,
+        }
+
+    return {
+        "trip_id": trip_id,
+        "title": "Workspace bootstrap comparison",
+        "summary": (
+            f"{len(rows)} persisted workspace direction(s) are available for comparison in "
+            f"{trip_title} while ranked route search is still bootstrapping."
+        ),
+        "comparison_axes": comparison_axes,
+        "lead_scenario_id": lead["scenario_id"],
+        "scenarios": rows,
+        "source_refs": [row["scenario_id"] for row in rows],
+    }
+
+
 def _serialize_session_record(record: PersistedPlanningSessionState) -> dict[str, Any]:
     return PlanningSessionState.from_dict(
         {
@@ -739,17 +978,20 @@ def _build_persisted_trip_workspace(
         primary_regions=record.primary_regions,
     )
     feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
-    runtime_scenario_comparison = _build_runtime_scenario_comparison(
+    runtime_scenario_comparison = _build_runtime_scenario_comparison_from_saved_scenarios(
         trip_id=record.trip_id,
         trip_title=trip_record["trip"]["title"],
-        scenario_search=scenario_search,
+        primary_regions=list(trip_record["trip"]["trip_frame"].get("primary_regions") or []),
+        saved_scenarios=resolved_saved_scenarios,
     )
 
     return {
         "trip_record": trip_record,
         "session": resolved_session,
         "saved_scenarios": resolved_saved_scenarios,
-        "scenario_comparison": None,
+        "scenario_comparison": _workspace_scenario_comparison_from_saved_scenarios(
+            resolved_saved_scenarios
+        ),
         "scenario_search": scenario_search,
         "runtime_scenario_comparison": runtime_scenario_comparison,
         "activity_log": resolved_activity_log,
@@ -811,10 +1053,25 @@ def _build_runtime_scenario_comparison_payload(
     except WorkspaceTripNotFoundError:
         return None
 
-    return _build_runtime_scenario_comparison(
+    session_record = db_session.get(PersistedPlanningSessionState, f"session:{trip_id}")
+    if session_record is None:
+        session_record = _get_or_create_workspace_session_record(db_session, record=record)
+        db_session.commit()
+    persisted_saved_scenarios, created_saved_scenarios = _get_or_create_workspace_saved_scenarios(
+        db_session,
+        record=record,
+        session_state_id=session_record.session_state_id,
+    )
+    if created_saved_scenarios:
+        db_session.commit()
+
+    return _build_runtime_scenario_comparison_from_saved_scenarios(
         trip_id=trip_id,
         trip_title=record.title,
-        scenario_search=_empty_workspace_scenario_search(),
+        primary_regions=list(record.primary_regions),
+        saved_scenarios=[
+            _serialize_saved_scenario_record(item) for item in persisted_saved_scenarios
+        ],
     )
 
 
@@ -1215,11 +1472,17 @@ def get_workspace_payload(
     if record is None:
         return None
     session_record = db_session.get(PersistedPlanningSessionState, f"session:{trip_id}")
-    persisted_saved_scenarios = db_session.scalars(
-        select(PersistedSavedScenario)
-        .where(PersistedSavedScenario.trip_id == trip_id)
-        .order_by(PersistedSavedScenario.updated_at.desc())
-    ).all()
+    created_session = False
+    if session_record is None:
+        session_record = _get_or_create_workspace_session_record(db_session, record=record)
+        created_session = True
+    persisted_saved_scenarios, created_saved_scenarios = _get_or_create_workspace_saved_scenarios(
+        db_session,
+        record=record,
+        session_state_id=session_record.session_state_id,
+    )
+    if created_session or created_saved_scenarios:
+        db_session.commit()
     activity_records = db_session.scalars(
         select(PersistedActivityLogEvent)
         .where(PersistedActivityLogEvent.trip_id == trip_id)
@@ -1228,22 +1491,9 @@ def get_workspace_payload(
     ).all()
     return _build_persisted_trip_workspace(
         record,
-        session=(
-            _serialize_session_record(session_record)
-            if session_record is not None
-            else None
-        ),
+        session=_serialize_session_record(session_record),
         saved_scenarios=[
-            {
-                "saved_scenario_id": scenario.saved_scenario_id,
-                "trip_id": scenario.trip_id,
-                "current_version_id": scenario.current_version_id,
-                "versions": list(scenario.versions),
-                "comparisons": list(scenario.comparisons),
-                "tags": list(scenario.tags),
-                "notes": list(scenario.notes),
-            }
-            for scenario in persisted_saved_scenarios
+            _serialize_saved_scenario_record(scenario) for scenario in persisted_saved_scenarios
         ],
         activity_log=[_serialize_activity_record(item) for item in activity_records],
         budget_state=load_budget_payload_for_workspace(db_session, record=record),
@@ -1328,6 +1578,44 @@ def _get_or_create_workspace_session_record(
     db_session.add(persisted)
     db_session.flush()
     return persisted
+
+
+def _get_or_create_workspace_saved_scenarios(
+    db_session: Session,
+    *,
+    record: PersistedTrip,
+    session_state_id: str,
+) -> tuple[list[PersistedSavedScenario], bool]:
+    existing = db_session.scalars(
+        select(PersistedSavedScenario)
+        .where(PersistedSavedScenario.trip_id == record.trip_id)
+        .order_by(
+            PersistedSavedScenario.created_at.asc(),
+            PersistedSavedScenario.saved_scenario_id.asc(),
+        )
+    ).all()
+    if existing:
+        return existing, False
+
+    scaffolds = _default_workspace_saved_scenarios(
+        record,
+        session_state_id=session_state_id,
+    )
+    persisted_records: list[PersistedSavedScenario] = []
+    for scaffold in scaffolds:
+        persisted = PersistedSavedScenario(
+            saved_scenario_id=scaffold.saved_scenario_id,
+            trip_id=scaffold.trip_id,
+            current_version_id=scaffold.current_version_id,
+            versions=[item.to_dict() for item in scaffold.versions],
+            comparisons=[item.to_dict() for item in scaffold.comparisons],
+            tags=list(scaffold.tags),
+            notes=list(scaffold.notes),
+        )
+        db_session.add(persisted)
+        persisted_records.append(persisted)
+    db_session.flush()
+    return persisted_records, True
 
 
 def _current_workspace_option_set(
