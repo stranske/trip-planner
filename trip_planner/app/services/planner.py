@@ -31,6 +31,7 @@ from trip_planner.state.sessions import PlanningSessionState
 
 class WorkspacePlannerTripNotFoundError(ValueError):
     """Raised when the planner conversation targets an unknown trip."""
+
 @dataclass(frozen=True, slots=True)
 class PlannerConversationRequest:
     trip_id: str
