@@ -216,15 +216,20 @@ def _build_inventory_assembly_input(
 
 def assemble_inventory_bundles_for_trip(
     *,
-    trip_id: str,
-    trip_mode: str,
+    trip_id: str | None = None,
+    trip_mode: str | None = None,
     primary_regions: Sequence[str] = (),
+    assembly_input: InventoryAssemblyInput | None = None,
 ) -> list[InventoryBundle]:
-    assembly_input = _build_inventory_assembly_input(
-        trip_id=trip_id,
-        trip_mode=trip_mode,
-        primary_regions=primary_regions,
-    )
+    if assembly_input is None:
+        if trip_id is None or trip_mode is None:
+            msg = "trip_id and trip_mode are required when assembly_input is not provided"
+            raise ValueError(msg)
+        assembly_input = _build_inventory_assembly_input(
+            trip_id=trip_id,
+            trip_mode=trip_mode,
+            primary_regions=primary_regions,
+        )
 
     bundles: list[InventoryBundle] = []
     for fixture_name in assembly_input.fixture_names:
@@ -301,11 +306,7 @@ def get_inventory_payload(
         trip_mode=trip_mode,
         primary_regions=primary_regions,
     )
-    bundles = assemble_inventory_bundles_for_trip(
-        trip_id=trip_id,
-        trip_mode=trip_mode,
-        primary_regions=primary_regions,
-    )
+    bundles = assemble_inventory_bundles_for_trip(assembly_input=assembly_input)
     return {
         "trip_id": trip_id,
         "bundle_count": len(bundles),

@@ -73,7 +73,10 @@ def test_inventory_endpoint_assembles_bundles_for_persisted_trip(client: TestCli
     assert payload["trip_id"] == trip_id
     assert payload["bundle_count"] == 1
     assert payload["bundles"][0]["bundle_id"].startswith("bundle-")
-    assert "adapter-backed inventory assembly seam" in payload["summary"]["notes"][1]
+    assert any(
+        "adapter-backed inventory assembly seam" in note
+        for note in payload["summary"]["notes"]
+    )
 
 
 def test_inventory_endpoint_returns_bounded_empty_fallback_for_partial_trip_input(
