@@ -14,6 +14,7 @@ Saved scenarios and trip-level planning history now persist underneath that same
 - [Application foundation epic plan](docs/application-foundation-epic.md)
 - [Accounts, persistence, and workflow state epic plan](docs/accounts-persistence-workflow-state-epic.md)
 - [Planner workspace vertical slice epic plan](docs/planner-workspace-vertical-slice-epic.md)
+- [Live runtime completion epic plan](docs/live-runtime-completion-epic.md)
 - [Runtime planning services epic plan](docs/runtime-planning-services-epic.md)
 - [Budget and business policy execution epic plan](docs/budget-business-policy-execution-epic.md)
 - [Maps, timeline, and comparison application surfaces epic plan](docs/maps-timeline-comparison-epic.md)
