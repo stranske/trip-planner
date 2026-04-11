@@ -59,6 +59,7 @@ trip_planner/app/routes/auth.py
 trip_planner/app/routes/budget.py
 trip_planner/app/routes/health.py
 trip_planner/app/routes/inventory.py
+trip_planner/app/routes/planner.py
 trip_planner/app/routes/policy.py
 trip_planner/app/routes/proposal.py
 trip_planner/app/routes/scenario_history.py
@@ -69,6 +70,7 @@ trip_planner/app/schemas/auth.py
 trip_planner/app/schemas/budget.py
 trip_planner/app/schemas/health.py
 trip_planner/app/schemas/inventory.py
+trip_planner/app/schemas/planner.py
 trip_planner/app/schemas/policy.py
 trip_planner/app/schemas/proposal.py
 trip_planner/app/schemas/scenario_history.py
@@ -78,6 +80,7 @@ trip_planner/app/services/auth.py
 trip_planner/app/services/budget.py
 trip_planner/app/services/feasibility.py
 trip_planner/app/services/inventory.py
+trip_planner/app/services/planner.py
 trip_planner/app/services/policy.py
 trip_planner/app/services/proposal.py
 trip_planner/app/services/scenario_history.py
@@ -147,8 +150,10 @@ trip_planner/persistence/alembic/versions/20260408_01_planning_session_state.py
 trip_planner/persistence/alembic/versions/20260408_02_budget_state.py
 trip_planner/persistence/alembic/versions/20260408_03_policy_state.py
 trip_planner/persistence/alembic/versions/20260409_01_proposal_state.py
+trip_planner/persistence/alembic/versions/20260410_01_planner_actions.py
 trip_planner/persistence/models/__init__.py
 trip_planner/persistence/models/account.py
+trip_planner/persistence/models/activity.py
 trip_planner/persistence/models/budget.py
 trip_planner/persistence/models/policy.py
 trip_planner/persistence/models/proposal.py
