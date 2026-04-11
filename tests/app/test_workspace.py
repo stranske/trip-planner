@@ -165,8 +165,9 @@ def test_workspace_endpoint_returns_minimal_payload_for_persisted_trip(
     assert payload["saved_scenarios"] == []
     assert payload["scenario_search"]["scenarios"] == []
     assert payload["runtime_scenario_comparison"]["scenarios"] == []
-    assert payload["inventory_summary"]["bundle_count"] == 0
-    assert payload["feasibility_summary"]["assessment_count"] == 0
+    assert payload["inventory_summary"]["bundle_count"] == 1
+    assert payload["inventory_summary"]["bundles"][0]["title"] == "Airport arrival bundle"
+    assert payload["feasibility_summary"]["assessment_count"] == 1
     assert payload["activity_log"] == []
     assert payload["budget_state"]["summary"]["planned_total"] == 0
     assert payload["budget_state"]["summary"]["actual_total"] == 0
