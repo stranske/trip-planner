@@ -736,6 +736,7 @@ def _build_persisted_trip_workspace(
     inventory_bundles = assemble_inventory_bundles_for_trip(
         trip_id=record.trip_id,
         trip_mode=record.mode,
+        primary_regions=record.primary_regions,
     )
     feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
     runtime_scenario_comparison = _build_runtime_scenario_comparison(
