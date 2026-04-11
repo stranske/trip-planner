@@ -16,6 +16,7 @@ Saved scenarios and trip-level planning history now persist underneath that same
 - [Planner workspace vertical slice epic plan](docs/planner-workspace-vertical-slice-epic.md)
 - [Live runtime completion epic plan](docs/live-runtime-completion-epic.md)
 - [LangChain planner runtime epic plan](docs/langchain-planner-runtime-epic.md)
+- [Google Maps and platform hardening epic plan](docs/google-maps-platform-hardening-epic.md)
 - [Runtime planning services epic plan](docs/runtime-planning-services-epic.md)
 - [Budget and business policy execution epic plan](docs/budget-business-policy-execution-epic.md)
 - [Maps, timeline, and comparison application surfaces epic plan](docs/maps-timeline-comparison-epic.md)
