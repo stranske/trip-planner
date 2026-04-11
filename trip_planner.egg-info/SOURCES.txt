@@ -39,6 +39,7 @@ tests/test_dependency_version_alignment.py
 tests/test_generate_segments.py
 tests/test_penalty.py
 tests/test_render_pr_review_thread_report.py
+tests/test_repo_hygiene.py
 tests/state/test_accounts.py
 tests/state/test_budget.py
 tests/state/test_scenarios.py
@@ -147,8 +148,10 @@ trip_planner/persistence/alembic/versions/20260408_01_planning_session_state.py
 trip_planner/persistence/alembic/versions/20260408_02_budget_state.py
 trip_planner/persistence/alembic/versions/20260408_03_policy_state.py
 trip_planner/persistence/alembic/versions/20260409_01_proposal_state.py
+trip_planner/persistence/alembic/versions/20260410_01_planner_actions.py
 trip_planner/persistence/models/__init__.py
 trip_planner/persistence/models/account.py
+trip_planner/persistence/models/activity.py
 trip_planner/persistence/models/budget.py
 trip_planner/persistence/models/policy.py
 trip_planner/persistence/models/proposal.py
