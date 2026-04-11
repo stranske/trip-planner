@@ -16,6 +16,7 @@ from trip_planner.app.services.workspace import (
     _append_activity_event,
     _get_or_create_workspace_session_record,
     _get_owned_trip_record,
+    _isoformat,
     _record_planner_action,
     _serialize_activity_record,
     _serialize_session_record,
@@ -30,11 +31,6 @@ from trip_planner.state.sessions import PlanningSessionState
 
 class WorkspacePlannerTripNotFoundError(ValueError):
     """Raised when the planner conversation targets an unknown trip."""
-
-
-def _isoformat(timestamp: datetime) -> str:
-    return timestamp.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
 
 @dataclass(frozen=True, slots=True)
 class PlannerConversationRequest:
@@ -286,7 +282,7 @@ def submit_planner_turn(
         trip_id=trip_id,
         session_state_id=session.session_state_id,
         occurred_at=occurred_at,
-        event_kind="decision_recorded",
+        event_kind="planner_message",
         summary="Traveler submitted a planner conversation turn.",
         metadata={"message_length": str(len(normalized_message))},
     )
@@ -311,8 +307,9 @@ def submit_planner_turn(
         trip_id=trip_id,
         session_state_id=session.session_state_id,
         occurred_at=occurred_at,
-        event_kind="rerank_requested",
+        event_kind="planner_message",
         summary="Planner conversation service generated the next trip-scoped reply.",
+        actor="planner",
         metadata={"ref_count": str(len(reply.refs))},
     )
     _record_planner_action(

@@ -7,7 +7,10 @@ from sqlalchemy import select
 
 from trip_planner.app.main import create_app
 from trip_planner.persistence.db import get_session_factory, reset_database_state
-from trip_planner.persistence.models.activity import PersistedPlannerAction
+from trip_planner.persistence.models.activity import (
+    PersistedActivityLogEvent,
+    PersistedPlannerAction,
+)
 from trip_planner.persistence.models.session import PersistedPlanningSessionState
 
 
@@ -101,6 +104,16 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
             "planner_user_turn",
             "planner_response",
         ]
+        activity_events = db_session.scalars(
+            select(PersistedActivityLogEvent)
+            .where(PersistedActivityLogEvent.trip_id == trip_id)
+            .order_by(PersistedActivityLogEvent.occurred_at.asc())
+        ).all()
+        assert [item.event_kind for item in activity_events] == [
+            "planner_message",
+            "planner_message",
+        ]
+        assert [item.actor for item in activity_events] == ["traveler", "planner"]
 
 
 def test_planner_resume_returns_prior_conversation_history(client: TestClient) -> None:

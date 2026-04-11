@@ -49,6 +49,7 @@ ACTIVITY_LOG_EVENT_KINDS: tuple[str, ...] = (
     "session_started",
     "checkpoint_created",
     "scenario_saved",
+    "planner_message",
     "rerank_requested",
     "option_rejected",
     "budget_updated",
