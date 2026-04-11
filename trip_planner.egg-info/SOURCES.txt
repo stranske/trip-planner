@@ -39,6 +39,7 @@ tests/test_dependency_version_alignment.py
 tests/test_generate_segments.py
 tests/test_penalty.py
 tests/test_render_pr_review_thread_report.py
+tests/test_repo_hygiene.py
 tests/state/test_accounts.py
 tests/state/test_budget.py
 tests/state/test_scenarios.py
