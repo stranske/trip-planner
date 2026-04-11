@@ -14,8 +14,6 @@ from trip_planner.app.services.feasibility import (
 from trip_planner.options import InventoryBundle
 from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.activity import PersistedPlannerAction
-from trip_planner.persistence.models.scenario import PersistedSavedScenario
-from trip_planner.persistence.models.session import PersistedPlanningSessionState
 
 
 @pytest.fixture
@@ -130,7 +128,7 @@ def test_workspace_endpoint_returns_not_found_for_unknown_trip(
     assert comparison_response.status_code == 404
 
 
-def test_workspace_endpoint_bootstraps_persisted_workspace_state_for_business_trip(
+def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_business_trip(
     client: TestClient,
 ) -> None:
     created = client.post(
@@ -163,19 +161,20 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_state_for_business_tr
     assert payload["trip_record"]["trip"]["title"] == "Chicago kickoff"
     assert payload["trip_record"]["artifact_refs"]["session_state_id"] == f"session:{trip_id}"
     assert payload["session"]["trip_id"] == trip_id
-    assert payload["session"]["pending_decisions"][0]["decision_id"].startswith("decision:")
-    assert len(payload["saved_scenarios"]) == 2
-    assert payload["saved_scenarios"][0]["saved_scenario_id"].startswith("saved-scenario:")
-    assert payload["saved_scenarios"][0]["versions"][0]["title"] == "Current trip frame"
-    assert payload["scenario_comparison"]["comparison_id"] == (
-        f"comparison:{trip_id}:workspace-bootstrap"
-    )
-    assert payload["scenario_search"]["scenarios"] == []
-    assert len(payload["runtime_scenario_comparison"]["scenarios"]) == 2
-    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == payload["saved_scenarios"][0][
+    assert payload["session"]["current_saved_scenario_id"] == payload["saved_scenarios"][0][
         "saved_scenario_id"
     ]
-    assert "bootstrapping" in payload["runtime_scenario_comparison"]["summary"].lower()
+    assert payload["session"]["pending_decisions"][0]["decision_id"].startswith("decision:")
+    assert len(payload["saved_scenarios"]) == 2
+    assert payload["saved_scenarios"][0]["versions"][0]["label"] == "baseline"
+    assert payload["saved_scenarios"][1]["versions"][0]["label"] == "fallback"
+    assert payload["scenario_comparison"]["baseline_scenario_id"] == payload["saved_scenarios"][0][
+        "saved_scenario_id"
+    ]
+    assert payload["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"] == payload[
+        "saved_scenarios"
+    ][0]["saved_scenario_id"]
+    assert payload["runtime_scenario_comparison"]["scenarios"][1]["status"] == "fallback"
     assert payload["inventory_summary"]["bundle_count"] == 1
     assert payload["inventory_summary"]["bundles"][0]["title"] == "Airport arrival bundle"
     assert payload["feasibility_summary"]["assessment_count"] == 1
@@ -184,57 +183,52 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_state_for_business_tr
     assert payload["budget_state"]["summary"]["actual_total"] == 0
     assert payload["budget_state"]["summary"]["has_budget_plan"] is False
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
-    assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_bootstrap"
+    assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_review"
+    planner_output_titles = [item["title"] for item in payload["planner_panel_state"]["outputs"]]
+    assert "Scenario ranking summary" in planner_output_titles
     assert payload["policy_state"] is None
     assert payload["proposal_state"] is None
 
-    with get_session_factory()() as db_session:
-        persisted_session = db_session.get(PersistedPlanningSessionState, f"session:{trip_id}")
-        assert persisted_session is not None
-        persisted_scenarios = db_session.scalars(
-            select(PersistedSavedScenario)
-            .where(PersistedSavedScenario.trip_id == trip_id)
-            .order_by(PersistedSavedScenario.created_at.asc())
-        ).all()
-        assert len(persisted_scenarios) == 2
+    scenario_history = client.get(f"/api/trips/{trip_id}/scenario-history")
+    assert scenario_history.status_code == 200
+    history_payload = scenario_history.json()
+    assert len(history_payload["saved_scenarios"]) == 2
+    assert history_payload["planning_sessions"][0]["current_saved_scenario_id"] == payload["session"][
+        "current_saved_scenario_id"
+    ]
 
 
-def test_workspace_scenario_comparison_bootstraps_for_new_leisure_trip(
+def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisure_trip(
     client: TestClient,
 ) -> None:
     created = client.post(
         "/api/trips",
         json={
-            "title": "Kyoto kickoff",
-            "summary": "Start from a persisted leisure trip shell.",
+            "title": "Lisbon weekend",
+            "summary": "Bootstrap a new leisure workspace.",
             "mode": "leisure",
             "trip_frame": {
-                "start_date": "2026-05-04",
-                "end_date": "2026-05-08",
-                "duration_days": 5,
-                "primary_regions": ["Kyoto", "Uji"],
-                "traveler_party": {
-                    "kind": "solo",
-                    "traveler_count": 1,
-                    "notes": "Spring planning pass",
-                },
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
             },
         },
     )
     assert created.status_code == 201
     trip_id = created.json()["trip"]["trip_id"]
 
-    response = client.get(f"/api/workspace/{trip_id}/scenarios/compare")
+    payload = client.get(f"/api/workspace/{trip_id}").json()
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["trip_id"] == trip_id
-    assert payload["lead_scenario_id"] == f"saved-scenario:{trip_id}:baseline"
-    assert len(payload["scenarios"]) == 2
-    assert payload["scenarios"][0]["title"] == "Current trip frame"
-    assert payload["scenarios"][1]["title"] == "Broadened planning pass"
-    assert payload["scenarios"][0]["route_sequence"] == ["Kyoto", "Uji"]
-    assert "persisted workspace direction" in payload["summary"].lower()
+    assert payload["saved_scenarios"][0]["versions"][0]["title"].startswith("Lisbon")
+    assert payload["runtime_scenario_comparison"]["scenarios"][0]["route_sequence"] == [
+        "Lisbon"
+    ]
+    assert payload["runtime_scenario_comparison"]["scenarios"][1]["route_sequence"] == [
+        "Lisbon",
+        "comparison-pass",
+    ]
+    assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_review"
 
 
 def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_trip(
