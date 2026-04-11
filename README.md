@@ -87,6 +87,13 @@ python -m pip install -e ".[dev]"
 npm --prefix frontend install
 ```
 
+Repo dependency layout:
+
+- Python tooling installs into the active virtualenv from the repo root.
+- Application JavaScript dependencies install under `frontend/node_modules`.
+- Workflow automation keeps its own vendored helpers under `.github/scripts/node_modules`.
+- Do not create or commit a repo-root `node_modules/`; CI and local runtime commands do not depend on it.
+
 Run the full stack together from the repo root:
 
 ```bash

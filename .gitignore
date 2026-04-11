@@ -11,6 +11,12 @@ verifier-context.md
 __pycache__/
 *.py[cod]
 .mypy_cache/
+
+# Application JavaScript dependencies belong under frontend/.
+# Keep repo-root installs out of git while preserving the workflow-local vendored helpers.
+node_modules/
+!.github/scripts/node_modules/
+!.github/scripts/node_modules/**
 node_modules/
 dist/
 *.tsbuildinfo
