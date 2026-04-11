@@ -8,6 +8,7 @@ from trip_planner.app.routes.auth import router as auth_router
 from trip_planner.app.routes.budget import router as budget_router
 from trip_planner.app.routes.health import router as health_router
 from trip_planner.app.routes.inventory import router as inventory_router
+from trip_planner.app.routes.planner import router as planner_router
 from trip_planner.app.routes.policy import router as policy_router
 from trip_planner.app.routes.proposal import router as proposal_router
 from trip_planner.app.routes.scenario_history import router as scenario_history_router
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix="/api")
     app.include_router(trips_router, prefix="/api")
     app.include_router(inventory_router, prefix="/api")
+    app.include_router(planner_router, prefix="/api")
     app.include_router(policy_router, prefix="/api")
     app.include_router(proposal_router, prefix="/api")
     app.include_router(scenario_history_router, prefix="/api")
