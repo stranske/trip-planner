@@ -71,6 +71,8 @@ def test_planner_session_endpoint_bootstraps_trip_scoped_session(client: TestCli
     assert payload["conversation_id"] == f"planner-conversation:{trip_id}"
     assert payload["session"]["trip_id"] == trip_id
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
+    assert payload["available_tools"]
+    assert payload["available_tools"][0]["tool_name"] == "read_workspace_state"
     assert payload["messages"] == []
 
     with get_session_factory()() as db_session:
@@ -114,6 +116,59 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
             "planner_message",
         ]
         assert [item.actor for item in activity_events] == ["traveler", "planner"]
+
+
+def test_planner_turn_executes_explicit_tool_calls(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": "Use the planner tools to inspect budget state and set a first pass budget.",
+            "tool_calls": [
+                {"tool_name": "read_budget_state"},
+                {
+                    "tool_name": "update_budget_plan",
+                    "arguments": {"total_amount": 1200, "title": "Planner first-pass budget"},
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    planner_reply = payload["messages"][-1]
+    assert len(planner_reply["tool_calls"]) == 2
+    assert planner_reply["tool_calls"][0]["tool_name"] == "read_budget_state"
+    assert planner_reply["tool_calls"][1]["tool_name"] == "update_budget_plan"
+    assert planner_reply["tool_calls"][1]["mutates_state"] is True
+    assert "Tool results:" in planner_reply["content"]
+
+    with get_session_factory()() as db_session:
+        stored = db_session.scalars(
+            select(PersistedPlannerAction)
+            .where(PersistedPlannerAction.trip_id == trip_id)
+            .order_by(PersistedPlannerAction.occurred_at.asc())
+        ).all()
+        assert stored[-1].payload["tool_calls"][1]["tool_name"] == "update_budget_plan"
+        session = db_session.get(PersistedPlanningSessionState, f"session:{trip_id}")
+        assert session is not None
+        assert session.active_budget_plan_id is not None
+
+
+def test_planner_turn_rejects_invalid_tool_calls(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": "Try an unsupported tool.",
+            "tool_calls": [{"tool_name": "launch_booking_agent"}],
+        },
+    )
+
+    assert response.status_code == 400
+    assert "not supported" in response.json()["detail"]
 
 
 def test_planner_resume_returns_prior_conversation_history(client: TestClient) -> None:
