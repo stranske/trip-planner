@@ -197,10 +197,10 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
 
         try:
             payload = json.loads(raw_body)
-        except ValueError as exc:
+        except ValueError:
             raise TPPContractError(
                 f"TPP request to {path} returned a non-JSON response."
-            ) from exc
+            )
         if not isinstance(payload, dict):
             raise TPPContractError(
                 f"TPP request to {path} returned a non-object JSON payload."
