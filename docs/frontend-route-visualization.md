@@ -21,6 +21,7 @@ Issue `#559` adds visualization-oriented shell surfaces that consume route and f
 - The component consumes `runtime_scenario_comparison.scenarios[*].route_sequence`, `route_summary`, `metrics`, and `inventory_summary.bundles[*].destination_names`.
 - `feasibility_summary.assessments` remains the source of route-attention and bundle-readiness signals; the map surface may summarize those signals, but it must not recalculate feasibility in the browser.
 - Scenario preview changes are local presentation changes. The selected map preview should start from persisted workspace state and then update the rendered map surface without mutating backend route logic.
+- When `VITE_GOOGLE_MAPS_EMBED_API_KEY` is configured, the workspace may render a Google Maps directions embed for the selected scenario. When that key is absent or a route is too sparse to render, the UI must fall back to the textual route schematic instead of inventing client-side routing logic.
 
 ## Representative states
 

@@ -1,0 +1,121 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  buildGoogleMapsEmbedUrl,
+  buildTripMapSurfaceModel,
+  humanizeStop,
+} from "./mapSurface";
+
+describe("mapSurface", () => {
+  it("normalizes route stop labels for provider-independent map shaping", () => {
+    expect(humanizeStop("dest-city-new-york")).toBe("New York");
+    expect(humanizeStop("kyoto_station")).toBe("Kyoto Station");
+  });
+
+  it("builds a Google Maps directions URL with waypoints", () => {
+    expect(
+      buildGoogleMapsEmbedUrl(["Kyoto", "Uji", "Kyoto"], "test-key")
+    ).toContain(
+      "https://www.google.com/maps/embed/v1/directions?key=test-key&origin=Kyoto&destination=Kyoto&mode=transit&waypoints=Uji"
+    );
+  });
+
+  it("selects the live Google Maps provider when a key and route are available", () => {
+    const model = buildTripMapSurfaceModel({
+      activeScenario: {
+        scenario_id: "scenario:1",
+        title: "Kyoto base",
+        rank: 1,
+        status: "lead",
+        summary: "Baseline",
+        comparison_note: "Lead route",
+        option_count: 2,
+        route_sequence: ["kyoto", "uji", "kyoto"],
+        route_summary: "kyoto -> uji -> kyoto",
+        recommended_for_selection: true,
+        feasible: true,
+        metrics: {
+          score: 0.93,
+          travel_minutes: 265,
+          transfers: 4,
+          estimated_total: { currency: "JPY", typical_amount: 3400 },
+        },
+        delta: {
+          score_delta: 0,
+          travel_minutes_delta: 0,
+          transfers_delta: 0,
+          estimated_total_delta: 0,
+        },
+        highlights: ["Low-friction baseline."],
+      },
+      bundles: [
+        {
+          bundle_id: "bundle-1",
+          title: "Kyoto anchor",
+          bundle_context: "route_level",
+          summary: "Bundle summary",
+          destination_names: ["Kyoto", "Uji"],
+          option_count: 2,
+          strengths: [],
+          tradeoffs: [],
+        },
+      ],
+      feasibilitySummary: {
+        assessment_count: 2,
+        recommended_bundle_count: 1,
+        blocking_bundle_count: 0,
+        attention_bundle_count: 1,
+        notes: [],
+        assessments: [],
+      },
+      googleMapsApiKey: "test-key",
+    });
+
+    expect(model.provider.kind).toBe("google-maps");
+    expect(model.destinationAnchors).toEqual(["Kyoto", "Uji"]);
+    expect(model.routeStops.map((stop) => stop.label)).toEqual(["Kyoto", "Uji", "Kyoto"]);
+  });
+
+  it("falls back when Google Maps is not configured", () => {
+    const model = buildTripMapSurfaceModel({
+      activeScenario: {
+        scenario_id: "scenario:1",
+        title: "Kyoto base",
+        rank: 1,
+        status: "lead",
+        summary: "Baseline",
+        comparison_note: "Lead route",
+        option_count: 2,
+        route_sequence: ["kyoto", "uji"],
+        route_summary: "kyoto -> uji",
+        recommended_for_selection: true,
+        feasible: true,
+        metrics: {
+          score: 0.93,
+          travel_minutes: 265,
+          transfers: 4,
+          estimated_total: null,
+        },
+        delta: {
+          score_delta: 0,
+          travel_minutes_delta: 0,
+          transfers_delta: 0,
+          estimated_total_delta: null,
+        },
+        highlights: ["Low-friction baseline."],
+      },
+      bundles: [],
+      feasibilitySummary: {
+        assessment_count: 0,
+        recommended_bundle_count: 0,
+        blocking_bundle_count: 0,
+        attention_bundle_count: 0,
+        notes: [],
+        assessments: [],
+      },
+    });
+
+    expect(model.provider.kind).toBe("fallback");
+    expect(model.provider.summary).toContain("bounded textual route fallback");
+  });
+});
