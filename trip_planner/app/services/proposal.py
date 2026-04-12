@@ -102,7 +102,7 @@ def _normalize_evaluation_request(
     proposal_version: str,
 ) -> TPPRequestEnvelope:
     live_payload = dict(request.payload)
-    live_payload["proposal_version"] = proposal_version or existing.proposal_version
+    live_payload["proposal_version"] = existing.proposal_version or proposal_version
     if existing.execution_id:
         live_payload["execution_id"] = existing.execution_id
 
