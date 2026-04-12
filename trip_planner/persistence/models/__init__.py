@@ -10,6 +10,10 @@ from trip_planner.persistence.models.budget import (
     PersistedBudgetPlan,
     PersistedBudgetPlanVersion,
 )
+from trip_planner.persistence.models.planner_memory import (
+    PersistedPlannerCheckpoint,
+    PersistedPlannerMemoryArtifact,
+)
 from trip_planner.persistence.models.policy import PersistedPolicyState
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.scenario import PersistedSavedScenario
@@ -25,7 +29,9 @@ __all__ = [
     "PersistedActualSpendEvent",
     "PersistedBudgetPlan",
     "PersistedBudgetPlanVersion",
+    "PersistedPlannerCheckpoint",
     "PersistedPlannerAction",
+    "PersistedPlannerMemoryArtifact",
     "PersistedPlanningSessionState",
     "PersistedPolicyState",
     "PersistedProposalState",

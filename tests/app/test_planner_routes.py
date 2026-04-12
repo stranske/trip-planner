@@ -3,13 +3,17 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from trip_planner.app.main import create_app
 from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
     PersistedPlannerAction,
+)
+from trip_planner.persistence.models.planner_memory import (
+    PersistedPlannerCheckpoint,
+    PersistedPlannerMemoryArtifact,
 )
 from trip_planner.persistence.models.session import PersistedPlanningSessionState
 
@@ -71,6 +75,7 @@ def test_planner_session_endpoint_bootstraps_trip_scoped_session(client: TestCli
     assert payload["conversation_id"] == f"planner-conversation:{trip_id}"
     assert payload["session"]["trip_id"] == trip_id
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
+    assert payload["planner_memory"]["current_checkpoint_id"] is None
     assert payload["available_tools"]
     assert payload["available_tools"][0]["tool_name"] == "read_workspace_state"
     assert payload["messages"] == []
@@ -95,6 +100,8 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
     assert "Help me decide" in payload["messages"][0]["content"]
     assert payload["messages"][1]["refs"]
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
+    assert payload["planner_memory"]["current_checkpoint_id"].startswith("planner-chk:")
+    assert payload["planner_memory"]["artifacts"][0]["title"] == "Planner checkpoint 1"
 
     with get_session_factory()() as db_session:
         stored = db_session.scalars(
@@ -116,6 +123,17 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
             "planner_message",
         ]
         assert [item.actor for item in activity_events] == ["traveler", "planner"]
+        checkpoint_id = payload["planner_memory"]["current_checkpoint_id"]
+        checkpoint = db_session.get(PersistedPlannerCheckpoint, checkpoint_id)
+        assert checkpoint is not None
+        assert len(checkpoint_id) <= 96
+        artifact = db_session.get(
+            PersistedPlannerMemoryArtifact,
+            payload["planner_memory"]["artifacts"][0]["memory_artifact_id"],
+        )
+        assert artifact is not None
+        assert artifact.memory_artifact_id.startswith("planner-mem:")
+        assert artifact.checkpoint_id == checkpoint.checkpoint_id
 
 
 def test_planner_turn_executes_explicit_tool_calls(client: TestClient) -> None:
@@ -219,3 +237,36 @@ def test_planner_resume_returns_prior_conversation_history(client: TestClient) -
     assert payload["resumed_at"] is not None
     assert [message["role"] for message in payload["messages"]] == ["user", "planner"]
     assert payload["messages"][1]["content"].startswith("Planner API kickoff is using")
+    assert payload["planner_memory"]["artifacts"][0]["title"] == "Planner checkpoint 1"
+
+
+def test_planner_resume_regenerates_memory_from_raw_transcript(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+    first_turn = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Keep the baseline narrow and summarize the current direction."},
+    )
+    assert first_turn.status_code == 200
+
+    with get_session_factory()() as db_session:
+        db_session.execute(
+            delete(PersistedPlannerMemoryArtifact).where(
+                PersistedPlannerMemoryArtifact.trip_id == trip_id
+            )
+        )
+        db_session.execute(
+            delete(PersistedPlannerCheckpoint).where(
+                PersistedPlannerCheckpoint.trip_id == trip_id
+            )
+        )
+        session = db_session.get(PersistedPlanningSessionState, f"session:{trip_id}")
+        assert session is not None
+        session.current_checkpoint_id = None
+        db_session.commit()
+
+    resumed = client.post(f"/api/planner/{trip_id}/resume")
+
+    assert resumed.status_code == 200
+    payload = resumed.json()
+    assert payload["planner_memory"]["current_checkpoint_id"].startswith("planner-chk:")
+    assert payload["planner_memory"]["artifacts"][0]["summary"].startswith("Turn 1 checkpoint")

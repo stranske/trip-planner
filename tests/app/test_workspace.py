@@ -233,6 +233,7 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
         for scenario in payload["runtime_scenario_comparison"]["scenarios"]
     )
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_review"
+    assert payload["planner_memory"]["current_checkpoint_id"] is None
 
 
 def test_workspace_endpoint_keeps_leisure_fixture_defaults_when_trip_frame_is_sparse(
@@ -317,6 +318,38 @@ def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_tri
     assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Policy posture loaded"
     assert payload["planner_panel_state"]["next_step_actions"][0]["target_section"] == "approval"
     assert "Navan" in payload["planner_panel_state"]["policy_evaluation"]["notes"][-2]
+
+
+def test_workspace_endpoint_surfaces_user_visible_planner_memory(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Planner memory workspace",
+            "summary": "Surface summarized memory in the workspace.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-07-01",
+                "end_date": "2026-07-04",
+                "duration_days": 4,
+                "primary_regions": ["Kyoto"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    planner_turn = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Keep the Kyoto baseline and remember that recovery time matters."},
+    )
+    assert planner_turn.status_code == 200
+
+    response = client.get(f"/api/workspace/{trip_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["planner_memory"]["current_checkpoint_id"].startswith("planner-chk:")
+    assert payload["planner_memory"]["artifacts"][0]["title"] == "Planner checkpoint 1"
+    assert "Traveler focus:" in payload["planner_memory"]["artifacts"][0]["detail"]
 
 
 def test_workspace_endpoint_prefers_persisted_proposal_lifecycle_for_business_trip(

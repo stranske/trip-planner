@@ -231,6 +231,30 @@ export type FeasibilitySummary = {
   }>;
 };
 
+export type PlannerCheckpoint = {
+  checkpoint_id: string;
+  checkpoint_kind: string;
+  turn_index: number;
+  message_count: number;
+  summary: string;
+  source_message_ids: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlannerMemoryArtifact = {
+  memory_artifact_id: string;
+  checkpoint_id: string | null;
+  artifact_kind: string;
+  title: string;
+  summary: string;
+  detail: string;
+  source_message_ids: string[];
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+};
+
 export type WorkspaceData = {
   trip_record: TripRecord;
   session: SessionState;
@@ -248,6 +272,11 @@ export type WorkspaceData = {
     event_kind: string;
     summary: string;
   }>;
+  planner_memory: {
+    current_checkpoint_id: string | null;
+    checkpoints: PlannerCheckpoint[];
+    artifacts: PlannerMemoryArtifact[];
+  };
   planner_panel_state: PlannerPanelState;
   feasibility_summary: FeasibilitySummary;
   inventory_summary: {
