@@ -166,14 +166,11 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_busin
     ]
     assert payload["session"]["pending_decisions"][0]["decision_id"].startswith("decision:")
     assert len(payload["saved_scenarios"]) == 2
+    lead_saved_scenario_id = payload["saved_scenarios"][0]["saved_scenario_id"]
     assert payload["saved_scenarios"][0]["versions"][0]["label"] == "baseline"
     assert payload["saved_scenarios"][1]["versions"][0]["label"] == "fallback"
-    assert payload["scenario_comparison"]["baseline_scenario_id"] == payload["saved_scenarios"][0][
-        "saved_scenario_id"
-    ]
-    assert payload["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"] == payload[
-        "saved_scenarios"
-    ][0]["saved_scenario_id"]
+    assert payload["scenario_comparison"]["baseline_scenario_id"] == lead_saved_scenario_id
+    assert payload["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"] == lead_saved_scenario_id
     assert payload["runtime_scenario_comparison"]["scenarios"][1]["status"] == "fallback"
     assert payload["inventory_summary"]["bundle_count"] == 1
     assert payload["inventory_summary"]["bundles"][0]["title"] == "Airport arrival bundle"

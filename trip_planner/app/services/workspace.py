@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
@@ -1157,11 +1158,26 @@ def _create_bootstrap_saved_scenarios(
         )
         for scenario in (baseline, fallback)
     ]
-    for persisted in persisted_records:
-        db_session.add(persisted)
-    if _bootstrap_option_set_id(record.trip_id) not in record.option_set_ids:
-        record.option_set_ids = [*record.option_set_ids, _bootstrap_option_set_id(record.trip_id)]
-    record.updated_at = datetime.now(UTC)
+    try:
+        with db_session.begin_nested():
+            for persisted in persisted_records:
+                db_session.add(persisted)
+            if _bootstrap_option_set_id(record.trip_id) not in record.option_set_ids:
+                record.option_set_ids = [
+                    *record.option_set_ids,
+                    _bootstrap_option_set_id(record.trip_id),
+                ]
+            record.updated_at = datetime.now(UTC)
+            db_session.flush()
+    except IntegrityError:
+        existing = db_session.scalars(
+            select(PersistedSavedScenario)
+            .where(PersistedSavedScenario.trip_id == record.trip_id)
+            .order_by(PersistedSavedScenario.updated_at.desc())
+        ).all()
+        if existing:
+            return list(existing)
+        raise
     return persisted_records
 
 
