@@ -7,8 +7,9 @@ class PolicySyncImportRequest(BaseModel):
     request: dict[str, Any] = Field(
         description="Serialized TPPRequestEnvelope payload used to fetch policy constraints."
     )
-    response: dict[str, Any] = Field(
-        description="Serialized TPPResponseEnvelope payload returned by the policy sync source."
+    response: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional serialized TPPResponseEnvelope payload for fixture-driven imports."
     )
     source_kind: Literal["tpp_sync", "manual_import"] = "tpp_sync"
     tags: list[str] = Field(default_factory=list)

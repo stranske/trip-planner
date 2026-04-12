@@ -10,8 +10,9 @@ class WorkspaceProposalSubmissionRequest(BaseModel):
     request: dict[str, Any] = Field(
         description="Serialized TPPRequestEnvelope payload used to submit the proposal."
     )
-    response: dict[str, Any] = Field(
-        description="Serialized TPPResponseEnvelope payload returned by proposal submission."
+    response: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional serialized TPPResponseEnvelope payload for fixture-driven proposal submission."
     )
     proposal_version: str = Field(min_length=1, max_length=96)
     scenario_id: str | None = Field(default=None, max_length=96)
@@ -21,8 +22,9 @@ class WorkspaceProposalEvaluationRequest(BaseModel):
     request: dict[str, Any] = Field(
         description="Serialized TPPRequestEnvelope payload used to ingest evaluation state."
     )
-    response: dict[str, Any] = Field(
-        description="Serialized TPPResponseEnvelope payload returned by evaluation ingestion."
+    response: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional serialized TPPResponseEnvelope payload for fixture-driven evaluation ingestion."
     )
     proposal_version: str = Field(min_length=1, max_length=96)
     scenario_id: str | None = Field(default=None, max_length=96)

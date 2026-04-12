@@ -11,6 +11,7 @@ from trip_planner.app.services.policy import (
     get_workspace_policy_payload,
     import_workspace_policy_constraints,
 )
+from trip_planner.integrations.tpp import TPPTransportError
 from trip_planner.persistence.db import get_db_session
 
 router = APIRouter(tags=["policy"])
@@ -49,6 +50,8 @@ def save_workspace_policy(
         )
     except WorkspacePolicyNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except TPPTransportError as error:
+        raise HTTPException(status_code=error.status_code, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return WorkspacePolicyResponse.model_validate(result)

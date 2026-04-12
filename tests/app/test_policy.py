@@ -1,12 +1,14 @@
 import json
 from collections.abc import Iterator
 from pathlib import Path
-
+from typing import Literal
+from urllib import error as urllib_error
 import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
 from trip_planner.persistence.db import reset_database_state
+from trip_planner.integrations.tpp import client as tpp_client_module
 
 
 def _fixture_path(name: str) -> Path:
@@ -17,6 +19,50 @@ def _fixture_path(name: str) -> Path:
 
 def _load_fixture(name: str) -> dict:
     return json.loads(_fixture_path(name).read_text(encoding="utf-8"))
+
+
+class _FakeHTTPResponse:
+    def __init__(self, status_code: int, payload: dict[str, object]) -> None:
+        self.status = status_code
+        self.status_code = status_code
+        self._payload = payload
+        self.text = json.dumps(payload)
+
+    def read(self) -> bytes:
+        return json.dumps(self._payload).encode("utf-8")
+
+    def __enter__(self) -> "_FakeHTTPResponse":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> Literal[False]:
+        del exc_type, exc, tb
+        return False
+
+
+def _install_fake_http(
+    monkeypatch: pytest.MonkeyPatch,
+    responses: list[_FakeHTTPResponse | Exception],
+    *,
+    captured_requests: list[dict[str, object]] | None = None,
+) -> None:
+    queue = list(responses)
+
+    def _fake_urlopen(request, timeout=0):
+        if captured_requests is not None:
+            captured_requests.append(
+                {
+                    "full_url": request.full_url,
+                    "method": request.get_method(),
+                    "body": json.loads((request.data or b"{}").decode("utf-8")),
+                }
+            )
+        del timeout
+        response = queue.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    monkeypatch.setattr(tpp_client_module.urllib_request, "urlopen", _fake_urlopen)
 
 
 @pytest.fixture
@@ -106,3 +152,147 @@ def test_workspace_policy_import_rejects_leisure_trip(client: TestClient) -> Non
 
     assert response.status_code == 400
     assert "business trips" in response.json()["detail"]
+
+
+def test_workspace_policy_import_uses_live_tpp_transport_when_response_is_omitted(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    captured_requests: list[dict[str, object]] = []
+    _install_fake_http(
+        monkeypatch,
+        [
+            _FakeHTTPResponse(
+                200,
+                {
+                    "trip_id": "placeholder",
+                    "freshness": "current",
+                    "generated_at": "2026-04-11T05:05:00Z",
+                    "expires_at": "2026-04-12T05:05:00Z",
+                    "invalidated_at": None,
+                    "invalidation_reason": None,
+                    "policy_status": "pass",
+                    "booking_requirements": [],
+                    "documentation_rules": [
+                        {
+                            "code": "fare_evidence",
+                            "summary": "Attach fare evidence before approval.",
+                            "severity": "error",
+                        }
+                    ],
+                    "approval_triggers": [
+                        {
+                            "code": "manager_review",
+                            "summary": "Manager review is required.",
+                            "blocking": True,
+                            "source": "policy_rule",
+                        }
+                    ],
+                    "auth": {
+                        "endpoint": "GET /api/planner/policy-snapshot",
+                        "required_permission": "view",
+                        "auth_scheme": "Bearer token",
+                        "supported_sso": ["okta"],
+                    },
+                    "versioning": {
+                        "contract_version": "2026-04-11",
+                        "policy_version": "d7a6d25a",
+                        "planner_known_policy_version": None,
+                        "compatible_with_planner_cache": True,
+                        "etag": "trip:policy:d7a6d25a",
+                    },
+                },
+            )
+        ],
+        captured_requests=captured_requests,
+    )
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Live policy sync",
+            "summary": "Use runtime TPP HTTP transport.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = _load_fixture("standard_policy_sync.json")
+    fixture["request"]["trip_id"] = trip_id
+
+    imported = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={
+            "request": fixture["request"],
+            "source_kind": "tpp_sync",
+            "tags": ["live-http"],
+            "notes": ["Fetched through the live TPP client."],
+        },
+    )
+
+    assert imported.status_code == 200
+    payload = imported.json()
+    assert payload["policy_state"]["policy_version"] == "d7a6d25a"
+    assert payload["summary"]["documentation_rules"] == ["fare_evidence"]
+    assert payload["summary"]["approval_triggers"] == ["manager_review"]
+    assert captured_requests == [
+        {
+            "full_url": "https://tpp.example.test/api/planner/policy-snapshot",
+            "method": "GET",
+            "body": {
+                "policy_scope": "business_planning",
+                "organization_context": True,
+                "trip_id": trip_id,
+                "requested_at": "2026-02-15T12:00:00Z",
+            },
+        }
+    ]
+
+
+def test_workspace_policy_import_surfaces_live_tpp_unavailable_errors(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    _install_fake_http(
+        monkeypatch,
+        [
+            urllib_error.URLError("connection refused"),
+        ],
+    )
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Unavailable policy sync",
+            "summary": "Surface live TPP transport failures.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = _load_fixture("standard_policy_sync.json")
+    fixture["request"]["trip_id"] = trip_id
+
+    response = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={"request": fixture["request"]},
+    )
+
+    assert response.status_code == 503
+    assert "failed" in response.json()["detail"]

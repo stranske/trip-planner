@@ -1,6 +1,15 @@
 """Travel-Plan-Permission integration contracts and client interfaces."""
 
-from .client import BaseTPPIntegrationClient, TPPIntegrationClient
+from .client import (
+    BaseTPPIntegrationClient,
+    HTTPTPPIntegrationClient,
+    TPPConfigurationError,
+    TPPContractError,
+    TPPIntegrationClient,
+    TPPRuntimeSettings,
+    TPPServiceUnavailableError,
+    TPPTransportError,
+)
 from .contracts import (
     TPPErrorRecord,
     TPPExecutionStatus,
@@ -39,6 +48,7 @@ from .reoptimization import (
 
 __all__ = [
     "BaseTPPIntegrationClient",
+    "HTTPTPPIntegrationClient",
     "OrganizationContextSnapshot",
     "PolicyConstraintImport",
     "PolicyFreshness",
@@ -56,9 +66,14 @@ __all__ = [
     "TPPEvaluationResultIngestionService",
     "TPPExecutionStatus",
     "TPPIntegrationClient",
+    "TPPConfigurationError",
+    "TPPContractError",
     "TPPOperationRequest",
     "TPPProposalSubmissionService",
     "TPPPolicySyncService",
+    "TPPRuntimeSettings",
+    "TPPServiceUnavailableError",
+    "TPPTransportError",
     "TPPReoptimizationService",
     "TPPRequestEnvelope",
     "TPPResponseEnvelope",

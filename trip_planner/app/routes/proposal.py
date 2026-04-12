@@ -15,6 +15,7 @@ from trip_planner.app.services.proposal import (
     save_workspace_proposal_evaluation,
     save_workspace_proposal_submission,
 )
+from trip_planner.integrations.tpp import TPPTransportError
 from trip_planner.persistence.db import get_db_session
 
 router = APIRouter(tags=["proposal"])
@@ -53,6 +54,8 @@ def save_workspace_proposal(
         )
     except WorkspaceProposalNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except TPPTransportError as error:
+        raise HTTPException(status_code=error.status_code, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return WorkspaceProposalResponse.model_validate(result)
@@ -77,6 +80,8 @@ def save_workspace_proposal_result(
         )
     except WorkspaceProposalNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except TPPTransportError as error:
+        raise HTTPException(status_code=error.status_code, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return WorkspaceProposalResponse.model_validate(result)
