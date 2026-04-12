@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,6 +50,10 @@ _SCENARIO_FIXTURE_SEEDS: dict[str, ScenarioFixtureSeed] = {
     ),
 }
 
+_DEFAULT_LEISURE_FIXTURE_ID = "urban-historian"
+_DEFAULT_BUSINESS_PROFILE_FIXTURE = "client_meeting_profile.json"
+_DEFAULT_BUSINESS_CONSTRAINT_FIXTURE = "policy_round_trip_exception.json"
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
@@ -60,6 +65,17 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 def _business_fixture_dir() -> Path:
     return _repo_root() / "tests" / "fixtures" / "business"
+
+
+def _default_scenario_title(
+    *,
+    trip_mode: str,
+    trip_title: str | None,
+    primary_regions: tuple[str, ...],
+) -> str:
+    subject = trip_title or ", ".join(primary_regions[:2]) or "Persisted trip"
+    suffix = "ranked scenarios" if trip_mode == "business" else "runtime scenarios"
+    return f"{subject} {suffix}"
 
 
 def _bundle_ranked_results(
@@ -115,9 +131,18 @@ def build_workspace_scenario_search(
     trip_id: str,
     trip_mode: str,
     bundles: list[InventoryBundle],
+    trip_title: str | None = None,
+    primary_regions: tuple[str, ...] = (),
+    duration_days: int | None = None,
+    traveler_party_kind: str | None = None,
 ):
     fixture_seed = _SCENARIO_FIXTURE_SEEDS.get(trip_id)
-    if fixture_seed is None or fixture_seed.trip_mode != trip_mode:
+    title = _default_scenario_title(
+        trip_mode=trip_mode,
+        trip_title=trip_title,
+        primary_regions=primary_regions,
+    )
+    if fixture_seed is not None and fixture_seed.trip_mode != trip_mode:
         raise KeyError(f"Unsupported scenario fixture trip: {trip_id}")
     if not bundles:
         raise ValueError("Workspace scenario search requires at least one inventory bundle")
@@ -129,9 +154,21 @@ def build_workspace_scenario_search(
     scenario_objectives: object
 
     if trip_mode == "leisure":
-        traveler_fixture = load_fixture_map()[fixture_seed.leisure_fixture_id or ""]
+        leisure_fixture_id = (
+            fixture_seed.leisure_fixture_id
+            if fixture_seed is not None and fixture_seed.leisure_fixture_id is not None
+            else _DEFAULT_LEISURE_FIXTURE_ID
+        )
+        traveler_fixture = load_fixture_map()[leisure_fixture_id]
+        leisure_profile = deepcopy(traveler_fixture.profile)
+        if duration_days is not None:
+            leisure_profile.trip_frame.duration_days = duration_days
+        if primary_regions:
+            leisure_profile.trip_frame.regions_in_scope = list(primary_regions)
+        if traveler_party_kind in {"solo", "pair", "family", "friends"}:
+            leisure_profile.trip_frame.traveler_party = traveler_party_kind
         resolved_profile = resolve_leisure_profile(
-            traveler_fixture.profile,
+            leisure_profile,
             traveler_fixture.evidence,
         )
         leisure_objectives = derive_itinerary_objectives(
@@ -140,33 +177,43 @@ def build_workspace_scenario_search(
             objective_id=f"objective:{trip_id}:ranking",
         )
         ranked_results = LeisureRankingEngine().rank_bundles(
-            traveler_fixture.profile,
+            resolved_profile.profile,
             leisure_objectives,
             bundles,
             trip_id=trip_id,
-            title=fixture_seed.title,
+            title=fixture_seed.title if fixture_seed is not None else title,
             feasibility_outputs=feasibility_outputs,
         )
         scenario_objectives = leisure_objectives
     else:
-        profile = BusinessTravelProfile.from_dict(
-            _load_json(_business_fixture_dir() / (fixture_seed.business_profile_fixture or ""))
+        business_profile_fixture = (
+            fixture_seed.business_profile_fixture
+            if fixture_seed is not None and fixture_seed.business_profile_fixture is not None
+            else _DEFAULT_BUSINESS_PROFILE_FIXTURE
+        )
+        business_constraint_fixture = (
+            fixture_seed.business_constraint_fixture
+            if fixture_seed is not None and fixture_seed.business_constraint_fixture is not None
+            else _DEFAULT_BUSINESS_CONSTRAINT_FIXTURE
+        )
+        business_profile = BusinessTravelProfile.from_dict(
+            _load_json(_business_fixture_dir() / business_profile_fixture)
         )
         constraint_payload = _load_json(
-            _business_fixture_dir() / (fixture_seed.business_constraint_fixture or "")
+            _business_fixture_dir() / business_constraint_fixture
         )
         constraint_set = PolicyConstraintSet(**constraint_payload["constraint_set"])
         business_objectives = derive_business_planning_objectives(
-            profile,
+            business_profile,
             trip_id=trip_id,
             constraint_set=constraint_set,
         )
         ranked_results = BusinessRankingEngine().rank_bundles(
-            profile,
+            business_profile,
             business_objectives,
             bundles,
             trip_id=trip_id,
-            title=fixture_seed.title,
+            title=fixture_seed.title if fixture_seed is not None else title,
             constraint_set=constraint_set,
             feasibility_outputs=feasibility_outputs,
         )
@@ -177,7 +224,7 @@ def build_workspace_scenario_search(
         bundles=bundles,
         objectives=scenario_objectives,
         feasibility_outputs=feasibility_outputs,
-        title=fixture_seed.title,
+        title=fixture_seed.title if fixture_seed is not None else title,
     )
 
 

@@ -170,8 +170,12 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_busin
     assert payload["saved_scenarios"][0]["versions"][0]["label"] == "baseline"
     assert payload["saved_scenarios"][1]["versions"][0]["label"] == "fallback"
     assert payload["scenario_comparison"]["baseline_scenario_id"] == lead_saved_scenario_id
-    assert payload["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"] == lead_saved_scenario_id
-    assert payload["runtime_scenario_comparison"]["scenarios"][1]["status"] == "fallback"
+    assert payload["scenario_search"]["title"] == "Chicago kickoff ranked scenarios"
+    assert payload["scenario_search"]["purpose"] == "final_selection"
+    assert payload["scenario_search"]["scenarios"][0]["scenario_id"] == f"scenario:{trip_id}:1"
+    assert payload["scenario_search"]["scenarios"][0]["scenario_id"] != lead_saved_scenario_id
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == f"scenario:{trip_id}:1"
+    assert len(payload["runtime_scenario_comparison"]["scenarios"]) == 1
     assert payload["inventory_summary"]["bundle_count"] == 1
     assert payload["inventory_summary"]["bundles"][0]["title"] == "Airport arrival bundle"
     assert payload["feasibility_summary"]["assessment_count"] == 1
@@ -218,14 +222,51 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
     payload = client.get(f"/api/workspace/{trip_id}").json()
 
     assert payload["saved_scenarios"][0]["versions"][0]["title"].startswith("Lisbon")
-    assert payload["runtime_scenario_comparison"]["scenarios"][0]["route_sequence"] == [
-        "Lisbon"
-    ]
-    assert payload["runtime_scenario_comparison"]["scenarios"][1]["route_sequence"] == [
-        "Lisbon",
-        "comparison-pass",
-    ]
+    assert payload["scenario_search"]["title"] == "Lisbon weekend runtime scenarios"
+    assert payload["scenario_search"]["purpose"] == "final_selection"
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == f"scenario:{trip_id}:1"
+    assert payload["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"] == (
+        f"scenario:{trip_id}:1"
+    )
+    assert all(
+        "comparison-pass" not in scenario["route_sequence"]
+        for scenario in payload["runtime_scenario_comparison"]["scenarios"]
+    )
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_review"
+
+
+def test_workspace_endpoint_keeps_leisure_fixture_defaults_when_trip_frame_is_sparse(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Flexible weekend",
+            "summary": "Exercise sparse persisted leisure trip inputs.",
+            "mode": "leisure",
+            "trip_frame": {},
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    initial = client.get(f"/api/workspace/{trip_id}")
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+
+    assert initial.status_code == 200
+    assert reloaded.status_code == 200
+    initial_payload = initial.json()
+    reloaded_payload = reloaded.json()
+    assert initial_payload["scenario_search"]["scenarios"]
+    assert initial_payload["scenario_search"]["scenarios"] == reloaded_payload["scenario_search"][
+        "scenarios"
+    ]
+    assert initial_payload["planner_panel_state"]["option_set"]["options"] == reloaded_payload[
+        "planner_panel_state"
+    ]["option_set"]["options"]
+    assert initial_payload["runtime_scenario_comparison"]["scenarios"] == reloaded_payload[
+        "runtime_scenario_comparison"
+    ]["scenarios"]
 
 
 def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_trip(
