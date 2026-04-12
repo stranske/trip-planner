@@ -192,5 +192,7 @@ export const router = createBrowserRouter(appRoutes, {
   future: {
     v7_normalizeFormMethod: true,
     v7_partialHydration: true,
+    v7_relativeSplatPath: true,
+    v7_startTransition: true,
   },
 });

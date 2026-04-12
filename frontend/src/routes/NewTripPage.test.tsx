@@ -1,9 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createTrip } from "../api/trips";
 import { NewTripPage } from "./NewTripPage";
+import { TestMemoryRouter } from "../test/router";
 
 vi.mock("../api/trips", () => ({
   createTrip: vi.fn(),
@@ -56,9 +56,9 @@ describe("NewTripPage", () => {
     });
 
     render(
-      <MemoryRouter>
+      <TestMemoryRouter>
         <NewTripPage />
-      </MemoryRouter>
+      </TestMemoryRouter>
     );
 
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Kyoto Spring" } });

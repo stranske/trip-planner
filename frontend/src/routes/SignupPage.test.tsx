@@ -1,9 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { signup } from "../api/auth";
 import { SignupPage } from "./SignupPage";
+import { TestMemoryRouter } from "../test/router";
 
 vi.mock("../api/auth", () => ({
   signup: vi.fn(),
@@ -37,9 +37,9 @@ describe("SignupPage", () => {
     });
 
     render(
-      <MemoryRouter>
+      <TestMemoryRouter>
         <SignupPage />
-      </MemoryRouter>
+      </TestMemoryRouter>
     );
 
     fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Owner" } });
