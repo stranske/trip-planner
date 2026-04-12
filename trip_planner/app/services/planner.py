@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.planner_memory import (
     build_planner_memory_payload,
+    ensure_planner_memory_persisted,
     refresh_planner_memory,
 )
 from trip_planner.app.services.planner_tools import (
@@ -246,6 +247,12 @@ def resume_planner_session_payload(
     resumed_at = _isoformat(datetime.now(UTC))
     session_record.last_updated_at = resumed_at
     record.updated_at = datetime.now(UTC)
+    ensure_planner_memory_persisted(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session_record.session_state_id,
+        occurred_at=resumed_at,
+    )
     db_session.commit()
     return _planner_session_payload(
         db_session,

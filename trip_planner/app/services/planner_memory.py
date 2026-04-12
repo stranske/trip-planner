@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import hashlib
+from datetime import UTC
 from typing import Any
 
 from sqlalchemy import select
@@ -82,6 +83,17 @@ def _checkpoint_summary(messages: list[PersistedPlannerAction], *, turn_index: i
     }
 
 
+def _planner_memory_ids(
+    *,
+    session_state_id: str,
+    source_message_ids: list[str],
+) -> tuple[str, str]:
+    digest = hashlib.sha256(
+        "|".join([session_state_id, *source_message_ids]).encode("utf-8")
+    ).hexdigest()[:20]
+    return (f"planner-chk:{digest}", f"planner-mem:{digest}")
+
+
 def refresh_planner_memory(
     db_session: Session,
     *,
@@ -95,10 +107,12 @@ def refresh_planner_memory(
     if turn_index == 0:
         return None
 
-    checkpoint_id = f"planner-checkpoint:{trip_id}:{turn_index}"
-    artifact_id = f"planner-memory:{trip_id}:{turn_index}"
     summary_payload = _checkpoint_summary(messages, turn_index=turn_index)
     source_message_ids = [record.planner_action_id for record in messages[-2:]]
+    checkpoint_id, artifact_id = _planner_memory_ids(
+        session_state_id=session_state_id,
+        source_message_ids=source_message_ids,
+    )
     checkpoint = db_session.get(PersistedPlannerCheckpoint, checkpoint_id)
     if checkpoint is None:
         checkpoint = PersistedPlannerCheckpoint(
@@ -155,6 +169,37 @@ def refresh_planner_memory(
     return checkpoint_id
 
 
+def ensure_planner_memory_persisted(
+    db_session: Session,
+    *,
+    trip_id: str,
+    session_state_id: str,
+    occurred_at: str | None = None,
+) -> str | None:
+    messages = _planner_message_records(db_session, session_state_id=session_state_id)
+    turn_index = sum(1 for record in messages if record.action_type == "planner_response")
+    if turn_index == 0:
+        return None
+
+    source_message_ids = [record.planner_action_id for record in messages[-2:]]
+    checkpoint_id, artifact_id = _planner_memory_ids(
+        session_state_id=session_state_id,
+        source_message_ids=source_message_ids,
+    )
+    if (
+        db_session.get(PersistedPlannerCheckpoint, checkpoint_id) is not None
+        and db_session.get(PersistedPlannerMemoryArtifact, artifact_id) is not None
+    ):
+        return checkpoint_id
+
+    return refresh_planner_memory(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session_state_id,
+        occurred_at=occurred_at,
+    )
+
+
 def _serialize_checkpoint(record: PersistedPlannerCheckpoint) -> dict[str, Any]:
     return {
         "checkpoint_id": record.checkpoint_id,
@@ -189,25 +234,6 @@ def build_planner_memory_payload(
     trip_id: str,
     session_state_id: str,
 ) -> dict[str, Any]:
-    latest_turn_index = sum(
-        1
-        for record in _planner_message_records(db_session, session_state_id=session_state_id)
-        if record.action_type == "planner_response"
-    )
-    if latest_turn_index > 0:
-        expected_checkpoint_id = f"planner-checkpoint:{trip_id}:{latest_turn_index}"
-        expected_artifact_id = f"planner-memory:{trip_id}:{latest_turn_index}"
-        if (
-            db_session.get(PersistedPlannerCheckpoint, expected_checkpoint_id) is None
-            or db_session.get(PersistedPlannerMemoryArtifact, expected_artifact_id) is None
-        ):
-            refresh_planner_memory(
-                db_session,
-                trip_id=trip_id,
-                session_state_id=session_state_id,
-            )
-            db_session.flush()
-
     checkpoints = db_session.scalars(
         select(PersistedPlannerCheckpoint)
         .where(PersistedPlannerCheckpoint.session_state_id == session_state_id)

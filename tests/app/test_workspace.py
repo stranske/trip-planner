@@ -347,7 +347,7 @@ def test_workspace_endpoint_surfaces_user_visible_planner_memory(client: TestCli
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["planner_memory"]["current_checkpoint_id"] == f"planner-checkpoint:{trip_id}:1"
+    assert payload["planner_memory"]["current_checkpoint_id"].startswith("planner-chk:")
     assert payload["planner_memory"]["artifacts"][0]["title"] == "Planner checkpoint 1"
     assert "Traveler focus:" in payload["planner_memory"]["artifacts"][0]["detail"]
 
