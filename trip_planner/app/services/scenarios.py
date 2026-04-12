@@ -160,15 +160,15 @@ def build_workspace_scenario_search(
             else _DEFAULT_LEISURE_FIXTURE_ID
         )
         traveler_fixture = load_fixture_map()[leisure_fixture_id]
-        profile = deepcopy(traveler_fixture.profile)
+        leisure_profile = deepcopy(traveler_fixture.profile)
         if duration_days is not None:
-            profile.trip_frame.duration_days = duration_days
+            leisure_profile.trip_frame.duration_days = duration_days
         if primary_regions:
-            profile.trip_frame.regions_in_scope = list(primary_regions)
+            leisure_profile.trip_frame.regions_in_scope = list(primary_regions)
         if traveler_party_kind in {"solo", "pair", "family", "friends"}:
-            profile.trip_frame.traveler_party = traveler_party_kind
+            leisure_profile.trip_frame.traveler_party = traveler_party_kind
         resolved_profile = resolve_leisure_profile(
-            profile,
+            leisure_profile,
             traveler_fixture.evidence,
         )
         leisure_objectives = derive_itinerary_objectives(
@@ -196,7 +196,7 @@ def build_workspace_scenario_search(
             if fixture_seed is not None and fixture_seed.business_constraint_fixture is not None
             else _DEFAULT_BUSINESS_CONSTRAINT_FIXTURE
         )
-        profile = BusinessTravelProfile.from_dict(
+        business_profile = BusinessTravelProfile.from_dict(
             _load_json(_business_fixture_dir() / business_profile_fixture)
         )
         constraint_payload = _load_json(
@@ -204,12 +204,12 @@ def build_workspace_scenario_search(
         )
         constraint_set = PolicyConstraintSet(**constraint_payload["constraint_set"])
         business_objectives = derive_business_planning_objectives(
-            profile,
+            business_profile,
             trip_id=trip_id,
             constraint_set=constraint_set,
         )
         ranked_results = BusinessRankingEngine().rank_bundles(
-            profile,
+            business_profile,
             business_objectives,
             bundles,
             trip_id=trip_id,
