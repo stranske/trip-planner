@@ -7,6 +7,7 @@
 
 The runtime baseline now treats the saved trip record as the durable planning container. New scenario, budget, workspace, and policy work should attach to a persisted trip instead of inventing a parallel root object.
 Saved scenarios and trip-level planning history now persist underneath that same trip container, so later comparison and workspace slices should consume those records instead of reintroducing fixture-only storage.
+The shipped full-stack MVP now includes authenticated trip creation, persisted trip and scenario routes, the workspace shell, planner session APIs, and stored policy/proposal state. Live external policy transport and provider-backed maps remain follow-on integrations, so docs and checks in this repo should describe those gaps explicitly instead of implying they already ship.
 
 ## Key Docs
 
@@ -89,6 +90,8 @@ python -m pip install -e ".[dev]"
 npm --prefix frontend install
 ```
 
+`make runtime-check` and `make runtime-smoke` assume those installs have already completed. If either the backend dev extras or `frontend/node_modules` are missing, the check script exits early and points back to these two commands.
+
 Repo dependency layout:
 
 - Python tooling installs into the active virtualenv from the repo root.
@@ -116,3 +119,5 @@ The verification path covers:
 - backend runtime tests for the live FastAPI routes
 - frontend unit/build checks
 - a smoke test that runs the frontend client against a live backend process
+
+These checks validate the local full-stack MVP that already exists in this repo. They do not prove live Google Maps rendering or remote Travel-Plan-Permission transport, which are still documented as active follow-on integrations.

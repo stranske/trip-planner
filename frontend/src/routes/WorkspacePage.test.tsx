@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, useLoaderData } from "react-router-dom";
+import { useLoaderData } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiClientError } from "../lib/api/errors";
@@ -11,6 +11,7 @@ import {
   submitPlannerOptionFeedback,
   type WorkspaceData,
 } from "../api/workspace";
+import { TestMemoryRouter } from "../test/router";
 import type { TripRecord } from "../api/trips";
 import { WorkspacePage } from "./WorkspacePage";
 
@@ -605,9 +606,9 @@ const workspacePayload = {
 
 function renderWorkspacePage() {
   return render(
-    <MemoryRouter>
+    <TestMemoryRouter>
       <WorkspacePage />
-    </MemoryRouter>
+    </TestMemoryRouter>
   );
 }
 

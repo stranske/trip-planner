@@ -1,8 +1,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, useLoaderData } from "react-router-dom";
+import { useLoaderData } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TripsPage } from "./TripsPage";
+import { TestMemoryRouter } from "../test/router";
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
@@ -52,9 +53,9 @@ describe("TripsPage", () => {
     });
 
     render(
-      <MemoryRouter>
+      <TestMemoryRouter>
         <TripsPage />
-      </MemoryRouter>
+      </TestMemoryRouter>
     );
 
     await waitFor(() => {

@@ -26,6 +26,7 @@ Issue `#681` establishes a single frontend seam for runtime-backed routes instea
 
 ## Current Coverage
 
-- `HealthPage` uses the shared client and deferred loader path.
-- `WorkspacePage` uses the same loader boundary for persisted runtime state.
-- Tests cover client success/error handling and route-level loading/error treatment.
+- `HealthPage`, `TripsPage`, `TripDetailPage`, and `WorkspacePage` all load through the shared route/client seam instead of owning ad hoc `fetch` wiring.
+- Auth-aware route loaders gate login/signup, trip list/detail, and workspace entry through the same session bootstrap path.
+- Tests cover client success/error handling, route-level loading/error treatment, and the React Router future flags already opted into by the runtime and test harnesses.
+- Deferred gaps stay explicit here: live external policy transport and provider-backed maps are separate runtime layers, not hidden assumptions inside the current route loader foundation.

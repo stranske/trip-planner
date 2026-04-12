@@ -10,6 +10,35 @@ backend_log="$(mktemp -d "${TMPDIR:-/tmp}/trip-planner-runtime.XXXXXX")/backend.
 smoke_only="false"
 backend_pid=""
 
+prereq_failure() {
+  cat >&2 <<'EOF'
+Full-stack runtime checks require both dependency installs to be present first:
+  1. python -m pip install -e ".[dev]"
+  2. npm --prefix frontend install
+
+Then rerun `make runtime-check` (or `make runtime-smoke`).
+EOF
+  exit 1
+}
+
+require_backend_prereqs() {
+  if ! python -m pytest --version >/dev/null 2>&1; then
+    echo "Missing backend test dependencies (`python -m pytest` is unavailable)." >&2
+    prereq_failure
+  fi
+}
+
+require_frontend_prereqs() {
+  if ! npm --prefix frontend exec -- vitest --version >/dev/null 2>&1; then
+    echo "Missing frontend test dependencies (`vitest` is unavailable under frontend/node_modules)." >&2
+    prereq_failure
+  fi
+  if ! npm --prefix frontend exec -- vite --version >/dev/null 2>&1; then
+    echo "Missing frontend build dependencies (`vite` is unavailable under frontend/node_modules)." >&2
+    prereq_failure
+  fi
+}
+
 if [ "${1:-}" = "--smoke-only" ]; then
   smoke_only="true"
 fi
@@ -51,6 +80,9 @@ PY
 trap cleanup EXIT INT TERM
 
 cd "${repo_root}"
+
+require_backend_prereqs
+require_frontend_prereqs
 
 if [ "${smoke_only}" != "true" ]; then
   python -m pytest tests/app/test_health.py tests/app/test_workspace.py

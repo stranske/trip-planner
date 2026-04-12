@@ -1,9 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { login } from "../api/auth";
 import { LoginPage } from "./LoginPage";
+import { TestMemoryRouter } from "../test/router";
 
 vi.mock("../api/auth", () => ({
   login: vi.fn(),
@@ -38,9 +38,9 @@ describe("LoginPage", () => {
     });
 
     render(
-      <MemoryRouter>
+      <TestMemoryRouter>
         <LoginPage />
-      </MemoryRouter>
+      </TestMemoryRouter>
     );
 
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "traveler@example.com" } });
@@ -60,9 +60,9 @@ describe("LoginPage", () => {
     mockedLogin.mockRejectedValue(new Error("Email or password was not recognized."));
 
     render(
-      <MemoryRouter>
+      <TestMemoryRouter>
         <LoginPage />
-      </MemoryRouter>
+      </TestMemoryRouter>
     );
 
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "traveler@example.com" } });
