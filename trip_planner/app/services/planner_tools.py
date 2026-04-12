@@ -260,7 +260,10 @@ def _update_budget_plan(
     workspace_payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
     summary = budget_payload["summary"]
     categories = list(summary.get("suggested_categories") or [])[:4]
-    currency = str(arguments.get("currency") or summary["currency"] or "USD")
+    raw_currency = arguments.get("currency") or summary["currency"] or "USD"
+    currency = str(raw_currency).strip().upper()
+    if len(currency) != 3 or not currency.isalpha():
+        raise ValueError("currency must be a 3-letter alphabetic currency code")
     saved_scenario = (workspace_payload.get("saved_scenarios") or [None])[0]
     scenario_budget_id = f"scenario-budget:{trip_id}:planner"
     scenario_title = (

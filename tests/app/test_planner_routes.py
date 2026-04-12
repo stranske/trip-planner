@@ -171,6 +171,39 @@ def test_planner_turn_rejects_invalid_tool_calls(client: TestClient) -> None:
     assert "not supported" in response.json()["detail"]
 
 
+def test_planner_turn_normalizes_lowercase_budget_currency(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": "Set a lowercase-currency planner budget.",
+            "tool_calls": [
+                {
+                    "tool_name": "update_budget_plan",
+                    "arguments": {
+                        "total_amount": 900,
+                        "currency": "usd",
+                    },
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    planner_reply = response.json()["messages"][-1]
+    assert planner_reply["tool_calls"][0]["tool_name"] == "update_budget_plan"
+    assert "USD 900.00" in planner_reply["tool_calls"][0]["summary"]
+
+    with get_session_factory()() as db_session:
+        stored = db_session.scalars(
+            select(PersistedPlannerAction)
+            .where(PersistedPlannerAction.trip_id == trip_id)
+            .order_by(PersistedPlannerAction.occurred_at.asc())
+        ).all()
+        assert stored[-1].payload["tool_calls"][0]["summary"] == "Updated the workspace budget plan to USD 900.00."
+
+
 def test_planner_resume_returns_prior_conversation_history(client: TestClient) -> None:
     trip_id = _create_trip(client)
     first_turn = client.post(

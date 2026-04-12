@@ -1869,7 +1869,7 @@ def _record_planner_action(
     option_set_id: str | None = None,
     option_id: str | None = None,
     choice: str | None = None,
-    payload: dict[str, str] | None = None,
+    payload: dict[str, Any] | None = None,
 ) -> None:
     db_session.add(
         PersistedPlannerAction(
