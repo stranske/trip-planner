@@ -21,6 +21,7 @@ def _load_fixture(*parts: str) -> dict:
 class _FakeHTTPResponse:
     def __init__(self, status_code: int, payload: dict[str, object]) -> None:
         self.status_code = status_code
+        self.status = status_code
         self._payload = payload
         self.text = json.dumps(payload)
 
@@ -38,11 +39,15 @@ class _FakeHTTPResponse:
 def _install_fake_http(
     monkeypatch: pytest.MonkeyPatch,
     responses: list[_FakeHTTPResponse | Exception],
+    *,
+    captured_requests: list[object] | None = None,
 ) -> None:
     queue = list(responses)
 
     def _fake_urlopen(request, timeout=0):
-        del request, timeout
+        del timeout
+        if captured_requests is not None:
+            captured_requests.append(request)
         response = queue.pop(0)
         if isinstance(response, Exception):
             raise response
@@ -810,6 +815,23 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
     monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
     monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Live proposal transport",
+            "summary": "Use runtime TPP HTTP transport.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    captured_requests: list[object] = []
     _install_fake_http(
         monkeypatch,
         [
@@ -848,8 +870,8 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
             _FakeHTTPResponse(
                 200,
                 {
-                    "trip_id": "placeholder",
-                    "proposal_id": "placeholder",
+                    "trip_id": trip_id,
+                    "proposal_id": f"proposal:{trip_id}",
                     "proposal_version": "proposal-v3",
                     "execution_id": "exec-live-001",
                     "request_id": "ignored-eval",
@@ -870,23 +892,8 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
                 },
             ),
         ],
+        captured_requests=captured_requests,
     )
-
-    created = client.post(
-        "/api/trips",
-        json={
-            "title": "Live proposal transport",
-            "summary": "Use runtime TPP HTTP transport.",
-            "mode": "business",
-            "trip_frame": {
-                "start_date": "2026-05-04",
-                "end_date": "2026-05-06",
-                "duration_days": 3,
-                "primary_regions": ["Chicago"],
-            },
-        },
-    )
-    trip_id = created.json()["trip"]["trip_id"]
     submission_fixture = _load_fixture("proposal_submit_deferred.json")
     submission_fixture["request"]["trip_id"] = trip_id
     submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
@@ -921,6 +928,11 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
     payload = evaluated.json()["proposal_state"]
     assert payload["evaluation"]["evaluation_result"]["status"] == "compliant"
     assert payload["summary"]["approval_ready"] is True
+    submission_body = json.loads(captured_requests[0].data.decode("utf-8"))
+    assert submission_body["proposal_version"] == "proposal-v3"
+    assert "execution_id" not in submission_body
+    evaluation_body = json.loads(captured_requests[1].data.decode("utf-8"))
+    assert evaluation_body["execution_id"] == "exec-live-001"
 
 
 def test_workspace_proposal_live_transport_rejects_invalid_upstream_contract(
@@ -964,5 +976,5 @@ def test_workspace_proposal_live_transport_rejects_invalid_upstream_contract(
         },
     )
 
-    assert response.status_code == 502
-    assert "execution_status" in response.json()["detail"] or "contract" in response.json()["detail"].lower()
+    assert response.status_code == 400
+    assert "execution_id is required" in response.json()["detail"]

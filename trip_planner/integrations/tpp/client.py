@@ -80,6 +80,20 @@ class TPPServiceUnavailableError(TPPTransportError):
         super().__init__(message, status_code=503)
 
 
+def _strip_none_values(value: Any) -> Any:
+    """Drop null fields before serializing live TPP request payloads."""
+
+    if isinstance(value, dict):
+        return {
+            key: _strip_none_values(item)
+            for key, item in value.items()
+            if item is not None
+        }
+    if isinstance(value, list):
+        return [_strip_none_values(item) for item in value if item is not None]
+    return value
+
+
 @dataclass(slots=True)
 class TPPRuntimeSettings:
     base_url: str
@@ -216,7 +230,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             raise TPPContractError(
                 "Live policy sync requires request.trip_id or payload.trip_id."
             )
-        return payload
+        return _strip_none_values(payload)
 
     def _proposal_request_payload(self, request: TPPRequestEnvelope) -> dict[str, Any]:
         payload = dict(request.payload)
@@ -237,7 +251,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             raise TPPContractError(
                 "Live proposal submission requires trip_id, proposal_id, and proposal_version."
             )
-        return payload
+        return _strip_none_values(payload)
 
     def _status_request_payload(self, request: TPPRequestEnvelope) -> dict[str, Any]:
         payload = dict(request.payload)
@@ -260,7 +274,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             raise TPPContractError(
                 "Live TPP status operations require payload.execution_id."
             )
-        return payload
+        return _strip_none_values(payload)
 
     def _adapt_execution_status(self, payload: dict[str, Any]) -> dict[str, Any]:
         execution = payload.get("execution_status")
@@ -345,16 +359,13 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         if not policy_version:
             raise TPPContractError("TPP policy snapshot response is missing policy_version.")
 
+        organization_context = request.payload.get("organization_context")
+        organization_context_dict = (
+            organization_context if isinstance(organization_context, dict) else {}
+        )
         organization_id = (
             request.organization_id
-            or str(
-                (
-                    request.payload.get("organization_context")
-                    if isinstance(request.payload.get("organization_context"), dict)
-                    else {}
-                ).get("organization_id")
-                or ""
-            ).strip()
+            or str(organization_context_dict.get("organization_id") or "").strip()
             or "tpp"
         )
         documentation_rules = [
