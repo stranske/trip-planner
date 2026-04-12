@@ -10,6 +10,7 @@ from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.business import ExceptionRequest, TripPlanProposal
 from trip_planner.integrations.tpp import (
     BaseTPPIntegrationClient,
+    HTTPTPPIntegrationClient,
     TPPEvaluationResultIngestionService,
     TPPProposalSubmissionService,
     TPPRequestEnvelope,
@@ -67,6 +68,56 @@ class _PassiveTPPClient(BaseTPPIntegrationClient):
 
     def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         return self.response
+
+
+def _resolve_submission_response(
+    request: TPPRequestEnvelope,
+    response_payload: dict[str, Any] | None,
+    *,
+    proposal_version: str,
+) -> TPPResponseEnvelope:
+    if response_payload is not None:
+        return TPPResponseEnvelope.from_dict(response_payload)
+    live_request = request
+    if not request.payload.get("proposal_version"):
+        live_request = TPPRequestEnvelope(
+            operation=request.operation,
+            request_id=request.request_id,
+            correlation_id=request.correlation_id,
+            payload={**request.payload, "proposal_version": proposal_version},
+            transport_pattern=request.transport_pattern,
+            organization_id=request.organization_id,
+            trip_id=request.trip_id,
+            proposal_id=request.proposal_id,
+            submitted_at=request.submitted_at,
+            metadata=dict(request.metadata),
+        )
+    return HTTPTPPIntegrationClient().submit_proposal(live_request)
+
+
+def _resolve_evaluation_response(
+    request: TPPRequestEnvelope,
+    response_payload: dict[str, Any] | None,
+    *,
+    proposal_version: str,
+) -> TPPResponseEnvelope:
+    if response_payload is not None:
+        return TPPResponseEnvelope.from_dict(response_payload)
+    live_request = request
+    if not request.payload.get("proposal_version"):
+        live_request = TPPRequestEnvelope(
+            operation=request.operation,
+            request_id=request.request_id,
+            correlation_id=request.correlation_id,
+            payload={**request.payload, "proposal_version": proposal_version},
+            transport_pattern=request.transport_pattern,
+            organization_id=request.organization_id,
+            trip_id=request.trip_id,
+            proposal_id=request.proposal_id,
+            submitted_at=request.submitted_at,
+            metadata=dict(request.metadata),
+        )
+    return HTTPTPPIntegrationClient().fetch_evaluation_result(live_request)
 
 
 def _now_iso() -> str:
@@ -306,7 +357,7 @@ def save_workspace_proposal_submission(
     trip_id: str,
     proposal_payload: dict[str, Any],
     request_payload: dict[str, Any],
-    response_payload: dict[str, Any],
+    response_payload: dict[str, Any] | None,
     proposal_version: str,
     scenario_id: str | None,
 ) -> dict[str, Any]:
@@ -319,7 +370,11 @@ def save_workspace_proposal_submission(
         raise ValueError("proposal.trip_id must match the workspace trip.")
 
     request = TPPRequestEnvelope.from_dict(request_payload)
-    response = TPPResponseEnvelope.from_dict(response_payload)
+    response = _resolve_submission_response(
+        request,
+        response_payload,
+        proposal_version=proposal_version,
+    )
     submission = TPPProposalSubmissionService(_PassiveTPPClient(response)).submit_proposal(
         request,
         proposal,
@@ -383,7 +438,7 @@ def save_workspace_proposal_evaluation(
     user: AuthenticatedUser,
     trip_id: str,
     request_payload: dict[str, Any],
-    response_payload: dict[str, Any],
+    response_payload: dict[str, Any] | None,
     proposal_version: str,
     scenario_id: str | None,
 ) -> dict[str, Any]:
@@ -398,7 +453,11 @@ def save_workspace_proposal_evaluation(
         )
 
     request = TPPRequestEnvelope.from_dict(request_payload)
-    response = TPPResponseEnvelope.from_dict(response_payload)
+    response = _resolve_evaluation_response(
+        request,
+        response_payload,
+        proposal_version=proposal_version,
+    )
     evaluation = TPPEvaluationResultIngestionService(_PassiveTPPClient(response)).fetch_evaluation_result(
         request,
         proposal_version=proposal_version,

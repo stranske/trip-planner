@@ -17,6 +17,7 @@ from trip_planner.business import (
     TripPlanProposal,
 )
 from trip_planner.integrations.tpp import (
+    HTTPTPPIntegrationClient,
     OrganizationContextSnapshot,
     PolicyConstraintImport,
     PolicyFreshness,
@@ -91,6 +92,15 @@ class _PassiveTPPClient:
 
     def poll_execution_status(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         raise NotImplementedError("Passive policy import client does not poll execution status.")
+
+
+def _resolve_policy_response(
+    request: TPPRequestEnvelope,
+    response_payload: dict[str, Any] | None,
+) -> TPPResponseEnvelope:
+    if response_payload is not None:
+        return TPPResponseEnvelope.from_dict(response_payload)
+    return HTTPTPPIntegrationClient().fetch_policy_constraints(request)
 
 
 def _is_effectively_stale(imported: PolicyConstraintImport) -> bool:
@@ -327,7 +337,7 @@ def import_workspace_policy_constraints(
     user: AuthenticatedUser,
     trip_id: str,
     request_payload: dict[str, Any],
-    response_payload: dict[str, Any],
+    response_payload: dict[str, Any] | None,
     source_kind: str,
     tags: list[str],
     notes: list[str],
@@ -337,7 +347,7 @@ def import_workspace_policy_constraints(
         raise ValueError("Only business trips can import workspace policy constraints.")
 
     request = TPPRequestEnvelope.from_dict(request_payload)
-    response = TPPResponseEnvelope.from_dict(response_payload)
+    response = _resolve_policy_response(request, response_payload)
     imported = TPPPolicySyncService(_PassiveTPPClient(response)).import_policy_constraints(request)
     imported_at = _isoformat(datetime.now(UTC))
     existing = _get_latest_policy_state(

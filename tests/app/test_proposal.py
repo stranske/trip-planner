@@ -1,11 +1,11 @@
 import json
 from collections.abc import Iterator
 from pathlib import Path
-
 import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
+from trip_planner.integrations.tpp import client as tpp_client_module
 from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.proposal import PersistedProposalState
 
@@ -16,6 +16,39 @@ def _fixture_path(*parts: str) -> Path:
 
 def _load_fixture(*parts: str) -> dict:
     return json.loads(_fixture_path(*parts).read_text(encoding="utf-8"))
+
+
+class _FakeHTTPResponse:
+    def __init__(self, status_code: int, payload: dict[str, object]) -> None:
+        self.status_code = status_code
+        self._payload = payload
+        self.text = json.dumps(payload)
+
+    def read(self) -> bytes:
+        return json.dumps(self._payload).encode("utf-8")
+
+    def __enter__(self) -> "_FakeHTTPResponse":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        del exc_type, exc, tb
+        return False
+
+
+def _install_fake_http(
+    monkeypatch: pytest.MonkeyPatch,
+    responses: list[_FakeHTTPResponse | Exception],
+) -> None:
+    queue = list(responses)
+
+    def _fake_urlopen(request, timeout=0):
+        del request, timeout
+        response = queue.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    monkeypatch.setattr(tpp_client_module.urllib_request, "urlopen", _fake_urlopen)
 
 
 def _proposal_payload(trip_id: str) -> dict:
@@ -768,3 +801,168 @@ def test_workspace_proposal_submission_rejects_leisure_trip(client: TestClient) 
 
     assert response.status_code == 400
     assert "business trips" in response.json()["detail"]
+
+
+def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    _install_fake_http(
+        monkeypatch,
+        [
+            _FakeHTTPResponse(
+                200,
+                {
+                    "operation": "submit_proposal",
+                    "submission_status": "submitted",
+                    "request_id": "ignored-submit",
+                    "correlation_id": {"value": "ignored", "issued_by": "tpp"},
+                    "transport_pattern": "deferred",
+                    "execution_status": {
+                        "state": "deferred",
+                        "terminal": False,
+                        "summary": "Proposal queued for evaluation",
+                        "poll_after_seconds": 30,
+                        "external_status": "202 Accepted",
+                        "updated_at": "2026-04-03T00:41:01Z",
+                    },
+                    "result_payload": {
+                        "execution_id": "exec-live-001",
+                        "queue_state": "waiting_for_policy_engine",
+                    },
+                    "retry": {
+                        "attempt": 0,
+                        "max_attempts": 5,
+                        "retryable": True,
+                        "backoff_seconds": 30,
+                        "next_retry_at": "2026-04-03T00:41:31Z",
+                        "reason": "Await evaluator completion",
+                    },
+                    "received_at": "2026-04-03T00:41:01Z",
+                    "status_endpoint": "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-live-001",
+                },
+            ),
+            _FakeHTTPResponse(
+                200,
+                {
+                    "trip_id": "placeholder",
+                    "proposal_id": "placeholder",
+                    "proposal_version": "proposal-v3",
+                    "execution_id": "exec-live-001",
+                    "request_id": "ignored-eval",
+                    "correlation_id": {"value": "ignored", "issued_by": "tpp"},
+                    "outcome": "compliant",
+                    "result_endpoint": "GET /api/planner/executions/exec-live-001/evaluation-result",
+                    "status_endpoint": "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-live-001",
+                    "policy_result": {
+                        "status": "pass",
+                        "issues": [],
+                        "policy_version": "policy-v1",
+                    },
+                    "blocking_issues": [],
+                    "preferred_alternatives": [],
+                    "exception_requirements": [],
+                    "reoptimization_guidance": [],
+                    "generated_at": "2026-04-03T02:15:04Z",
+                },
+            ),
+        ],
+    )
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Live proposal transport",
+            "summary": "Use runtime TPP HTTP transport.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+
+    submitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert submitted.status_code == 200
+    assert submitted.json()["proposal_state"]["execution_id"] == "exec-live-001"
+
+    evaluation_fixture = _load_fixture("results", "approved_evaluation.json")
+    evaluation_fixture["request"]["trip_id"] = trip_id
+    evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_fixture["request"]["payload"]["execution_id"] = "exec-live-001"
+
+    evaluated = client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation_fixture["request"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert evaluated.status_code == 200
+    payload = evaluated.json()["proposal_state"]
+    assert payload["evaluation"]["evaluation_result"]["status"] == "compliant"
+    assert payload["summary"]["approval_ready"] is True
+
+
+def test_workspace_proposal_live_transport_rejects_invalid_upstream_contract(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    _install_fake_http(
+        monkeypatch,
+        [_FakeHTTPResponse(200, {"submission_status": "submitted"})],
+    )
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Invalid proposal transport",
+            "summary": "Surface invalid live TPP contracts.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+
+    response = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "proposal_version": "proposal-v3",
+        },
+    )
+
+    assert response.status_code == 502
+    assert "execution_status" in response.json()["detail"] or "contract" in response.json()["detail"].lower()
