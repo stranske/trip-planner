@@ -734,7 +734,7 @@ def _bootstrap_saved_scenario_records(
                     "scope": "mixed",
                     "summary": _bootstrap_version_summary(record, label="baseline"),
                     "tags": ["workspace-bootstrap", record.mode],
-                    "notes": ["Generated from the persisted default workspace path."],
+                    "notes": ["Generated during persisted workspace bootstrap."],
                 }
             ],
             "comparisons": [
@@ -754,7 +754,7 @@ def _bootstrap_saved_scenario_records(
                 }
             ],
             "tags": ["workspace-bootstrap", "preferred"],
-            "notes": ["Created automatically for the first persisted workspace render."],
+            "notes": ["Created automatically during the first persisted workspace bootstrap."],
         }
     )
     fallback = SavedScenarioRecord.from_dict(
@@ -775,12 +775,12 @@ def _bootstrap_saved_scenario_records(
                     "scope": "mixed",
                     "summary": _bootstrap_version_summary(record, label="fallback"),
                     "tags": ["workspace-bootstrap", record.mode],
-                    "notes": ["Generated from the persisted default workspace path."],
+                    "notes": ["Generated during persisted workspace bootstrap."],
                 }
             ],
             "comparisons": [],
             "tags": ["workspace-bootstrap", "fallback"],
-            "notes": ["Created automatically for the first persisted workspace render."],
+            "notes": ["Created automatically during the first persisted workspace bootstrap."],
         }
     )
     return baseline, fallback
