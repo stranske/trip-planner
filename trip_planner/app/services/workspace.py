@@ -39,6 +39,7 @@ from trip_planner.itinerary import (
     ScenarioSummary,
     ScenarioTradeoff,
 )
+from trip_planner.options import InventoryBundle
 from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
     PersistedPlannerAction,
