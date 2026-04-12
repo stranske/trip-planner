@@ -23,6 +23,7 @@ def _load_fixture(name: str) -> dict:
 
 class _FakeHTTPResponse:
     def __init__(self, status_code: int, payload: dict[str, object]) -> None:
+        self.status = status_code
         self.status_code = status_code
         self._payload = payload
         self.text = json.dumps(payload)

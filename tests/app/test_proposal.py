@@ -21,6 +21,7 @@ def _load_fixture(*parts: str) -> dict:
 
 class _FakeHTTPResponse:
     def __init__(self, status_code: int, payload: dict[str, object]) -> None:
+        self.status = status_code
         self.status_code = status_code
         self._payload = payload
         self.text = json.dumps(payload)
@@ -822,66 +823,65 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
     monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
     captured_requests: list[dict[str, object]] = []
+    submission_response = _FakeHTTPResponse(
+        200,
+        {
+            "operation": "submit_proposal",
+            "submission_status": "submitted",
+            "request_id": "ignored-submit",
+            "correlation_id": {"value": "ignored", "issued_by": "tpp"},
+            "transport_pattern": "deferred",
+            "execution_status": {
+                "state": "deferred",
+                "terminal": False,
+                "summary": "Proposal queued for evaluation",
+                "poll_after_seconds": 30,
+                "external_status": "202 Accepted",
+                "updated_at": "2026-04-03T00:41:01Z",
+            },
+            "result_payload": {
+                "execution_id": "exec-live-001",
+                "queue_state": "waiting_for_policy_engine",
+            },
+            "retry": {
+                "attempt": 0,
+                "max_attempts": 5,
+                "retryable": True,
+                "backoff_seconds": 30,
+                "next_retry_at": "2026-04-03T00:41:31Z",
+                "reason": "Await evaluator completion",
+            },
+            "received_at": "2026-04-03T00:41:01Z",
+            "status_endpoint": "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-live-001",
+        },
+    )
+    evaluation_response = _FakeHTTPResponse(
+        200,
+        {
+            "trip_id": "trip-placeholder",
+            "proposal_id": "proposal:trip-placeholder",
+            "proposal_version": "proposal-v3",
+            "execution_id": "exec-live-001",
+            "request_id": "ignored-eval",
+            "correlation_id": {"value": "ignored", "issued_by": "tpp"},
+            "outcome": "compliant",
+            "result_endpoint": "GET /api/planner/executions/exec-live-001/evaluation-result",
+            "status_endpoint": "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-live-001",
+            "policy_result": {
+                "status": "pass",
+                "issues": [],
+                "policy_version": "policy-v1",
+            },
+            "blocking_issues": [],
+            "preferred_alternatives": [],
+            "exception_requirements": [],
+            "reoptimization_guidance": [],
+            "generated_at": "2026-04-03T02:15:04Z",
+        },
+    )
     _install_fake_http(
         monkeypatch,
-        [
-            _FakeHTTPResponse(
-                200,
-                {
-                    "operation": "submit_proposal",
-                    "submission_status": "submitted",
-                    "request_id": "ignored-submit",
-                    "correlation_id": {"value": "ignored", "issued_by": "tpp"},
-                    "transport_pattern": "deferred",
-                    "execution_status": {
-                        "state": "deferred",
-                        "terminal": False,
-                        "summary": "Proposal queued for evaluation",
-                        "poll_after_seconds": 30,
-                        "external_status": "202 Accepted",
-                        "updated_at": "2026-04-03T00:41:01Z",
-                    },
-                    "result_payload": {
-                        "execution_id": "exec-live-001",
-                        "queue_state": "waiting_for_policy_engine",
-                    },
-                    "retry": {
-                        "attempt": 0,
-                        "max_attempts": 5,
-                        "retryable": True,
-                        "backoff_seconds": 30,
-                        "next_retry_at": "2026-04-03T00:41:31Z",
-                        "reason": "Await evaluator completion",
-                    },
-                    "received_at": "2026-04-03T00:41:01Z",
-                    "status_endpoint": "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-live-001",
-                },
-            ),
-            _FakeHTTPResponse(
-                200,
-                {
-                    "trip_id": "placeholder",
-                    "proposal_id": "placeholder",
-                    "proposal_version": "proposal-v3",
-                    "execution_id": "exec-live-001",
-                    "request_id": "ignored-eval",
-                    "correlation_id": {"value": "ignored", "issued_by": "tpp"},
-                    "outcome": "compliant",
-                    "result_endpoint": "GET /api/planner/executions/exec-live-001/evaluation-result",
-                    "status_endpoint": "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-live-001",
-                    "policy_result": {
-                        "status": "pass",
-                        "issues": [],
-                        "policy_version": "policy-v1",
-                    },
-                    "blocking_issues": [],
-                    "preferred_alternatives": [],
-                    "exception_requirements": [],
-                    "reoptimization_guidance": [],
-                    "generated_at": "2026-04-03T02:15:04Z",
-                },
-            ),
-        ],
+        [submission_response, evaluation_response],
         captured_requests=captured_requests,
     )
 
@@ -921,6 +921,9 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
     evaluation_fixture["request"]["trip_id"] = trip_id
     evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
     evaluation_fixture["request"]["payload"]["execution_id"] = "exec-live-001"
+    evaluation_response._payload["trip_id"] = trip_id
+    evaluation_response._payload["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_response.text = json.dumps(evaluation_response._payload)
 
     evaluated = client.put(
         f"/api/workspace/{trip_id}/proposal/evaluation",
@@ -1005,5 +1008,5 @@ def test_workspace_proposal_live_transport_rejects_invalid_upstream_contract(
         },
     )
 
-    assert response.status_code == 502
-    assert "execution_status" in response.json()["detail"] or "contract" in response.json()["detail"].lower()
+    assert response.status_code == 400
+    assert response.json()["detail"] == "result_payload.execution_id is required for non-terminal submissions"
