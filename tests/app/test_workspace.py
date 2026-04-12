@@ -726,6 +726,198 @@ def test_workspace_endpoint_surfaces_reoptimization_follow_up_for_non_compliant_
     assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Reoptimization path required"
 
 
+def test_workspace_endpoint_surfaces_exception_follow_up_for_live_policy_results(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Exception workflow workspace",
+            "summary": "Workspace should expose the exception-oriented follow-up lane.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    submission_fixture = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "fixtures"
+            / "integrations"
+            / "tpp"
+            / "proposal_submit_deferred.json"
+        ).read_text(encoding="utf-8")
+    )
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+    evaluation_fixture = {
+        "request": {
+            "operation": "fetch_evaluation_result",
+            "request_id": "req-result-exception-required",
+            "correlation_id": {
+                "value": "corr-result-exception-required",
+                "issued_by": "trip-planner",
+            },
+            "payload": {
+                "execution_id": "exec-exception-001",
+            },
+            "transport_pattern": "async",
+            "organization_id": "org-acme",
+            "trip_id": "trip-100",
+            "proposal_id": "proposal-123",
+            "submitted_at": "2026-04-03T02:18:00Z",
+        },
+        "response": {
+            "operation": "fetch_evaluation_result",
+            "request_id": "req-result-exception-required",
+            "correlation_id": {
+                "value": "corr-result-exception-required",
+                "issued_by": "trip-planner",
+            },
+            "transport_pattern": "async",
+            "execution_status": {
+                "state": "succeeded",
+                "terminal": True,
+                "summary": "Policy evaluation completed with an exception requirement",
+                "external_status": "200 OK",
+                "updated_at": "2026-04-03T02:18:08Z",
+            },
+            "result_payload": {
+                "execution_id": "exec-exception-001",
+                "trip_id": "trip-100",
+                "proposal_id": "proposal-123",
+                "proposal_version": "proposal-v3",
+                "scenario_id": "scenario-a",
+                "evaluation_result": {
+                    "evaluation_id": "eval-exception-001",
+                    "proposal_id": "proposal-123",
+                    "status": "exception_required",
+                    "approval_requirements": [
+                        {
+                            "role": "manager",
+                            "reason": "Schedule exception requires manager approval.",
+                            "mandatory": True,
+                        }
+                    ],
+                    "failure_reasons": [
+                        {
+                            "code": "arrival_window_conflict",
+                            "message": "The compliant itinerary misses the client workshop start time.",
+                            "severity": "blocking",
+                            "related_category": "flight",
+                        }
+                    ],
+                    "preferred_alternatives": [],
+                    "exception_guidance": [
+                        "Attach the compliant comparable to the exception packet.",
+                        "Explain why the earlier arrival is required for the client meeting.",
+                    ],
+                    "notes": [
+                        "Exception review is required before approval can continue."
+                    ],
+                    "compliance_score": 0.61,
+                },
+            },
+            "received_at": "2026-04-03T02:18:08Z",
+            "status_endpoint": "https://tpp.example.test/executions/exec-exception-001",
+        },
+    }
+    evaluation_fixture["request"]["trip_id"] = trip_id
+    evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_fixture["response"]["result_payload"]["trip_id"] = trip_id
+    evaluation_fixture["response"]["result_payload"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["proposal_id"] = (
+        f"proposal:{trip_id}"
+    )
+    proposal_payload = {
+        "proposal_id": f"proposal:{trip_id}",
+        "trip_id": trip_id,
+        "mode": "business",
+        "traveler_context": {
+            "employee_type": "employee",
+            "traveler_experience": "frequent",
+            "home_airport": "ORD",
+            "loyalty_programs": ["United"],
+            "mobility_or_access_needs": [],
+        },
+        "selected_options": [
+            {
+                "category": "airfare",
+                "option_id": "flight-1",
+                "label": "United 123",
+                "vendor": "United",
+                "booking_channel": "Navan",
+                "estimated_cost": {
+                    "currency": "USD",
+                    "typical_amount": 620.0,
+                    "min_amount": 620.0,
+                    "max_amount": 620.0,
+                },
+                "justification_refs": ["schedule-policy"],
+            }
+        ],
+        "cost_summary": {
+            "currency": "USD",
+            "total_estimated_cost": 620.0,
+            "category_estimates": {"airfare": 620.0},
+            "notes": ["Costs include taxes."],
+        },
+        "comparables": [
+            {
+                "category": "airfare",
+                "label": "Compliant later departure",
+                "vendor": "United",
+                "booking_channel": "Navan",
+                "estimated_cost": {
+                    "currency": "USD",
+                    "typical_amount": 610.0,
+                    "min_amount": 610.0,
+                    "max_amount": 610.0,
+                },
+                "notes": ["Compliant arrival misses the workshop setup window."],
+            }
+        ],
+        "approval_notes": ["Schedule exception needs a manager decision before booking."],
+        "constraint_set_id": "policy-standard-2026-02",
+    }
+
+    client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": proposal_payload,
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation_fixture["request"],
+            "response": evaluation_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+
+    response = client.get(f"/api/workspace/{trip_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["proposal_state"]["follow_up"]["status"] == "exception_required"
+    assert payload["planner_panel_state"]["next_step_actions"][0]["action_kind"] == "request_exception"
+    assert payload["planner_panel_state"]["next_step_actions"][0]["label"] == "Prepare exception request"
+    assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Exception path required"
+    assert payload["planner_panel_state"]["outputs"][-1]["status"] == "caution"
+
+
 def test_workspace_planner_decision_answer_persists_across_reload(client: TestClient) -> None:
     created = client.post(
         "/api/trips",
