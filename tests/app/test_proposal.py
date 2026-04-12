@@ -919,8 +919,10 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
     assert submitted.json()["proposal_state"]["execution_id"] == "exec-live-001"
 
     evaluation_fixture = _load_fixture("results", "approved_evaluation.json")
-    evaluation_fixture["request"]["trip_id"] = trip_id
-    evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_fixture["request"]["trip_id"] = "trip-stale"
+    evaluation_fixture["request"]["proposal_id"] = "proposal:stale"
+    evaluation_fixture["request"]["organization_id"] = "org-stale"
+    evaluation_fixture["request"]["payload"]["proposal_version"] = "proposal-stale"
     evaluation_response._payload["trip_id"] = trip_id
     evaluation_response._payload["proposal_id"] = f"proposal:{trip_id}"
     evaluation_response.text = json.dumps(evaluation_response._payload)
@@ -965,6 +967,15 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
             "requested_at": evaluation_fixture["request"]["submitted_at"],
         },
     }
+    assert payload["evaluation"]["request_payload"] == {
+        "execution_id": "exec-live-001",
+        "proposal_version": "proposal-v3",
+    }
+    assert payload["evaluation"]["linkage"]["trip_id"] == trip_id
+    assert payload["evaluation"]["linkage"]["proposal_id"] == f"proposal:{trip_id}"
+    assert payload["evaluation"]["linkage"]["organization_id"] == submission_fixture["request"][
+        "organization_id"
+    ]
 
 
 def test_workspace_proposal_live_transport_rejects_invalid_upstream_contract(
