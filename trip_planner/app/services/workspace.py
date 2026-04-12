@@ -346,12 +346,45 @@ def _build_scenario_search(
     trip_id: str,
     trip_mode: str,
     bundles: list[Any],
+    trip_title: str | None = None,
+    primary_regions: tuple[str, ...] = (),
+    duration_days: int | None = None,
+    traveler_party_kind: str | None = None,
 ) -> ScenarioSearchResult:
     return build_workspace_scenario_search(
         trip_id=trip_id,
         trip_mode=trip_mode,
         bundles=bundles,
+        trip_title=trip_title,
+        primary_regions=primary_regions,
+        duration_days=duration_days,
+        traveler_party_kind=traveler_party_kind,
     )
+
+
+def _build_runtime_scenario_search_for_trip(
+    *,
+    record: PersistedTrip,
+    inventory_bundles: list[Any],
+    saved_scenarios: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if inventory_bundles:
+        return _build_scenario_search(
+            trip_id=record.trip_id,
+            trip_mode=record.mode,
+            bundles=inventory_bundles,
+            trip_title=record.title,
+            primary_regions=tuple(record.primary_regions),
+            duration_days=record.duration_days,
+            traveler_party_kind=record.traveler_party_kind,
+        ).to_dict()
+
+    if saved_scenarios:
+        return _build_saved_scenario_runtime_search(
+            record,
+            saved_scenarios=saved_scenarios,
+        )
+    return _empty_workspace_scenario_search()
 
 
 def _comparison_status_label(scenario: dict[str, Any]) -> str:
@@ -1011,19 +1044,15 @@ def _build_persisted_trip_workspace(
         },
     }
     ordered_saved_scenarios = _ordered_saved_scenarios(saved_scenarios or [])
-    scenario_search = (
-        _build_saved_scenario_runtime_search(
-            record,
-            saved_scenarios=ordered_saved_scenarios,
-        )
-        if ordered_saved_scenarios
-        else _empty_workspace_scenario_search()
-    )
-
     inventory_bundles = assemble_inventory_bundles_for_trip(
         trip_id=record.trip_id,
         trip_mode=record.mode,
         primary_regions=record.primary_regions,
+    )
+    scenario_search = _build_runtime_scenario_search_for_trip(
+        record=record,
+        inventory_bundles=inventory_bundles,
+        saved_scenarios=ordered_saved_scenarios,
     )
     feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
     runtime_scenario_comparison = _build_runtime_scenario_comparison(
@@ -1091,6 +1120,10 @@ def _build_runtime_scenario_comparison_payload(
             trip_id=trip_id,
             trip_mode=trip_record.trip.mode,
             bundles=inventory_bundles,
+            trip_title=trip_record.trip.title,
+            primary_regions=tuple(trip_record.trip.trip_frame.primary_regions),
+            duration_days=trip_record.trip.trip_frame.duration_days,
+            traveler_party_kind=trip_record.trip.trip_frame.traveler_party.kind,
         )
         return _build_runtime_scenario_comparison(
             trip_id=trip_id,
@@ -1120,16 +1153,18 @@ def _build_runtime_scenario_comparison_payload(
         ).all()
     ]
 
+    inventory_bundles = assemble_inventory_bundles_for_trip(
+        trip_id=record.trip_id,
+        trip_mode=record.mode,
+        primary_regions=record.primary_regions,
+    )
     return _build_runtime_scenario_comparison(
         trip_id=trip_id,
         trip_title=record.title,
-        scenario_search=(
-            _build_saved_scenario_runtime_search(
-                record,
-                saved_scenarios=persisted_saved_scenarios,
-            )
-            if persisted_saved_scenarios
-            else _empty_workspace_scenario_search()
+        scenario_search=_build_runtime_scenario_search_for_trip(
+            record=record,
+            inventory_bundles=inventory_bundles,
+            saved_scenarios=persisted_saved_scenarios,
         ),
     )
 
@@ -1186,6 +1221,7 @@ def _sync_workspace_session_record(
     *,
     record: PersistedTrip,
     saved_scenarios: list[PersistedSavedScenario],
+    runtime_option_ids: list[str] | None = None,
 ) -> bool:
     ordered_ids = [
         scenario["saved_scenario_id"]
@@ -1208,6 +1244,7 @@ def _sync_workspace_session_record(
         updated = True
 
     option_set_id = _bootstrap_option_set_id(record.trip_id)
+    surfaced_option_ids = list(runtime_option_ids or ordered_ids)
     presentation = (
         session_record.recent_option_presentations[0]
         if session_record.recent_option_presentations
@@ -1216,8 +1253,8 @@ def _sync_workspace_session_record(
     if (
         presentation is None
         or presentation.get("option_set_id") != option_set_id
-        or presentation.get("surfaced_option_ids") != ordered_ids
-        or presentation.get("highlighted_option_id") not in ordered_ids
+        or presentation.get("surfaced_option_ids") != surfaced_option_ids
+        or presentation.get("highlighted_option_id") not in surfaced_option_ids
     ):
         session_record.recent_option_presentations = [
             OptionPresentationRecord(
@@ -1225,9 +1262,13 @@ def _sync_workspace_session_record(
                 option_set_id=option_set_id,
                 shown_at=session_record.last_updated_at,
                 surface_kind="scenario_comparison",
-                surfaced_option_ids=ordered_ids,
-                highlighted_option_id=ordered_ids[0],
-                summary="Persisted workspace bootstrap scenarios are ready for comparison.",
+                surfaced_option_ids=surfaced_option_ids,
+                highlighted_option_id=surfaced_option_ids[0],
+                summary=(
+                    "Runtime workspace scenarios are ready for comparison."
+                    if runtime_option_ids
+                    else "Persisted workspace bootstrap scenarios are ready for comparison."
+                ),
                 notes=["Initial workspace planner presentation."],
             ).to_dict()
         ]
@@ -1236,8 +1277,8 @@ def _sync_workspace_session_record(
     if session_record.pending_decisions:
         decision = dict(session_record.pending_decisions[0])
         if (
-            decision.get("related_saved_scenario_id") is None
-            or decision.get("related_option_set_id") != option_set_id
+            decision.get("related_option_set_id") != option_set_id
+            or decision.get("related_saved_scenario_id") is None
         ):
             decision["related_saved_scenario_id"] = ordered_ids[0]
             decision["related_option_set_id"] = option_set_id
@@ -1619,6 +1660,10 @@ def get_workspace_payload(
             trip_id=trip_id,
             trip_mode=trip_record.trip.mode,
             bundles=inventory_bundles,
+            trip_title=trip_record.trip.title,
+            primary_regions=tuple(trip_record.trip.trip_frame.primary_regions),
+            duration_days=trip_record.trip.trip_frame.duration_days,
+            traveler_party_kind=trip_record.trip.trip_frame.traveler_party.kind,
         )
         feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
         runtime_scenario_comparison = _build_runtime_scenario_comparison(
@@ -1678,10 +1723,34 @@ def get_workspace_payload(
             session_record=session_record,
         )
         bootstrap_updated = True
+    inventory_bundles = assemble_inventory_bundles_for_trip(
+        trip_id=record.trip_id,
+        trip_mode=record.mode,
+        primary_regions=record.primary_regions,
+    )
+    runtime_search = _build_runtime_scenario_search_for_trip(
+        record=record,
+        inventory_bundles=inventory_bundles,
+        saved_scenarios=[
+            {
+                "saved_scenario_id": scenario.saved_scenario_id,
+                "trip_id": scenario.trip_id,
+                "current_version_id": scenario.current_version_id,
+                "versions": list(scenario.versions),
+                "comparisons": list(scenario.comparisons),
+                "tags": list(scenario.tags),
+                "notes": list(scenario.notes),
+            }
+            for scenario in persisted_saved_scenarios
+        ],
+    )
     if _sync_workspace_session_record(
         session_record,
         record=record,
         saved_scenarios=persisted_saved_scenarios,
+        runtime_option_ids=[
+            scenario["scenario_id"] for scenario in runtime_search.get("scenarios", [])
+        ],
     ):
         bootstrap_updated = True
     if bootstrap_updated:

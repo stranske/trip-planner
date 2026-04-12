@@ -170,8 +170,12 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_busin
     assert payload["saved_scenarios"][0]["versions"][0]["label"] == "baseline"
     assert payload["saved_scenarios"][1]["versions"][0]["label"] == "fallback"
     assert payload["scenario_comparison"]["baseline_scenario_id"] == lead_saved_scenario_id
-    assert payload["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"] == lead_saved_scenario_id
-    assert payload["runtime_scenario_comparison"]["scenarios"][1]["status"] == "fallback"
+    assert payload["scenario_search"]["title"] == "Chicago kickoff ranked scenarios"
+    assert payload["scenario_search"]["purpose"] == "final_selection"
+    assert payload["scenario_search"]["scenarios"][0]["scenario_id"] == f"scenario:{trip_id}:1"
+    assert payload["scenario_search"]["scenarios"][0]["scenario_id"] != lead_saved_scenario_id
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == f"scenario:{trip_id}:1"
+    assert len(payload["runtime_scenario_comparison"]["scenarios"]) == 1
     assert payload["inventory_summary"]["bundle_count"] == 1
     assert payload["inventory_summary"]["bundles"][0]["title"] == "Airport arrival bundle"
     assert payload["feasibility_summary"]["assessment_count"] == 1
@@ -218,13 +222,16 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
     payload = client.get(f"/api/workspace/{trip_id}").json()
 
     assert payload["saved_scenarios"][0]["versions"][0]["title"].startswith("Lisbon")
-    assert payload["runtime_scenario_comparison"]["scenarios"][0]["route_sequence"] == [
-        "Lisbon"
-    ]
-    assert payload["runtime_scenario_comparison"]["scenarios"][1]["route_sequence"] == [
-        "Lisbon",
-        "comparison-pass",
-    ]
+    assert payload["scenario_search"]["title"] == "Lisbon weekend runtime scenarios"
+    assert payload["scenario_search"]["purpose"] == "final_selection"
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == f"scenario:{trip_id}:1"
+    assert payload["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"] == (
+        f"scenario:{trip_id}:1"
+    )
+    assert all(
+        "comparison-pass" not in scenario["route_sequence"]
+        for scenario in payload["runtime_scenario_comparison"]["scenarios"]
+    )
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_review"
 
 
