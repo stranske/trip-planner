@@ -235,6 +235,40 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_review"
 
 
+def test_workspace_endpoint_keeps_leisure_fixture_defaults_when_trip_frame_is_sparse(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Flexible weekend",
+            "summary": "Exercise sparse persisted leisure trip inputs.",
+            "mode": "leisure",
+            "trip_frame": {},
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    initial = client.get(f"/api/workspace/{trip_id}")
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+
+    assert initial.status_code == 200
+    assert reloaded.status_code == 200
+    initial_payload = initial.json()
+    reloaded_payload = reloaded.json()
+    assert initial_payload["scenario_search"]["scenarios"]
+    assert initial_payload["scenario_search"]["scenarios"] == reloaded_payload["scenario_search"][
+        "scenarios"
+    ]
+    assert initial_payload["planner_panel_state"]["option_set"]["options"] == reloaded_payload[
+        "planner_panel_state"
+    ]["option_set"]["options"]
+    assert initial_payload["runtime_scenario_comparison"]["scenarios"] == reloaded_payload[
+        "runtime_scenario_comparison"
+    ]["scenarios"]
+
+
 def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_trip(
     client: TestClient,
 ) -> None:

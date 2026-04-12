@@ -161,8 +161,10 @@ def build_workspace_scenario_search(
         )
         traveler_fixture = load_fixture_map()[leisure_fixture_id]
         profile = deepcopy(traveler_fixture.profile)
-        profile.trip_frame.duration_days = duration_days
-        profile.trip_frame.regions_in_scope = list(primary_regions)
+        if duration_days is not None:
+            profile.trip_frame.duration_days = duration_days
+        if primary_regions:
+            profile.trip_frame.regions_in_scope = list(primary_regions)
         if traveler_party_kind in {"solo", "pair", "family", "friends"}:
             profile.trip_frame.traveler_party = traveler_party_kind
         resolved_profile = resolve_leisure_profile(

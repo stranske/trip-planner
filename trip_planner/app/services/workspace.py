@@ -1021,6 +1021,9 @@ def _build_persisted_trip_workspace(
     budget_state: dict[str, Any] | None = None,
     policy_context: dict[str, Any] | None = None,
     proposal_context: dict[str, Any] | None = None,
+    inventory_bundles: list[InventoryBundle] | None = None,
+    scenario_search: dict[str, Any] | None = None,
+    feasibility_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     resolved_session = session or _default_workspace_session(record).to_dict()
     trip_record = _serialize_persisted_trip_record(record)
@@ -1044,21 +1047,23 @@ def _build_persisted_trip_workspace(
         },
     }
     ordered_saved_scenarios = _ordered_saved_scenarios(saved_scenarios or [])
-    inventory_bundles = assemble_inventory_bundles_for_trip(
+    resolved_inventory_bundles = inventory_bundles or assemble_inventory_bundles_for_trip(
         trip_id=record.trip_id,
         trip_mode=record.mode,
         primary_regions=record.primary_regions,
     )
-    scenario_search = _build_runtime_scenario_search_for_trip(
+    resolved_scenario_search = scenario_search or _build_runtime_scenario_search_for_trip(
         record=record,
-        inventory_bundles=inventory_bundles,
+        inventory_bundles=resolved_inventory_bundles,
         saved_scenarios=ordered_saved_scenarios,
     )
-    feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
+    resolved_feasibility_summary = feasibility_summary or build_feasibility_summary_payload(
+        resolved_inventory_bundles
+    )
     runtime_scenario_comparison = _build_runtime_scenario_comparison(
         trip_id=record.trip_id,
         trip_title=trip_record["trip"]["title"],
-        scenario_search=scenario_search,
+        scenario_search=resolved_scenario_search,
     )
 
     return {
@@ -1070,21 +1075,21 @@ def _build_persisted_trip_workspace(
             if ordered_saved_scenarios and ordered_saved_scenarios[0].get("comparisons")
             else None
         ),
-        "scenario_search": scenario_search,
+        "scenario_search": resolved_scenario_search,
         "runtime_scenario_comparison": runtime_scenario_comparison,
         "activity_log": resolved_activity_log,
         "planner_panel_state": _build_planner_panel_state(
             trip=trip_record["trip"],
-            scenario_search=scenario_search,
+            scenario_search=resolved_scenario_search,
             session=resolved_session,
             saved_scenarios=ordered_saved_scenarios,
             activity_log=resolved_activity_log,
-            feasibility_summary=feasibility_summary,
+            feasibility_summary=resolved_feasibility_summary,
             policy_context=policy_context,
             proposal_context=proposal_context,
         ),
-        "feasibility_summary": feasibility_summary,
-        "inventory_summary": build_inventory_summary_payload(inventory_bundles),
+        "feasibility_summary": resolved_feasibility_summary,
+        "inventory_summary": build_inventory_summary_payload(resolved_inventory_bundles),
         "budget_state": resolved_budget_state,
         "policy_state": (policy_context or {}).get("policy_state"),
         "proposal_state": (proposal_context or {}).get("proposal_state"),
@@ -1775,6 +1780,7 @@ def get_workspace_payload(
         .order_by(PersistedActivityLogEvent.occurred_at.desc())
         .limit(WORKSPACE_ACTIVITY_LOG_LIMIT)
     ).all()
+    feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
     return _build_persisted_trip_workspace(
         record,
         session=(
@@ -1806,6 +1812,9 @@ def get_workspace_payload(
             if record.mode == "business"
             else None
         ),
+        inventory_bundles=inventory_bundles,
+        scenario_search=runtime_search,
+        feasibility_summary=feasibility_summary,
     )
 
 
