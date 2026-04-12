@@ -482,8 +482,14 @@ def test_workspace_proposal_evaluation_rejects_mismatched_scenario_and_organizat
             "scenario_id": "scenario-a",
         },
     )
-    assert organization_response.status_code == 400
-    assert "organization_id" in organization_response.json()["detail"]
+    assert organization_response.status_code == 200
+    assert organization_response.json()["proposal_state"]["evaluation"]["request_payload"] == {
+        "execution_id": "exec-001",
+        "proposal_version": "proposal-v3",
+    }
+    assert organization_response.json()["proposal_state"]["evaluation"]["linkage"]["organization_id"] == (
+        submission_fixture["request"]["organization_id"]
+    )
 
 
 def test_workspace_proposal_follow_up_patch_persists_exception_request(client: TestClient) -> None:
