@@ -23,7 +23,6 @@ def _load_fixture(name: str) -> dict:
 class _FakeHTTPResponse:
     def __init__(self, status_code: int, payload: dict[str, object]) -> None:
         self.status_code = status_code
-        self.status = status_code
         self._payload = payload
         self.text = json.dumps(payload)
 
@@ -42,14 +41,20 @@ def _install_fake_http(
     monkeypatch: pytest.MonkeyPatch,
     responses: list[_FakeHTTPResponse | Exception],
     *,
-    captured_requests: list[object] | None = None,
+    captured_requests: list[dict[str, object]] | None = None,
 ) -> None:
     queue = list(responses)
 
     def _fake_urlopen(request, timeout=0):
-        del timeout
         if captured_requests is not None:
-            captured_requests.append(request)
+            captured_requests.append(
+                {
+                    "full_url": request.full_url,
+                    "method": request.get_method(),
+                    "body": json.loads((request.data or b"{}").decode("utf-8")),
+                }
+            )
+        del timeout
         response = queue.pop(0)
         if isinstance(response, Exception):
             raise response
@@ -154,7 +159,7 @@ def test_workspace_policy_import_uses_live_tpp_transport_when_response_is_omitte
     monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
     monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
-    captured_requests: list[object] = []
+    captured_requests: list[dict[str, object]] = []
     _install_fake_http(
         monkeypatch,
         [
@@ -236,10 +241,18 @@ def test_workspace_policy_import_uses_live_tpp_transport_when_response_is_omitte
     assert payload["policy_state"]["policy_version"] == "d7a6d25a"
     assert payload["summary"]["documentation_rules"] == ["fare_evidence"]
     assert payload["summary"]["approval_triggers"] == ["manager_review"]
-    request_body = json.loads(captured_requests[0].data.decode("utf-8"))
-    assert "requested_at" in request_body
-    assert "organization_context" in request_body
-    assert "proposal_id" not in request_body
+    assert captured_requests == [
+        {
+            "full_url": "https://tpp.example.test/api/planner/policy-snapshot",
+            "method": "GET",
+            "body": {
+                "policy_scope": "business_planning",
+                "organization_context": True,
+                "trip_id": trip_id,
+                "requested_at": "2026-02-15T12:00:00Z",
+            },
+        }
+    ]
 
 
 def test_workspace_policy_import_surfaces_live_tpp_unavailable_errors(
