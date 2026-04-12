@@ -29,15 +29,17 @@ def _planner_message_records(
     *,
     session_state_id: str,
 ) -> list[PersistedPlannerAction]:
-    return db_session.scalars(
-        select(PersistedPlannerAction)
-        .where(PersistedPlannerAction.session_state_id == session_state_id)
-        .where(PersistedPlannerAction.action_type.in_(["planner_user_turn", "planner_response"]))
-        .order_by(
-            PersistedPlannerAction.created_at.asc(),
-            PersistedPlannerAction.planner_action_id.asc(),
-        )
-    ).all()
+    return list(
+        db_session.scalars(
+            select(PersistedPlannerAction)
+            .where(PersistedPlannerAction.session_state_id == session_state_id)
+            .where(PersistedPlannerAction.action_type.in_(["planner_user_turn", "planner_response"]))
+            .order_by(
+                PersistedPlannerAction.created_at.asc(),
+                PersistedPlannerAction.planner_action_id.asc(),
+            )
+        ).all()
+    )
 
 
 def _checkpoint_summary(messages: list[PersistedPlannerAction], *, turn_index: int) -> dict[str, Any]:
@@ -241,7 +243,8 @@ def build_planner_memory_payload(
             PersistedPlannerCheckpoint.turn_index.desc(),
             PersistedPlannerCheckpoint.created_at.desc(),
         )
-    ).all()
+        ).all()
+    )
     artifacts = db_session.scalars(
         select(PersistedPlannerMemoryArtifact)
         .where(PersistedPlannerMemoryArtifact.session_state_id == session_state_id)
