@@ -266,6 +266,119 @@ def test_workspace_proposal_evaluation_derives_reoptimization_follow_up(client: 
     assert follow_up["status"] == "reoptimization_required"
     assert follow_up["recommended_action"] == "reoptimize"
     assert follow_up["alternatives"][0]["category"] == "lodging"
+    assert follow_up["selected_alternative"]["summary"] == "Use a compliant downtown property"
+
+
+def test_workspace_proposal_evaluation_derives_exception_follow_up(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Exception follow-up workspace",
+            "summary": "Persist deterministic exception guidance from live policy results.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+    client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+
+    evaluation_fixture = _load_fixture("results", "approved_evaluation.json")
+    evaluation_fixture["request"]["trip_id"] = trip_id
+    evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_fixture["response"]["result_payload"]["trip_id"] = trip_id
+    evaluation_fixture["response"]["result_payload"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["proposal_id"] = (
+        f"proposal:{trip_id}"
+    )
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["status"] = (
+        "exception_required"
+    )
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"][
+        "approval_requirements"
+    ] = [
+        {
+            "role": "manager",
+            "reason": "Operational exception requires manager approval",
+            "mandatory": True,
+        },
+        {
+            "role": "finance",
+            "reason": "Lodging cap exception requires finance review",
+            "mandatory": True,
+        },
+    ]
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["failure_reasons"] = [
+        {
+            "code": "lodging_cap_exception",
+            "message": "Selected lodging exceeds the nightly cap.",
+            "severity": "warning",
+            "related_category": "lodging",
+        }
+    ]
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"][
+        "preferred_alternatives"
+    ] = [
+        {
+            "category": "lodging",
+            "summary": "Use the lower-cost comparable if the exception is denied.",
+            "rationale": "Preserves site access with a lower nightly cost ceiling.",
+            "comparable_ref": "lodging-alt-2",
+        }
+    ]
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"][
+        "exception_guidance"
+    ] = [
+        "Retain the lower-cost comparable in the approval packet.",
+        "Document the operational-safety rationale in the manager approval request.",
+    ]
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["notes"] = [
+        "Proposal is exception-eligible if the fatigue-management rationale is approved."
+    ]
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["compliance_score"] = 0.68
+
+    evaluated = client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation_fixture["request"],
+            "response": evaluation_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert evaluated.status_code == 200
+    payload = evaluated.json()["proposal_state"]
+    follow_up = payload["follow_up"]
+    assert follow_up["status"] == "exception_required"
+    assert follow_up["path"] == "exception"
+    assert follow_up["recommended_action"] == "request_exception"
+    assert follow_up["approval_requirements"][0]["role"] == "manager"
+    assert follow_up["alternatives"][0]["category"] == "lodging"
+    assert follow_up["guidance"] == [
+        "Retain the lower-cost comparable in the approval packet.",
+        "Document the operational-safety rationale in the manager approval request.",
+    ]
+    assert payload["summary"]["evaluation_result_status"] == "exception_required"
+    assert payload["summary"]["approval_ready"] is False
+    assert payload["summary"]["follow_up_status"] == "exception_required"
 
 
 def test_workspace_proposal_submission_clears_stale_evaluation_state(client: TestClient) -> None:
@@ -402,6 +515,74 @@ def test_workspace_proposal_evaluation_rejects_mismatched_submission_linkage(
     assert "persisted proposal" in evaluated.json()["detail"]
 
 
+def test_workspace_proposal_evaluation_normalizes_stale_request_linkage(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Proposal evaluation request normalization",
+            "summary": "Stale request linkage should be repaired from the stored submission.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+
+    submitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert submitted.status_code == 200
+
+    evaluation_fixture = _load_fixture("results", "approved_evaluation.json")
+    evaluation_fixture["request"]["trip_id"] = "trip-stale"
+    evaluation_fixture["request"]["proposal_id"] = "proposal:stale"
+    evaluation_fixture["request"]["organization_id"] = "org-stale"
+    evaluation_fixture["request"]["payload"]["proposal_version"] = "proposal-v1"
+    evaluation_fixture["response"]["result_payload"]["trip_id"] = trip_id
+    evaluation_fixture["response"]["result_payload"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_fixture["response"]["result_payload"]["proposal_version"] = "proposal-v3"
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["proposal_id"] = (
+        f"proposal:{trip_id}"
+    )
+
+    evaluated = client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation_fixture["request"],
+            "response": evaluation_fixture["response"],
+            "proposal_version": "proposal-v1",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert evaluated.status_code == 200
+    evaluation = evaluated.json()["proposal_state"]["evaluation"]
+    assert evaluation["request_payload"] == {
+        "execution_id": "exec-001",
+        "proposal_version": "proposal-v3",
+    }
+    assert evaluation["linkage"]["trip_id"] == trip_id
+    assert evaluation["linkage"]["proposal_id"] == f"proposal:{trip_id}"
+    assert evaluation["linkage"]["organization_id"] == submission_fixture["request"]["organization_id"]
+
+
 def test_workspace_proposal_evaluation_rejects_mismatched_scenario_and_organization(
     client: TestClient,
 ) -> None:
@@ -481,8 +662,14 @@ def test_workspace_proposal_evaluation_rejects_mismatched_scenario_and_organizat
             "scenario_id": "scenario-a",
         },
     )
-    assert organization_response.status_code == 400
-    assert "organization_id" in organization_response.json()["detail"]
+    assert organization_response.status_code == 200
+    assert organization_response.json()["proposal_state"]["evaluation"]["request_payload"] == {
+        "execution_id": "exec-001",
+        "proposal_version": "proposal-v3",
+    }
+    assert organization_response.json()["proposal_state"]["evaluation"]["linkage"]["organization_id"] == (
+        submission_fixture["request"]["organization_id"]
+    )
 
 
 def test_workspace_proposal_follow_up_patch_persists_exception_request(client: TestClient) -> None:
@@ -918,9 +1105,10 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
     assert submitted.json()["proposal_state"]["execution_id"] == "exec-live-001"
 
     evaluation_fixture = _load_fixture("results", "approved_evaluation.json")
-    evaluation_fixture["request"]["trip_id"] = trip_id
-    evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
-    evaluation_fixture["request"]["payload"]["execution_id"] = "exec-live-001"
+    evaluation_fixture["request"]["trip_id"] = "trip-stale"
+    evaluation_fixture["request"]["proposal_id"] = "proposal:stale"
+    evaluation_fixture["request"]["organization_id"] = "org-stale"
+    evaluation_fixture["request"]["payload"]["proposal_version"] = "proposal-stale"
     evaluation_response._payload["trip_id"] = trip_id
     evaluation_response._payload["proposal_id"] = f"proposal:{trip_id}"
     evaluation_response.text = json.dumps(evaluation_response._payload)
@@ -965,6 +1153,15 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
             "requested_at": evaluation_fixture["request"]["submitted_at"],
         },
     }
+    assert payload["evaluation"]["request_payload"] == {
+        "execution_id": "exec-live-001",
+        "proposal_version": "proposal-v3",
+    }
+    assert payload["evaluation"]["linkage"]["trip_id"] == trip_id
+    assert payload["evaluation"]["linkage"]["proposal_id"] == f"proposal:{trip_id}"
+    assert payload["evaluation"]["linkage"]["organization_id"] == submission_fixture["request"][
+        "organization_id"
+    ]
 
 
 def test_workspace_proposal_live_transport_rejects_invalid_upstream_contract(

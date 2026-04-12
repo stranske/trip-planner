@@ -1000,6 +1000,85 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Nightly lodging exceeds the allowed cap.")).toBeInTheDocument();
   });
 
+  it("surfaces exception guidance and approval requirements from live policy results", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          follow_up: {
+            status: "exception_required",
+            path: "exception",
+            title: "Exception review required",
+            summary: "Document the schedule exception and route the packet for manager approval.",
+            recommended_action: "request_exception",
+            recommended_label: "Prepare exception packet",
+            alternatives: [],
+            guidance: [
+              "Attach the compliant comparable to the exception packet.",
+              "Explain why the earlier arrival is required for the client meeting.",
+            ],
+            notes: [],
+            selected_alternative: null,
+            requested_exception: {
+              exception_type: "schedule_protection",
+              reason: "The client workshop starts before the first compliant arrival window.",
+              requested_approval_roles: ["manager"],
+              notes: ["Reference the supported comparable in the packet."],
+            },
+          },
+          evaluation: {
+            evaluation_result: {
+              ...workspacePayload.proposal_state.evaluation.evaluation_result,
+              status: "exception_required",
+              approval_requirements: [
+                {
+                  role: "manager",
+                  reason: "Schedule exception requires manager approval.",
+                  mandatory: true,
+                },
+              ],
+              failure_reasons: [
+                {
+                  code: "arrival_window_conflict",
+                  message: "The compliant itinerary misses the client workshop start time.",
+                  severity: "blocking",
+                  related_category: "flight",
+                },
+              ],
+              notes: ["Exception review is required before approval can continue."],
+              compliance_score: 0.61,
+            },
+          },
+          summary: {
+            ...workspacePayload.proposal_state.summary,
+            approval_ready: false,
+            evaluation_result_status: "exception_required",
+            follow_up_status: "exception_required",
+            follow_up_title: "Exception review required",
+            follow_up_summary:
+              "Document the schedule exception and route the packet for manager approval.",
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Exception review required")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Prepare exception packet")).toBeInTheDocument();
+    expect(screen.getAllByText("Attach the compliant comparable to the exception packet.")).toHaveLength(2);
+    expect(
+      screen.getByText("Explain why the earlier arrival is required for the client meeting."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Exception rationale: The client workshop starts before the first compliant arrival window."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Schedule exception requires manager approval.")).toBeInTheDocument();
+  });
+
   it("skips the follow-up card when legacy records expose an empty follow-up object", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
@@ -1120,12 +1199,15 @@ describe("WorkspacePage", () => {
     });
 
     const user = userEvent.setup();
-    await user.clear(screen.getByLabelText("Budget title"));
-    await user.type(screen.getByLabelText("Budget title"), "Kyoto spring guardrails");
-    await user.clear(screen.getByLabelText("Lodging cap"));
-    await user.type(screen.getByLabelText("Lodging cap"), "600");
-    await user.clear(screen.getByLabelText("Food cap"));
-    await user.type(screen.getByLabelText("Food cap"), "180");
+    fireEvent.change(screen.getByLabelText("Budget title"), {
+      target: { value: "Kyoto spring guardrails" },
+    });
+    fireEvent.change(screen.getByLabelText("Lodging cap"), {
+      target: { value: "600" },
+    });
+    fireEvent.change(screen.getByLabelText("Food cap"), {
+      target: { value: "180" },
+    });
     await user.click(screen.getByRole("button", { name: "Save budget plan" }));
 
     await waitFor(() => {

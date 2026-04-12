@@ -91,32 +91,57 @@ def _resolve_submission_response(
             proposal_id=request.proposal_id,
             submitted_at=request.submitted_at,
             metadata=dict(request.metadata),
-        )
+    )
     return HTTPTPPIntegrationClient().submit_proposal(live_request)
+
+
+def _normalize_evaluation_request(
+    request: TPPRequestEnvelope,
+    *,
+    existing: PersistedProposalState,
+    proposal_version: str,
+) -> TPPRequestEnvelope:
+    live_payload = dict(request.payload)
+    live_payload["proposal_version"] = existing.proposal_version or proposal_version
+    if existing.execution_id:
+        live_payload["execution_id"] = existing.execution_id
+
+    organization_id = existing.organization_id or request.organization_id
+    if (
+        live_payload != request.payload
+        or request.trip_id != existing.trip_id
+        or request.proposal_id != existing.proposal_id
+        or request.organization_id != organization_id
+    ):
+        return TPPRequestEnvelope(
+            operation=request.operation,
+            request_id=request.request_id,
+            correlation_id=request.correlation_id,
+            payload=live_payload,
+            transport_pattern=request.transport_pattern,
+            organization_id=organization_id,
+            trip_id=existing.trip_id,
+            proposal_id=existing.proposal_id,
+            submitted_at=request.submitted_at,
+            metadata=dict(request.metadata),
+        )
+    return request
 
 
 def _resolve_evaluation_response(
     request: TPPRequestEnvelope,
     response_payload: dict[str, Any] | None,
     *,
+    existing: PersistedProposalState,
     proposal_version: str,
 ) -> TPPResponseEnvelope:
     if response_payload is not None:
         return TPPResponseEnvelope.from_dict(response_payload)
-    live_request = request
-    if not request.payload.get("proposal_version"):
-        live_request = TPPRequestEnvelope(
-            operation=request.operation,
-            request_id=request.request_id,
-            correlation_id=request.correlation_id,
-            payload={**request.payload, "proposal_version": proposal_version},
-            transport_pattern=request.transport_pattern,
-            organization_id=request.organization_id,
-            trip_id=request.trip_id,
-            proposal_id=request.proposal_id,
-            submitted_at=request.submitted_at,
-            metadata=dict(request.metadata),
-        )
+    live_request = _normalize_evaluation_request(
+        request,
+        existing=existing,
+        proposal_version=proposal_version,
+    )
     return HTTPTPPIntegrationClient().fetch_evaluation_result(live_request)
 
 
@@ -163,6 +188,7 @@ def _derive_follow_up_state(
             ),
             "recommended_action": "reoptimize",
             "recommended_label": "Reoptimize plan",
+            "selected_alternative": alternative if isinstance(alternative, dict) else None,
         }
     elif status == "exception_required":
         follow_up = {
@@ -199,7 +225,7 @@ def _derive_follow_up_state(
     follow_up["failure_reasons"] = failure_reasons
     follow_up["guidance"] = exception_guidance
     follow_up["requested_exception"] = requested_exception
-    follow_up["selected_alternative"] = None
+    follow_up["selected_alternative"] = follow_up.get("selected_alternative")
     follow_up["notes"] = []
 
     if persisted_follow_up and persisted_follow_up.get("manual"):
@@ -452,10 +478,15 @@ def save_workspace_proposal_evaluation(
             "Proposal evaluation cannot be stored before a proposal submission exists."
         )
 
-    request = TPPRequestEnvelope.from_dict(request_payload)
+    request = _normalize_evaluation_request(
+        TPPRequestEnvelope.from_dict(request_payload),
+        existing=existing,
+        proposal_version=proposal_version,
+    )
     response = _resolve_evaluation_response(
         request,
         response_payload,
+        existing=existing,
         proposal_version=proposal_version,
     )
     evaluation = TPPEvaluationResultIngestionService(_PassiveTPPClient(response)).fetch_evaluation_result(
