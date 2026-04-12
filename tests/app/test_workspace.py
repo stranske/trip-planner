@@ -1,6 +1,7 @@
 from collections.abc import Iterator
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -756,7 +757,7 @@ def test_workspace_endpoint_surfaces_exception_follow_up_for_live_policy_results
     submission_fixture["request"]["trip_id"] = trip_id
     submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
     submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
-    evaluation_fixture = {
+    evaluation_fixture: dict[str, Any] = {
         "request": {
             "operation": "fetch_evaluation_result",
             "request_id": "req-result-exception-required",
