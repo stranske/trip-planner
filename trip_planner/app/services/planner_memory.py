@@ -243,8 +243,7 @@ def build_planner_memory_payload(
             PersistedPlannerCheckpoint.turn_index.desc(),
             PersistedPlannerCheckpoint.created_at.desc(),
         )
-        ).all()
-    )
+    ).all()
     artifacts = db_session.scalars(
         select(PersistedPlannerMemoryArtifact)
         .where(PersistedPlannerMemoryArtifact.session_state_id == session_state_id)
