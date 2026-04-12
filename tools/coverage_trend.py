@@ -101,9 +101,7 @@ def main(args: list[str] | None = None) -> int:
     parser.add_argument("--hotspot-limit", type=int, default=15, help="Max hotspot files to show")
     parser.add_argument("--low-threshold", type=float, default=50.0, help="Low coverage threshold")
     parser.add_argument(
-        "--soft",
-        action="store_true",
-        help="Soft gate mode - report only, always exit 0",
+        "--soft", action="store_true", help="Soft gate mode - report only, always exit 0"
     )
     parsed = parser.parse_args(args)
 
