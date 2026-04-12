@@ -11,6 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.app.services.planner_tools import (
+    execute_planner_tool_call,
+    list_planner_tools,
+)
 from trip_planner.app.services.workspace import (
     WORKSPACE_ACTIVITY_LOG_LIMIT,
     _append_activity_event,
@@ -44,6 +48,7 @@ class PlannerConversationRequest:
 class PlannerConversationReply:
     content: str
     refs: list[str]
+    tool_calls: list[dict[str, Any]]
 
 
 class PlannerConversationRunnable(Protocol):
@@ -98,7 +103,7 @@ class DeterministicPlannerConversationRunnable:
             "This reply is generated through the planner runnable boundary so a LangChain-backed engine can replace it without changing the route handlers."
         )
         deduped_refs = list(dict.fromkeys(refs))
-        return PlannerConversationReply(content=" ".join(lines), refs=deduped_refs)
+        return PlannerConversationReply(content=" ".join(lines), refs=deduped_refs, tool_calls=[])
 
 
 def _planner_runnable() -> PlannerConversationRunnable:
@@ -116,6 +121,7 @@ def _message_payload(
     content: str,
     created_at: str,
     refs: list[str] | None = None,
+    tool_calls: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "message_id": message_id,
@@ -123,6 +129,7 @@ def _message_payload(
         "content": content,
         "created_at": created_at,
         "refs": list(refs or []),
+        "tool_calls": list(tool_calls or []),
     }
 
 
@@ -147,6 +154,7 @@ def _conversation_messages(
         )
         raw_refs = record.payload.get("refs", "")
         refs = [item for item in raw_refs.split(",") if item]
+        tool_calls = list(record.payload.get("tool_calls") or [])
         messages.append(
             _message_payload(
                 message_id=record.planner_action_id,
@@ -154,6 +162,7 @@ def _conversation_messages(
                 content=record.payload.get("content", ""),
                 created_at=record.occurred_at,
                 refs=refs,
+                tool_calls=tool_calls,
             )
         )
     return messages
@@ -193,6 +202,7 @@ def _planner_session_payload(
         "resumed_at": resumed_at,
         "session": session,
         "planner_panel_state": workspace_payload["planner_panel_state"],
+        "available_tools": list_planner_tools(),
         "activity_log": _activity_log(db_session, trip_id=trip_id),
         "messages": _conversation_messages(db_session, session_state_id=session_state_id),
     }
@@ -242,6 +252,7 @@ def submit_planner_turn(
     user: AuthenticatedUser,
     trip_id: str,
     message: str,
+    tool_calls: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     normalized_message = message.strip()
     if not normalized_message:
@@ -252,22 +263,9 @@ def submit_planner_turn(
     except ValueError as error:
         raise WorkspacePlannerTripNotFoundError(str(error)) from error
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
-    workspace_payload = get_workspace_payload(db_session, user=user, trip_id=trip_id)
-    if workspace_payload is None:
-        raise WorkspacePlannerTripNotFoundError(f"Trip '{trip_id}' was not found.")
-
-    session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
     now = datetime.now(UTC)
     occurred_at = _isoformat(now)
-    runnable = _planner_runnable()
-    reply = runnable.invoke(
-        PlannerConversationRequest(
-            trip_id=trip_id,
-            message=normalized_message,
-            planner_panel_state=workspace_payload["planner_panel_state"],
-            session=session,
-        )
-    )
+    session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
 
     session.updated_at = occurred_at
     session.notes.append(f"planner-turn:{occurred_at}")
@@ -297,8 +295,41 @@ def submit_planner_turn(
             "role": "user",
             "content": normalized_message,
             "refs": session.session_state_id,
+            "tool_calls": [],
         },
     )
+
+    executed_tool_calls: list[dict[str, Any]] = []
+    for tool_call in tool_calls or []:
+        result = execute_planner_tool_call(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            tool_name=str(tool_call.get("tool_name") or ""),
+            arguments=tool_call.get("arguments") or {},
+        )
+        executed_tool_calls.append(result.to_dict())
+
+    workspace_payload = get_workspace_payload(db_session, user=user, trip_id=trip_id)
+    if workspace_payload is None:
+        raise WorkspacePlannerTripNotFoundError(f"Trip '{trip_id}' was not found.")
+    session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
+    runnable = _planner_runnable()
+    reply = runnable.invoke(
+        PlannerConversationRequest(
+            trip_id=trip_id,
+            message=normalized_message,
+            planner_panel_state=workspace_payload["planner_panel_state"],
+            session=session,
+        )
+    )
+    if executed_tool_calls:
+        tool_summary = " ".join(item["summary"] for item in executed_tool_calls)
+        reply = PlannerConversationReply(
+            content=f"{reply.content} Tool results: {tool_summary}",
+            refs=list(dict.fromkeys(reply.refs + [ref for item in executed_tool_calls for ref in item["refs"]])),
+            tool_calls=executed_tool_calls,
+        )
 
     planner_activity_event_id = f"activity:{trip_id}:{secrets.token_hex(4)}"
     _append_activity_event(
@@ -323,6 +354,7 @@ def submit_planner_turn(
             "role": "planner",
             "content": reply.content,
             "refs": ",".join(reply.refs),
+            "tool_calls": reply.tool_calls,
         },
     )
 

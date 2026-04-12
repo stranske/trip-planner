@@ -53,10 +53,10 @@ def create_planner_turn(
             user=user,
             trip_id=trip_id,
             message=payload.message,
+            tool_calls=[item.model_dump() for item in payload.tool_calls],
         )
     except WorkspacePlannerTripNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return PlannerSessionResponse.model_validate(result)
-

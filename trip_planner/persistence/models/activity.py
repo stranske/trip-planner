@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -33,7 +34,7 @@ class PersistedActivityLogEvent(Base):
     budget_plan_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
     scenario_budget_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
     checkpoint_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
-    metadata_payload: Mapped[dict[str, str]] = mapped_column("metadata", JSON, default=dict)
+    metadata_payload: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     notes: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
@@ -59,5 +60,5 @@ class PersistedPlannerAction(Base):
     option_set_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
     option_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
     choice: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    payload: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
