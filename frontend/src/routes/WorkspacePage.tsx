@@ -633,6 +633,12 @@ function WorkspacePageContent({
                   ) : null}
                 </article>
               ) : null}
+              {(renderableProposalFollowUp?.guidance ?? []).map((guidance) => (
+                <article key={guidance} className="decision-card">
+                  <h3>Guidance</h3>
+                  <p>{guidance}</p>
+                </article>
+              ))}
               {(renderableProposalFollowUp?.alternatives ?? []).map((alternative) => (
                 <article
                   key={`${alternative.category}-${alternative.summary}`}
