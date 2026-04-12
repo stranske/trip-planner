@@ -1,6 +1,7 @@
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Literal
 import pytest
 from fastapi.testclient import TestClient
 
@@ -30,7 +31,7 @@ class _FakeHTTPResponse:
     def __enter__(self) -> "_FakeHTTPResponse":
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> bool:
+    def __exit__(self, exc_type, exc, tb) -> Literal[False]:
         del exc_type, exc, tb
         return False
 

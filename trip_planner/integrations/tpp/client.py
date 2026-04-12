@@ -352,16 +352,13 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         if not policy_version:
             raise TPPContractError("TPP policy snapshot response is missing policy_version.")
 
+        organization_context_raw = request.payload.get("organization_context")
+        organization_context = (
+            organization_context_raw if isinstance(organization_context_raw, dict) else {}
+        )
         organization_id = (
             request.organization_id
-            or str(
-                (
-                    request.payload.get("organization_context")
-                    if isinstance(request.payload.get("organization_context"), dict)
-                    else {}
-                ).get("organization_id")
-                or ""
-            ).strip()
+            or str(organization_context.get("organization_id") or "").strip()
             or "tpp"
         )
         documentation_rules = [
