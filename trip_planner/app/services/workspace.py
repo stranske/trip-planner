@@ -25,6 +25,7 @@ from trip_planner.app.services.inventory import (
     assemble_inventory_bundles_for_trip,
     build_inventory_summary_payload,
 )
+from trip_planner.app.services.planner_memory import build_planner_memory_payload
 from trip_planner.app.services.policy import get_workspace_policy_payload
 from trip_planner.app.services.proposal import get_workspace_proposal_payload
 from trip_planner.app.services.scenarios import (
@@ -1019,6 +1020,7 @@ def _build_persisted_trip_workspace(
     session: dict[str, Any] | None = None,
     saved_scenarios: list[dict[str, Any]] | None = None,
     activity_log: list[dict[str, Any]] | None = None,
+    planner_memory: dict[str, Any] | None = None,
     budget_state: dict[str, Any] | None = None,
     policy_context: dict[str, Any] | None = None,
     proposal_context: dict[str, Any] | None = None,
@@ -1079,6 +1081,12 @@ def _build_persisted_trip_workspace(
         "scenario_search": resolved_scenario_search,
         "runtime_scenario_comparison": runtime_scenario_comparison,
         "activity_log": resolved_activity_log,
+        "planner_memory": planner_memory
+        or {
+            "current_checkpoint_id": resolved_session.get("current_checkpoint_id"),
+            "checkpoints": [],
+            "artifacts": [],
+        },
         "planner_panel_state": _build_planner_panel_state(
             trip=trip_record["trip"],
             scenario_search=resolved_scenario_search,
@@ -1686,6 +1694,11 @@ def get_workspace_payload(
             "scenario_search": scenario_search.to_dict(),
             "runtime_scenario_comparison": runtime_scenario_comparison,
             "activity_log": [],
+            "planner_memory": {
+                "current_checkpoint_id": session.current_checkpoint_id,
+                "checkpoints": [],
+                "artifacts": [],
+            },
             "planner_panel_state": _build_planner_panel_state(
                 trip=trip_record.to_dict()["trip"],
                 scenario_search=scenario_search.to_dict(),
@@ -1802,6 +1815,11 @@ def get_workspace_payload(
             for scenario in persisted_saved_scenarios
         ],
         activity_log=[_serialize_activity_record(item) for item in activity_records],
+        planner_memory=build_planner_memory_payload(
+            db_session,
+            trip_id=trip_id,
+            session_state_id=session_record.session_state_id,
+        ),
         budget_state=load_budget_payload_for_workspace(db_session, record=record),
         policy_context=(
             get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)

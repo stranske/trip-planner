@@ -209,6 +209,44 @@ const workspacePayload = {
     focus_areas: ["recovery", "route_coherence", "weather_resilience"],
   },
   activity_log: [],
+  planner_memory: {
+    current_checkpoint_id: "planner-checkpoint:trip-leisure-kyoto-draft:1",
+    checkpoints: [
+      {
+        checkpoint_id: "planner-checkpoint:trip-leisure-kyoto-draft:1",
+        checkpoint_kind: "conversation_summary",
+        turn_index: 1,
+        message_count: 2,
+        summary:
+          "Turn 1 checkpoint keeps the latest traveler intent and planner guidance available for later resume.",
+        source_message_ids: [
+          "planner-action:trip-leisure-kyoto-draft:user-1",
+          "planner-action:trip-leisure-kyoto-draft:planner-1",
+        ],
+        created_at: "2026-04-12T06:10:00+00:00",
+        updated_at: "2026-04-12T06:10:00+00:00",
+      },
+    ],
+    artifacts: [
+      {
+        memory_artifact_id: "planner-memory:trip-leisure-kyoto-draft:1",
+        checkpoint_id: "planner-checkpoint:trip-leisure-kyoto-draft:1",
+        artifact_kind: "conversation_summary",
+        title: "Planner checkpoint 1",
+        summary:
+          "Turn 1 checkpoint keeps the latest traveler intent and planner guidance available for later resume.",
+        detail:
+          "Traveler focus: Keep the Kyoto baseline but protect recovery time. Planner summary: The planner recommends preserving the Kyoto baseline and revisiting transfers later.",
+        source_message_ids: [
+          "planner-action:trip-leisure-kyoto-draft:user-1",
+          "planner-action:trip-leisure-kyoto-draft:planner-1",
+        ],
+        tags: ["planner-memory", "user-visible", "checkpoint-summary"],
+        created_at: "2026-04-12T06:10:00+00:00",
+        updated_at: "2026-04-12T06:10:00+00:00",
+      },
+    ],
+  },
   scenario_search: {
     title: "Kyoto leisure scenario comparison",
     scenarios: [
@@ -618,6 +656,8 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Approval-ready proposal")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Comparables and readiness signals" })).toBeInTheDocument();
     expect(screen.getByText("Conference Hotel")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "User-visible planner checkpoints" })).toBeInTheDocument();
+    expect(screen.getByText("Planner checkpoint 1")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Compare this workspace with other saved trips" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Compare with Tokyo client summit" })).toBeInTheDocument();

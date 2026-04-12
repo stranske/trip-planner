@@ -31,6 +31,36 @@ class PlannerMessageResponse(BaseModel):
     tool_calls: list[PlannerToolCallResponse] = Field(default_factory=list)
 
 
+class PlannerCheckpointResponse(BaseModel):
+    checkpoint_id: str
+    checkpoint_kind: str
+    turn_index: int
+    message_count: int
+    summary: str
+    source_message_ids: list[str] = Field(default_factory=list)
+    created_at: str
+    updated_at: str
+
+
+class PlannerMemoryArtifactResponse(BaseModel):
+    memory_artifact_id: str
+    checkpoint_id: str | None = None
+    artifact_kind: str
+    title: str
+    summary: str
+    detail: str
+    source_message_ids: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    created_at: str
+    updated_at: str
+
+
+class PlannerMemoryResponse(BaseModel):
+    current_checkpoint_id: str | None = None
+    checkpoints: list[PlannerCheckpointResponse] = Field(default_factory=list)
+    artifacts: list[PlannerMemoryArtifactResponse] = Field(default_factory=list)
+
+
 class PlannerSessionResponse(BaseModel):
     trip_id: str
     session_state_id: str
@@ -38,6 +68,7 @@ class PlannerSessionResponse(BaseModel):
     resumed_at: str | None = None
     session: dict[str, Any]
     planner_panel_state: dict[str, Any]
+    planner_memory: PlannerMemoryResponse
     available_tools: list[dict[str, Any]] = Field(default_factory=list)
     activity_log: list[dict[str, Any]] = Field(default_factory=list)
     messages: list[PlannerMessageResponse] = Field(default_factory=list)

@@ -27,6 +27,10 @@ class WorkspaceResponse(BaseModel):
         default_factory=list,
         description="Recent persisted workspace activity entries tied to the trip/session trail.",
     )
+    planner_memory: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Persisted planner checkpoints and user-visible summarized memory.",
+    )
     planner_panel_state: dict[str, Any] = Field(
         description="Workspace-scoped planner panel payload for the mounted side-panel UI.",
     )

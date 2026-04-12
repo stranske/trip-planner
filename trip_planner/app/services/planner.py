@@ -11,6 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.app.services.planner_memory import (
+    build_planner_memory_payload,
+    refresh_planner_memory,
+)
 from trip_planner.app.services.planner_tools import (
     execute_planner_tool_call,
     list_planner_tools,
@@ -202,6 +206,11 @@ def _planner_session_payload(
         "resumed_at": resumed_at,
         "session": session,
         "planner_panel_state": workspace_payload["planner_panel_state"],
+        "planner_memory": build_planner_memory_payload(
+            db_session,
+            trip_id=trip_id,
+            session_state_id=session_state_id,
+        ),
         "available_tools": list_planner_tools(),
         "activity_log": _activity_log(db_session, trip_id=trip_id),
         "messages": _conversation_messages(db_session, session_state_id=session_state_id),
@@ -356,6 +365,12 @@ def submit_planner_turn(
             "refs": ",".join(reply.refs),
             "tool_calls": reply.tool_calls,
         },
+    )
+    refresh_planner_memory(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        occurred_at=occurred_at,
     )
 
     db_session.commit()

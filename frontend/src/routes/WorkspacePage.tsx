@@ -679,6 +679,31 @@ function WorkspacePageContent({
         </section>
 
         <section className="status-card">
+          <p className="status-label">Planner memory</p>
+          <h2>
+            {currentWorkspace.planner_memory.artifacts.length > 0
+              ? "User-visible planner checkpoints"
+              : "Planner memory has not been summarized yet"}
+          </h2>
+          {currentWorkspace.planner_memory.artifacts.length === 0 ? (
+            <p className="muted-copy">
+              The workspace will surface durable planner summaries here after the first persisted
+              planner conversation turn.
+            </p>
+          ) : (
+            <div className="decision-stack">
+              {currentWorkspace.planner_memory.artifacts.slice(0, 3).map((artifact) => (
+                <article key={artifact.memory_artifact_id} className="decision-card">
+                  <h3>{artifact.title}</h3>
+                  <p>{artifact.summary}</p>
+                  <p className="muted-copy">{artifact.detail}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="status-card">
           <p className="status-label">Activity trail</p>
           <h2>Persisted planner actions</h2>
           <div className="decision-stack">
