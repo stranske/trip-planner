@@ -99,21 +99,31 @@ def _resolve_evaluation_response(
     request: TPPRequestEnvelope,
     response_payload: dict[str, Any] | None,
     *,
+    existing: PersistedProposalState,
     proposal_version: str,
 ) -> TPPResponseEnvelope:
     if response_payload is not None:
         return TPPResponseEnvelope.from_dict(response_payload)
+    live_payload = dict(request.payload)
+    live_payload.setdefault("proposal_version", proposal_version or existing.proposal_version)
+    if existing.execution_id:
+        live_payload["execution_id"] = existing.execution_id
     live_request = request
-    if not request.payload.get("proposal_version"):
+    if (
+        live_payload != request.payload
+        or request.trip_id is None
+        or request.proposal_id is None
+        or request.organization_id is None
+    ):
         live_request = TPPRequestEnvelope(
             operation=request.operation,
             request_id=request.request_id,
             correlation_id=request.correlation_id,
-            payload={**request.payload, "proposal_version": proposal_version},
+            payload=live_payload,
             transport_pattern=request.transport_pattern,
-            organization_id=request.organization_id,
-            trip_id=request.trip_id,
-            proposal_id=request.proposal_id,
+            organization_id=request.organization_id or existing.organization_id,
+            trip_id=request.trip_id or existing.trip_id,
+            proposal_id=request.proposal_id or existing.proposal_id,
             submitted_at=request.submitted_at,
             metadata=dict(request.metadata),
         )
@@ -163,6 +173,7 @@ def _derive_follow_up_state(
             ),
             "recommended_action": "reoptimize",
             "recommended_label": "Reoptimize plan",
+            "selected_alternative": alternative if isinstance(alternative, dict) else None,
         }
     elif status == "exception_required":
         follow_up = {
@@ -199,7 +210,7 @@ def _derive_follow_up_state(
     follow_up["failure_reasons"] = failure_reasons
     follow_up["guidance"] = exception_guidance
     follow_up["requested_exception"] = requested_exception
-    follow_up["selected_alternative"] = None
+    follow_up["selected_alternative"] = follow_up.get("selected_alternative")
     follow_up["notes"] = []
 
     if persisted_follow_up and persisted_follow_up.get("manual"):
@@ -456,6 +467,7 @@ def save_workspace_proposal_evaluation(
     response = _resolve_evaluation_response(
         request,
         response_payload,
+        existing=existing,
         proposal_version=proposal_version,
     )
     evaluation = TPPEvaluationResultIngestionService(_PassiveTPPClient(response)).fetch_evaluation_result(

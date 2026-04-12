@@ -266,6 +266,7 @@ def test_workspace_proposal_evaluation_derives_reoptimization_follow_up(client: 
     assert follow_up["status"] == "reoptimization_required"
     assert follow_up["recommended_action"] == "reoptimize"
     assert follow_up["alternatives"][0]["category"] == "lodging"
+    assert follow_up["selected_alternative"]["summary"] == "Use a compliant downtown property"
 
 
 def test_workspace_proposal_submission_clears_stale_evaluation_state(client: TestClient) -> None:
@@ -920,7 +921,6 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
     evaluation_fixture = _load_fixture("results", "approved_evaluation.json")
     evaluation_fixture["request"]["trip_id"] = trip_id
     evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
-    evaluation_fixture["request"]["payload"]["execution_id"] = "exec-live-001"
     evaluation_response._payload["trip_id"] = trip_id
     evaluation_response._payload["proposal_id"] = f"proposal:{trip_id}"
     evaluation_response.text = json.dumps(evaluation_response._payload)
