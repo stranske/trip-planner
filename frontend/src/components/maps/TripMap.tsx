@@ -3,20 +3,14 @@ import type {
   RuntimeScenarioComparison,
   WorkspaceData,
 } from "../../api/workspace";
+import {
+  buildGoogleMapsEmbedUrl,
+  buildTripMapViewModel,
+  resolveTripMapProvider,
+} from "./tripMapModel";
 
 type TripMapScenario = RuntimeScenarioComparison["scenarios"][number];
 type InventoryBundle = WorkspaceData["inventory_summary"]["bundles"][number];
-
-function humanizeStop(stop: string): string {
-  return stop
-    .replace(/^dest-city-/, "")
-    .replace(/^dest-/, "")
-    .replace(/^city-/, "")
-    .split(/[-_]/g)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
 
 function formatEstimatedTotal(
   value: RuntimeScenarioComparison["scenarios"][number]["metrics"]["estimated_total"]
@@ -32,40 +26,31 @@ function formatEstimatedTotal(
   }).format(value.typical_amount);
 }
 
-function summarizeFeasibility(
-  feasibilitySummary: FeasibilitySummary,
-  bundleDestinations: string[]
-): string {
-  if (feasibilitySummary.assessment_count === 0) {
-    return "No inventory bundles have produced route-feasibility signals yet.";
-  }
-
-  if (bundleDestinations.length === 0) {
-    return `${feasibilitySummary.assessment_count} bundle checks are available, but destination anchors have not been attached yet.`;
-  }
-
-  return `${bundleDestinations.length} destination anchors are backed by ${feasibilitySummary.assessment_count} feasibility assessment(s).`;
-}
-
 export function TripMap({
   comparison,
   activeScenarioId,
   onSelectScenario,
   bundles,
   feasibilitySummary,
+  providerOverride,
+  googleMapsApiKeyOverride,
 }: {
   comparison: RuntimeScenarioComparison;
   activeScenarioId: string | null;
   onSelectScenario: (scenarioId: string) => void;
   bundles: InventoryBundle[];
   feasibilitySummary: FeasibilitySummary;
+  providerOverride?: "google-maps" | "fallback";
+  googleMapsApiKeyOverride?: string;
 }) {
-  const activeScenario =
-    comparison.scenarios.find((scenario) => scenario.scenario_id === activeScenarioId) ??
-    comparison.scenarios[0] ??
-    null;
+  const model = buildTripMapViewModel({
+    comparison,
+    activeScenarioId,
+    bundles,
+    feasibilitySummary,
+  });
 
-  if (activeScenario == null) {
+  if (model == null) {
     return (
       <section className="status-card map-card">
         <p className="status-label">Map surface</p>
@@ -78,20 +63,35 @@ export function TripMap({
     );
   }
 
-  const bundleDestinations = Array.from(
-    new Set(
-      bundles
-        .flatMap((bundle) => bundle.destination_names)
-        .map((destination) => destination.trim())
-        .filter(Boolean)
-    )
-  );
+  const googleMapsApiKey =
+    googleMapsApiKeyOverride ?? import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY ?? "";
+  const provider =
+    providerOverride ??
+    resolveTripMapProvider({
+      googleMapsApiKey,
+      preferredProvider: import.meta.env.VITE_MAP_PROVIDER,
+    });
+  const googleMapsEmbedUrl =
+    provider === "google-maps" && googleMapsApiKey
+      ? buildGoogleMapsEmbedUrl({ apiKey: googleMapsApiKey, model })
+      : null;
+  const activeScenario = model.activeScenario;
 
   return (
     <section className="status-card map-card">
       <p className="status-label">Map surface</p>
       <h2>Map preview for {activeScenario.title}</h2>
       <p>{activeScenario.summary}</p>
+      <div className="map-provider-row">
+        <span className="map-provider-pill">
+          {provider === "google-maps" ? "Google Maps provider" : "Fallback provider preview"}
+        </span>
+        <span className="muted-copy">
+          {provider === "google-maps"
+            ? "Route overlays are rendered through the Google Maps embed path while preserving a fallback seam."
+            : "Fallback route rendering stays available for local development and provider outages."}
+        </span>
+      </div>
       <div className="map-scenario-toggle" aria-label="Map scenario previews">
         {comparison.scenarios.map((scenario) => (
           <button
@@ -107,25 +107,31 @@ export function TripMap({
           </button>
         ))}
       </div>
-      <div className="map-surface" aria-label="Route context map">
-        <div className="map-route">
-          {activeScenario.route_sequence.map((stop, index) => (
-            <div key={`${activeScenario.scenario_id}-${stop}-${index}`} className="map-stop">
-              <div className="map-stop-marker">
-                <span>{index + 1}</span>
-              </div>
-              <div className="map-stop-copy">
-                <h3>{humanizeStop(stop)}</h3>
-                <p>
-                  {index === 0
-                    ? "Current route origin for the workspace preview."
-                    : index === activeScenario.route_sequence.length - 1
-                      ? "Current route destination anchor."
-                      : "Intermediate route checkpoint preserved in the active scenario."}
-                </p>
-              </div>
+      <div className="map-surface">
+        <div className="map-visual-shell" aria-label="Route context map">
+          {googleMapsEmbedUrl ? (
+            <iframe
+              className="map-embed-frame"
+              title={`Google Maps route for ${activeScenario.title}`}
+              src={googleMapsEmbedUrl}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          ) : (
+            <div className="map-route">
+              {model.stops.map((stop, index) => (
+                <div key={`${activeScenario.scenario_id}-${stop.query}-${index}`} className="map-stop">
+                  <div className="map-stop-marker">
+                    <span>{index + 1}</span>
+                  </div>
+                  <div className="map-stop-copy">
+                    <h3>{stop.label}</h3>
+                    <p>{stop.detail}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
         <div className="map-sidebar">
           <dl className="workspace-meta map-metrics">
@@ -153,12 +159,12 @@ export function TripMap({
           </article>
           <article className="decision-card">
             <h3>Destination anchors</h3>
-            <p>{summarizeFeasibility(feasibilitySummary, bundleDestinations)}</p>
+            <p>{model.feasibilityNote}</p>
             <div className="map-anchor-list">
-              {bundleDestinations.length === 0 ? (
+              {model.destinationAnchors.length === 0 ? (
                 <span className="map-anchor-chip map-anchor-chip-muted">Awaiting option anchors</span>
               ) : (
-                bundleDestinations.map((destination) => (
+                model.destinationAnchors.map((destination) => (
                   <span key={destination} className="map-anchor-chip">
                     {destination}
                   </span>
