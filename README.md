@@ -9,6 +9,17 @@ The runtime baseline now treats the saved trip record as the durable planning co
 Saved scenarios and trip-level planning history now persist underneath that same trip container, so later comparison and workspace slices should consume those records instead of reintroducing fixture-only storage.
 The shipped full-stack MVP now includes authenticated trip creation, persisted trip and scenario routes, the workspace shell, planner session APIs, and stored policy/proposal state. Live external policy transport and provider-backed maps remain follow-on integrations, so docs and checks in this repo should describe those gaps explicitly instead of implying they already ship.
 
+## Current MVP Surfaces
+
+The current runtime already ships these inspectable application surfaces:
+
+- authenticated sign-up, sign-in, sign-out, and session restore
+- persisted trip creation plus saved trip, scenario-history, and workspace routes
+- planner session APIs and workspace state hydration for the frontend app shell
+- stored proposal and policy posture state that later `Travel-Plan-Permission` work can consume
+
+The current runtime does not yet ship live Google Maps rendering or remote `Travel-Plan-Permission` execution. Those remain explicit follow-on integrations, so local runtime checks and product docs should continue to call them out as deferred.
+
 ## Key Docs
 
 - [Implementation plan](docs/implementation-plan.md)

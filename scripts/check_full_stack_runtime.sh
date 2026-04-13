@@ -17,6 +17,10 @@ Full-stack runtime checks require both dependency installs to be present first:
   2. npm --prefix frontend install
 
 Then rerun `make runtime-check` (or `make runtime-smoke`).
+These commands validate the local FastAPI + Vite MVP in this repo; they do not
+prove live Google Maps rendering or remote Travel-Plan-Permission transport.
+Do not create a repo-root `node_modules/`; local frontend tooling should live
+under `frontend/node_modules`.
 EOF
   exit 1
 }

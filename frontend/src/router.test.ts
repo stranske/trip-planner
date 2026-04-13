@@ -45,6 +45,24 @@ describe("router auth loaders", () => {
     vi.clearAllMocks();
   });
 
+  it("opts the app router into the same React Router future flags used by runtime tests", async () => {
+    vi.resetModules();
+    const { createBrowserRouter } = await import("react-router-dom");
+    vi.mocked(createBrowserRouter).mockClear();
+
+    const { APP_ROUTER_FUTURE } = await import("./router");
+
+    expect(APP_ROUTER_FUTURE).toEqual({
+      v7_normalizeFormMethod: true,
+      v7_partialHydration: true,
+      v7_relativeSplatPath: true,
+      v7_startTransition: true,
+    });
+    expect(createBrowserRouter).toHaveBeenCalledWith(expect.any(Array), {
+      future: APP_ROUTER_FUTURE,
+    });
+  });
+
   it("restores the signed-in session during app bootstrap", async () => {
     const { fetchCurrentSession } = await import("./api/auth");
     vi.mocked(fetchCurrentSession).mockResolvedValueOnce({

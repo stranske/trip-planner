@@ -1464,18 +1464,17 @@ describe("WorkspacePage", () => {
     const host = view.container.querySelector(".planner-panel-host");
     const plannerMountNode = host?.shadowRoot?.lastElementChild;
     expect(plannerMountNode).not.toBeNull();
-    fireEvent(
-      plannerMountNode as Element,
-      new CustomEvent("planner-response-save-as-fallback", {
-        detail: {
-          option_id: "scenario:trip-leisure-kyoto-draft:1",
-          action_type: "save_as_fallback",
-          decision_id: null,
-        },
-      })
-    );
-
     await waitFor(() => {
+      fireEvent(
+        plannerMountNode as Element,
+        new CustomEvent("planner-response-save-as-fallback", {
+          detail: {
+            option_id: "scenario:trip-leisure-kyoto-draft:1",
+            action_type: "save_as_fallback",
+            decision_id: null,
+          },
+        })
+      );
       expect(mockedSubmitPlannerOptionFeedback).toHaveBeenCalledWith(
         "trip-leisure-kyoto-draft",
         "scenario:trip-leisure-kyoto-draft:1",
