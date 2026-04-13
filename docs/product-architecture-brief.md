@@ -199,6 +199,8 @@ Build toward a stateful web app with:
 - LLM chat side panel
 - business-policy readiness summary
 
+The repo is already past the contracts-only stage. The current MVP ships account-backed entry flows, persisted trip creation, saved trip/scenario routes, a workspace shell, planner session APIs, and stored proposal/policy posture state. Provider-backed maps and live `Travel-Plan-Permission` execution are still follow-on integrations, so design work should treat those as explicit deferred seams rather than implied current behavior.
+
 ### Core Backend Services
 
 Organize the application into five bounded modules:
