@@ -13,11 +13,17 @@ describe("mapSurface", () => {
   });
 
   it("builds a Google Maps directions URL with waypoints", () => {
-    expect(
+    const url = new URL(
       buildGoogleMapsEmbedUrl(["Kyoto", "Uji", "Kyoto"], "test-key")
-    ).toContain(
-      "https://www.google.com/maps/embed/v1/directions?key=test-key&origin=Kyoto&destination=Kyoto&mode=transit&waypoints=Uji"
     );
+
+    expect(url.origin).toBe("https://www.google.com");
+    expect(url.pathname).toBe("/maps/embed/v1/directions");
+    expect(url.searchParams.get("key")).toBe("test-key");
+    expect(url.searchParams.get("origin")).toBe("Kyoto");
+    expect(url.searchParams.get("destination")).toBe("Kyoto");
+    expect(url.searchParams.get("mode")).toBe("transit");
+    expect(url.searchParams.get("waypoints")).toBe("Uji");
   });
 
   it("selects the live Google Maps provider when a key and route are available", () => {
