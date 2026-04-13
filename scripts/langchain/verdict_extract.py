@@ -33,9 +33,7 @@ class VerdictGithubOutputs(TypedDict):
     verdict_metadata: str
 
 
-def _build_github_outputs(
-    result: verdict_policy.VerdictPolicyResult,
-) -> VerdictGithubOutputs:
+def _build_github_outputs(result: verdict_policy.VerdictPolicyResult) -> VerdictGithubOutputs:
     return {
         "verdict": result.verdict,
         "needs_human": str(result.needs_human).lower(),

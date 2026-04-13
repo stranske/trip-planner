@@ -551,7 +551,7 @@ Be conservative - if unsure, don't mark as completed."""
                 reasoning=reasoning,
                 provider_used=self.name,
                 model_name="gpt-4.1",  # Actual model used by GitHubModelsProvider
-                raw_confidence=(raw_confidence if adjusted_confidence != raw_confidence else None),
+                raw_confidence=raw_confidence if adjusted_confidence != raw_confidence else None,
                 confidence_adjusted=adjusted_confidence != raw_confidence,
                 quality_warnings=warnings if warnings else None,
             )

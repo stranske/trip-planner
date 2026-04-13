@@ -121,15 +121,7 @@ SECTION_TITLES = {
 LIST_ITEM_REGEX = re.compile(r"^\s*([-*+]|\d+[.)]|[A-Za-z][.)])\s+(.*)$")
 CHECKBOX_REGEX = re.compile(r"^\[[ xX]\]\s*(.*)$")
 
-SUBJECTIVE_CRITERIA = (
-    "clean",
-    "nice",
-    "good",
-    "fast",
-    "better",
-    "intuitive",
-    "polished",
-)
+SUBJECTIVE_CRITERIA = ("clean", "nice", "good", "fast", "better", "intuitive", "polished")
 SUGGESTIONS_MARKER_PREFIX = "suggestions-json:"
 
 

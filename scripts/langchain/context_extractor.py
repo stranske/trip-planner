@@ -236,7 +236,7 @@ def extract_context(
                     response = chain.invoke(
                         {
                             "issue_body": issue_body,
-                            "comments": ("\n\n".join(comments) if comments else "_None._"),
+                            "comments": "\n\n".join(comments) if comments else "_None._",
                         }
                     )
                 except Exception as e:
@@ -249,7 +249,7 @@ def extract_context(
                             response = chain.invoke(
                                 {
                                     "issue_body": issue_body,
-                                    "comments": ("\n\n".join(comments) if comments else "_None._"),
+                                    "comments": "\n\n".join(comments) if comments else "_None._",
                                 }
                             )
                         else:

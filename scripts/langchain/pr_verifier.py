@@ -313,11 +313,7 @@ class ComparisonRunner:
 
     @classmethod
     def from_environment(
-        cls,
-        context: str,
-        diff: str | None,
-        model1: str | None = None,
-        model2: str | None = None,
+        cls, context: str, diff: str | None, model1: str | None = None, model2: str | None = None
     ) -> ComparisonRunner:
         return cls(
             context=context,
@@ -706,14 +702,7 @@ def _is_auth_error(exc: Exception) -> bool:
     """Check if an exception is an authentication/authorization error."""
     exc_str = str(exc).lower()
     # Common auth error patterns from various LLM APIs
-    auth_patterns = [
-        "401",
-        "unauthorized",
-        "forbidden",
-        "403",
-        "permission",
-        "authentication",
-    ]
+    auth_patterns = ["401", "unauthorized", "forbidden", "403", "permission", "authentication"]
     return any(pattern in exc_str for pattern in auth_patterns)
 
 
@@ -813,10 +802,7 @@ def evaluate_pr(
 
 
 def evaluate_pr_multiple(
-    context: str,
-    diff: str | None = None,
-    model1: str | None = None,
-    model2: str | None = None,
+    context: str, diff: str | None = None, model1: str | None = None, model2: str | None = None
 ) -> list[EvaluationResult]:
     change_type = _classify_change_type(diff)
     runner = ComparisonRunner.from_environment(context, diff, model1, model2)

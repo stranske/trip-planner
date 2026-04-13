@@ -124,12 +124,7 @@ def main() -> int:
         }
         github_meta = {
             key.lower(): os.environ[key]
-            for key in (
-                "GITHUB_RUN_ID",
-                "GITHUB_RUN_NUMBER",
-                "GITHUB_SHA",
-                "GITHUB_REF",
-            )
+            for key in ("GITHUB_RUN_ID", "GITHUB_RUN_NUMBER", "GITHUB_SHA", "GITHUB_REF")
             if os.environ.get(key)
         }
         if github_meta:
