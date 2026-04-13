@@ -622,6 +622,7 @@ describe("WorkspacePage", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     mockedAnswerPlannerDecision.mockReset();
     mockedSubmitPlannerOptionFeedback.mockReset();
     mockedSaveWorkspaceBudget.mockReset();
@@ -693,6 +694,33 @@ describe("WorkspacePage", () => {
     ).toBeInTheDocument();
     expect(within(screen.getByLabelText("Route context map")).getByRole("heading", { name: "Osaka" })).toBeInTheDocument();
     expect(screen.getByText("Higher transfer load to preserve nightlife breadth.")).toBeInTheDocument();
+  });
+
+  it("renders the Google Maps provider path when configured", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_EMBED_API_KEY", "test-key");
+    const user = userEvent.setup();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(
+        screen.getByTitle("Google Maps route preview for Kyoto base with Uji day trip")
+      ).toBeInTheDocument();
+    });
+
+    const initialFrame = screen.getByTitle("Google Maps route preview for Kyoto base with Uji day trip");
+    expect(initialFrame).toHaveAttribute("src", expect.stringContaining("key=test-key"));
+    expect(initialFrame).toHaveAttribute("src", expect.stringContaining("origin=Kyoto"));
+    expect(initialFrame).toHaveAttribute("src", expect.stringContaining("waypoints=Uji"));
+
+    await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
+
+    const updatedFrame = screen.getByTitle("Google Maps route preview for Kyoto plus Osaka fallback");
+    expect(updatedFrame).toHaveAttribute("src", expect.stringContaining("waypoints=Osaka"));
   });
 
   it("updates the dedicated comparison surfaces when scenario and trip selections change", async () => {
