@@ -142,7 +142,7 @@ jobs:
 
       - name: Report Gate commit status
         if: ${{ always() }}
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9.0.0
         env:
           STATE: ${{ steps.summarize.outputs.state || 'pending' }}
           DESCRIPTION: ${{ steps.summarize.outputs.description || 'Gate status pending' }}
