@@ -618,8 +618,11 @@ function getPlannerHost() {
   return plannerHost as HTMLDivElement;
 }
 
+const originalMatchMedia = window.matchMedia;
+
 function stubMatchMedia(matches: boolean) {
   Object.defineProperty(window, "matchMedia", {
+    configurable: true,
     writable: true,
     value: vi.fn().mockImplementation((query: string) => ({
       matches,
@@ -639,6 +642,11 @@ describe("WorkspacePage", () => {
     cleanup();
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: originalMatchMedia,
+    });
     mockedAnswerPlannerDecision.mockReset();
     mockedSubmitPlannerOptionFeedback.mockReset();
     mockedSaveWorkspaceBudget.mockReset();
@@ -877,6 +885,33 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Fallback route path")).toBeInTheDocument();
     expect(screen.getAllByText(/Google Maps is not configured in this environment/).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Compact day-by-day review" })).toBeInTheDocument();
+  });
+
+  it("renders an explicit empty state when runtime scenarios are unavailable", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        runtime_scenario_comparison: {
+          ...workspacePayload.runtime_scenario_comparison,
+          lead_scenario_id: null,
+          scenarios: [],
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Review-ready scenario tradeoffs" })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByLabelText("Scenario review board")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "No runtime scenarios are available yet, so there is nothing to review in the scenario board."
+      )
+    ).toBeInTheDocument();
   });
 
   it("shows created-trip metadata even when the workspace has no seeded scenario state yet", async () => {
