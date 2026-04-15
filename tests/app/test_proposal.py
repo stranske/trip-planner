@@ -1,7 +1,7 @@
 import json
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 import pytest
 from fastapi.testclient import TestClient
 
@@ -1362,7 +1362,8 @@ def test_workspace_proposal_refresh_polls_live_status_and_persists_evaluation(
         f"https://tpp.example.test/api/planner/proposals/proposal:{trip_id}/executions/exec-live-002"
     )
     assert captured_requests[1]["method"] == "GET"
-    assert captured_requests[1]["body"]["proposal_version"] == "proposal-v3"
+    poll_request_body = cast(dict[str, object], captured_requests[1]["body"])
+    assert poll_request_body["proposal_version"] == "proposal-v3"
     assert captured_requests[2]["full_url"] == (
         "https://tpp.example.test/api/planner/executions/exec-live-002/evaluation-result"
     )
@@ -1469,7 +1470,8 @@ def test_workspace_proposal_refresh_preserves_submission_and_retries_when_evalua
         200,
         _load_fixture("proposal_submit_deferred.json")["response"],
     )
-    submission_response._payload["result_payload"]["execution_id"] = "exec-live-002"
+    submission_result_payload = cast(dict[str, object], submission_response._payload["result_payload"])
+    submission_result_payload["execution_id"] = "exec-live-002"
     submission_response._payload["status_endpoint"] = (
         "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-live-002"
     )
