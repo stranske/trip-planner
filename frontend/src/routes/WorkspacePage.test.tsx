@@ -1077,6 +1077,7 @@ describe("WorkspacePage", () => {
       ).toBeInTheDocument();
     });
     expect(screen.getAllByText("pending").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Refresh live status" })).not.toBeInTheDocument();
   });
 
   it("surfaces a deferred execution state while the remote verdict is queued", async () => {
@@ -1147,6 +1148,48 @@ describe("WorkspacePage", () => {
     expect(screen.getAllByText("running").length).toBeGreaterThan(0);
     expect(screen.getByText("Policy engine accepted the packet and is still evaluating it.")).toBeInTheDocument();
     expect(screen.getByText("Keep the workspace open for remote results")).toBeInTheDocument();
+  });
+
+  it("keeps awaiting evaluation refreshable after execution succeeds", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          submission_status: "succeeded",
+          evaluation_status: "retry_scheduled",
+          follow_up: {
+            ...workspacePayload.proposal_state.follow_up,
+            status: "awaiting_evaluation",
+            title: "Awaiting policy verdict",
+            summary: "Policy execution finished, but the evaluation result still needs to load.",
+          },
+          summary: {
+            ...workspacePayload.proposal_state.summary,
+            submission_status: "succeeded",
+            submission_summary: "Policy execution completed and the evaluation result is ready.",
+            submission_requires_polling: true,
+            evaluation_transport_status: "retry_scheduled",
+            evaluation_result_status: undefined,
+            approval_ready: false,
+            follow_up_status: "awaiting_evaluation",
+            follow_up_title: "Awaiting policy verdict",
+            follow_up_summary:
+              "Policy execution finished, but the evaluation result still needs to load.",
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Awaiting policy evaluation result" })).toBeInTheDocument();
+    });
+    expect(
+      screen.getAllByText("Policy execution finished, but the evaluation result still needs to load.").length
+    ).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Refresh live status" })).toBeInTheDocument();
   });
 
   it("refreshes the proposal lifecycle when the workspace requests live status", async () => {

@@ -1455,3 +1455,118 @@ def test_workspace_proposal_refresh_persists_failed_remote_status(
     assert payload["summary"]["submission_requires_polling"] is False
     assert payload["summary"]["evaluation_transport_status"] is None
     assert payload["summary"]["submission_summary"] == "Evaluator returned an integration error"
+
+
+def test_workspace_proposal_refresh_preserves_submission_and_retries_when_evaluation_ingestion_fails(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    captured_requests: list[dict[str, object]] = []
+    submission_response = _FakeHTTPResponse(
+        200,
+        _load_fixture("proposal_submit_deferred.json")["response"],
+    )
+    submission_response._payload["result_payload"]["execution_id"] = "exec-live-002"
+    submission_response._payload["status_endpoint"] = (
+        "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-live-002"
+    )
+    submission_response.text = json.dumps(submission_response._payload)
+    poll_response = _FakeHTTPResponse(
+        200,
+        {
+            "transport_pattern": "async",
+            "execution_status": {
+                "state": "succeeded",
+                "terminal": True,
+                "summary": "Policy execution completed and the evaluation result is ready.",
+                "external_status": "completed",
+                "updated_at": "2026-04-03T00:42:11Z",
+            },
+            "result_payload": {
+                "execution_id": "exec-live-002",
+                "queue_state": "completed",
+            },
+            "received_at": "2026-04-03T00:42:11Z",
+            "status_endpoint": (
+                "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-live-002"
+            ),
+        },
+    )
+    malformed_evaluation_response = _FakeHTTPResponse(
+        200,
+        {
+            "trip_id": "trip-placeholder",
+            "proposal_id": "proposal:trip-placeholder",
+            "proposal_version": "proposal-v3",
+            "execution_id": "exec-live-002",
+            "request_id": "ignored-eval",
+            "correlation_id": {"value": "ignored", "issued_by": "tpp"},
+            "outcome": "non_compliant",
+            "result_endpoint": "GET /api/planner/executions/exec-live-002/evaluation-result",
+            "status_endpoint": (
+                "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-live-002"
+            ),
+            "generated_at": "2026-04-03T00:42:13Z",
+        },
+    )
+    _install_fake_http(
+        monkeypatch,
+        [submission_response, poll_response, malformed_evaluation_response],
+        captured_requests=captured_requests,
+    )
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Refresh proposal retry",
+            "summary": "Keep refresh retryable when evaluation ingestion fails.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+
+    submitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert submitted.status_code == 200
+
+    refreshed = client.post(f"/api/workspace/{trip_id}/proposal/refresh")
+
+    assert refreshed.status_code == 200
+    payload = refreshed.json()["proposal_state"]
+    assert payload["submission"]["request_id"] == submission_fixture["request"]["request_id"]
+    assert payload["submission"]["request_payload"]["proposal_ref"] == f"proposal:{trip_id}"
+    assert payload["submission"]["last_poll_request_payload"] == {
+        "proposal_version": "proposal-v3",
+        "execution_id": "exec-live-002",
+    }
+    assert payload["submission_status"] == "succeeded"
+    assert payload["evaluation_status"] == "retry_scheduled"
+    assert payload["summary"]["submission_requires_polling"] is True
+    assert payload["summary"]["evaluation_transport_status"] == "retry_scheduled"
+    assert payload["summary"]["evaluation_result_status"] is None
+    assert payload["follow_up"]["status"] == "awaiting_evaluation"
+    assert payload["evaluation"]["error"]["code"] == "evaluation_refresh_failed"
+    assert payload["evaluation"]["error"]["retryable"] is True
+    assert captured_requests[2]["full_url"] == (
+        "https://tpp.example.test/api/planner/executions/exec-live-002/evaluation-result"
+    )

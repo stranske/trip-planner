@@ -283,6 +283,25 @@ function isRunningLifecycleStatus(status: string | null | undefined): boolean {
   );
 }
 
+function shouldShowProposalRefresh(
+  proposalState: NonNullable<WorkspaceData["proposal_state"]>,
+  followUp: NonNullable<WorkspaceData["proposal_state"]>["follow_up"]
+): boolean {
+  const submissionStatus = proposalState.summary.submission_status ?? proposalState.submission_status;
+  const evaluationTransportStatus =
+    proposalState.summary.evaluation_transport_status ?? proposalState.evaluation_status;
+  const awaitingEvaluation =
+    proposalState.summary.evaluation_result_status == null &&
+    (followUp?.status === "awaiting_evaluation" ||
+      proposalState.summary.follow_up_status === "awaiting_evaluation" ||
+      submissionStatus === "succeeded" ||
+      evaluationTransportStatus === "succeeded");
+  return Boolean(
+    proposalState.summary.submission_requires_polling ||
+      awaitingEvaluation
+  );
+}
+
 function deriveProposalLifecyclePresentation(
   proposalState: NonNullable<WorkspaceData["proposal_state"]>,
   followUp: NonNullable<WorkspaceData["proposal_state"]>["follow_up"]
@@ -292,6 +311,11 @@ function deriveProposalLifecyclePresentation(
   const evaluationTransportStatus =
     summary.evaluation_transport_status ?? proposalState.evaluation_status;
   const followUpStatus = followUp?.status ?? summary.follow_up_status;
+  const awaitingEvaluation =
+    summary.evaluation_result_status == null &&
+    (followUpStatus === "awaiting_evaluation" ||
+      submissionStatus === "succeeded" ||
+      evaluationTransportStatus === "succeeded");
 
   if (summary.approval_ready || followUpStatus === "resolved") {
     return {
@@ -342,6 +366,7 @@ function deriveProposalLifecyclePresentation(
   }
 
   if (
+    awaitingEvaluation ||
     summary.submission_requires_polling ||
     isRunningLifecycleStatus(submissionStatus) ||
     isRunningLifecycleStatus(evaluationTransportStatus)
@@ -349,8 +374,9 @@ function deriveProposalLifecyclePresentation(
     return {
       state: "running",
       label: "running",
-      title: "Policy review is running",
+      title: awaitingEvaluation ? "Awaiting policy evaluation result" : "Policy review is running",
       summary:
+        summary.follow_up_summary ??
         summary.submission_summary ??
         "The workspace is waiting for the latest remote policy execution result.",
     };
@@ -703,7 +729,10 @@ function WorkspacePageContent({
                 </div>
               </dl>
               <p>{proposalLifecycle?.summary ?? "Submission stored for later review."}</p>
-              {currentWorkspace.proposal_state.summary.submission_requires_polling ? (
+              {shouldShowProposalRefresh(
+                currentWorkspace.proposal_state,
+                renderableProposalFollowUp
+              ) ? (
                 <button type="button" className="secondary-button" onClick={handleProposalRefresh}>
                   Refresh live status
                 </button>
