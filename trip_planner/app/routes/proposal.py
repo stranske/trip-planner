@@ -11,6 +11,7 @@ from trip_planner.app.services.auth import AuthenticatedUser, require_authentica
 from trip_planner.app.services.proposal import (
     WorkspaceProposalNotFoundError,
     get_workspace_proposal_payload,
+    refresh_workspace_proposal_status,
     save_workspace_proposal_follow_up,
     save_workspace_proposal_evaluation,
     save_workspace_proposal_submission,
@@ -116,6 +117,27 @@ def save_workspace_proposal_follow_up_state(
         )
     except WorkspaceProposalNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return WorkspaceProposalResponse.model_validate(result)
+
+
+@router.post("/workspace/{trip_id}/proposal/refresh", response_model=WorkspaceProposalResponse)
+def refresh_workspace_proposal(
+    trip_id: str,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> WorkspaceProposalResponse:
+    try:
+        result = refresh_workspace_proposal_status(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+        )
+    except WorkspaceProposalNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except TPPTransportError as error:
+        raise HTTPException(status_code=error.status_code, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return WorkspaceProposalResponse.model_validate(result)

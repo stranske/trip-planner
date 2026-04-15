@@ -7,6 +7,7 @@ import { ApiClientError } from "../lib/api/errors";
 import {
   answerPlannerDecision,
   recordWorkspaceSpendEvent,
+  refreshWorkspaceProposalStatus,
   saveWorkspaceBudget,
   submitPlannerOptionFeedback,
   type WorkspaceData,
@@ -23,6 +24,7 @@ vi.mock("../api/workspace", async () => {
     submitPlannerOptionFeedback: vi.fn(),
     saveWorkspaceBudget: vi.fn(),
     recordWorkspaceSpendEvent: vi.fn(),
+    refreshWorkspaceProposalStatus: vi.fn(),
   };
 });
 
@@ -39,6 +41,7 @@ const mockedAnswerPlannerDecision = vi.mocked(answerPlannerDecision);
 const mockedSubmitPlannerOptionFeedback = vi.mocked(submitPlannerOptionFeedback);
 const mockedSaveWorkspaceBudget = vi.mocked(saveWorkspaceBudget);
 const mockedRecordWorkspaceSpendEvent = vi.mocked(recordWorkspaceSpendEvent);
+const mockedRefreshWorkspaceProposalStatus = vi.mocked(refreshWorkspaceProposalStatus);
 const tripComparisonPayload: TripRecord[] = [
   {
     trip_id: "trip-leisure-kyoto-draft",
@@ -510,6 +513,8 @@ const workspacePayload = {
     summary: {
       submission_status: "succeeded",
       submission_summary: "Proposal submitted to the policy engine.",
+      submission_requires_polling: false,
+      evaluation_transport_status: "succeeded",
       evaluation_result_status: "compliant",
       approval_ready: true,
       comparable_count: 1,
@@ -651,6 +656,7 @@ describe("WorkspacePage", () => {
     mockedSubmitPlannerOptionFeedback.mockReset();
     mockedSaveWorkspaceBudget.mockReset();
     mockedRecordWorkspaceSpendEvent.mockReset();
+    mockedRefreshWorkspaceProposalStatus.mockReset();
   });
 
   it("renders timeline structure from persisted trip and scenario state", async () => {
@@ -684,7 +690,8 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Osaka arrival buffer")).toBeInTheDocument();
     expect(screen.getByText("Kyoto cultural anchor")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Approval packet is ready" })).toBeInTheDocument();
-    expect(screen.getByText("Approval-ready proposal")).toBeInTheDocument();
+    expect(screen.getByText("approval-ready")).toBeInTheDocument();
+    expect(screen.getAllByText("Advance to approval").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Comparables and readiness signals" })).toBeInTheDocument();
     expect(screen.getByText("Conference Hotel")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "User-visible planner checkpoints" })).toBeInTheDocument();
@@ -1034,6 +1041,236 @@ describe("WorkspacePage", () => {
     expect(screen.queryByText("2026-05-04")).not.toBeInTheDocument();
   });
 
+  it("surfaces a pending execution state before the proposal is sent", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          submission_status: "pending",
+          evaluation_status: null,
+          follow_up: null,
+          summary: {
+            submission_status: "pending",
+            submission_summary: "",
+            submission_requires_polling: false,
+            evaluation_transport_status: undefined,
+            evaluation_result_status: undefined,
+            approval_ready: false,
+            comparable_count: 1,
+            highlights: [],
+            follow_up_status: undefined,
+            follow_up_title: undefined,
+            follow_up_summary: undefined,
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Build and submit the approval packet to start live policy execution for this workspace."
+        )
+      ).toBeInTheDocument();
+    });
+    expect(screen.getAllByText("pending").length).toBeGreaterThan(0);
+  });
+
+  it("surfaces a deferred execution state while the remote verdict is queued", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          submission_status: "deferred",
+          evaluation_status: null,
+          follow_up: null,
+          summary: {
+            ...workspacePayload.proposal_state.summary,
+            submission_status: "deferred",
+            submission_summary: "Proposal queued for evaluation",
+            submission_requires_polling: true,
+            evaluation_transport_status: undefined,
+            evaluation_result_status: undefined,
+            approval_ready: false,
+            follow_up_status: undefined,
+            follow_up_title: undefined,
+            follow_up_summary: undefined,
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Policy review is deferred" })).toBeInTheDocument();
+    });
+    expect(screen.getAllByText("deferred").length).toBeGreaterThan(0);
+    expect(screen.getByText("Proposal queued for evaluation")).toBeInTheDocument();
+    expect(screen.getByText("Keep the workspace open for remote results")).toBeInTheDocument();
+  });
+
+  it("surfaces a running execution state while live polling is still in progress", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          submission_status: "submitted",
+          evaluation_status: "running",
+          follow_up: null,
+          summary: {
+            ...workspacePayload.proposal_state.summary,
+            submission_status: "submitted",
+            submission_summary: "Policy engine accepted the packet and is still evaluating it.",
+            submission_requires_polling: true,
+            evaluation_transport_status: "running",
+            evaluation_result_status: undefined,
+            approval_ready: false,
+            follow_up_status: undefined,
+            follow_up_title: undefined,
+            follow_up_summary: undefined,
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Policy review is running" })).toBeInTheDocument();
+    });
+    expect(screen.getAllByText("running").length).toBeGreaterThan(0);
+    expect(screen.getByText("Policy engine accepted the packet and is still evaluating it.")).toBeInTheDocument();
+    expect(screen.getByText("Keep the workspace open for remote results")).toBeInTheDocument();
+  });
+
+  it("refreshes the proposal lifecycle when the workspace requests live status", async () => {
+    mockedRefreshWorkspaceProposalStatus.mockResolvedValue({
+      ...workspacePayload.proposal_state,
+      submission_status: "succeeded",
+      evaluation_status: "succeeded",
+      follow_up: {
+        status: "reoptimization_required",
+        path: "reoptimization",
+        title: "Reoptimization path required",
+        summary: "Use a compliant downtown property before resubmitting the approval packet.",
+        recommended_action: "reoptimize",
+        recommended_label: "Reoptimize plan",
+        alternatives: [
+          {
+            category: "lodging",
+            summary: "Use a compliant downtown property",
+            rationale: "Alternative meets nightly cap and booking-channel requirements.",
+            comparable_ref: "lodging-alt-2",
+          },
+        ],
+        guidance: ["Keep the policy-safe lodging alternative attached to the next submission."],
+        notes: [],
+        selected_alternative: {
+          category: "lodging",
+          summary: "Use a compliant downtown property",
+          rationale: "Alternative meets nightly cap and booking-channel requirements.",
+          comparable_ref: "lodging-alt-2",
+        },
+        requested_exception: null,
+      },
+      summary: {
+        ...workspacePayload.proposal_state.summary,
+        submission_status: "succeeded",
+        submission_summary: "Policy evaluation completed",
+        submission_requires_polling: false,
+        evaluation_transport_status: "succeeded",
+        evaluation_result_status: "non_compliant",
+        approval_ready: false,
+        follow_up_status: "reoptimization_required",
+        follow_up_title: "Reoptimization path required",
+        follow_up_summary: "Use a compliant downtown property before resubmitting the approval packet.",
+      },
+    });
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          submission_status: "deferred",
+          evaluation_status: null,
+          follow_up: null,
+          summary: {
+            ...workspacePayload.proposal_state.summary,
+            submission_status: "deferred",
+            submission_summary: "Proposal queued for evaluation",
+            submission_requires_polling: true,
+            evaluation_transport_status: null,
+            evaluation_result_status: null,
+            approval_ready: false,
+            follow_up_status: null,
+            follow_up_title: null,
+            follow_up_summary: null,
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Refresh live status" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh live status" }));
+
+    await waitFor(() => {
+      expect(mockedRefreshWorkspaceProposalStatus).toHaveBeenCalledWith("trip-leisure-kyoto-draft");
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Policy review finished with follow-up" })).toBeInTheDocument();
+    });
+    expect(
+      screen.getAllByText("Use a compliant downtown property before resubmitting the approval packet.").length
+    ).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Refresh live status" })).not.toBeInTheDocument();
+  });
+
+  it("surfaces a failed execution state when the live transport breaks", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          submission_status: "failed",
+          evaluation_status: "failed",
+          follow_up: null,
+          summary: {
+            ...workspacePayload.proposal_state.summary,
+            submission_status: "failed",
+            submission_summary: "TPP gateway returned a 502 response for the proposal submission.",
+            submission_requires_polling: false,
+            evaluation_transport_status: "failed",
+            evaluation_result_status: undefined,
+            approval_ready: false,
+            follow_up_status: undefined,
+            follow_up_title: undefined,
+            follow_up_summary: undefined,
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Live policy execution needs attention" })).toBeInTheDocument();
+    });
+    expect(screen.getAllByText("failed").length).toBeGreaterThan(0);
+    expect(screen.getByText("TPP gateway returned a 502 response for the proposal submission.")).toBeInTheDocument();
+    expect(screen.getByText("Review the live transport failure")).toBeInTheDocument();
+  });
+
   it("surfaces reoptimization follow-up guidance for non-compliant policy results", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
@@ -1097,9 +1334,10 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByText("Reoptimization path required")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Policy review finished with follow-up" })).toBeInTheDocument();
     });
-    expect(screen.getByText("Reoptimize plan")).toBeInTheDocument();
+    expect(screen.getByText("completed with follow-up")).toBeInTheDocument();
+    expect(screen.getAllByText("Reoptimize plan").length).toBeGreaterThan(0);
     expect(screen.getByText("Use a compliant downtown property")).toBeInTheDocument();
     expect(screen.getByText("Nightly lodging exceeds the allowed cap.")).toBeInTheDocument();
   });
@@ -1170,9 +1408,10 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByText("Exception review required")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Policy review finished with follow-up" })).toBeInTheDocument();
     });
-    expect(screen.getByText("Prepare exception packet")).toBeInTheDocument();
+    expect(screen.getByText("completed with follow-up")).toBeInTheDocument();
+    expect(screen.getAllByText("Prepare exception packet").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Attach the compliant comparable to the exception packet.")).toHaveLength(2);
     expect(
       screen.getByText("Explain why the earlier arrival is required for the client meeting."),

@@ -1207,3 +1207,251 @@ def test_workspace_proposal_live_transport_rejects_invalid_upstream_contract(
 
     assert response.status_code == 400
     assert response.json()["detail"] == "result_payload.execution_id is required for non-terminal submissions"
+
+
+def test_workspace_proposal_refresh_polls_live_status_and_persists_evaluation(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    captured_requests: list[dict[str, object]] = []
+    submission_response = _FakeHTTPResponse(
+        200,
+        {
+            "transport_pattern": "deferred",
+            "execution_status": {
+                "state": "deferred",
+                "terminal": False,
+                "summary": "Proposal queued for evaluation",
+                "poll_after_seconds": 30,
+                "external_status": "202 Accepted",
+                "updated_at": "2026-04-03T00:41:01Z",
+            },
+            "result_payload": {
+                "execution_id": "exec-live-002",
+                "queue_state": "waiting_for_policy_engine",
+            },
+            "retry": {
+                "attempt": 0,
+                "max_attempts": 5,
+                "retryable": True,
+                "backoff_seconds": 30,
+                "next_retry_at": "2026-04-03T00:41:31Z",
+                "reason": "Await evaluator completion",
+            },
+            "received_at": "2026-04-03T00:41:01Z",
+            "status_endpoint": "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-live-002",
+        },
+    )
+    poll_response = _FakeHTTPResponse(
+        200,
+        {
+            "transport_pattern": "async",
+            "execution_status": {
+                "state": "succeeded",
+                "terminal": True,
+                "summary": "Policy evaluation completed",
+                "external_status": "200 OK",
+                "updated_at": "2026-04-03T00:42:11Z",
+            },
+            "result_payload": {
+                "execution_id": "exec-live-002",
+                "queue_state": "completed",
+            },
+            "received_at": "2026-04-03T00:42:11Z",
+            "status_endpoint": "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-live-002",
+        },
+    )
+    evaluation_response = _FakeHTTPResponse(
+        200,
+        {
+            "trip_id": "trip-placeholder",
+            "proposal_id": "proposal:trip-placeholder",
+            "proposal_version": "proposal-v3",
+            "execution_id": "exec-live-002",
+            "request_id": "ignored-eval",
+            "correlation_id": {"value": "ignored", "issued_by": "tpp"},
+            "outcome": "non_compliant",
+            "result_endpoint": "GET /api/planner/executions/exec-live-002/evaluation-result",
+            "status_endpoint": "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-live-002",
+            "policy_result": {
+                "status": "fail",
+                "issues": [],
+                "policy_version": "policy-v1",
+            },
+            "blocking_issues": [
+                {
+                    "code": "lodging_cap_exceeded",
+                    "summary": "Nightly lodging exceeds the allowed cap.",
+                    "category": "lodging",
+                }
+            ],
+            "preferred_alternatives": [
+                {
+                    "category": "lodging",
+                    "summary": "Use a compliant downtown property",
+                    "rationale": "Alternative meets nightly cap and booking-channel requirements.",
+                    "comparable_ref": "lodging-alt-2",
+                }
+            ],
+            "exception_requirements": [],
+            "reoptimization_guidance": [
+                {
+                    "summary": "Keep the lower-cost lodging alternative attached to the next submission."
+                }
+            ],
+            "generated_at": "2026-04-03T00:42:13Z",
+        },
+    )
+    _install_fake_http(
+        monkeypatch,
+        [submission_response, poll_response, evaluation_response],
+        captured_requests=captured_requests,
+    )
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Refresh proposal status",
+            "summary": "Advance a deferred live TPP execution from the workspace.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+
+    submitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert submitted.status_code == 200
+
+    evaluation_response._payload["trip_id"] = trip_id
+    evaluation_response._payload["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_response.text = json.dumps(evaluation_response._payload)
+
+    refreshed = client.post(f"/api/workspace/{trip_id}/proposal/refresh")
+
+    assert refreshed.status_code == 200
+    payload = refreshed.json()["proposal_state"]
+    assert payload["submission_status"] == "succeeded"
+    assert payload["evaluation_status"] == "succeeded"
+    assert payload["summary"]["submission_requires_polling"] is False
+    assert payload["summary"]["evaluation_transport_status"] == "succeeded"
+    assert payload["follow_up"]["status"] == "reoptimization_required"
+    assert payload["follow_up"]["selected_alternative"]["summary"] == (
+        "Use a compliant downtown property"
+    )
+    assert captured_requests[1]["full_url"] == (
+        f"https://tpp.example.test/api/planner/proposals/proposal:{trip_id}/executions/exec-live-002"
+    )
+    assert captured_requests[1]["method"] == "GET"
+    assert captured_requests[1]["body"]["proposal_version"] == "proposal-v3"
+    assert captured_requests[2]["full_url"] == (
+        "https://tpp.example.test/api/planner/executions/exec-live-002/evaluation-result"
+    )
+
+
+def test_workspace_proposal_refresh_persists_failed_remote_status(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    poll_response = _FakeHTTPResponse(
+        200,
+        {
+            "transport_pattern": "async",
+            "execution_status": {
+                "state": "failed",
+                "terminal": True,
+                "summary": "Evaluator returned an integration error",
+                "external_status": "502 Bad Gateway",
+                "updated_at": "2026-04-03T00:42:02Z",
+            },
+            "error": {
+                "code": "upstream_unavailable",
+                "message": "Travel-Plan-Permission did not return a valid evaluation payload.",
+                "category": "upstream",
+                "retryable": True,
+                "details": {
+                    "provider": "Travel-Plan-Permission",
+                    "http_status": 502,
+                },
+            },
+            "retry": {
+                "attempt": 1,
+                "max_attempts": 4,
+                "retryable": True,
+                "backoff_seconds": 60,
+                "next_retry_at": "2026-04-03T00:43:02Z",
+                "reason": "Transient upstream outage",
+            },
+            "received_at": "2026-04-03T00:42:02Z",
+            "status_endpoint": "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-failed-001",
+        },
+    )
+    _install_fake_http(monkeypatch, [poll_response])
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Refresh proposal failure",
+            "summary": "Persist live TPP execution failures in the workspace.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+    submission_fixture["response"]["result_payload"]["execution_id"] = "exec-failed-001"
+    submission_fixture["response"]["status_endpoint"] = (
+        "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-failed-001"
+    )
+
+    submitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert submitted.status_code == 200
+
+    refreshed = client.post(f"/api/workspace/{trip_id}/proposal/refresh")
+
+    assert refreshed.status_code == 200
+    payload = refreshed.json()["proposal_state"]
+    assert payload["submission_status"] == "failed"
+    assert payload["evaluation"] == {}
+    assert payload["summary"]["submission_requires_polling"] is False
+    assert payload["summary"]["evaluation_transport_status"] is None
+    assert payload["summary"]["submission_summary"] == "Evaluator returned an integration error"

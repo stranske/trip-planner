@@ -5,6 +5,7 @@ import type { TripRecord } from "../api/trips";
 import {
   answerPlannerDecision,
   recordWorkspaceSpendEvent,
+  refreshWorkspaceProposalStatus,
   saveWorkspaceBudget,
   type ActualSpendEventUpsertPayload,
   type BudgetPlanUpsertPayload,
@@ -35,6 +36,21 @@ type TimelineStop = {
 type ScenarioReviewMetric = {
   label: string;
   value: string;
+};
+
+type ProposalLifecycleState =
+  | "pending"
+  | "deferred"
+  | "running"
+  | "failed"
+  | "completed-with-follow-up"
+  | "approval-ready";
+
+type ProposalLifecyclePresentation = {
+  state: ProposalLifecycleState;
+  label: string;
+  title: string;
+  summary: string;
 };
 
 function formatDateRange(startDate: string | null, endDate: string | null): string {
@@ -256,6 +272,98 @@ function formatFollowUpStatus(status: string | undefined): string {
   return status.replace(/_/g, " ");
 }
 
+function isFailedLifecycleStatus(status: string | null | undefined): boolean {
+  return status != null && ["failed", "error", "errored", "rejected", "invalid"].includes(status);
+}
+
+function isRunningLifecycleStatus(status: string | null | undefined): boolean {
+  return (
+    status != null &&
+    ["submitted", "queued", "running", "in_progress", "processing"].includes(status)
+  );
+}
+
+function deriveProposalLifecyclePresentation(
+  proposalState: NonNullable<WorkspaceData["proposal_state"]>,
+  followUp: NonNullable<WorkspaceData["proposal_state"]>["follow_up"]
+): ProposalLifecyclePresentation {
+  const summary = proposalState.summary;
+  const submissionStatus = summary.submission_status ?? proposalState.submission_status;
+  const evaluationTransportStatus =
+    summary.evaluation_transport_status ?? proposalState.evaluation_status;
+  const followUpStatus = followUp?.status ?? summary.follow_up_status;
+
+  if (summary.approval_ready || followUpStatus === "resolved") {
+    return {
+      state: "approval-ready",
+      label: "approval-ready",
+      title: "Approval packet is ready",
+      summary:
+        summary.follow_up_summary ??
+        summary.submission_summary ??
+        "Policy evaluation passed and the workspace is ready for approval handling.",
+    };
+  }
+
+  if (isFailedLifecycleStatus(submissionStatus) || isFailedLifecycleStatus(evaluationTransportStatus)) {
+    return {
+      state: "failed",
+      label: "failed",
+      title: "Live policy execution needs attention",
+      summary:
+        summary.submission_summary ??
+        "The proposal could not complete a live policy run. Review the transport failure before retrying.",
+    };
+  }
+
+  if (
+    summary.evaluation_result_status != null ||
+    (followUpStatus != null && followUpStatus !== "awaiting_evaluation")
+  ) {
+    return {
+      state: "completed-with-follow-up",
+      label: "completed with follow-up",
+      title: "Policy review finished with follow-up",
+      summary:
+        summary.follow_up_summary ??
+        "The live policy run completed and the workspace now needs remediation or exception handling.",
+    };
+  }
+
+  if (submissionStatus === "deferred" || evaluationTransportStatus === "deferred") {
+    return {
+      state: "deferred",
+      label: "deferred",
+      title: "Policy review is deferred",
+      summary:
+        summary.submission_summary ??
+        "The remote policy service accepted the proposal and deferred the final verdict.",
+    };
+  }
+
+  if (
+    summary.submission_requires_polling ||
+    isRunningLifecycleStatus(submissionStatus) ||
+    isRunningLifecycleStatus(evaluationTransportStatus)
+  ) {
+    return {
+      state: "running",
+      label: "running",
+      title: "Policy review is running",
+      summary:
+        summary.submission_summary ??
+        "The workspace is waiting for the latest remote policy execution result.",
+    };
+  }
+
+  return {
+    state: "pending",
+    label: "pending",
+    title: "Proposal submission is pending",
+    summary: "Build and submit the approval packet to start live policy execution for this workspace.",
+  };
+}
+
 function hasRenderableFollowUp(
   followUp: NonNullable<WorkspaceData["proposal_state"]>["follow_up"]
 ): followUp is NonNullable<NonNullable<WorkspaceData["proposal_state"]>["follow_up"]> {
@@ -330,6 +438,8 @@ function WorkspacePageContent({
   const [plannerBusyLabel, setPlannerBusyLabel] = useState<string | null>(null);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
+  const [proposalError, setProposalError] = useState<string | null>(null);
+  const [proposalBusyLabel, setProposalBusyLabel] = useState<string | null>(null);
   const isCompactLayout = useCompactWorkspaceLayout();
   useEffect(() => {
     setCurrentWorkspace(workspace);
@@ -355,6 +465,13 @@ function WorkspacePageContent({
   const renderableProposalFollowUp = hasRenderableFollowUp(proposalFollowUp)
     ? proposalFollowUp
     : null;
+  const proposalLifecycle =
+    currentWorkspace.proposal_state == null
+      ? null
+      : deriveProposalLifecyclePresentation(
+          currentWorkspace.proposal_state,
+          renderableProposalFollowUp
+        );
   const scenarioPolicyPosture = formatPolicyPosture(currentWorkspace);
 
   async function handleDecisionAnswer(decisionId: string, choice: string) {
@@ -428,6 +545,24 @@ function WorkspacePageContent({
       setBudgetError(error instanceof Error ? error.message : "Spend entry failed.");
     } finally {
       setBudgetBusyLabel(null);
+    }
+  }
+
+  async function handleProposalRefresh() {
+    setProposalError(null);
+    setProposalBusyLabel("Refreshing live policy status...");
+    try {
+      const nextProposalState = await refreshWorkspaceProposalStatus(trip.trip_id);
+      startTransition(() => {
+        setCurrentWorkspace((current) => ({
+          ...current,
+          proposal_state: nextProposalState,
+        }));
+      });
+    } catch (error) {
+      setProposalError(error instanceof Error ? error.message : "Proposal status refresh failed.");
+    } finally {
+      setProposalBusyLabel(null);
     }
   }
 
@@ -519,21 +654,31 @@ function WorkspacePageContent({
 
         <section className="status-card">
           <p className="status-label">Approval packet</p>
-          <h2>
-            {currentWorkspace.proposal_state?.summary.approval_ready
-              ? "Approval packet is ready"
-              : "Proposal lifecycle in progress"}
-          </h2>
+          <h2>{proposalLifecycle?.title ?? "Proposal lifecycle in progress"}</h2>
           {currentWorkspace.proposal_state == null ? (
             <p className="muted-copy">
               Proposal submission and evaluation records have not been persisted for this workspace yet.
             </p>
           ) : (
             <>
+              {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
+              {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
               <dl className="workspace-meta">
+                <div>
+                  <dt>Workspace state</dt>
+                  <dd>{proposalLifecycle?.label ?? "pending"}</dd>
+                </div>
                 <div>
                   <dt>Submission</dt>
                   <dd>{currentWorkspace.proposal_state.summary.submission_status ?? "unknown"}</dd>
+                </div>
+                <div>
+                  <dt>Transport</dt>
+                  <dd>
+                    {currentWorkspace.proposal_state.summary.evaluation_transport_status ??
+                      currentWorkspace.proposal_state.evaluation_status ??
+                      "pending"}
+                  </dd>
                 </div>
                 <div>
                   <dt>Evaluation</dt>
@@ -557,15 +702,36 @@ function WorkspacePageContent({
                   </dd>
                 </div>
               </dl>
-              <p>{currentWorkspace.proposal_state.summary.submission_summary ?? "Submission stored for later review."}</p>
+              <p>{proposalLifecycle?.summary ?? "Submission stored for later review."}</p>
+              {currentWorkspace.proposal_state.summary.submission_requires_polling ? (
+                <button type="button" className="secondary-button" onClick={handleProposalRefresh}>
+                  Refresh live status
+                </button>
+              ) : null}
               {renderableProposalFollowUp ? (
                 <article className="decision-card">
-                  <h3>{renderableProposalFollowUp.title}</h3>
+                  <h3>{renderableProposalFollowUp.recommended_label ?? renderableProposalFollowUp.title}</h3>
                   <p>{renderableProposalFollowUp.summary}</p>
                   {renderableProposalFollowUp.guidance &&
                   renderableProposalFollowUp.guidance.length > 0 ? (
                     <p className="muted-copy">{renderableProposalFollowUp.guidance[0]}</p>
                   ) : null}
+                </article>
+              ) : proposalLifecycle?.state === "running" || proposalLifecycle?.state === "deferred" ? (
+                <article className="decision-card">
+                  <h3>Keep the workspace open for remote results</h3>
+                  <p>
+                    Reloading the workspace preserves the latest stored execution state, so you can safely return
+                    after the remote policy service posts a new verdict.
+                  </p>
+                </article>
+              ) : proposalLifecycle?.state === "failed" ? (
+                <article className="decision-card">
+                  <h3>Review the live transport failure</h3>
+                  <p>
+                    Validate the remote TPP configuration and retry posture before asking travelers to treat this
+                    workspace as approval-ready.
+                  </p>
                 </article>
               ) : null}
               <div className="decision-stack">
