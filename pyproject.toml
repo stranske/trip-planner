@@ -11,11 +11,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "ruff==0.15.1",
-    "mypy==1.19.1",
-    "pytest==9.0.2",
-    "pytest-cov==7.0.0",
-    "black==26.1.0",
+    "ruff==0.15.10",
+    "mypy==1.20.1",
+    "pytest==9.0.3",
+    "pytest-cov==7.1.0",
+    "black==26.3.1",
     "httpx==0.28.1",
 ]
 [build-system]

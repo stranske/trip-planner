@@ -12,12 +12,14 @@ export function TripMap({
   onSelectScenario,
   bundles,
   feasibilitySummary,
+  compactLayout,
 }: {
   comparison: RuntimeScenarioComparison;
   activeScenarioId: string | null;
   onSelectScenario: (scenarioId: string) => void;
   bundles: InventoryBundle[];
   feasibilitySummary: FeasibilitySummary;
+  compactLayout: boolean;
 }) {
   const activeScenario =
     comparison.scenarios.find((scenario) => scenario.scenario_id === activeScenarioId) ??
@@ -49,6 +51,15 @@ export function TripMap({
       <p className="status-label">Map surface</p>
       <h2>Map preview for {activeScenario.title}</h2>
       <p>{activeScenario.summary}</p>
+      <div className="map-provider-banner" aria-label="Map provider status">
+        <span className={`map-provider-pill map-provider-pill-${mapSurface.provider.status}`}>
+          {mapSurface.provider.label}
+        </span>
+        <p className="muted-copy">
+          {compactLayout ? "Compact" : "Full"} review keeps the provider state and fallback path
+          visible before the traveler studies the route.
+        </p>
+      </div>
       <p className="muted-copy">
         {mapSurface.provider.label} is the current map path. {mapSurface.provider.summary}
       </p>
@@ -94,6 +105,10 @@ export function TripMap({
           </div>
         )}
         <div className="map-sidebar">
+          <article className="decision-card">
+            <h3>{mapSurface.provider.kind === "google-maps" ? "Live provider path" : "Fallback route path"}</h3>
+            <p>{mapSurface.provider.summary}</p>
+          </article>
           <dl className="workspace-meta map-metrics">
             <div>
               <dt>Travel minutes</dt>
@@ -139,6 +154,27 @@ export function TripMap({
                 <li key={highlight}>{highlight}</li>
               ))}
             </ul>
+          </article>
+          <article className="decision-card">
+            <h3>Scenario review rail</h3>
+            <div className="map-scenario-rail" aria-label="Map scenario review rail">
+              {comparison.scenarios.map((scenario) => (
+                <div
+                  key={scenario.scenario_id}
+                  className={`map-scenario-rail-card${
+                    scenario.scenario_id === activeScenario.scenario_id
+                      ? " map-scenario-rail-card-active"
+                      : ""
+                  }`}
+                >
+                  <p className="scenario-kicker">
+                    {scenario.recommended_for_selection ? "recommended" : scenario.status}
+                  </p>
+                  <h4>{scenario.title}</h4>
+                  <p>{scenario.metrics.travel_minutes} min · {scenario.metrics.transfers} transfers</p>
+                </div>
+              ))}
+            </div>
           </article>
         </div>
       </div>
