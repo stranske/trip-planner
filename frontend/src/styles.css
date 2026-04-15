@@ -143,6 +143,12 @@ a {
   pointer-events: none;
 }
 
+.workspace-hero-emphasis {
+  margin: 1rem 0 0;
+  max-width: 42rem;
+  color: #365063;
+}
+
 .workspace-meta {
   display: grid;
   gap: 0.9rem;
@@ -227,6 +233,27 @@ a {
   background: rgba(56, 117, 107, 0.08);
 }
 
+.timeline-summary-grid,
+.scenario-review-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 1.25rem;
+}
+
+.timeline-summary-card,
+.scenario-review-card {
+  min-height: 100%;
+}
+
+.scenario-review-metrics {
+  margin-top: 1rem;
+}
+
+.scenario-highlight-list {
+  margin-top: 1rem;
+}
+
 .scenario-kicker {
   margin: 0 0 0.35rem;
   text-transform: uppercase;
@@ -266,6 +293,35 @@ a {
 
 .map-card {
   grid-column: 1 / -1;
+}
+
+.map-provider-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.map-provider-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.map-provider-pill-live {
+  background: rgba(56, 117, 107, 0.16);
+  color: #234f48;
+}
+
+.map-provider-pill-fallback {
+  background: rgba(132, 86, 35, 0.14);
+  color: #845623;
 }
 
 .map-scenario-toggle {
@@ -382,9 +438,55 @@ a {
   display: grid;
 }
 
+.map-scenario-rail {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.map-scenario-rail-card {
+  padding: 0.85rem 0.9rem;
+  border-radius: 18px;
+  background: rgba(19, 33, 44, 0.04);
+}
+
+.map-scenario-rail-card-active {
+  background: rgba(56, 117, 107, 0.1);
+  border: 1px solid rgba(56, 117, 107, 0.2);
+}
+
+.map-scenario-rail-card h4 {
+  margin: 0 0 0.3rem;
+}
+
+.map-scenario-rail-card p {
+  margin: 0;
+  color: #365063;
+}
+
 @media (max-width: 820px) {
   .map-surface {
     grid-template-columns: 1fr;
+  }
+
+  .workspace-layout-compact .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-layout-compact .timeline-stop {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .map-scenario-toggle {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .map-toggle-chip {
+    width: 100%;
+    text-align: left;
   }
 }
 

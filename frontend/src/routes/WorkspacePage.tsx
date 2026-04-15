@@ -32,6 +32,11 @@ type TimelineStop = {
   endDay: number;
 };
 
+type ScenarioReviewMetric = {
+  label: string;
+  value: string;
+};
+
 function formatDateRange(startDate: string | null, endDate: string | null): string {
   if (!startDate && !endDate) {
     return "Dates not set yet";
@@ -111,6 +116,38 @@ function buildTimelineStops(workspace: WorkspaceData): TimelineStop[] {
   });
 }
 
+function useCompactWorkspaceLayout(): boolean {
+  const [isCompact, setIsCompact] = useState(() =>
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function"
+      ? window.matchMedia("(max-width: 820px)").matches
+      : false
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 820px)");
+    const updateLayout = (event: MediaQueryListEvent | MediaQueryList) => {
+      setIsCompact(event.matches);
+    };
+
+    updateLayout(mediaQuery);
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", updateLayout);
+      return () => mediaQuery.removeEventListener("change", updateLayout);
+    }
+
+    mediaQuery.addListener(updateLayout);
+    return () => mediaQuery.removeListener(updateLayout);
+  }, []);
+
+  return isCompact;
+}
+
 function formatDate(value: string): string {
   const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (dateOnlyMatch) {
@@ -137,6 +174,61 @@ function formatCurrency(amount: number, currency: string): string {
       maximumFractionDigits: 0,
     }).format(amount);
   }
+}
+
+function formatScenarioScore(score: number): string {
+  return `${Math.round(score * 100)} / 100`;
+}
+
+function formatPolicyPosture(workspace: WorkspaceData): string {
+  const proposalState = workspace.proposal_state;
+  if (proposalState == null) {
+    return "No approval packet yet";
+  }
+
+  if (proposalState.summary.approval_ready) {
+    return "Approval-ready";
+  }
+
+  if (proposalState.summary.follow_up_status) {
+    return formatFollowUpStatus(proposalState.summary.follow_up_status);
+  }
+
+  return proposalState.summary.evaluation_result_status ?? "review pending";
+}
+
+function buildScenarioReviewMetrics(
+  workspace: WorkspaceData,
+  scenario: WorkspaceData["runtime_scenario_comparison"]["scenarios"][number]
+): ScenarioReviewMetric[] {
+  return [
+    {
+      label: "Estimated total",
+      value:
+        scenario.metrics.estimated_total == null
+          ? "Pending"
+          : formatCurrency(
+              scenario.metrics.estimated_total.typical_amount,
+              scenario.metrics.estimated_total.currency
+            ),
+    },
+    {
+      label: "Travel minutes",
+      value: `${scenario.metrics.travel_minutes} min`,
+    },
+    {
+      label: "Transfers",
+      value: `${scenario.metrics.transfers}`,
+    },
+    {
+      label: "Feasibility",
+      value: scenario.feasible ? "Ready to review" : "Needs feasibility work",
+    },
+    {
+      label: "Policy posture",
+      value: formatPolicyPosture(workspace),
+    },
+  ];
 }
 
 function ScenarioSummaryCard({
@@ -238,6 +330,7 @@ function WorkspacePageContent({
   const [plannerBusyLabel, setPlannerBusyLabel] = useState<string | null>(null);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
+  const isCompactLayout = useCompactWorkspaceLayout();
   useEffect(() => {
     setCurrentWorkspace(workspace);
     setSelectedMapScenarioId(resolveMapScenarioId(workspace));
@@ -252,10 +345,17 @@ function WorkspacePageContent({
   const timelineStops = buildTimelineStops(currentWorkspace);
   const { trip } = currentWorkspace.trip_record;
   const activeScenario = resolveActiveScenario(currentWorkspace);
+  const activeRuntimeScenario =
+    currentWorkspace.runtime_scenario_comparison.scenarios.find(
+      (scenario) => scenario.scenario_id === (selectedMapScenarioId ?? activeScenario.scenario?.scenario_id)
+    ) ??
+    currentWorkspace.runtime_scenario_comparison.scenarios[0] ??
+    null;
   const proposalFollowUp = currentWorkspace.proposal_state?.follow_up ?? null;
   const renderableProposalFollowUp = hasRenderableFollowUp(proposalFollowUp)
     ? proposalFollowUp
     : null;
+  const scenarioPolicyPosture = formatPolicyPosture(currentWorkspace);
 
   async function handleDecisionAnswer(decisionId: string, choice: string) {
     setPlannerError(null);
@@ -332,7 +432,10 @@ function WorkspacePageContent({
   }
 
   return (
-    <section className="workspace-layout">
+    <section
+      className={`workspace-layout${isCompactLayout ? " workspace-layout-compact" : ""}`}
+      data-layout={isCompactLayout ? "compact" : "full"}
+    >
       <div className="workspace-hero status-card">
         <p className="status-label">Workspace timeline</p>
         <h2>{trip.title}</h2>
@@ -359,6 +462,11 @@ function WorkspacePageContent({
             <dd>{trip.status}</dd>
           </div>
         </dl>
+        <p className="workspace-hero-emphasis">
+          {isCompactLayout
+            ? "Compact review stack keeps map, timeline, and tradeoff calls visible on smaller screens."
+            : "Review-ready workspace keeps route context, daily pacing, and tradeoffs visible at once."}
+        </p>
       </div>
 
       <div className="workspace-grid">
@@ -392,6 +500,7 @@ function WorkspacePageContent({
           onSelectScenario={setSelectedMapScenarioId}
           bundles={currentWorkspace.inventory_summary.bundles}
           feasibilitySummary={currentWorkspace.feasibility_summary}
+          compactLayout={isCompactLayout}
         />
 
         <ScenarioComparison
@@ -509,9 +618,37 @@ function WorkspacePageContent({
             </>
           ) : (
             <>
-              <h2>{activeScenario.scenario.title}</h2>
+              <h2>{isCompactLayout ? "Compact day-by-day review" : "Trip rhythm and day sequencing"}</h2>
               <p>{activeScenario.scenario.scenario_summary.headline}</p>
-              <ol className="timeline-list">
+              <div className="timeline-summary-grid" aria-label="Timeline summary">
+                <article className="timeline-summary-card">
+                  <p className="scenario-kicker">Duration</p>
+                  <h3>
+                    {trip.trip_frame.duration_days == null
+                      ? "Trip length pending"
+                      : `${trip.trip_frame.duration_days} days planned`}
+                  </h3>
+                  <p>Dates: {formatDateRange(trip.trip_frame.start_date, trip.trip_frame.end_date)}</p>
+                </article>
+                <article className="timeline-summary-card">
+                  <p className="scenario-kicker">Route shape</p>
+                  <h3>{timelineStops.length} review checkpoints</h3>
+                  <p>
+                    {activeRuntimeScenario?.route_summary ??
+                      activeScenario.scenario.scenario_summary.route_sequence.join(" -> ")}
+                  </p>
+                </article>
+                <article className="timeline-summary-card">
+                  <p className="scenario-kicker">Pacing</p>
+                  <h3>
+                    {activeRuntimeScenario == null
+                      ? "Planner score pending"
+                      : `${formatScenarioScore(activeRuntimeScenario.metrics.score)} planner score`}
+                  </h3>
+                  <p>{scenarioPolicyPosture} packet posture for the current workspace.</p>
+                </article>
+              </div>
+              <ol className="timeline-list" aria-label="Trip timeline sequence">
                 {timelineStops.map((stop) => (
                   <li key={stop.key} className="timeline-stop">
                     <div className="timeline-dayband">
@@ -521,7 +658,8 @@ function WorkspacePageContent({
                     <div>
                       <h3>{stop.label}</h3>
                       <p>
-                        Derived from the scenario route sequence and the persisted trip frame.
+                        Days {stop.startDay}-{stop.endDay} keep this stop visible in the selected
+                        scenario review path.
                       </p>
                     </div>
                   </li>
@@ -529,6 +667,51 @@ function WorkspacePageContent({
               </ol>
             </>
           )}
+        </section>
+
+        <section className="status-card">
+          <p className="status-label">Scenario review board</p>
+          <h2>{isCompactLayout ? "Compact scenario tradeoffs" : "Review-ready scenario tradeoffs"}</h2>
+          <p>
+            Cost, route burden, feasibility, and policy posture stay scannable here without
+            forcing the traveler into raw scenario notes.
+          </p>
+          <div className="scenario-review-grid" aria-label="Scenario review board">
+            {currentWorkspace.runtime_scenario_comparison.scenarios.map((scenario) => {
+              const reviewMetrics = buildScenarioReviewMetrics(currentWorkspace, scenario);
+              const isSelected = scenario.scenario_id === selectedScenarioComparisonId;
+
+              return (
+                <article
+                  key={scenario.scenario_id}
+                  className={`scenario-card scenario-review-card${
+                    isSelected ? " scenario-card-active" : ""
+                  }`}
+                  aria-label={`${scenario.title} review summary`}
+                >
+                  <p className="scenario-kicker">
+                    {scenario.recommended_for_selection ? "recommended" : scenario.status}
+                  </p>
+                  <h3>{scenario.title}</h3>
+                  <p>{scenario.summary}</p>
+                  <dl className="workspace-meta scenario-review-metrics">
+                    {reviewMetrics.map((metric) => (
+                      <div key={`${scenario.scenario_id}-${metric.label}`}>
+                        <dt>{metric.label}</dt>
+                        <dd>{metric.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <p className="muted-copy">{scenario.comparison_note}</p>
+                  <ul className="focus-area-list scenario-highlight-list">
+                    {scenario.highlights.slice(0, 2).map((highlight) => (
+                      <li key={highlight}>{highlight}</li>
+                    ))}
+                  </ul>
+                </article>
+              );
+            })}
+          </div>
         </section>
 
         <section className="status-card">

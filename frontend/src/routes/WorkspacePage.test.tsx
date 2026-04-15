@@ -618,6 +618,22 @@ function getPlannerHost() {
   return plannerHost as HTMLDivElement;
 }
 
+function stubMatchMedia(matches: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
 describe("WorkspacePage", () => {
   afterEach(() => {
     cleanup();
@@ -643,7 +659,7 @@ describe("WorkspacePage", () => {
 
     const routeContextMap = screen.getByLabelText("Route context map");
 
-    expect(screen.getByRole("heading", { name: "Kyoto base with Uji day trip" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: "Kyoto base with Uji day trip" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })).toBeInTheDocument();
     expect(within(routeContextMap).getAllByRole("heading", { name: "Kyoto" })).toHaveLength(2);
     expect(within(routeContextMap).getByRole("heading", { name: "Uji" })).toBeInTheDocument();
@@ -651,6 +667,11 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Trip-scoped planner surface")).toBeInTheDocument();
     expect(routeContextMap).toBeInTheDocument();
     expect(screen.getByText("Destination anchors")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Trip rhythm and day sequencing" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Timeline summary")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review-ready scenario tradeoffs" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Scenario review board")).toBeInTheDocument();
+    expect(screen.getAllByText("Policy posture").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Assembled inventory layer" })).toBeInTheDocument();
     expect(screen.getByText("Osaka arrival buffer")).toBeInTheDocument();
     expect(screen.getByText("Kyoto cultural anchor")).toBeInTheDocument();
@@ -693,7 +714,7 @@ describe("WorkspacePage", () => {
       screen.getByRole("heading", { name: "Map preview for Kyoto plus Osaka fallback" })
     ).toBeInTheDocument();
     expect(within(screen.getByLabelText("Route context map")).getByRole("heading", { name: "Osaka" })).toBeInTheDocument();
-    expect(screen.getByText("Higher transfer load to preserve nightlife breadth.")).toBeInTheDocument();
+    expect(screen.getAllByText("Higher transfer load to preserve nightlife breadth.").length).toBeGreaterThan(0);
   });
 
   it("renders the Google Maps provider path when configured", async () => {
@@ -716,6 +737,7 @@ describe("WorkspacePage", () => {
     expect(initialFrame).toHaveAttribute("src", expect.stringContaining("key=test-key"));
     expect(initialFrame).toHaveAttribute("src", expect.stringContaining("origin=Kyoto"));
     expect(initialFrame).toHaveAttribute("src", expect.stringContaining("waypoints=Uji"));
+    expect(screen.getByText("Live provider path")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 
@@ -836,6 +858,25 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(getPlannerHost().shadowRoot?.querySelector('[aria-label="Planner side panel"]')).toBeTruthy();
     });
+  });
+
+  it("renders the fallback map state and compact review copy on small screens", async () => {
+    stubMatchMedia(true);
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Compact scenario tradeoffs" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Compact review stack keeps map, timeline, and tradeoff calls visible on smaller screens.")).toBeInTheDocument();
+    expect(screen.getByText("Fallback route path")).toBeInTheDocument();
+    expect(screen.getAllByText(/Google Maps is not configured in this environment/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Compact day-by-day review" })).toBeInTheDocument();
   });
 
   it("shows created-trip metadata even when the workspace has no seeded scenario state yet", async () => {
