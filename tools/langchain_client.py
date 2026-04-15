@@ -95,10 +95,8 @@ def _resolve_model(model: str | None) -> str:
 
 def _default_slots() -> list[SlotDefinition]:
     return [
-        SlotDefinition(name="slot1", provider=PROVIDER_OPENAI, model="gpt-5.2"),
-        SlotDefinition(
-            name="slot2", provider=PROVIDER_ANTHROPIC, model="claude-sonnet-4-5-20250929"
-        ),
+        SlotDefinition(name="slot1", provider=PROVIDER_OPENAI, model="gpt-5.4"),
+        SlotDefinition(name="slot2", provider=PROVIDER_ANTHROPIC, model="claude-sonnet-4-6"),
         SlotDefinition(name="slot3", provider=PROVIDER_GITHUB, model=DEFAULT_MODEL),
     ]
 

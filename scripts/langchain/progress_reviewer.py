@@ -415,7 +415,7 @@ def review_progress_with_llm(
     recent_commits: list[str],
     files_changed: list[str],
     rounds_without_completion: int,
-    model: str = "gpt-4o-mini",
+    model: str = "gpt-5.4-mini",
 ) -> ProgressReviewResult:
     """
     Use LLM to review agent progress and provide recommendation.
@@ -537,7 +537,7 @@ def review_progress(
     files_changed: list[str],
     rounds_without_completion: int,
     use_llm: bool = True,
-    model: str = "gpt-4o-mini",
+    model: str = "gpt-5.4-mini",
 ) -> ProgressReviewResult:
     """
     Main entry point for progress review.
@@ -714,7 +714,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--model",
-        default="gpt-4o-mini",
+        default="gpt-5.4-mini",
         help="LLM model to use",
     )
     parser.add_argument(

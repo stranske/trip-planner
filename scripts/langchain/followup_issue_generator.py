@@ -867,7 +867,7 @@ def _get_llm_client(reasoning: bool = False) -> tuple[Any, str] | None:
         if not resolved:
             resolved = build_chat_client()
     else:
-        model = os.environ.get("FOLLOWUP_MODEL")
+        model = os.environ.get("FOLLOWUP_MODEL", "gpt-5.4")
         resolved = build_chat_client(model=model)
 
     if not resolved:
@@ -1177,7 +1177,7 @@ def generate_followup_issue(
 
     # Get reasoning model for analysis (o3-mini)
     reasoning_client_info = _get_llm_client(reasoning=True)
-    # Get standard model for formatting (gpt-4o)
+    # Get standard model for follow-up generation/formatting (gpt-5.4)
     standard_client_info = _get_llm_client(reasoning=False)
 
     # Handle partial availability: use whatever client(s) we have
@@ -1258,7 +1258,8 @@ def _generate_with_llm(
 ) -> FollowupIssue:
     """Generate follow-up issue using multi-round LLM interaction.
 
-    Uses reasoning model (o3-mini) for analysis, standard model (gpt-4o) for formatting.
+    Uses reasoning model (o3-mini) for analysis, standard model (gpt-5.4) for follow-up
+    generation and formatting.
     """
 
     # Prepare iteration details - only include if there's useful failure information
