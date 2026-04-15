@@ -282,7 +282,6 @@ def _build_summary(
     submission_requires_polling = (
         execution_status.get("terminal") is False
         or evaluation_transport.get("terminal") is False
-        or follow_up.get("status") == "awaiting_evaluation"
     )
     return {
         "trip_id": proposal_payload.get("trip_id"),
@@ -412,6 +411,9 @@ def _update_submission_record_from_poll(
     submission_record["received_at"] = response.received_at
     submission_record["status_endpoint"] = response.status_endpoint or submission_record.get(
         "status_endpoint"
+    )
+    submission_record["last_poll_status_endpoint"] = response.status_endpoint or submission_record.get(
+        "last_poll_status_endpoint"
     )
     submission_record["execution_id"] = execution_id
     if response_payload.get("queue_state") is not None:

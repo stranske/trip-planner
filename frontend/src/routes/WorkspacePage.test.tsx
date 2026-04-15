@@ -1192,6 +1192,42 @@ describe("WorkspacePage", () => {
     expect(screen.getByRole("button", { name: "Refresh live status" })).toBeInTheDocument();
   });
 
+  it("keeps refresh affordances visible when execution succeeded but evaluation is still missing", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state,
+          submission_status: "succeeded",
+          evaluation_status: "succeeded",
+          follow_up: null,
+          summary: {
+            ...workspacePayload.proposal_state.summary,
+            submission_status: "succeeded",
+            submission_summary: "Execution finished, but the evaluation payload still needs to be persisted.",
+            submission_requires_polling: false,
+            evaluation_transport_status: "succeeded",
+            evaluation_result_status: null,
+            approval_ready: false,
+            follow_up_status: null,
+            follow_up_title: null,
+            follow_up_summary: null,
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Awaiting policy evaluation result" })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "Refresh live status" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Execution finished, but the evaluation payload still needs to be persisted.")
+    ).toBeInTheDocument();
+  });
+
   it("refreshes the proposal lifecycle when the workspace requests live status", async () => {
     mockedRefreshWorkspaceProposalStatus.mockResolvedValue({
       ...workspacePayload.proposal_state,
