@@ -676,42 +676,49 @@ function WorkspacePageContent({
             Cost, route burden, feasibility, and policy posture stay scannable here without
             forcing the traveler into raw scenario notes.
           </p>
-          <div className="scenario-review-grid" aria-label="Scenario review board">
-            {currentWorkspace.runtime_scenario_comparison.scenarios.map((scenario) => {
-              const reviewMetrics = buildScenarioReviewMetrics(currentWorkspace, scenario);
-              const isSelected = scenario.scenario_id === selectedScenarioComparisonId;
+          {currentWorkspace.runtime_scenario_comparison.scenarios.length > 0 ? (
+            <div className="scenario-review-grid" aria-label="Scenario review board">
+              {currentWorkspace.runtime_scenario_comparison.scenarios.map((scenario) => {
+                const reviewMetrics = buildScenarioReviewMetrics(currentWorkspace, scenario);
+                const isSelected = scenario.scenario_id === selectedScenarioComparisonId;
 
-              return (
-                <article
-                  key={scenario.scenario_id}
-                  className={`scenario-card scenario-review-card${
-                    isSelected ? " scenario-card-active" : ""
-                  }`}
-                  aria-label={`${scenario.title} review summary`}
-                >
-                  <p className="scenario-kicker">
-                    {scenario.recommended_for_selection ? "recommended" : scenario.status}
-                  </p>
-                  <h3>{scenario.title}</h3>
-                  <p>{scenario.summary}</p>
-                  <dl className="workspace-meta scenario-review-metrics">
-                    {reviewMetrics.map((metric) => (
-                      <div key={`${scenario.scenario_id}-${metric.label}`}>
-                        <dt>{metric.label}</dt>
-                        <dd>{metric.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <p className="muted-copy">{scenario.comparison_note}</p>
-                  <ul className="focus-area-list scenario-highlight-list">
-                    {scenario.highlights.slice(0, 2).map((highlight) => (
-                      <li key={highlight}>{highlight}</li>
-                    ))}
-                  </ul>
-                </article>
-              );
-            })}
-          </div>
+                return (
+                  <article
+                    key={scenario.scenario_id}
+                    className={`scenario-card scenario-review-card${
+                      isSelected ? " scenario-card-active" : ""
+                    }`}
+                    aria-label={`${scenario.title} review summary`}
+                  >
+                    <p className="scenario-kicker">
+                      {scenario.recommended_for_selection ? "recommended" : scenario.status}
+                    </p>
+                    <h3>{scenario.title}</h3>
+                    <p>{scenario.summary}</p>
+                    <dl className="workspace-meta scenario-review-metrics">
+                      {reviewMetrics.map((metric) => (
+                        <div key={`${scenario.scenario_id}-${metric.label}`}>
+                          <dt>{metric.label}</dt>
+                          <dd>{metric.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <p className="muted-copy">{scenario.comparison_note}</p>
+                    <ul className="focus-area-list scenario-highlight-list">
+                      {scenario.highlights.slice(0, 2).map((highlight) => (
+                        <li key={highlight}>{highlight}</li>
+                      ))}
+                    </ul>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="muted-copy">
+              No runtime scenarios are available yet, so there is nothing to review in the
+              scenario board.
+            </p>
+          )}
         </section>
 
         <section className="status-card">
