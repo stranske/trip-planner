@@ -47,6 +47,7 @@ _FIXTURE_BUNDLE_INPUTS: dict[str, InventoryFixtureSeed] = {
 class InventoryAssemblyInput:
     trip_id: str
     trip_mode: str
+    duration_days: int | None
     query: SourceQuery
     snapshot: RawSnapshot
     handoff: NormalizationHandoff
@@ -56,10 +57,18 @@ class InventoryAssemblyInput:
 class PersistedTripInventoryFixtureAdapter(SourceAdapter):
     """Expose fixture-backed inventory as an explicit adapter seam for persisted trips."""
 
-    def __init__(self, *, trip_id: str, trip_mode: str, primary_regions: Sequence[str]) -> None:
+    def __init__(
+        self,
+        *,
+        trip_id: str,
+        trip_mode: str,
+        primary_regions: Sequence[str],
+        duration_days: int | None = None,
+    ) -> None:
         self.trip_id = trip_id
         self.trip_mode = trip_mode
         self.primary_regions = tuple(region for region in primary_regions if region)
+        self.duration_days = duration_days
         self.adapter_id = "persisted-trip-fixture-inventory"
         self.source_record = SourceRecord(
             source_id="fixture-normalized-inventory",
@@ -82,6 +91,8 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
             return fixture_seed.fixture_names
         if not self.primary_regions:
             return ()
+        if self.duration_days is None or self.duration_days <= 0:
+            return ()
         if self.trip_mode == "leisure":
             return ("route_level_mixed_option.json",)
         if self.trip_mode == "business":
@@ -90,22 +101,34 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
 
     def fetch_snapshot(self, query: SourceQuery) -> RawSnapshot:
         fixture_names = self.fixture_names()
-        issues = (
-            []
-            if fixture_names
-            else [
-                AdapterIssue(
-                    issue_id=f"issue:{self.trip_id}:inventory-fallback",
-                    stage="availability",
-                    severity="warning",
-                    code="missing_inventory_adapter_input",
-                    message=(
-                        "No adapter-backed inventory input is available for this persisted trip yet."
-                    ),
-                    details={"trip_id": self.trip_id, "trip_mode": self.trip_mode},
+        issues: list[AdapterIssue] = []
+        if not fixture_names:
+            if not self.primary_regions:
+                issues.append(
+                    AdapterIssue(
+                        issue_id=f"issue:{self.trip_id}:inventory-missing-regions",
+                        stage="availability",
+                        severity="warning",
+                        code="missing_inventory_primary_regions",
+                        message=(
+                            "Primary regions are still missing, so the runtime inventory remains empty."
+                        ),
+                        details={"trip_id": self.trip_id, "trip_mode": self.trip_mode},
+                    )
                 )
-            ]
-        )
+            else:
+                issues.append(
+                    AdapterIssue(
+                        issue_id=f"issue:{self.trip_id}:inventory-missing-duration",
+                        stage="availability",
+                        severity="warning",
+                        code="missing_inventory_trip_duration",
+                        message=(
+                            "Trip dates or duration are still missing, so inventory assembly stays partial."
+                        ),
+                        details={"trip_id": self.trip_id, "trip_mode": self.trip_mode},
+                    )
+                )
         records = [
             RawSourceRecord(
                 record_id=f"{query.query_id}:{index}",
@@ -135,6 +158,7 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
                 "trip_id": self.trip_id,
                 "trip_mode": self.trip_mode,
                 "region_count": str(len(self.primary_regions)),
+                "duration_days": "" if self.duration_days is None else str(self.duration_days),
             },
         )
 
@@ -185,6 +209,7 @@ def _build_inventory_assembly_input(
     trip_id: str,
     trip_mode: str,
     primary_regions: Sequence[str] = (),
+    duration_days: int | None = None,
 ) -> InventoryAssemblyInput:
     query = SourceQuery(
         query_id=f"inventory-query:{trip_id}",
@@ -199,12 +224,14 @@ def _build_inventory_assembly_input(
         trip_id=trip_id,
         trip_mode=trip_mode,
         primary_regions=primary_regions,
+        duration_days=duration_days,
     )
     snapshot = adapter.fetch_snapshot(query)
     handoff = adapter.build_handoff(snapshot)
     return InventoryAssemblyInput(
         trip_id=trip_id,
         trip_mode=trip_mode,
+        duration_days=duration_days,
         query=query,
         snapshot=snapshot,
         handoff=handoff,
@@ -260,6 +287,33 @@ def build_inventory_summary_payload(
             "Bundle assembly will appear here once normalized option inputs are available for the trip."
         ]
 
+    if bundles:
+        runtime_state = {
+            "status": "ready",
+            "title": "Runtime inventory is ready",
+            "summary": "Persisted trip context is rich enough to assemble comparison-ready inventory bundles.",
+        }
+    elif assembly_input is not None and assembly_input.snapshot.issues:
+        issue = assembly_input.snapshot.issues[0]
+        if issue.code == "missing_inventory_trip_duration":
+            runtime_state = {
+                "status": "partial",
+                "title": "Runtime inventory is partially specified",
+                "summary": "Add trip dates or duration to replace the bounded fallback with runtime bundle assembly.",
+            }
+        else:
+            runtime_state = {
+                "status": "empty",
+                "title": "Runtime inventory is still empty",
+                "summary": "Add at least one primary region before the workspace can assemble runtime inventory bundles.",
+            }
+    else:
+        runtime_state = {
+            "status": "empty",
+            "title": "Runtime inventory is still empty",
+            "summary": "Bundle assembly will appear once the trip carries enough persisted runtime context.",
+        }
+
     return {
         "bundle_count": len(bundles),
         "bundles": [
@@ -276,6 +330,7 @@ def build_inventory_summary_payload(
             for bundle in bundles
         ],
         "notes": notes,
+        "runtime_state": runtime_state,
     }
 
 
@@ -288,6 +343,7 @@ def get_inventory_payload(
     fixture_seed = _FIXTURE_BUNDLE_INPUTS.get(trip_id)
     record: PersistedTrip | None = None
     primary_regions: Sequence[str] = ()
+    duration_days: int | None = None
     if fixture_seed is not None:
         trip_mode = fixture_seed.trip_mode
     else:
@@ -300,11 +356,13 @@ def get_inventory_payload(
             return None
         trip_mode = record.mode
         primary_regions = tuple(record.primary_regions)
+        duration_days = record.duration_days
 
     assembly_input = _build_inventory_assembly_input(
         trip_id=trip_id,
         trip_mode=trip_mode,
         primary_regions=primary_regions,
+        duration_days=duration_days,
     )
     bundles = assemble_inventory_bundles_for_trip(assembly_input=assembly_input)
     return {
