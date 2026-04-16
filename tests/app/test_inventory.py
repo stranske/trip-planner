@@ -10,9 +10,7 @@ from trip_planner.persistence.db import reset_database_state
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    monkeypatch.setenv(
-        "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'inventory.db'}"
-    )
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'inventory.db'}")
     reset_database_state()
     app = create_app()
 
@@ -75,8 +73,7 @@ def test_inventory_endpoint_assembles_bundles_for_persisted_trip(client: TestCli
     assert payload["bundles"][0]["bundle_id"].startswith("bundle-")
     assert payload["summary"]["runtime_state"]["status"] == "ready"
     assert any(
-        "adapter-backed inventory assembly seam" in note
-        for note in payload["summary"]["notes"]
+        "adapter-backed inventory assembly seam" in note for note in payload["summary"]["notes"]
     )
 
 
@@ -135,4 +132,4 @@ def test_inventory_endpoint_returns_bounded_empty_fallback_for_partial_trip_inpu
     assert payload["trip_id"] == trip_id
     assert payload["bundle_count"] == 0
     assert payload["summary"]["runtime_state"]["status"] == "empty"
-    assert "No adapter-backed inventory input is available" in payload["summary"]["notes"][0]
+    assert "Primary regions are still missing" in payload["summary"]["notes"][0]

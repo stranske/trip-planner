@@ -19,9 +19,7 @@ from trip_planner.persistence.models.activity import PersistedPlannerAction
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    monkeypatch.setenv(
-        "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'workspace.db'}"
-    )
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'workspace.db'}")
     reset_database_state()
     app = create_app()
 
@@ -45,15 +43,13 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
     assert response.status_code == 200
     payload = response.json()
     assert payload["trip_record"]["trip"]["trip_id"] == "trip-leisure-kyoto-draft"
-    assert (
-        payload["session"]["current_saved_scenario_id"]
-        == "saved-scenario:kyoto-baseline"
-    )
+    assert payload["session"]["current_saved_scenario_id"] == "saved-scenario:kyoto-baseline"
     assert payload["scenario_search"]["title"] == "Kyoto ranked scenario workspace"
     assert payload["scenario_search"]["scenarios"][0]["title"] == "Kyoto cultural anchor"
-    assert payload["scenario_search"]["scenarios"][0]["scenario_summary"][
-        "route_sequence"
-    ] == ["dest-city-osaka", "dest-city-kyoto"]
+    assert payload["scenario_search"]["scenarios"][0]["scenario_summary"]["route_sequence"] == [
+        "dest-city-osaka",
+        "dest-city-kyoto",
+    ]
     assert payload["inventory_summary"]["bundle_count"] == 2
     assert payload["inventory_summary"]["bundles"][0]["title"] == "Osaka arrival buffer"
     assert payload["feasibility_summary"]["assessment_count"] == 2
@@ -64,9 +60,10 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
     assert payload["planner_panel_state"]["outputs"][0]["tags"][0] == "feasibility"
     assert payload["planner_panel_state"]["outputs"][3]["title"] == "Scenario ranking summary"
     assert payload["planner_panel_state"]["outputs"][4]["title"].startswith("Rank #1 ")
-    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == payload["scenario_search"][
-        "scenarios"
-    ][0]["scenario_id"]
+    assert (
+        payload["runtime_scenario_comparison"]["lead_scenario_id"]
+        == payload["scenario_search"]["scenarios"][0]["scenario_id"]
+    )
     assert payload["runtime_state"]["status"] == "ready"
     assert payload["inventory_summary"]["runtime_state"]["status"] == "ready"
     assert payload["runtime_scenario_comparison"]["comparison_axes"][-1]["key"] == "estimated_total"
@@ -95,13 +92,17 @@ def test_workspace_endpoint_surfaces_business_ranked_scenarios(client: TestClien
     payload = response.json()
     assert payload["scenario_search"]["title"] == "Client summit ranked scenarios"
     assert payload["scenario_search"]["scenarios"][0]["title"] == "Airport arrival bundle"
-    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == payload["runtime_scenario_comparison"][
-        "scenarios"
-    ][0]["scenario_id"]
+    assert (
+        payload["runtime_scenario_comparison"]["lead_scenario_id"]
+        == payload["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"]
+    )
     assert payload["runtime_scenario_comparison"]["scenarios"][0]["status"] == "fallback"
     assert payload["planner_panel_state"]["outputs"][2]["title"] == "Scenario ranking summary"
     assert payload["planner_panel_state"]["outputs"][3]["title"] == "Rank #1 Airport arrival bundle"
-    assert payload["planner_panel_state"]["option_set"]["options"][0]["label"] == "Airport arrival bundle"
+    assert (
+        payload["planner_panel_state"]["option_set"]["options"][0]["label"]
+        == "Airport arrival bundle"
+    )
 
 
 def test_workspace_scenario_comparison_endpoint_returns_runtime_surface(
@@ -164,9 +165,10 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_busin
     assert payload["trip_record"]["trip"]["title"] == "Chicago kickoff"
     assert payload["trip_record"]["artifact_refs"]["session_state_id"] == f"session:{trip_id}"
     assert payload["session"]["trip_id"] == trip_id
-    assert payload["session"]["current_saved_scenario_id"] == payload["saved_scenarios"][0][
-        "saved_scenario_id"
-    ]
+    assert (
+        payload["session"]["current_saved_scenario_id"]
+        == payload["saved_scenarios"][0]["saved_scenario_id"]
+    )
     assert payload["session"]["pending_decisions"][0]["decision_id"].startswith("decision:")
     assert len(payload["saved_scenarios"]) == 2
     lead_saved_scenario_id = payload["saved_scenarios"][0]["saved_scenario_id"]
@@ -198,9 +200,10 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_busin
     assert scenario_history.status_code == 200
     history_payload = scenario_history.json()
     assert len(history_payload["saved_scenarios"]) == 2
-    assert history_payload["planning_sessions"][0]["current_saved_scenario_id"] == payload["session"][
-        "current_saved_scenario_id"
-    ]
+    assert (
+        history_payload["planning_sessions"][0]["current_saved_scenario_id"]
+        == payload["session"]["current_saved_scenario_id"]
+    )
 
 
 def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisure_trip(
@@ -334,15 +337,18 @@ def test_workspace_endpoint_returns_bounded_empty_runtime_state_when_trip_frame_
     assert initial_payload["inventory_summary"]["runtime_state"]["status"] == "empty"
     assert initial_payload["scenario_search"]["scenarios"] == []
     assert initial_payload["runtime_scenario_comparison"]["scenarios"] == []
-    assert initial_payload["scenario_search"]["scenarios"] == reloaded_payload["scenario_search"][
-        "scenarios"
-    ]
-    assert initial_payload["planner_panel_state"]["option_set"]["options"] == reloaded_payload[
-        "planner_panel_state"
-    ]["option_set"]["options"]
-    assert initial_payload["runtime_scenario_comparison"]["scenarios"] == reloaded_payload[
-        "runtime_scenario_comparison"
-    ]["scenarios"]
+    assert (
+        initial_payload["scenario_search"]["scenarios"]
+        == reloaded_payload["scenario_search"]["scenarios"]
+    )
+    assert (
+        initial_payload["planner_panel_state"]["option_set"]["options"]
+        == reloaded_payload["planner_panel_state"]["option_set"]["options"]
+    )
+    assert (
+        initial_payload["runtime_scenario_comparison"]["scenarios"]
+        == reloaded_payload["runtime_scenario_comparison"]["scenarios"]
+    )
 
 
 def test_workspace_endpoint_surfaces_partial_runtime_state_for_under_scoped_trip(
@@ -370,6 +376,17 @@ def test_workspace_endpoint_surfaces_partial_runtime_state_for_under_scoped_trip
     assert payload["inventory_summary"]["runtime_state"]["status"] == "partial"
     assert payload["scenario_search"]["scenarios"] == []
     assert payload["runtime_scenario_comparison"]["scenarios"] == []
+
+    comparison_response = client.get(f"/api/workspace/{trip_id}/scenarios/compare")
+
+    assert comparison_response.status_code == 200
+    comparison_payload = comparison_response.json()
+    assert comparison_payload["scenarios"] == []
+    assert comparison_payload["lead_scenario_id"] is None
+    assert (
+        "does not have runtime scenario comparison data yet"
+        in comparison_payload["summary"].lower()
+    )
 
 
 def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_trip(
@@ -416,7 +433,9 @@ def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_tri
     payload = response.json()
     assert payload["policy_state"]["policy_id"] == "policy-standard-2026-02"
     assert payload["planner_panel_state"]["policy_evaluation"]["status"] == "compliant"
-    assert payload["planner_panel_state"]["proposal"]["constraint_set_id"] == "policy-standard-2026-02"
+    assert (
+        payload["planner_panel_state"]["proposal"]["constraint_set_id"] == "policy-standard-2026-02"
+    )
     assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Policy posture loaded"
     assert payload["planner_panel_state"]["next_step_actions"][0]["target_section"] == "approval"
     assert "Navan" in payload["planner_panel_state"]["policy_evaluation"]["notes"][-2]
@@ -498,9 +517,9 @@ def test_workspace_endpoint_prefers_persisted_proposal_lifecycle_for_business_tr
     evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
     evaluation_fixture["response"]["result_payload"]["trip_id"] = trip_id
     evaluation_fixture["response"]["result_payload"]["proposal_id"] = f"proposal:{trip_id}"
-    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["proposal_id"] = (
-        f"proposal:{trip_id}"
-    )
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"][
+        "proposal_id"
+    ] = f"proposal:{trip_id}"
     proposal_payload = {
         "proposal_id": f"proposal:{trip_id}",
         "trip_id": trip_id,
@@ -581,7 +600,9 @@ def test_workspace_endpoint_prefers_persisted_proposal_lifecycle_for_business_tr
     payload = response.json()
     assert payload["proposal_state"]["summary"]["approval_ready"] is True
     assert payload["planner_panel_state"]["proposal"]["proposal_id"] == f"proposal:{trip_id}"
-    assert payload["planner_panel_state"]["policy_evaluation"]["evaluation_id"] == "eval-approved-001"
+    assert (
+        payload["planner_panel_state"]["policy_evaluation"]["evaluation_id"] == "eval-approved-001"
+    )
     titles = [item["title"] for item in payload["planner_panel_state"]["outputs"]]
     assert "Proposal lifecycle loaded" in titles
     assert "Approval-ready proposal" in titles
@@ -744,9 +765,9 @@ def test_workspace_endpoint_surfaces_reoptimization_follow_up_for_non_compliant_
     evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
     evaluation_fixture["response"]["result_payload"]["trip_id"] = trip_id
     evaluation_fixture["response"]["result_payload"]["proposal_id"] = f"proposal:{trip_id}"
-    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["proposal_id"] = (
-        f"proposal:{trip_id}"
-    )
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"][
+        "proposal_id"
+    ] = f"proposal:{trip_id}"
     proposal_payload = {
         "proposal_id": f"proposal:{trip_id}",
         "trip_id": trip_id,
@@ -920,9 +941,7 @@ def test_workspace_endpoint_surfaces_exception_follow_up_for_live_policy_results
                         "Attach the compliant comparable to the exception packet.",
                         "Explain why the earlier arrival is required for the client meeting.",
                     ],
-                    "notes": [
-                        "Exception review is required before approval can continue."
-                    ],
+                    "notes": ["Exception review is required before approval can continue."],
                     "compliance_score": 0.61,
                 },
             },
@@ -934,9 +953,9 @@ def test_workspace_endpoint_surfaces_exception_follow_up_for_live_policy_results
     evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
     evaluation_fixture["response"]["result_payload"]["trip_id"] = trip_id
     evaluation_fixture["response"]["result_payload"]["proposal_id"] = f"proposal:{trip_id}"
-    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["proposal_id"] = (
-        f"proposal:{trip_id}"
-    )
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"][
+        "proposal_id"
+    ] = f"proposal:{trip_id}"
     proposal_payload = {
         "proposal_id": f"proposal:{trip_id}",
         "trip_id": trip_id,
@@ -1014,8 +1033,13 @@ def test_workspace_endpoint_surfaces_exception_follow_up_for_live_policy_results
     assert response.status_code == 200
     payload = response.json()
     assert payload["proposal_state"]["follow_up"]["status"] == "exception_required"
-    assert payload["planner_panel_state"]["next_step_actions"][0]["action_kind"] == "request_exception"
-    assert payload["planner_panel_state"]["next_step_actions"][0]["label"] == "Prepare exception request"
+    assert (
+        payload["planner_panel_state"]["next_step_actions"][0]["action_kind"] == "request_exception"
+    )
+    assert (
+        payload["planner_panel_state"]["next_step_actions"][0]["label"]
+        == "Prepare exception request"
+    )
     assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Exception path required"
     assert payload["planner_panel_state"]["outputs"][-1]["status"] == "caution"
 
@@ -1250,7 +1274,9 @@ def test_feasibility_summary_payload_keeps_ready_and_blocked_bundles_distinct() 
     assert payload["assessment_count"] == 2
     assert payload["recommended_bundle_count"] == 1
     assert payload["blocking_bundle_count"] == 1
-    statuses = {assessment["bundle_id"]: assessment["status"] for assessment in payload["assessments"]}
+    statuses = {
+        assessment["bundle_id"]: assessment["status"] for assessment in payload["assessments"]
+    }
     assert statuses["bundle:kyoto-low-friction"] == "positive"
     assert statuses["bundle:unrealistic-same-day"] == "critical"
 

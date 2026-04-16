@@ -35,7 +35,6 @@ class WorkspaceResponse(BaseModel):
         description="Workspace-scoped planner panel payload for the mounted side-panel UI.",
     )
     runtime_state: dict[str, Any] = Field(
-        default_factory=dict,
         description="Top-level runtime readiness summary for the workspace surface.",
     )
     feasibility_summary: dict[str, Any] = Field(
