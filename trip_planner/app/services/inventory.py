@@ -236,7 +236,9 @@ def _build_inventory_assembly_input(
         snapshot=snapshot,
         handoff=handoff,
         fixture_names=tuple(
-            record.metadata["fixture_name"] for record in snapshot.records if "fixture_name" in record.metadata
+            record.metadata["fixture_name"]
+            for record in snapshot.records
+            if "fixture_name" in record.metadata
         ),
     )
 
@@ -285,6 +287,10 @@ def build_inventory_summary_payload(
         if issue.code == "missing_inventory_trip_duration":
             notes = [
                 "Trip dates or duration are still missing, so runtime inventory stays in a bounded partial state until those inputs are filled in."
+            ]
+        elif issue.code == "missing_inventory_primary_regions":
+            notes = [
+                "Primary regions are still missing, so add at least one destination before the workspace can assemble runtime inventory bundles."
             ]
         else:
             notes = [
