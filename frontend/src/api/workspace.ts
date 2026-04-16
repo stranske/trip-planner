@@ -368,6 +368,8 @@ export type WorkspaceData = {
     summary: {
       submission_status?: string;
       submission_summary?: string;
+      submission_requires_polling?: boolean;
+      evaluation_transport_status?: string;
       evaluation_result_status?: string;
       approval_ready?: boolean;
       comparable_count?: number;
@@ -423,6 +425,18 @@ export async function fetchWorkspace(tripId: string): Promise<WorkspaceData> {
     path: `/api/workspace/${tripId}`,
     credentials: "include",
   });
+}
+
+export async function refreshWorkspaceProposalStatus(tripId: string): Promise<WorkspaceData["proposal_state"]> {
+  const response = await fetchJson<{
+    proposal_state: WorkspaceData["proposal_state"];
+    summary: NonNullable<WorkspaceData["proposal_state"]>["summary"] | Record<string, never>;
+  }>({
+    path: `/api/workspace/${tripId}/proposal/refresh`,
+    method: "POST",
+    credentials: "include",
+  });
+  return response.proposal_state;
 }
 
 export async function answerPlannerDecision(

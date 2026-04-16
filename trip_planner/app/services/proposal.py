@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,11 +11,17 @@ from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.business import ExceptionRequest, TripPlanProposal
 from trip_planner.integrations.tpp import (
     BaseTPPIntegrationClient,
+    EvaluationResultIngestionError,
     HTTPTPPIntegrationClient,
+    TPPCorrelationId,
+    TPPErrorRecord,
     TPPEvaluationResultIngestionService,
+    TPPExecutionStatus,
     TPPProposalSubmissionService,
     TPPRequestEnvelope,
     TPPResponseEnvelope,
+    TPPRetryMetadata,
+    TPPTransportError,
 )
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
@@ -272,13 +279,17 @@ def _build_summary(
     )
     if follow_up.get("summary"):
         highlights = [str(follow_up["summary"]), *highlights][:3]
+    submission_requires_polling = (
+        execution_status.get("terminal") is False
+        or evaluation_transport.get("terminal") is False
+    )
     return {
         "trip_id": proposal_payload.get("trip_id"),
         "proposal_id": proposal_payload.get("proposal_id"),
         "proposal_version": submission_record.get("linkage", {}).get("proposal_version"),
         "submission_status": execution_status.get("state"),
         "submission_summary": execution_status.get("summary"),
-        "submission_requires_polling": execution_status.get("terminal") is False,
+        "submission_requires_polling": submission_requires_polling,
         "evaluation_transport_status": evaluation_transport.get("state"),
         "evaluation_result_status": evaluation_result.get("status"),
         "approval_ready": evaluation_result.get("status") == "compliant",
@@ -354,6 +365,129 @@ def _serialize_proposal_state(record: PersistedProposalState) -> dict[str, Any]:
         "evaluation": dict(record.evaluation_record),
         "summary": dict(record.summary),
         "follow_up": follow_up,
+    }
+
+
+def _make_runtime_request(
+    *,
+    operation: str,
+    record: PersistedProposalState,
+    payload: dict[str, Any],
+) -> TPPRequestEnvelope:
+    submission_record = dict(record.submission_record)
+    correlation_id = submission_record.get("correlation_id")
+    if not correlation_id:
+        raise ValueError("Persisted proposal state is missing correlation metadata.")
+    return TPPRequestEnvelope(
+        operation=operation,
+        request_id=f"{operation}:{uuid4().hex}",
+        correlation_id=TPPCorrelationId.from_value(str(correlation_id)),
+        payload=payload,
+        transport_pattern=str(submission_record.get("transport_pattern") or "async"),
+        organization_id=record.organization_id,
+        trip_id=record.trip_id,
+        proposal_id=record.proposal_id,
+        submitted_at=_now_iso(),
+        metadata={"source": "workspace_proposal_refresh"},
+    )
+
+
+def _update_submission_record_from_poll(
+    *,
+    record: PersistedProposalState,
+    request: TPPRequestEnvelope,
+    response: TPPResponseEnvelope,
+) -> None:
+    submission_record = dict(record.submission_record)
+    response_payload = dict(response.result_payload or {})
+    execution_id = response_payload.get("execution_id") or record.execution_id
+
+    submission_record["last_poll_request_id"] = request.request_id
+    submission_record["last_poll_request_payload"] = dict(request.payload)
+    submission_record["transport_pattern"] = response.transport_pattern
+    submission_record["execution_status"] = response.execution_status.to_dict()
+    submission_record["last_poll_response_payload"] = response_payload
+    submission_record["last_poll_received_at"] = response.received_at
+    submission_record["received_at"] = response.received_at
+    submission_record["status_endpoint"] = response.status_endpoint or submission_record.get(
+        "status_endpoint"
+    )
+    submission_record["last_poll_status_endpoint"] = response.status_endpoint or submission_record.get(
+        "last_poll_status_endpoint"
+    )
+    submission_record["execution_id"] = execution_id
+    if response_payload.get("queue_state") is not None:
+        submission_record["queue_state"] = response_payload["queue_state"]
+    if response.retry is not None:
+        submission_record["retry"] = response.retry.to_dict()
+    else:
+        submission_record.pop("retry", None)
+    if response.error is not None:
+        submission_record["error"] = response.error.to_dict()
+    else:
+        submission_record.pop("error", None)
+
+    record.execution_id = str(execution_id) if execution_id else None
+    record.submission_status = response.execution_status.state
+    record.submission_record = submission_record
+
+
+def _persist_evaluation_refresh_failure(
+    *,
+    record: PersistedProposalState,
+    request: TPPRequestEnvelope,
+    error: Exception,
+) -> None:
+    status_code = getattr(error, "status_code", None)
+    details: dict[str, str] = {"source": "workspace_proposal_refresh"}
+    if status_code is not None:
+        details["status_code"] = str(status_code)
+
+    if isinstance(error, TPPTransportError):
+        category = "transport"
+    elif isinstance(error, (EvaluationResultIngestionError, ValueError)):
+        category = "contract"
+    else:
+        category = "application"
+
+    record.evaluation_status = "retry_scheduled"
+    record.evaluation_record = {
+        "linkage": {
+            "trip_id": record.trip_id,
+            "proposal_id": record.proposal_id,
+            "proposal_version": record.proposal_version,
+            "scenario_id": record.scenario_id,
+            "execution_id": record.execution_id,
+            "organization_id": record.organization_id,
+        },
+        "request_id": request.request_id,
+        "correlation_id": request.correlation_id.value,
+        "transport_pattern": request.transport_pattern,
+        "execution_status": TPPExecutionStatus(
+            state="retry_scheduled",
+            terminal=False,
+            summary=(
+                "Policy execution finished, but loading the evaluation result failed. "
+                "Refresh live status to retry."
+            ),
+            updated_at=_now_iso(),
+        ).to_dict(),
+        "request_payload": dict(request.payload),
+        "response_payload": {},
+        "retry": TPPRetryMetadata(
+            attempt=1,
+            max_attempts=5,
+            retryable=True,
+            reason="Retry the live workspace refresh after evaluation retrieval fails.",
+        ).to_dict(),
+        "error": TPPErrorRecord(
+            code="evaluation_refresh_failed",
+            message=str(error) or "Live evaluation refresh failed.",
+            category=category,
+            retryable=True,
+            details=details,
+        ).to_dict(),
+        "received_at": _now_iso(),
     }
 
 
@@ -595,6 +729,93 @@ def save_workspace_proposal_follow_up(
     trip_record.updated_at = datetime.now(UTC)
     db_session.commit()
     db_session.refresh(existing)
+    return {
+        "proposal_state": _serialize_proposal_state(existing),
+        "summary": dict(existing.summary),
+    }
+
+
+def refresh_workspace_proposal_status(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+) -> dict[str, Any]:
+    trip_record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    if trip_record.mode != "business":
+        raise ValueError("Only business trips can persist proposal lifecycle state.")
+
+    existing = _get_latest_proposal_state(db_session, trip_id=trip_id, user_id=user.user_id)
+    if existing is None:
+        raise WorkspaceProposalNotFoundError(
+            "Proposal status cannot be refreshed before a proposal submission exists."
+        )
+    if not existing.execution_id:
+        raise ValueError("Proposal status cannot be refreshed without an execution_id.")
+
+    poll_request = _make_runtime_request(
+        operation="poll_execution_status",
+        record=existing,
+        payload={
+            "proposal_version": existing.proposal_version,
+            "execution_id": existing.execution_id,
+        },
+    )
+    polled_response = HTTPTPPIntegrationClient().poll_execution_status(poll_request)
+    _update_submission_record_from_poll(
+        record=existing,
+        request=poll_request,
+        response=polled_response,
+    )
+    existing.summary = _build_summary(
+        submission_record=dict(existing.submission_record),
+        evaluation_record=dict(existing.evaluation_record),
+        proposal_payload=dict(existing.proposal_payload),
+        persisted_follow_up=dict(existing.summary.get("follow_up") or {}),
+    )
+    trip_record.updated_at = datetime.now(UTC)
+    db_session.commit()
+    db_session.refresh(existing)
+
+    if polled_response.execution_status.state == "succeeded":
+        evaluation_request = _make_runtime_request(
+            operation="fetch_evaluation_result",
+            record=existing,
+            payload={
+                "proposal_version": existing.proposal_version,
+                "execution_id": existing.execution_id,
+            },
+        )
+        try:
+            return save_workspace_proposal_evaluation(
+                db_session,
+                user=user,
+                trip_id=trip_id,
+                request_payload=evaluation_request.to_dict(),
+                response_payload=None,
+                proposal_version=existing.proposal_version,
+                scenario_id=existing.scenario_id,
+            )
+        except (EvaluationResultIngestionError, TPPTransportError, ValueError) as error:
+            _persist_evaluation_refresh_failure(
+                record=existing,
+                request=evaluation_request,
+                error=error,
+            )
+            existing.summary = _build_summary(
+                submission_record=dict(existing.submission_record),
+                evaluation_record=dict(existing.evaluation_record),
+                proposal_payload=dict(existing.proposal_payload),
+                persisted_follow_up=dict(existing.summary.get("follow_up") or {}),
+            )
+            trip_record.updated_at = datetime.now(UTC)
+            db_session.commit()
+            db_session.refresh(existing)
+            return {
+                "proposal_state": _serialize_proposal_state(existing),
+                "summary": dict(existing.summary),
+            }
+
     return {
         "proposal_state": _serialize_proposal_state(existing),
         "summary": dict(existing.summary),
