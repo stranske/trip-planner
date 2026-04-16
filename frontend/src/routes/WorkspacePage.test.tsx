@@ -696,7 +696,9 @@ describe("WorkspacePage", () => {
     expect(screen.getByRole("heading", { name: "Review-ready scenario tradeoffs" })).toBeInTheDocument();
     expect(screen.getByLabelText("Scenario review board")).toBeInTheDocument();
     expect(screen.getAllByText("Policy posture").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Assembled inventory layer" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: workspacePayload.inventory_summary.runtime_state.title })
+    ).toBeInTheDocument();
     expect(screen.getByText("Osaka arrival buffer")).toBeInTheDocument();
     expect(screen.getByText("Kyoto cultural anchor")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Approval packet is ready" })).toBeInTheDocument();
