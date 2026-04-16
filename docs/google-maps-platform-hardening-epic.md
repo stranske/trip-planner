@@ -48,6 +48,7 @@ Every child issue in this epic should preserve these rules:
 - Keep fallback behavior real and bounded: local development and temporary provider failure should fall back to textual or simplified map presentation instead of breaking the workspace.
 - Keep runtime docs factual; do not claim live traffic, turn-by-turn navigation, or other map capabilities that the implementation does not actually ship.
 - Use the normalized frontend dependency layout established by `#766`; do not reintroduce repo-root `node_modules` or other bootstrap shortcuts.
+- Keep local bootstrap guidance explicit: `.venv` plus `frontend/node_modules` are required local prerequisites, while Google Maps and remote TPP env vars remain optional integration toggles.
 
 ## Child Issue Map
 

@@ -94,21 +94,29 @@ python scripts/build_html.py
 
 ## App Runtime Quick Start
 
-Install the backend and frontend dependencies once:
+Create and activate a repo-local virtualenv first:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+Then install the backend and frontend dependencies once:
 
 ```bash
 python -m pip install -e ".[dev]"
 npm --prefix frontend install
 ```
 
-`make runtime-check` and `make runtime-smoke` assume those installs have already completed. If either the backend dev extras or `frontend/node_modules` are missing, the check script exits early and points back to these two commands.
+`make runtime-check` and `make runtime-smoke` assume those installs have already completed inside the active `.venv` and `frontend/node_modules`. If either the backend dev extras or frontend dependencies are missing, the check script exits early and points back to these commands.
 
 Repo dependency layout:
 
-- Python tooling installs into the active virtualenv from the repo root.
+- Python tooling installs into the active `.venv` from the repo root.
 - Application JavaScript dependencies install under `frontend/node_modules`.
 - Workflow automation keeps its own vendored helpers under `.github/scripts/node_modules`.
 - Do not create or commit a repo-root `node_modules/`; CI and local runtime commands do not depend on it.
+- `TRIP_PLANNER_DATABASE_URL` is optional for local work; if unset, the backend falls back to the default SQLite path under the repo.
 
 Run the full stack together from the repo root:
 
@@ -132,3 +140,19 @@ The verification path covers:
 - a smoke test that runs the frontend client against a live backend process
 
 These checks validate the local full-stack MVP that already exists in this repo. They do not prove live Google Maps rendering or remote Travel-Plan-Permission transport, which are still documented as active follow-on integrations.
+
+## Optional Live Integration Env Vars
+
+The local MVP does not require live external integrations. `make runtime-check` should pass without the env vars below.
+
+Use these env vars only when you are intentionally exercising an integration seam that already exists in code:
+
+- `VITE_API_BASE_URL`: overrides the frontend API base URL when you are not using the local Vite proxy.
+- `VITE_GOOGLE_MAPS_EMBED_API_KEY`: enables the optional Google Maps embed path in the workspace. If it is unset, the UI should stay on the textual fallback map surface.
+- `TPP_BASE_URL`, `TPP_ACCESS_TOKEN`, `TPP_OIDC_PROVIDER`: enable the live `Travel-Plan-Permission` transport client. If they are unset, the repo should continue to present stored-policy and passive/local TPP seams rather than implying a real remote policy round-trip.
+
+That distinction matters for docs and verification messaging:
+
+- missing local prerequisites such as `.venv` or `frontend/node_modules` are setup failures
+- missing live integration env vars are not setup failures for the shipped MVP
+- live Google Maps rendering and remote `Travel-Plan-Permission` execution remain deferred follow-on integrations unless you deliberately configure those seams
