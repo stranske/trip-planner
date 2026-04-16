@@ -241,6 +241,73 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
     assert payload["planner_memory"]["current_checkpoint_id"] is None
 
 
+def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_persisted_leisure_trip(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Lisbon weekend",
+            "summary": "Comparison endpoint should use persisted runtime inputs.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/workspace/{trip_id}/scenarios/compare")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["lead_scenario_id"] == f"scenario:{trip_id}:1"
+    assert payload["scenarios"][0]["scenario_id"] == f"scenario:{trip_id}:1"
+    assert not payload["scenarios"][0]["scenario_id"].startswith("saved-scenario:")
+    assert payload["scenarios"][0]["option_count"] >= 1
+    assert "runtime scenario" in payload["summary"].lower()
+
+
+def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_persisted_business_trip(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Chicago kickoff",
+            "summary": "Comparison endpoint should use persisted runtime inputs.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+                "traveler_party": {
+                    "kind": "team",
+                    "traveler_count": 3,
+                    "notes": "Customer kickoff",
+                },
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/workspace/{trip_id}/scenarios/compare")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["lead_scenario_id"] == f"scenario:{trip_id}:1"
+    assert payload["scenarios"][0]["scenario_id"] == f"scenario:{trip_id}:1"
+    assert not payload["scenarios"][0]["scenario_id"].startswith("saved-scenario:")
+    assert payload["scenarios"][0]["status"] == "fallback"
+    assert "runtime scenario" in payload["summary"].lower()
+
+
 def test_workspace_endpoint_returns_bounded_empty_runtime_state_when_trip_frame_is_sparse(
     client: TestClient,
 ) -> None:

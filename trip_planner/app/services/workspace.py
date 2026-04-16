@@ -1056,6 +1056,7 @@ def _build_persisted_trip_workspace(
         trip_id=record.trip_id,
         trip_mode=record.mode,
         primary_regions=record.primary_regions,
+        duration_days=record.duration_days,
     )
     resolved_inventory_summary = inventory_summary or build_inventory_summary_payload(
         resolved_inventory_bundles
@@ -1239,6 +1240,7 @@ def _build_runtime_scenario_comparison_payload(
         trip_id=record.trip_id,
         trip_mode=record.mode,
         primary_regions=record.primary_regions,
+        duration_days=record.duration_days,
     )
     return _build_runtime_scenario_comparison(
         trip_id=trip_id,

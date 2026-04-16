@@ -246,6 +246,7 @@ def assemble_inventory_bundles_for_trip(
     trip_id: str | None = None,
     trip_mode: str | None = None,
     primary_regions: Sequence[str] = (),
+    duration_days: int | None = None,
     assembly_input: InventoryAssemblyInput | None = None,
 ) -> list[InventoryBundle]:
     if assembly_input is None:
@@ -256,6 +257,7 @@ def assemble_inventory_bundles_for_trip(
             trip_id=trip_id,
             trip_mode=trip_mode,
             primary_regions=primary_regions,
+            duration_days=duration_days,
         )
 
     bundles: list[InventoryBundle] = []
