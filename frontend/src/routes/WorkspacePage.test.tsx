@@ -363,6 +363,11 @@ const workspacePayload = {
     ],
     source_refs: ["ranked-results:kyoto-spring"],
   },
+  runtime_state: {
+    status: "ready",
+    title: "Workspace runtime is ready",
+    summary: "Inventory, scenario ranking, and comparison surfaces are ready for review.",
+  },
   inventory_summary: {
     bundle_count: 2,
     bundles: [
@@ -390,6 +395,11 @@ const workspacePayload = {
     notes: [
       "Bundle summaries are assembled from normalized destination, lodging, transport, and activity records.",
     ],
+    runtime_state: {
+      status: "ready",
+      title: "Runtime inventory is ready",
+      summary: "Persisted trip context is rich enough to assemble comparison-ready inventory bundles.",
+    },
   },
   feasibility_summary: {
     assessment_count: 2,
@@ -686,7 +696,9 @@ describe("WorkspacePage", () => {
     expect(screen.getByRole("heading", { name: "Review-ready scenario tradeoffs" })).toBeInTheDocument();
     expect(screen.getByLabelText("Scenario review board")).toBeInTheDocument();
     expect(screen.getAllByText("Policy posture").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Assembled inventory layer" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: workspacePayload.inventory_summary.runtime_state.title })
+    ).toBeInTheDocument();
     expect(screen.getByText("Osaka arrival buffer")).toBeInTheDocument();
     expect(screen.getByText("Kyoto cultural anchor")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Approval packet is ready" })).toBeInTheDocument();
@@ -957,10 +969,20 @@ describe("WorkspacePage", () => {
           title: "Trip setup workspace",
           scenarios: [],
         },
+        runtime_state: {
+          status: "partial",
+          title: "Workspace runtime is partially assembled",
+          summary: "Add trip dates or duration to replace the bounded fallback with runtime bundle assembly.",
+        },
         inventory_summary: {
           bundle_count: 0,
           bundles: [],
-          notes: ["Bundle assembly will appear here once normalized option inputs are available for the trip."],
+          notes: ["Trip dates or duration are still missing, so inventory assembly stays partial."],
+          runtime_state: {
+            status: "partial",
+            title: "Runtime inventory is partially specified",
+            summary: "Add trip dates or duration to replace the bounded fallback with runtime bundle assembly.",
+          },
         },
         planner_panel_state: {
           ...workspacePayload.planner_panel_state,
@@ -1001,7 +1023,10 @@ describe("WorkspacePage", () => {
 
     expect(screen.getByText("Dates not set yet")).toBeInTheDocument();
     expect(screen.getByText("Duration not set yet")).toBeInTheDocument();
-    expect(screen.getByText("Bundle assembly has not started yet for this trip.")).toBeInTheDocument();
+    expect(screen.getByText("Runtime inventory is partially specified")).toBeInTheDocument();
+    expect(
+      screen.getByText("Runtime bundle assembly is waiting on the rest of the trip frame.")
+    ).toBeInTheDocument();
     await waitFor(() => {
       expect(getPlannerHost().shadowRoot?.querySelector('[aria-label="Planner side panel"]')).toBeTruthy();
     });

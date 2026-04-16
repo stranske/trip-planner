@@ -776,11 +776,14 @@ function WorkspacePageContent({
 
         <section className="status-card">
           <p className="status-label">Inventory bundles</p>
-          <h2>Assembled inventory layer</h2>
+          <h2>{workspace.inventory_summary.runtime_state.title}</h2>
+          <p>{workspace.inventory_summary.runtime_state.summary}</p>
           <p className="muted-copy">{workspace.inventory_summary.notes[0]}</p>
           {workspace.inventory_summary.bundle_count === 0 ? (
             <p className="muted-copy">
-              Bundle assembly has not started yet for this trip.
+              {workspace.inventory_summary.runtime_state.status === "partial"
+                ? "Runtime bundle assembly is waiting on the rest of the trip frame."
+                : "Bundle assembly has not started yet for this trip."}
             </p>
           ) : (
             <div className="scenario-stack">
@@ -910,8 +913,9 @@ function WorkspacePageContent({
             </div>
           ) : (
             <p className="muted-copy">
-              No runtime scenarios are available yet, so there is nothing to review in the
-              scenario board.
+              {currentWorkspace.runtime_state.status === "partial"
+                ? "Runtime comparison is waiting on richer trip inputs before scenario review can start."
+                : "No runtime scenarios are available yet, so there is nothing to review in the scenario board."}
             </p>
           )}
         </section>

@@ -73,10 +73,37 @@ def test_inventory_endpoint_assembles_bundles_for_persisted_trip(client: TestCli
     assert payload["trip_id"] == trip_id
     assert payload["bundle_count"] == 1
     assert payload["bundles"][0]["bundle_id"].startswith("bundle-")
+    assert payload["summary"]["runtime_state"]["status"] == "ready"
     assert any(
         "adapter-backed inventory assembly seam" in note
         for note in payload["summary"]["notes"]
     )
+
+
+def test_inventory_endpoint_surfaces_partial_runtime_state_when_trip_dates_are_missing(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Chicago kickoff draft",
+            "summary": "Regions exist, but dates do not yet.",
+            "mode": "business",
+            "trip_frame": {
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/inventory/{trip_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["bundle_count"] == 0
+    assert payload["summary"]["runtime_state"]["status"] == "partial"
+    assert "duration" in payload["summary"]["notes"][0].lower()
 
 
 def test_inventory_endpoint_returns_bounded_empty_fallback_for_partial_trip_input(
@@ -107,4 +134,5 @@ def test_inventory_endpoint_returns_bounded_empty_fallback_for_partial_trip_inpu
     payload = response.json()
     assert payload["trip_id"] == trip_id
     assert payload["bundle_count"] == 0
+    assert payload["summary"]["runtime_state"]["status"] == "empty"
     assert "No adapter-backed inventory input is available" in payload["summary"]["notes"][0]

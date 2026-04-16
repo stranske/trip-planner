@@ -278,6 +278,11 @@ export type WorkspaceData = {
     artifacts: PlannerMemoryArtifact[];
   };
   planner_panel_state: PlannerPanelState;
+  runtime_state: {
+    status: "ready" | "partial" | "empty";
+    title: string;
+    summary: string;
+  };
   feasibility_summary: FeasibilitySummary;
   inventory_summary: {
     bundle_count: number;
@@ -292,6 +297,11 @@ export type WorkspaceData = {
       tradeoffs: string[];
     }>;
     notes: string[];
+    runtime_state: {
+      status: "ready" | "partial" | "empty";
+      title: string;
+      summary: string;
+    };
   };
   budget_state: BudgetWorkspaceState;
   proposal_state: {

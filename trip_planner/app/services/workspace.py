@@ -22,6 +22,7 @@ from trip_planner.app.services.feasibility import (
     build_feasibility_summary_payload,
 )
 from trip_planner.app.services.inventory import (
+    _build_inventory_assembly_input,
     assemble_inventory_bundles_for_trip,
     build_inventory_summary_payload,
 )
@@ -1025,6 +1026,7 @@ def _build_persisted_trip_workspace(
     policy_context: dict[str, Any] | None = None,
     proposal_context: dict[str, Any] | None = None,
     inventory_bundles: list[InventoryBundle] | None = None,
+    inventory_summary: dict[str, Any] | None = None,
     scenario_search: dict[str, Any] | None = None,
     feasibility_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -1054,11 +1056,22 @@ def _build_persisted_trip_workspace(
         trip_id=record.trip_id,
         trip_mode=record.mode,
         primary_regions=record.primary_regions,
+        duration_days=record.duration_days,
     )
-    resolved_scenario_search = scenario_search or _build_runtime_scenario_search_for_trip(
-        record=record,
-        inventory_bundles=resolved_inventory_bundles,
-        saved_scenarios=ordered_saved_scenarios,
+    resolved_inventory_summary = inventory_summary or build_inventory_summary_payload(
+        resolved_inventory_bundles
+    )
+    inventory_status = str(
+        (resolved_inventory_summary.get("runtime_state") or {}).get("status") or "empty"
+    )
+    resolved_scenario_search = scenario_search or (
+        _build_runtime_scenario_search_for_trip(
+            record=record,
+            inventory_bundles=resolved_inventory_bundles,
+            saved_scenarios=ordered_saved_scenarios,
+        )
+        if inventory_status == "ready"
+        else _empty_workspace_scenario_search()
     )
     resolved_feasibility_summary = feasibility_summary or build_feasibility_summary_payload(
         resolved_inventory_bundles
@@ -1067,6 +1080,10 @@ def _build_persisted_trip_workspace(
         trip_id=record.trip_id,
         trip_title=trip_record["trip"]["title"],
         scenario_search=resolved_scenario_search,
+    )
+    runtime_state = _build_workspace_runtime_state(
+        inventory_summary=resolved_inventory_summary,
+        runtime_scenario_comparison=runtime_scenario_comparison,
     )
 
     return {
@@ -1097,8 +1114,9 @@ def _build_persisted_trip_workspace(
             policy_context=policy_context,
             proposal_context=proposal_context,
         ),
+        "runtime_state": runtime_state,
         "feasibility_summary": resolved_feasibility_summary,
-        "inventory_summary": build_inventory_summary_payload(resolved_inventory_bundles),
+        "inventory_summary": resolved_inventory_summary,
         "budget_state": resolved_budget_state,
         "policy_state": (policy_context or {}).get("policy_state"),
         "proposal_state": (proposal_context or {}).get("proposal_state"),
@@ -1114,6 +1132,57 @@ def _empty_workspace_scenario_search() -> dict[str, Any]:
             "Scenario search and comparisons will appear after planning begins.",
         ],
         "source_refs": [],
+    }
+
+
+def _build_workspace_runtime_state(
+    *,
+    inventory_summary: dict[str, Any],
+    runtime_scenario_comparison: dict[str, Any],
+) -> dict[str, str]:
+    inventory_runtime_state = dict(inventory_summary.get("runtime_state") or {})
+    runtime_scenarios = list(runtime_scenario_comparison.get("scenarios") or [])
+    inventory_status = str(inventory_runtime_state.get("status") or "")
+
+    if inventory_status == "ready" and runtime_scenarios:
+        return {
+            "status": "ready",
+            "title": "Workspace runtime is ready",
+            "summary": "Inventory, scenario ranking, and comparison surfaces are ready for review.",
+        }
+    if inventory_status in {"partial", "empty"}:
+        return {
+            "status": inventory_status,
+            "title": str(
+                inventory_runtime_state.get("title")
+                or (
+                    "Workspace runtime is partially assembled"
+                    if inventory_status == "partial"
+                    else "Workspace runtime is still empty"
+                )
+            ),
+            "summary": str(
+                inventory_runtime_state.get("summary")
+                or (
+                    "Inventory bundles are available, but scenario comparison is not ready yet."
+                    if inventory_status == "partial"
+                    else "Trip context is not complete enough for runtime workspace assembly yet."
+                )
+            ),
+        }
+    if inventory_summary.get("bundle_count", 0) > 0 or runtime_scenarios:
+        return {
+            "status": "partial",
+            "title": "Workspace runtime is partially assembled",
+            "summary": "Inventory bundles are available, but scenario comparison is not ready yet.",
+        }
+    return {
+        "status": str(inventory_runtime_state.get("status") or "empty"),
+        "title": str(inventory_runtime_state.get("title") or "Workspace runtime is still empty"),
+        "summary": str(
+            inventory_runtime_state.get("summary")
+            or "Trip context is not complete enough for runtime workspace assembly yet."
+        ),
     }
 
 
@@ -1171,6 +1240,7 @@ def _build_runtime_scenario_comparison_payload(
         trip_id=record.trip_id,
         trip_mode=record.mode,
         primary_regions=record.primary_regions,
+        duration_days=record.duration_days,
     )
     return _build_runtime_scenario_comparison(
         trip_id=trip_id,
@@ -1666,9 +1736,14 @@ def get_workspace_payload(
         saved_scenarios, scenario_comparison = _load_saved_scenarios(fixture.scenarios_fixture)
         session = _load_session(fixture.session_fixture)
         _canonicalize_saved_scenario_ids(session, saved_scenarios)
-        inventory_bundles = assemble_inventory_bundles_for_trip(
+        inventory_assembly_input = _build_inventory_assembly_input(
             trip_id=trip_id,
             trip_mode=trip_record.trip.mode,
+            primary_regions=tuple(trip_record.trip.trip_frame.primary_regions),
+            duration_days=trip_record.trip.trip_frame.duration_days,
+        )
+        inventory_bundles = assemble_inventory_bundles_for_trip(
+            assembly_input=inventory_assembly_input,
         )
         scenario_search = _build_scenario_search(
             trip_id=trip_id,
@@ -1684,6 +1759,10 @@ def get_workspace_payload(
             trip_id=trip_id,
             trip_title=trip_record.trip.title,
             scenario_search=scenario_search.to_dict(),
+        )
+        inventory_summary = build_inventory_summary_payload(
+            inventory_bundles,
+            assembly_input=inventory_assembly_input,
         )
 
         return {
@@ -1709,8 +1788,12 @@ def get_workspace_payload(
                 policy_context=None,
                 proposal_context=None,
             ),
+            "runtime_state": _build_workspace_runtime_state(
+                inventory_summary=inventory_summary,
+                runtime_scenario_comparison=runtime_scenario_comparison,
+            ),
             "feasibility_summary": feasibility_summary,
-            "inventory_summary": build_inventory_summary_payload(inventory_bundles),
+            "inventory_summary": inventory_summary,
             "budget_state": build_fixture_budget_payload(
                 trip_id=trip_id,
                 trip_mode=trip_record.trip.mode,
@@ -1726,6 +1809,12 @@ def get_workspace_payload(
     )
     if record is None:
         return None
+    inventory_assembly_input = _build_inventory_assembly_input(
+        trip_id=record.trip_id,
+        trip_mode=record.mode,
+        primary_regions=record.primary_regions,
+        duration_days=record.duration_days,
+    )
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     persisted_saved_scenarios = list(
         db_session.scalars(
@@ -1742,26 +1831,31 @@ def get_workspace_payload(
             session_record=session_record,
         )
         bootstrap_updated = True
-    inventory_bundles = assemble_inventory_bundles_for_trip(
-        trip_id=record.trip_id,
-        trip_mode=record.mode,
-        primary_regions=record.primary_regions,
+    inventory_bundles = assemble_inventory_bundles_for_trip(assembly_input=inventory_assembly_input)
+    inventory_summary = build_inventory_summary_payload(
+        inventory_bundles,
+        assembly_input=inventory_assembly_input,
     )
-    runtime_search = _build_runtime_scenario_search_for_trip(
-        record=record,
-        inventory_bundles=inventory_bundles,
-        saved_scenarios=[
-            {
-                "saved_scenario_id": scenario.saved_scenario_id,
-                "trip_id": scenario.trip_id,
-                "current_version_id": scenario.current_version_id,
-                "versions": list(scenario.versions),
-                "comparisons": list(scenario.comparisons),
-                "tags": list(scenario.tags),
-                "notes": list(scenario.notes),
-            }
-            for scenario in persisted_saved_scenarios
-        ],
+    inventory_status = str((inventory_summary.get("runtime_state") or {}).get("status") or "empty")
+    runtime_search = (
+        _build_runtime_scenario_search_for_trip(
+            record=record,
+            inventory_bundles=inventory_bundles,
+            saved_scenarios=[
+                {
+                    "saved_scenario_id": scenario.saved_scenario_id,
+                    "trip_id": scenario.trip_id,
+                    "current_version_id": scenario.current_version_id,
+                    "versions": list(scenario.versions),
+                    "comparisons": list(scenario.comparisons),
+                    "tags": list(scenario.tags),
+                    "notes": list(scenario.notes),
+                }
+                for scenario in persisted_saved_scenarios
+            ],
+        )
+        if inventory_status == "ready"
+        else _empty_workspace_scenario_search()
     )
     if _sync_workspace_session_record(
         session_record,
@@ -1832,6 +1926,7 @@ def get_workspace_payload(
             else None
         ),
         inventory_bundles=inventory_bundles,
+        inventory_summary=inventory_summary,
         scenario_search=runtime_search,
         feasibility_summary=feasibility_summary,
     )

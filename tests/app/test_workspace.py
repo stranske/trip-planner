@@ -67,6 +67,8 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
     assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == payload["scenario_search"][
         "scenarios"
     ][0]["scenario_id"]
+    assert payload["runtime_state"]["status"] == "ready"
+    assert payload["inventory_summary"]["runtime_state"]["status"] == "ready"
     assert payload["runtime_scenario_comparison"]["comparison_axes"][-1]["key"] == "estimated_total"
     assert payload["runtime_scenario_comparison"]["scenarios"][0]["delta"]["transfers_delta"] == 0
     assert payload["runtime_scenario_comparison"]["scenarios"][0]["route_summary"] == (
@@ -172,6 +174,7 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_busin
     assert payload["saved_scenarios"][1]["versions"][0]["label"] == "fallback"
     assert payload["scenario_comparison"]["baseline_scenario_id"] == lead_saved_scenario_id
     assert payload["scenario_search"]["title"] == "Chicago kickoff ranked scenarios"
+    assert payload["runtime_state"]["status"] == "ready"
     assert payload["scenario_search"]["purpose"] == "final_selection"
     assert payload["scenario_search"]["scenarios"][0]["scenario_id"] == f"scenario:{trip_id}:1"
     assert payload["scenario_search"]["scenarios"][0]["scenario_id"] != lead_saved_scenario_id
@@ -222,6 +225,7 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
 
     payload = client.get(f"/api/workspace/{trip_id}").json()
 
+    assert payload["runtime_state"]["status"] == "ready"
     assert payload["saved_scenarios"][0]["versions"][0]["title"].startswith("Lisbon")
     assert payload["scenario_search"]["title"] == "Lisbon weekend runtime scenarios"
     assert payload["scenario_search"]["purpose"] == "final_selection"
@@ -237,7 +241,74 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
     assert payload["planner_memory"]["current_checkpoint_id"] is None
 
 
-def test_workspace_endpoint_keeps_leisure_fixture_defaults_when_trip_frame_is_sparse(
+def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_persisted_leisure_trip(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Lisbon weekend",
+            "summary": "Comparison endpoint should use persisted runtime inputs.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/workspace/{trip_id}/scenarios/compare")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["lead_scenario_id"] == f"scenario:{trip_id}:1"
+    assert payload["scenarios"][0]["scenario_id"] == f"scenario:{trip_id}:1"
+    assert not payload["scenarios"][0]["scenario_id"].startswith("saved-scenario:")
+    assert payload["scenarios"][0]["option_count"] >= 1
+    assert "runtime scenario" in payload["summary"].lower()
+
+
+def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_persisted_business_trip(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Chicago kickoff",
+            "summary": "Comparison endpoint should use persisted runtime inputs.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+                "traveler_party": {
+                    "kind": "team",
+                    "traveler_count": 3,
+                    "notes": "Customer kickoff",
+                },
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/workspace/{trip_id}/scenarios/compare")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["lead_scenario_id"] == f"scenario:{trip_id}:1"
+    assert payload["scenarios"][0]["scenario_id"] == f"scenario:{trip_id}:1"
+    assert not payload["scenarios"][0]["scenario_id"].startswith("saved-scenario:")
+    assert payload["scenarios"][0]["status"] == "fallback"
+    assert "runtime scenario" in payload["summary"].lower()
+
+
+def test_workspace_endpoint_returns_bounded_empty_runtime_state_when_trip_frame_is_sparse(
     client: TestClient,
 ) -> None:
     created = client.post(
@@ -259,7 +330,10 @@ def test_workspace_endpoint_keeps_leisure_fixture_defaults_when_trip_frame_is_sp
     assert reloaded.status_code == 200
     initial_payload = initial.json()
     reloaded_payload = reloaded.json()
-    assert initial_payload["scenario_search"]["scenarios"]
+    assert initial_payload["runtime_state"]["status"] == "empty"
+    assert initial_payload["inventory_summary"]["runtime_state"]["status"] == "empty"
+    assert initial_payload["scenario_search"]["scenarios"] == []
+    assert initial_payload["runtime_scenario_comparison"]["scenarios"] == []
     assert initial_payload["scenario_search"]["scenarios"] == reloaded_payload["scenario_search"][
         "scenarios"
     ]
@@ -269,6 +343,33 @@ def test_workspace_endpoint_keeps_leisure_fixture_defaults_when_trip_frame_is_sp
     assert initial_payload["runtime_scenario_comparison"]["scenarios"] == reloaded_payload[
         "runtime_scenario_comparison"
     ]["scenarios"]
+
+
+def test_workspace_endpoint_surfaces_partial_runtime_state_for_under_scoped_trip(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Chicago kickoff draft",
+            "summary": "Primary region exists but runtime inputs are incomplete.",
+            "mode": "business",
+            "trip_frame": {
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/workspace/{trip_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["runtime_state"]["status"] == "partial"
+    assert payload["inventory_summary"]["runtime_state"]["status"] == "partial"
+    assert payload["scenario_search"]["scenarios"] == []
+    assert payload["runtime_scenario_comparison"]["scenarios"] == []
 
 
 def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_trip(
