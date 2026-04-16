@@ -25,6 +25,11 @@ Issue `#559` adds visualization-oriented shell surfaces that consume route and f
 - The workspace route should keep three review surfaces visible as distinct concerns: provider/fallback map state, day-sequencing timeline review, and a compact scenario tradeoff board for cost, travel burden, feasibility, and current policy posture.
 - Mobile rendering should stack those same review surfaces without hiding the route-state explanation or the scenario toggle affordances behind separate navigation.
 
+## Local setup note
+
+- `make runtime-check` and `make runtime-smoke` validate the shipped textual-map fallback and workspace shell; they do not require a Google Maps key.
+- `VITE_GOOGLE_MAPS_EMBED_API_KEY` is optional local configuration for exercising the embed seam. If it is unset, the expected behavior is the fallback surface, not a failed runtime bootstrap.
+
 ## Representative states
 
 - Leisure regional loop: low-friction base with one regional excursion.

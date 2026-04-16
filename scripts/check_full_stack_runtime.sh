@@ -13,6 +13,7 @@ backend_pid=""
 prereq_failure() {
   cat >&2 <<'EOF'
 Full-stack runtime checks require both dependency installs to be present first:
+  0. python -m venv .venv && source .venv/bin/activate
   1. python -m pip install -e ".[dev]"
   2. npm --prefix frontend install
 
@@ -21,6 +22,8 @@ These commands validate the local FastAPI + Vite MVP in this repo; they do not
 prove live Google Maps rendering or remote Travel-Plan-Permission transport.
 Do not create a repo-root `node_modules/`; local frontend tooling should live
 under `frontend/node_modules`.
+Missing integration env vars such as `VITE_GOOGLE_MAPS_EMBED_API_KEY` or
+`TPP_BASE_URL` are not prerequisites for these local checks.
 EOF
   exit 1
 }

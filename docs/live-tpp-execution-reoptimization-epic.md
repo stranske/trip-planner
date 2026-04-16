@@ -26,6 +26,12 @@ The repo already has strong business-planning contracts and planner-side workflo
 
 That means the app can model policy-facing planning state, but it still does not complete a real policy round-trip through `Travel-Plan-Permission` and then drive deterministic runtime follow-up from the returned result.
 
+For local contributor setup, that also means the shipped MVP must stay honest about configuration:
+
+- `TPP_BASE_URL`, `TPP_ACCESS_TOKEN`, and `TPP_OIDC_PROVIDER` are optional integration env vars, not baseline runtime prerequisites
+- when those env vars are absent, the repo should continue to surface passive or stored-policy seams rather than implying live remote policy execution
+- runtime-check messaging should distinguish missing local dependencies from intentionally unconfigured remote TPP transport
+
 ## Dependency Chain
 
 This epic depends on the persisted-trip runtime seams from `#753`, the planner runtime sequencing from `#754`, and the existing TPP contract docs already established in this repo, because live policy execution needs stable trip/workspace identity, planner-facing runtime state, and explicit cross-repo contracts before it can replace passive local behavior coherently.
