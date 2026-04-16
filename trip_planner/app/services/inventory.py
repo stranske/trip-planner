@@ -279,9 +279,15 @@ def build_inventory_summary_payload(
                 "Persisted trips use an adapter-backed inventory assembly seam instead of a seeded trip-ID gate."
             )
     elif assembly_input is not None and assembly_input.snapshot.issues:
-        notes = [
-            "No adapter-backed inventory input is available for this persisted trip yet, so the workspace remains available with an empty bundle set."
-        ]
+        issue = assembly_input.snapshot.issues[0]
+        if issue.code == "missing_inventory_trip_duration":
+            notes = [
+                "Trip dates or duration are still missing, so runtime inventory stays in a bounded partial state until those inputs are filled in."
+            ]
+        else:
+            notes = [
+                "No adapter-backed inventory input is available for this persisted trip yet, so the workspace remains available with an empty bundle set."
+            ]
     else:
         notes = [
             "Bundle assembly will appear here once normalized option inputs are available for the trip."

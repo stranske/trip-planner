@@ -1060,10 +1060,17 @@ def _build_persisted_trip_workspace(
     resolved_inventory_summary = inventory_summary or build_inventory_summary_payload(
         resolved_inventory_bundles
     )
-    resolved_scenario_search = scenario_search or _build_runtime_scenario_search_for_trip(
-        record=record,
-        inventory_bundles=resolved_inventory_bundles,
-        saved_scenarios=ordered_saved_scenarios,
+    inventory_status = str(
+        (resolved_inventory_summary.get("runtime_state") or {}).get("status") or "empty"
+    )
+    resolved_scenario_search = scenario_search or (
+        _build_runtime_scenario_search_for_trip(
+            record=record,
+            inventory_bundles=resolved_inventory_bundles,
+            saved_scenarios=ordered_saved_scenarios,
+        )
+        if inventory_status == "ready"
+        else _empty_workspace_scenario_search()
     )
     resolved_feasibility_summary = feasibility_summary or build_feasibility_summary_payload(
         resolved_inventory_bundles
@@ -1134,14 +1141,35 @@ def _build_workspace_runtime_state(
 ) -> dict[str, str]:
     inventory_runtime_state = dict(inventory_summary.get("runtime_state") or {})
     runtime_scenarios = list(runtime_scenario_comparison.get("scenarios") or [])
+    inventory_status = str(inventory_runtime_state.get("status") or "")
 
-    if runtime_scenarios:
+    if inventory_status == "ready" and runtime_scenarios:
         return {
             "status": "ready",
             "title": "Workspace runtime is ready",
             "summary": "Inventory, scenario ranking, and comparison surfaces are ready for review.",
         }
-    if inventory_summary.get("bundle_count", 0) > 0:
+    if inventory_status in {"partial", "empty"}:
+        return {
+            "status": inventory_status,
+            "title": str(
+                inventory_runtime_state.get("title")
+                or (
+                    "Workspace runtime is partially assembled"
+                    if inventory_status == "partial"
+                    else "Workspace runtime is still empty"
+                )
+            ),
+            "summary": str(
+                inventory_runtime_state.get("summary")
+                or (
+                    "Inventory bundles are available, but scenario comparison is not ready yet."
+                    if inventory_status == "partial"
+                    else "Trip context is not complete enough for runtime workspace assembly yet."
+                )
+            ),
+        }
+    if inventory_summary.get("bundle_count", 0) > 0 or runtime_scenarios:
         return {
             "status": "partial",
             "title": "Workspace runtime is partially assembled",
@@ -1806,21 +1834,26 @@ def get_workspace_payload(
         inventory_bundles,
         assembly_input=inventory_assembly_input,
     )
-    runtime_search = _build_runtime_scenario_search_for_trip(
-        record=record,
-        inventory_bundles=inventory_bundles,
-        saved_scenarios=[
-            {
-                "saved_scenario_id": scenario.saved_scenario_id,
-                "trip_id": scenario.trip_id,
-                "current_version_id": scenario.current_version_id,
-                "versions": list(scenario.versions),
-                "comparisons": list(scenario.comparisons),
-                "tags": list(scenario.tags),
-                "notes": list(scenario.notes),
-            }
-            for scenario in persisted_saved_scenarios
-        ],
+    inventory_status = str((inventory_summary.get("runtime_state") or {}).get("status") or "empty")
+    runtime_search = (
+        _build_runtime_scenario_search_for_trip(
+            record=record,
+            inventory_bundles=inventory_bundles,
+            saved_scenarios=[
+                {
+                    "saved_scenario_id": scenario.saved_scenario_id,
+                    "trip_id": scenario.trip_id,
+                    "current_version_id": scenario.current_version_id,
+                    "versions": list(scenario.versions),
+                    "comparisons": list(scenario.comparisons),
+                    "tags": list(scenario.tags),
+                    "notes": list(scenario.notes),
+                }
+                for scenario in persisted_saved_scenarios
+            ],
+        )
+        if inventory_status == "ready"
+        else _empty_workspace_scenario_search()
     )
     if _sync_workspace_session_record(
         session_record,
