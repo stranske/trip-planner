@@ -474,6 +474,21 @@ const workspacePayload = {
     execution_id: "exec-approved-001",
     submission_status: "succeeded",
     evaluation_status: "succeeded",
+    submission: {
+      request_id: "submit-request-001",
+      correlation_id: "corr-approved-001",
+      transport_pattern: "async",
+      status_endpoint: "https://tpp.example.test/api/planner/executions/exec-approved-001",
+      received_at: "2026-04-12T08:10:00Z",
+      execution_status: {
+        state: "succeeded",
+        terminal: true,
+        summary: "Proposal submitted to the policy engine.",
+        updated_at: "2026-04-12T08:10:00Z",
+      },
+      retry: null,
+      error: null,
+    },
     proposal: {
       proposal_id: "proposal:trip-leisure-kyoto-draft",
       comparables: [
@@ -492,6 +507,15 @@ const workspacePayload = {
       approval_notes: ["Manager review required."],
     },
     evaluation: {
+      execution_status: {
+        state: "succeeded",
+        terminal: true,
+        summary: "Policy constraints satisfied.",
+        updated_at: "2026-04-12T08:12:00Z",
+      },
+      retry: null,
+      error: null,
+      received_at: "2026-04-12T08:12:00Z",
       evaluation_result: {
         evaluation_id: "eval-approved-001",
         status: "compliant",
@@ -1183,6 +1207,33 @@ describe("WorkspacePage", () => {
           ...workspacePayload.proposal_state,
           submission_status: "succeeded",
           evaluation_status: "retry_scheduled",
+          evaluation: {
+            ...workspacePayload.proposal_state.evaluation,
+            execution_status: {
+              state: "retry_scheduled",
+              terminal: false,
+              summary:
+                "Policy execution finished, but loading the evaluation result failed. Refresh live status to retry.",
+              updated_at: "2026-04-12T08:14:00Z",
+            },
+            retry: {
+              attempt: 1,
+              max_attempts: 5,
+              retryable: true,
+              reason: "Retry the live workspace refresh after evaluation retrieval fails.",
+            },
+            error: {
+              code: "evaluation_refresh_failed",
+              message:
+                "Policy execution finished, but loading the evaluation result failed. Refresh live status to retry.",
+              category: "transport",
+              retryable: true,
+              details: {
+                source: "workspace_proposal_refresh",
+              },
+            },
+            evaluation_result: undefined,
+          },
           follow_up: {
             ...workspacePayload.proposal_state.follow_up,
             status: "awaiting_evaluation",
@@ -1209,11 +1260,17 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Awaiting policy evaluation result" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Evaluation refresh needs recovery" })).toBeInTheDocument();
     });
     expect(
-      screen.getAllByText("Policy execution finished, but the evaluation result still needs to load.").length
+      screen.getAllByText(
+        "Policy execution finished, but loading the evaluation result failed. Refresh live status to retry."
+      ).length
     ).toBeGreaterThan(0);
+    expect(screen.getByText("Retry the evaluation refresh")).toBeInTheDocument();
+    expect(
+      screen.getByText("Retry 1 of 5 · Retry the live workspace refresh after evaluation retrieval fails.")
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refresh live status" })).toBeInTheDocument();
   });
 
@@ -1348,6 +1405,30 @@ describe("WorkspacePage", () => {
           ...workspacePayload.proposal_state,
           submission_status: "failed",
           evaluation_status: "failed",
+          submission: {
+            ...workspacePayload.proposal_state.submission,
+            execution_status: {
+              state: "failed",
+              terminal: true,
+              summary: "TPP gateway returned a 502 response for the proposal submission.",
+              updated_at: "2026-04-12T08:15:00Z",
+            },
+            error: {
+              code: "gateway_unavailable",
+              message: "TPP gateway returned a 502 response for the proposal submission.",
+              category: "transport",
+              retryable: true,
+              details: {
+                source: "workspace_proposal_submission",
+              },
+            },
+            retry: {
+              attempt: 1,
+              max_attempts: 3,
+              retryable: true,
+              reason: "Retry after the upstream gateway recovers.",
+            },
+          },
           follow_up: null,
           summary: {
             ...workspacePayload.proposal_state.summary,
@@ -1371,8 +1452,11 @@ describe("WorkspacePage", () => {
       expect(screen.getByRole("heading", { name: "Live policy execution needs attention" })).toBeInTheDocument();
     });
     expect(screen.getAllByText("failed").length).toBeGreaterThan(0);
-    expect(screen.getByText("TPP gateway returned a 502 response for the proposal submission.")).toBeInTheDocument();
-    expect(screen.getByText("Review the live transport failure")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("TPP gateway returned a 502 response for the proposal submission.").length
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("Recover the live submission path")).toBeInTheDocument();
+    expect(screen.getByText("Retry 1 of 3 · Retry after the upstream gateway recovers.")).toBeInTheDocument();
   });
 
   it("surfaces reoptimization follow-up guidance for non-compliant policy results", async () => {

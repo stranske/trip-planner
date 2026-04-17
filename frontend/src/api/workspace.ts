@@ -313,6 +313,33 @@ export type WorkspaceData = {
     execution_id: string | null;
     submission_status: string;
     evaluation_status: string | null;
+    submission: {
+      request_id?: string;
+      correlation_id?: string;
+      transport_pattern?: string;
+      status_endpoint?: string | null;
+      received_at?: string;
+      last_poll_received_at?: string;
+      execution_status?: {
+        state?: string;
+        terminal?: boolean;
+        summary?: string;
+        updated_at?: string;
+      };
+      retry?: {
+        attempt: number;
+        max_attempts: number;
+        retryable: boolean;
+        reason: string;
+      } | null;
+      error?: {
+        code: string;
+        message: string;
+        category: string;
+        retryable: boolean;
+        details?: Record<string, string>;
+      } | null;
+    };
     proposal: {
       proposal_id: string;
       approval_notes?: string[];
@@ -329,6 +356,26 @@ export type WorkspaceData = {
       }>;
     };
     evaluation: {
+      execution_status?: {
+        state?: string;
+        terminal?: boolean;
+        summary?: string;
+        updated_at?: string;
+      };
+      retry?: {
+        attempt: number;
+        max_attempts: number;
+        retryable: boolean;
+        reason: string;
+      } | null;
+      error?: {
+        code: string;
+        message: string;
+        category: string;
+        retryable: boolean;
+        details?: Record<string, string>;
+      } | null;
+      received_at?: string;
       evaluation_result?: {
         evaluation_id: string;
         status: string;

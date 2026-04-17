@@ -42,6 +42,7 @@ type ProposalLifecycleState =
   | "pending"
   | "deferred"
   | "running"
+  | "recovery-required"
   | "failed"
   | "completed-with-follow-up"
   | "approval-ready";
@@ -51,6 +52,17 @@ type ProposalLifecyclePresentation = {
   label: string;
   title: string;
   summary: string;
+};
+
+type ProposalDiagnosticRow = {
+  label: string;
+  value: string;
+};
+
+type ProposalRecoveryCard = {
+  title: string;
+  summary: string;
+  meta: string | null;
 };
 
 function formatDateRange(startDate: string | null, endDate: string | null): string {
@@ -192,6 +204,24 @@ function formatCurrency(amount: number, currency: string): string {
   }
 }
 
+function formatTimestamp(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(parsed);
+}
+
 function formatScenarioScore(score: number): string {
   return `${Math.round(score * 100)} / 100`;
 }
@@ -276,6 +306,10 @@ function isFailedLifecycleStatus(status: string | null | undefined): boolean {
   return status != null && ["failed", "error", "errored", "rejected", "invalid"].includes(status);
 }
 
+function needsRecoveryLifecycleStatus(status: string | null | undefined): boolean {
+  return status != null && ["retry_scheduled"].includes(status);
+}
+
 function isRunningLifecycleStatus(status: string | null | undefined): boolean {
   return (
     status != null &&
@@ -326,6 +360,23 @@ function deriveProposalLifecyclePresentation(
         summary.follow_up_summary ??
         summary.submission_summary ??
         "Policy evaluation passed and the workspace is ready for approval handling.",
+    };
+  }
+
+  if (
+    needsRecoveryLifecycleStatus(submissionStatus) ||
+    needsRecoveryLifecycleStatus(evaluationTransportStatus)
+  ) {
+    return {
+      state: "recovery-required",
+      label: "recovery needed",
+      title: "Evaluation refresh needs recovery",
+      summary:
+        proposalState.evaluation.error?.message ??
+        proposalState.evaluation.execution_status?.summary ??
+        summary.follow_up_summary ??
+        summary.submission_summary ??
+        "The live policy run needs another refresh before the evaluation result can be trusted.",
     };
   }
 
@@ -394,6 +445,92 @@ function hasRenderableFollowUp(
   followUp: NonNullable<WorkspaceData["proposal_state"]>["follow_up"]
 ): followUp is NonNullable<NonNullable<WorkspaceData["proposal_state"]>["follow_up"]> {
   return Boolean(followUp?.status && followUp?.title && followUp?.summary);
+}
+
+function buildProposalDiagnosticRows(
+  proposalState: NonNullable<WorkspaceData["proposal_state"]>
+): ProposalDiagnosticRow[] {
+  const rows: ProposalDiagnosticRow[] = [];
+  const evaluationUpdatedAt = formatTimestamp(proposalState.evaluation.execution_status?.updated_at);
+  const submissionUpdatedAt = formatTimestamp(
+    proposalState.submission.last_poll_received_at ?? proposalState.submission.received_at
+  );
+
+  if (proposalState.execution_id) {
+    rows.push({ label: "Execution", value: proposalState.execution_id });
+  }
+  if (proposalState.submission.correlation_id) {
+    rows.push({ label: "Correlation", value: proposalState.submission.correlation_id });
+  }
+  if (proposalState.submission.transport_pattern) {
+    rows.push({
+      label: "Transport",
+      value: proposalState.submission.transport_pattern.replace(/_/g, " "),
+    });
+  }
+  if (proposalState.submission.status_endpoint) {
+    rows.push({ label: "Status endpoint", value: proposalState.submission.status_endpoint });
+  }
+  if (evaluationUpdatedAt) {
+    rows.push({ label: "Evaluation update", value: evaluationUpdatedAt });
+  } else if (submissionUpdatedAt) {
+    rows.push({ label: "Last transport update", value: submissionUpdatedAt });
+  }
+  if (proposalState.evaluation.error?.code) {
+    rows.push({
+      label: "Recovery code",
+      value: proposalState.evaluation.error.code.replace(/_/g, " "),
+    });
+  } else if (proposalState.submission.error?.code) {
+    rows.push({
+      label: "Failure code",
+      value: proposalState.submission.error.code.replace(/_/g, " "),
+    });
+  }
+  return rows;
+}
+
+function buildProposalRecoveryCard(
+  proposalState: NonNullable<WorkspaceData["proposal_state"]>
+): ProposalRecoveryCard | null {
+  const evaluationRetry = proposalState.evaluation.retry;
+  const evaluationError = proposalState.evaluation.error;
+  const submissionRetry = proposalState.submission.retry;
+  const submissionError = proposalState.submission.error;
+
+  if (evaluationError || evaluationRetry) {
+    const meta = evaluationRetry
+      ? `Retry ${evaluationRetry.attempt} of ${evaluationRetry.max_attempts} · ${evaluationRetry.reason}`
+      : evaluationError?.category
+        ? `Category: ${evaluationError.category}`
+        : null;
+    return {
+      title: "Retry the evaluation refresh",
+      summary:
+        evaluationError?.message ??
+        proposalState.evaluation.execution_status?.summary ??
+        "Refresh live status to retry loading the latest evaluation result.",
+      meta,
+    };
+  }
+
+  if (submissionError || submissionRetry) {
+    const meta = submissionRetry
+      ? `Retry ${submissionRetry.attempt} of ${submissionRetry.max_attempts} · ${submissionRetry.reason}`
+      : submissionError?.category
+        ? `Category: ${submissionError.category}`
+        : null;
+    return {
+      title: "Recover the live submission path",
+      summary:
+        submissionError?.message ??
+        proposalState.submission.execution_status?.summary ??
+        "Review the live policy transport failure before retrying.",
+      meta,
+    };
+  }
+
+  return null;
 }
 
 function mergeWorkspaceBudgetState(
@@ -491,6 +628,14 @@ function WorkspacePageContent({
   const renderableProposalFollowUp = hasRenderableFollowUp(proposalFollowUp)
     ? proposalFollowUp
     : null;
+  const proposalDiagnosticRows =
+    currentWorkspace.proposal_state == null
+      ? []
+      : buildProposalDiagnosticRows(currentWorkspace.proposal_state);
+  const proposalRecoveryCard =
+    currentWorkspace.proposal_state == null
+      ? null
+      : buildProposalRecoveryCard(currentWorkspace.proposal_state);
   const proposalLifecycle =
     currentWorkspace.proposal_state == null
       ? null
@@ -729,6 +874,16 @@ function WorkspacePageContent({
                 </div>
               </dl>
               <p>{proposalLifecycle?.summary ?? "Submission stored for later review."}</p>
+              {proposalDiagnosticRows.length > 0 ? (
+                <dl className="workspace-meta">
+                  {proposalDiagnosticRows.map((row) => (
+                    <div key={row.label}>
+                      <dt>{row.label}</dt>
+                      <dd>{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
               {shouldShowProposalRefresh(
                 currentWorkspace.proposal_state,
                 renderableProposalFollowUp
@@ -737,7 +892,18 @@ function WorkspacePageContent({
                   Refresh live status
                 </button>
               ) : null}
-              {renderableProposalFollowUp ? (
+              {proposalLifecycle?.state === "recovery-required" ? (
+                <article className="decision-card">
+                  <h3>{proposalRecoveryCard?.title ?? "Retry the live status refresh"}</h3>
+                  <p>
+                    {proposalRecoveryCard?.summary ??
+                      "The workspace needs another live refresh before the evaluation result can be trusted."}
+                  </p>
+                  {proposalRecoveryCard?.meta ? (
+                    <p className="muted-copy">{proposalRecoveryCard.meta}</p>
+                  ) : null}
+                </article>
+              ) : renderableProposalFollowUp ? (
                 <article className="decision-card">
                   <h3>{renderableProposalFollowUp.recommended_label ?? renderableProposalFollowUp.title}</h3>
                   <p>{renderableProposalFollowUp.summary}</p>
@@ -756,11 +922,14 @@ function WorkspacePageContent({
                 </article>
               ) : proposalLifecycle?.state === "failed" ? (
                 <article className="decision-card">
-                  <h3>Review the live transport failure</h3>
+                  <h3>{proposalRecoveryCard?.title ?? "Review the live transport failure"}</h3>
                   <p>
-                    Validate the remote TPP configuration and retry posture before asking travelers to treat this
-                    workspace as approval-ready.
+                    {proposalRecoveryCard?.summary ??
+                      "Validate the remote TPP configuration and retry posture before asking travelers to treat this workspace as approval-ready."}
                   </p>
+                  {proposalRecoveryCard?.meta ? (
+                    <p className="muted-copy">{proposalRecoveryCard.meta}</p>
+                  ) : null}
                 </article>
               ) : null}
               <div className="decision-stack">
