@@ -14,6 +14,8 @@ from trip_planner.integrations.tpp import (
     EvaluationResultIngestionError,
     HTTPTPPIntegrationClient,
     TPPCorrelationId,
+    TPPConfigurationError,
+    TPPContractError,
     TPPErrorRecord,
     TPPEvaluationResultIngestionService,
     TPPExecutionStatus,
@@ -303,6 +305,10 @@ def _build_summary(
         "follow_up_title": follow_up.get("title"),
         "follow_up_summary": follow_up.get("summary"),
         "follow_up": follow_up,
+        "submission_error": submission_record.get("error"),
+        "submission_retry": submission_record.get("retry"),
+        "evaluation_error": evaluation_record.get("error"),
+        "evaluation_retry": evaluation_record.get("retry"),
     }
 
 
@@ -489,6 +495,85 @@ def _persist_evaluation_refresh_failure(
         ).to_dict(),
         "received_at": _now_iso(),
     }
+
+
+def _persist_submission_refresh_failure(
+    *,
+    record: PersistedProposalState,
+    request: TPPRequestEnvelope,
+    error: Exception,
+) -> None:
+    status_code = getattr(error, "status_code", None)
+    details: dict[str, str] = {"source": "workspace_proposal_refresh"}
+    if status_code is not None:
+        details["status_code"] = str(status_code)
+
+    if isinstance(error, TPPConfigurationError):
+        category = "configuration"
+        state = "failed"
+        retryable = True
+        terminal = True
+        summary = "Workspace refresh needs live TPP configuration before status can be updated."
+        code = "submission_refresh_configuration_failed"
+    elif isinstance(error, TPPContractError):
+        category = "contract"
+        state = "failed"
+        retryable = False
+        terminal = True
+        summary = "Workspace refresh received an invalid live TPP status payload."
+        code = "submission_refresh_contract_failed"
+    elif isinstance(error, TPPTransportError):
+        category = "transport"
+        state = "retry_scheduled"
+        retryable = True
+        terminal = False
+        summary = "Workspace refresh could not reach the live proposal status endpoint. Retry the status check."
+        code = "submission_refresh_transport_failed"
+    else:
+        category = "application"
+        state = "failed"
+        retryable = False
+        terminal = True
+        summary = "Workspace refresh could not reconcile the stored proposal status."
+        code = "submission_refresh_failed"
+
+    submission_record = dict(record.submission_record)
+    previous_execution_status = dict(submission_record.get("execution_status") or {})
+    if previous_execution_status:
+        submission_record["last_known_execution_status"] = previous_execution_status
+
+    submission_record["last_poll_request_id"] = request.request_id
+    submission_record["last_poll_request_payload"] = dict(request.payload)
+    submission_record["last_poll_error_at"] = _now_iso()
+    submission_record["execution_status"] = TPPExecutionStatus(
+        state=state,
+        terminal=terminal,
+        summary=summary,
+        external_status=str(previous_execution_status.get("external_status") or ""),
+        updated_at=_now_iso(),
+    ).to_dict()
+    submission_record["error"] = TPPErrorRecord(
+        code=code,
+        message=str(error) or summary,
+        category=category,
+        retryable=retryable,
+        details=details,
+    ).to_dict()
+    if retryable:
+        previous_retry = dict(submission_record.get("retry") or {})
+        next_attempt = int(previous_retry.get("attempt") or 0) + 1
+        max_attempts = int(previous_retry.get("max_attempts") or 5)
+        submission_record["retry"] = TPPRetryMetadata(
+            attempt=min(next_attempt, max_attempts),
+            max_attempts=max_attempts,
+            retryable=True,
+            reason=summary,
+        ).to_dict()
+    else:
+        submission_record.pop("retry", None)
+
+    record.submission_status = state
+    record.submission_record = submission_record
 
 
 def get_workspace_proposal_payload(
@@ -761,21 +846,41 @@ def refresh_workspace_proposal_status(
             "execution_id": existing.execution_id,
         },
     )
-    polled_response = HTTPTPPIntegrationClient().poll_execution_status(poll_request)
-    _update_submission_record_from_poll(
-        record=existing,
-        request=poll_request,
-        response=polled_response,
-    )
-    existing.summary = _build_summary(
-        submission_record=dict(existing.submission_record),
-        evaluation_record=dict(existing.evaluation_record),
-        proposal_payload=dict(existing.proposal_payload),
-        persisted_follow_up=dict(existing.summary.get("follow_up") or {}),
-    )
-    trip_record.updated_at = datetime.now(UTC)
-    db_session.commit()
-    db_session.refresh(existing)
+    try:
+        polled_response = HTTPTPPIntegrationClient().poll_execution_status(poll_request)
+        _update_submission_record_from_poll(
+            record=existing,
+            request=poll_request,
+            response=polled_response,
+        )
+        existing.summary = _build_summary(
+            submission_record=dict(existing.submission_record),
+            evaluation_record=dict(existing.evaluation_record),
+            proposal_payload=dict(existing.proposal_payload),
+            persisted_follow_up=dict(existing.summary.get("follow_up") or {}),
+        )
+        trip_record.updated_at = datetime.now(UTC)
+        db_session.commit()
+        db_session.refresh(existing)
+    except (TPPTransportError, ValueError) as error:
+        _persist_submission_refresh_failure(
+            record=existing,
+            request=poll_request,
+            error=error,
+        )
+        existing.summary = _build_summary(
+            submission_record=dict(existing.submission_record),
+            evaluation_record=dict(existing.evaluation_record),
+            proposal_payload=dict(existing.proposal_payload),
+            persisted_follow_up=dict(existing.summary.get("follow_up") or {}),
+        )
+        trip_record.updated_at = datetime.now(UTC)
+        db_session.commit()
+        db_session.refresh(existing)
+        return {
+            "proposal_state": _serialize_proposal_state(existing),
+            "summary": dict(existing.summary),
+        }
 
     if polled_response.execution_status.state == "succeeded":
         evaluation_request = _make_runtime_request(

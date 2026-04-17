@@ -1456,6 +1456,83 @@ def test_workspace_proposal_refresh_persists_failed_remote_status(
     assert payload["summary"]["submission_requires_polling"] is False
     assert payload["summary"]["evaluation_transport_status"] is None
     assert payload["summary"]["submission_summary"] == "Evaluator returned an integration error"
+    assert payload["summary"]["submission_error"]["code"] == "upstream_unavailable"
+    assert payload["summary"]["submission_error"]["category"] == "upstream"
+    assert payload["summary"]["submission_error"]["retryable"] is True
+    assert (
+        payload["summary"]["submission_error"]["message"]
+        == "Travel-Plan-Permission did not return a valid evaluation payload."
+    )
+    assert payload["summary"]["submission_retry"]["reason"] == "Transient upstream outage"
+
+
+def test_workspace_proposal_refresh_persists_configuration_failure_for_reload(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    monkeypatch.delenv("TPP_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("TPP_OIDC_PROVIDER", raising=False)
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Refresh proposal config blocker",
+            "summary": "Persist live TPP config failures in workspace state.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+    submission_fixture["response"]["result_payload"]["execution_id"] = "exec-config-001"
+    submission_fixture["response"]["status_endpoint"] = (
+        "https://tpp.example.test/api/planner/proposals/proposal-live/executions/exec-config-001"
+    )
+
+    submitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert submitted.status_code == 200
+
+    refreshed = client.post(f"/api/workspace/{trip_id}/proposal/refresh")
+
+    assert refreshed.status_code == 200
+    payload = refreshed.json()["proposal_state"]
+    assert payload["submission_status"] == "failed"
+    assert payload["summary"]["submission_requires_polling"] is False
+    assert payload["summary"]["submission_error"]["code"] == (
+        "submission_refresh_configuration_failed"
+    )
+    assert payload["summary"]["submission_error"]["category"] == "configuration"
+    assert payload["summary"]["submission_error"]["retryable"] is True
+    assert "TPP_BASE_URL" in payload["summary"]["submission_error"]["message"]
+    assert payload["summary"]["submission_retry"]["retryable"] is True
+    assert payload["submission"]["last_known_execution_status"]["state"] == "deferred"
+
+    reloaded = client.get(f"/api/workspace/{trip_id}/proposal")
+    assert reloaded.status_code == 200
+    reloaded_payload = reloaded.json()["proposal_state"]
+    assert reloaded_payload["summary"]["submission_error"]["category"] == "configuration"
+    assert reloaded_payload["submission"]["last_poll_request_payload"] == {
+        "proposal_version": "proposal-v3",
+        "execution_id": "exec-config-001",
+    }
 
 
 def test_workspace_proposal_refresh_preserves_submission_and_retries_when_evaluation_ingestion_fails(
