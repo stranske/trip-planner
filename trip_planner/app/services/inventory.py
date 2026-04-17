@@ -69,7 +69,7 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
     ) -> None:
         self.trip_id = trip_id
         self.trip_mode = trip_mode
-        self.primary_regions = tuple(region for region in primary_regions if region)
+        self.primary_regions = tuple(region.strip() for region in primary_regions if region.strip())
         self.duration_days = duration_days
         self.allow_fixture_fallback = allow_fixture_fallback
         self.adapter_id = "persisted-trip-fixture-inventory"
@@ -89,11 +89,11 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
         self.capabilities = ("read_fixture", "supports_normalization_handoff")
 
     def fixture_names(self) -> tuple[str, ...]:
+        if not self.allow_fixture_fallback:
+            return ()
         fixture_seed = _FIXTURE_BUNDLE_INPUTS.get(self.trip_id)
         if fixture_seed is not None and fixture_seed.trip_mode == self.trip_mode:
             return fixture_seed.fixture_names
-        if not self.allow_fixture_fallback:
-            return ()
         if not self.primary_regions:
             return ()
         if self.duration_days is None or self.duration_days <= 0:
@@ -316,7 +316,7 @@ def build_inventory_summary_payload(
             ]
         elif issue.code == "missing_inventory_live_adapter":
             notes = [
-                "The persisted workspace path no longer assembles inventory from bundled fixtures, so runtime inventory will stay empty until a live adapter is wired in."
+                "Persisted workspace reads no longer assemble inventory from fixtures, so runtime inventory will stay empty until a live adapter is wired in."
             ]
         else:
             notes = [

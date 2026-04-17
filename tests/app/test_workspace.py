@@ -387,6 +387,34 @@ def test_workspace_endpoint_surfaces_partial_runtime_state_for_under_scoped_trip
     assert "runtime scenario" in comparison_payload["summary"].lower()
 
 
+def test_workspace_endpoint_treats_whitespace_only_primary_regions_as_missing(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Whitespace regions",
+            "summary": "Whitespace-only regions should not unlock runtime inventory.",
+            "mode": "business",
+            "trip_frame": {
+                "duration_days": 3,
+                "primary_regions": [" ", ""],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    payload = client.get(f"/api/workspace/{trip_id}").json()
+
+    assert payload["runtime_state"]["status"] == "empty"
+    assert payload["inventory_summary"]["runtime_state"]["status"] == "empty"
+    assert any(
+        "add at least one destination" in note.lower()
+        for note in payload["inventory_summary"]["notes"]
+    )
+
+
 def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_trip(
     client: TestClient,
 ) -> None:

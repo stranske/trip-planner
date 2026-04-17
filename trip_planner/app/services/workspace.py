@@ -558,46 +558,16 @@ def _build_runtime_scenario_comparison(
 
 
 def _build_workspace_inventory_summary(record: PersistedTrip) -> dict[str, Any]:
-    if not record.primary_regions:
-        return {
-            "bundle_count": 0,
-            "bundles": [],
-            "notes": [
-                "Primary regions are still missing, so add at least one destination before the workspace can assemble runtime inventory bundles."
-            ],
-            "runtime_state": {
-                "status": "empty",
-                "title": "Runtime inventory is still empty",
-                "summary": "Add at least one primary region before the workspace can assemble runtime inventory bundles.",
-            },
-        }
-
-    if record.duration_days is None or record.duration_days <= 0:
-        return {
-            "bundle_count": 0,
-            "bundles": [],
-            "notes": [
-                "Trip dates or duration are still missing, so runtime inventory stays in a bounded partial state until those inputs are filled in."
-            ],
-            "runtime_state": {
-                "status": "partial",
-                "title": "Runtime inventory is partially specified",
-                "summary": "Add trip dates or duration to replace the bounded fallback with runtime bundle assembly.",
-            },
-        }
-
-    return {
-        "bundle_count": 0,
-        "bundles": [],
-        "notes": [
-            "Persisted workspace reads no longer assemble inventory from fixtures. Runtime bundles will appear after a non-fixture inventory source writes trip-scoped inventory state."
-        ],
-        "runtime_state": {
-            "status": "empty",
-            "title": "Runtime inventory is still empty",
-            "summary": "The workspace stays in bootstrap mode until trip-scoped inventory is persisted from a non-fixture source.",
-        },
-    }
+    return build_inventory_summary_payload(
+        [],
+        assembly_input=_build_inventory_assembly_input(
+            trip_id=record.trip_id,
+            trip_mode=record.mode,
+            primary_regions=record.primary_regions,
+            duration_days=record.duration_days,
+            allow_fixture_fallback=False,
+        ),
+    )
 
 
 def _isoformat(value: datetime) -> str:
@@ -1111,8 +1081,12 @@ def _build_persisted_trip_workspace(
         duration_days=record.duration_days,
         allow_fixture_fallback=False,
     )
-    resolved_inventory_bundles = inventory_bundles or assemble_inventory_bundles_for_trip(
-        assembly_input=inventory_assembly_input,
+    resolved_inventory_bundles = (
+        inventory_bundles
+        if inventory_bundles is not None
+        else assemble_inventory_bundles_for_trip(
+            assembly_input=inventory_assembly_input,
+        )
     )
     resolved_inventory_summary = inventory_summary or build_inventory_summary_payload(
         resolved_inventory_bundles,
@@ -1302,7 +1276,7 @@ def _build_runtime_scenario_comparison_payload(
         }
         for scenario in persisted_saved_scenarios_records
     ]
-    inventory_bundles: list[InventoryBundle] = []
+    persisted_inventory_bundles: list[InventoryBundle] = []
     inventory_summary = _build_workspace_inventory_summary(record)
     inventory_status = str((inventory_summary.get("runtime_state") or {}).get("status") or "empty")
     return _build_runtime_scenario_comparison(
@@ -1310,7 +1284,7 @@ def _build_runtime_scenario_comparison_payload(
         trip_title=record.title,
         scenario_search=_build_runtime_scenario_search_for_trip(
             record=record,
-            inventory_bundles=inventory_bundles,
+            inventory_bundles=persisted_inventory_bundles,
             saved_scenarios=persisted_saved_scenarios,
             inventory_status=inventory_status,
         ),
@@ -1897,12 +1871,12 @@ def get_workspace_payload(
             session_record=session_record,
         )
         bootstrap_updated = True
-    inventory_bundles: list[InventoryBundle] = []
+    persisted_inventory_bundles: list[InventoryBundle] = []
     inventory_summary = _build_workspace_inventory_summary(record)
     inventory_status = str((inventory_summary.get("runtime_state") or {}).get("status") or "empty")
     runtime_search = _build_runtime_scenario_search_for_trip(
         record=record,
-        inventory_bundles=inventory_bundles,
+        inventory_bundles=persisted_inventory_bundles,
         saved_scenarios=[
             {
                 "saved_scenario_id": scenario.saved_scenario_id,
@@ -1948,7 +1922,7 @@ def get_workspace_payload(
         .order_by(PersistedActivityLogEvent.occurred_at.desc())
         .limit(WORKSPACE_ACTIVITY_LOG_LIMIT)
     ).all()
-    feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
+    feasibility_summary = build_feasibility_summary_payload(persisted_inventory_bundles)
     return _build_persisted_trip_workspace(
         record,
         session=(_serialize_session_record(session_record) if session_record is not None else None),
@@ -1981,7 +1955,7 @@ def get_workspace_payload(
             if record.mode == "business"
             else None
         ),
-        inventory_bundles=inventory_bundles,
+        inventory_bundles=persisted_inventory_bundles,
         inventory_summary=inventory_summary,
         scenario_search=runtime_search,
         feasibility_summary=feasibility_summary,
