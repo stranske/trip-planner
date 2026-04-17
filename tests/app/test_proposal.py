@@ -1468,7 +1468,12 @@ def test_workspace_proposal_refresh_persists_failed_remote_status(
 
 def test_workspace_proposal_refresh_persists_configuration_failure_for_reload(
     client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    monkeypatch.delenv("TPP_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("TPP_OIDC_PROVIDER", raising=False)
+
     created = client.post(
         "/api/trips",
         json={
