@@ -175,16 +175,19 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_busin
     assert payload["saved_scenarios"][0]["versions"][0]["label"] == "baseline"
     assert payload["saved_scenarios"][1]["versions"][0]["label"] == "fallback"
     assert payload["scenario_comparison"]["baseline_scenario_id"] == lead_saved_scenario_id
-    assert payload["scenario_search"]["title"] == "Chicago kickoff ranked scenarios"
-    assert payload["runtime_state"]["status"] == "ready"
-    assert payload["scenario_search"]["purpose"] == "final_selection"
-    assert payload["scenario_search"]["scenarios"][0]["scenario_id"] == f"scenario:{trip_id}:1"
-    assert payload["scenario_search"]["scenarios"][0]["scenario_id"] != lead_saved_scenario_id
-    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == f"scenario:{trip_id}:1"
-    assert len(payload["runtime_scenario_comparison"]["scenarios"]) == 1
-    assert payload["inventory_summary"]["bundle_count"] == 1
-    assert payload["inventory_summary"]["bundles"][0]["title"] == "Airport arrival bundle"
-    assert payload["feasibility_summary"]["assessment_count"] == 1
+    assert payload["scenario_search"]["title"] == "Persisted workspace bootstrap comparison"
+    assert payload["runtime_state"]["status"] == "empty"
+    assert payload["scenario_search"]["purpose"] == "workspace_bootstrap"
+    assert payload["scenario_search"]["scenarios"][0]["scenario_id"] == lead_saved_scenario_id
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == lead_saved_scenario_id
+    assert len(payload["runtime_scenario_comparison"]["scenarios"]) == 2
+    assert payload["inventory_summary"]["bundle_count"] == 0
+    assert payload["inventory_summary"]["bundles"] == []
+    assert any(
+        "no longer assemble inventory from fixtures" in note.lower()
+        for note in payload["inventory_summary"]["notes"]
+    )
+    assert payload["feasibility_summary"]["assessment_count"] == 0
     assert payload["activity_log"] == []
     assert payload["budget_state"]["summary"]["planned_total"] == 0
     assert payload["budget_state"]["summary"]["actual_total"] == 0
@@ -228,16 +231,16 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
 
     payload = client.get(f"/api/workspace/{trip_id}").json()
 
-    assert payload["runtime_state"]["status"] == "ready"
+    assert payload["runtime_state"]["status"] == "empty"
     assert payload["saved_scenarios"][0]["versions"][0]["title"].startswith("Lisbon")
-    assert payload["scenario_search"]["title"] == "Lisbon weekend runtime scenarios"
-    assert payload["scenario_search"]["purpose"] == "final_selection"
-    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == f"scenario:{trip_id}:1"
-    assert payload["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"] == (
-        f"scenario:{trip_id}:1"
+    assert payload["scenario_search"]["title"] == "Persisted workspace bootstrap comparison"
+    assert payload["scenario_search"]["purpose"] == "workspace_bootstrap"
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
+    assert payload["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"].startswith(
+        "saved-scenario:"
     )
-    assert all(
-        "comparison-pass" not in scenario["route_sequence"]
+    assert any(
+        "comparison-pass" in scenario["route_sequence"]
         for scenario in payload["runtime_scenario_comparison"]["scenarios"]
     )
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_review"
@@ -268,10 +271,9 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_pers
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["lead_scenario_id"] == f"scenario:{trip_id}:1"
-    assert payload["scenarios"][0]["scenario_id"] == f"scenario:{trip_id}:1"
-    assert not payload["scenarios"][0]["scenario_id"].startswith("saved-scenario:")
-    assert payload["scenarios"][0]["option_count"] >= 1
+    assert payload["lead_scenario_id"].startswith("saved-scenario:")
+    assert payload["scenarios"][0]["scenario_id"].startswith("saved-scenario:")
+    assert payload["scenarios"][0]["option_count"] == 1
     assert "runtime scenario" in payload["summary"].lower()
 
 
@@ -304,10 +306,9 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_pers
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["lead_scenario_id"] == f"scenario:{trip_id}:1"
-    assert payload["scenarios"][0]["scenario_id"] == f"scenario:{trip_id}:1"
-    assert not payload["scenarios"][0]["scenario_id"].startswith("saved-scenario:")
-    assert payload["scenarios"][0]["status"] == "fallback"
+    assert payload["lead_scenario_id"].startswith("saved-scenario:")
+    assert payload["scenarios"][0]["scenario_id"].startswith("saved-scenario:")
+    assert payload["scenarios"][0]["status"] == "recommended"
     assert "runtime scenario" in payload["summary"].lower()
 
 
@@ -335,19 +336,19 @@ def test_workspace_endpoint_returns_bounded_empty_runtime_state_when_trip_frame_
     reloaded_payload = reloaded.json()
     assert initial_payload["runtime_state"]["status"] == "empty"
     assert initial_payload["inventory_summary"]["runtime_state"]["status"] == "empty"
-    assert initial_payload["scenario_search"]["scenarios"] == []
-    assert initial_payload["runtime_scenario_comparison"]["scenarios"] == []
+    assert len(initial_payload["scenario_search"]["scenarios"]) == 2
+    assert len(initial_payload["runtime_scenario_comparison"]["scenarios"]) == 2
     assert (
-        initial_payload["scenario_search"]["scenarios"]
-        == reloaded_payload["scenario_search"]["scenarios"]
+        initial_payload["scenario_search"]["scenarios"][0]["scenario_id"]
+        == reloaded_payload["scenario_search"]["scenarios"][0]["scenario_id"]
     )
     assert (
-        initial_payload["planner_panel_state"]["option_set"]["options"]
-        == reloaded_payload["planner_panel_state"]["option_set"]["options"]
+        initial_payload["planner_panel_state"]["option_set"]["purpose"]
+        == reloaded_payload["planner_panel_state"]["option_set"]["purpose"]
     )
     assert (
-        initial_payload["runtime_scenario_comparison"]["scenarios"]
-        == reloaded_payload["runtime_scenario_comparison"]["scenarios"]
+        initial_payload["runtime_scenario_comparison"]["lead_scenario_id"]
+        == reloaded_payload["runtime_scenario_comparison"]["lead_scenario_id"]
     )
 
 
@@ -374,19 +375,16 @@ def test_workspace_endpoint_surfaces_partial_runtime_state_for_under_scoped_trip
     payload = response.json()
     assert payload["runtime_state"]["status"] == "partial"
     assert payload["inventory_summary"]["runtime_state"]["status"] == "partial"
-    assert payload["scenario_search"]["scenarios"] == []
-    assert payload["runtime_scenario_comparison"]["scenarios"] == []
+    assert len(payload["scenario_search"]["scenarios"]) == 2
+    assert len(payload["runtime_scenario_comparison"]["scenarios"]) == 2
 
     comparison_response = client.get(f"/api/workspace/{trip_id}/scenarios/compare")
 
     assert comparison_response.status_code == 200
     comparison_payload = comparison_response.json()
-    assert comparison_payload["scenarios"] == []
-    assert comparison_payload["lead_scenario_id"] is None
-    assert (
-        "does not have runtime scenario comparison data yet"
-        in comparison_payload["summary"].lower()
-    )
+    assert len(comparison_payload["scenarios"]) == 2
+    assert comparison_payload["lead_scenario_id"].startswith("saved-scenario:")
+    assert "runtime scenario" in comparison_payload["summary"].lower()
 
 
 def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_trip(

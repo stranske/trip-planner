@@ -52,6 +52,7 @@ class InventoryAssemblyInput:
     snapshot: RawSnapshot
     handoff: NormalizationHandoff
     fixture_names: tuple[str, ...]
+    allow_fixture_fallback: bool
 
 
 class PersistedTripInventoryFixtureAdapter(SourceAdapter):
@@ -64,11 +65,13 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
         trip_mode: str,
         primary_regions: Sequence[str],
         duration_days: int | None = None,
+        allow_fixture_fallback: bool = True,
     ) -> None:
         self.trip_id = trip_id
         self.trip_mode = trip_mode
         self.primary_regions = tuple(region for region in primary_regions if region)
         self.duration_days = duration_days
+        self.allow_fixture_fallback = allow_fixture_fallback
         self.adapter_id = "persisted-trip-fixture-inventory"
         self.source_record = SourceRecord(
             source_id="fixture-normalized-inventory",
@@ -89,6 +92,8 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
         fixture_seed = _FIXTURE_BUNDLE_INPUTS.get(self.trip_id)
         if fixture_seed is not None and fixture_seed.trip_mode == self.trip_mode:
             return fixture_seed.fixture_names
+        if not self.allow_fixture_fallback:
+            return ()
         if not self.primary_regions:
             return ()
         if self.duration_days is None or self.duration_days <= 0:
@@ -117,18 +122,32 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
                     )
                 )
             else:
-                issues.append(
-                    AdapterIssue(
-                        issue_id=f"issue:{self.trip_id}:inventory-missing-duration",
-                        stage="availability",
-                        severity="warning",
-                        code="missing_inventory_trip_duration",
-                        message=(
-                            "Trip dates or duration are still missing, so inventory assembly stays partial."
-                        ),
-                        details={"trip_id": self.trip_id, "trip_mode": self.trip_mode},
+                if self.duration_days is None or self.duration_days <= 0:
+                    issues.append(
+                        AdapterIssue(
+                            issue_id=f"issue:{self.trip_id}:inventory-missing-duration",
+                            stage="availability",
+                            severity="warning",
+                            code="missing_inventory_trip_duration",
+                            message=(
+                                "Trip dates or duration are still missing, so inventory assembly stays partial."
+                            ),
+                            details={"trip_id": self.trip_id, "trip_mode": self.trip_mode},
+                        )
                     )
-                )
+                elif not self.allow_fixture_fallback:
+                    issues.append(
+                        AdapterIssue(
+                            issue_id=f"issue:{self.trip_id}:inventory-live-adapter-pending",
+                            stage="availability",
+                            severity="warning",
+                            code="missing_inventory_live_adapter",
+                            message=(
+                                "Fixture-backed inventory is disabled for the persisted workspace path until a live adapter is connected."
+                            ),
+                            details={"trip_id": self.trip_id, "trip_mode": self.trip_mode},
+                        )
+                    )
         records = [
             RawSourceRecord(
                 record_id=f"{query.query_id}:{index}",
@@ -210,6 +229,7 @@ def _build_inventory_assembly_input(
     trip_mode: str,
     primary_regions: Sequence[str] = (),
     duration_days: int | None = None,
+    allow_fixture_fallback: bool = True,
 ) -> InventoryAssemblyInput:
     query = SourceQuery(
         query_id=f"inventory-query:{trip_id}",
@@ -225,6 +245,7 @@ def _build_inventory_assembly_input(
         trip_mode=trip_mode,
         primary_regions=primary_regions,
         duration_days=duration_days,
+        allow_fixture_fallback=allow_fixture_fallback,
     )
     snapshot = adapter.fetch_snapshot(query)
     handoff = adapter.build_handoff(snapshot)
@@ -240,6 +261,7 @@ def _build_inventory_assembly_input(
             for record in snapshot.records
             if "fixture_name" in record.metadata
         ),
+        allow_fixture_fallback=allow_fixture_fallback,
     )
 
 
@@ -292,6 +314,10 @@ def build_inventory_summary_payload(
             notes = [
                 "Primary regions are still missing, so add at least one destination before the workspace can assemble runtime inventory bundles."
             ]
+        elif issue.code == "missing_inventory_live_adapter":
+            notes = [
+                "The persisted workspace path no longer assembles inventory from bundled fixtures, so runtime inventory will stay empty until a live adapter is wired in."
+            ]
         else:
             notes = [
                 "No adapter-backed inventory input is available for this persisted trip yet, so the workspace remains available with an empty bundle set."
@@ -314,6 +340,12 @@ def build_inventory_summary_payload(
                 "status": "partial",
                 "title": "Runtime inventory is partially specified",
                 "summary": "Add trip dates or duration to replace the bounded fallback with runtime bundle assembly.",
+            }
+        elif issue.code == "missing_inventory_live_adapter":
+            runtime_state = {
+                "status": "empty",
+                "title": "Runtime inventory is waiting on a live adapter",
+                "summary": "The main workspace no longer falls back to bundled fixture inventory for persisted trips.",
             }
         else:
             runtime_state = {
