@@ -43,6 +43,7 @@ The current runtime does not yet ship live Google Maps rendering or remote `Trav
 - [Preference learning model](docs/preference-learning-model.md)
 - [Preference roadmap](docs/preference-roadmap.md)
 - [Frontend route visualization](docs/frontend-route-visualization.md)
+- [Local testing plan](docs/local-testing-plan.md)
 - [Planning autonomy and revealed preference contracts](docs/contracts/planning-autonomy.md)
 - [Shared planning contracts](docs/shared-planning-contracts.md)
 - [Normalized inventory contracts epic](docs/normalized-inventory-contracts-epic.md)
@@ -133,6 +134,18 @@ Validate the runtime surfaces from the repo root:
 make runtime-check
 ```
 
+For the production-focused journey matrix, run:
+
+```bash
+make runtime-production-check
+```
+
+To smoke-check a deploy preview as well, provide the preview origin:
+
+```bash
+make runtime-preview-smoke TRIP_PLANNER_PREVIEW_URL=https://deploy-preview-123--example.netlify.app
+```
+
 The verification path covers:
 
 - backend runtime tests for the live FastAPI routes
@@ -140,6 +153,7 @@ The verification path covers:
 - a smoke test that runs the frontend client against a live backend process
 
 These checks validate the local full-stack MVP that already exists in this repo. They do not prove live Google Maps rendering or remote Travel-Plan-Permission transport, which are still documented as active follow-on integrations.
+The production-focused testing plan in [docs/local-testing-plan.md](docs/local-testing-plan.md) adds the critical auth, trip, workspace, policy, proposal, and preview-verification journeys on top of that baseline.
 
 ## Optional Live Integration Env Vars
 
