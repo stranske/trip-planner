@@ -667,6 +667,79 @@ def test_workspace_endpoint_surfaces_partial_runtime_state_for_under_scoped_trip
     assert "runtime scenario" in comparison_payload["summary"].lower()
 
 
+@pytest.mark.parametrize(
+    ("title", "trip_frame", "expected_issue_codes", "expected_reasons"),
+    [
+        (
+            "Missing destination draft",
+            {
+                "start_date": "2026-09-05",
+                "end_date": "2026-09-08",
+                "duration_days": 4,
+            },
+            {"missing_inventory_primary_regions"},
+            {"missing_destination"},
+        ),
+        (
+            "Missing dates draft",
+            {
+                "primary_regions": ["Lisbon"],
+            },
+            {"missing_inventory_trip_duration"},
+            {"missing_dates"},
+        ),
+        (
+            "Missing destination and dates draft",
+            {},
+            {"missing_inventory_primary_regions", "missing_inventory_trip_duration"},
+            {"missing_destination", "missing_dates"},
+        ),
+    ],
+)
+def test_workspace_endpoint_returns_coherent_partial_response_for_missing_trip_inputs(
+    client: TestClient,
+    title: str,
+    trip_frame: dict[str, Any],
+    expected_issue_codes: set[str],
+    expected_reasons: set[str],
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": title,
+            "summary": "Verify degraded persisted-trip runtime behavior when required inputs are missing.",
+            "mode": "leisure",
+            "trip_frame": trip_frame,
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/workspace/{trip_id}")
+    assert response.status_code == 200
+    payload = response.json()
+
+    inventory_summary = payload["inventory_summary"]
+    runtime_state = inventory_summary["runtime_state"]
+    assert isinstance(runtime_state.get("issues"), list)
+    assert runtime_state["issues"]
+
+    issue_codes = {issue["code"] for issue in runtime_state["issues"]}
+    issue_reasons = {issue["reason"] for issue in runtime_state["issues"]}
+    assert expected_issue_codes.issubset(issue_codes)
+    assert expected_reasons.issubset(issue_reasons)
+
+    assert inventory_summary["bundle_count"] == 0
+    assert inventory_summary["bundles"] == []
+    assert payload["scenario_search"]["scenarios"]
+    assert payload["runtime_scenario_comparison"]["scenarios"]
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
+
+    serialized_payload = json.dumps(payload, sort_keys=True)
+    for marker in _FIXTURE_ADAPTER_MARKERS:
+        assert marker not in serialized_payload
+
+
 def test_workspace_endpoint_treats_whitespace_only_primary_regions_as_missing(
     client: TestClient,
 ) -> None:
