@@ -1,15 +1,18 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useLoaderData } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiClientError } from "../lib/api/errors";
 import {
   answerPlannerDecision,
+  fetchPlannerSession,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
   saveWorkspaceBudget,
+  submitPlannerTurn,
   submitPlannerOptionFeedback,
+  type PlannerSessionResponse,
   type WorkspaceData,
 } from "../api/workspace";
 import { TestMemoryRouter } from "../test/router";
@@ -21,7 +24,9 @@ vi.mock("../api/workspace", async () => {
   return {
     ...actual,
     answerPlannerDecision: vi.fn(),
+    fetchPlannerSession: vi.fn(),
     submitPlannerOptionFeedback: vi.fn(),
+    submitPlannerTurn: vi.fn(),
     saveWorkspaceBudget: vi.fn(),
     recordWorkspaceSpendEvent: vi.fn(),
     refreshWorkspaceProposalStatus: vi.fn(),
@@ -38,7 +43,9 @@ vi.mock("react-router-dom", async () => {
 
 const mockedUseLoaderData = vi.mocked(useLoaderData);
 const mockedAnswerPlannerDecision = vi.mocked(answerPlannerDecision);
+const mockedFetchPlannerSession = vi.mocked(fetchPlannerSession);
 const mockedSubmitPlannerOptionFeedback = vi.mocked(submitPlannerOptionFeedback);
+const mockedSubmitPlannerTurn = vi.mocked(submitPlannerTurn);
 const mockedSaveWorkspaceBudget = vi.mocked(saveWorkspaceBudget);
 const mockedRecordWorkspaceSpendEvent = vi.mocked(recordWorkspaceSpendEvent);
 const mockedRefreshWorkspaceProposalStatus = vi.mocked(refreshWorkspaceProposalStatus);
@@ -619,6 +626,47 @@ const workspacePayload = {
   },
 } satisfies WorkspaceData;
 
+const plannerSessionPayload = {
+  trip_id: "trip-leisure-kyoto-draft",
+  session_state_id: "session:trip-leisure-kyoto-draft",
+  conversation_id: "planner-conversation:trip-leisure-kyoto-draft",
+  resumed_at: null,
+  session: workspacePayload.session,
+  planner_panel_state: workspacePayload.planner_panel_state,
+  planner_memory: workspacePayload.planner_memory,
+  available_tools: [
+    {
+      tool_name: "read_workspace_state",
+      description: "Read the current persisted workspace state.",
+      mutates_state: false,
+    },
+    {
+      tool_name: "update_budget_plan",
+      description: "Update the persisted workspace budget.",
+      mutates_state: true,
+    },
+  ],
+  activity_log: workspacePayload.activity_log,
+  messages: [
+    {
+      message_id: "planner-action:trip-leisure-kyoto-draft:user-1",
+      role: "user",
+      content: "Can you summarize what I should compare next?",
+      created_at: "2026-04-12T06:09:00+00:00",
+      refs: ["session:trip-leisure-kyoto-draft"],
+      tool_calls: [],
+    },
+    {
+      message_id: "planner-action:trip-leisure-kyoto-draft:planner-1",
+      role: "planner",
+      content: "Compare the Kyoto baseline against the Osaka fallback before locking the plan.",
+      created_at: "2026-04-12T06:10:00+00:00",
+      refs: ["session:trip-leisure-kyoto-draft", "scenario:trip-leisure-kyoto-draft:1"],
+      tool_calls: [],
+    },
+  ],
+} satisfies PlannerSessionResponse;
+
 function renderWorkspacePage() {
   return render(
     <TestMemoryRouter>
@@ -653,6 +701,11 @@ function stubMatchMedia(matches: boolean) {
 }
 
 describe("WorkspacePage", () => {
+  beforeEach(() => {
+    mockedFetchPlannerSession.mockResolvedValue(plannerSessionPayload);
+    mockedSubmitPlannerTurn.mockResolvedValue(plannerSessionPayload);
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -663,7 +716,9 @@ describe("WorkspacePage", () => {
       value: originalMatchMedia,
     });
     mockedAnswerPlannerDecision.mockReset();
+    mockedFetchPlannerSession.mockReset();
     mockedSubmitPlannerOptionFeedback.mockReset();
+    mockedSubmitPlannerTurn.mockReset();
     mockedSaveWorkspaceBudget.mockReset();
     mockedRecordWorkspaceSpendEvent.mockReset();
     mockedRefreshWorkspaceProposalStatus.mockReset();
@@ -689,6 +744,16 @@ describe("WorkspacePage", () => {
     expect(within(routeContextMap).getByRole("heading", { name: "Uji" })).toBeInTheDocument();
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
     expect(screen.getByText("Trip-scoped planner surface")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockedFetchPlannerSession).toHaveBeenCalledWith("trip-leisure-kyoto-draft");
+    });
+    expect(screen.getByRole("heading", { name: "Message the trip planner" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByText("Compare the Kyoto baseline against the Osaka fallback before locking the plan.")
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByText("read workspace state")).toBeInTheDocument();
     expect(routeContextMap).toBeInTheDocument();
     expect(screen.getByText("Destination anchors")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trip rhythm and day sequencing" })).toBeInTheDocument();
@@ -717,6 +782,67 @@ describe("WorkspacePage", () => {
       );
       expect(plannerPanel).toBeTruthy();
     });
+  });
+
+  it("submits planner conversation turns through the trip-scoped planner API", async () => {
+    const user = userEvent.setup();
+    const nextPlannerSession = {
+      ...plannerSessionPayload,
+      messages: [
+        ...plannerSessionPayload.messages,
+        {
+          message_id: "planner-action:trip-leisure-kyoto-draft:user-2",
+          role: "user",
+          content: "Keep Uji, but reduce transfer pressure.",
+          created_at: "2026-04-12T06:15:00+00:00",
+          refs: ["session:trip-leisure-kyoto-draft"],
+          tool_calls: [],
+        },
+        {
+          message_id: "planner-action:trip-leisure-kyoto-draft:planner-2",
+          role: "planner",
+          content: "Keep the Uji day trip and compare fewer evening moves before the next checkpoint.",
+          created_at: "2026-04-12T06:16:00+00:00",
+          refs: ["session:trip-leisure-kyoto-draft", "scenario:trip-leisure-kyoto-draft:1"],
+          tool_calls: [
+            {
+              tool_name: "read_workspace_state",
+              status: "succeeded",
+              summary: "Read the current workspace state.",
+              mutates_state: false,
+              refs: ["session:trip-leisure-kyoto-draft"],
+              output: {},
+            },
+          ],
+        },
+      ],
+    } satisfies PlannerSessionResponse;
+    mockedSubmitPlannerTurn.mockResolvedValue(nextPlannerSession);
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Can you summarize what I should compare next?")).toBeInTheDocument();
+    });
+
+    await user.type(screen.getByLabelText("Message"), "Keep Uji, but reduce transfer pressure.");
+    await user.click(screen.getByRole("button", { name: "Send planner turn" }));
+
+    await waitFor(() => {
+      expect(mockedSubmitPlannerTurn).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        "Keep Uji, but reduce transfer pressure."
+      );
+    });
+    expect(
+      screen.getByText("Keep the Uji day trip and compare fewer evening moves before the next checkpoint.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("read_workspace_state: Read the current workspace state.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Message")).toHaveValue("");
   });
 
   it("updates the map surface when a different scenario preview is selected", async () => {

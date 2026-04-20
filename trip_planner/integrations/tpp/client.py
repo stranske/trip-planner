@@ -157,6 +157,15 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
     def _strip_none_values(payload: dict[str, Any]) -> dict[str, Any]:
         return {key: value for key, value in payload.items() if value is not None}
 
+    @staticmethod
+    def _extract_trip_plan_payload(payload: dict[str, Any], *, operation: str) -> dict[str, Any]:
+        trip_plan = payload.pop("trip_plan", None)
+        if not isinstance(trip_plan, dict):
+            raise TPPContractError(
+                f"Live TPP {operation} requires payload.trip_plan for the planner HTTP wrapper."
+            )
+        return trip_plan
+
     def _request_json(
         self,
         *,
@@ -213,37 +222,56 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
 
     def _policy_request_payload(self, request: TPPRequestEnvelope) -> dict[str, Any]:
         payload = dict(request.payload)
-        payload.setdefault("trip_id", request.trip_id)
-        if request.submitted_at is not None:
-            payload.setdefault("requested_at", request.submitted_at)
-        payload = self._strip_none_values(payload)
-        if payload.get("trip_id") in (None, ""):
+        trip_plan = self._extract_trip_plan_payload(payload, operation="policy snapshot")
+        trip_id = payload.get("trip_id") or request.trip_id or trip_plan.get("trip_id")
+        if trip_id in (None, ""):
             raise TPPContractError(
                 "Live policy sync requires request.trip_id or payload.trip_id."
             )
-        return payload
+        snapshot_request = self._strip_none_values(
+            {
+                "trip_id": trip_id,
+                "requested_at": payload.get("requested_at") or request.submitted_at,
+                "snapshot_generated_at": payload.get("snapshot_generated_at"),
+                "known_policy_version": payload.get("known_policy_version"),
+                "invalidate_reason": payload.get("invalidate_reason"),
+            }
+        )
+        return {"trip_plan": trip_plan, "request": snapshot_request}
 
     def _proposal_request_payload(self, request: TPPRequestEnvelope) -> dict[str, Any]:
         payload = dict(request.payload)
-        payload.setdefault("trip_id", request.trip_id)
-        payload.setdefault("proposal_id", request.proposal_id)
-        payload.setdefault("proposal_version", payload.get("proposal_version"))
-        payload.setdefault("request_id", request.request_id)
-        payload.setdefault("correlation_id", request.correlation_id.to_dict())
-        payload.setdefault("transport_pattern", request.transport_pattern)
-        payload.setdefault("organization_id", request.organization_id)
-        if request.submitted_at is not None:
-            payload.setdefault("submitted_at", request.submitted_at)
-        payload = self._strip_none_values(payload)
+        trip_plan = self._extract_trip_plan_payload(payload, operation="proposal submission")
+        proposal_version = payload.pop("proposal_version", None)
+        payload.pop("trip_id", None)
+        payload.pop("proposal_id", None)
+        payload.pop("request_id", None)
+        payload.pop("correlation_id", None)
+        payload.pop("transport_pattern", None)
+        payload.pop("organization_id", None)
+        payload.pop("submitted_at", None)
+        request_payload = self._strip_none_values(
+            {
+                "trip_id": request.trip_id or trip_plan.get("trip_id"),
+                "proposal_id": request.proposal_id,
+                "proposal_version": proposal_version,
+                "payload": payload,
+                "request_id": request.request_id,
+                "correlation_id": request.correlation_id.to_dict(),
+                "transport_pattern": request.transport_pattern,
+                "organization_id": request.organization_id,
+                "submitted_at": request.submitted_at,
+            }
+        )
         if (
-            payload.get("trip_id") in (None, "")
-            or payload.get("proposal_id") in (None, "")
-            or payload.get("proposal_version") in (None, "")
+            request_payload.get("trip_id") in (None, "")
+            or request_payload.get("proposal_id") in (None, "")
+            or request_payload.get("proposal_version") in (None, "")
         ):
             raise TPPContractError(
                 "Live proposal submission requires trip_id, proposal_id, and proposal_version."
             )
-        return payload
+        return {"trip_plan": trip_plan, "request": request_payload}
 
     def _status_request_payload(self, request: TPPRequestEnvelope) -> dict[str, Any]:
         payload = dict(request.payload)
