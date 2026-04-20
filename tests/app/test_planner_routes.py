@@ -1,11 +1,13 @@
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
 from trip_planner.app.main import create_app
+from trip_planner.app.services.planner import set_planner_chat_model_factory_for_tests
 from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
@@ -21,6 +23,10 @@ from trip_planner.persistence.models.session import PersistedPlanningSessionStat
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'planner.db'}")
+    monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", raising=False)
+    monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    set_planner_chat_model_factory_for_tests(None)
     reset_database_state()
     app = create_app()
 
@@ -36,7 +42,18 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
         assert signup.status_code == 201
         yield test_client
 
+    set_planner_chat_model_factory_for_tests(None)
     reset_database_state()
+
+
+class FakePlannerChatModel:
+    def __init__(self, response: dict[str, Any]) -> None:
+        self.response = response
+        self.requests: list[dict[str, Any]] = []
+
+    def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.requests.append(payload)
+        return self.response
 
 
 def _create_trip(client: TestClient) -> str:
@@ -76,6 +93,8 @@ def test_planner_session_endpoint_bootstraps_trip_scoped_session(client: TestCli
     assert payload["session"]["trip_id"] == trip_id
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
     assert payload["planner_memory"]["current_checkpoint_id"] is None
+    assert payload["runtime"]["mode"] == "fallback"
+    assert payload["runtime"]["fallback_reason"] == "planner_model_not_configured"
     assert payload["available_tools"]
     assert payload["available_tools"][0]["tool_name"] == "read_workspace_state"
     assert payload["messages"] == []
@@ -98,6 +117,7 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
     payload = response.json()
     assert [message["role"] for message in payload["messages"]] == ["user", "planner"]
     assert "Help me decide" in payload["messages"][0]["content"]
+    assert "Deterministic planner fallback is active" in payload["messages"][1]["content"]
     assert payload["messages"][1]["refs"]
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
     assert payload["planner_memory"]["current_checkpoint_id"].startswith("planner-chk:")
@@ -134,6 +154,78 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
         assert artifact is not None
         assert artifact.memory_artifact_id.startswith("planner-mem:")
         assert artifact.checkpoint_id == checkpoint.checkpoint_id
+
+
+def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trip_id = _create_trip(client)
+    fake_model = FakePlannerChatModel(
+        {
+            "content": "I need to compare the current workspace state before recommending next steps.",
+            "tool_calls": [{"tool_name": "read_workspace_state", "arguments": {}}],
+        }
+    )
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL", "fake-planner-model")
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-test-key")
+    set_planner_chat_model_factory_for_tests(lambda _: fake_model)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Compare my options and tell me what to revise."},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["runtime"]["mode"] == "model"
+    assert payload["runtime"]["model"] == "fake-planner-model"
+    planner_reply = payload["messages"][-1]
+    assert planner_reply["content"].startswith("I need to compare")
+    assert planner_reply["tool_calls"][0]["tool_name"] == "read_workspace_state"
+    assert planner_reply["tool_calls"][0]["status"] == "completed"
+    assert fake_model.requests[0]["available_tools"][0]["tool_name"] == "read_workspace_state"
+    runtime_context = fake_model.requests[0]["runtime_context"]
+    assert isinstance(runtime_context, dict)
+    assert runtime_context["trip"]["trip_id"] == trip_id
+
+    with get_session_factory()() as db_session:
+        stored = db_session.scalars(
+            select(PersistedPlannerAction)
+            .where(PersistedPlannerAction.trip_id == trip_id)
+            .order_by(PersistedPlannerAction.occurred_at.asc())
+        ).all()
+        assert stored[-1].payload["tool_calls"][0]["summary"] == "Read the current planner panel workspace state."
+
+
+def test_planner_turn_records_model_tool_errors_without_fabricating_success(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trip_id = _create_trip(client)
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL", "fake-planner-model")
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-test-key")
+    set_planner_chat_model_factory_for_tests(
+        lambda _: FakePlannerChatModel(
+            {
+                "content": "I tried to use a tool that is outside the app boundary.",
+                "tool_calls": [{"tool_name": "launch_booking_agent", "arguments": {}}],
+            }
+        )
+    )
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Book the lead option for me."},
+    )
+
+    assert response.status_code == 200
+    planner_reply = response.json()["messages"][-1]
+    assert planner_reply["tool_calls"][0]["tool_name"] == "launch_booking_agent"
+    assert planner_reply["tool_calls"][0]["status"] == "error"
+    assert "not supported" in planner_reply["tool_calls"][0]["summary"]
 
 
 def test_planner_turn_executes_explicit_tool_calls(client: TestClient) -> None:
