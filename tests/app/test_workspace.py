@@ -370,6 +370,13 @@ def test_workspace_endpoint_creates_non_seeded_persisted_leisure_trip_with_runti
     workspace = client.get(f"/api/workspace/{trip_id}")
     assert workspace.status_code == 200
     workspace_payload = workspace.json()
+    workspace_trip = workspace_payload["trip_record"]["trip"]
+    assert workspace_trip["trip_id"] == trip_id
+    assert workspace_trip["trip_frame"]["primary_regions"] == ["Lisbon"]
+    assert workspace_trip["trip_frame"]["start_date"] == "2026-07-18"
+    assert workspace_trip["trip_frame"]["end_date"] == "2026-07-21"
+    assert workspace_trip["trip_frame"]["traveler_party"]["kind"] == "solo"
+    assert workspace_trip["trip_frame"]["traveler_party"]["traveler_count"] == 1
     assert isinstance(workspace_payload["inventory_summary"]["bundle_count"], int)
     assert workspace_payload["inventory_summary"]["bundle_count"] > 0
     assert workspace_payload["scenario_comparison"] is not None
