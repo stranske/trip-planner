@@ -943,6 +943,7 @@ def build_inventory_summary_payload(
             "Bundle assembly will appear here once normalized option inputs are available for the trip."
         ]
 
+    runtime_state: dict[str, Any]
     if bundles:
         runtime_state = {
             "status": "ready",
