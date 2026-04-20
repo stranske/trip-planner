@@ -23,9 +23,9 @@ python_major=$(echo "$python_version" | cut -d. -f1)
 python_minor=$(echo "$python_version" | cut -d. -f2)
 
 if [[ "$python_major" -ge 3 ]] && [[ "$python_minor" -ge 11 ]]; then
-    echo -e "${GREEN}✓${NC} Python $python_version (>=3.11 required)"
+    echo -e "${GREEN}✓${NC} Python $python_version (>=3.12 required)"
 else
-    echo -e "${RED}✗${NC} Python $python_version (>=3.11 required)"
+    echo -e "${RED}✗${NC} Python $python_version (>=3.12 required)"
     all_ok=false
 fi
 echo ""
