@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState, type FormEvent } from "react";
+import { startTransition, useEffect, useRef, useState, type FormEvent } from "react";
 import { useLoaderData } from "react-router-dom";
 
 import type { TripRecord } from "../api/trips";
@@ -426,12 +426,25 @@ function mergePlannerSessionState(
   workspace: WorkspaceData,
   plannerSession: PlannerSessionResponse
 ): WorkspaceData {
+  const plannerActivityIds = new Set(
+    plannerSession.activity_log.map((entry) => entry.activity_event_id)
+  );
+  const sessionIncludesWorkspaceActivity = workspace.activity_log.every((entry) =>
+    plannerActivityIds.has(entry.activity_event_id)
+  );
+
   return {
     ...workspace,
     session: plannerSession.session,
-    planner_panel_state: plannerSession.planner_panel_state,
-    planner_memory: plannerSession.planner_memory,
-    activity_log: plannerSession.activity_log,
+    planner_panel_state: sessionIncludesWorkspaceActivity
+      ? plannerSession.planner_panel_state
+      : workspace.planner_panel_state,
+    planner_memory: sessionIncludesWorkspaceActivity
+      ? plannerSession.planner_memory
+      : workspace.planner_memory,
+    activity_log: sessionIncludesWorkspaceActivity
+      ? plannerSession.activity_log
+      : workspace.activity_log,
   };
 }
 
@@ -488,6 +501,7 @@ function WorkspacePageContent({
   const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
   const [proposalError, setProposalError] = useState<string | null>(null);
   const [proposalBusyLabel, setProposalBusyLabel] = useState<string | null>(null);
+  const plannerSessionLoadVersion = useRef(0);
   const isCompactLayout = useCompactWorkspaceLayout();
   useEffect(() => {
     setCurrentWorkspace(workspace);
@@ -495,6 +509,9 @@ function WorkspacePageContent({
     setSelectedScenarioComparisonId(
       workspace.runtime_scenario_comparison.lead_scenario_id
     );
+  }, [workspace]);
+
+  useEffect(() => {
     setSelectedTripComparisonId(
       trips.find((trip) => trip.trip_id !== workspace.trip_record.trip.trip_id)?.trip_id ?? null
     );
@@ -502,21 +519,34 @@ function WorkspacePageContent({
 
   useEffect(() => {
     let isCancelled = false;
+    plannerSessionLoadVersion.current += 1;
+    const loadVersion = plannerSessionLoadVersion.current;
     setPlannerSession(null);
     setPlannerConversationError(null);
     setPlannerConversationBusyLabel("Loading planner conversation...");
 
     fetchPlannerSession(workspace.trip_record.trip.trip_id)
       .then((nextPlannerSession) => {
-        if (isCancelled) {
+        if (isCancelled || plannerSessionLoadVersion.current !== loadVersion) {
           return;
         }
         startTransition(() => {
           setPlannerSession(nextPlannerSession);
+          setCurrentWorkspace((current) => {
+            if (
+              current.session === nextPlannerSession.session &&
+              current.planner_panel_state === nextPlannerSession.planner_panel_state &&
+              current.planner_memory === nextPlannerSession.planner_memory &&
+              current.activity_log === nextPlannerSession.activity_log
+            ) {
+              return current;
+            }
+            return mergePlannerSessionState(current, nextPlannerSession);
+          });
         });
       })
       .catch((error) => {
-        if (isCancelled) {
+        if (isCancelled || plannerSessionLoadVersion.current !== loadVersion) {
           return;
         }
         setPlannerConversationError(
@@ -524,7 +554,7 @@ function WorkspacePageContent({
         );
       })
       .finally(() => {
-        if (!isCancelled) {
+        if (!isCancelled && plannerSessionLoadVersion.current === loadVersion) {
           setPlannerConversationBusyLabel(null);
         }
       });
@@ -559,11 +589,10 @@ function WorkspacePageContent({
   async function handleDecisionAnswer(decisionId: string, choice: string) {
     setPlannerError(null);
     setPlannerBusyLabel("Saving planner decision...");
+    plannerSessionLoadVersion.current += 1;
     try {
       const nextWorkspace = await answerPlannerDecision(trip.trip_id, decisionId, choice);
-      startTransition(() => {
-        setCurrentWorkspace(nextWorkspace);
-      });
+      setCurrentWorkspace(nextWorkspace);
     } catch (error) {
       setPlannerError(error instanceof Error ? error.message : "Planner decision update failed.");
     } finally {
@@ -578,6 +607,7 @@ function WorkspacePageContent({
   ) {
     setPlannerError(null);
     setPlannerBusyLabel("Saving planner feedback...");
+    plannerSessionLoadVersion.current += 1;
     try {
       const nextWorkspace = await submitPlannerOptionFeedback(
         trip.trip_id,
@@ -590,9 +620,7 @@ function WorkspacePageContent({
           | "do_more_before_asking_again",
         decisionId
       );
-      startTransition(() => {
-        setCurrentWorkspace(nextWorkspace);
-      });
+      setCurrentWorkspace(nextWorkspace);
     } catch (error) {
       setPlannerError(error instanceof Error ? error.message : "Planner feedback update failed.");
     } finally {
@@ -610,6 +638,7 @@ function WorkspacePageContent({
 
     setPlannerConversationError(null);
     setPlannerConversationBusyLabel("Sending planner turn...");
+    plannerSessionLoadVersion.current += 1;
     try {
       const nextPlannerSession = await submitPlannerTurn(trip.trip_id, message);
       startTransition(() => {
@@ -737,6 +766,7 @@ function WorkspacePageContent({
           {plannerBusyLabel ? <p className="muted-copy">{plannerBusyLabel}</p> : null}
           {plannerError ? <p className="planner-inline-error">{plannerError}</p> : null}
           <PlannerSidePanelSurface
+            key={currentWorkspace.planner_panel_state === workspace.planner_panel_state ? "loader" : "workspace"}
             state={currentWorkspace.planner_panel_state}
             onDecisionAnswer={handleDecisionAnswer}
             onOptionFeedback={handleOptionFeedback}

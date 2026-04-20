@@ -32,6 +32,7 @@ export function PlannerSidePanelSurface({
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<PlannerSidePanelController | null>(null);
+  const latestStateRef = useRef(state);
   const [plannerMountNode, setPlannerMountNode] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -61,7 +62,10 @@ export function PlannerSidePanelSurface({
         return;
       }
 
-      controllerRef.current = plannerModule.renderPlannerSidePanel(plannerMount, state);
+      controllerRef.current = plannerModule.renderPlannerSidePanel(
+        plannerMount,
+        latestStateRef.current
+      );
     }
 
     void mountPlannerPanel();
@@ -76,6 +80,7 @@ export function PlannerSidePanelSurface({
   }, []);
 
   useEffect(() => {
+    latestStateRef.current = state;
     controllerRef.current?.replaceState(state);
   }, [state]);
 

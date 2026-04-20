@@ -7,7 +7,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
+from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.app.services.policy import _tpp_trip_plan_payload
 from trip_planner.persistence.db import reset_database_state
+from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.integrations.tpp import client as tpp_client_module
 
 
@@ -19,6 +22,31 @@ def _fixture_path(name: str) -> Path:
 
 def _load_fixture(name: str) -> dict:
     return json.loads(_fixture_path(name).read_text(encoding="utf-8"))
+
+
+def test_tpp_trip_plan_payload_falls_back_to_owner_profile_department() -> None:
+    record = PersistedTrip(
+        trip_id="trip-leisure-1",
+        user_id="user-1",
+        title="Leisure policy sync",
+        summary="Check fallback department.",
+        mode="leisure",
+        start_date="2026-05-04",
+        end_date="2026-05-06",
+        duration_days=3,
+        primary_regions=["Chicago"],
+        leisure_profile_id="profile:trip-leisure-1:leisure",
+        business_profile_id=None,
+    )
+    user = AuthenticatedUser(
+        user_id="user-1",
+        email="owner@example.test",
+        display_name="Policy Owner",
+    )
+
+    payload = _tpp_trip_plan_payload(record, user=user)
+
+    assert payload["department"] == "profile:trip-leisure-1:leisure"
 
 
 class _FakeHTTPResponse:

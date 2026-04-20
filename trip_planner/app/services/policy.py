@@ -89,7 +89,7 @@ def _tpp_trip_plan_payload(record: PersistedTrip, *, user: AuthenticatedUser) ->
         "trip_id": record.trip_id,
         "traveler_name": user.display_name,
         "traveler_role": "business traveler",
-        "department": record.business_profile_id,
+        "department": _owner_profile_id(record),
         "destination": ", ".join(primary_regions),
         "destination_city": primary_regions[0],
         "departure_date": _required_tpp_trip_date(record.start_date, "start_date"),
