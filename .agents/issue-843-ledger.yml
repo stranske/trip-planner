@@ -1,0 +1,380 @@
+version: 1
+issue: 843
+base: main
+branch: codex/issue-843
+tasks:
+  - id: task-01
+    title: Create integration test that creates a persisted leisure trip with arbitrary
+      non-seeded ID, destination, dates, and traveler context
+    status: doing
+    started_at: '2026-04-20T09:35:22Z'
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-02
+    title: Add test assertions that verify workspace response contains inventory_summary.bundle_count
+      greater than zero for persisted leisure trips
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: Add test assertions that verify workspace response contains non-empty scenario_comparison
+      collection for persisted leisure trips
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: Add test assertions that verify all source and provenance metadata fields
+      are derived from runtime persisted-trip context without fixture markers
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: Create integration test that creates a persisted business trip with arbitrary
+      non-seeded ID, destination, dates, and business purpose
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: Add test assertions that verify workspace response contains non-empty inventory
+      data for persisted business trips
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: Add test assertions that verify workspace response contains non-empty scenario_comparison
+      collection for persisted business trips
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: Add test assertions that verify workspace response includes budget and
+      category totals with non-null numeric values
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: Add test assertions that verify all source and provenance metadata is derived
+      from runtime context without business fixture profile markers
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: Create integration test that creates a persisted trip missing destination
+      and verifies workspace returns coherent partial response
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: Create integration test that creates a persisted trip missing dates and
+      verifies workspace returns coherent partial response
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: Create integration test that creates a persisted trip missing both destination
+      and dates and verifies workspace returns coherent partial response
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: Add test assertions that verify runtime_state field is present in inventory_summary
+      for degraded persisted trips
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: Add test assertions that verify runtime_state contains AdapterIssue entries
+      with appropriate reasons for missing inputs
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: Add test assertions that verify degraded workspace responses do not contain
+      fixture or default inventory data
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-16
+    title: Implement detection logic in workspace service to identify when persisted
+      trips are missing destination or dates
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-17
+    title: Implement AdapterIssue creation with appropriate reason codes for missing
+      destination and missing dates scenarios
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-18
+    title: Update inventory_summary schema to include runtime_state field that can
+      contain AdapterIssue collections
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-19
+    title: Modify workspace assembly logic to emit runtime_state issues instead of
+      falling back to demo or fixture data
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-20
+    title: Update workspace response serialization to include runtime_state in the
+      API response JSON
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-21
+    title: Implement constraint_set normalization logic that converts null to a default
+      empty constraints object before ranking
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-22
+    title: Update business ranking engine to safely handle null constraint_set values
+      without raising exceptions
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-23
+    title: Create regression test that creates persisted business trip with null constraint_set
+      and verifies workspace generation completes successfully
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-24
+    title: Add test assertions that verify scenario ranking produces non-empty results
+      when constraint_set is null or omitted
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-25
+    title: Create regression test that verifies workspace responses for arbitrary
+      persisted leisure trips contain no hard-coded seeded trip IDs
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-26
+    title: Create regression test that verifies workspace responses for arbitrary
+      persisted business trips contain no hard-coded seeded trip IDs
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-27
+    title: Add test assertions that verify workspace responses contain no seeded fixture
+      paths or PersistedTripInventoryFixtureAdapter markers
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-28
+    title: Add test assertions that verify workspace responses contain no seeded bundle
+      identifiers in inventory data
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-29
+    title: Update README or runtime documentation to describe workspace generation
+      from persisted trip runtime context including expected source and provenance
+      metadata
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-30
+    title: Add documentation section describing degraded behavior when destination
+      or dates are missing including runtime_state and AdapterIssue reporting
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-31
+    title: A persisted leisure trip created with a non-seeded trip ID, a destination,
+      a start date, an end date, and traveler context returns HTTP 200 from the workspace
+      read endpoint, and the response JSON contains `inventory_summary.bundle_count`
+      as an integer greater than 0.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-32
+    title: 'For the same persisted leisure trip scenario, the workspace response contains
+      a `scenario_comparison` array with length greater than 0, where each entry contains
+      non-null values for required fields: scenario_id, total_cost, and at least one
+      comparison metric.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-33
+    title: For a persisted leisure trip created during the test run, all source and
+      provenance metadata fields (source_type, origin, adapter_name, provenance_context)
+      contain values indicating runtime-derived origin (such as 'persisted_trip',
+      'runtime', 'database') and do not contain the strings 'fixture', 'seed', 'demo',
+      or 'PersistedTripInventoryFixtureAdapter'.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-34
+    title: A persisted business trip created with a non-seeded trip ID, a destination,
+      start/end dates, and a business purpose returns HTTP 200 from the workspace
+      read endpoint, and the response contains non-empty inventory data and a non-empty
+      `scenario_comparison` collection.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-35
+    title: For a valid persisted business trip, the workspace response includes budget_summary
+      with non-null numeric values for total_budget, total_spent, and remaining_budget
+      fields, and category_totals with non-null numeric values for each category defined
+      in the business trip schema.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-36
+    title: For a valid persisted business trip, all source and provenance metadata
+      fields (source_type, origin, adapter_name, provenance_context) contain values
+      indicating runtime-derived origin and do not contain the strings 'fixture',
+      'seed', 'demo', or 'PersistedTripInventoryFixtureAdapter'.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-37
+    title: Reading a workspace for a persisted trip missing destination, missing dates,
+      or missing both returns HTTP 200 with a coherent response object instead of
+      an error caused by fixture fallback.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-38
+    title: For degraded persisted-trip workspace responses, the workspace response
+      includes `inventory_summary.runtime_state` with at least one issue whose type/reason
+      identifies the missing input(s).
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-39
+    title: For degraded persisted-trip workspace responses, the JSON response contains
+      an inventory_summary.runtime_state field that is a non-null array, and the workspace
+      response schema definition includes runtime_state as a documented field.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-40
+    title: When a persisted business trip with constraint_set stored as null is processed,
+      the workspace endpoint returns HTTP 200 with a scenario_comparison array containing
+      at least one entry with valid scenario_id and ranking_score fields.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-41
+    title: When a persisted business trip is processed with `constraint_set = null`
+      or omitted, workspace generation and scenario ranking complete without raising
+      an exception, and the workspace endpoint returns HTTP 200.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-42
+    title: Workspace reads for arbitrary persisted leisure and business trips do not
+      return any hard-coded seeded trip IDs, including `trip-leisure-kyoto-draft`
+      or `trip-business-client-summit`, anywhere in the response body.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-43
+    title: Workspace reads for arbitrary persisted leisure and business trips do not
+      include seeded fixture paths, seeded bundle identifiers, or the string `PersistedTripInventoryFixtureAdapter`
+      anywhere in the response JSON.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-44
+    title: The README or runtime/workspace documentation contains a section that explicitly
+      states that workspace generation is derived from persisted trip runtime context,
+      and that missing destination or dates produce a partial workspace with explicit
+      `runtime_state`/AdapterIssue reporting.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
