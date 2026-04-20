@@ -362,6 +362,90 @@ def test_workspace_endpoint_creates_non_seeded_persisted_leisure_trip_with_runti
         assert forbidden_marker not in serialized_source_metadata
 
 
+def test_workspace_endpoint_creates_non_seeded_persisted_business_trip_with_runtime_frame(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Chicago client renewal sprint",
+            "summary": "Business purpose: prepare Q3 renewal strategy with client stakeholders.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-08-11",
+                "end_date": "2026-08-14",
+                "duration_days": 4,
+                "primary_regions": ["Chicago"],
+                "traveler_party": {
+                    "kind": "team",
+                    "traveler_count": 4,
+                    "notes": "Client workshops and executive readout.",
+                },
+            },
+        },
+    )
+    assert created.status_code == 201
+
+    trip = created.json()["trip"]
+    trip_id = trip["trip_id"]
+    assert trip_id
+    assert all(
+        seeded_id not in trip_id
+        for seeded_id in ("trip-leisure-kyoto-draft", "trip-business-client-summit")
+    )
+    assert trip["trip_frame"]["primary_regions"] == ["Chicago"]
+    assert trip["trip_frame"]["start_date"] == "2026-08-11"
+    assert trip["trip_frame"]["end_date"] == "2026-08-14"
+    assert trip["trip_frame"]["traveler_party"]["kind"] == "team"
+    assert trip["trip_frame"]["traveler_party"]["traveler_count"] == 4
+    assert "Business purpose:" in trip["summary"]
+
+    workspace = client.get(f"/api/workspace/{trip_id}")
+    assert workspace.status_code == 200
+    workspace_payload = workspace.json()
+
+    assert isinstance(workspace_payload["inventory_summary"]["bundle_count"], int)
+    assert workspace_payload["inventory_summary"]["bundle_count"] > 0
+    assert workspace_payload["inventory_summary"]["bundles"]
+
+    assert workspace_payload["scenario_comparison"] is not None
+    assert workspace_payload["scenario_comparison"]["baseline_scenario_id"]
+    runtime_comparison = workspace_payload["runtime_scenario_comparison"]
+    assert runtime_comparison["scenarios"]
+    first_scenario = runtime_comparison["scenarios"][0]
+    assert first_scenario["scenario_id"]
+    assert first_scenario["metrics"]["score"] is not None
+
+    budget_summary = workspace_payload["budget_state"]["summary"]
+    for numeric_field in ("planned_total", "actual_total", "remaining_total"):
+        assert budget_summary[numeric_field] is not None
+        assert isinstance(budget_summary[numeric_field], (int, float))
+    category_totals = budget_summary["category_summaries"]
+    assert category_totals
+    for category in category_totals:
+        for numeric_field in ("planned_amount", "actual_amount", "remaining_amount"):
+            assert category[numeric_field] is not None
+            assert isinstance(category[numeric_field], (int, float))
+
+    source_metadata = workspace_payload["inventory_summary"]["source_metadata"]
+    assert source_metadata["source_type"] == "persisted_trip"
+    assert source_metadata["origin"] == "runtime"
+    assert source_metadata["adapter_name"] == "persisted-trip-source-inventory"
+    provenance_context = source_metadata["provenance_context"]
+    assert provenance_context["trip_id"] == trip_id
+    assert provenance_context["trip_mode"] == "business"
+    assert provenance_context["source_id"] == "persisted-trip-runtime-source"
+    assert provenance_context["query_id"] == f"inventory-query:{trip_id}"
+    assert provenance_context["handoff_id"] == f"handoff:{trip_id}:inventory"
+    assert provenance_context["input_record_ids"]
+    assert provenance_context["issue_codes"] == []
+    assert provenance_context["filters"]["trip_mode"] == "business"
+    assert provenance_context["notes"]
+    serialized_source_metadata = json.dumps(source_metadata, sort_keys=True).lower()
+    for forbidden_marker in ("fixture", "seed", "demo", "persistedtripinventoryfixtureadapter"):
+        assert forbidden_marker not in serialized_source_metadata
+
+
 @pytest.mark.parametrize(
     ("mode", "title", "summary", "trip_frame"),
     [
