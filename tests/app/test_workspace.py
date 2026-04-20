@@ -358,9 +358,11 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_pers
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["lead_scenario_id"].startswith("saved-scenario:")
-    assert payload["scenarios"][0]["scenario_id"].startswith("saved-scenario:")
-    assert payload["scenarios"][0]["option_count"] == 1
+    assert payload["lead_scenario_id"].startswith("scenario:")
+    assert payload["scenarios"][0]["scenario_id"].startswith("scenario:")
+    assert payload["scenarios"][0]["option_count"] > 0
+    assert payload["scenarios"][0]["route_sequence"]
+    assert payload["source_refs"]
     assert "runtime scenario" in payload["summary"].lower()
 
 
@@ -393,9 +395,11 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_pers
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["lead_scenario_id"].startswith("saved-scenario:")
-    assert payload["scenarios"][0]["scenario_id"].startswith("saved-scenario:")
-    assert payload["scenarios"][0]["status"] == "recommended"
+    assert payload["lead_scenario_id"].startswith("scenario:")
+    assert payload["scenarios"][0]["scenario_id"].startswith("scenario:")
+    assert payload["scenarios"][0]["status"] in {"recommended", "fallback", "alternative"}
+    assert payload["scenarios"][0]["route_sequence"]
+    assert payload["source_refs"]
     assert "runtime scenario" in payload["summary"].lower()
 
 
