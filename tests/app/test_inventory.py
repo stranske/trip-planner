@@ -5,7 +5,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
-from trip_planner.app.services.inventory import _build_inventory_assembly_input
+from trip_planner.app.services import inventory as inventory_service
+from trip_planner.app.services.inventory import (
+    _build_inventory_assembly_input,
+    assemble_inventory_bundles_for_trip,
+)
 from trip_planner.persistence.db import reset_database_state
 
 _LEGACY_FIXTURE_BUNDLE_IDS = {
@@ -49,6 +53,28 @@ def test_inventory_endpoint_returns_seeded_bundle_payload(client: TestClient) ->
     assert payload["bundles"][0]["bundle_id"] == "bundle-osaka-gateway"
     assert payload["summary"]["bundles"][1]["title"] == "Kyoto cultural anchor"
     assert payload["summary"]["bundles"][1]["option_count"] == 3
+
+
+def test_seeded_inventory_assembly_uses_adapter_record_payloads_as_main_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assembly_input = _build_inventory_assembly_input(
+        trip_id="trip-leisure-kyoto-draft",
+        trip_mode="leisure",
+        allow_fixture_fallback=True,
+        prefer_persisted_context=False,
+    )
+    assert assembly_input.record_payloads
+
+    def _fail_fixture_load(name: str) -> None:
+        raise AssertionError(f"fixture file loader should not be used for main path: {name}")
+
+    monkeypatch.setattr(inventory_service, "_load_mixed_option_fixture", _fail_fixture_load)
+
+    bundles = assemble_inventory_bundles_for_trip(assembly_input=assembly_input)
+
+    assert bundles
+    assert bundles[0].bundle_id == "bundle-osaka-gateway"
 
 
 def test_inventory_endpoint_returns_not_found_for_unknown_trip(client: TestClient) -> None:
