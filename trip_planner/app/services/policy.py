@@ -118,9 +118,7 @@ class _PassiveTPPClient:
         raise NotImplementedError("Passive policy import client does not submit proposals.")
 
     def fetch_evaluation_result(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
-        raise NotImplementedError(
-            "Passive policy import client does not fetch evaluation results."
-        )
+        raise NotImplementedError("Passive policy import client does not fetch evaluation results.")
 
     def poll_execution_status(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         raise NotImplementedError("Passive policy import client does not poll execution status.")
@@ -175,7 +173,9 @@ def _summarize_policy_import(imported: PolicyConstraintImport) -> dict[str, Any]
     }
 
 
-def _proposal_from_import(record: PersistedTrip, imported: PolicyConstraintImport) -> TripPlanProposal:
+def _proposal_from_import(
+    record: PersistedTrip, imported: PolicyConstraintImport
+) -> TripPlanProposal:
     notes = [
         f"Imported policy {imported.constraint_set.policy_id} v{imported.constraint_set.policy_version}.",
         (
@@ -296,9 +296,7 @@ def _policy_evaluation_from_import(
         failure_reasons=failure_reasons,
         preferred_alternatives=[],
         exception_guidance=(
-            [
-                "Refresh the policy import before preparing a final approval packet."
-            ]
+            ["Refresh the policy import before preparing a final approval packet."]
             if _is_effectively_stale(imported)
             else [
                 "Use the stored constraint set as planning guidance until proposal submission is wired."
@@ -307,6 +305,91 @@ def _policy_evaluation_from_import(
         notes=notes,
         compliance_score=compliance_score,
     )
+
+
+def _normalize_json_object(payload: object) -> dict[str, Any]:
+    if isinstance(payload, dict):
+        return dict(payload)
+    return {}
+
+
+def _normalize_string_list(payload: object) -> list[str]:
+    if not isinstance(payload, list):
+        return []
+    return [value for value in payload if isinstance(value, str) and value]
+
+
+def _normalize_constraint_set_payload(record: PersistedPolicyState) -> dict[str, Any]:
+    constraint_set = _normalize_json_object(record.constraint_set)
+    return {
+        "policy_id": str(constraint_set.get("policy_id") or record.policy_id),
+        "organization_id": str(constraint_set.get("organization_id") or record.organization_id),
+        "policy_version": str(constraint_set.get("policy_version") or record.policy_version),
+        "required_booking_channels": _normalize_string_list(
+            constraint_set.get("required_booking_channels")
+        ),
+        "airfare_rules": _normalize_json_object(constraint_set.get("airfare_rules")),
+        "lodging_rules": _normalize_json_object(constraint_set.get("lodging_rules")),
+        "ground_transport_rules": _normalize_json_object(
+            constraint_set.get("ground_transport_rules")
+        ),
+        "meal_rules": _normalize_json_object(constraint_set.get("meal_rules")),
+        "approval_rules": _normalize_string_list(constraint_set.get("approval_rules")),
+        "documentation_rules": _normalize_string_list(constraint_set.get("documentation_rules")),
+        "allowed_exception_types": _normalize_string_list(
+            constraint_set.get("allowed_exception_types")
+        ),
+    }
+
+
+def _normalize_organization_context_payload(record: PersistedPolicyState) -> dict[str, Any]:
+    organization_context = _normalize_json_object(record.organization_context)
+    comparable_requirements_payload = organization_context.get("comparable_requirements")
+    comparable_requirements: dict[str, int] = {}
+    if isinstance(comparable_requirements_payload, dict):
+        for key, value in comparable_requirements_payload.items():
+            if isinstance(key, str) and key and isinstance(value, int):
+                comparable_requirements[key] = value
+    return {
+        "organization_id": str(
+            organization_context.get("organization_id") or record.organization_id
+        ),
+        "approved_channels": _normalize_string_list(organization_context.get("approved_channels")),
+        "comparable_requirements": comparable_requirements,
+        "documentation_rules": _normalize_string_list(
+            organization_context.get("documentation_rules")
+        ),
+        "approval_triggers": _normalize_string_list(organization_context.get("approval_triggers")),
+        "comfort_preferences": _normalize_json_object(
+            organization_context.get("comfort_preferences")
+        ),
+        "class_of_service_limits": _normalize_json_object(
+            organization_context.get("class_of_service_limits")
+        ),
+        "metadata": _normalize_json_object(organization_context.get("metadata")),
+    }
+
+
+def _normalize_freshness_payload(record: PersistedPolicyState) -> dict[str, Any]:
+    freshness = _normalize_json_object(record.freshness)
+    return {
+        "snapshot_version": str(freshness.get("snapshot_version") or record.policy_version),
+        "captured_at": str(freshness.get("captured_at") or record.imported_at),
+        "fresh_until": (
+            freshness.get("fresh_until") if isinstance(freshness.get("fresh_until"), str) else None
+        ),
+        "invalidated_at": (
+            freshness.get("invalidated_at")
+            if isinstance(freshness.get("invalidated_at"), str)
+            else None
+        ),
+        "invalidation_reason": (
+            freshness.get("invalidation_reason")
+            if isinstance(freshness.get("invalidation_reason"), str)
+            else None
+        ),
+        "status": str(freshness.get("status") or record.sync_status or "current"),
+    }
 
 
 def _serialize_policy_state(record: PersistedPolicyState) -> dict[str, Any]:
@@ -322,10 +405,10 @@ def _serialize_policy_state(record: PersistedPolicyState) -> dict[str, Any]:
         "policy_version": record.policy_version,
         "sync_status": record.sync_status,
         "imported_at": record.imported_at,
-        "constraint_set": dict(record.constraint_set),
-        "organization_context": dict(record.organization_context),
-        "freshness": dict(record.freshness),
-        "raw_payload": dict(record.raw_payload),
+        "constraint_set": _normalize_constraint_set_payload(record),
+        "organization_context": _normalize_organization_context_payload(record),
+        "freshness": _normalize_freshness_payload(record),
+        "raw_payload": _normalize_json_object(record.raw_payload),
         "tags": list(record.tags),
         "notes": list(record.notes),
     }
@@ -337,12 +420,14 @@ def _build_workspace_policy_payload(
     policy_record: PersistedPolicyState,
 ) -> dict[str, Any]:
     imported = PolicyConstraintImport(
-        constraint_set=PolicyConstraintSet(**policy_record.constraint_set),
-        organization_context=OrganizationContextSnapshot(**policy_record.organization_context),
-        freshness=PolicyFreshness(**policy_record.freshness),
+        constraint_set=PolicyConstraintSet(**_normalize_constraint_set_payload(policy_record)),
+        organization_context=OrganizationContextSnapshot(
+            **_normalize_organization_context_payload(policy_record)
+        ),
+        freshness=PolicyFreshness(**_normalize_freshness_payload(policy_record)),
         source_request_id=policy_record.source_request_id,
         source_correlation_id=policy_record.source_correlation_id,
-        raw_payload=dict(policy_record.raw_payload),
+        raw_payload=_normalize_json_object(policy_record.raw_payload),
     )
     proposal = _proposal_from_import(trip_record, imported)
     policy_evaluation = _policy_evaluation_from_import(trip_record, imported)
@@ -399,9 +484,7 @@ def import_workspace_policy_constraints(
         request,
         response_payload,
         trip_plan_payload=(
-            _tpp_trip_plan_payload(trip_record, user=user)
-            if response_payload is None
-            else {}
+            _tpp_trip_plan_payload(trip_record, user=user) if response_payload is None else {}
         ),
     )
     imported = TPPPolicySyncService(_PassiveTPPClient(response)).import_policy_constraints(request)
@@ -411,7 +494,9 @@ def import_workspace_policy_constraints(
         trip_id=trip_id,
         user_id=user.user_id,
     )
-    policy_state_id = existing.policy_state_id if existing is not None else f"policy-state:{trip_id}"
+    policy_state_id = (
+        existing.policy_state_id if existing is not None else f"policy-state:{trip_id}"
+    )
 
     record = existing or PersistedPolicyState(
         policy_state_id=policy_state_id,

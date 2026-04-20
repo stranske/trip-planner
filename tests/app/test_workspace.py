@@ -8,14 +8,23 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from trip_planner.app.main import create_app
+from trip_planner.app.services.auth import AuthenticatedUser, create_account
 from trip_planner.app.services.feasibility import (
     build_feasibility_planner_outputs,
     build_feasibility_summary_payload,
 )
 from trip_planner.app.services.scenarios import _runtime_business_profile
+from trip_planner.app.services.trips import create_trip
+from trip_planner.app.services.workspace import get_workspace_payload
 from trip_planner.options import InventoryBundle
-from trip_planner.persistence.db import get_session_factory, reset_database_state
+from trip_planner.persistence.db import (
+    ensure_database_ready,
+    get_session_factory,
+    reset_database_state,
+)
 from trip_planner.persistence.models.activity import PersistedPlannerAction
+from trip_planner.persistence.models.policy import PersistedPolicyState
+from trip_planner.persistence.models.trip import PersistedTrip
 
 _LEGACY_FIXTURE_BUNDLE_IDS = {
     "bundle-osaka-gateway",
@@ -57,6 +66,7 @@ def test_runtime_business_profile_uses_valid_default_home_airport_for_unknown_re
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'workspace.db'}")
     reset_database_state()
+    ensure_database_ready()
     app = create_app()
 
     with TestClient(app) as test_client:
@@ -829,6 +839,81 @@ def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_tri
     assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Policy posture loaded"
     assert payload["planner_panel_state"]["next_step_actions"][0]["target_section"] == "approval"
     assert "Navan" in payload["planner_panel_state"]["policy_evaluation"]["notes"][-2]
+
+
+def test_workspace_endpoint_handles_null_constraint_set_for_business_policy_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'workspace.db'}")
+    reset_database_state()
+    ensure_database_ready()
+
+    with get_session_factory()() as db_session:
+        account = create_account(
+            db_session,
+            email="workspace-null-constraint@example.com",
+            password="password123",
+            display_name="Workspace Owner",
+        )
+        user = AuthenticatedUser(
+            user_id=account.user_id,
+            email=account.email,
+            display_name=account.display_name,
+        )
+        trip = create_trip(
+            db_session,
+            user=user,
+            title="Null constraint set workspace",
+            summary="Business workspace should tolerate null policy constraint_set payloads.",
+            mode="business",
+            start_date="2026-05-12",
+            end_date="2026-05-15",
+            duration_days=4,
+            primary_regions=["Chicago"],
+            traveler_kind="team",
+            traveler_count=3,
+            traveler_notes="Business travel",
+        )
+        trip_id = trip["trip_id"]
+        trip_record = db_session.scalar(
+            select(PersistedTrip).where(PersistedTrip.trip_id == trip_id)
+        )
+        assert trip_record is not None
+        db_session.add(
+            PersistedPolicyState(
+                policy_state_id=f"policy-state:{trip_id}:null-constraint-set",
+                trip_id=trip_id,
+                user_id=trip_record.user_id,
+                owner_profile_id=trip_record.business_profile_id or f"profile:{trip_id}:business",
+                source_kind="tpp_sync",
+                source_request_id=f"request:{trip_id}",
+                source_correlation_id=f"correlation:{trip_id}",
+                policy_id="policy-standard-2026-02",
+                organization_id="org-enterprise",
+                policy_version="2026-02",
+                sync_status="current",
+                imported_at="2026-05-01T00:00:00Z",
+                constraint_set=None,
+                organization_context=None,
+                freshness=None,
+                raw_payload=None,
+                tags=[],
+                notes=["Inserted by regression test."],
+            )
+        )
+        db_session.commit()
+        payload = get_workspace_payload(db_session, user=user, trip_id=trip_id)
+
+    assert payload is not None
+    runtime_scenarios = payload["runtime_scenario_comparison"]["scenarios"]
+    assert runtime_scenarios
+    assert runtime_scenarios[0]["scenario_id"]
+    assert runtime_scenarios[0]["metrics"]["score"] is not None
+    assert payload["policy_state"]["constraint_set"]["policy_id"] == "policy-standard-2026-02"
+    assert payload["policy_state"]["constraint_set"]["required_booking_channels"] == []
+
+    reset_database_state()
 
 
 def test_workspace_endpoint_surfaces_user_visible_planner_memory(client: TestClient) -> None:
