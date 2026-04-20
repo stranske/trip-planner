@@ -152,6 +152,24 @@ def test_planner_session_treats_blank_model_key_as_unconfigured(
     assert runtime["fallback_reason"] == "openai_api_key_missing"
 
 
+def test_planner_session_reports_model_runtime_when_configured(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trip_id = _create_trip(client)
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL", "fake-planner-model")
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-test-key")
+
+    response = client.get(f"/api/planner/{trip_id}/session")
+
+    assert response.status_code == 200
+    runtime = response.json()["runtime"]
+    assert runtime["mode"] == "model"
+    assert runtime["provider"] == "openai"
+    assert runtime["model"] == "fake-planner-model"
+
+
 def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> None:
     trip_id = _create_trip(client)
 
@@ -232,6 +250,17 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
     assert planner_reply["content"].startswith("I need to compare")
     assert planner_reply["tool_calls"][0]["tool_name"] == "read_workspace_state"
     assert planner_reply["tool_calls"][0]["status"] == "completed"
+    completed_tool_names = {
+        item["tool_name"] for item in planner_reply["tool_calls"] if item["status"] == "completed"
+    }
+    assert completed_tool_names == {
+        "read_workspace_state",
+        "refresh_inventory",
+        "refresh_scenarios",
+        "read_budget_state",
+        "read_policy_state",
+        "read_proposal_state",
+    }
     assert fake_model.requests[0]["available_tools"][0]["tool_name"] == "read_workspace_state"
     runtime_context = fake_model.requests[0]["runtime_context"]
     assert isinstance(runtime_context, dict)
@@ -263,7 +292,7 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
             payload["planner_memory"]["current_checkpoint_id"],
         )
         assert checkpoint is not None
-        assert checkpoint.metadata_payload["tool_call_count"] == 1
+        assert checkpoint.metadata_payload["tool_call_count"] == 6
         assert checkpoint.metadata_payload["selected_planning_mode"] == "leisure"
 
 

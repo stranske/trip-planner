@@ -72,6 +72,14 @@ class PlannerChatModel(Protocol):
 PlannerChatModelFactory = Callable[[PlannerRuntimeConfig], PlannerChatModel]
 
 _PLANNER_CHAT_MODEL_FACTORY: PlannerChatModelFactory | None = None
+_GROUNDING_TOOL_NAMES: tuple[str, ...] = (
+    "read_workspace_state",
+    "refresh_inventory",
+    "refresh_scenarios",
+    "read_budget_state",
+    "read_policy_state",
+    "read_proposal_state",
+)
 
 
 def set_planner_chat_model_factory_for_tests(factory: PlannerChatModelFactory | None) -> None:
@@ -426,6 +434,19 @@ def _execute_model_tool_calls(
     return executed
 
 
+def _missing_grounding_tool_calls(executed_tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen = {
+        str(item.get("tool_name") or "")
+        for item in executed_tool_calls
+        if str(item.get("status") or "") == "completed"
+    }
+    return [
+        {"tool_name": tool_name, "arguments": {}}
+        for tool_name in _GROUNDING_TOOL_NAMES
+        if tool_name not in seen
+    ]
+
+
 def get_planner_session_payload(
     db_session: Session,
     *,
@@ -575,6 +596,17 @@ def submit_planner_turn(
         tool_calls=reply.requested_tool_calls,
     )
     executed_tool_calls.extend(model_tool_calls)
+    if runtime_config.mode == "model":
+        grounding_tool_calls = _missing_grounding_tool_calls(executed_tool_calls)
+        if grounding_tool_calls:
+            executed_tool_calls.extend(
+                _execute_model_tool_calls(
+                    db_session,
+                    user=user,
+                    trip_id=trip_id,
+                    tool_calls=grounding_tool_calls,
+                )
+            )
     if executed_tool_calls:
         tool_summary = " ".join(item["summary"] for item in executed_tool_calls)
         reply = PlannerConversationReply(
