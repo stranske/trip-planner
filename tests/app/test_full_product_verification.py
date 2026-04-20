@@ -91,3 +91,19 @@ def test_live_tpp_auto_reports_ready_with_base_url_and_auth_config() -> None:
 
     assert check.status == "READY"
     assert check.details["TPP_BASE_URL"] == "https://tpp.example.test"
+
+
+def test_live_tpp_auto_reports_invalid_repo_path_as_blocked(tmp_path) -> None:
+    missing_repo = tmp_path / "missing-tpp"
+
+    check = tpp_prerequisite_status(
+        live_tpp="auto",
+        env={
+            "TPP_ACCESS_TOKEN": "token",
+            "TPP_OIDC_PROVIDER": "google",
+            "TPP_REPO_PATH": str(missing_repo),
+        },
+    )
+
+    assert check.status == "BLOCKED"
+    assert check.details["invalid_path"] == {"TPP_REPO_PATH": str(missing_repo)}

@@ -399,10 +399,24 @@ def _run_live_tpp_journey(client: TestClient, trip_id: str, env: dict[str, str])
                     os.environ[key] = value
 
 
-def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
+@contextmanager
+def _temporary_database_url(database_url: str) -> Iterator[None]:
     previous_database_url = os.environ.get("TRIP_PLANNER_DATABASE_URL")
-    with tempfile.TemporaryDirectory(prefix="trip-planner-full-product.") as tmpdir:
-        os.environ["TRIP_PLANNER_DATABASE_URL"] = f"sqlite:///{Path(tmpdir) / 'full_product.db'}"
+    os.environ["TRIP_PLANNER_DATABASE_URL"] = database_url
+    try:
+        yield
+    finally:
+        reset_database_state()
+        if previous_database_url is None:
+            os.environ.pop("TRIP_PLANNER_DATABASE_URL", None)
+        else:
+            os.environ["TRIP_PLANNER_DATABASE_URL"] = previous_database_url
+
+
+def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
+    with tempfile.TemporaryDirectory(prefix="trip-planner-full-product.") as tmpdir, (
+        _temporary_database_url(f"sqlite:///{Path(tmpdir) / 'full_product.db'}")
+    ):
         reset_database_state()
         ensure_database_ready()
         app = create_app()
@@ -575,11 +589,6 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
                 if live_tpp == "required" and tpp_status.status != "PASS":
                     raise VerificationFailure(json.dumps(tpp_status.details, sort_keys=True))
 
-        reset_database_state()
-        if previous_database_url is None:
-            os.environ.pop("TRIP_PLANNER_DATABASE_URL", None)
-        else:
-            os.environ["TRIP_PLANNER_DATABASE_URL"] = previous_database_url
         return results
 
 
