@@ -56,6 +56,12 @@ class FakePlannerChatModel:
         return self.response
 
 
+class FailingPlannerChatModel:
+    def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+        del payload
+        raise RuntimeError("provider timeout")
+
+
 def _create_trip(client: TestClient) -> str:
     response = client.post(
         "/api/trips",
@@ -206,6 +212,12 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
     runtime_context = fake_model.requests[0]["runtime_context"]
     assert isinstance(runtime_context, dict)
     assert runtime_context["trip"]["trip_id"] == trip_id
+    assert runtime_context["context_readiness"]["status"] == "ready"
+    assert runtime_context["autonomy_preferences"]["interaction_state"]["initiative_level"] == "balanced"
+    assert runtime_context["budget_state"]["summary"]["currency"] == "USD"
+    assert "policy_state" in runtime_context
+    assert "proposal_state" in runtime_context
+    assert "recent_activity" in runtime_context
 
     with get_session_factory()() as db_session:
         stored = db_session.scalars(
@@ -214,6 +226,15 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
             .order_by(PersistedPlannerAction.occurred_at.asc())
         ).all()
         assert stored[-1].payload["tool_calls"][0]["summary"] == "Read the current planner panel workspace state."
+        assert stored[-1].payload["selected_planning_mode"] == "leisure"
+        assert stored[-1].payload["runtime_mode"] == "model"
+        checkpoint = db_session.get(
+            PersistedPlannerCheckpoint,
+            payload["planner_memory"]["current_checkpoint_id"],
+        )
+        assert checkpoint is not None
+        assert checkpoint.metadata_payload["tool_call_count"] == 1
+        assert checkpoint.metadata_payload["selected_planning_mode"] == "leisure"
 
 
 def test_planner_turn_records_model_tool_errors_without_fabricating_success(
@@ -243,6 +264,58 @@ def test_planner_turn_records_model_tool_errors_without_fabricating_success(
     assert planner_reply["tool_calls"][0]["tool_name"] == "launch_booking_agent"
     assert planner_reply["tool_calls"][0]["status"] == "error"
     assert "not supported" in planner_reply["tool_calls"][0]["summary"]
+
+
+def test_planner_turn_records_malformed_model_tool_arguments_as_visible_error(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trip_id = _create_trip(client)
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL", "fake-planner-model")
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-test-key")
+    set_planner_chat_model_factory_for_tests(
+        lambda _: FakePlannerChatModel(
+            {
+                "content": "The budget tool received malformed arguments.",
+                "tool_calls": [{"tool_name": "update_budget_plan", "arguments": "not-a-dict"}],
+            }
+        )
+    )
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Set a budget from malformed model output."},
+    )
+
+    assert response.status_code == 200
+    planner_reply = response.json()["messages"][-1]
+    assert planner_reply["tool_calls"][0]["tool_name"] == "update_budget_plan"
+    assert planner_reply["tool_calls"][0]["status"] == "error"
+    assert "dictionary update sequence" in planner_reply["tool_calls"][0]["summary"]
+
+
+def test_planner_turn_records_model_provider_failure_as_visible_error(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trip_id = _create_trip(client)
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL", "fake-planner-model")
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-test-key")
+    set_planner_chat_model_factory_for_tests(lambda _: FailingPlannerChatModel())
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Try the configured model path."},
+    )
+
+    assert response.status_code == 200
+    planner_reply = response.json()["messages"][-1]
+    assert "Planner model runtime failed" in planner_reply["content"]
+    assert planner_reply["tool_calls"][0]["tool_name"] == "planner_model"
+    assert planner_reply["tool_calls"][0]["status"] == "error"
+    assert planner_reply["tool_calls"][0]["summary"] == "provider timeout"
 
 
 def test_planner_turn_executes_explicit_tool_calls(client: TestClient) -> None:

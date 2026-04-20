@@ -25,6 +25,7 @@ from trip_planner.app.services.planner_tools import (
     execute_planner_tool_call,
     list_planner_tools,
 )
+from trip_planner.preferences.autonomy import AutonomyGuardrails
 from trip_planner.app.services.workspace import (
     WORKSPACE_ACTIVITY_LOG_LIMIT,
     _append_activity_event,
@@ -305,23 +306,37 @@ def _activity_log(
 def _planner_runtime_context(
     workspace_payload: dict[str, Any],
     *,
+    session: PlanningSessionState,
     planner_memory: dict[str, Any],
     activity_log: list[dict[str, Any]],
 ) -> dict[str, Any]:
     panel = workspace_payload["planner_panel_state"]
+    required_sections = {
+        "inventory_summary": workspace_payload.get("inventory_summary") or {},
+        "scenario_search": workspace_payload.get("scenario_search") or {},
+        "runtime_scenario_comparison": workspace_payload.get("runtime_scenario_comparison") or {},
+        "budget_state": workspace_payload.get("budget_state") or {},
+        "planner_memory": planner_memory,
+    }
+    missing_sections = [key for key, value in required_sections.items() if not value]
     return {
         "trip": panel["trip"],
         "pending_decisions": panel.get("pending_decisions") or [],
         "option_set": panel.get("option_set") or {},
         "outputs": panel.get("outputs") or [],
-        "inventory_summary": workspace_payload.get("inventory_summary") or {},
-        "scenario_search": workspace_payload.get("scenario_search") or {},
-        "runtime_scenario_comparison": workspace_payload.get("runtime_scenario_comparison") or {},
-        "budget_state": workspace_payload.get("budget_state") or {},
+        **required_sections,
         "policy_state": workspace_payload.get("policy_state") or {},
         "proposal_state": workspace_payload.get("proposal_state") or {},
-        "planner_memory": planner_memory,
+        "autonomy_preferences": {
+            "interaction_state": session.interaction_state.to_dict(),
+            "guardrails": AutonomyGuardrails().to_dict(),
+            "planner_behavior": panel.get("planner_behavior") or {},
+        },
         "recent_activity": activity_log[:8],
+        "context_readiness": {
+            "status": "partial" if missing_sections else "ready",
+            "missing_sections": missing_sections,
+        },
     }
 
 
@@ -368,6 +383,22 @@ def _tool_call_error(tool_name: str, message: str) -> dict[str, Any]:
         "refs": [],
         "output": {"error": message},
     }
+
+
+def _planner_model_error_reply(
+    *,
+    session_state_id: str,
+    error: Exception,
+) -> PlannerConversationReply:
+    message = (
+        "Planner model runtime failed before it could complete the turn. "
+        "The traveler message was saved, and the visible error state is available for retry."
+    )
+    return PlannerConversationReply(
+        content=f"{message} Error: {error}",
+        refs=[session_state_id],
+        tool_calls=[_tool_call_error("planner_model", str(error))],
+    )
 
 
 def _execute_model_tool_calls(
@@ -489,6 +520,7 @@ def submit_planner_turn(
             "content": normalized_message,
             "refs": session.session_state_id,
             "tool_calls": [],
+            "selected_planning_mode": session.mode,
         },
     )
 
@@ -515,19 +547,27 @@ def submit_planner_turn(
     activity_log = _activity_log(db_session, trip_id=trip_id)
     runtime_config = get_planner_runtime_config()
     runnable = _planner_runnable(runtime_config)
-    reply = runnable.invoke(
-        PlannerConversationRequest(
-            trip_id=trip_id,
-            message=normalized_message,
-            planner_panel_state=workspace_payload["planner_panel_state"],
-            session=session,
-            runtime_context=_planner_runtime_context(
-                workspace_payload,
-                planner_memory=planner_memory,
-                activity_log=activity_log,
-            ),
-        )
+    runtime_context = _planner_runtime_context(
+        workspace_payload,
+        session=session,
+        planner_memory=planner_memory,
+        activity_log=activity_log,
     )
+    try:
+        reply = runnable.invoke(
+            PlannerConversationRequest(
+                trip_id=trip_id,
+                message=normalized_message,
+                planner_panel_state=workspace_payload["planner_panel_state"],
+                session=session,
+                runtime_context=runtime_context,
+            )
+        )
+    except Exception as error:
+        reply = _planner_model_error_reply(
+            session_state_id=session.session_state_id,
+            error=error,
+        )
     model_tool_calls = _execute_model_tool_calls(
         db_session,
         user=user,
@@ -567,6 +607,14 @@ def submit_planner_turn(
             "content": reply.content,
             "refs": ",".join(reply.refs),
             "tool_calls": reply.tool_calls,
+            "selected_planning_mode": session.mode,
+            "planning_stage": (
+                workspace_payload["planner_panel_state"]
+                .get("planner_behavior", {})
+                .get("trip_stage")
+            ),
+            "runtime_mode": runtime_config.mode,
+            "context_readiness": runtime_context["context_readiness"],
         },
     )
     refresh_planner_memory(
