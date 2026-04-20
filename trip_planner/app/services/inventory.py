@@ -685,9 +685,12 @@ def _build_inventory_assembly_input(
     traveler_party_kind: str | None = None,
     traveler_count: int | None = None,
     allow_fixture_fallback: bool = True,
+    prefer_persisted_context: bool = False,
 ) -> InventoryAssemblyInput:
     fixture_seed = _FIXTURE_BUNDLE_INPUTS.get(trip_id)
-    use_fixture_seed = fixture_seed is not None and allow_fixture_fallback
+    use_fixture_seed = (
+        fixture_seed is not None and allow_fixture_fallback and not prefer_persisted_context
+    )
     query = SourceQuery(
         query_id=f"inventory-query:{trip_id}",
         entity_scope="mixed",
@@ -893,23 +896,24 @@ def get_inventory_payload(
     user: AuthenticatedUser,
     trip_id: str,
 ) -> dict[str, Any] | None:
+    record = db_session.scalar(
+        select(PersistedTrip)
+        .where(PersistedTrip.trip_id == trip_id)
+        .where(PersistedTrip.user_id == user.user_id)
+    )
+
     fixture_seed = _FIXTURE_BUNDLE_INPUTS.get(trip_id)
-    record: PersistedTrip | None = None
     primary_regions: Sequence[str] = ()
     duration_days: int | None = None
-    if fixture_seed is not None:
-        trip_mode = fixture_seed.trip_mode
-    else:
-        record = db_session.scalar(
-            select(PersistedTrip)
-            .where(PersistedTrip.trip_id == trip_id)
-            .where(PersistedTrip.user_id == user.user_id)
-        )
-        if record is None:
-            return None
+    prefer_persisted_context = record is not None
+    if record is not None:
         trip_mode = record.mode
         primary_regions = tuple(record.primary_regions)
         duration_days = record.duration_days
+    elif fixture_seed is not None:
+        trip_mode = fixture_seed.trip_mode
+    else:
+        return None
 
     assembly_input = _build_inventory_assembly_input(
         trip_id=trip_id,
@@ -923,6 +927,7 @@ def get_inventory_payload(
         trip_summary=record.summary if record is not None else None,
         traveler_party_kind=record.traveler_party_kind if record is not None else None,
         traveler_count=record.traveler_count if record is not None else None,
+        prefer_persisted_context=prefer_persisted_context,
     )
     bundles = assemble_inventory_bundles_for_trip(assembly_input=assembly_input)
     return {

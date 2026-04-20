@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
+from trip_planner.app.services.inventory import _build_inventory_assembly_input
 from trip_planner.persistence.db import reset_database_state
 
 _LEGACY_FIXTURE_BUNDLE_IDS = {
@@ -54,6 +55,28 @@ def test_inventory_endpoint_returns_not_found_for_unknown_trip(client: TestClien
     response = client.get("/api/inventory/trip-unknown")
 
     assert response.status_code == 404
+
+
+def test_inventory_assembly_input_prefers_persisted_context_over_seeded_fixture_ids() -> None:
+    assembly_input = _build_inventory_assembly_input(
+        trip_id="trip-leisure-kyoto-draft",
+        trip_mode="leisure",
+        start_date="2026-09-10",
+        end_date="2026-09-13",
+        duration_days=4,
+        primary_regions=["Lisbon"],
+        traveler_party_kind="solo",
+        traveler_count=1,
+        allow_fixture_fallback=True,
+        prefer_persisted_context=True,
+    )
+
+    assert assembly_input.snapshot.adapter_id == "persisted-trip-source-inventory"
+    assert assembly_input.fixture_names == ()
+    assert assembly_input.record_payloads
+    first_payload = assembly_input.record_payloads[0]["bundle_payloads"][0]
+    assert first_payload["bundle_id"] == "bundle-trip-leisure-kyoto-draft-runtime-1-1"
+    assert first_payload["destinations"][0]["name"] == "Lisbon gateway"
 
 
 def test_inventory_endpoint_assembles_bundles_for_persisted_trip(client: TestClient) -> None:
