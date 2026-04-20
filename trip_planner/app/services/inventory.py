@@ -99,6 +99,37 @@ class InventoryAssemblyInput:
     allow_fixture_fallback: bool
 
 
+@dataclass(frozen=True)
+class PersistedTripInventoryContext:
+    trip_id: str
+    trip_mode: str
+    start_date: str | None
+    end_date: str | None
+    trip_status: str | None
+    primary_regions: tuple[str, ...]
+    duration_days: int | None
+    trip_title: str | None
+    trip_summary: str | None
+    traveler_party_kind: str | None
+    traveler_count: int | None
+
+    @classmethod
+    def from_persisted_trip(cls, record: PersistedTrip) -> PersistedTripInventoryContext:
+        return cls(
+            trip_id=record.trip_id,
+            trip_mode=record.mode,
+            start_date=record.start_date,
+            end_date=record.end_date,
+            trip_status=record.status,
+            primary_regions=tuple(record.primary_regions),
+            duration_days=record.duration_days,
+            trip_title=record.title,
+            trip_summary=record.summary,
+            traveler_party_kind=record.traveler_party_kind,
+            traveler_count=record.traveler_count,
+        )
+
+
 class PersistedTripInventoryFixtureAdapter(SourceAdapter):
     """Expose fixture-backed inventory as an explicit adapter seam for persisted trips."""
 
@@ -192,18 +223,27 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
                             details={"trip_id": self.trip_id, "trip_mode": self.trip_mode},
                         )
                     )
-        records = [
-            RawSourceRecord(
-                record_id=f"{query.query_id}:{index}",
-                entity_scope=query.entity_scope,
-                provider_entity_id=f"{self.trip_id}:{fixture_name}",
-                payload_type="fixture_bundle",
-                payload={"fixture_name": fixture_name, "trip_id": self.trip_id},
-                captured_at="2026-04-11T00:00:00Z",
-                metadata={"fixture_name": fixture_name},
+        records: list[RawSourceRecord] = []
+        for index, fixture_name in enumerate(fixture_names, start=1):
+            mixed_option = _load_mixed_option_fixture(fixture_name)
+            records.append(
+                RawSourceRecord(
+                    record_id=f"{query.query_id}:{index}",
+                    entity_scope=query.entity_scope,
+                    provider_entity_id=f"{self.trip_id}:{fixture_name}",
+                    payload_type="normalized_bundle_seed",
+                    payload={
+                        "fixture_name": fixture_name,
+                        "trip_id": self.trip_id,
+                        "bundle_payloads": [bundle.to_dict() for bundle in mixed_option.bundles],
+                    },
+                    captured_at="2026-04-11T00:00:00Z",
+                    metadata={
+                        "fixture_name": fixture_name,
+                        "bundle_count": str(len(mixed_option.bundles)),
+                    },
+                )
             )
-            for index, fixture_name in enumerate(fixture_names, start=1)
-        ]
         return RawSnapshot(
             snapshot_id=f"snapshot:{self.trip_id}:inventory",
             adapter_id=self.adapter_id,
@@ -298,6 +338,20 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         self.supported_entity_scopes = ("mixed",)
         self.supported_option_kinds = ("mixed", "lodging", "activity", "rail")
         self.capabilities = ("read_file", "supports_normalization_handoff")
+
+    @classmethod
+    def from_persisted_trip(cls, record: PersistedTrip) -> PersistedTripSourceInventoryAdapter:
+        return cls(
+            trip_id=record.trip_id,
+            trip_mode=record.mode,
+            primary_regions=tuple(record.primary_regions),
+            start_date=record.start_date,
+            end_date=record.end_date,
+            duration_days=record.duration_days,
+            trip_title=record.title,
+            traveler_party_kind=record.traveler_party_kind,
+            traveler_count=record.traveler_count,
+        )
 
     @staticmethod
     def _slug(value: str) -> str:
@@ -684,10 +738,27 @@ def _build_inventory_assembly_input(
     trip_summary: str | None = None,
     traveler_party_kind: str | None = None,
     traveler_count: int | None = None,
+    persisted_trip: PersistedTrip | None = None,
     allow_fixture_fallback: bool = True,
 ) -> InventoryAssemblyInput:
+    if persisted_trip is not None:
+        persisted_context = PersistedTripInventoryContext.from_persisted_trip(persisted_trip)
+        trip_id = persisted_context.trip_id
+        trip_mode = persisted_context.trip_mode
+        start_date = persisted_context.start_date
+        end_date = persisted_context.end_date
+        trip_status = persisted_context.trip_status
+        primary_regions = persisted_context.primary_regions
+        duration_days = persisted_context.duration_days
+        trip_title = persisted_context.trip_title
+        trip_summary = persisted_context.trip_summary
+        traveler_party_kind = persisted_context.traveler_party_kind
+        traveler_count = persisted_context.traveler_count
+
     fixture_seed = _FIXTURE_BUNDLE_INPUTS.get(trip_id)
-    use_fixture_seed = fixture_seed is not None and allow_fixture_fallback
+    use_fixture_seed = (
+        fixture_seed is not None and allow_fixture_fallback and persisted_trip is None
+    )
     query = SourceQuery(
         query_id=f"inventory-query:{trip_id}",
         entity_scope="mixed",
@@ -705,6 +776,7 @@ def _build_inventory_assembly_input(
         },
         notes=[
             "Persisted trip inventory assembly",
+            f"persisted_trip:{'yes' if persisted_trip is not None else 'no'}",
             f"trip_title:{trip_title or ''}",
             f"trip_summary:{(trip_summary or '')[:60]}",
             f"start_date:{start_date or ''}",
@@ -720,17 +792,20 @@ def _build_inventory_assembly_input(
             allow_fixture_fallback=allow_fixture_fallback,
         )
     else:
-        adapter = PersistedTripSourceInventoryAdapter(
-            trip_id=trip_id,
-            trip_mode=trip_mode,
-            primary_regions=primary_regions,
-            start_date=start_date,
-            end_date=end_date,
-            duration_days=duration_days,
-            trip_title=trip_title,
-            traveler_party_kind=traveler_party_kind,
-            traveler_count=traveler_count,
-        )
+        if persisted_trip is not None:
+            adapter = PersistedTripSourceInventoryAdapter.from_persisted_trip(persisted_trip)
+        else:
+            adapter = PersistedTripSourceInventoryAdapter(
+                trip_id=trip_id,
+                trip_mode=trip_mode,
+                primary_regions=primary_regions,
+                start_date=start_date,
+                end_date=end_date,
+                duration_days=duration_days,
+                trip_title=trip_title,
+                traveler_party_kind=traveler_party_kind,
+                traveler_count=traveler_count,
+            )
     snapshot = adapter.fetch_snapshot(query)
     handoff = adapter.build_handoff(snapshot)
     return InventoryAssemblyInput(
@@ -779,22 +854,6 @@ def assemble_inventory_bundles_for_trip(
         for bundle_payload in bundle_payloads:
             if isinstance(bundle_payload, dict):
                 bundles.append(InventoryBundle.from_dict(bundle_payload))
-
-    if bundles:
-        return bundles
-
-    uses_seeded_fixture_ids = assembly_input.trip_id in _FIXTURE_BUNDLE_INPUTS
-    for fixture_index, fixture_name in enumerate(assembly_input.fixture_names, start=1):
-        mixed_option = _load_mixed_option_fixture(fixture_name)
-        for bundle_index, fixture_bundle in enumerate(mixed_option.bundles, start=1):
-            if uses_seeded_fixture_ids:
-                bundles.append(fixture_bundle)
-                continue
-            payload = fixture_bundle.to_dict()
-            payload["bundle_id"] = (
-                f"bundle-{assembly_input.trip_id}-runtime-{fixture_index}-{bundle_index}"
-            )
-            bundles.append(InventoryBundle.from_dict(payload))
     return bundles
 
 
@@ -914,6 +973,7 @@ def get_inventory_payload(
     assembly_input = _build_inventory_assembly_input(
         trip_id=trip_id,
         trip_mode=trip_mode,
+        persisted_trip=record,
         primary_regions=primary_regions,
         start_date=record.start_date if record is not None else None,
         end_date=record.end_date if record is not None else None,

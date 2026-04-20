@@ -562,6 +562,7 @@ def _build_workspace_inventory_inputs(
     record: PersistedTrip,
 ) -> tuple[list[InventoryBundle], dict[str, Any]]:
     assembly_input = _build_inventory_assembly_input(
+        persisted_trip=record,
         trip_id=record.trip_id,
         trip_mode=record.mode,
         start_date=record.start_date,
@@ -1086,6 +1087,7 @@ def _build_persisted_trip_workspace(
     }
     ordered_saved_scenarios = _ordered_saved_scenarios(saved_scenarios or [])
     inventory_assembly_input = _build_inventory_assembly_input(
+        persisted_trip=record,
         trip_id=record.trip_id,
         trip_mode=record.mode,
         start_date=record.start_date,
