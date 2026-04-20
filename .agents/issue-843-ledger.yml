@@ -6,10 +6,10 @@ tasks:
   - id: task-01
     title: Create integration test that creates a persisted leisure trip with arbitrary
       non-seeded ID, destination, dates, and traveler context
-    status: doing
+    status: done
     started_at: '2026-04-20T09:35:22Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-04-20T09:35:34Z'
+    commit: a8744e4d1b07500e1d21b25bebdf1a6a63ec6021
     notes: []
   - id: task-02
     title: Add test assertions that verify workspace response contains inventory_summary.bundle_count
