@@ -214,8 +214,12 @@ def _assert_workspace_scenario_context(payload: dict[str, Any], *, trip_id: str)
     runtime_comparison = payload["runtime_scenario_comparison"]
     scenarios = list(scenario_search.get("scenarios") or [])
     comparison_rows = list(runtime_comparison.get("scenarios") or [])
-    _require(scenarios, "workspace scenario search returned no scenarios", trip_id=trip_id)
-    _require(comparison_rows, "workspace comparison returned no scenarios", trip_id=trip_id)
+    _require(bool(scenarios), "workspace scenario search returned no scenarios", trip_id=trip_id)
+    _require(
+        bool(comparison_rows),
+        "workspace comparison returned no scenarios",
+        trip_id=trip_id,
+    )
     for scenario in scenarios:
         route_sequence = scenario["scenario_summary"].get("route_sequence") or []
         _require(
@@ -276,7 +280,7 @@ def _assert_planner_runtime_response(payload: dict[str, Any], *, trip_id: str) -
         conversation_id=payload.get("conversation_id"),
     )
     _require(
-        payload.get("available_tools"),
+        bool(payload.get("available_tools")),
         "planner turn did not expose model-tool runtime capabilities",
         trip_id=trip_id,
     )
