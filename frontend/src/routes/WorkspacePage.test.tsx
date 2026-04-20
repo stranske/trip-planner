@@ -987,7 +987,10 @@ describe("WorkspacePage", () => {
     });
 
     expect(screen.getAllByText("Google Maps JavaScript adapter").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Route geometry overlay for Kyoto base with Uji day trip")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /stop marker:/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByTitle(/google maps/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Fallback option markers")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /lodging marker: Osaka arrival buffer/ }));
     expect(screen.getAllByRole("heading", { name: "Osaka arrival buffer" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Live provider path")).toBeInTheDocument();

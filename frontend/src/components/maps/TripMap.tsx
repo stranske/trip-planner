@@ -302,7 +302,12 @@ function InteractiveProviderMap({
 }) {
   return (
     <div className="map-provider-canvas" role="group" aria-label={`Interactive map for ${title}`}>
-      <svg className="map-route-geometry" viewBox="0 0 100 100" aria-hidden="true">
+      <svg
+        className="map-route-geometry"
+        viewBox="0 0 100 100"
+        role="img"
+        aria-label={`Route geometry overlay for ${title}`}
+      >
         {routeSegments.map((segment) => (
           <line
             key={segment.id}
