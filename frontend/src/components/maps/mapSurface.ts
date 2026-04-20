@@ -65,6 +65,7 @@ export type TripMapSurfaceModel = {
   destinationContext: string[];
   scenarioFocusAreas: string[];
   scenarioComparisonSummary: string;
+  scenarioAffordances: string[];
   policyPosture: string;
   feasibilitySummary: string;
   routeState: "ready" | "sparse";
@@ -146,18 +147,22 @@ function coordinateForMarker(index: number, total: number): { x: number; y: numb
   };
 }
 
-function markerKindForBundle(bundle: InventoryBundle): MapMarkerKind {
+function markerKindsForBundle(bundle: InventoryBundle): MapMarkerKind[] {
   const context = bundle.bundle_context.toLowerCase();
+  const kinds: MapMarkerKind[] = [];
   if (context.includes("lodging")) {
-    return "lodging";
+    kinds.push("lodging");
   }
   if (context.includes("activity")) {
-    return "activity";
+    kinds.push("activity");
   }
   if (context.includes("transport") || context.includes("route")) {
-    return "transport";
+    kinds.push("transport");
   }
-  return "activity";
+  if (kinds.length === 0) {
+    kinds.push("activity");
+  }
+  return Array.from(new Set(kinds));
 }
 
 function deriveRouteWarning(activeScenario: TripMapScenario, feasibilitySummary: FeasibilitySummary): string | null {
@@ -241,19 +246,20 @@ function buildMarkers({
     y: stop.y,
     emphasized: index === 0 || index === routeStops.length - 1,
   }));
-  const bundleMarkers = bundles.map((bundle, index) => {
+  const bundleMarkers = bundles.flatMap((bundle, index) => {
     const coordinate = coordinateForMarker(index, bundles.length);
+    const markerKinds = markerKindsForBundle(bundle);
     const destinations = bundle.destination_names.filter(Boolean).join(", ") || "No destination anchors";
-    return {
-      id: `bundle-${bundle.bundle_id}`,
-      kind: markerKindForBundle(bundle),
+    return markerKinds.map((kind, markerIndex) => ({
+      id: `bundle-${bundle.bundle_id}-${kind}`,
+      kind,
       label: bundle.title,
       summary: `${bundle.option_count} option(s) anchored to ${destinations}`,
       detail: bundle.summary,
-      x: coordinate.x,
-      y: coordinate.y,
-      emphasized: activeScenario.recommended_for_selection && index === 0,
-    };
+      x: coordinate.x + markerIndex * 3,
+      y: coordinate.y + markerIndex * 3,
+      emphasized: activeScenario.recommended_for_selection && index === 0 && markerIndex === 0,
+    }));
   });
   const policyMarker =
     routeWarning == null
@@ -272,6 +278,33 @@ function buildMarkers({
         ];
 
   return [...stopMarkers, ...bundleMarkers, ...policyMarker];
+}
+
+function buildScenarioAffordances({
+  activeScenario,
+  routeState,
+  routeWarning,
+}: {
+  activeScenario: TripMapScenario;
+  routeState: "ready" | "sparse";
+  routeWarning: string | null;
+}): string[] {
+  const affordances = [
+    activeScenario.recommended_for_selection ? "Recommended scenario" : "Alternative scenario",
+    activeScenario.feasible ? "Feasibility-ready route" : "Feasibility warning",
+    `${activeScenario.option_count} mapped option marker(s)`,
+    `${activeScenario.route_sequence.length} route stop(s)`,
+  ];
+  if (activeScenario.metrics.transfers > 0) {
+    affordances.push(`${activeScenario.metrics.transfers} transfer checkpoint(s)`);
+  }
+  if (routeState === "sparse") {
+    affordances.push("Sparse route fallback");
+  }
+  if (routeWarning) {
+    affordances.push("Policy or feasibility warning active");
+  }
+  return affordances;
 }
 
 export function buildTripMapSurfaceModel({
@@ -329,6 +362,11 @@ export function buildTripMapSurfaceModel({
     policyPosture,
   });
   const routeState = routeStops.length >= 2 ? "ready" : "sparse";
+  const scenarioAffordances = buildScenarioAffordances({
+    activeScenario,
+    routeState,
+    routeWarning,
+  });
   let provider: MapSurfaceProvider;
 
   if (routeState === "sparse") {
@@ -385,6 +423,7 @@ export function buildTripMapSurfaceModel({
     scenarioComparisonSummary:
       scenarioComparisonSummary?.trim() ||
       "Scenario comparison summary is still syncing to this workspace review surface.",
+    scenarioAffordances,
     policyPosture,
     feasibilitySummary: summarizeFeasibility(feasibilitySummary, destinationAnchors),
     routeState,

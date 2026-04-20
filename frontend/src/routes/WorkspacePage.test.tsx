@@ -959,6 +959,9 @@ describe("WorkspacePage", () => {
     ).toBeInTheDocument();
     expect(within(screen.getByLabelText("Route context map")).getAllByText("Osaka").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Higher transfer load to preserve nightlife breadth.").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Selected scenario affordances" })).toBeInTheDocument();
+    expect(screen.getByText("Alternative scenario")).toBeInTheDocument();
+    expect(screen.getByText("7 transfer checkpoint(s)")).toBeInTheDocument();
   });
 
   it("renders the Google Maps JavaScript provider path when configured", async () => {

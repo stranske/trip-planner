@@ -221,6 +221,14 @@ function ActiveTripMap({
             ) : null}
           </article>
           <article className="decision-card">
+            <h3>Selected scenario affordances</h3>
+            <ul className="map-highlight-list">
+              {mapSurface.scenarioAffordances.map((affordance) => (
+                <li key={affordance}>{affordance}</li>
+              ))}
+            </ul>
+          </article>
+          <article className="decision-card">
             <h3>Route summary</h3>
             <p>{activeScenario.route_summary}</p>
             <p className="muted-copy">{activeScenario.comparison_note}</p>
