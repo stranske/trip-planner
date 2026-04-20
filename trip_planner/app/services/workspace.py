@@ -564,6 +564,9 @@ def _build_workspace_inventory_inputs(
     assembly_input = _build_inventory_assembly_input(
         trip_id=record.trip_id,
         trip_mode=record.mode,
+        start_date=record.start_date,
+        end_date=record.end_date,
+        trip_status=record.status,
         primary_regions=record.primary_regions,
         duration_days=record.duration_days,
         trip_title=record.title,
@@ -1085,6 +1088,9 @@ def _build_persisted_trip_workspace(
     inventory_assembly_input = _build_inventory_assembly_input(
         trip_id=record.trip_id,
         trip_mode=record.mode,
+        start_date=record.start_date,
+        end_date=record.end_date,
+        trip_status=record.status,
         primary_regions=record.primary_regions,
         duration_days=record.duration_days,
         trip_title=record.title,

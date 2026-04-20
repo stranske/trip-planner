@@ -114,6 +114,18 @@ def test_inventory_endpoint_avoids_legacy_fixture_bundle_ids_for_arbitrary_persi
     bundle_ids = {bundle["bundle_id"] for bundle in payload["bundles"]}
     assert bundle_ids
     assert bundle_ids.isdisjoint(_LEGACY_FIXTURE_BUNDLE_IDS)
+    bundle = payload["bundles"][0]
+    assert bundle["destinations"][0]["geo"]["country_code"] == "PT"
+    assert bundle["destinations"][0]["geo"]["time_zone"] == "Europe/Lisbon"
+    assert bundle["transport_options"][0]["timing_summary"]["departure_local"] == (
+        "2026-06-04T09:00:00Z"
+    )
+    assert bundle["transport_options"][0]["timing_summary"]["arrival_local"] == (
+        "2026-06-04T09:45:00Z"
+    )
+    assert bundle["transport_options"][0]["source_refs"][0]["captured_at"] == (
+        "2026-06-04T00:00:00Z"
+    )
     serialized = str(payload["summary"])
     for marker in _FIXTURE_ADAPTER_MARKERS:
         assert marker not in serialized

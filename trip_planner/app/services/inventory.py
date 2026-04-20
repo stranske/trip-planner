@@ -25,6 +25,48 @@ from trip_planner.sources import (
 
 _BUNDLE_RESOURCE_PACKAGE = "trip_planner.resources.options.bundles"
 
+_REGION_GEO_DEFAULTS: dict[str, dict[str, Any]] = {
+    "austin": {
+        "latitude": 30.2672,
+        "longitude": -97.7431,
+        "country_code": "US",
+        "region_code": "TX",
+        "time_zone": "America/Chicago",
+    },
+    "chicago": {
+        "latitude": 41.8781,
+        "longitude": -87.6298,
+        "country_code": "US",
+        "region_code": "IL",
+        "time_zone": "America/Chicago",
+    },
+    "kyoto": {
+        "latitude": 35.0116,
+        "longitude": 135.7681,
+        "country_code": "JP",
+        "time_zone": "Asia/Tokyo",
+    },
+    "lisbon": {
+        "latitude": 38.7223,
+        "longitude": -9.1393,
+        "country_code": "PT",
+        "time_zone": "Europe/Lisbon",
+    },
+    "seattle": {
+        "latitude": 47.6062,
+        "longitude": -122.3321,
+        "country_code": "US",
+        "region_code": "WA",
+        "time_zone": "America/Los_Angeles",
+    },
+    "tokyo": {
+        "latitude": 35.6762,
+        "longitude": 139.6503,
+        "country_code": "JP",
+        "time_zone": "Asia/Tokyo",
+    },
+}
+
 
 @dataclass(frozen=True)
 class InventoryFixtureSeed:
@@ -227,6 +269,8 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         trip_id: str,
         trip_mode: str,
         primary_regions: Sequence[str],
+        start_date: str | None = None,
+        end_date: str | None = None,
         duration_days: int | None = None,
         trip_title: str | None = None,
         traveler_party_kind: str | None = None,
@@ -235,6 +279,8 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         self.trip_id = trip_id
         self.trip_mode = trip_mode
         self.primary_regions = tuple(region.strip() for region in primary_regions if region.strip())
+        self.start_date = (start_date or "").strip()
+        self.end_date = (end_date or "").strip()
         self.duration_days = duration_days
         self.trip_title = (trip_title or "").strip()
         self.traveler_party_kind = (traveler_party_kind or "").strip()
@@ -258,6 +304,22 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
         return slug or "destination"
 
+    def _geo_payload(self, region: str) -> dict[str, Any]:
+        geo = _REGION_GEO_DEFAULTS.get(self._slug(region))
+        if geo is not None:
+            return dict(geo)
+        return {
+            "latitude": 0.0,
+            "longitude": 0.0,
+            "country_code": "ZZ",
+            "time_zone": "",
+            "locality_hint": region,
+        }
+
+    def _trip_timestamp(self, *, hour: int, minute: int = 0) -> str:
+        trip_date = self.start_date or self.end_date or "1970-01-01"
+        return f"{trip_date}T{hour:02d}:{minute:02d}:00Z"
+
     def _build_runtime_bundle_payload(
         self, *, source_id: str, source_category: str
     ) -> dict[str, Any]:
@@ -273,12 +335,24 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         transport_total = float(165 if self.trip_mode == "business" else 95)
         activity_total = float(75 if self.trip_mode == "business" else 120)
         baseline_signal = 0.82 if self.trip_mode == "business" else 0.79
+        destination_geo = self._geo_payload(destination_name)
+        gateway_geo = dict(destination_geo)
         traveler_scope = (
             f"{self.traveler_party_kind}:{self.traveler_count}"
             if self.traveler_party_kind and self.traveler_count is not None
             else self.traveler_party_kind or "unspecified"
         )
         provenance_base = f"prov:{self.trip_id}:runtime"
+        captured_at = self._trip_timestamp(hour=0)
+        transport_timing: dict[str, Any] = {"duration_minutes": 45}
+        departure_local = self._trip_timestamp(hour=9)
+        arrival_local = self._trip_timestamp(hour=9, minute=45)
+        transport_timing.update(
+            {
+                "departure_local": departure_local,
+                "arrival_local": arrival_local,
+            }
+        )
 
         def _destination_source_ref(provenance_id: str, summary: str) -> dict[str, Any]:
             return {
@@ -297,7 +371,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
             subject_id: str,
             summary: str,
         ) -> dict[str, Any]:
-            return {
+            payload = {
                 "provenance_id": provenance_id,
                 "source_id": source_id,
                 "source_category": source_category,
@@ -305,8 +379,9 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                 "subject_id": subject_id,
                 "contribution_kind": "inventory",
                 "summary": summary,
-                "captured_at": "2026-04-11T00:00:00Z",
             }
+            payload["captured_at"] = captured_at
+            return payload
 
         lodging_option_id = f"lodging:{self.trip_id}:primary"
         transport_option_id = f"transport:{self.trip_id}:arrival"
@@ -329,12 +404,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                     "destination_id": gateway_id,
                     "place_kind": "site",
                     "name": f"{destination_name} gateway",
-                    "geo": {
-                        "latitude": 0.0,
-                        "longitude": 0.0,
-                        "country_code": "US",
-                        "time_zone": "UTC",
-                    },
+                    "geo": gateway_geo,
                     "source_refs": [
                         _destination_source_ref(
                             f"{provenance_base}:destination:gateway",
@@ -346,12 +416,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                     "destination_id": destination_id,
                     "place_kind": "city",
                     "name": destination_name,
-                    "geo": {
-                        "latitude": 0.0,
-                        "longitude": 0.0,
-                        "country_code": "US",
-                        "time_zone": "UTC",
-                    },
+                    "geo": destination_geo,
                     "source_refs": [
                         _destination_source_ref(
                             f"{provenance_base}:destination:primary",
@@ -399,11 +464,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                     "transport_kind": "rail",
                     "origin_id": gateway_id,
                     "destination_id": destination_id,
-                    "timing_summary": {
-                        "departure_local": "2026-04-11T09:00:00Z",
-                        "arrival_local": "2026-04-11T09:45:00Z",
-                        "duration_minutes": 45,
-                    },
+                    "timing_summary": transport_timing,
                     "segments": [
                         {
                             "segment_id": f"segment:{self.trip_id}:arrival-1",
@@ -542,7 +603,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                             )
                         ],
                     },
-                    captured_at="2026-04-11T00:00:00Z",
+                    captured_at=self._trip_timestamp(hour=0) or "",
                     metadata={"source_seed": "persisted_trip_runtime"},
                 )
             )
@@ -614,6 +675,9 @@ def _build_inventory_assembly_input(
     *,
     trip_id: str,
     trip_mode: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    trip_status: str | None = None,
     primary_regions: Sequence[str] = (),
     duration_days: int | None = None,
     trip_title: str | None = None,
@@ -633,6 +697,9 @@ def _build_inventory_assembly_input(
         trip_phase="inventory_selection",
         filters={
             "trip_mode": trip_mode,
+            "trip_status": trip_status or "",
+            "start_date": start_date or "",
+            "end_date": end_date or "",
             "duration_days": "" if duration_days is None else str(duration_days),
             "traveler_count": "" if traveler_count is None else str(traveler_count),
         },
@@ -640,6 +707,8 @@ def _build_inventory_assembly_input(
             "Persisted trip inventory assembly",
             f"trip_title:{trip_title or ''}",
             f"trip_summary:{(trip_summary or '')[:60]}",
+            f"start_date:{start_date or ''}",
+            f"end_date:{end_date or ''}",
         ],
     )
     if use_fixture_seed:
@@ -655,6 +724,8 @@ def _build_inventory_assembly_input(
             trip_id=trip_id,
             trip_mode=trip_mode,
             primary_regions=primary_regions,
+            start_date=start_date,
+            end_date=end_date,
             duration_days=duration_days,
             trip_title=trip_title,
             traveler_party_kind=traveler_party_kind,
@@ -844,6 +915,9 @@ def get_inventory_payload(
         trip_id=trip_id,
         trip_mode=trip_mode,
         primary_regions=primary_regions,
+        start_date=record.start_date if record is not None else None,
+        end_date=record.end_date if record is not None else None,
+        trip_status=record.status if record is not None else None,
         duration_days=duration_days,
         trip_title=record.title if record is not None else None,
         trip_summary=record.summary if record is not None else None,
