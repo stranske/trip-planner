@@ -11,6 +11,7 @@ verifier-context.md
 __pycache__/
 *.py[cod]
 .mypy_cache/
+.venv/
 
 # Application JavaScript dependencies belong under frontend/.
 # Keep repo-root installs out of git while preserving the workflow-local vendored helpers.
