@@ -8,14 +8,23 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from trip_planner.app.main import create_app
+from trip_planner.app.services.auth import AuthenticatedUser, create_account
 from trip_planner.app.services.feasibility import (
     build_feasibility_planner_outputs,
     build_feasibility_summary_payload,
 )
 from trip_planner.app.services.scenarios import _runtime_business_profile
+from trip_planner.app.services.trips import create_trip
+from trip_planner.app.services.workspace import get_workspace_payload
 from trip_planner.options import InventoryBundle
-from trip_planner.persistence.db import get_session_factory, reset_database_state
+from trip_planner.persistence.db import (
+    ensure_database_ready,
+    get_session_factory,
+    reset_database_state,
+)
 from trip_planner.persistence.models.activity import PersistedPlannerAction
+from trip_planner.persistence.models.policy import PersistedPolicyState
+from trip_planner.persistence.models.trip import PersistedTrip
 
 _LEGACY_FIXTURE_BUNDLE_IDS = {
     "bundle-osaka-gateway",
@@ -31,6 +40,17 @@ _FIXTURE_ADAPTER_MARKERS = {
     "Kyoto ranked scenario workspace",
     "Client summit ranked scenarios",
 }
+
+
+def _assert_payload_avoids_fixture_or_default_inventory_data(payload: dict[str, Any]) -> None:
+    bundle_ids = {bundle["bundle_id"] for bundle in payload["inventory_summary"]["bundles"]}
+    assert bundle_ids.isdisjoint(_LEGACY_FIXTURE_BUNDLE_IDS)
+
+    serialized_payload = json.dumps(payload, sort_keys=True).lower()
+    for marker in _FIXTURE_ADAPTER_MARKERS:
+        assert marker.lower() not in serialized_payload
+    for seeded_trip_id in ("trip-leisure-kyoto-draft", "trip-business-client-summit"):
+        assert seeded_trip_id not in serialized_payload
 
 
 def test_runtime_business_profile_normalizes_punctuated_regions_to_home_airports() -> None:
@@ -57,6 +77,7 @@ def test_runtime_business_profile_uses_valid_default_home_airport_for_unknown_re
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'workspace.db'}")
     reset_database_state()
+    ensure_database_ready()
     app = create_app()
 
     with TestClient(app) as test_client:
@@ -166,6 +187,25 @@ def test_workspace_endpoint_returns_not_found_for_unknown_trip(
     comparison_response = client.get("/api/workspace/trip-unknown/scenarios/compare")
 
     assert comparison_response.status_code == 404
+
+
+def test_workspace_openapi_documents_inventory_runtime_state_issue_schema() -> None:
+    app = create_app()
+    openapi_payload = app.openapi()
+    schemas = openapi_payload["components"]["schemas"]
+    workspace_schema = schemas["WorkspaceResponse"]
+    inventory_ref = workspace_schema["properties"]["inventory_summary"]["$ref"]
+    inventory_schema = schemas[inventory_ref.rsplit("/", maxsplit=1)[-1]]
+
+    runtime_state_ref = inventory_schema["properties"]["runtime_state"]["$ref"]
+    runtime_state_schema = schemas[runtime_state_ref.rsplit("/", maxsplit=1)[-1]]
+    assert runtime_state_schema["properties"]["issues"]["type"] == "array"
+
+    issue_ref = runtime_state_schema["properties"]["issues"]["items"]["$ref"]
+    issue_schema = schemas[issue_ref.rsplit("/", maxsplit=1)[-1]]
+    assert issue_schema["properties"]["code"]["anyOf"]
+    assert issue_schema["properties"]["reason"]["anyOf"]
+    assert issue_schema["properties"]["message"]["anyOf"]
 
 
 def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_business_trip(
@@ -288,6 +328,186 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
     )
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_review"
     assert payload["planner_memory"]["current_checkpoint_id"] is None
+
+
+def test_workspace_endpoint_creates_non_seeded_persisted_leisure_trip_with_runtime_frame(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Lisbon solo long weekend",
+            "summary": "Create a persisted leisure trip from runtime context.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-07-18",
+                "end_date": "2026-07-21",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+                "traveler_party": {
+                    "kind": "solo",
+                    "traveler_count": 1,
+                    "notes": "Prioritize museums and walkable neighborhoods.",
+                },
+            },
+        },
+    )
+    assert created.status_code == 201
+
+    trip = created.json()["trip"]
+    trip_id = trip["trip_id"]
+    assert trip_id
+    assert all(
+        seeded_id not in trip_id
+        for seeded_id in ("trip-leisure-kyoto-draft", "trip-business-client-summit")
+    )
+    assert trip["trip_frame"]["primary_regions"] == ["Lisbon"]
+    assert trip["trip_frame"]["start_date"] == "2026-07-18"
+    assert trip["trip_frame"]["end_date"] == "2026-07-21"
+    assert trip["trip_frame"]["traveler_party"]["kind"] == "solo"
+    assert trip["trip_frame"]["traveler_party"]["traveler_count"] == 1
+
+    workspace = client.get(f"/api/workspace/{trip_id}")
+    assert workspace.status_code == 200
+    workspace_payload = workspace.json()
+    workspace_trip = workspace_payload["trip_record"]["trip"]
+    assert workspace_trip["trip_id"] == trip_id
+    assert workspace_trip["trip_frame"]["primary_regions"] == ["Lisbon"]
+    assert workspace_trip["trip_frame"]["start_date"] == "2026-07-18"
+    assert workspace_trip["trip_frame"]["end_date"] == "2026-07-21"
+    assert workspace_trip["trip_frame"]["traveler_party"]["kind"] == "solo"
+    assert workspace_trip["trip_frame"]["traveler_party"]["traveler_count"] == 1
+    assert isinstance(workspace_payload["inventory_summary"]["bundle_count"], int)
+    assert workspace_payload["inventory_summary"]["bundle_count"] > 0
+    assert workspace_payload["scenario_comparison"] is not None
+    assert workspace_payload["scenario_comparison"]["baseline_scenario_id"]
+    assert workspace_payload["scenario_comparison"]["candidate_scenario_id"]
+    runtime_comparison = workspace_payload["runtime_scenario_comparison"]
+    runtime_scenarios = runtime_comparison["scenarios"]
+    assert runtime_scenarios
+    for scenario in runtime_scenarios:
+        assert scenario["scenario_id"]
+        assert scenario["metrics"]["estimated_total"] is not None
+        assert any(
+            scenario["metrics"][key] is not None for key in ("score", "travel_minutes", "transfers")
+        )
+    source_metadata = workspace_payload["inventory_summary"]["source_metadata"]
+    assert source_metadata["source_type"] == "persisted_trip"
+    assert source_metadata["origin"] == "runtime"
+    assert source_metadata["adapter_name"] == "persisted-trip-source-inventory"
+    provenance_context = source_metadata["provenance_context"]
+    assert provenance_context["trip_id"] == trip_id
+    assert provenance_context["trip_mode"] == "leisure"
+    assert provenance_context["source_id"] == "persisted-trip-runtime-source"
+    assert provenance_context["query_id"] == f"inventory-query:{trip_id}"
+    assert provenance_context["handoff_id"] == f"handoff:{trip_id}:inventory"
+    assert provenance_context["input_record_ids"]
+    assert provenance_context["issue_codes"] == []
+    assert provenance_context["filters"]["trip_mode"] == "leisure"
+    assert provenance_context["notes"]
+    serialized_source_metadata = json.dumps(source_metadata, sort_keys=True).lower()
+    for forbidden_marker in ("fixture", "seed", "demo", "persistedtripinventoryfixtureadapter"):
+        assert forbidden_marker not in serialized_source_metadata
+
+
+def test_workspace_endpoint_creates_non_seeded_persisted_business_trip_with_runtime_frame(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Chicago client renewal sprint",
+            "summary": "Business purpose: prepare Q3 renewal strategy with client stakeholders.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-08-11",
+                "end_date": "2026-08-14",
+                "duration_days": 4,
+                "primary_regions": ["Chicago"],
+                "traveler_party": {
+                    "kind": "team",
+                    "traveler_count": 4,
+                    "notes": "Client workshops and executive readout.",
+                },
+            },
+        },
+    )
+    assert created.status_code == 201
+
+    trip = created.json()["trip"]
+    trip_id = trip["trip_id"]
+    assert trip_id
+    assert all(
+        seeded_id not in trip_id
+        for seeded_id in ("trip-leisure-kyoto-draft", "trip-business-client-summit")
+    )
+    assert trip["trip_frame"]["primary_regions"] == ["Chicago"]
+    assert trip["trip_frame"]["start_date"] == "2026-08-11"
+    assert trip["trip_frame"]["end_date"] == "2026-08-14"
+    assert trip["trip_frame"]["traveler_party"]["kind"] == "team"
+    assert trip["trip_frame"]["traveler_party"]["traveler_count"] == 4
+    assert "Business purpose:" in trip["summary"]
+
+    workspace = client.get(f"/api/workspace/{trip_id}")
+    assert workspace.status_code == 200
+    workspace_payload = workspace.json()
+
+    assert isinstance(workspace_payload["inventory_summary"]["bundle_count"], int)
+    assert workspace_payload["inventory_summary"]["bundle_count"] > 0
+    assert workspace_payload["inventory_summary"]["bundles"]
+
+    assert workspace_payload["scenario_comparison"] is not None
+    assert workspace_payload["scenario_comparison"]["baseline_scenario_id"]
+    assert workspace_payload["scenario_comparison"]["candidate_scenario_id"]
+    runtime_comparison = workspace_payload["runtime_scenario_comparison"]
+    runtime_scenarios = runtime_comparison["scenarios"]
+    assert runtime_scenarios
+    for scenario in runtime_scenarios:
+        assert scenario["scenario_id"]
+        assert scenario["metrics"]["estimated_total"] is not None
+        assert any(
+            scenario["metrics"][key] is not None for key in ("score", "travel_minutes", "transfers")
+        )
+
+    budget_summary = workspace_payload["budget_state"]["summary"]
+    for numeric_field in ("planned_total", "actual_total", "remaining_total"):
+        assert budget_summary[numeric_field] is not None
+        assert isinstance(budget_summary[numeric_field], (int, float))
+    category_totals = budget_summary["category_summaries"]
+    assert category_totals
+    for category in category_totals:
+        for numeric_field in ("planned_amount", "actual_amount", "remaining_amount"):
+            assert category[numeric_field] is not None
+            assert isinstance(category[numeric_field], (int, float))
+
+    source_metadata = workspace_payload["inventory_summary"]["source_metadata"]
+    assert source_metadata["source_type"] == "persisted_trip"
+    assert source_metadata["origin"] == "runtime"
+    assert source_metadata["adapter_name"] == "persisted-trip-source-inventory"
+    provenance_context = source_metadata["provenance_context"]
+    assert provenance_context["trip_id"] == trip_id
+    assert provenance_context["trip_mode"] == "business"
+    assert provenance_context["source_id"] == "persisted-trip-runtime-source"
+    assert provenance_context["query_id"] == f"inventory-query:{trip_id}"
+    assert provenance_context["handoff_id"] == f"handoff:{trip_id}:inventory"
+    assert provenance_context["input_record_ids"]
+    assert provenance_context["issue_codes"] == []
+    assert provenance_context["filters"]["trip_mode"] == "business"
+    assert provenance_context["notes"]
+    serialized_source_metadata = json.dumps(source_metadata, sort_keys=True).lower()
+    for forbidden_marker in ("fixture", "seed", "demo", "persistedtripinventoryfixtureadapter"):
+        assert forbidden_marker not in serialized_source_metadata
+    serialized_business_metadata = json.dumps(
+        {"source_metadata": source_metadata, "provenance_context": provenance_context},
+        sort_keys=True,
+    ).lower()
+    for business_fixture_marker in (
+        "client_meeting_profile",
+        "conference_profile",
+        "site_visit_profile",
+        "policy_round_trip_exception",
+    ):
+        assert business_fixture_marker not in serialized_business_metadata
 
 
 @pytest.mark.parametrize(
@@ -507,6 +727,147 @@ def test_workspace_endpoint_surfaces_partial_runtime_state_for_under_scoped_trip
     assert "runtime scenario" in comparison_payload["summary"].lower()
 
 
+def test_workspace_endpoint_returns_coherent_partial_response_when_trip_dates_are_missing(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Dates missing draft",
+            "summary": "Verify degraded runtime behavior when persisted trip dates are absent.",
+            "mode": "business",
+            "trip_frame": {
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/workspace/{trip_id}")
+    assert response.status_code == 200
+    payload = response.json()
+
+    inventory_summary = payload["inventory_summary"]
+    runtime_state = inventory_summary["runtime_state"]
+    assert runtime_state["status"] == "partial"
+    assert isinstance(runtime_state.get("issues"), list)
+    assert runtime_state["issues"]
+    assert any(issue["reason"] == "missing_dates" for issue in runtime_state["issues"])
+
+    assert inventory_summary["bundle_count"] == 0
+    assert inventory_summary["bundles"] == []
+    assert payload["scenario_search"]["scenarios"]
+    assert payload["runtime_scenario_comparison"]["scenarios"]
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
+    _assert_payload_avoids_fixture_or_default_inventory_data(payload)
+
+
+def test_workspace_endpoint_returns_coherent_partial_response_when_destination_and_dates_are_missing(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Destination and dates missing draft",
+            "summary": "Verify degraded runtime behavior when destination and trip dates are absent.",
+            "mode": "leisure",
+            "trip_frame": {},
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/workspace/{trip_id}")
+    assert response.status_code == 200
+    payload = response.json()
+
+    inventory_summary = payload["inventory_summary"]
+    runtime_state = inventory_summary["runtime_state"]
+    assert runtime_state["status"] == "empty"
+    assert isinstance(runtime_state.get("issues"), list)
+    assert runtime_state["issues"]
+    reasons = {issue["reason"] for issue in runtime_state["issues"]}
+    assert {"missing_destination", "missing_dates"}.issubset(reasons)
+
+    assert inventory_summary["bundle_count"] == 0
+    assert inventory_summary["bundles"] == []
+    assert payload["scenario_search"]["scenarios"]
+    assert payload["runtime_scenario_comparison"]["scenarios"]
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
+    _assert_payload_avoids_fixture_or_default_inventory_data(payload)
+
+
+@pytest.mark.parametrize(
+    ("title", "trip_frame", "expected_issue_codes", "expected_reasons"),
+    [
+        (
+            "Missing destination draft",
+            {
+                "start_date": "2026-09-05",
+                "end_date": "2026-09-08",
+                "duration_days": 4,
+            },
+            {"missing_inventory_primary_regions"},
+            {"missing_destination"},
+        ),
+        (
+            "Missing dates draft",
+            {
+                "primary_regions": ["Lisbon"],
+            },
+            {"missing_inventory_trip_duration"},
+            {"missing_dates"},
+        ),
+        (
+            "Missing destination and dates draft",
+            {},
+            {"missing_inventory_primary_regions", "missing_inventory_trip_duration"},
+            {"missing_destination", "missing_dates"},
+        ),
+    ],
+)
+def test_workspace_endpoint_returns_coherent_partial_response_for_missing_trip_inputs(
+    client: TestClient,
+    title: str,
+    trip_frame: dict[str, Any],
+    expected_issue_codes: set[str],
+    expected_reasons: set[str],
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": title,
+            "summary": "Verify degraded persisted-trip runtime behavior when required inputs are missing.",
+            "mode": "leisure",
+            "trip_frame": trip_frame,
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/workspace/{trip_id}")
+    assert response.status_code == 200
+    payload = response.json()
+
+    inventory_summary = payload["inventory_summary"]
+    runtime_state = inventory_summary["runtime_state"]
+    assert isinstance(runtime_state.get("issues"), list)
+    assert runtime_state["issues"]
+
+    issue_codes = {issue["code"] for issue in runtime_state["issues"]}
+    issue_reasons = {issue["reason"] for issue in runtime_state["issues"]}
+    assert expected_issue_codes.issubset(issue_codes)
+    assert expected_reasons.issubset(issue_reasons)
+
+    assert inventory_summary["bundle_count"] == 0
+    assert inventory_summary["bundles"] == []
+    assert payload["scenario_search"]["scenarios"]
+    assert payload["runtime_scenario_comparison"]["scenarios"]
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
+    _assert_payload_avoids_fixture_or_default_inventory_data(payload)
+
+
 def test_workspace_endpoint_treats_whitespace_only_primary_regions_as_missing(
     client: TestClient,
 ) -> None:
@@ -585,6 +946,81 @@ def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_tri
     assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Policy posture loaded"
     assert payload["planner_panel_state"]["next_step_actions"][0]["target_section"] == "approval"
     assert "Navan" in payload["planner_panel_state"]["policy_evaluation"]["notes"][-2]
+
+
+def test_workspace_endpoint_handles_null_constraint_set_for_business_policy_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'workspace.db'}")
+    reset_database_state()
+    ensure_database_ready()
+
+    with get_session_factory()() as db_session:
+        account = create_account(
+            db_session,
+            email="workspace-null-constraint@example.com",
+            password="password123",
+            display_name="Workspace Owner",
+        )
+        user = AuthenticatedUser(
+            user_id=account.user_id,
+            email=account.email,
+            display_name=account.display_name,
+        )
+        trip = create_trip(
+            db_session,
+            user=user,
+            title="Null constraint set workspace",
+            summary="Business workspace should tolerate null policy constraint_set payloads.",
+            mode="business",
+            start_date="2026-05-12",
+            end_date="2026-05-15",
+            duration_days=4,
+            primary_regions=["Chicago"],
+            traveler_kind="team",
+            traveler_count=3,
+            traveler_notes="Business travel",
+        )
+        trip_id = trip["trip_id"]
+        trip_record = db_session.scalar(
+            select(PersistedTrip).where(PersistedTrip.trip_id == trip_id)
+        )
+        assert trip_record is not None
+        db_session.add(
+            PersistedPolicyState(
+                policy_state_id=f"policy-state:{trip_id}:null-constraint-set",
+                trip_id=trip_id,
+                user_id=trip_record.user_id,
+                owner_profile_id=trip_record.business_profile_id or f"profile:{trip_id}:business",
+                source_kind="tpp_sync",
+                source_request_id=f"request:{trip_id}",
+                source_correlation_id=f"correlation:{trip_id}",
+                policy_id="policy-standard-2026-02",
+                organization_id="org-enterprise",
+                policy_version="2026-02",
+                sync_status="current",
+                imported_at="2026-05-01T00:00:00Z",
+                constraint_set=None,
+                organization_context=None,
+                freshness=None,
+                raw_payload=None,
+                tags=[],
+                notes=["Inserted by regression test."],
+            )
+        )
+        db_session.commit()
+        payload = get_workspace_payload(db_session, user=user, trip_id=trip_id)
+
+    assert payload is not None
+    runtime_scenarios = payload["runtime_scenario_comparison"]["scenarios"]
+    assert runtime_scenarios
+    assert runtime_scenarios[0]["scenario_id"]
+    assert runtime_scenarios[0]["metrics"]["score"] is not None
+    assert payload["policy_state"]["constraint_set"]["policy_id"] == "policy-standard-2026-02"
+    assert payload["policy_state"]["constraint_set"]["required_booking_channels"] == []
+
+    reset_database_state()
 
 
 def test_workspace_endpoint_surfaces_user_visible_planner_memory(client: TestClient) -> None:

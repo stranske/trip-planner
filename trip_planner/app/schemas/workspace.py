@@ -3,6 +3,46 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class InventoryRuntimeIssue(BaseModel):
+    issue_id: str | None = None
+    stage: str | None = None
+    severity: str | None = None
+    code: str | None = None
+    message: str | None = None
+    reason: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+    affected_record_ids: list[str] = Field(default_factory=list)
+
+
+class InventoryRuntimeState(BaseModel):
+    status: str = Field(description="Runtime readiness status for inventory assembly.")
+    title: str = Field(description="Short runtime readiness heading.")
+    summary: str = Field(description="Human-readable runtime readiness summary.")
+    issues: list[InventoryRuntimeIssue] = Field(
+        default_factory=list,
+        description="Adapter and runtime issues describing missing inputs or blocked inventory reads.",
+    )
+
+
+class InventorySummary(BaseModel):
+    bundle_count: int = Field(description="Number of assembled inventory bundles.")
+    bundles: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Inventory bundle previews derived from persisted runtime context.",
+    )
+    notes: list[str] = Field(
+        default_factory=list,
+        description="Inventory assembly notes for current workspace readiness.",
+    )
+    runtime_state: InventoryRuntimeState = Field(
+        description="Runtime state details including AdapterIssue-derived issue entries."
+    )
+    source_metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Source and provenance metadata for the runtime inventory assembly path.",
+    )
+
+
 class WorkspaceResponse(BaseModel):
     trip_record: dict[str, Any] = Field(
         description="Persisted trip record payload for the workspace."
@@ -40,7 +80,7 @@ class WorkspaceResponse(BaseModel):
     feasibility_summary: dict[str, Any] = Field(
         description="Structured feasibility and move-cost assessments derived from workspace inventory bundles.",
     )
-    inventory_summary: dict[str, Any] = Field(
+    inventory_summary: InventorySummary = Field(
         description="Bundle summary assembled from normalized option/domain records for the workspace surface."
     )
     budget_state: dict[str, Any] = Field(
