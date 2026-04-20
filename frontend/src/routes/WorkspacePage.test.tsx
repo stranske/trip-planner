@@ -952,11 +952,17 @@ describe("WorkspacePage", () => {
     expect(
       screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })
     ).toBeInTheDocument();
+    expect(screen.getAllByText("kyoto -> uji -> kyoto").length).toBeGreaterThan(0);
+    expect(screen.getByText("93 / 100 planner score")).toBeInTheDocument();
+    expect(screen.getAllByText("Balanced Kyoto culture baseline").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 
     expect(
       screen.getByRole("heading", { name: "Map preview for Kyoto plus Osaka fallback" })
     ).toBeInTheDocument();
+    expect(screen.getAllByText("kyoto -> osaka -> kyoto").length).toBeGreaterThan(0);
+    expect(screen.getByText("88 / 100 planner score")).toBeInTheDocument();
+    expect(screen.getAllByText("Higher-energy fallback with extra transfers").length).toBeGreaterThan(0);
     expect(within(screen.getByLabelText("Route context map")).getAllByText("Osaka").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Higher transfer load to preserve nightlife breadth.").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Selected scenario affordances" })).toBeInTheDocument();
@@ -1007,6 +1013,9 @@ describe("WorkspacePage", () => {
 
     expect(screen.getAllByText("Moderate travel friction with a clear cultural center of gravity.").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" }));
+    expect(
+      screen.getByRole("heading", { name: "Map preview for Kyoto plus Osaka fallback" })
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Osaka rainy-day fallback").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Higher transfer load to preserve nightlife breadth.").length).toBeGreaterThan(0);
 

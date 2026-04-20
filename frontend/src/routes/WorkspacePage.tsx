@@ -105,11 +105,7 @@ function resolveMapScenarioId(workspace: WorkspaceData): string | null {
   return workspace.runtime_scenario_comparison.lead_scenario_id;
 }
 
-function buildTimelineStops(workspace: WorkspaceData): TimelineStop[] {
-  const { scenario } = resolveActiveScenario(workspace);
-  const tripDuration = workspace.trip_record.trip.trip_frame.duration_days;
-  const routeSequence = scenario?.scenario_summary.route_sequence ?? [];
-
+function buildTimelineStops(routeSequence: string[], tripDuration: number | null): TimelineStop[] {
   if (tripDuration == null || tripDuration <= 0 || routeSequence.length === 0) {
     return [];
   }
@@ -480,11 +476,8 @@ function WorkspacePageContent({
   trips: TripRecord[];
 }) {
   const [currentWorkspace, setCurrentWorkspace] = useState(workspace);
-  const [selectedMapScenarioId, setSelectedMapScenarioId] = useState(() =>
+  const [selectedScenarioId, setSelectedScenarioId] = useState(() =>
     resolveMapScenarioId(workspace)
-  );
-  const [selectedScenarioComparisonId, setSelectedScenarioComparisonId] = useState<string | null>(
-    () => workspace.runtime_scenario_comparison.lead_scenario_id
   );
   const [selectedTripComparisonId, setSelectedTripComparisonId] = useState<string | null>(
     () => trips.find((trip) => trip.trip_id !== workspace.trip_record.trip.trip_id)?.trip_id ?? null
@@ -505,10 +498,7 @@ function WorkspacePageContent({
   const isCompactLayout = useCompactWorkspaceLayout();
   useEffect(() => {
     setCurrentWorkspace(workspace);
-    setSelectedMapScenarioId(resolveMapScenarioId(workspace));
-    setSelectedScenarioComparisonId(
-      workspace.runtime_scenario_comparison.lead_scenario_id
-    );
+    setSelectedScenarioId(resolveMapScenarioId(workspace));
   }, [workspace]);
 
   useEffect(() => {
@@ -564,15 +554,19 @@ function WorkspacePageContent({
     };
   }, [workspace.trip_record.trip.trip_id]);
 
-  const timelineStops = buildTimelineStops(currentWorkspace);
   const { trip } = currentWorkspace.trip_record;
   const activeScenario = resolveActiveScenario(currentWorkspace);
-  const activeRuntimeScenario =
+  const selectedRuntimeScenario =
     currentWorkspace.runtime_scenario_comparison.scenarios.find(
-      (scenario) => scenario.scenario_id === (selectedMapScenarioId ?? activeScenario.scenario?.scenario_id)
+      (scenario) => scenario.scenario_id === (selectedScenarioId ?? activeScenario.scenario?.scenario_id)
     ) ??
     currentWorkspace.runtime_scenario_comparison.scenarios[0] ??
     null;
+  const timelineRouteSequence =
+    selectedRuntimeScenario?.route_sequence ??
+    activeScenario.scenario?.scenario_summary.route_sequence ??
+    [];
+  const timelineStops = buildTimelineStops(timelineRouteSequence, trip.trip_frame.duration_days);
   const proposalFollowUp = currentWorkspace.proposal_state?.follow_up ?? null;
   const renderableProposalFollowUp = hasRenderableFollowUp(proposalFollowUp)
     ? proposalFollowUp
@@ -585,6 +579,9 @@ function WorkspacePageContent({
           renderableProposalFollowUp
         );
   const scenarioPolicyPosture = formatPolicyPosture(currentWorkspace);
+  function handleScenarioSelection(scenarioId: string) {
+    setSelectedScenarioId(scenarioId);
+  }
 
   async function handleDecisionAnswer(decisionId: string, choice: string) {
     setPlannerError(null);
@@ -860,8 +857,8 @@ function WorkspacePageContent({
           comparison={currentWorkspace.runtime_scenario_comparison}
           scenarioComparisonSummary={currentWorkspace.scenario_comparison?.summary}
           scenarioFocusAreas={currentWorkspace.scenario_comparison?.focus_areas ?? []}
-          activeScenarioId={selectedMapScenarioId}
-          onSelectScenario={setSelectedMapScenarioId}
+          activeScenarioId={selectedScenarioId}
+          onSelectScenario={handleScenarioSelection}
           bundles={currentWorkspace.inventory_summary.bundles}
           feasibilitySummary={currentWorkspace.feasibility_summary}
           tripPrimaryRegions={trip.trip_frame.primary_regions}
@@ -872,8 +869,8 @@ function WorkspacePageContent({
         <ScenarioComparison
           comparison={currentWorkspace.runtime_scenario_comparison}
           savedScenarios={currentWorkspace.saved_scenarios}
-          selectedScenarioId={selectedScenarioComparisonId}
-          onSelectScenario={setSelectedScenarioComparisonId}
+          selectedScenarioId={selectedScenarioId}
+          onSelectScenario={handleScenarioSelection}
         />
 
         <TripComparison
@@ -1022,7 +1019,7 @@ function WorkspacePageContent({
           ) : (
             <>
               <h2>{isCompactLayout ? "Compact day-by-day review" : "Trip rhythm and day sequencing"}</h2>
-              <p>{activeScenario.scenario.scenario_summary.headline}</p>
+              <p>{selectedRuntimeScenario?.summary ?? activeScenario.scenario.scenario_summary.headline}</p>
               <div className="timeline-summary-grid" aria-label="Timeline summary">
                 <article className="timeline-summary-card">
                   <p className="scenario-kicker">Duration</p>
@@ -1037,18 +1034,30 @@ function WorkspacePageContent({
                   <p className="scenario-kicker">Route shape</p>
                   <h3>{timelineStops.length} review checkpoints</h3>
                   <p>
-                    {activeRuntimeScenario?.route_summary ??
+                    {selectedRuntimeScenario?.route_summary ??
                       activeScenario.scenario.scenario_summary.route_sequence.join(" -> ")}
                   </p>
                 </article>
                 <article className="timeline-summary-card">
                   <p className="scenario-kicker">Pacing</p>
                   <h3>
-                    {activeRuntimeScenario == null
+                    {selectedRuntimeScenario == null
                       ? "Planner score pending"
-                      : `${formatScenarioScore(activeRuntimeScenario.metrics.score)} planner score`}
+                      : `${formatScenarioScore(selectedRuntimeScenario.metrics.score)} planner score`}
                   </h3>
                   <p>{scenarioPolicyPosture} packet posture for the current workspace.</p>
+                </article>
+                <article className="timeline-summary-card">
+                  <p className="scenario-kicker">Options</p>
+                  <h3>
+                    {selectedRuntimeScenario == null
+                      ? "Option count pending"
+                      : `${selectedRuntimeScenario.option_count} mapped options`}
+                  </h3>
+                  <p>
+                    {selectedRuntimeScenario?.comparison_note ??
+                      "Option-level details update when scenario comparison data is available."}
+                  </p>
                 </article>
               </div>
               <ol className="timeline-list" aria-label="Trip timeline sequence">
@@ -1083,7 +1092,7 @@ function WorkspacePageContent({
             <div className="scenario-review-grid" aria-label="Scenario review board">
               {currentWorkspace.runtime_scenario_comparison.scenarios.map((scenario) => {
                 const reviewMetrics = buildScenarioReviewMetrics(currentWorkspace, scenario);
-                const isSelected = scenario.scenario_id === selectedScenarioComparisonId;
+                const isSelected = scenario.scenario_id === selectedScenarioId;
 
                 return (
                   <article
