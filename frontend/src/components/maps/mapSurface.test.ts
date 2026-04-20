@@ -59,11 +59,19 @@ describe("mapSurface", () => {
         notes: [],
         assessments: [],
       },
+      scenarioComparisonSummary: "Kyoto baseline remains preferred with Osaka preserved for fallback.",
+      scenarioFocusAreas: ["route_coherence", "weather_resilience"],
+      tripPrimaryRegions: ["JP-26", "JP-27"],
+      policyPosture: "Approval-ready",
       googleMapsApiKey: "test-key",
     });
 
     expect(model.provider.kind).toBe("google-maps-js");
     expect(model.destinationAnchors).toEqual(["Kyoto", "Uji"]);
+    expect(model.destinationContext).toEqual(["Kyoto", "Uji", "JP-26", "JP-27"]);
+    expect(model.policyPosture).toBe("Approval-ready");
+    expect(model.scenarioComparisonSummary).toContain("Kyoto baseline remains preferred");
+    expect(model.scenarioFocusAreas).toEqual(["route_coherence", "weather_resilience"]);
     expect(model.routeStops.map((stop) => stop.label)).toEqual(["Kyoto", "Uji", "Kyoto"]);
     expect(model.routeSegments).toHaveLength(2);
     expect(model.markers.map((marker) => marker.kind)).toEqual([
@@ -117,6 +125,9 @@ describe("mapSurface", () => {
     expect(model.provider.kind).toBe("fallback");
     expect(model.provider.summary).toContain("bounded textual route fallback");
     expect(model.provider.status).toBe("misconfigured");
+    expect(model.scenarioComparisonSummary).toBe(
+      "Scenario comparison summary is still syncing to this workspace review surface."
+    );
   });
 
   it("keeps route context visible when the provider reports a load error", () => {

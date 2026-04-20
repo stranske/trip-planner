@@ -62,6 +62,10 @@ export type TripMapSurfaceModel = {
   routeSegments: RouteSegment[];
   markers: MapMarker[];
   destinationAnchors: string[];
+  destinationContext: string[];
+  scenarioFocusAreas: string[];
+  scenarioComparisonSummary: string;
+  policyPosture: string;
   feasibilitySummary: string;
   routeState: "ready" | "sparse";
   routeWarning: string | null;
@@ -172,6 +176,32 @@ function deriveRouteWarning(activeScenario: TripMapScenario, feasibilitySummary:
   return null;
 }
 
+function normalizeLabel(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed === "") {
+    return "";
+  }
+  if (trimmed.includes("-") || trimmed.includes("_")) {
+    return humanizeStop(trimmed);
+  }
+  return trimmed;
+}
+
+function buildDestinationContext({
+  bundles,
+  routeStops,
+  tripPrimaryRegions,
+}: {
+  bundles: InventoryBundle[];
+  routeStops: RouteStop[];
+  tripPrimaryRegions: string[];
+}): string[] {
+  const fromBundles = bundles.flatMap((bundle) => bundle.destination_names).map(normalizeLabel).filter(Boolean);
+  const fromRoute = routeStops.map((stop) => stop.label.trim()).filter(Boolean);
+  const fromTripFrame = tripPrimaryRegions.map(normalizeLabel).filter(Boolean);
+  return Array.from(new Set([...fromRoute, ...fromBundles, ...fromTripFrame]));
+}
+
 function buildRouteSegments(routeStops: RouteStop[], routeWarning: string | null): RouteSegment[] {
   return routeStops.slice(0, -1).map((stop, index) => {
     const nextStop = routeStops[index + 1];
@@ -193,11 +223,13 @@ function buildMarkers({
   bundles,
   routeStops,
   routeWarning,
+  policyPosture,
 }: {
   activeScenario: TripMapScenario;
   bundles: InventoryBundle[];
   routeStops: RouteStop[];
   routeWarning: string | null;
+  policyPosture: string;
 }): MapMarker[] {
   const stopMarkers = routeStops.map((stop, index) => ({
     id: `${stop.id}-marker`,
@@ -232,7 +264,7 @@ function buildMarkers({
             kind: "policy" as const,
             label: "Route burden warning",
             summary: routeWarning,
-            detail: activeScenario.comparison_note,
+            detail: `${activeScenario.comparison_note} Policy posture: ${policyPosture}.`,
             x: 82,
             y: 18,
             emphasized: true,
@@ -246,23 +278,23 @@ export function buildTripMapSurfaceModel({
   activeScenario,
   bundles,
   feasibilitySummary,
+  scenarioComparisonSummary,
+  scenarioFocusAreas,
+  tripPrimaryRegions = [],
+  policyPosture = "review pending",
   googleMapsApiKey,
   providerLoadState = "ready",
 }: {
   activeScenario: TripMapScenario;
   bundles: InventoryBundle[];
   feasibilitySummary: FeasibilitySummary;
+  scenarioComparisonSummary?: string | null;
+  scenarioFocusAreas?: string[];
+  tripPrimaryRegions?: string[];
+  policyPosture?: string;
   googleMapsApiKey?: string | null;
   providerLoadState?: MapProviderLoadState;
 }): TripMapSurfaceModel {
-  const destinationAnchors = Array.from(
-    new Set(
-      bundles
-        .flatMap((bundle) => bundle.destination_names)
-        .map((destination) => destination.trim())
-        .filter(Boolean)
-    )
-  );
   const routeStops = activeScenario.route_sequence.map((stop, index) => {
     const coordinate = coordinateForRouteIndex(index, activeScenario.route_sequence.length);
     return {
@@ -273,10 +305,29 @@ export function buildTripMapSurfaceModel({
       y: coordinate.y,
     };
   });
+  const destinationContext = buildDestinationContext({
+    bundles,
+    routeStops,
+    tripPrimaryRegions,
+  });
+  const destinationAnchors = Array.from(
+    new Set(
+      bundles
+        .flatMap((bundle) => bundle.destination_names)
+        .map((destination) => normalizeLabel(destination))
+        .filter(Boolean)
+    )
+  );
   const trimmedApiKey = googleMapsApiKey?.trim() ?? "";
   const routeWarning = deriveRouteWarning(activeScenario, feasibilitySummary);
   const routeSegments = buildRouteSegments(routeStops, routeWarning);
-  const markers = buildMarkers({ activeScenario, bundles, routeStops, routeWarning });
+  const markers = buildMarkers({
+    activeScenario,
+    bundles,
+    routeStops,
+    routeWarning,
+    policyPosture,
+  });
   const routeState = routeStops.length >= 2 ? "ready" : "sparse";
   let provider: MapSurfaceProvider;
 
@@ -329,6 +380,12 @@ export function buildTripMapSurfaceModel({
     routeSegments,
     markers,
     destinationAnchors,
+    destinationContext,
+    scenarioFocusAreas: scenarioFocusAreas?.filter(Boolean) ?? [],
+    scenarioComparisonSummary:
+      scenarioComparisonSummary?.trim() ||
+      "Scenario comparison summary is still syncing to this workspace review surface.",
+    policyPosture,
     feasibilitySummary: summarizeFeasibility(feasibilitySummary, destinationAnchors),
     routeState,
     routeWarning,

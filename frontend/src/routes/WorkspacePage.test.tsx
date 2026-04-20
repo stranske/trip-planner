@@ -755,7 +755,7 @@ describe("WorkspacePage", () => {
     });
     expect(screen.getByText("read workspace state")).toBeInTheDocument();
     expect(routeContextMap).toBeInTheDocument();
-    expect(screen.getByText("Destination anchors")).toBeInTheDocument();
+    expect(screen.getByText("Destination context")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trip rhythm and day sequencing" })).toBeInTheDocument();
     expect(screen.getByLabelText("Timeline summary")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Review-ready scenario tradeoffs" })).toBeInTheDocument();

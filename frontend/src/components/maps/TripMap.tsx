@@ -12,17 +12,25 @@ type TripMapScenario = RuntimeScenarioComparison["scenarios"][number];
 
 export function TripMap({
   comparison,
+  scenarioComparisonSummary,
+  scenarioFocusAreas,
   activeScenarioId,
   onSelectScenario,
   bundles,
   feasibilitySummary,
+  tripPrimaryRegions,
+  policyPosture,
   compactLayout,
 }: {
   comparison: RuntimeScenarioComparison;
+  scenarioComparisonSummary?: string | null;
+  scenarioFocusAreas?: string[];
   activeScenarioId: string | null;
   onSelectScenario: (scenarioId: string) => void;
   bundles: InventoryBundle[];
   feasibilitySummary: FeasibilitySummary;
+  tripPrimaryRegions: string[];
+  policyPosture: string;
   compactLayout: boolean;
 }) {
   const activeScenario =
@@ -49,6 +57,10 @@ export function TripMap({
       onSelectScenario={onSelectScenario}
       bundles={bundles}
       feasibilitySummary={feasibilitySummary}
+      scenarioComparisonSummary={scenarioComparisonSummary}
+      scenarioFocusAreas={scenarioFocusAreas}
+      tripPrimaryRegions={tripPrimaryRegions}
+      policyPosture={policyPosture}
       compactLayout={compactLayout}
     />
   );
@@ -60,6 +72,10 @@ function ActiveTripMap({
   onSelectScenario,
   bundles,
   feasibilitySummary,
+  scenarioComparisonSummary,
+  scenarioFocusAreas,
+  tripPrimaryRegions,
+  policyPosture,
   compactLayout,
 }: {
   activeScenario: TripMapScenario;
@@ -67,6 +83,10 @@ function ActiveTripMap({
   onSelectScenario: (scenarioId: string) => void;
   bundles: InventoryBundle[];
   feasibilitySummary: FeasibilitySummary;
+  scenarioComparisonSummary?: string | null;
+  scenarioFocusAreas?: string[];
+  tripPrimaryRegions: string[];
+  policyPosture: string;
   compactLayout: boolean;
 }) {
   const providerLoadState =
@@ -75,6 +95,10 @@ function ActiveTripMap({
     activeScenario,
     bundles,
     feasibilitySummary,
+    scenarioComparisonSummary,
+    scenarioFocusAreas,
+    tripPrimaryRegions,
+    policyPosture,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_BROWSER_API_KEY,
     providerLoadState,
   });
@@ -186,18 +210,30 @@ function ActiveTripMap({
             </div>
           </dl>
           <article className="decision-card">
+            <h3>Scenario comparison</h3>
+            <p>{mapSurface.scenarioComparisonSummary}</p>
+            {mapSurface.scenarioFocusAreas.length > 0 ? (
+              <ul className="map-highlight-list">
+                {mapSurface.scenarioFocusAreas.slice(0, 3).map((focusArea) => (
+                  <li key={focusArea}>{focusArea.replace(/_/g, " ")}</li>
+                ))}
+              </ul>
+            ) : null}
+          </article>
+          <article className="decision-card">
             <h3>Route summary</h3>
             <p>{activeScenario.route_summary}</p>
             <p className="muted-copy">{activeScenario.comparison_note}</p>
           </article>
           <article className="decision-card">
-            <h3>Destination anchors</h3>
+            <h3>Destination context</h3>
+            <p className="muted-copy">Policy posture: {mapSurface.policyPosture}</p>
             <p>{mapSurface.feasibilitySummary}</p>
             <div className="map-anchor-list">
-              {mapSurface.destinationAnchors.length === 0 ? (
+              {mapSurface.destinationContext.length === 0 ? (
                 <span className="map-anchor-chip map-anchor-chip-muted">Awaiting option anchors</span>
               ) : (
-                mapSurface.destinationAnchors.map((destination) => (
+                mapSurface.destinationContext.map((destination) => (
                   <span key={destination} className="map-anchor-chip">
                     {destination}
                   </span>

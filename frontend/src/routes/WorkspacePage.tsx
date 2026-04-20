@@ -858,10 +858,14 @@ function WorkspacePageContent({
 
         <TripMap
           comparison={currentWorkspace.runtime_scenario_comparison}
+          scenarioComparisonSummary={currentWorkspace.scenario_comparison?.summary}
+          scenarioFocusAreas={currentWorkspace.scenario_comparison?.focus_areas ?? []}
           activeScenarioId={selectedMapScenarioId}
           onSelectScenario={setSelectedMapScenarioId}
           bundles={currentWorkspace.inventory_summary.bundles}
           feasibilitySummary={currentWorkspace.feasibility_summary}
+          tripPrimaryRegions={trip.trip_frame.primary_regions}
+          policyPosture={scenarioPolicyPosture}
           compactLayout={isCompactLayout}
         />
 
