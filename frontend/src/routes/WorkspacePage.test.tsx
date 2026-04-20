@@ -818,6 +818,7 @@ describe("WorkspacePage", () => {
       ],
     } satisfies PlannerSessionResponse;
     mockedSubmitPlannerTurn.mockResolvedValue(nextPlannerSession);
+
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve(workspacePayload),
       trips: Promise.resolve(tripComparisonPayload),
@@ -843,6 +844,54 @@ describe("WorkspacePage", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("read_workspace_state: Read the current workspace state.")).toBeInTheDocument();
     expect(screen.getByLabelText("Message")).toHaveValue("");
+  });
+
+  it("labels the planner panel as deterministic fallback when runtime metadata is absent", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Planner runtime state")).toBeInTheDocument();
+    });
+
+    const runtime = screen.getByLabelText("Planner runtime state");
+    expect(within(runtime).getByText("Deterministic fallback planner")).toHaveClass(
+      "planner-runtime-pill--fallback"
+    );
+    expect(within(runtime).getByText("Fallback")).toBeInTheDocument();
+  });
+
+  it("labels the planner panel as model-backed when runtime metadata reports a configured model", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        planner_panel_state: {
+          ...workspacePayload.planner_panel_state,
+          planner_behavior: {
+            ...workspacePayload.planner_panel_state.planner_behavior,
+            runtime_status: "ready",
+            runtime_mode: "model",
+            runtime_label: "Model-backed planner",
+            runtime_summary: "Planner model configuration is active for this workspace.",
+          },
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Planner runtime state")).toBeInTheDocument();
+    });
+
+    const runtime = screen.getByLabelText("Planner runtime state");
+    expect(within(runtime).getByText("Model-backed planner")).toHaveClass("planner-runtime-pill--ready");
+    expect(within(runtime).getByText("Model-backed")).toBeInTheDocument();
   });
 
   it("updates the map surface when a different scenario preview is selected", async () => {

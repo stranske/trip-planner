@@ -86,6 +86,30 @@ def _create_trip(client: TestClient) -> str:
     return response.json()["trip"]["trip_id"]
 
 
+def _create_business_trip(client: TestClient) -> str:
+    response = client.post(
+        "/api/trips",
+        json={
+            "title": "Planner API business kickoff",
+            "summary": "Need policy and proposal-backed planner context.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+                "traveler_party": {
+                    "kind": "solo",
+                    "traveler_count": 1,
+                    "notes": "Planner business API test",
+                },
+            },
+        },
+    )
+    assert response.status_code == 201
+    return response.json()["trip"]["trip_id"]
+
+
 def test_planner_session_endpoint_bootstraps_trip_scoped_session(client: TestClient) -> None:
     trip_id = _create_trip(client)
 
@@ -213,7 +237,10 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
     assert isinstance(runtime_context, dict)
     assert runtime_context["trip"]["trip_id"] == trip_id
     assert runtime_context["context_readiness"]["status"] == "ready"
-    assert runtime_context["autonomy_preferences"]["interaction_state"]["initiative_level"] == "balanced"
+    assert (
+        runtime_context["autonomy_preferences"]["interaction_state"]["initiative_level"]
+        == "balanced"
+    )
     assert runtime_context["budget_state"]["summary"]["currency"] == "USD"
     assert "policy_state" in runtime_context
     assert "proposal_state" in runtime_context
@@ -225,7 +252,10 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
             .where(PersistedPlannerAction.trip_id == trip_id)
             .order_by(PersistedPlannerAction.occurred_at.asc())
         ).all()
-        assert stored[-1].payload["tool_calls"][0]["summary"] == "Read the current planner panel workspace state."
+        assert (
+            stored[-1].payload["tool_calls"][0]["summary"]
+            == "Read the current planner panel workspace state."
+        )
         assert stored[-1].payload["selected_planning_mode"] == "leisure"
         assert stored[-1].payload["runtime_mode"] == "model"
         checkpoint = db_session.get(
@@ -235,6 +265,103 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
         assert checkpoint is not None
         assert checkpoint.metadata_payload["tool_call_count"] == 1
         assert checkpoint.metadata_payload["selected_planning_mode"] == "leisure"
+
+
+def test_planner_turn_tool_reads_are_grounded_in_persisted_workspace_state(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trip_id = _create_business_trip(client)
+    seeded_budget = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": "Seed planner budget state before model reads.",
+            "tool_calls": [
+                {"tool_name": "update_budget_plan", "arguments": {"total_amount": 2400}}
+            ],
+        },
+    )
+    assert seeded_budget.status_code == 200
+
+    expected_workspace = client.get(f"/api/workspace/{trip_id}")
+    expected_budget = client.get(f"/api/workspace/{trip_id}/budget")
+    expected_policy = client.get(f"/api/workspace/{trip_id}/policy")
+    expected_proposal = client.get(f"/api/workspace/{trip_id}/proposal")
+    assert expected_workspace.status_code == 200
+    assert expected_budget.status_code == 200
+    assert expected_policy.status_code == 200
+    assert expected_proposal.status_code == 200
+
+    fake_model = FakePlannerChatModel(
+        {
+            "content": "I pulled the latest persisted planner state before recommending a direction.",
+            "tool_calls": [
+                {"tool_name": "read_workspace_state", "arguments": {}},
+                {"tool_name": "refresh_inventory", "arguments": {}},
+                {"tool_name": "refresh_scenarios", "arguments": {}},
+                {"tool_name": "read_budget_state", "arguments": {}},
+                {"tool_name": "read_policy_state", "arguments": {}},
+                {"tool_name": "read_proposal_state", "arguments": {}},
+            ],
+        }
+    )
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL", "fake-planner-model")
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-test-key")
+    set_planner_chat_model_factory_for_tests(lambda _: fake_model)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Ground your recommendation in persisted workspace and approval state."},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    planner_reply = payload["messages"][-1]
+    assert payload["runtime"]["mode"] == "model"
+    assert "Tool results:" in planner_reply["content"]
+    tool_outputs = {item["tool_name"]: item for item in planner_reply["tool_calls"]}
+    assert set(tool_outputs) == {
+        "read_workspace_state",
+        "refresh_inventory",
+        "refresh_scenarios",
+        "read_budget_state",
+        "read_policy_state",
+        "read_proposal_state",
+    }
+    for result in tool_outputs.values():
+        assert result["status"] == "completed"
+
+    workspace_payload = expected_workspace.json()
+    budget_payload = expected_budget.json()
+    policy_payload = expected_policy.json()
+    proposal_payload = expected_proposal.json()
+    assert (
+        tool_outputs["read_workspace_state"]["output"]["trip_title"]
+        == workspace_payload["trip_record"]["trip"]["title"]
+    )
+    assert tool_outputs["read_workspace_state"]["output"]["pending_decision_count"] == len(
+        workspace_payload["planner_panel_state"]["pending_decisions"]
+    )
+    assert (
+        tool_outputs["refresh_inventory"]["output"]["bundle_count"]
+        == workspace_payload["inventory_summary"]["bundle_count"]
+    )
+    assert (
+        tool_outputs["refresh_scenarios"]["output"]["lead_scenario_id"]
+        == workspace_payload["runtime_scenario_comparison"]["lead_scenario_id"]
+    )
+    assert (
+        tool_outputs["read_budget_state"]["output"]["planned_total"]
+        == budget_payload["summary"]["planned_total"]
+    )
+    assert (
+        tool_outputs["read_policy_state"]["output"]["status"] == policy_payload["summary"]["status"]
+    )
+    assert (
+        tool_outputs["read_proposal_state"]["output"]["status"]
+        == proposal_payload["summary"]["status"]
+    )
 
 
 def test_planner_turn_records_model_tool_errors_without_fabricating_success(
@@ -401,7 +528,10 @@ def test_planner_turn_normalizes_lowercase_budget_currency(client: TestClient) -
             .where(PersistedPlannerAction.trip_id == trip_id)
             .order_by(PersistedPlannerAction.occurred_at.asc())
         ).all()
-        assert stored[-1].payload["tool_calls"][0]["summary"] == "Updated the workspace budget plan to USD 900.00."
+        assert (
+            stored[-1].payload["tool_calls"][0]["summary"]
+            == "Updated the workspace budget plan to USD 900.00."
+        )
 
 
 def test_planner_resume_returns_prior_conversation_history(client: TestClient) -> None:
@@ -437,9 +567,7 @@ def test_planner_resume_regenerates_memory_from_raw_transcript(client: TestClien
             )
         )
         db_session.execute(
-            delete(PersistedPlannerCheckpoint).where(
-                PersistedPlannerCheckpoint.trip_id == trip_id
-            )
+            delete(PersistedPlannerCheckpoint).where(PersistedPlannerCheckpoint.trip_id == trip_id)
         )
         session = db_session.get(PersistedPlanningSessionState, f"session:{trip_id}")
         assert session is not None
