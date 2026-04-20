@@ -332,6 +332,17 @@ def test_workspace_endpoint_creates_non_seeded_persisted_leisure_trip_with_runti
     workspace_payload = workspace.json()
     assert isinstance(workspace_payload["inventory_summary"]["bundle_count"], int)
     assert workspace_payload["inventory_summary"]["bundle_count"] > 0
+    assert workspace_payload["scenario_comparison"] is not None
+    assert workspace_payload["scenario_comparison"]["baseline_scenario_id"]
+    runtime_comparison = workspace_payload["runtime_scenario_comparison"]
+    assert runtime_comparison["scenarios"]
+    first_scenario = runtime_comparison["scenarios"][0]
+    assert first_scenario["scenario_id"]
+    assert first_scenario["metrics"]["estimated_total"] is not None
+    assert any(
+        first_scenario["metrics"][key] is not None
+        for key in ("score", "travel_minutes", "transfers")
+    )
 
 
 @pytest.mark.parametrize(
