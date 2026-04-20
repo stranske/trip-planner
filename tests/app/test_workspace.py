@@ -178,6 +178,25 @@ def test_workspace_endpoint_returns_not_found_for_unknown_trip(
     assert comparison_response.status_code == 404
 
 
+def test_workspace_openapi_documents_inventory_runtime_state_issue_schema() -> None:
+    app = create_app()
+    openapi_payload = app.openapi()
+    schemas = openapi_payload["components"]["schemas"]
+    workspace_schema = schemas["WorkspaceResponse"]
+    inventory_ref = workspace_schema["properties"]["inventory_summary"]["$ref"]
+    inventory_schema = schemas[inventory_ref.rsplit("/", maxsplit=1)[-1]]
+
+    runtime_state_ref = inventory_schema["properties"]["runtime_state"]["$ref"]
+    runtime_state_schema = schemas[runtime_state_ref.rsplit("/", maxsplit=1)[-1]]
+    assert runtime_state_schema["properties"]["issues"]["type"] == "array"
+
+    issue_ref = runtime_state_schema["properties"]["issues"]["items"]["$ref"]
+    issue_schema = schemas[issue_ref.rsplit("/", maxsplit=1)[-1]]
+    assert issue_schema["properties"]["code"]["anyOf"]
+    assert issue_schema["properties"]["reason"]["anyOf"]
+    assert issue_schema["properties"]["message"]["anyOf"]
+
+
 def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_business_trip(
     client: TestClient,
 ) -> None:
