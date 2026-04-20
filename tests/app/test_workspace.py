@@ -42,6 +42,17 @@ _FIXTURE_ADAPTER_MARKERS = {
 }
 
 
+def _assert_payload_avoids_fixture_or_default_inventory_data(payload: dict[str, Any]) -> None:
+    bundle_ids = {bundle["bundle_id"] for bundle in payload["inventory_summary"]["bundles"]}
+    assert bundle_ids.isdisjoint(_LEGACY_FIXTURE_BUNDLE_IDS)
+
+    serialized_payload = json.dumps(payload, sort_keys=True).lower()
+    for marker in _FIXTURE_ADAPTER_MARKERS:
+        assert marker.lower() not in serialized_payload
+    for seeded_trip_id in ("trip-leisure-kyoto-draft", "trip-business-client-summit"):
+        assert seeded_trip_id not in serialized_payload
+
+
 def test_runtime_business_profile_normalizes_punctuated_regions_to_home_airports() -> None:
     profile = _runtime_business_profile(
         trip_title="Kyoto kickoff",
@@ -742,10 +753,7 @@ def test_workspace_endpoint_returns_coherent_partial_response_when_trip_dates_ar
     assert payload["scenario_search"]["scenarios"]
     assert payload["runtime_scenario_comparison"]["scenarios"]
     assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
-
-    serialized_payload = json.dumps(payload, sort_keys=True)
-    for marker in _FIXTURE_ADAPTER_MARKERS:
-        assert marker not in serialized_payload
+    _assert_payload_avoids_fixture_or_default_inventory_data(payload)
 
 
 def test_workspace_endpoint_returns_coherent_partial_response_when_destination_and_dates_are_missing(
@@ -780,10 +788,7 @@ def test_workspace_endpoint_returns_coherent_partial_response_when_destination_a
     assert payload["scenario_search"]["scenarios"]
     assert payload["runtime_scenario_comparison"]["scenarios"]
     assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
-
-    serialized_payload = json.dumps(payload, sort_keys=True)
-    for marker in _FIXTURE_ADAPTER_MARKERS:
-        assert marker not in serialized_payload
+    _assert_payload_avoids_fixture_or_default_inventory_data(payload)
 
 
 @pytest.mark.parametrize(
@@ -853,10 +858,7 @@ def test_workspace_endpoint_returns_coherent_partial_response_for_missing_trip_i
     assert payload["scenario_search"]["scenarios"]
     assert payload["runtime_scenario_comparison"]["scenarios"]
     assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
-
-    serialized_payload = json.dumps(payload, sort_keys=True)
-    for marker in _FIXTURE_ADAPTER_MARKERS:
-        assert marker not in serialized_payload
+    _assert_payload_avoids_fixture_or_default_inventory_data(payload)
 
 
 def test_workspace_endpoint_treats_whitespace_only_primary_regions_as_missing(
