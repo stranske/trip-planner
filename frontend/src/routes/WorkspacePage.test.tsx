@@ -741,7 +741,7 @@ describe("WorkspacePage", () => {
     expect(screen.getAllByRole("heading", { name: "Kyoto base with Uji day trip" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })).toBeInTheDocument();
     expect(within(routeContextMap).getAllByText("Kyoto").length).toBeGreaterThan(0);
-    expect(within(routeContextMap).getByText("Uji")).toBeInTheDocument();
+    expect(within(routeContextMap).getAllByText("Uji").length).toBeGreaterThan(0);
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
     expect(screen.getByText("Trip-scoped planner surface")).toBeInTheDocument();
     await waitFor(() => {

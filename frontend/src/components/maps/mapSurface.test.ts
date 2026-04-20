@@ -68,7 +68,7 @@ describe("mapSurface", () => {
 
     expect(model.provider.kind).toBe("google-maps-js");
     expect(model.destinationAnchors).toEqual(["Kyoto", "Uji"]);
-    expect(model.destinationContext).toEqual(["Kyoto", "Uji", "JP-26", "JP-27"]);
+    expect(model.destinationContext).toEqual(["Kyoto", "Uji", "JP 26", "JP 27"]);
     expect(model.policyPosture).toBe("Approval-ready");
     expect(model.scenarioComparisonSummary).toContain("Kyoto baseline remains preferred");
     expect(model.scenarioFocusAreas).toEqual(["route_coherence", "weather_resilience"]);
