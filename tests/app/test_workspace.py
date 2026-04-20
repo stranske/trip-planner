@@ -16,6 +16,16 @@ from trip_planner.options import InventoryBundle
 from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.activity import PersistedPlannerAction
 
+_LEGACY_FIXTURE_BUNDLE_IDS = {
+    "bundle-osaka-gateway",
+    "bundle-kyoto-culture-day",
+    "bundle-osaka-arrival",
+}
+_FIXTURE_ADAPTER_MARKERS = {
+    "PersistedTripInventoryFixtureAdapter",
+    "persisted-trip-fixture-inventory",
+}
+
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
@@ -251,6 +261,77 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
     )
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_review"
     assert payload["planner_memory"]["current_checkpoint_id"] is None
+
+
+@pytest.mark.parametrize(
+    ("mode", "title", "summary", "trip_frame"),
+    [
+        (
+            "leisure",
+            "Lisbon weekend",
+            "Runtime workspace should avoid fixture bundle IDs.",
+            {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        ),
+        (
+            "business",
+            "Chicago kickoff",
+            "Runtime workspace should avoid fixture adapter identities.",
+            {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+                "traveler_party": {
+                    "kind": "team",
+                    "traveler_count": 3,
+                    "notes": "Customer kickoff",
+                },
+            },
+        ),
+    ],
+)
+def test_workspace_endpoint_avoids_fixture_bundle_ids_and_fixture_adapter_markers_for_persisted_trips(
+    client: TestClient,
+    mode: str,
+    title: str,
+    summary: str,
+    trip_frame: dict[str, Any],
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": title,
+            "summary": summary,
+            "mode": mode,
+            "trip_frame": trip_frame,
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/workspace/{trip_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    bundle_ids = {bundle["bundle_id"] for bundle in payload["inventory_summary"]["bundles"]}
+    assert bundle_ids
+    assert bundle_ids.isdisjoint(_LEGACY_FIXTURE_BUNDLE_IDS)
+
+    serialized_runtime_payload = json.dumps(
+        {
+            "inventory_summary": payload["inventory_summary"],
+            "scenario_search": payload["scenario_search"],
+            "runtime_scenario_comparison": payload["runtime_scenario_comparison"],
+        },
+        sort_keys=True,
+    )
+    for marker in _FIXTURE_ADAPTER_MARKERS:
+        assert marker not in serialized_runtime_payload
 
 
 def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_persisted_leisure_trip(

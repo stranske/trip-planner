@@ -285,9 +285,18 @@ def assemble_inventory_bundles_for_trip(
         )
 
     bundles: list[InventoryBundle] = []
-    for fixture_name in assembly_input.fixture_names:
+    uses_seeded_fixture_ids = assembly_input.trip_id in _FIXTURE_BUNDLE_INPUTS
+    for fixture_index, fixture_name in enumerate(assembly_input.fixture_names, start=1):
         mixed_option = _load_mixed_option_fixture(fixture_name)
-        bundles.extend(mixed_option.bundles)
+        for bundle_index, fixture_bundle in enumerate(mixed_option.bundles, start=1):
+            if uses_seeded_fixture_ids:
+                bundles.append(fixture_bundle)
+                continue
+            payload = fixture_bundle.to_dict()
+            payload["bundle_id"] = (
+                f"bundle-{assembly_input.trip_id}-runtime-{fixture_index}-{bundle_index}"
+            )
+            bundles.append(InventoryBundle.from_dict(payload))
     return bundles
 
 
