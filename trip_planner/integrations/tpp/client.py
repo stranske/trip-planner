@@ -226,7 +226,8 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         trip_id = payload.get("trip_id") or request.trip_id or trip_plan.get("trip_id")
         if trip_id in (None, ""):
             raise TPPContractError(
-                "Live policy sync requires request.trip_id or payload.trip_id."
+                "Live policy sync requires request.trip_id, payload.trip_id, "
+                "or payload.trip_plan.trip_id."
             )
         snapshot_request = self._strip_none_values(
             {

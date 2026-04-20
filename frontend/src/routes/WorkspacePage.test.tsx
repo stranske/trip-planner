@@ -865,6 +865,48 @@ describe("WorkspacePage", () => {
     expect(within(runtime).getByText("Fallback")).toBeInTheDocument();
   });
 
+  it("merges fetched planner session state into the workspace surface", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+    mockedFetchPlannerSession.mockResolvedValueOnce({
+      ...plannerSessionPayload,
+      planner_panel_state: {
+        ...workspacePayload.planner_panel_state,
+        planner_behavior: {
+          ...workspacePayload.planner_panel_state.planner_behavior,
+          runtime_status: "ready",
+          runtime_mode: "model",
+          runtime_label: "Model-backed planner",
+          runtime_summary: "Planner model configuration is active for this workspace.",
+        },
+      },
+      activity_log: [
+        {
+          activity_event_id: "activity:session-refresh",
+          occurred_at: "2026-04-12T07:09:00+00:00",
+          event_kind: "planner_session_loaded",
+          summary: "Planner session loaded model-backed workspace context.",
+        },
+      ],
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Planner runtime state")).toBeInTheDocument();
+    });
+
+    const runtime = screen.getByLabelText("Planner runtime state");
+    await waitFor(() => {
+      expect(within(runtime).getByText("Model-backed planner")).toHaveClass(
+        "planner-runtime-pill--ready"
+      );
+    });
+    expect(screen.getByText("Planner session loaded model-backed workspace context.")).toBeInTheDocument();
+  });
+
   it("labels the planner panel as model-backed when runtime metadata reports a configured model", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
