@@ -16,6 +16,16 @@ from trip_planner.options import InventoryBundle
 from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.activity import PersistedPlannerAction
 
+_LEGACY_FIXTURE_BUNDLE_IDS = {
+    "bundle-osaka-gateway",
+    "bundle-kyoto-culture-day",
+    "bundle-osaka-arrival",
+}
+_FIXTURE_ADAPTER_MARKERS = {
+    "PersistedTripInventoryFixtureAdapter",
+    "persisted-trip-fixture-inventory",
+}
+
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
@@ -175,19 +185,22 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_busin
     assert payload["saved_scenarios"][0]["versions"][0]["label"] == "baseline"
     assert payload["saved_scenarios"][1]["versions"][0]["label"] == "fallback"
     assert payload["scenario_comparison"]["baseline_scenario_id"] == lead_saved_scenario_id
-    assert payload["scenario_search"]["title"] == "Persisted workspace bootstrap comparison"
-    assert payload["runtime_state"]["status"] == "empty"
-    assert payload["scenario_search"]["purpose"] == "workspace_bootstrap"
-    assert payload["scenario_search"]["scenarios"][0]["scenario_id"] == lead_saved_scenario_id
-    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == lead_saved_scenario_id
-    assert len(payload["runtime_scenario_comparison"]["scenarios"]) == 2
-    assert payload["inventory_summary"]["bundle_count"] == 0
-    assert payload["inventory_summary"]["bundles"] == []
-    assert any(
-        "no longer assemble inventory from fixtures" in note.lower()
-        for note in payload["inventory_summary"]["notes"]
+    assert payload["runtime_state"]["status"] == "ready"
+    assert payload["inventory_summary"]["runtime_state"]["status"] == "ready"
+    assert payload["inventory_summary"]["bundle_count"] > 0
+    assert payload["inventory_summary"]["bundles"][0]["option_count"] > 0
+    assert len(payload["scenario_search"]["scenarios"]) > 0
+    assert payload["scenario_search"]["scenarios"][0]["scenario_id"].startswith("scenario:")
+    assert payload["scenario_search"]["source_refs"]
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("scenario:")
+    assert len(payload["runtime_scenario_comparison"]["scenarios"]) > 0
+    assert payload["runtime_scenario_comparison"]["source_refs"]
+    assert "->" in payload["runtime_scenario_comparison"]["scenarios"][0]["route_summary"]
+    assert all(
+        seeded_id not in payload["trip_record"]["trip"]["trip_id"]
+        for seeded_id in ("trip-leisure-kyoto-draft", "trip-business-client-summit")
     )
-    assert payload["feasibility_summary"]["assessment_count"] == 0
+    assert payload["feasibility_summary"]["assessment_count"] > 0
     assert payload["activity_log"] == []
     assert payload["budget_state"]["summary"]["planned_total"] == 0
     assert payload["budget_state"]["summary"]["actual_total"] == 0
@@ -231,20 +244,94 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
 
     payload = client.get(f"/api/workspace/{trip_id}").json()
 
-    assert payload["runtime_state"]["status"] == "empty"
+    assert payload["runtime_state"]["status"] == "ready"
     assert payload["saved_scenarios"][0]["versions"][0]["title"].startswith("Lisbon")
-    assert payload["scenario_search"]["title"] == "Persisted workspace bootstrap comparison"
-    assert payload["scenario_search"]["purpose"] == "workspace_bootstrap"
-    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
+    assert payload["inventory_summary"]["bundle_count"] > 0
+    assert payload["scenario_search"]["scenarios"]
+    assert payload["scenario_search"]["source_refs"]
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("scenario:")
     assert payload["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"].startswith(
-        "saved-scenario:"
+        "scenario:"
     )
-    assert any(
-        "comparison-pass" in scenario["route_sequence"]
-        for scenario in payload["runtime_scenario_comparison"]["scenarios"]
+    assert payload["runtime_scenario_comparison"]["source_refs"]
+    assert "->" in payload["runtime_scenario_comparison"]["scenarios"][0]["route_summary"]
+    assert all(
+        seeded_id not in payload["trip_record"]["trip"]["trip_id"]
+        for seeded_id in ("trip-leisure-kyoto-draft", "trip-business-client-summit")
     )
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_review"
     assert payload["planner_memory"]["current_checkpoint_id"] is None
+
+
+@pytest.mark.parametrize(
+    ("mode", "title", "summary", "trip_frame"),
+    [
+        (
+            "leisure",
+            "Lisbon weekend",
+            "Runtime workspace should avoid fixture bundle IDs.",
+            {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        ),
+        (
+            "business",
+            "Chicago kickoff",
+            "Runtime workspace should avoid fixture adapter identities.",
+            {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+                "traveler_party": {
+                    "kind": "team",
+                    "traveler_count": 3,
+                    "notes": "Customer kickoff",
+                },
+            },
+        ),
+    ],
+)
+def test_workspace_endpoint_avoids_fixture_bundle_ids_and_fixture_adapter_markers_for_persisted_trips(
+    client: TestClient,
+    mode: str,
+    title: str,
+    summary: str,
+    trip_frame: dict[str, Any],
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": title,
+            "summary": summary,
+            "mode": mode,
+            "trip_frame": trip_frame,
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/workspace/{trip_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    bundle_ids = {bundle["bundle_id"] for bundle in payload["inventory_summary"]["bundles"]}
+    assert bundle_ids
+    assert bundle_ids.isdisjoint(_LEGACY_FIXTURE_BUNDLE_IDS)
+
+    serialized_runtime_payload = json.dumps(
+        {
+            "inventory_summary": payload["inventory_summary"],
+            "scenario_search": payload["scenario_search"],
+            "runtime_scenario_comparison": payload["runtime_scenario_comparison"],
+        },
+        sort_keys=True,
+    )
+    for marker in _FIXTURE_ADAPTER_MARKERS:
+        assert marker not in serialized_runtime_payload
 
 
 def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_persisted_leisure_trip(
@@ -271,9 +358,11 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_pers
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["lead_scenario_id"].startswith("saved-scenario:")
-    assert payload["scenarios"][0]["scenario_id"].startswith("saved-scenario:")
-    assert payload["scenarios"][0]["option_count"] == 1
+    assert payload["lead_scenario_id"].startswith("scenario:")
+    assert payload["scenarios"][0]["scenario_id"].startswith("scenario:")
+    assert payload["scenarios"][0]["option_count"] > 0
+    assert payload["scenarios"][0]["route_sequence"]
+    assert payload["source_refs"]
     assert "runtime scenario" in payload["summary"].lower()
 
 
@@ -306,9 +395,11 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_pers
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["lead_scenario_id"].startswith("saved-scenario:")
-    assert payload["scenarios"][0]["scenario_id"].startswith("saved-scenario:")
-    assert payload["scenarios"][0]["status"] == "recommended"
+    assert payload["lead_scenario_id"].startswith("scenario:")
+    assert payload["scenarios"][0]["scenario_id"].startswith("scenario:")
+    assert payload["scenarios"][0]["status"] in {"recommended", "fallback", "alternative"}
+    assert payload["scenarios"][0]["route_sequence"]
+    assert payload["source_refs"]
     assert "runtime scenario" in payload["summary"].lower()
 
 
@@ -1188,7 +1279,9 @@ def test_workspace_option_feedback_reuses_recent_presentation_ids(client: TestCl
     trip_id = created.json()["trip"]["trip_id"]
 
     initial = client.get(f"/api/workspace/{trip_id}")
-    option_id = initial.json()["planner_panel_state"]["option_set"]["options"][1]["option_id"]
+    options = initial.json()["planner_panel_state"]["option_set"]["options"]
+    option_index = min(1, len(options) - 1)
+    option_id = options[option_index]["option_id"]
 
     updated = client.post(
         f"/api/workspace/{trip_id}/planner/options/{option_id}/feedback",
@@ -1197,7 +1290,7 @@ def test_workspace_option_feedback_reuses_recent_presentation_ids(client: TestCl
 
     assert updated.status_code == 200
     payload = updated.json()
-    assert payload["planner_panel_state"]["option_set"]["options"][1]["label"].endswith(
+    assert payload["planner_panel_state"]["option_set"]["options"][option_index]["label"].endswith(
         "(saved direction)"
     )
 

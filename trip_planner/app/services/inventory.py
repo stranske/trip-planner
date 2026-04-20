@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from importlib import resources
 from typing import Any, Sequence
@@ -51,6 +52,7 @@ class InventoryAssemblyInput:
     query: SourceQuery
     snapshot: RawSnapshot
     handoff: NormalizationHandoff
+    record_payloads: tuple[dict[str, Any], ...]
     fixture_names: tuple[str, ...]
     allow_fixture_fallback: bool
 
@@ -216,6 +218,391 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
         )
 
 
+class PersistedTripSourceInventoryAdapter(SourceAdapter):
+    """Build source-backed runtime inventory inputs from persisted trip context."""
+
+    def __init__(
+        self,
+        *,
+        trip_id: str,
+        trip_mode: str,
+        primary_regions: Sequence[str],
+        duration_days: int | None = None,
+        trip_title: str | None = None,
+        traveler_party_kind: str | None = None,
+        traveler_count: int | None = None,
+    ) -> None:
+        self.trip_id = trip_id
+        self.trip_mode = trip_mode
+        self.primary_regions = tuple(region.strip() for region in primary_regions if region.strip())
+        self.duration_days = duration_days
+        self.trip_title = (trip_title or "").strip()
+        self.traveler_party_kind = (traveler_party_kind or "").strip()
+        self.traveler_count = traveler_count
+        self.adapter_id = "persisted-trip-source-inventory"
+        self.source_record = SourceRecord(
+            source_id="persisted-trip-runtime-source",
+            provider_name="Trip Planner Runtime",
+            display_name="Persisted trip runtime inventory source",
+            category="commercial_inventory",
+            coverage_scope="global",
+            supported_option_kinds=["mixed", "lodging", "activity", "rail"],
+            notes=["Derives normalized inventory seeds directly from persisted trip context."],
+        )
+        self.supported_entity_scopes = ("mixed",)
+        self.supported_option_kinds = ("mixed", "lodging", "activity", "rail")
+        self.capabilities = ("read_file", "supports_normalization_handoff")
+
+    @staticmethod
+    def _slug(value: str) -> str:
+        slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+        return slug or "destination"
+
+    def _build_runtime_bundle_payload(
+        self, *, source_id: str, source_category: str
+    ) -> dict[str, Any]:
+        primary_region = self.primary_regions[0]
+        primary_slug = self._slug(primary_region)
+        gateway_id = f"dest-gateway-{primary_slug}"
+        destination_id = f"dest-city-{primary_slug}"
+        destination_name = primary_region
+        duration_days = self.duration_days or 1
+        lodging_total = float(
+            max(1, duration_days) * (230 if self.trip_mode == "business" else 165)
+        )
+        transport_total = float(165 if self.trip_mode == "business" else 95)
+        activity_total = float(75 if self.trip_mode == "business" else 120)
+        baseline_signal = 0.82 if self.trip_mode == "business" else 0.79
+        traveler_scope = (
+            f"{self.traveler_party_kind}:{self.traveler_count}"
+            if self.traveler_party_kind and self.traveler_count is not None
+            else self.traveler_party_kind or "unspecified"
+        )
+        provenance_base = f"prov:{self.trip_id}:runtime"
+
+        def _destination_source_ref(provenance_id: str, summary: str) -> dict[str, Any]:
+            return {
+                "provenance_id": provenance_id,
+                "role": "identity",
+                "source_id": source_id,
+                "source_category": source_category,
+                "contribution_kind": "inventory",
+                "summary": summary,
+            }
+
+        def _provenance_ref(
+            *,
+            provenance_id: str,
+            subject_kind: str,
+            subject_id: str,
+            summary: str,
+        ) -> dict[str, Any]:
+            return {
+                "provenance_id": provenance_id,
+                "source_id": source_id,
+                "source_category": source_category,
+                "subject_kind": subject_kind,
+                "subject_id": subject_id,
+                "contribution_kind": "inventory",
+                "summary": summary,
+                "captured_at": "2026-04-11T00:00:00Z",
+            }
+
+        lodging_option_id = f"lodging:{self.trip_id}:primary"
+        transport_option_id = f"transport:{self.trip_id}:arrival"
+        activity_option_id = f"activity:{self.trip_id}:primary"
+        option_ids = [lodging_option_id, transport_option_id, activity_option_id]
+        source_refs = [
+            f"{provenance_base}:destination:gateway",
+            f"{provenance_base}:destination:primary",
+            f"{provenance_base}:lodging",
+            f"{provenance_base}:transport",
+            f"{provenance_base}:activity",
+        ]
+
+        return {
+            "bundle_id": f"bundle-{self.trip_id}-runtime-1-1",
+            "title": f"{destination_name} runtime bundle",
+            "bundle_context": "mixed",
+            "destinations": [
+                {
+                    "destination_id": gateway_id,
+                    "place_kind": "site",
+                    "name": f"{destination_name} gateway",
+                    "geo": {
+                        "latitude": 0.0,
+                        "longitude": 0.0,
+                        "country_code": "US",
+                        "time_zone": "UTC",
+                    },
+                    "source_refs": [
+                        _destination_source_ref(
+                            f"{provenance_base}:destination:gateway",
+                            "Gateway context derived from persisted trip region inputs.",
+                        )
+                    ],
+                },
+                {
+                    "destination_id": destination_id,
+                    "place_kind": "city",
+                    "name": destination_name,
+                    "geo": {
+                        "latitude": 0.0,
+                        "longitude": 0.0,
+                        "country_code": "US",
+                        "time_zone": "UTC",
+                    },
+                    "source_refs": [
+                        _destination_source_ref(
+                            f"{provenance_base}:destination:primary",
+                            "Primary destination context derived from persisted trip records.",
+                        )
+                    ],
+                },
+            ],
+            "lodging_options": [
+                {
+                    "option_id": lodging_option_id,
+                    "name": f"{destination_name} central stay",
+                    "destination_id": destination_id,
+                    "location_summary": {
+                        "destination_id": destination_id,
+                        "location_context": "urban_core",
+                        "access_summary": "Central location selected from persisted trip scope.",
+                    },
+                    "room_summary": {"lodging_kind": "hotel"},
+                    "cost_summary": {
+                        "total": {"currency": "USD", "typical_amount": lodging_total},
+                    },
+                    "fit_summary": {"overall_signal": baseline_signal},
+                    "feasibility": {
+                        "inventory_status": "available",
+                        "available": True,
+                        "business_approval_status": (
+                            "preferred" if self.trip_mode == "business" else "approved"
+                        ),
+                    },
+                    "source_refs": [
+                        _provenance_ref(
+                            provenance_id=f"{provenance_base}:lodging",
+                            subject_kind="option",
+                            subject_id=lodging_option_id,
+                            summary="Lodging candidate synthesized from persisted trip dates and region.",
+                        )
+                    ],
+                }
+            ],
+            "transport_options": [
+                {
+                    "option_id": transport_option_id,
+                    "name": f"{destination_name} arrival connector",
+                    "transport_kind": "rail",
+                    "origin_id": gateway_id,
+                    "destination_id": destination_id,
+                    "timing_summary": {
+                        "departure_local": "2026-04-11T09:00:00Z",
+                        "arrival_local": "2026-04-11T09:45:00Z",
+                        "duration_minutes": 45,
+                    },
+                    "segments": [
+                        {
+                            "segment_id": f"segment:{self.trip_id}:arrival-1",
+                            "mode": "rail",
+                            "origin_label": f"{destination_name} gateway",
+                            "destination_label": destination_name,
+                        }
+                    ],
+                    "cost_summary": {
+                        "total": {"currency": "USD", "typical_amount": transport_total}
+                    },
+                    "fit_summary": {"overall_signal": baseline_signal},
+                    "policy_summary": {
+                        "business_approval_status": (
+                            "preferred" if self.trip_mode == "business" else "approved"
+                        )
+                    },
+                    "feasibility": {"available": True, "availability_status": "available"},
+                    "source_refs": [
+                        _provenance_ref(
+                            provenance_id=f"{provenance_base}:transport",
+                            subject_kind="option",
+                            subject_id=transport_option_id,
+                            summary="Transport leg derived from persisted destination and trip mode.",
+                        )
+                    ],
+                }
+            ],
+            "activity_options": [
+                {
+                    "option_id": activity_option_id,
+                    "name": (
+                        "Client priority planning block"
+                        if self.trip_mode == "business"
+                        else f"{destination_name} anchor experience"
+                    ),
+                    "activity_kind": "dining" if self.trip_mode == "business" else "museum",
+                    "destination_id": destination_id,
+                    "place_id": f"place:{self.trip_id}:primary-activity",
+                    "category": {
+                        "primary": "meeting" if self.trip_mode == "business" else "museum",
+                    },
+                    "timing_summary": {"duration_minutes": 120},
+                    "significance_summary": {
+                        "overall_signal": baseline_signal,
+                        "anchor_worthy": True,
+                    },
+                    "cost_summary": {
+                        "total": {"currency": "USD", "typical_amount": activity_total}
+                    },
+                    "fit_summary": {"overall_signal": baseline_signal},
+                    "feasibility": {"available": True, "availability_status": "available"},
+                    "source_refs": [
+                        _provenance_ref(
+                            provenance_id=f"{provenance_base}:activity",
+                            subject_kind="option",
+                            subject_id=activity_option_id,
+                            summary="Activity seed is aligned to persisted trip mode and traveler scope.",
+                        )
+                    ],
+                }
+            ],
+            "composition_summary": {
+                "sequence_index": 0,
+                "assembly_role": "persisted_trip_runtime",
+                "primary_destination_id": destination_id,
+                "component_option_ids": option_ids,
+            },
+            "provenance_summary": {"source_refs": source_refs},
+            "quality_value_fit": {
+                "quality_signal": baseline_signal,
+                "value_signal": baseline_signal - 0.05,
+                "fit_signal": baseline_signal,
+            },
+            "feasibility": {"available": True, "internally_consistent": True},
+            "explanation": {
+                "headline": "Runtime inventory assembled from persisted trip context.",
+                "strengths": [
+                    f"Derived from persisted destination scope ({destination_name}).",
+                    f"Traveler scope considered: {traveler_scope}.",
+                ],
+                "tradeoffs": [
+                    "This source-backed seed is a bounded baseline until provider ingest is connected."
+                ],
+            },
+            "summary": (
+                f"Runtime bundle synthesized for {destination_name} from persisted trip data."
+            ),
+            "notes": [
+                "Source-backed runtime bundle generated without fixture file fallback.",
+                f"Trip title hint: {self.trip_title or destination_name}.",
+            ],
+        }
+
+    def fetch_snapshot(self, query: SourceQuery) -> RawSnapshot:
+        issues: list[AdapterIssue] = []
+        records: list[RawSourceRecord] = []
+        if not self.primary_regions:
+            issues.append(
+                AdapterIssue(
+                    issue_id=f"issue:{self.trip_id}:inventory-missing-regions",
+                    stage="availability",
+                    severity="warning",
+                    code="missing_inventory_primary_regions",
+                    message=(
+                        "Primary regions are still missing, so the runtime inventory remains empty."
+                    ),
+                    details={"trip_id": self.trip_id, "trip_mode": self.trip_mode},
+                )
+            )
+        elif self.duration_days is None or self.duration_days <= 0:
+            issues.append(
+                AdapterIssue(
+                    issue_id=f"issue:{self.trip_id}:inventory-missing-duration",
+                    stage="availability",
+                    severity="warning",
+                    code="missing_inventory_trip_duration",
+                    message=(
+                        "Trip dates or duration are still missing, so inventory assembly stays partial."
+                    ),
+                    details={"trip_id": self.trip_id, "trip_mode": self.trip_mode},
+                )
+            )
+        else:
+            records.append(
+                RawSourceRecord(
+                    record_id=f"{query.query_id}:1",
+                    entity_scope=query.entity_scope,
+                    provider_entity_id=f"{self.trip_id}:runtime-bundle-seed",
+                    payload_type="runtime_bundle_seed",
+                    payload={
+                        "bundle_payloads": [
+                            self._build_runtime_bundle_payload(
+                                source_id=self.source_record.source_id,
+                                source_category=self.source_record.category,
+                            )
+                        ],
+                    },
+                    captured_at="2026-04-11T00:00:00Z",
+                    metadata={"source_seed": "persisted_trip_runtime"},
+                )
+            )
+
+        return RawSnapshot(
+            snapshot_id=f"snapshot:{self.trip_id}:inventory",
+            adapter_id=self.adapter_id,
+            source_id=self.source_record.source_id,
+            source_category=self.source_record.category,
+            entity_scope=query.entity_scope,
+            option_kind=query.option_kind,
+            fetched_at="2026-04-11T00:00:00Z",
+            query=query,
+            records=records,
+            issues=issues,
+            snapshot_status="complete" if records else "partial",
+            handoff_status="ready" if records else "partial",
+            payload_metadata={
+                "trip_id": self.trip_id,
+                "trip_mode": self.trip_mode,
+                "region_count": str(len(self.primary_regions)),
+                "duration_days": "" if self.duration_days is None else str(self.duration_days),
+            },
+        )
+
+    def build_handoff(self, snapshot: RawSnapshot) -> NormalizationHandoff:
+        return NormalizationHandoff(
+            handoff_id=f"handoff:{self.trip_id}:inventory",
+            snapshot_id=snapshot.snapshot_id,
+            target_contract="trip_planner/options/bundles.py",
+            entity_scope=snapshot.entity_scope,
+            status="ready" if snapshot.records else "partial",
+            input_record_ids=[record.record_id for record in snapshot.records],
+            blocked_issue_ids=[issue.issue_id for issue in snapshot.issues],
+            provenance_refs=[
+                ProvenanceReference(
+                    provenance_id=f"prov:{record.record_id}",
+                    source_id=snapshot.source_id,
+                    source_category=snapshot.source_category,
+                    subject_kind="option_set",
+                    subject_id=f"inventory:{self.trip_id}",
+                    contribution_kind="inventory",
+                    summary=(
+                        "Persisted trip inventory now derives from source-backed runtime seeds."
+                    ),
+                    captured_at=snapshot.fetched_at,
+                )
+                for record in snapshot.records
+            ],
+            record_count=len(snapshot.records),
+            notes=(
+                []
+                if snapshot.records
+                else [
+                    "Return an empty bundle set rather than failing when persisted inventory inputs are missing."
+                ]
+            ),
+        )
+
+
 def _load_mixed_option_fixture(name: str) -> MixedOption:
     payload = json.loads(
         resources.files(_BUNDLE_RESOURCE_PACKAGE).joinpath(name).read_text(encoding="utf-8")
@@ -229,24 +616,50 @@ def _build_inventory_assembly_input(
     trip_mode: str,
     primary_regions: Sequence[str] = (),
     duration_days: int | None = None,
+    trip_title: str | None = None,
+    trip_summary: str | None = None,
+    traveler_party_kind: str | None = None,
+    traveler_count: int | None = None,
     allow_fixture_fallback: bool = True,
 ) -> InventoryAssemblyInput:
+    fixture_seed = _FIXTURE_BUNDLE_INPUTS.get(trip_id)
+    use_fixture_seed = fixture_seed is not None and allow_fixture_fallback
     query = SourceQuery(
         query_id=f"inventory-query:{trip_id}",
         entity_scope="mixed",
         option_kind="mixed",
         destination=", ".join(primary_regions[:2]),
+        traveler_segment=traveler_party_kind or "",
         trip_phase="inventory_selection",
-        filters={"trip_mode": trip_mode},
-        notes=["Persisted trip inventory assembly"],
+        filters={
+            "trip_mode": trip_mode,
+            "duration_days": "" if duration_days is None else str(duration_days),
+            "traveler_count": "" if traveler_count is None else str(traveler_count),
+        },
+        notes=[
+            "Persisted trip inventory assembly",
+            f"trip_title:{trip_title or ''}",
+            f"trip_summary:{(trip_summary or '')[:60]}",
+        ],
     )
-    adapter = PersistedTripInventoryFixtureAdapter(
-        trip_id=trip_id,
-        trip_mode=trip_mode,
-        primary_regions=primary_regions,
-        duration_days=duration_days,
-        allow_fixture_fallback=allow_fixture_fallback,
-    )
+    if use_fixture_seed:
+        adapter: SourceAdapter = PersistedTripInventoryFixtureAdapter(
+            trip_id=trip_id,
+            trip_mode=trip_mode,
+            primary_regions=primary_regions,
+            duration_days=duration_days,
+            allow_fixture_fallback=allow_fixture_fallback,
+        )
+    else:
+        adapter = PersistedTripSourceInventoryAdapter(
+            trip_id=trip_id,
+            trip_mode=trip_mode,
+            primary_regions=primary_regions,
+            duration_days=duration_days,
+            trip_title=trip_title,
+            traveler_party_kind=traveler_party_kind,
+            traveler_count=traveler_count,
+        )
     snapshot = adapter.fetch_snapshot(query)
     handoff = adapter.build_handoff(snapshot)
     return InventoryAssemblyInput(
@@ -256,6 +669,9 @@ def _build_inventory_assembly_input(
         query=query,
         snapshot=snapshot,
         handoff=handoff,
+        record_payloads=tuple(
+            record.payload for record in snapshot.records if isinstance(record.payload, dict)
+        ),
         fixture_names=tuple(
             record.metadata["fixture_name"]
             for record in snapshot.records
@@ -285,9 +701,29 @@ def assemble_inventory_bundles_for_trip(
         )
 
     bundles: list[InventoryBundle] = []
-    for fixture_name in assembly_input.fixture_names:
+    for payload in assembly_input.record_payloads:
+        bundle_payloads = payload.get("bundle_payloads")
+        if not isinstance(bundle_payloads, list):
+            continue
+        for bundle_payload in bundle_payloads:
+            if isinstance(bundle_payload, dict):
+                bundles.append(InventoryBundle.from_dict(bundle_payload))
+
+    if bundles:
+        return bundles
+
+    uses_seeded_fixture_ids = assembly_input.trip_id in _FIXTURE_BUNDLE_INPUTS
+    for fixture_index, fixture_name in enumerate(assembly_input.fixture_names, start=1):
         mixed_option = _load_mixed_option_fixture(fixture_name)
-        bundles.extend(mixed_option.bundles)
+        for bundle_index, fixture_bundle in enumerate(mixed_option.bundles, start=1):
+            if uses_seeded_fixture_ids:
+                bundles.append(fixture_bundle)
+                continue
+            payload = fixture_bundle.to_dict()
+            payload["bundle_id"] = (
+                f"bundle-{assembly_input.trip_id}-runtime-{fixture_index}-{bundle_index}"
+            )
+            bundles.append(InventoryBundle.from_dict(payload))
     return bundles
 
 
@@ -409,6 +845,10 @@ def get_inventory_payload(
         trip_mode=trip_mode,
         primary_regions=primary_regions,
         duration_days=duration_days,
+        trip_title=record.title if record is not None else None,
+        trip_summary=record.summary if record is not None else None,
+        traveler_party_kind=record.traveler_party_kind if record is not None else None,
+        traveler_count=record.traveler_count if record is not None else None,
     )
     bundles = assemble_inventory_bundles_for_trip(assembly_input=assembly_input)
     return {

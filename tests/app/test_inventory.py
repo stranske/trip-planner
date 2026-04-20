@@ -7,6 +7,16 @@ from fastapi.testclient import TestClient
 from trip_planner.app.main import create_app
 from trip_planner.persistence.db import reset_database_state
 
+_LEGACY_FIXTURE_BUNDLE_IDS = {
+    "bundle-osaka-gateway",
+    "bundle-kyoto-culture-day",
+    "bundle-osaka-arrival",
+}
+_FIXTURE_ADAPTER_MARKERS = {
+    "PersistedTripInventoryFixtureAdapter",
+    "persisted-trip-fixture-inventory",
+}
+
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
@@ -75,6 +85,38 @@ def test_inventory_endpoint_assembles_bundles_for_persisted_trip(client: TestCli
     assert any(
         "adapter-backed inventory assembly seam" in note for note in payload["summary"]["notes"]
     )
+
+
+def test_inventory_endpoint_avoids_legacy_fixture_bundle_ids_for_arbitrary_persisted_trip(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Lisbon weekend",
+            "summary": "Arbitrary persisted trips should not reuse fixture bundle IDs.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/inventory/{trip_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    bundle_ids = {bundle["bundle_id"] for bundle in payload["bundles"]}
+    assert bundle_ids
+    assert bundle_ids.isdisjoint(_LEGACY_FIXTURE_BUNDLE_IDS)
+    serialized = str(payload["summary"])
+    for marker in _FIXTURE_ADAPTER_MARKERS:
+        assert marker not in serialized
 
 
 def test_inventory_endpoint_surfaces_partial_runtime_state_when_trip_dates_are_missing(

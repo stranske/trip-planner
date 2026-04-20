@@ -558,16 +558,23 @@ def _build_runtime_scenario_comparison(
     }
 
 
-def _build_workspace_inventory_summary(record: PersistedTrip) -> dict[str, Any]:
-    return build_inventory_summary_payload(
-        [],
-        assembly_input=_build_inventory_assembly_input(
-            trip_id=record.trip_id,
-            trip_mode=record.mode,
-            primary_regions=record.primary_regions,
-            duration_days=record.duration_days,
-            allow_fixture_fallback=False,
-        ),
+def _build_workspace_inventory_inputs(
+    record: PersistedTrip,
+) -> tuple[list[InventoryBundle], dict[str, Any]]:
+    assembly_input = _build_inventory_assembly_input(
+        trip_id=record.trip_id,
+        trip_mode=record.mode,
+        primary_regions=record.primary_regions,
+        duration_days=record.duration_days,
+        trip_title=record.title,
+        trip_summary=record.summary,
+        traveler_party_kind=record.traveler_party_kind,
+        traveler_count=record.traveler_count,
+    )
+    bundles = assemble_inventory_bundles_for_trip(assembly_input=assembly_input)
+    return bundles, build_inventory_summary_payload(
+        bundles,
+        assembly_input=assembly_input,
     )
 
 
@@ -1080,6 +1087,10 @@ def _build_persisted_trip_workspace(
         trip_mode=record.mode,
         primary_regions=record.primary_regions,
         duration_days=record.duration_days,
+        trip_title=record.title,
+        trip_summary=record.summary,
+        traveler_party_kind=record.traveler_party_kind,
+        traveler_count=record.traveler_count,
         allow_fixture_fallback=False,
     )
     resolved_inventory_bundles = (
@@ -1277,8 +1288,7 @@ def _build_runtime_scenario_comparison_payload(
         }
         for scenario in persisted_saved_scenarios_records
     ]
-    persisted_inventory_bundles: list[InventoryBundle] = []
-    inventory_summary = _build_workspace_inventory_summary(record)
+    persisted_inventory_bundles, inventory_summary = _build_workspace_inventory_inputs(record)
     inventory_status = str((inventory_summary.get("runtime_state") or {}).get("status") or "empty")
     return _build_runtime_scenario_comparison(
         trip_id=trip_id,
@@ -1877,8 +1887,7 @@ def get_workspace_payload(
             session_record=session_record,
         )
         bootstrap_updated = True
-    persisted_inventory_bundles: list[InventoryBundle] = []
-    inventory_summary = _build_workspace_inventory_summary(record)
+    persisted_inventory_bundles, inventory_summary = _build_workspace_inventory_inputs(record)
     inventory_status = str((inventory_summary.get("runtime_state") or {}).get("status") or "empty")
     runtime_search = _build_runtime_scenario_search_for_trip(
         record=record,
