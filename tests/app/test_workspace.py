@@ -688,6 +688,45 @@ def test_workspace_endpoint_surfaces_partial_runtime_state_for_under_scoped_trip
     assert "runtime scenario" in comparison_payload["summary"].lower()
 
 
+def test_workspace_endpoint_returns_coherent_partial_response_when_trip_dates_are_missing(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Dates missing draft",
+            "summary": "Verify degraded runtime behavior when persisted trip dates are absent.",
+            "mode": "business",
+            "trip_frame": {
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    response = client.get(f"/api/workspace/{trip_id}")
+    assert response.status_code == 200
+    payload = response.json()
+
+    inventory_summary = payload["inventory_summary"]
+    runtime_state = inventory_summary["runtime_state"]
+    assert runtime_state["status"] == "partial"
+    assert isinstance(runtime_state.get("issues"), list)
+    assert runtime_state["issues"]
+    assert any(issue["reason"] == "missing_dates" for issue in runtime_state["issues"])
+
+    assert inventory_summary["bundle_count"] == 0
+    assert inventory_summary["bundles"] == []
+    assert payload["scenario_search"]["scenarios"]
+    assert payload["runtime_scenario_comparison"]["scenarios"]
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
+
+    serialized_payload = json.dumps(payload, sort_keys=True)
+    for marker in _FIXTURE_ADAPTER_MARKERS:
+        assert marker not in serialized_payload
+
+
 @pytest.mark.parametrize(
     ("title", "trip_frame", "expected_issue_codes", "expected_reasons"),
     [
