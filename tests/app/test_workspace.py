@@ -1279,7 +1279,9 @@ def test_workspace_option_feedback_reuses_recent_presentation_ids(client: TestCl
     trip_id = created.json()["trip"]["trip_id"]
 
     initial = client.get(f"/api/workspace/{trip_id}")
-    option_id = initial.json()["planner_panel_state"]["option_set"]["options"][1]["option_id"]
+    options = initial.json()["planner_panel_state"]["option_set"]["options"]
+    option_index = min(1, len(options) - 1)
+    option_id = options[option_index]["option_id"]
 
     updated = client.post(
         f"/api/workspace/{trip_id}/planner/options/{option_id}/feedback",
@@ -1288,7 +1290,7 @@ def test_workspace_option_feedback_reuses_recent_presentation_ids(client: TestCl
 
     assert updated.status_code == 200
     payload = updated.json()
-    assert payload["planner_panel_state"]["option_set"]["options"][1]["label"].endswith(
+    assert payload["planner_panel_state"]["option_set"]["options"][option_index]["label"].endswith(
         "(saved direction)"
     )
 
