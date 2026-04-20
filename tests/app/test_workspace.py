@@ -448,6 +448,17 @@ def test_workspace_endpoint_creates_non_seeded_persisted_business_trip_with_runt
     serialized_source_metadata = json.dumps(source_metadata, sort_keys=True).lower()
     for forbidden_marker in ("fixture", "seed", "demo", "persistedtripinventoryfixtureadapter"):
         assert forbidden_marker not in serialized_source_metadata
+    serialized_business_metadata = json.dumps(
+        {"source_metadata": source_metadata, "provenance_context": provenance_context},
+        sort_keys=True,
+    ).lower()
+    for business_fixture_marker in (
+        "client_meeting_profile",
+        "conference_profile",
+        "site_visit_profile",
+        "policy_round_trip_exception",
+    ):
+        assert business_fixture_marker not in serialized_business_metadata
 
 
 @pytest.mark.parametrize(
