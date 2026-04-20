@@ -1,4 +1,4 @@
-.PHONY: runtime-backend runtime-frontend runtime-dev runtime-check runtime-smoke runtime-production-check runtime-preview-smoke
+.PHONY: runtime-backend runtime-frontend runtime-dev runtime-check runtime-smoke runtime-production-check runtime-preview-smoke runtime-full-product-check full-product-check
 
 runtime-backend:
 	python -m uvicorn trip_planner.app.main:app --reload --host 127.0.0.1 --port 8000
@@ -20,3 +20,8 @@ runtime-production-check:
 
 runtime-preview-smoke:
 	./scripts/check_production_readiness.sh --preview "${TRIP_PLANNER_PREVIEW_URL}"
+
+full-product-check:
+	python scripts/check_full_product_verification.py
+
+runtime-full-product-check: full-product-check

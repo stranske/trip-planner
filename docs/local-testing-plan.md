@@ -35,6 +35,16 @@ If you already know a branch only changed the full-stack smoke path, you may sti
 make runtime-smoke
 ```
 
+For full-product readiness evidence, run the separate product-verification lane:
+
+```bash
+make full-product-check
+```
+
+`make runtime-full-product-check` is an equivalent alias for callers that keep all runtime gates under the same prefix.
+
+That command creates fresh leisure and business trips through the runtime API, opens their workspaces, asserts runtime/source-backed inventory and scenario comparison identifiers, submits one planner turn, persists a business proposal submission, and ingests an evaluation result. It also reports map-provider and live Travel-Plan-Permission readiness explicitly. Missing map or TPP configuration is reported as `SKIPPED` or `BLOCKED` with the exact missing env var or sibling checkout path; it is never reported as live readiness.
+
 ## Critical Journeys Covered
 
 ### Automated Local Checks
@@ -46,6 +56,7 @@ make runtime-smoke
 | Workspace load, comparison, planner interaction, budget state | `tests/app/test_workspace.py`, `tests/app/test_budget_routes.py`, `frontend/src/routes/WorkspacePage.test.tsx` |
 | Business policy import and proposal lifecycle | `tests/app/test_policy.py`, `tests/app/test_proposal.py` |
 | Local end-to-end runtime wiring | `scripts/check_full_stack_runtime.sh --smoke-only`, `frontend/src/smoke/runtime.smoke.test.ts` |
+| Full-product fresh leisure/business journeys | `scripts/check_full_product_verification.py`, `tests/app/test_full_product_verification.py` |
 
 ### Browser-Facing Manual Review
 
@@ -91,6 +102,7 @@ These are additive checks, not prerequisites for the default local matrix:
 - `VITE_GOOGLE_MAPS_BROWSER_API_KEY` for the optional Google Maps JavaScript adapter path
 - `VITE_GOOGLE_MAPS_PROVIDER_STATE` for local `ready`, `loading`, or `error` adapter-state checks without live provider access
 - `TPP_BASE_URL`, `TPP_ACCESS_TOKEN`, and `TPP_OIDC_PROVIDER` for live Travel-Plan-Permission transport
+- `TPP_REPO_PATH` for starting a sibling `Travel-Plan-Permission` checkout when `TPP_BASE_URL` is not already configured; by default the verifier looks for `../Travel-Plan-Permission`
 
 Only run live integration verification when a branch explicitly changes those seams or when you need release confidence on an already configured environment. Their absence should not fail the standard production-readiness lane.
 
@@ -101,6 +113,7 @@ When a check fails, record:
 - the command that failed
 - the route or API path that regressed
 - the trip id, scenario id, or proposal/policy id involved
+- the provider state, missing env var, or sibling repo path if an optional live integration is skipped or blocked
 - whether the failure is local-only, preview-only, or both
 - any missing optional env var that changed the expected result
 

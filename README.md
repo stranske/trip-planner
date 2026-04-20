@@ -146,6 +146,14 @@ For the production-focused journey matrix, run:
 make runtime-production-check
 ```
 
+For a full-product verification lane that creates fresh leisure and business trips, verifies runtime inventory/scenario/planner/proposal identifiers, and reports optional live map/TPP prerequisites explicitly, run:
+
+```bash
+make full-product-check
+```
+
+`make runtime-full-product-check` is available as an equivalent runtime-prefixed alias.
+
 To smoke-check a deploy preview as well, provide the preview origin:
 
 ```bash
@@ -157,6 +165,7 @@ The verification path covers:
 - backend runtime tests for the live FastAPI routes
 - frontend unit/build checks
 - a smoke test that runs the frontend client against a live backend process
+- a separate full-product check for fresh leisure and business product journeys
 
 These checks validate the local full-stack MVP that already exists in this repo. They exercise the map adapter and fallback seam with mocked provider state. They do not prove live Google Maps rendering or remote Travel-Plan-Permission transport.
 The production-focused testing plan in [docs/local-testing-plan.md](docs/local-testing-plan.md) adds the critical auth, trip, workspace, policy, proposal, and preview-verification journeys on top of that baseline.
@@ -172,6 +181,7 @@ Use these env vars only when you are intentionally exercising an integration sea
 - `VITE_GOOGLE_MAPS_EMBED_API_KEY`: legacy key name still accepted as a compatibility fallback when `VITE_GOOGLE_MAPS_BROWSER_API_KEY` is not set.
 - `VITE_GOOGLE_MAPS_PROVIDER_STATE`: optional local/test override for the map adapter load state (`ready`, `loading`, or `error`).
 - `TPP_BASE_URL`, `TPP_ACCESS_TOKEN`, `TPP_OIDC_PROVIDER`: enable the live `Travel-Plan-Permission` transport client. If they are unset, the repo should continue to present stored-policy and passive/local TPP seams rather than implying a real remote policy round-trip.
+- `TPP_REPO_PATH`: optional sibling checkout path used by `make full-product-check` when it needs to start a local Travel-Plan-Permission service instead of using `TPP_BASE_URL`.
 
 That distinction matters for docs and verification messaging:
 
