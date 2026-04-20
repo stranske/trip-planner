@@ -180,7 +180,7 @@ function ActiveTripMap({
         </div>
         <div className="map-sidebar">
           <article className="decision-card">
-            <h3>{mapSurface.provider.kind === "google-maps-js" ? "Live provider path" : "Fallback route path"}</h3>
+            <h3>{providerPathHeading(mapSurface.provider)}</h3>
             <p>{mapSurface.provider.summary}</p>
           </article>
           {selectedMarker ? (
@@ -403,5 +403,24 @@ function markerLabel(kind: MapMarker["kind"]): string {
     case "stop":
     default:
       return "S";
+  }
+}
+
+function providerPathHeading(provider: ReturnType<typeof buildTripMapSurfaceModel>["provider"]): string {
+  if (provider.kind === "google-maps-js") {
+    return "Live provider path";
+  }
+
+  switch (provider.status) {
+    case "loading":
+      return "Provider loading fallback path";
+    case "provider-error":
+      return "Provider error fallback path";
+    case "sparse-route":
+      return "Sparse route fallback path";
+    case "misconfigured":
+      return "Textual fallback route path";
+    default:
+      return "Fallback route path";
   }
 }

@@ -181,6 +181,100 @@ describe("mapSurface", () => {
     expect(model.routeSegments).toHaveLength(1);
   });
 
+  it("keeps route context visible while the provider is still loading", () => {
+    const model = buildTripMapSurfaceModel({
+      activeScenario: {
+        scenario_id: "scenario:1",
+        title: "Kyoto base",
+        rank: 1,
+        status: "lead",
+        summary: "Baseline",
+        comparison_note: "Lead route",
+        option_count: 2,
+        route_sequence: ["kyoto", "uji"],
+        route_summary: "kyoto -> uji",
+        recommended_for_selection: true,
+        feasible: true,
+        metrics: {
+          score: 0.93,
+          travel_minutes: 265,
+          transfers: 4,
+          estimated_total: null,
+        },
+        delta: {
+          score_delta: 0,
+          travel_minutes_delta: 0,
+          transfers_delta: 0,
+          estimated_total_delta: null,
+        },
+        highlights: ["Low-friction baseline."],
+      },
+      bundles: [],
+      feasibilitySummary: {
+        assessment_count: 0,
+        recommended_bundle_count: 0,
+        blocking_bundle_count: 0,
+        attention_bundle_count: 0,
+        notes: [],
+        assessments: [],
+      },
+      googleMapsApiKey: "test-key",
+      providerLoadState: "loading",
+    });
+
+    expect(model.provider.kind).toBe("fallback");
+    expect(model.provider.status).toBe("loading");
+    expect(model.routeSegments).toHaveLength(1);
+    expect(model.markers.length).toBeGreaterThan(0);
+  });
+
+  it("uses sparse route fallback when the active scenario does not include enough route stops", () => {
+    const model = buildTripMapSurfaceModel({
+      activeScenario: {
+        scenario_id: "scenario:1",
+        title: "Kyoto base",
+        rank: 1,
+        status: "lead",
+        summary: "Baseline",
+        comparison_note: "Lead route",
+        option_count: 1,
+        route_sequence: ["kyoto"],
+        route_summary: "kyoto",
+        recommended_for_selection: true,
+        feasible: true,
+        metrics: {
+          score: 0.93,
+          travel_minutes: 120,
+          transfers: 1,
+          estimated_total: null,
+        },
+        delta: {
+          score_delta: 0,
+          travel_minutes_delta: 0,
+          transfers_delta: 0,
+          estimated_total_delta: null,
+        },
+        highlights: ["Low-friction baseline."],
+      },
+      bundles: [],
+      feasibilitySummary: {
+        assessment_count: 0,
+        recommended_bundle_count: 0,
+        blocking_bundle_count: 0,
+        attention_bundle_count: 0,
+        notes: [],
+        assessments: [],
+      },
+      googleMapsApiKey: "test-key",
+    });
+
+    expect(model.routeState).toBe("sparse");
+    expect(model.provider.kind).toBe("fallback");
+    expect(model.provider.status).toBe("sparse-route");
+    expect(model.routeSegments).toHaveLength(0);
+    expect(model.markers).toHaveLength(1);
+  });
+
   it("emits lodging, activity, and transport markers from mixed bundle contexts", () => {
     const model = buildTripMapSurfaceModel({
       activeScenario: {

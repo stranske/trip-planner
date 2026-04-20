@@ -1130,9 +1130,59 @@ describe("WorkspacePage", () => {
     });
 
     expect(screen.getByText("Compact review stack keeps map, timeline, and tradeoff calls visible on smaller screens.")).toBeInTheDocument();
-    expect(screen.getByText("Fallback route path")).toBeInTheDocument();
+    expect(screen.getByText("Textual fallback route path")).toBeInTheDocument();
     expect(screen.getAllByText(/Google Maps JavaScript is not configured in this environment/).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Compact day-by-day review" })).toBeInTheDocument();
+  });
+
+  it("renders a loading fallback state while the provider adapter is initializing", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
+    vi.stubEnv("VITE_GOOGLE_MAPS_PROVIDER_STATE", "loading");
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Provider loading fallback path")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(/Google Maps JavaScript is loading/).length).toBeGreaterThan(0);
+    expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
+  });
+
+  it("renders a sparse-route fallback state and keeps map context visible", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        runtime_scenario_comparison: {
+          ...workspacePayload.runtime_scenario_comparison,
+          scenarios: workspacePayload.runtime_scenario_comparison.scenarios.map((scenario) =>
+            scenario.scenario_id === "scenario:trip-leisure-kyoto-draft:1"
+              ? {
+                  ...scenario,
+                  route_sequence: ["kyoto"],
+                  route_summary: "kyoto",
+                }
+              : scenario
+          ),
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Sparse route fallback path")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(/needs at least an origin and destination/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
   });
 
   it("renders an explicit empty state when runtime scenarios are unavailable", async () => {
