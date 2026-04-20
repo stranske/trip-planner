@@ -12,6 +12,7 @@ from trip_planner.app.services.feasibility import (
     build_feasibility_planner_outputs,
     build_feasibility_summary_payload,
 )
+from trip_planner.app.services.scenarios import _runtime_business_profile
 from trip_planner.options import InventoryBundle
 from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.activity import PersistedPlannerAction
@@ -30,6 +31,26 @@ _FIXTURE_ADAPTER_MARKERS = {
     "Kyoto ranked scenario workspace",
     "Client summit ranked scenarios",
 }
+
+
+def test_runtime_business_profile_normalizes_punctuated_regions_to_home_airports() -> None:
+    profile = _runtime_business_profile(
+        trip_title="Kyoto kickoff",
+        primary_regions=("Kyoto, Japan",),
+        traveler_party_kind="team",
+    )
+
+    assert profile.traveler_context.home_airport == "KIX"
+
+
+def test_runtime_business_profile_uses_valid_default_home_airport_for_unknown_regions() -> None:
+    profile = _runtime_business_profile(
+        trip_title="Regional kickoff",
+        primary_regions=("Remote client campus",),
+        traveler_party_kind=None,
+    )
+
+    assert profile.traveler_context.home_airport == "ORD"
 
 
 @pytest.fixture

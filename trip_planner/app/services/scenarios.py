@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from copy import deepcopy
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import unicodedata
 
 from trip_planner.business import (
     ApprovalTargets,
@@ -75,6 +77,10 @@ _SCENARIO_FIXTURE_SEEDS: dict[str, ScenarioFixtureSeed] = {
 _DEFAULT_LEISURE_FIXTURE_ID = "urban-historian"
 _DEFAULT_BUSINESS_PROFILE_FIXTURE = "client_meeting_profile.json"
 _DEFAULT_BUSINESS_CONSTRAINT_FIXTURE = "policy_round_trip_exception.json"
+_RUNTIME_LODGING_KEY = "lodging"
+_RUNTIME_TRANSPORT_KEY = "transport"
+_RUNTIME_ACTIVITIES_KEY = "activities"
+_RUNTIME_DEFAULT_HOME_AIRPORT = "ORD"
 _BUSINESS_HOME_AIRPORT_BY_REGION: dict[str, str] = {
     "austin": "AUS",
     "chicago": "ORD",
@@ -83,6 +89,23 @@ _BUSINESS_HOME_AIRPORT_BY_REGION: dict[str, str] = {
     "seattle": "SEA",
     "tokyo": "HND",
 }
+_RUNTIME_SPENDING_PRIORITIES: dict[str, float] = {
+    _RUNTIME_LODGING_KEY: 0.42,
+    _RUNTIME_TRANSPORT_KEY: 0.36,
+    _RUNTIME_ACTIVITIES_KEY: 0.5,
+}
+_RUNTIME_QUALITY_FLOORS: dict[str, str] = {
+    _RUNTIME_LODGING_KEY: "comfortable local base",
+    _RUNTIME_TRANSPORT_KEY: "low-friction transfers",
+}
+_RUNTIME_COMPARISON_REQUIREMENTS: dict[str, int] = {
+    _RUNTIME_LODGING_KEY: 1,
+    _RUNTIME_TRANSPORT_KEY: 1,
+}
+_RUNTIME_REQUIRED_RECEIPT_CATEGORIES = [_RUNTIME_LODGING_KEY, _RUNTIME_TRANSPORT_KEY]
+_RUNTIME_TRADEOFF_CONFIDENCE = 0.45
+_RUNTIME_TRADEOFF_SALIENCE = 0.35
+_RUNTIME_TRADEOFF_STABILITY = 0.4
 
 
 def _repo_root() -> Path:
@@ -109,7 +132,17 @@ def _default_scenario_title(
 
 
 def _slug(value: str) -> str:
-    return "-".join(part for part in value.lower().split() if part) or "destination"
+    normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    return "-".join(re.findall(r"[a-z0-9]+", normalized.lower())) or "destination"
+
+
+def _home_airport_for_regions(primary_regions: tuple[str, ...]) -> str:
+    for region in primary_regions:
+        region_slug = _slug(region)
+        for candidate in (region_slug, *region_slug.split("-")):
+            if candidate in _BUSINESS_HOME_AIRPORT_BY_REGION:
+                return _BUSINESS_HOME_AIRPORT_BY_REGION[candidate]
+    return _RUNTIME_DEFAULT_HOME_AIRPORT
 
 
 def _runtime_leisure_profile(
@@ -141,18 +174,15 @@ def _runtime_leisure_profile(
     )
     budget_model = BudgetModel(
         total_budget_sensitivity=0.45,
-        spending_priorities={
-            "lodging": 0.42,
-            "transport": 0.36,
-            "activities": 0.5,
-        },
-        quality_floors={
-            "lodging": "comfortable local base",
-            "transport": "low-friction transfers",
-        },
+        spending_priorities=dict(_RUNTIME_SPENDING_PRIORITIES),
+        quality_floors=dict(_RUNTIME_QUALITY_FLOORS),
     )
     tradeoffs = {
-        key: TradeoffDimension(confidence=0.45, salience=0.35, stability=0.4)
+        key: TradeoffDimension(
+            confidence=_RUNTIME_TRADEOFF_CONFIDENCE,
+            salience=_RUNTIME_TRADEOFF_SALIENCE,
+            stability=_RUNTIME_TRADEOFF_STABILITY,
+        )
         for key in leisure_schema.TRADEOFF_DIMENSION_KEYS
     }
     tradeoffs["route_coherence_vs_eclectic_contrast"].value = 0.35
@@ -208,13 +238,12 @@ def _runtime_business_profile(
     primary_regions: tuple[str, ...],
     traveler_party_kind: str | None,
 ) -> BusinessTravelProfile:
-    region_key = _slug(primary_regions[0]) if primary_regions else ""
     purpose_summary = trip_title or ", ".join(primary_regions[:2]) or "Persisted business trip"
     return BusinessTravelProfile(
         traveler_context=TravelerContext(
             employee_type="employee",
             traveler_experience="occasional",
-            home_airport=_BUSINESS_HOME_AIRPORT_BY_REGION.get(region_key, "TBD"),
+            home_airport=_home_airport_for_regions(primary_regions),
             loyalty_programs=[],
             mobility_or_access_needs=[],
         ),
@@ -230,7 +259,7 @@ def _runtime_business_profile(
         ),
         vendor_constraints=VendorConstraints(
             approved_vendors=[],
-            comparison_requirements={"lodging": 1, "transport": 1},
+            comparison_requirements=dict(_RUNTIME_COMPARISON_REQUIREMENTS),
         ),
         schedule_requirements=ScheduleRequirements(
             arrival_buffer_preference="moderate",
@@ -249,7 +278,7 @@ def _runtime_business_profile(
             work_enablers=["reliable wifi"],
         ),
         documentation_requirements=DocumentationRequirements(
-            required_receipt_categories=["lodging", "transport"],
+            required_receipt_categories=list(_RUNTIME_REQUIRED_RECEIPT_CATEGORIES),
             justification_fields=["business purpose", "source-backed option rationale"],
             comparable_capture_required=True,
             booking_link_retention_required=True,
