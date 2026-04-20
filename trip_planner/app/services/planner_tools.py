@@ -316,10 +316,18 @@ def _read_policy_state(
 ) -> PlannerToolResult:
     del arguments
     payload = get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
+    summary = payload["summary"]
     output = {
-        "status": payload["summary"]["status"],
-        "ready_for_submission": payload["summary"]["ready_for_submission"],
-        "issue_count": payload["summary"]["issue_count"],
+        "status": summary["status"],
+        "ready_for_submission": bool(
+            summary.get("ready_for_submission") or summary.get("approval_ready")
+        ),
+        "issue_count": int(
+            summary.get("issue_count")
+            or summary.get("blocking_failure_count")
+            or summary.get("approval_requirement_count")
+            or 0
+        ),
     }
     return PlannerToolResult(
         tool_name="read_policy_state",
@@ -339,10 +347,18 @@ def _read_proposal_state(
 ) -> PlannerToolResult:
     del arguments
     payload = get_workspace_proposal_payload(db_session, user=user, trip_id=trip_id)
+    summary = payload["summary"]
     output = {
-        "status": payload["summary"]["status"],
-        "requires_follow_up": payload["summary"]["requires_follow_up"],
-        "needs_exception": payload["summary"]["needs_exception"],
+        "status": summary["status"],
+        "requires_follow_up": bool(
+            summary.get("requires_follow_up")
+            or summary.get("follow_up_status")
+            in {"reoptimization_required", "exception_required", "exception_requested"}
+        ),
+        "needs_exception": bool(
+            summary.get("needs_exception")
+            or summary.get("follow_up_status") in {"exception_required", "exception_requested"}
+        ),
     }
     return PlannerToolResult(
         tool_name="read_proposal_state",
