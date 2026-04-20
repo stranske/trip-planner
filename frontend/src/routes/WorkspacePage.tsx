@@ -717,8 +717,23 @@ function WorkspacePageContent({
           <p className="status-label">Planner panel</p>
           <h2>Trip-scoped planner surface</h2>
           <p className="muted-copy">
-            The existing planner side panel now mounts inside the workspace route and reads trip-scoped API data.
+            {currentWorkspace.planner_panel_state.planner_behavior.runtime_summary ??
+              "The existing planner side panel now mounts inside the workspace route and reads trip-scoped API data."}
           </p>
+          <div className="planner-runtime-row" aria-label="Planner runtime state">
+            <span
+              className={`planner-runtime-pill planner-runtime-pill--${
+                currentWorkspace.planner_panel_state.planner_behavior.runtime_status ?? "fallback"
+              }`}
+            >
+              {currentWorkspace.planner_panel_state.planner_behavior.runtime_label ?? "Deterministic fallback planner"}
+            </span>
+            <span className="planner-runtime-mode">
+              {currentWorkspace.planner_panel_state.planner_behavior.runtime_mode === "model"
+                ? "Model-backed"
+                : "Fallback"}
+            </span>
+          </div>
           {plannerBusyLabel ? <p className="muted-copy">{plannerBusyLabel}</p> : null}
           {plannerError ? <p className="planner-inline-error">{plannerError}</p> : null}
           <PlannerSidePanelSurface

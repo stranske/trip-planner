@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,10 +17,15 @@ from trip_planner.app.services.planner_memory import (
     ensure_planner_memory_persisted,
     refresh_planner_memory,
 )
+from trip_planner.app.services.planner_runtime_config import (
+    PlannerRuntimeConfig,
+    get_planner_runtime_config,
+)
 from trip_planner.app.services.planner_tools import (
     execute_planner_tool_call,
     list_planner_tools,
 )
+from trip_planner.preferences.autonomy import AutonomyGuardrails
 from trip_planner.app.services.workspace import (
     WORKSPACE_ACTIVITY_LOG_LIMIT,
     _append_activity_event,
@@ -47,6 +53,7 @@ class PlannerConversationRequest:
     message: str
     planner_panel_state: dict[str, Any]
     session: PlanningSessionState
+    runtime_context: dict[str, Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +61,30 @@ class PlannerConversationReply:
     content: str
     refs: list[str]
     tool_calls: list[dict[str, Any]]
+    requested_tool_calls: list[dict[str, Any]] | None = None
+
+
+class PlannerChatModel(Protocol):
+    def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Return planner content and optional tool call requests."""
+
+
+PlannerChatModelFactory = Callable[[PlannerRuntimeConfig], PlannerChatModel]
+
+_PLANNER_CHAT_MODEL_FACTORY: PlannerChatModelFactory | None = None
+_GROUNDING_TOOL_NAMES: tuple[str, ...] = (
+    "read_workspace_state",
+    "refresh_inventory",
+    "refresh_scenarios",
+    "read_budget_state",
+    "read_policy_state",
+    "read_proposal_state",
+)
+
+
+def set_planner_chat_model_factory_for_tests(factory: PlannerChatModelFactory | None) -> None:
+    global _PLANNER_CHAT_MODEL_FACTORY
+    _PLANNER_CHAT_MODEL_FACTORY = factory
 
 
 class PlannerConversationRunnable(Protocol):
@@ -64,7 +95,7 @@ class PlannerConversationRunnable(Protocol):
 
 
 class DeterministicPlannerConversationRunnable:
-    """Small provider-neutral runnable until a real LangChain chat stack is attached."""
+    """Provider-neutral fallback when planner model configuration is absent."""
 
     def invoke(self, request: PlannerConversationRequest) -> PlannerConversationReply:
         panel = request.planner_panel_state
@@ -105,14 +136,107 @@ class DeterministicPlannerConversationRunnable:
             refs.extend(output["output_id"] for output in outputs[:2])
 
         lines.append(
-            "This reply is generated through the planner runnable boundary so a LangChain-backed engine can replace it without changing the route handlers."
+            "Deterministic planner fallback is active; configure a planner model for tool-grounded orchestration."
         )
         deduped_refs = list(dict.fromkeys(refs))
         return PlannerConversationReply(content=" ".join(lines), refs=deduped_refs, tool_calls=[])
 
 
-def _planner_runnable() -> PlannerConversationRunnable:
-    return DeterministicPlannerConversationRunnable()
+class _OpenAIPlannerChatModel:
+    def __init__(self, config: PlannerRuntimeConfig) -> None:
+        if not config.model:
+            raise ValueError("Planner model name is required.")
+        from langchain_openai import ChatOpenAI
+
+        self._model = ChatOpenAI(model=config.model, temperature=0)
+
+    def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool["tool_name"],
+                    "description": tool["description"],
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": True,
+                    },
+                },
+            }
+            for tool in payload["available_tools"]
+        ]
+        model = self._model.bind_tools(tools)
+        response = model.invoke(
+            [
+                (
+                    "system",
+                    "You are a trip-scoped planner. Use only the listed app tools for "
+                    "workspace, inventory, scenario, budget, policy, or proposal facts. "
+                    "Do not invent persisted state.",
+                ),
+                (
+                    "human",
+                    json.dumps(
+                        {
+                            "message": payload["message"],
+                            "context": payload["runtime_context"],
+                        },
+                        default=str,
+                    ),
+                ),
+            ]
+        )
+        tool_calls: list[dict[str, Any]] = []
+        for call in getattr(response, "tool_calls", []) or []:
+            tool_calls.append(
+                {
+                    "tool_name": call.get("name") or call.get("tool_name") or "",
+                    "arguments": call.get("args") or call.get("arguments") or {},
+                }
+            )
+        return {"content": str(response.content), "tool_calls": tool_calls}
+
+
+class ModelBackedPlannerConversationRunnable:
+    def __init__(self, config: PlannerRuntimeConfig, chat_model: PlannerChatModel) -> None:
+        self._config = config
+        self._chat_model = chat_model
+
+    def invoke(self, request: PlannerConversationRequest) -> PlannerConversationReply:
+        raw = self._chat_model.invoke(
+            {
+                "message": request.message,
+                "trip_id": request.trip_id,
+                "available_tools": list_planner_tools(),
+                "runtime_context": request.runtime_context,
+                "provider": self._config.provider,
+                "model": self._config.model,
+            }
+        )
+        content = str(raw.get("content") or "").strip()
+        if not content:
+            content = "Planner model returned an empty response after reading the current trip context."
+        requested_tool_calls = [
+            {
+                "tool_name": str(item.get("tool_name") or item.get("name") or ""),
+                "arguments": item.get("arguments") or item.get("args") or {},
+            }
+            for item in list(raw.get("tool_calls") or [])
+        ]
+        return PlannerConversationReply(
+            content=content,
+            refs=[request.session.session_state_id],
+            tool_calls=[],
+            requested_tool_calls=requested_tool_calls,
+        )
+
+
+def _planner_runnable(config: PlannerRuntimeConfig) -> PlannerConversationRunnable:
+    if config.mode != "model":
+        return DeterministicPlannerConversationRunnable()
+    factory = _PLANNER_CHAT_MODEL_FACTORY or (lambda runtime_config: _OpenAIPlannerChatModel(runtime_config))
+    return ModelBackedPlannerConversationRunnable(config, factory(config))
 
 
 def _conversation_id(trip_id: str) -> str:
@@ -187,6 +311,43 @@ def _activity_log(
     return [_serialize_activity_record(record) for record in records]
 
 
+def _planner_runtime_context(
+    workspace_payload: dict[str, Any],
+    *,
+    session: PlanningSessionState,
+    planner_memory: dict[str, Any],
+    activity_log: list[dict[str, Any]],
+) -> dict[str, Any]:
+    panel = workspace_payload["planner_panel_state"]
+    required_sections = {
+        "inventory_summary": workspace_payload.get("inventory_summary") or {},
+        "scenario_search": workspace_payload.get("scenario_search") or {},
+        "runtime_scenario_comparison": workspace_payload.get("runtime_scenario_comparison") or {},
+        "budget_state": workspace_payload.get("budget_state") or {},
+        "planner_memory": planner_memory,
+    }
+    missing_sections = [key for key, value in required_sections.items() if not value]
+    return {
+        "trip": panel["trip"],
+        "pending_decisions": panel.get("pending_decisions") or [],
+        "option_set": panel.get("option_set") or {},
+        "outputs": panel.get("outputs") or [],
+        **required_sections,
+        "policy_state": workspace_payload.get("policy_state") or {},
+        "proposal_state": workspace_payload.get("proposal_state") or {},
+        "autonomy_preferences": {
+            "interaction_state": session.interaction_state.to_dict(),
+            "guardrails": AutonomyGuardrails().to_dict(),
+            "planner_behavior": panel.get("planner_behavior") or {},
+        },
+        "recent_activity": activity_log[:8],
+        "context_readiness": {
+            "status": "partial" if missing_sections else "ready",
+            "missing_sections": missing_sections,
+        },
+    }
+
+
 def _planner_session_payload(
     db_session: Session,
     *,
@@ -200,22 +361,90 @@ def _planner_session_payload(
 
     session = workspace_payload["session"]
     session_state_id = session["session_state_id"]
+    planner_memory = build_planner_memory_payload(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session_state_id,
+    )
+    activity_log = _activity_log(db_session, trip_id=trip_id)
     return {
         "trip_id": trip_id,
         "session_state_id": session_state_id,
         "conversation_id": _conversation_id(trip_id),
         "resumed_at": resumed_at,
+        "runtime": get_planner_runtime_config().to_payload(),
         "session": session,
         "planner_panel_state": workspace_payload["planner_panel_state"],
-        "planner_memory": build_planner_memory_payload(
-            db_session,
-            trip_id=trip_id,
-            session_state_id=session_state_id,
-        ),
+        "planner_memory": planner_memory,
         "available_tools": list_planner_tools(),
-        "activity_log": _activity_log(db_session, trip_id=trip_id),
+        "activity_log": activity_log,
         "messages": _conversation_messages(db_session, session_state_id=session_state_id),
     }
+
+
+def _tool_call_error(tool_name: str, message: str) -> dict[str, Any]:
+    return {
+        "tool_name": tool_name or "unknown",
+        "status": "error",
+        "summary": message,
+        "mutates_state": False,
+        "refs": [],
+        "output": {"error": message},
+    }
+
+
+def _planner_model_error_reply(
+    *,
+    session_state_id: str,
+    error: Exception,
+) -> PlannerConversationReply:
+    message = (
+        "Planner model runtime failed before it could complete the turn. "
+        "The traveler message was saved, and the visible error state is available for retry."
+    )
+    return PlannerConversationReply(
+        content=f"{message} Error: {error}",
+        refs=[session_state_id],
+        tool_calls=[_tool_call_error("planner_model", str(error))],
+    )
+
+
+def _execute_model_tool_calls(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    tool_calls: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    executed: list[dict[str, Any]] = []
+    for tool_call in tool_calls or []:
+        tool_name = str(tool_call.get("tool_name") or "")
+        try:
+            result = execute_planner_tool_call(
+                db_session,
+                user=user,
+                trip_id=trip_id,
+                tool_name=tool_name,
+                arguments=tool_call.get("arguments") or {},
+            )
+        except Exception as error:
+            executed.append(_tool_call_error(tool_name, str(error)))
+        else:
+            executed.append(result.to_dict())
+    return executed
+
+
+def _missing_grounding_tool_calls(executed_tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen = {
+        str(item.get("tool_name") or "")
+        for item in executed_tool_calls
+        if str(item.get("status") or "") == "completed"
+    }
+    return [
+        {"tool_name": tool_name, "arguments": {}}
+        for tool_name in _GROUNDING_TOOL_NAMES
+        if tool_name not in seen
+    ]
 
 
 def get_planner_session_payload(
@@ -312,6 +541,7 @@ def submit_planner_turn(
             "content": normalized_message,
             "refs": session.session_state_id,
             "tool_calls": [],
+            "selected_planning_mode": session.mode,
         },
     )
 
@@ -330,15 +560,57 @@ def submit_planner_turn(
     if workspace_payload is None:
         raise WorkspacePlannerTripNotFoundError(f"Trip '{trip_id}' was not found.")
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
-    runnable = _planner_runnable()
-    reply = runnable.invoke(
-        PlannerConversationRequest(
-            trip_id=trip_id,
-            message=normalized_message,
-            planner_panel_state=workspace_payload["planner_panel_state"],
-            session=session,
-        )
+    planner_memory = build_planner_memory_payload(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
     )
+    activity_log = _activity_log(db_session, trip_id=trip_id)
+    runtime_config = get_planner_runtime_config()
+    runnable = _planner_runnable(runtime_config)
+    runtime_context = _planner_runtime_context(
+        workspace_payload,
+        session=session,
+        planner_memory=planner_memory,
+        activity_log=activity_log,
+    )
+    try:
+        reply = runnable.invoke(
+            PlannerConversationRequest(
+                trip_id=trip_id,
+                message=normalized_message,
+                planner_panel_state=workspace_payload["planner_panel_state"],
+                session=session,
+                runtime_context=runtime_context,
+            )
+        )
+    except Exception as error:
+        reply = _planner_model_error_reply(
+            session_state_id=session.session_state_id,
+            error=error,
+        )
+    model_tool_calls = _execute_model_tool_calls(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        tool_calls=reply.requested_tool_calls,
+    )
+    executed_tool_calls.extend(model_tool_calls)
+    model_runtime_failed = any(
+        item.get("tool_name") == "planner_model" and item.get("status") == "error"
+        for item in reply.tool_calls
+    )
+    if runtime_config.mode == "model" and not model_runtime_failed:
+        grounding_tool_calls = _missing_grounding_tool_calls(executed_tool_calls)
+        if grounding_tool_calls:
+            executed_tool_calls.extend(
+                _execute_model_tool_calls(
+                    db_session,
+                    user=user,
+                    trip_id=trip_id,
+                    tool_calls=grounding_tool_calls,
+                )
+            )
     if executed_tool_calls:
         tool_summary = " ".join(item["summary"] for item in executed_tool_calls)
         reply = PlannerConversationReply(
@@ -371,6 +643,14 @@ def submit_planner_turn(
             "content": reply.content,
             "refs": ",".join(reply.refs),
             "tool_calls": reply.tool_calls,
+            "selected_planning_mode": session.mode,
+            "planning_stage": (
+                workspace_payload["planner_panel_state"]
+                .get("planner_behavior", {})
+                .get("trip_stage")
+            ),
+            "runtime_mode": runtime_config.mode,
+            "context_readiness": runtime_context["context_readiness"],
         },
     )
     refresh_planner_memory(

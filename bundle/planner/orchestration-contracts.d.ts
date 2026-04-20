@@ -144,6 +144,10 @@ export interface PlannerOutputRecord {
 
 export interface PlannerBehaviorRecord {
   trip_stage: string;
+  runtime_mode?: "model" | "fallback";
+  runtime_status?: "ready" | "fallback" | "error";
+  runtime_label?: string;
+  runtime_summary?: string;
   ask_before_next_major_change: boolean;
   target_research_passes: number;
   target_options_before_checkpoint: number;

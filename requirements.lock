@@ -9,6 +9,7 @@ annotated-types==0.7.0
 anyio==4.13.0
     # via
     #   httpx
+    #   openai
     #   starlette
 black==26.3.1
     # via trip-planner (pyproject.toml)
@@ -16,6 +17,9 @@ certifi==2026.2.25
     # via
     #   httpcore
     #   httpx
+    #   requests
+charset-normalizer==3.4.7
+    # via requests
 click==8.3.1
     # via
     #   black
@@ -24,8 +28,11 @@ colorama==0.4.6 ; sys_platform == 'win32'
     # via
     #   click
     #   pytest
+    #   tqdm
 coverage==7.13.5
     # via pytest-cov
+distro==1.9.0
+    # via openai
 fastapi==0.135.3
     # via trip-planner (pyproject.toml)
 greenlet==3.4.0 ; platform_machine == 'AMD64' or platform_machine == 'WIN32' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'ppc64le' or platform_machine == 'win32' or platform_machine == 'x86_64'
@@ -37,13 +44,31 @@ h11==0.16.0
 httpcore==1.0.9
     # via httpx
 httpx==0.28.1
-    # via trip-planner (pyproject.toml)
+    # via
+    #   trip-planner (pyproject.toml)
+    #   langsmith
+    #   openai
 idna==3.11
     # via
     #   anyio
     #   httpx
+    #   requests
 iniconfig==2.3.0
     # via pytest
+jiter==0.14.0
+    # via openai
+jsonpatch==1.33
+    # via langchain-core
+jsonpointer==3.1.1
+    # via jsonpatch
+langchain-core==1.2.31
+    # via
+    #   trip-planner (pyproject.toml)
+    #   langchain-openai
+langchain-openai==1.1.14
+    # via trip-planner (pyproject.toml)
+langsmith==0.7.32
+    # via langchain-core
 librt==0.9.0 ; platform_python_implementation != 'PyPy'
     # via mypy
 mako==1.3.10
@@ -56,9 +81,15 @@ mypy-extensions==1.1.0
     # via
     #   black
     #   mypy
+openai==2.32.0
+    # via langchain-openai
+orjson==3.11.8 ; platform_python_implementation != 'PyPy'
+    # via langsmith
 packaging==25.0
     # via
     #   black
+    #   langchain-core
+    #   langsmith
     #   pytest
 pathspec==1.0.4
     # via
@@ -71,7 +102,11 @@ pluggy==1.6.0
     #   pytest
     #   pytest-cov
 pydantic==2.12.5
-    # via fastapi
+    # via
+    #   fastapi
+    #   langchain-core
+    #   langsmith
+    #   openai
 pydantic-core==2.41.5
     # via pydantic
 pygments==2.19.2
@@ -84,20 +119,41 @@ pytest-cov==7.1.0
     # via trip-planner (pyproject.toml)
 pytokens==0.4.1
     # via black
+pyyaml==6.0.3
+    # via langchain-core
+regex==2026.4.4
+    # via tiktoken
+requests==2.33.1
+    # via
+    #   langsmith
+    #   requests-toolbelt
+    #   tiktoken
+requests-toolbelt==1.0.0
+    # via langsmith
 ruff==0.15.10
     # via trip-planner (pyproject.toml)
+sniffio==1.3.1
+    # via openai
 sqlalchemy==2.0.49
     # via
     #   trip-planner (pyproject.toml)
     #   alembic
 starlette==0.47.3
     # via fastapi
+tenacity==9.1.4
+    # via langchain-core
+tiktoken==0.12.0
+    # via langchain-openai
+tqdm==4.67.3
+    # via openai
 typing-extensions==4.15.0
     # via
     #   alembic
     #   anyio
     #   fastapi
+    #   langchain-core
     #   mypy
+    #   openai
     #   pydantic
     #   pydantic-core
     #   sqlalchemy
@@ -107,5 +163,15 @@ typing-inspection==0.4.2
     # via
     #   fastapi
     #   pydantic
+urllib3==2.6.3
+    # via requests
+uuid-utils==0.14.1
+    # via
+    #   langchain-core
+    #   langsmith
 uvicorn==0.44.0
     # via trip-planner (pyproject.toml)
+xxhash==3.6.0
+    # via langsmith
+zstandard==0.25.0
+    # via langsmith
