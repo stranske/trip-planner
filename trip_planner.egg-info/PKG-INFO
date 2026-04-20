@@ -2,6 +2,7 @@ Metadata-Version: 2.4
 Name: trip-planner
 Version: 0.1.0
 Requires-Dist: alembic==1.18.4
+Requires-Dist: anyio<4.13
 Requires-Dist: fastapi==0.135.3
 Requires-Dist: langchain-core==1.2.31
 Requires-Dist: langchain-openai==1.1.14

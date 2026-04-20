@@ -566,6 +566,10 @@ def _build_workspace_inventory_inputs(
         trip_mode=record.mode,
         primary_regions=record.primary_regions,
         duration_days=record.duration_days,
+        trip_title=record.title,
+        trip_summary=record.summary,
+        traveler_party_kind=record.traveler_party_kind,
+        traveler_count=record.traveler_count,
     )
     bundles = assemble_inventory_bundles_for_trip(assembly_input=assembly_input)
     return bundles, build_inventory_summary_payload(
@@ -1083,6 +1087,10 @@ def _build_persisted_trip_workspace(
         trip_mode=record.mode,
         primary_regions=record.primary_regions,
         duration_days=record.duration_days,
+        trip_title=record.title,
+        trip_summary=record.summary,
+        traveler_party_kind=record.traveler_party_kind,
+        traveler_count=record.traveler_count,
         allow_fixture_fallback=False,
     )
     resolved_inventory_bundles = (
