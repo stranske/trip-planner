@@ -596,7 +596,11 @@ def submit_planner_turn(
         tool_calls=reply.requested_tool_calls,
     )
     executed_tool_calls.extend(model_tool_calls)
-    if runtime_config.mode == "model":
+    model_runtime_failed = any(
+        item.get("tool_name") == "planner_model" and item.get("status") == "error"
+        for item in reply.tool_calls
+    )
+    if runtime_config.mode == "model" and not model_runtime_failed:
         grounding_tool_calls = _missing_grounding_tool_calls(executed_tool_calls)
         if grounding_tool_calls:
             executed_tool_calls.extend(
