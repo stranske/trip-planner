@@ -175,19 +175,22 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_busin
     assert payload["saved_scenarios"][0]["versions"][0]["label"] == "baseline"
     assert payload["saved_scenarios"][1]["versions"][0]["label"] == "fallback"
     assert payload["scenario_comparison"]["baseline_scenario_id"] == lead_saved_scenario_id
-    assert payload["scenario_search"]["title"] == "Persisted workspace bootstrap comparison"
-    assert payload["runtime_state"]["status"] == "empty"
-    assert payload["scenario_search"]["purpose"] == "workspace_bootstrap"
-    assert payload["scenario_search"]["scenarios"][0]["scenario_id"] == lead_saved_scenario_id
-    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] == lead_saved_scenario_id
-    assert len(payload["runtime_scenario_comparison"]["scenarios"]) == 2
-    assert payload["inventory_summary"]["bundle_count"] == 0
-    assert payload["inventory_summary"]["bundles"] == []
-    assert any(
-        "no longer assemble inventory from fixtures" in note.lower()
-        for note in payload["inventory_summary"]["notes"]
+    assert payload["runtime_state"]["status"] == "ready"
+    assert payload["inventory_summary"]["runtime_state"]["status"] == "ready"
+    assert payload["inventory_summary"]["bundle_count"] > 0
+    assert payload["inventory_summary"]["bundles"][0]["option_count"] > 0
+    assert len(payload["scenario_search"]["scenarios"]) > 0
+    assert payload["scenario_search"]["scenarios"][0]["scenario_id"].startswith("scenario:")
+    assert payload["scenario_search"]["source_refs"]
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("scenario:")
+    assert len(payload["runtime_scenario_comparison"]["scenarios"]) > 0
+    assert payload["runtime_scenario_comparison"]["source_refs"]
+    assert "->" in payload["runtime_scenario_comparison"]["scenarios"][0]["route_summary"]
+    assert all(
+        seeded_id not in payload["trip_record"]["trip"]["trip_id"]
+        for seeded_id in ("trip-leisure-kyoto-draft", "trip-business-client-summit")
     )
-    assert payload["feasibility_summary"]["assessment_count"] == 0
+    assert payload["feasibility_summary"]["assessment_count"] > 0
     assert payload["activity_log"] == []
     assert payload["budget_state"]["summary"]["planned_total"] == 0
     assert payload["budget_state"]["summary"]["actual_total"] == 0
@@ -231,17 +234,20 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
 
     payload = client.get(f"/api/workspace/{trip_id}").json()
 
-    assert payload["runtime_state"]["status"] == "empty"
+    assert payload["runtime_state"]["status"] == "ready"
     assert payload["saved_scenarios"][0]["versions"][0]["title"].startswith("Lisbon")
-    assert payload["scenario_search"]["title"] == "Persisted workspace bootstrap comparison"
-    assert payload["scenario_search"]["purpose"] == "workspace_bootstrap"
-    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
+    assert payload["inventory_summary"]["bundle_count"] > 0
+    assert payload["scenario_search"]["scenarios"]
+    assert payload["scenario_search"]["source_refs"]
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("scenario:")
     assert payload["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"].startswith(
-        "saved-scenario:"
+        "scenario:"
     )
-    assert any(
-        "comparison-pass" in scenario["route_sequence"]
-        for scenario in payload["runtime_scenario_comparison"]["scenarios"]
+    assert payload["runtime_scenario_comparison"]["source_refs"]
+    assert "->" in payload["runtime_scenario_comparison"]["scenarios"][0]["route_summary"]
+    assert all(
+        seeded_id not in payload["trip_record"]["trip"]["trip_id"]
+        for seeded_id in ("trip-leisure-kyoto-draft", "trip-business-client-summit")
     )
     assert payload["planner_panel_state"]["option_set"]["purpose"] == "workspace_review"
     assert payload["planner_memory"]["current_checkpoint_id"] is None
