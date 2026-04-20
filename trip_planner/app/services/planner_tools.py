@@ -318,7 +318,7 @@ def _read_policy_state(
     payload = get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
     summary = payload["summary"]
     output = {
-        "status": summary["status"],
+        "status": summary.get("status", "ready" if payload.get("policy_state") else "missing"),
         "ready_for_submission": bool(
             summary.get("ready_for_submission") or summary.get("approval_ready")
         ),
@@ -348,16 +348,22 @@ def _read_proposal_state(
     del arguments
     payload = get_workspace_proposal_payload(db_session, user=user, trip_id=trip_id)
     summary = payload["summary"]
+    follow_up_status = summary.get("follow_up_status")
     output = {
-        "status": summary["status"],
+        "status": summary.get("status") or summary.get("evaluation_result_status") or "missing",
         "requires_follow_up": bool(
             summary.get("requires_follow_up")
-            or summary.get("follow_up_status")
-            in {"reoptimization_required", "exception_required", "exception_requested"}
+            or follow_up_status
+            in {
+                "awaiting_evaluation",
+                "reoptimization_required",
+                "exception_required",
+                "exception_requested",
+            }
         ),
         "needs_exception": bool(
             summary.get("needs_exception")
-            or summary.get("follow_up_status") in {"exception_required", "exception_requested"}
+            or follow_up_status in {"exception_required", "exception_requested"}
         ),
     }
     return PlannerToolResult(
