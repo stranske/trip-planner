@@ -1,7 +1,7 @@
 import json
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from urllib import error as urllib_error
 import pytest
 from fastapi.testclient import TestClient
@@ -43,7 +43,7 @@ def _install_fake_http(
     monkeypatch: pytest.MonkeyPatch,
     responses: list[_FakeHTTPResponse | Exception],
     *,
-    captured_requests: list[dict[str, object]] | None = None,
+    captured_requests: list[dict[str, Any]] | None = None,
 ) -> None:
     queue = list(responses)
 
@@ -161,7 +161,7 @@ def test_workspace_policy_import_uses_live_tpp_transport_when_response_is_omitte
     monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
     monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
-    captured_requests: list[dict[str, object]] = []
+    captured_requests: list[dict[str, Any]] = []
     _install_fake_http(
         monkeypatch,
         [
