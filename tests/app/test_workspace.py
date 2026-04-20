@@ -343,6 +343,23 @@ def test_workspace_endpoint_creates_non_seeded_persisted_leisure_trip_with_runti
         first_scenario["metrics"][key] is not None
         for key in ("score", "travel_minutes", "transfers")
     )
+    source_metadata = workspace_payload["inventory_summary"]["source_metadata"]
+    assert source_metadata["source_type"] == "persisted_trip"
+    assert source_metadata["origin"] == "runtime"
+    assert source_metadata["adapter_name"] == "persisted-trip-source-inventory"
+    provenance_context = source_metadata["provenance_context"]
+    assert provenance_context["trip_id"] == trip_id
+    assert provenance_context["trip_mode"] == "leisure"
+    assert provenance_context["source_id"] == "persisted-trip-runtime-source"
+    assert provenance_context["query_id"] == f"inventory-query:{trip_id}"
+    assert provenance_context["handoff_id"] == f"handoff:{trip_id}:inventory"
+    assert provenance_context["input_record_ids"]
+    assert provenance_context["issue_codes"] == []
+    assert provenance_context["filters"]["trip_mode"] == "leisure"
+    assert provenance_context["notes"]
+    serialized_source_metadata = json.dumps(source_metadata, sort_keys=True).lower()
+    for forbidden_marker in ("fixture", "seed", "demo", "persistedtripinventoryfixtureadapter"):
+        assert forbidden_marker not in serialized_source_metadata
 
 
 @pytest.mark.parametrize(

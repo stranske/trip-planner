@@ -862,6 +862,32 @@ def build_inventory_summary_payload(
     *,
     assembly_input: InventoryAssemblyInput | None = None,
 ) -> dict[str, Any]:
+    if assembly_input is not None:
+        issue_codes = [issue.code for issue in assembly_input.snapshot.issues]
+        source_metadata = {
+            "source_type": "persisted_trip",
+            "origin": "runtime",
+            "adapter_name": assembly_input.snapshot.adapter_id,
+            "provenance_context": {
+                "trip_id": assembly_input.trip_id,
+                "trip_mode": assembly_input.trip_mode,
+                "source_id": assembly_input.snapshot.source_id,
+                "query_id": assembly_input.query.query_id,
+                "handoff_id": assembly_input.handoff.handoff_id,
+                "input_record_ids": list(assembly_input.handoff.input_record_ids),
+                "issue_codes": issue_codes,
+                "filters": dict(assembly_input.query.filters),
+                "notes": list(assembly_input.query.notes),
+            },
+        }
+    else:
+        source_metadata = {
+            "source_type": "unknown",
+            "origin": "runtime",
+            "adapter_name": "",
+            "provenance_context": {},
+        }
+
     if bundles:
         notes = [
             "Bundle summaries are assembled from normalized destination, lodging, transport, and activity records."
@@ -943,6 +969,7 @@ def build_inventory_summary_payload(
         ],
         "notes": notes,
         "runtime_state": runtime_state,
+        "source_metadata": source_metadata,
     }
 
 

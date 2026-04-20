@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+import json
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from trip_planner.app.main import create_app
 from trip_planner.app.services.inventory import (
     _build_inventory_assembly_input,
     assemble_inventory_bundles_for_trip,
+    build_inventory_summary_payload,
 )
 from trip_planner.persistence.db import reset_database_state
 from trip_planner.persistence.models.trip import PersistedTrip
@@ -140,6 +142,23 @@ def test_inventory_endpoint_assembles_bundles_for_persisted_trip(client: TestCli
     assert any(
         "adapter-backed inventory assembly seam" in note for note in payload["summary"]["notes"]
     )
+    source_metadata = payload["summary"]["source_metadata"]
+    assert source_metadata["source_type"] == "persisted_trip"
+    assert source_metadata["origin"] == "runtime"
+    assert source_metadata["adapter_name"] == "persisted-trip-source-inventory"
+    provenance_context = source_metadata["provenance_context"]
+    assert provenance_context["trip_id"] == trip_id
+    assert provenance_context["trip_mode"] == "business"
+    assert provenance_context["source_id"] == "persisted-trip-runtime-source"
+    assert provenance_context["query_id"] == f"inventory-query:{trip_id}"
+    assert provenance_context["handoff_id"] == f"handoff:{trip_id}:inventory"
+    assert provenance_context["input_record_ids"]
+    assert provenance_context["issue_codes"] == []
+    assert provenance_context["filters"]["trip_mode"] == "business"
+    assert provenance_context["notes"]
+    serialized_source_metadata = json.dumps(source_metadata, sort_keys=True).lower()
+    for forbidden_marker in ("fixture", "seed", "demo", "persistedtripinventoryfixtureadapter"):
+        assert forbidden_marker not in serialized_source_metadata
 
 
 def test_inventory_endpoint_avoids_legacy_fixture_bundle_ids_for_arbitrary_persisted_trip(
@@ -242,3 +261,48 @@ def test_inventory_endpoint_returns_bounded_empty_fallback_for_partial_trip_inpu
     assert payload["bundle_count"] == 0
     assert payload["summary"]["runtime_state"]["status"] == "empty"
     assert "Primary regions are still missing" in payload["summary"]["notes"][0]
+
+
+def test_inventory_summary_source_metadata_is_runtime_derived_for_persisted_trip() -> None:
+    persisted_trip = PersistedTrip(
+        trip_id="trip-runtime-provenance-check",
+        user_id="user-test",
+        title="Chicago workshop",
+        summary="Verify runtime source metadata shape.",
+        mode="business",
+        status="draft",
+        start_date="2026-05-04",
+        end_date="2026-05-06",
+        duration_days=3,
+        primary_regions=["Chicago"],
+        traveler_party_kind="team",
+        traveler_count=3,
+        traveler_notes="",
+    )
+    assembly_input = _build_inventory_assembly_input(
+        trip_id=persisted_trip.trip_id,
+        trip_mode=persisted_trip.mode,
+        persisted_trip=persisted_trip,
+        allow_fixture_fallback=False,
+    )
+    bundles = assemble_inventory_bundles_for_trip(assembly_input=assembly_input)
+
+    summary = build_inventory_summary_payload(bundles, assembly_input=assembly_input)
+
+    source_metadata = summary["source_metadata"]
+    assert source_metadata["source_type"] == "persisted_trip"
+    assert source_metadata["origin"] == "runtime"
+    assert source_metadata["adapter_name"] == "persisted-trip-source-inventory"
+    provenance_context = source_metadata["provenance_context"]
+    assert provenance_context["trip_id"] == persisted_trip.trip_id
+    assert provenance_context["trip_mode"] == "business"
+    assert provenance_context["source_id"] == "persisted-trip-runtime-source"
+    assert provenance_context["query_id"] == f"inventory-query:{persisted_trip.trip_id}"
+    assert provenance_context["handoff_id"] == f"handoff:{persisted_trip.trip_id}:inventory"
+    assert provenance_context["input_record_ids"]
+    assert provenance_context["issue_codes"] == []
+    assert provenance_context["filters"]["trip_mode"] == "business"
+    assert provenance_context["notes"]
+    serialized_source_metadata = json.dumps(source_metadata, sort_keys=True).lower()
+    for forbidden_marker in ("fixture", "seed", "demo", "persistedtripinventoryfixtureadapter"):
+        assert forbidden_marker not in serialized_source_metadata
