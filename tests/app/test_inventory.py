@@ -5,7 +5,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
-from trip_planner.app.services.inventory import _build_inventory_assembly_input
+from trip_planner.app.services.inventory import (
+    _build_inventory_assembly_input,
+    assemble_inventory_bundles_for_trip,
+)
 from trip_planner.persistence.db import reset_database_state
 from trip_planner.persistence.models.trip import PersistedTrip
 
@@ -82,6 +85,24 @@ def test_inventory_assembly_prefers_persisted_trip_context_over_seeded_trip_id()
     assert assembly_input.record_payloads
     assert assembly_input.snapshot.records[0].payload_type == "runtime_bundle_seed"
     assert assembly_input.fixture_names == ()
+
+
+def test_seeded_trip_inventory_assembly_uses_record_payload_contract() -> None:
+    assembly_input = _build_inventory_assembly_input(
+        trip_id="trip-leisure-kyoto-draft",
+        trip_mode="leisure",
+        primary_regions=("Kyoto",),
+        duration_days=4,
+    )
+
+    assert assembly_input.snapshot.adapter_id == "persisted-trip-fixture-inventory"
+    assert assembly_input.record_payloads
+    assert assembly_input.record_payloads[0]["bundle_payloads"]
+
+    bundles = assemble_inventory_bundles_for_trip(assembly_input=assembly_input)
+
+    assert len(bundles) == 2
+    assert bundles[0].bundle_id == "bundle-osaka-gateway"
 
 
 def test_inventory_endpoint_returns_not_found_for_unknown_trip(client: TestClient) -> None:

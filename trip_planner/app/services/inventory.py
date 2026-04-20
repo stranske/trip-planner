@@ -223,18 +223,27 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
                             details={"trip_id": self.trip_id, "trip_mode": self.trip_mode},
                         )
                     )
-        records = [
-            RawSourceRecord(
-                record_id=f"{query.query_id}:{index}",
-                entity_scope=query.entity_scope,
-                provider_entity_id=f"{self.trip_id}:{fixture_name}",
-                payload_type="fixture_bundle",
-                payload={"fixture_name": fixture_name, "trip_id": self.trip_id},
-                captured_at="2026-04-11T00:00:00Z",
-                metadata={"fixture_name": fixture_name},
+        records: list[RawSourceRecord] = []
+        for index, fixture_name in enumerate(fixture_names, start=1):
+            mixed_option = _load_mixed_option_fixture(fixture_name)
+            records.append(
+                RawSourceRecord(
+                    record_id=f"{query.query_id}:{index}",
+                    entity_scope=query.entity_scope,
+                    provider_entity_id=f"{self.trip_id}:{fixture_name}",
+                    payload_type="normalized_bundle_seed",
+                    payload={
+                        "fixture_name": fixture_name,
+                        "trip_id": self.trip_id,
+                        "bundle_payloads": [bundle.to_dict() for bundle in mixed_option.bundles],
+                    },
+                    captured_at="2026-04-11T00:00:00Z",
+                    metadata={
+                        "fixture_name": fixture_name,
+                        "bundle_count": str(len(mixed_option.bundles)),
+                    },
+                )
             )
-            for index, fixture_name in enumerate(fixture_names, start=1)
-        ]
         return RawSnapshot(
             snapshot_id=f"snapshot:{self.trip_id}:inventory",
             adapter_id=self.adapter_id,
@@ -845,22 +854,6 @@ def assemble_inventory_bundles_for_trip(
         for bundle_payload in bundle_payloads:
             if isinstance(bundle_payload, dict):
                 bundles.append(InventoryBundle.from_dict(bundle_payload))
-
-    if bundles:
-        return bundles
-
-    uses_seeded_fixture_ids = assembly_input.trip_id in _FIXTURE_BUNDLE_INPUTS
-    for fixture_index, fixture_name in enumerate(assembly_input.fixture_names, start=1):
-        mixed_option = _load_mixed_option_fixture(fixture_name)
-        for bundle_index, fixture_bundle in enumerate(mixed_option.bundles, start=1):
-            if uses_seeded_fixture_ids:
-                bundles.append(fixture_bundle)
-                continue
-            payload = fixture_bundle.to_dict()
-            payload["bundle_id"] = (
-                f"bundle-{assembly_input.trip_id}-runtime-{fixture_index}-{bundle_index}"
-            )
-            bundles.append(InventoryBundle.from_dict(payload))
     return bundles
 
 
