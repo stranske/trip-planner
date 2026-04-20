@@ -1175,6 +1175,25 @@ describe("WorkspacePage", () => {
     expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
   });
 
+  it("renders a provider-error fallback state and keeps route context visible", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
+    vi.stubEnv("VITE_GOOGLE_MAPS_PROVIDER_STATE", "error");
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Provider error fallback path")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(/failed to load/).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Fallback option markers")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
+  });
+
   it("renders a sparse-route fallback state and keeps map context visible", async () => {
     vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
     mockedUseLoaderData.mockReturnValue({
