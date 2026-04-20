@@ -71,6 +71,101 @@ def _get_latest_proposal_state(
     )
 
 
+_TPP_EXPENSE_CATEGORY_MAP = {
+    "air": "airfare",
+    "airfare": "airfare",
+    "flight": "airfare",
+    "flights": "airfare",
+    "hotel": "lodging",
+    "lodging": "lodging",
+    "ground": "ground_transport",
+    "ground_transport": "ground_transport",
+    "rental_car": "ground_transport",
+    "car": "ground_transport",
+    "meals": "meals",
+    "meal": "meals",
+    "food": "meals",
+    "conference": "conference_fees",
+    "conference_fees": "conference_fees",
+}
+
+
+def _tpp_expense_category(category: str) -> str:
+    normalized = category.strip().lower().replace("-", "_")
+    return _TPP_EXPENSE_CATEGORY_MAP.get(normalized, "other")
+
+
+def _required_tpp_trip_date(value: str | None, field_name: str) -> str:
+    if not value:
+        raise ValueError(f"Live TPP proposal submission requires trip {field_name}.")
+    return value
+
+
+def _aggregate_tpp_costs(proposal: TripPlanProposal) -> dict[str, float]:
+    costs: dict[str, float] = {}
+    for category, amount in proposal.cost_summary.category_estimates.items():
+        tpp_category = _tpp_expense_category(category)
+        costs[tpp_category] = costs.get(tpp_category, 0.0) + float(amount)
+    for option in proposal.selected_options:
+        if option.estimated_cost is None or option.estimated_cost.typical_amount is None:
+            continue
+        tpp_category = _tpp_expense_category(option.category)
+        costs.setdefault(tpp_category, float(option.estimated_cost.typical_amount))
+    return costs
+
+
+def _tpp_trip_plan_payload(
+    record: PersistedTrip,
+    *,
+    user: AuthenticatedUser,
+    proposal: TripPlanProposal,
+) -> dict[str, Any]:
+    primary_regions = [region for region in record.primary_regions if region]
+    if not primary_regions:
+        raise ValueError("Live TPP proposal submission requires at least one primary region.")
+    costs = _aggregate_tpp_costs(proposal)
+    selected_providers = {
+        _tpp_expense_category(option.category): option.vendor
+        for option in proposal.selected_options
+        if option.vendor
+    }
+    comparable_hotels = [
+        comparable.estimated_cost.typical_amount
+        for comparable in proposal.comparables
+        if _tpp_expense_category(comparable.category) == "lodging"
+        and comparable.estimated_cost.typical_amount is not None
+    ]
+    airfare_cost = costs.get("airfare")
+    lodging_cost = costs.get("lodging")
+    transportation_mode = "air" if airfare_cost is not None else "mixed"
+
+    return {
+        "trip_id": proposal.trip_id,
+        "traveler_name": user.display_name,
+        "traveler_role": proposal.traveler_context.employee_type,
+        "department": proposal.constraint_set_id,
+        "destination": ", ".join(primary_regions),
+        "origin_city": proposal.traveler_context.home_airport,
+        "destination_city": primary_regions[0],
+        "departure_date": _required_tpp_trip_date(record.start_date, "start_date"),
+        "return_date": _required_tpp_trip_date(record.end_date, "end_date"),
+        "purpose": record.summary or record.title,
+        "transportation_mode": transportation_mode,
+        "expected_costs": costs,
+        "funding_source": proposal.constraint_set_id,
+        "estimated_cost": proposal.cost_summary.total_estimated_cost,
+        "status": "submitted",
+        "expense_breakdown": costs,
+        "selected_fare": airfare_cost,
+        "flight_cost": airfare_cost,
+        "comparable_hotels": comparable_hotels or ([lodging_cost] if lodging_cost else None),
+        "selected_providers": selected_providers,
+        "validation_results": [],
+        "approval_history": [],
+        "exception_requests": [],
+    }
+
+
 class _PassiveTPPClient(BaseTPPIntegrationClient):
     def __init__(self, response: TPPResponseEnvelope) -> None:
         self.response = response
@@ -84,16 +179,28 @@ def _resolve_submission_response(
     response_payload: dict[str, Any] | None,
     *,
     proposal_version: str,
+    trip_record: PersistedTrip,
+    user: AuthenticatedUser,
+    proposal: TripPlanProposal,
 ) -> TPPResponseEnvelope:
     if response_payload is not None:
         return TPPResponseEnvelope.from_dict(response_payload)
     live_request = request
-    if not request.payload.get("proposal_version"):
+    live_payload = dict(request.payload)
+    if not live_payload.get("proposal_version"):
+        live_payload["proposal_version"] = proposal_version
+    if not isinstance(live_payload.get("trip_plan"), dict):
+        live_payload["trip_plan"] = _tpp_trip_plan_payload(
+            trip_record,
+            user=user,
+            proposal=proposal,
+        )
+    if live_payload != request.payload:
         live_request = TPPRequestEnvelope(
             operation=request.operation,
             request_id=request.request_id,
             correlation_id=request.correlation_id,
-            payload={**request.payload, "proposal_version": proposal_version},
+            payload=live_payload,
             transport_pattern=request.transport_pattern,
             organization_id=request.organization_id,
             trip_id=request.trip_id,
@@ -619,6 +726,9 @@ def save_workspace_proposal_submission(
         request,
         response_payload,
         proposal_version=proposal_version,
+        trip_record=trip_record,
+        user=user,
+        proposal=proposal,
     )
     submission = TPPProposalSubmissionService(_PassiveTPPClient(response)).submit_proposal(
         request,

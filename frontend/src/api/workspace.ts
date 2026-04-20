@@ -255,6 +255,55 @@ export type PlannerMemoryArtifact = {
   updated_at: string;
 };
 
+export type PlannerMemoryState = {
+  current_checkpoint_id: string | null;
+  checkpoints: PlannerCheckpoint[];
+  artifacts: PlannerMemoryArtifact[];
+};
+
+export type ActivityLogEntry = {
+  activity_event_id: string;
+  occurred_at: string;
+  event_kind: string;
+  summary: string;
+};
+
+export type PlannerToolCallResponse = {
+  tool_name: string;
+  status: string;
+  summary: string;
+  mutates_state: boolean;
+  refs: string[];
+  output: Record<string, unknown>;
+};
+
+export type PlannerMessage = {
+  message_id: string;
+  role: "user" | "planner" | string;
+  content: string;
+  created_at: string;
+  refs: string[];
+  tool_calls: PlannerToolCallResponse[];
+};
+
+export type PlannerSessionResponse = {
+  trip_id: string;
+  session_state_id: string;
+  conversation_id: string;
+  resumed_at: string | null;
+  session: SessionState;
+  planner_panel_state: PlannerPanelState;
+  planner_memory: PlannerMemoryState;
+  available_tools: Array<{
+    tool_name: string;
+    description?: string;
+    mutates_state?: boolean;
+    [key: string]: unknown;
+  }>;
+  activity_log: ActivityLogEntry[];
+  messages: PlannerMessage[];
+};
+
 export type WorkspaceData = {
   trip_record: TripRecord;
   session: SessionState;
@@ -266,17 +315,8 @@ export type WorkspaceData = {
   } | null;
   scenario_search: ScenarioSearchResult;
   runtime_scenario_comparison: RuntimeScenarioComparison;
-  activity_log: Array<{
-    activity_event_id: string;
-    occurred_at: string;
-    event_kind: string;
-    summary: string;
-  }>;
-  planner_memory: {
-    current_checkpoint_id: string | null;
-    checkpoints: PlannerCheckpoint[];
-    artifacts: PlannerMemoryArtifact[];
-  };
+  activity_log: ActivityLogEntry[];
+  planner_memory: PlannerMemoryState;
   planner_panel_state: PlannerPanelState;
   runtime_state: {
     status: "ready" | "partial" | "empty";
@@ -434,6 +474,28 @@ export async function fetchWorkspace(tripId: string): Promise<WorkspaceData> {
   return fetchJson<WorkspaceData>({
     path: `/api/workspace/${tripId}`,
     credentials: "include",
+  });
+}
+
+export async function fetchPlannerSession(tripId: string): Promise<PlannerSessionResponse> {
+  return fetchJson<PlannerSessionResponse>({
+    path: `/api/planner/${tripId}/session`,
+    credentials: "include",
+  });
+}
+
+export async function submitPlannerTurn(
+  tripId: string,
+  message: string
+): Promise<PlannerSessionResponse> {
+  return fetchJson<PlannerSessionResponse>({
+    path: `/api/planner/${tripId}/turns`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ message }),
   });
 }
 
