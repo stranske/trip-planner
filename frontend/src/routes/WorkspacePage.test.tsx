@@ -994,6 +994,11 @@ describe("WorkspacePage", () => {
     expect(screen.queryByLabelText("Fallback option markers")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /lodging marker: Osaka arrival buffer/ }));
     expect(screen.getAllByRole("heading", { name: "Osaka arrival buffer" }).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: /activity marker: Kyoto cultural anchor/ }));
+    expect(screen.getByRole("heading", { name: "Kyoto cultural anchor" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /policy marker: Route burden warning/ }));
+    expect(screen.getByRole("heading", { name: "Route burden warning" })).toBeInTheDocument();
+    expect(screen.getAllByText("Policy or feasibility warning active").length).toBeGreaterThan(0);
     expect(screen.getByText("Live provider path")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
