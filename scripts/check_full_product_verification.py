@@ -37,6 +37,10 @@ TPP_PORT = 8765
 class VerificationFailure(AssertionError):
     """Raised when a product journey does not satisfy the verification contract."""
 
+    def __init__(self, message: str, **details: Any) -> None:
+        suffix = f" ({json.dumps(details, sort_keys=True)})" if details else ""
+        super().__init__(f"{message}{suffix}")
+
 
 @dataclass(frozen=True)
 class CheckResult:
@@ -47,8 +51,7 @@ class CheckResult:
 
 def _require(condition: bool, message: str, **details: Any) -> None:
     if not condition:
-        suffix = f" ({json.dumps(details, sort_keys=True)})" if details else ""
-        raise VerificationFailure(f"{message}{suffix}")
+        raise VerificationFailure(message, **details)
 
 
 def _fixture(*parts: str) -> dict[str, Any]:
@@ -58,15 +61,28 @@ def _fixture(*parts: str) -> dict[str, Any]:
 
 def run_frontend_runtime_smoke() -> CheckResult:
     command = [str(REPO_ROOT / "scripts" / "check_full_stack_runtime.sh"), "--smoke-only"]
-    completed = subprocess.run(
-        command,
-        cwd=REPO_ROOT,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        timeout=180,
-    )
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=180,
+        )
+    except subprocess.TimeoutExpired as exc:
+        details: dict[str, Any] = {
+            "command": " ".join(command),
+            "timeout": exc.timeout,
+        }
+        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+        if stdout.strip():
+            details["stdout_tail"] = stdout.strip()[-1200:]
+        if stderr.strip():
+            details["stderr_tail"] = stderr.strip()[-1200:]
+        raise VerificationFailure("frontend/runtime smoke timed out", **details) from exc
     details = {
         "command": " ".join(command),
         "returncode": completed.returncode,

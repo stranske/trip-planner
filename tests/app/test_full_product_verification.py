@@ -124,6 +124,16 @@ def test_live_tpp_auto_reports_invalid_repo_path_as_blocked(tmp_path) -> None:
 
 
 def test_required_live_tpp_accepts_ready_prerequisite_after_success(monkeypatch) -> None:
+    for name in (
+        "TPP_BASE_URL",
+        "TPP_ACCESS_TOKEN",
+        "TPP_OIDC_PROVIDER",
+        "TPP_REPO_PATH",
+        "VITE_GOOGLE_MAPS_PROVIDER_STATE",
+        "VITE_GOOGLE_MAPS_BROWSER_API_KEY",
+        "VITE_GOOGLE_MAPS_EMBED_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "token")
     monkeypatch.setenv("TPP_OIDC_PROVIDER", "google")
@@ -166,3 +176,26 @@ def test_frontend_runtime_smoke_reports_subprocess_success(monkeypatch) -> None:
             "stdout_tail": "ok",
         },
     )
+
+
+def test_frontend_runtime_smoke_reports_timeout_with_context(monkeypatch) -> None:
+    def fake_timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(
+            cmd=args[0],
+            timeout=kwargs["timeout"],
+            output="stdout context",
+            stderr="stderr context",
+        )
+
+    monkeypatch.setattr(verifier.subprocess, "run", fake_timeout)
+
+    try:
+        run_frontend_runtime_smoke()
+    except verifier.VerificationFailure as error:
+        message = str(error)
+    else:  # pragma: no cover - assertion guard
+        raise AssertionError("expected smoke timeout to fail verification")
+
+    assert "frontend/runtime smoke timed out" in message
+    assert "stdout context" in message
+    assert "stderr context" in message
