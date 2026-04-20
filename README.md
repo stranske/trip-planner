@@ -146,13 +146,14 @@ For the production-focused journey matrix, run:
 make runtime-production-check
 ```
 
-For a full-product verification lane that creates fresh leisure and business trips, verifies runtime inventory/scenario/planner/proposal identifiers, and reports optional live map/TPP prerequisites explicitly, run:
+For a full-product verification lane that first runs the backend/frontend runtime smoke layer, then creates fresh leisure and business trips, verifies runtime inventory/scenario/planner/proposal identifiers, and reports optional live map/TPP prerequisites explicitly, run:
 
 ```bash
 make full-product-check
 ```
 
 `make runtime-full-product-check` is available as an equivalent runtime-prefixed alias.
+Use `python scripts/check_full_product_verification.py --skip-frontend-smoke` only when you need to isolate the product-journey assertions from frontend/runtime smoke prerequisites.
 
 To smoke-check a deploy preview as well, provide the preview origin:
 

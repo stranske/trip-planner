@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -53,6 +54,30 @@ def _require(condition: bool, message: str, **details: Any) -> None:
 def _fixture(*parts: str) -> dict[str, Any]:
     path = REPO_ROOT / "tests" / "fixtures" / "integrations" / "tpp" / Path(*parts)
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def run_frontend_runtime_smoke() -> CheckResult:
+    command = [str(REPO_ROOT / "scripts" / "check_full_stack_runtime.sh"), "--smoke-only"]
+    completed = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=180,
+    )
+    details = {
+        "command": " ".join(command),
+        "returncode": completed.returncode,
+    }
+    if completed.stdout.strip():
+        details["stdout_tail"] = completed.stdout.strip()[-1200:]
+    if completed.stderr.strip():
+        details["stderr_tail"] = completed.stderr.strip()[-1200:]
+    if completed.returncode != 0:
+        raise VerificationFailure("frontend/runtime smoke failed", **details)
+    return CheckResult("frontend-runtime-smoke", "PASS", details)
 
 
 def _signup(client: TestClient) -> str:
@@ -146,6 +171,116 @@ def _proposal_payload(trip_id: str) -> dict[str, Any]:
         "approval_notes": ["Manager review required before booking."],
         "constraint_set_id": "policy-standard-2026-02",
     }
+
+
+def _prepared_policy_request(trip_id: str) -> dict[str, Any]:
+    request_payload = copy.deepcopy(_fixture("policy", "standard_policy_sync.json")["request"])
+    request_payload["trip_id"] = trip_id
+    return request_payload
+
+
+def _prepared_submission_request(trip_id: str, proposal_id: str) -> dict[str, Any]:
+    request_payload = copy.deepcopy(_fixture("proposal_submit_deferred.json")["request"])
+    request_payload["trip_id"] = trip_id
+    request_payload["proposal_id"] = proposal_id
+    request_payload["payload"]["proposal_ref"] = proposal_id
+    return request_payload
+
+
+def _prepared_evaluation_request(trip_id: str, proposal_id: str, execution_id: str) -> dict[str, Any]:
+    request_payload = copy.deepcopy(_fixture("results", "approved_evaluation.json")["request"])
+    request_payload["trip_id"] = trip_id
+    request_payload["proposal_id"] = proposal_id
+    request_payload["payload"]["execution_id"] = execution_id
+    return request_payload
+
+
+def _prepared_evaluation_response(
+    trip_id: str,
+    proposal_id: str,
+    execution_id: str,
+) -> dict[str, Any]:
+    response_payload = copy.deepcopy(_fixture("results", "approved_evaluation.json")["response"])
+    result_payload = response_payload["result_payload"]
+    result_payload["execution_id"] = execution_id
+    result_payload["trip_id"] = trip_id
+    result_payload["proposal_id"] = proposal_id
+    result_payload["evaluation_result"]["proposal_id"] = proposal_id
+    return response_payload
+
+
+def _assert_workspace_scenario_context(payload: dict[str, Any], *, trip_id: str) -> None:
+    scenario_search = payload["scenario_search"]
+    runtime_comparison = payload["runtime_scenario_comparison"]
+    scenarios = list(scenario_search.get("scenarios") or [])
+    comparison_rows = list(runtime_comparison.get("scenarios") or [])
+    _require(scenarios, "workspace scenario search returned no scenarios", trip_id=trip_id)
+    _require(comparison_rows, "workspace comparison returned no scenarios", trip_id=trip_id)
+    for scenario in scenarios:
+        route_sequence = scenario["scenario_summary"].get("route_sequence") or []
+        _require(
+            len(route_sequence) >= 2,
+            "workspace scenario is missing timeline route context",
+            trip_id=trip_id,
+            scenario_id=scenario.get("scenario_id"),
+        )
+    for row in comparison_rows:
+        _require(
+            row.get("route_sequence"),
+            "workspace comparison row is missing map route context",
+            trip_id=trip_id,
+            scenario_id=row.get("scenario_id"),
+        )
+
+
+def _assert_runtime_inventory(payload: dict[str, Any], *, trip_id: str) -> None:
+    inventory_summary = payload["inventory_summary"]
+    _require(
+        inventory_summary["runtime_state"]["status"] == "ready",
+        "inventory runtime was not ready",
+        trip_id=trip_id,
+    )
+    _require(
+        inventory_summary["bundle_count"] > 0,
+        "journey produced no source-backed inventory bundles",
+        trip_id=trip_id,
+    )
+    source_metadata = inventory_summary["source_metadata"]
+    _require(
+        source_metadata["origin"] == "runtime",
+        "workspace did not expose runtime source metadata",
+        trip_id=trip_id,
+        source_metadata=source_metadata,
+    )
+    fixture_names = source_metadata.get("fixture_names") or []
+    _require(
+        not fixture_names,
+        "persisted workspace unexpectedly exposed fixture-backed runtime labels",
+        trip_id=trip_id,
+        fixture_names=fixture_names,
+    )
+
+
+def _assert_planner_runtime_response(payload: dict[str, Any], *, trip_id: str) -> str:
+    runtime = dict(payload.get("runtime") or {})
+    _require(
+        runtime.get("mode") in {"fallback", "model"},
+        "planner turn did not report a runtime mode",
+        trip_id=trip_id,
+        runtime=runtime,
+    )
+    _require(
+        payload.get("conversation_id") == f"planner-conversation:{trip_id}",
+        "planner turn did not use the trip-scoped runtime conversation",
+        trip_id=trip_id,
+        conversation_id=payload.get("conversation_id"),
+    )
+    _require(
+        payload.get("available_tools"),
+        "planner turn did not expose model-tool runtime capabilities",
+        trip_id=trip_id,
+    )
+    return str(runtime["mode"])
 
 
 def classify_map_prerequisite(env: Mapping[str, str] | None = None) -> CheckResult:
@@ -324,9 +459,7 @@ def _run_live_tpp_journey(client: TestClient, trip_id: str, env: dict[str, str])
         previous = {key: os.environ.get(key) for key in tpp_env}
         os.environ.update(tpp_env)
         try:
-            policy_fixture = _fixture("policy", "standard_policy_sync.json")
-            policy_request = policy_fixture["request"]
-            policy_request["trip_id"] = trip_id
+            policy_request = _prepared_policy_request(trip_id)
             policy_response = client.put(
                 f"/api/workspace/{trip_id}/policy",
                 json={"request": policy_request, "response": None, "tags": ["full-product-live"]},
@@ -340,11 +473,7 @@ def _run_live_tpp_journey(client: TestClient, trip_id: str, env: dict[str, str])
             )
 
             proposal = _proposal_payload(trip_id)
-            submission_fixture = _fixture("proposal_submit_deferred.json")
-            submission_request = submission_fixture["request"]
-            submission_request["trip_id"] = trip_id
-            submission_request["proposal_id"] = proposal["proposal_id"]
-            submission_request["payload"]["proposal_ref"] = proposal["proposal_id"]
+            submission_request = _prepared_submission_request(trip_id, proposal["proposal_id"])
             submission_response = client.put(
                 f"/api/workspace/{trip_id}/proposal",
                 json={
@@ -363,9 +492,25 @@ def _run_live_tpp_journey(client: TestClient, trip_id: str, env: dict[str, str])
                 trip_id=trip_id,
                 proposal_id=proposal["proposal_id"],
             )
+            submission_payload = submission_response.json()
+            execution_id = submission_payload["proposal_state"]["execution_id"]
 
-            evaluation_fixture = _fixture("results", "approved_evaluation.json")
-            evaluation_request = evaluation_fixture["request"]
+            status_response = client.post(f"/api/workspace/{trip_id}/proposal/refresh")
+            _require(
+                status_response.status_code == 200,
+                "live TPP proposal status poll failed",
+                status=status_response.status_code,
+                body=status_response.text,
+                trip_id=trip_id,
+                proposal_id=proposal["proposal_id"],
+                execution_id=execution_id,
+            )
+
+            evaluation_request = _prepared_evaluation_request(
+                trip_id,
+                proposal["proposal_id"],
+                execution_id,
+            )
             evaluation_response = client.put(
                 f"/api/workspace/{trip_id}/proposal/evaluation",
                 json={
@@ -389,6 +534,7 @@ def _run_live_tpp_journey(client: TestClient, trip_id: str, env: dict[str, str])
                 "trip_id": trip_id,
                 "proposal_id": proposal["proposal_id"],
                 "execution_id": payload["proposal_state"]["execution_id"],
+                "status_poll": status_response.json()["summary"]["submission_status"],
                 "evaluation_status": payload["summary"]["evaluation_result_status"],
             }
         finally:
@@ -439,30 +585,29 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
             )
             leisure_payload = leisure_workspace.json()
             comparison = client.get(f"/api/workspace/{leisure_trip_id}/scenarios/compare")
-            _require(comparison.status_code == 200, "scenario comparison failed")
+            _require(
+                comparison.status_code == 200,
+                "scenario comparison failed",
+                status=comparison.status_code,
+                trip_id=leisure_trip_id,
+                route=f"/api/workspace/{leisure_trip_id}/scenarios/compare",
+            )
             planner_turn = client.post(
                 f"/api/planner/{leisure_trip_id}/turns",
                 json={"message": "Compare these scenarios and recommend a next step."},
             )
-            _require(planner_turn.status_code == 200, "planner turn failed")
             _require(
-                leisure_payload["inventory_summary"]["runtime_state"]["status"] == "ready",
-                "leisure inventory runtime was not ready",
+                planner_turn.status_code == 200,
+                "planner turn failed",
+                status=planner_turn.status_code,
+                body=planner_turn.text,
                 trip_id=leisure_trip_id,
+                route=f"/api/planner/{leisure_trip_id}/turns",
             )
-            _require(
-                leisure_payload["inventory_summary"]["bundle_count"] > 0,
-                "leisure journey produced no source-backed inventory bundles",
-                trip_id=leisure_trip_id,
-            )
-            _require(
-                leisure_payload["runtime_scenario_comparison"]["scenarios"],
-                "leisure scenario comparison returned no scenarios",
-                trip_id=leisure_trip_id,
-            )
-            _require(
-                leisure_payload["inventory_summary"]["source_metadata"]["origin"] == "runtime",
-                "leisure workspace did not expose runtime source metadata",
+            _assert_runtime_inventory(leisure_payload, trip_id=leisure_trip_id)
+            _assert_workspace_scenario_context(leisure_payload, trip_id=leisure_trip_id)
+            planner_runtime = _assert_planner_runtime_response(
+                planner_turn.json(),
                 trip_id=leisure_trip_id,
             )
             results.append(
@@ -475,7 +620,10 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
                         "scenario_id": leisure_payload["runtime_scenario_comparison"][
                             "lead_scenario_id"
                         ],
-                        "planner_runtime": planner_turn.json()["runtime"]["mode"],
+                        "planner_runtime": planner_runtime,
+                        "route_contexts": len(
+                            leisure_payload["runtime_scenario_comparison"]["scenarios"]
+                        ),
                     },
                 )
             )
@@ -494,67 +642,123 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
                 trip_id=business_trip_id,
             )
             business_payload = business_workspace.json()
-            _require(
-                business_payload["runtime_scenario_comparison"]["scenarios"],
-                "business scenario comparison returned no scenarios",
-                trip_id=business_trip_id,
-            )
-            policy_fixture = _fixture("policy", "standard_policy_sync.json")
-            policy_fixture["request"]["trip_id"] = business_trip_id
+            _assert_runtime_inventory(business_payload, trip_id=business_trip_id)
+            _assert_workspace_scenario_context(business_payload, trip_id=business_trip_id)
+            policy_request = _prepared_policy_request(business_trip_id)
             imported = client.put(
                 f"/api/workspace/{business_trip_id}/policy",
                 json={
-                    "request": policy_fixture["request"],
-                    "response": policy_fixture["response"],
+                    "request": policy_request,
+                    "response": _fixture("policy", "standard_policy_sync.json")["response"],
                     "source_kind": "tpp_sync",
                     "tags": ["full-product-local"],
                 },
             )
-            _require(imported.status_code == 200, "local policy import failed")
+            _require(
+                imported.status_code == 200,
+                "local policy import failed",
+                status=imported.status_code,
+                body=imported.text,
+                trip_id=business_trip_id,
+                route=f"/api/workspace/{business_trip_id}/policy",
+            )
 
             proposal = _proposal_payload(business_trip_id)
-            submission_fixture = _fixture("proposal_submit_deferred.json")
-            submission_fixture["request"]["trip_id"] = business_trip_id
-            submission_fixture["request"]["proposal_id"] = proposal["proposal_id"]
-            submission_fixture["request"]["payload"]["proposal_ref"] = proposal["proposal_id"]
+            submission_request = _prepared_submission_request(
+                business_trip_id,
+                proposal["proposal_id"],
+            )
+            submission_response = _fixture("proposal_submit_deferred.json")["response"]
             submitted = client.put(
                 f"/api/workspace/{business_trip_id}/proposal",
                 json={
                     "proposal": proposal,
-                    "request": submission_fixture["request"],
-                    "response": submission_fixture["response"],
+                    "request": submission_request,
+                    "response": submission_response,
                     "proposal_version": "proposal-v3",
                     "scenario_id": "scenario-a",
                 },
             )
-            _require(submitted.status_code == 200, "local proposal submission failed")
+            _require(
+                submitted.status_code == 200,
+                "local proposal submission failed",
+                status=submitted.status_code,
+                body=submitted.text,
+                trip_id=business_trip_id,
+                proposal_id=proposal["proposal_id"],
+                route=f"/api/workspace/{business_trip_id}/proposal",
+            )
+            execution_id = submitted.json()["proposal_state"]["execution_id"]
 
-            evaluation_fixture = _fixture("results", "approved_evaluation.json")
-            evaluation_fixture["request"]["trip_id"] = business_trip_id
-            evaluation_fixture["request"]["proposal_id"] = proposal["proposal_id"]
-            evaluation_fixture["response"]["result_payload"]["trip_id"] = business_trip_id
-            evaluation_fixture["response"]["result_payload"]["proposal_id"] = proposal[
-                "proposal_id"
-            ]
-            evaluation_fixture["response"]["result_payload"]["evaluation_result"][
-                "proposal_id"
-            ] = proposal["proposal_id"]
+            refresh = client.post(f"/api/workspace/{business_trip_id}/proposal/refresh")
+            _require(
+                refresh.status_code == 200,
+                "local proposal status poll failed",
+                status=refresh.status_code,
+                body=refresh.text,
+                trip_id=business_trip_id,
+                proposal_id=proposal["proposal_id"],
+                execution_id=execution_id,
+                route=f"/api/workspace/{business_trip_id}/proposal/refresh",
+            )
+            refresh_payload = refresh.json()
+            _require(
+                refresh_payload["summary"]["submission_status"]
+                in {"deferred", "failed", "retry_scheduled"},
+                "local proposal status poll did not preserve workspace-visible submission state",
+                trip_id=business_trip_id,
+                proposal_id=proposal["proposal_id"],
+                summary=refresh_payload["summary"],
+            )
+            evaluation_request = _prepared_evaluation_request(
+                business_trip_id,
+                proposal["proposal_id"],
+                execution_id,
+            )
+            evaluation_response = _prepared_evaluation_response(
+                business_trip_id,
+                proposal["proposal_id"],
+                execution_id,
+            )
             evaluated = client.put(
                 f"/api/workspace/{business_trip_id}/proposal/evaluation",
                 json={
-                    "request": evaluation_fixture["request"],
-                    "response": evaluation_fixture["response"],
+                    "request": evaluation_request,
+                    "response": evaluation_response,
                     "proposal_version": "proposal-v3",
                     "scenario_id": "scenario-a",
                 },
             )
-            _require(evaluated.status_code == 200, "local evaluation ingestion failed")
+            _require(
+                evaluated.status_code == 200,
+                "local evaluation ingestion failed",
+                status=evaluated.status_code,
+                body=evaluated.text,
+                trip_id=business_trip_id,
+                proposal_id=proposal["proposal_id"],
+                route=f"/api/workspace/{business_trip_id}/proposal/evaluation",
+            )
             evaluation_payload = evaluated.json()
             _require(
                 evaluation_payload["summary"]["approval_ready"] is True,
                 "business evaluation did not produce approval-ready follow-up state",
                 trip_id=business_trip_id,
                 proposal_id=proposal["proposal_id"],
+            )
+            reloaded_business_workspace = client.get(f"/api/workspace/{business_trip_id}")
+            _require(
+                reloaded_business_workspace.status_code == 200,
+                "business workspace reload after evaluation failed",
+                status=reloaded_business_workspace.status_code,
+                trip_id=business_trip_id,
+            )
+            reloaded_proposal = reloaded_business_workspace.json()["proposal_state"]
+            _require(
+                reloaded_proposal["summary"]["follow_up_status"] == "resolved",
+                "business workspace did not expose reloaded follow-up state",
+                trip_id=business_trip_id,
+                proposal_id=proposal["proposal_id"],
+                follow_up=reloaded_proposal["summary"].get("follow_up"),
             )
             results.append(
                 CheckResult(
@@ -567,6 +771,7 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
                             "evaluation_result_status"
                         ],
                         "follow_up_status": evaluation_payload["summary"]["follow_up_status"],
+                        "status_poll": refresh_payload["summary"]["submission_status"],
                     },
                 )
             )
@@ -586,7 +791,7 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
                 results.append(CheckResult("live-tpp", "PASS", live_details))
             else:
                 results.append(tpp_status)
-                if live_tpp == "required" and tpp_status.status != "PASS":
+                if live_tpp == "required":
                     raise VerificationFailure(json.dumps(tpp_status.details, sort_keys=True))
 
         return results
@@ -609,9 +814,17 @@ def main(argv: list[str] | None = None) -> int:
             "or require them."
         ),
     )
+    parser.add_argument(
+        "--skip-frontend-smoke",
+        action="store_true",
+        help="Skip the live backend/frontend smoke layer and run only product journeys.",
+    )
     args = parser.parse_args(argv)
     try:
-        results = run_product_journeys(live_tpp=args.live_tpp)
+        results = []
+        if not args.skip_frontend_smoke:
+            results.append(run_frontend_runtime_smoke())
+        results.extend(run_product_journeys(live_tpp=args.live_tpp))
     except VerificationFailure as exc:
         print(f"Full-product verification failed: {exc}", file=sys.stderr)
         return 1
