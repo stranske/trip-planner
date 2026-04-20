@@ -152,7 +152,7 @@ The verification path covers:
 - frontend unit/build checks
 - a smoke test that runs the frontend client against a live backend process
 
-These checks validate the local full-stack MVP that already exists in this repo. They exercise the map adapter and fallback seam with mocked provider state, but they do not prove live Google Maps network rendering or remote Travel-Plan-Permission transport.
+These checks validate the local full-stack MVP that already exists in this repo. They exercise the map adapter and fallback seam with mocked provider state. They do not prove live Google Maps rendering or remote Travel-Plan-Permission transport.
 The production-focused testing plan in [docs/local-testing-plan.md](docs/local-testing-plan.md) adds the critical auth, trip, workspace, policy, proposal, and preview-verification journeys on top of that baseline.
 
 ## Optional Live Integration Env Vars
@@ -164,6 +164,7 @@ Use these env vars only when you are intentionally exercising an integration sea
 - `VITE_API_BASE_URL`: overrides the frontend API base URL when you are not using the local Vite proxy.
 - `VITE_GOOGLE_MAPS_BROWSER_API_KEY`: enables the Google Maps JavaScript adapter path in the workspace. If it is unset, the UI should stay on the bounded fallback map surface.
 - `VITE_GOOGLE_MAPS_PROVIDER_STATE`: optional local/test override for the map adapter load state (`ready`, `loading`, or `error`).
+- `VITE_GOOGLE_MAPS_EMBED_API_KEY`: legacy map key name retained for local env compatibility while the workspace map seam migrates to the browser API key.
 - `TPP_BASE_URL`, `TPP_ACCESS_TOKEN`, `TPP_OIDC_PROVIDER`: enable the live `Travel-Plan-Permission` transport client. If they are unset, the repo should continue to present stored-policy and passive/local TPP seams rather than implying a real remote policy round-trip.
 
 That distinction matters for docs and verification messaging:
