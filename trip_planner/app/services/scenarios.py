@@ -7,8 +7,18 @@ from pathlib import Path
 from typing import Any
 
 from trip_planner.business import (
+    ApprovalTargets,
     BusinessTravelProfile,
+    ComfortFloors,
+    CostControls,
+    DocumentationRequirements,
+    ExceptionStrategy,
+    PolicyConstraints,
     PolicyConstraintSet,
+    ScheduleRequirements,
+    TravelerContext,
+    TripPurpose,
+    VendorConstraints,
     derive_business_planning_objectives,
 )
 from trip_planner.itinerary import (
@@ -17,7 +27,19 @@ from trip_planner.itinerary import (
     evaluate_bundle_feasibility,
 )
 from trip_planner.options import InventoryBundle
-from trip_planner.preferences import resolve_leisure_profile
+from trip_planner.preferences import (
+    Anchor,
+    BudgetModel,
+    DateWindow,
+    DurationBounds,
+    HardConstraints,
+    HybridFactor,
+    LeisurePreferenceProfile,
+    TradeoffDimension,
+    TripFrame,
+    resolve_leisure_profile,
+)
+from trip_planner.preferences import schema as leisure_schema
 from trip_planner.ranking import (
     BusinessRankingEngine,
     LeisureRankingEngine,
@@ -53,6 +75,14 @@ _SCENARIO_FIXTURE_SEEDS: dict[str, ScenarioFixtureSeed] = {
 _DEFAULT_LEISURE_FIXTURE_ID = "urban-historian"
 _DEFAULT_BUSINESS_PROFILE_FIXTURE = "client_meeting_profile.json"
 _DEFAULT_BUSINESS_CONSTRAINT_FIXTURE = "policy_round_trip_exception.json"
+_BUSINESS_HOME_AIRPORT_BY_REGION: dict[str, str] = {
+    "austin": "AUS",
+    "chicago": "ORD",
+    "kyoto": "KIX",
+    "lisbon": "LIS",
+    "seattle": "SEA",
+    "tokyo": "HND",
+}
 
 
 def _repo_root() -> Path:
@@ -76,6 +106,164 @@ def _default_scenario_title(
     subject = trip_title or ", ".join(primary_regions[:2]) or "Persisted trip"
     suffix = "ranked scenarios" if trip_mode == "business" else "runtime scenarios"
     return f"{subject} {suffix}"
+
+
+def _slug(value: str) -> str:
+    return "-".join(part for part in value.lower().split() if part) or "destination"
+
+
+def _runtime_leisure_profile(
+    *,
+    primary_regions: tuple[str, ...],
+    duration_days: int | None,
+    traveler_party_kind: str | None,
+) -> LeisurePreferenceProfile:
+    traveler_party = (
+        traveler_party_kind if traveler_party_kind in leisure_schema.TRAVELER_PARTIES else None
+    )
+    trip_frame = TripFrame(
+        duration_days=duration_days,
+        traveler_party=traveler_party,
+        trip_stage="first_visit",
+        regions_in_scope=list(primary_regions),
+    )
+    hard_constraints = HardConstraints(
+        date_window=DateWindow(),
+        duration_bounds=(
+            DurationBounds(
+                min_days=duration_days,
+                max_days=duration_days,
+            )
+            if duration_days is not None
+            else DurationBounds()
+        ),
+        must_include_places=list(primary_regions),
+    )
+    budget_model = BudgetModel(
+        total_budget_sensitivity=0.45,
+        spending_priorities={
+            "lodging": 0.42,
+            "transport": 0.36,
+            "activities": 0.5,
+        },
+        quality_floors={
+            "lodging": "comfortable local base",
+            "transport": "low-friction transfers",
+        },
+    )
+    tradeoffs = {
+        key: TradeoffDimension(confidence=0.45, salience=0.35, stability=0.4)
+        for key in leisure_schema.TRADEOFF_DIMENSION_KEYS
+    }
+    tradeoffs["route_coherence_vs_eclectic_contrast"].value = 0.35
+    tradeoffs["breadth_vs_depth"].value = -0.2 if duration_days and duration_days <= 4 else 0.1
+    tradeoffs["self_reliance_vs_convenience"].value = -0.25
+    tradeoffs["iconic_vs_discovery"].value = -0.15
+    if duration_days and duration_days <= 4:
+        tradeoffs["movement_vs_friction"].value = -0.25
+        tradeoffs["recovery_vs_intensity"].value = 0.25
+
+    anchors: dict[str, list[Anchor]] = {group: [] for group in leisure_schema.ANCHOR_GROUPS}
+    anchors["place_anchors"] = [
+        Anchor(
+            type="primary_region",
+            label=region,
+            strength=0.72,
+            flexibility=0.35,
+            notes="Derived from persisted trip primary region.",
+        )
+        for region in primary_regions[:3]
+    ]
+    anchors["quality_floor_anchors"] = [
+        Anchor(
+            type="workspace_quality_floor",
+            label="comparison-ready runtime inventory",
+            strength=0.62,
+            flexibility=0.45,
+            notes="Protects source-backed workspace review for arbitrary persisted trips.",
+        )
+    ]
+    return LeisurePreferenceProfile(
+        trip_frame=trip_frame,
+        hard_constraints=hard_constraints,
+        budget_model=budget_model,
+        tradeoff_dimensions=tradeoffs,
+        hybrid_factors={
+            "food": HybridFactor(mode="tradeoff", salience=0.35, tradeoff_role="atmosphere"),
+            "rest": HybridFactor(
+                mode="anchor", salience=0.45, anchor_strength=0.5, tradeoff_role="rhythm"
+            ),
+            "music": HybridFactor(mode="tradeoff", salience=0.2, tradeoff_role="atmosphere"),
+            "route_modes": HybridFactor(
+                mode="both", salience=0.45, anchor_strength=0.35, tradeoff_role="route_design"
+            ),
+        },
+        anchors=anchors,
+    )
+
+
+def _runtime_business_profile(
+    *,
+    trip_title: str | None,
+    primary_regions: tuple[str, ...],
+    traveler_party_kind: str | None,
+) -> BusinessTravelProfile:
+    region_key = _slug(primary_regions[0]) if primary_regions else ""
+    purpose_summary = trip_title or ", ".join(primary_regions[:2]) or "Persisted business trip"
+    return BusinessTravelProfile(
+        traveler_context=TravelerContext(
+            employee_type="employee",
+            traveler_experience="occasional",
+            home_airport=_BUSINESS_HOME_AIRPORT_BY_REGION.get(region_key, "TBD"),
+            loyalty_programs=[],
+            mobility_or_access_needs=[],
+        ),
+        trip_purpose=TripPurpose(
+            purpose_type="client_meeting",
+            business_justification=(f"Plan source-backed workspace options for {purpose_summary}."),
+            required_presence_windows=[],
+            trip_criticality="medium",
+        ),
+        policy_constraints=PolicyConstraints(
+            required_booking_channels=[],
+            documentation_rules=["retain runtime inventory provenance"],
+        ),
+        vendor_constraints=VendorConstraints(
+            approved_vendors=[],
+            comparison_requirements={"lodging": 1, "transport": 1},
+        ),
+        schedule_requirements=ScheduleRequirements(
+            arrival_buffer_preference="moderate",
+            meeting_protection_priority=0.7,
+            same_day_return_tolerance=0.4,
+            red_eye_tolerance=0.15,
+        ),
+        cost_controls=CostControls(
+            overall_cost_priority=0.55,
+            policy_compliance_priority=0.65,
+            employee_convenience_priority=0.55,
+        ),
+        comfort_floors=ComfortFloors(
+            lodging_needs=["quiet workspace-ready base"],
+            transport_needs=["low-risk arrival timing"],
+            work_enablers=["reliable wifi"],
+        ),
+        documentation_requirements=DocumentationRequirements(
+            required_receipt_categories=["lodging", "transport"],
+            justification_fields=["business purpose", "source-backed option rationale"],
+            comparable_capture_required=True,
+            booking_link_retention_required=True,
+        ),
+        approval_targets=ApprovalTargets(
+            needs_manager_approval=traveler_party_kind == "team",
+            approval_roles=["manager"] if traveler_party_kind == "team" else [],
+        ),
+        exception_strategy=ExceptionStrategy(
+            fallback_mode="nearest_compliant",
+            require_additional_comparables=False,
+            notes=["Prefer compliant runtime inventory before exception paths."],
+        ),
+    )
 
 
 def _bundle_ranked_results(
@@ -109,9 +297,11 @@ def _bundle_ranked_results(
                 route_sequence=list(
                     result.route_sequence
                     or bundle_map[
-                        result.target_option.option_id
-                        if result.target_option is not None
-                        else result.explanation_records[0].target_id
+                        (
+                            result.target_option.option_id
+                            if result.target_option is not None
+                            else result.explanation_records[0].target_id
+                        )
                     ].destination_ids
                 ),
                 score_breakdown=result.score_breakdown,
@@ -154,23 +344,21 @@ def build_workspace_scenario_search(
     scenario_objectives: object
 
     if trip_mode == "leisure":
-        leisure_fixture_id = (
-            fixture_seed.leisure_fixture_id
-            if fixture_seed is not None and fixture_seed.leisure_fixture_id is not None
-            else _DEFAULT_LEISURE_FIXTURE_ID
-        )
-        traveler_fixture = load_fixture_map()[leisure_fixture_id]
-        leisure_profile = deepcopy(traveler_fixture.profile)
-        if duration_days is not None:
-            leisure_profile.trip_frame.duration_days = duration_days
-        if primary_regions:
-            leisure_profile.trip_frame.regions_in_scope = list(primary_regions)
-        if traveler_party_kind in {"solo", "pair", "family", "friends"}:
-            leisure_profile.trip_frame.traveler_party = traveler_party_kind
-        resolved_profile = resolve_leisure_profile(
-            leisure_profile,
-            traveler_fixture.evidence,
-        )
+        if fixture_seed is not None:
+            leisure_fixture_id = fixture_seed.leisure_fixture_id or _DEFAULT_LEISURE_FIXTURE_ID
+            traveler_fixture = load_fixture_map()[leisure_fixture_id]
+            leisure_profile = deepcopy(traveler_fixture.profile)
+            evidence_records = traveler_fixture.evidence
+            ranking_title = fixture_seed.title
+        else:
+            leisure_profile = _runtime_leisure_profile(
+                primary_regions=primary_regions,
+                duration_days=duration_days,
+                traveler_party_kind=traveler_party_kind,
+            )
+            evidence_records = []
+            ranking_title = title
+        resolved_profile = resolve_leisure_profile(leisure_profile, evidence_records)
         leisure_objectives = derive_itinerary_objectives(
             resolved_profile,
             trip_id=trip_id,
@@ -181,28 +369,32 @@ def build_workspace_scenario_search(
             leisure_objectives,
             bundles,
             trip_id=trip_id,
-            title=fixture_seed.title if fixture_seed is not None else title,
+            title=ranking_title,
             feasibility_outputs=feasibility_outputs,
         )
         scenario_objectives = leisure_objectives
     else:
-        business_profile_fixture = (
-            fixture_seed.business_profile_fixture
-            if fixture_seed is not None and fixture_seed.business_profile_fixture is not None
-            else _DEFAULT_BUSINESS_PROFILE_FIXTURE
-        )
-        business_constraint_fixture = (
-            fixture_seed.business_constraint_fixture
-            if fixture_seed is not None and fixture_seed.business_constraint_fixture is not None
-            else _DEFAULT_BUSINESS_CONSTRAINT_FIXTURE
-        )
-        business_profile = BusinessTravelProfile.from_dict(
-            _load_json(_business_fixture_dir() / business_profile_fixture)
-        )
-        constraint_payload = _load_json(
-            _business_fixture_dir() / business_constraint_fixture
-        )
-        constraint_set = PolicyConstraintSet(**constraint_payload["constraint_set"])
+        if fixture_seed is not None:
+            business_profile_fixture = (
+                fixture_seed.business_profile_fixture or _DEFAULT_BUSINESS_PROFILE_FIXTURE
+            )
+            business_constraint_fixture = (
+                fixture_seed.business_constraint_fixture or _DEFAULT_BUSINESS_CONSTRAINT_FIXTURE
+            )
+            business_profile = BusinessTravelProfile.from_dict(
+                _load_json(_business_fixture_dir() / business_profile_fixture)
+            )
+            constraint_payload = _load_json(_business_fixture_dir() / business_constraint_fixture)
+            constraint_set = PolicyConstraintSet(**constraint_payload["constraint_set"])
+            ranking_title = fixture_seed.title
+        else:
+            business_profile = _runtime_business_profile(
+                trip_title=trip_title,
+                primary_regions=primary_regions,
+                traveler_party_kind=traveler_party_kind,
+            )
+            constraint_set = None
+            ranking_title = title
         business_objectives = derive_business_planning_objectives(
             business_profile,
             trip_id=trip_id,
@@ -213,7 +405,7 @@ def build_workspace_scenario_search(
             business_objectives,
             bundles,
             trip_id=trip_id,
-            title=fixture_seed.title if fixture_seed is not None else title,
+            title=ranking_title,
             constraint_set=constraint_set,
             feasibility_outputs=feasibility_outputs,
         )
@@ -224,7 +416,7 @@ def build_workspace_scenario_search(
         bundles=bundles,
         objectives=scenario_objectives,
         feasibility_outputs=feasibility_outputs,
-        title=fixture_seed.title if fixture_seed is not None else title,
+        title=ranking_title,
     )
 
 
@@ -278,9 +470,11 @@ def build_scenario_ranking_outputs(
                 "tags": [
                     "scenario-ranking",
                     scenario["scenario_summary"]["scenario_kind"],
-                    "recommended"
-                    if scenario["scenario_summary"]["recommended_for_selection"]
-                    else "fallback",
+                    (
+                        "recommended"
+                        if scenario["scenario_summary"]["recommended_for_selection"]
+                        else "fallback"
+                    ),
                 ],
                 "status": _scenario_output_status(scenario),
                 "highlights": [

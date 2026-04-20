@@ -24,6 +24,11 @@ _LEGACY_FIXTURE_BUNDLE_IDS = {
 _FIXTURE_ADAPTER_MARKERS = {
     "PersistedTripInventoryFixtureAdapter",
     "persisted-trip-fixture-inventory",
+    "urban-historian",
+    "client_meeting_profile",
+    "policy_round_trip_exception",
+    "Kyoto ranked scenario workspace",
+    "Client summit ranked scenarios",
 }
 
 
@@ -248,6 +253,7 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
     assert payload["saved_scenarios"][0]["versions"][0]["title"].startswith("Lisbon")
     assert payload["inventory_summary"]["bundle_count"] > 0
     assert payload["scenario_search"]["scenarios"]
+    assert payload["scenario_search"]["title"] == "Lisbon weekend runtime scenarios"
     assert payload["scenario_search"]["source_refs"]
     assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("scenario:")
     assert payload["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"].startswith(
@@ -359,6 +365,7 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_pers
     assert response.status_code == 200
     payload = response.json()
     assert payload["lead_scenario_id"].startswith("scenario:")
+    assert payload["title"] == "Lisbon weekend runtime scenarios"
     assert payload["scenarios"][0]["scenario_id"].startswith("scenario:")
     assert payload["scenarios"][0]["option_count"] > 0
     assert payload["scenarios"][0]["route_sequence"]
@@ -396,6 +403,7 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_pers
     assert response.status_code == 200
     payload = response.json()
     assert payload["lead_scenario_id"].startswith("scenario:")
+    assert payload["title"] == "Chicago kickoff ranked scenarios"
     assert payload["scenarios"][0]["scenario_id"].startswith("scenario:")
     assert payload["scenarios"][0]["status"] in {"recommended", "fallback", "alternative"}
     assert payload["scenarios"][0]["route_sequence"]
