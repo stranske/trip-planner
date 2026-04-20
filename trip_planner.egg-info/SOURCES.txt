@@ -83,6 +83,7 @@ trip_planner/app/services/feasibility.py
 trip_planner/app/services/inventory.py
 trip_planner/app/services/planner.py
 trip_planner/app/services/planner_memory.py
+trip_planner/app/services/planner_runtime_config.py
 trip_planner/app/services/planner_tools.py
 trip_planner/app/services/policy.py
 trip_planner/app/services/proposal.py
