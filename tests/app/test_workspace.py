@@ -344,15 +344,16 @@ def test_workspace_endpoint_creates_non_seeded_persisted_leisure_trip_with_runti
     assert workspace_payload["inventory_summary"]["bundle_count"] > 0
     assert workspace_payload["scenario_comparison"] is not None
     assert workspace_payload["scenario_comparison"]["baseline_scenario_id"]
+    assert workspace_payload["scenario_comparison"]["candidate_scenario_id"]
     runtime_comparison = workspace_payload["runtime_scenario_comparison"]
-    assert runtime_comparison["scenarios"]
-    first_scenario = runtime_comparison["scenarios"][0]
-    assert first_scenario["scenario_id"]
-    assert first_scenario["metrics"]["estimated_total"] is not None
-    assert any(
-        first_scenario["metrics"][key] is not None
-        for key in ("score", "travel_minutes", "transfers")
-    )
+    runtime_scenarios = runtime_comparison["scenarios"]
+    assert runtime_scenarios
+    for scenario in runtime_scenarios:
+        assert scenario["scenario_id"]
+        assert scenario["metrics"]["estimated_total"] is not None
+        assert any(
+            scenario["metrics"][key] is not None for key in ("score", "travel_minutes", "transfers")
+        )
     source_metadata = workspace_payload["inventory_summary"]["source_metadata"]
     assert source_metadata["source_type"] == "persisted_trip"
     assert source_metadata["origin"] == "runtime"
@@ -420,6 +421,7 @@ def test_workspace_endpoint_creates_non_seeded_persisted_business_trip_with_runt
 
     assert workspace_payload["scenario_comparison"] is not None
     assert workspace_payload["scenario_comparison"]["baseline_scenario_id"]
+    assert workspace_payload["scenario_comparison"]["candidate_scenario_id"]
     runtime_comparison = workspace_payload["runtime_scenario_comparison"]
     runtime_scenarios = runtime_comparison["scenarios"]
     assert runtime_scenarios
