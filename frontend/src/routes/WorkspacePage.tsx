@@ -426,12 +426,25 @@ function mergePlannerSessionState(
   workspace: WorkspaceData,
   plannerSession: PlannerSessionResponse
 ): WorkspaceData {
+  const plannerActivityIds = new Set(
+    plannerSession.activity_log.map((entry) => entry.activity_event_id)
+  );
+  const sessionIncludesWorkspaceActivity = workspace.activity_log.every((entry) =>
+    plannerActivityIds.has(entry.activity_event_id)
+  );
+
   return {
     ...workspace,
     session: plannerSession.session,
-    planner_panel_state: plannerSession.planner_panel_state,
-    planner_memory: plannerSession.planner_memory,
-    activity_log: plannerSession.activity_log,
+    planner_panel_state: sessionIncludesWorkspaceActivity
+      ? plannerSession.planner_panel_state
+      : workspace.planner_panel_state,
+    planner_memory: sessionIncludesWorkspaceActivity
+      ? plannerSession.planner_memory
+      : workspace.planner_memory,
+    activity_log: sessionIncludesWorkspaceActivity
+      ? plannerSession.activity_log
+      : workspace.activity_log,
   };
 }
 
