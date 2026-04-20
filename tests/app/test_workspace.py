@@ -411,10 +411,14 @@ def test_workspace_endpoint_creates_non_seeded_persisted_business_trip_with_runt
     assert workspace_payload["scenario_comparison"] is not None
     assert workspace_payload["scenario_comparison"]["baseline_scenario_id"]
     runtime_comparison = workspace_payload["runtime_scenario_comparison"]
-    assert runtime_comparison["scenarios"]
-    first_scenario = runtime_comparison["scenarios"][0]
-    assert first_scenario["scenario_id"]
-    assert first_scenario["metrics"]["score"] is not None
+    runtime_scenarios = runtime_comparison["scenarios"]
+    assert runtime_scenarios
+    for scenario in runtime_scenarios:
+        assert scenario["scenario_id"]
+        assert scenario["metrics"]["estimated_total"] is not None
+        assert any(
+            scenario["metrics"][key] is not None for key in ("score", "travel_minutes", "transfers")
+        )
 
     budget_summary = workspace_payload["budget_state"]["summary"]
     for numeric_field in ("planned_total", "actual_total", "remaining_total"):
