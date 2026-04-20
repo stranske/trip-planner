@@ -527,15 +527,12 @@ function WorkspacePageContent({
 
     fetchPlannerSession(workspace.trip_record.trip.trip_id)
       .then((nextPlannerSession) => {
-        if (isCancelled) {
+        if (isCancelled || plannerSessionLoadVersion.current !== loadVersion) {
           return;
         }
         startTransition(() => {
           setPlannerSession(nextPlannerSession);
           setCurrentWorkspace((current) => {
-            if (plannerSessionLoadVersion.current !== loadVersion) {
-              return current;
-            }
             if (
               current.session === nextPlannerSession.session &&
               current.planner_panel_state === nextPlannerSession.planner_panel_state &&
@@ -549,7 +546,7 @@ function WorkspacePageContent({
         });
       })
       .catch((error) => {
-        if (isCancelled) {
+        if (isCancelled || plannerSessionLoadVersion.current !== loadVersion) {
           return;
         }
         setPlannerConversationError(
@@ -557,7 +554,7 @@ function WorkspacePageContent({
         );
       })
       .finally(() => {
-        if (!isCancelled) {
+        if (!isCancelled && plannerSessionLoadVersion.current === loadVersion) {
           setPlannerConversationBusyLabel(null);
         }
       });
