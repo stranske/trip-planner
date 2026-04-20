@@ -88,7 +88,8 @@ This preview smoke is intentionally lightweight. It is a guardrail for deploy-pr
 
 These are additive checks, not prerequisites for the default local matrix:
 
-- `VITE_GOOGLE_MAPS_EMBED_API_KEY` for the optional Google Maps embed path
+- `VITE_GOOGLE_MAPS_BROWSER_API_KEY` for the optional Google Maps JavaScript adapter path
+- `VITE_GOOGLE_MAPS_PROVIDER_STATE` for local `ready`, `loading`, or `error` adapter-state checks without live provider access
 - `TPP_BASE_URL`, `TPP_ACCESS_TOKEN`, and `TPP_OIDC_PROVIDER` for live Travel-Plan-Permission transport
 
 Only run live integration verification when a branch explicitly changes those seams or when you need release confidence on an already configured environment. Their absence should not fail the standard production-readiness lane.

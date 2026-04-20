@@ -978,8 +978,8 @@ describe("WorkspacePage", () => {
     });
 
     expect(screen.getAllByText("Google Maps JavaScript adapter").length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: "S" }).length).toBeGreaterThan(0);
-    await user.click(screen.getAllByRole("button", { name: "L" })[0]);
+    expect(screen.getAllByRole("button", { name: /stop marker:/ }).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: /lodging marker: Osaka arrival buffer/ }));
     expect(screen.getAllByRole("heading", { name: "Osaka arrival buffer" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Live provider path")).toBeInTheDocument();
 

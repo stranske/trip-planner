@@ -254,7 +254,7 @@ function InteractiveProviderMap({
   onSelectMarker: (markerId: string) => void;
 }) {
   return (
-    <div className="map-provider-canvas" role="img" aria-label={`Interactive map for ${title}`}>
+    <div className="map-provider-canvas" role="group" aria-label={`Interactive map for ${title}`}>
       <svg className="map-route-geometry" viewBox="0 0 100 100" aria-hidden="true">
         {routeSegments.map((segment) => (
           <line
@@ -275,6 +275,7 @@ function InteractiveProviderMap({
             selectedMarker?.id === marker.id ? " map-marker-selected" : ""
           }${marker.emphasized ? " map-marker-emphasized" : ""}`}
           style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
+          aria-label={markerAccessibleLabel(marker)}
           aria-pressed={selectedMarker?.id === marker.id}
           onClick={() => onSelectMarker(marker.id)}
         >
@@ -309,6 +310,7 @@ function FallbackRouteSchematic({
               key={stop.id}
               type="button"
               className={`map-stop${selectedMarker?.id === markerId ? " map-stop-selected" : ""}`}
+              aria-pressed={selectedMarker?.id === markerId}
               onClick={() => onSelectMarker(markerId)}
             >
               <span className="map-stop-marker">{index + 1}</span>
@@ -328,6 +330,7 @@ function FallbackRouteSchematic({
             className={`map-option-marker map-option-marker-${marker.kind}${
               selectedMarker?.id === marker.id ? " map-option-marker-selected" : ""
             }`}
+            aria-pressed={selectedMarker?.id === marker.id}
             onClick={() => onSelectMarker(marker.id)}
           >
             <span>{markerLabel(marker.kind)}</span>
@@ -337,6 +340,10 @@ function FallbackRouteSchematic({
       </div>
     </>
   );
+}
+
+function markerAccessibleLabel(marker: MapMarker): string {
+  return `${marker.kind} marker: ${marker.label}. ${marker.summary}`;
 }
 
 function markerLabel(kind: MapMarker["kind"]): string {
