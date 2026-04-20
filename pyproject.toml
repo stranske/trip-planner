@@ -3,7 +3,7 @@ name = "trip-planner"
 version = "0.1.0"
 dependencies = [
     "alembic==1.18.4",
-    "anyio<4.13",
+    "anyio==4.13.0",
     "fastapi==0.135.3",
     "langchain-core==1.2.31",
     "langchain-openai==1.1.14",
