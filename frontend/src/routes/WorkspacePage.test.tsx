@@ -998,6 +998,25 @@ describe("WorkspacePage", () => {
     expect(screen.getAllByText("Osaka").length).toBeGreaterThan(0);
   });
 
+  it("uses the legacy embed API key env var as a compatibility fallback", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_EMBED_API_KEY", "legacy-test-key");
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText("Interactive map for Kyoto base with Uji day trip")
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("Google Maps JavaScript adapter").length).toBeGreaterThan(0);
+    expect(screen.getByText("Live provider path")).toBeInTheDocument();
+  });
+
   it("updates the dedicated comparison surfaces when scenario and trip selections change", async () => {
     const user = userEvent.setup();
     mockedUseLoaderData.mockReturnValue({

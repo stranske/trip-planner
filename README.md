@@ -162,9 +162,9 @@ The local MVP does not require live external integrations. `make runtime-check` 
 Use these env vars only when you are intentionally exercising an integration seam that already exists in code:
 
 - `VITE_API_BASE_URL`: overrides the frontend API base URL when you are not using the local Vite proxy.
-- `VITE_GOOGLE_MAPS_BROWSER_API_KEY`: enables the Google Maps JavaScript adapter path in the workspace. If it is unset, the UI should stay on the bounded fallback map surface.
+- `VITE_GOOGLE_MAPS_BROWSER_API_KEY`: primary key for enabling the Google Maps JavaScript adapter path in the workspace.
+- `VITE_GOOGLE_MAPS_EMBED_API_KEY`: legacy key name still accepted as a compatibility fallback when `VITE_GOOGLE_MAPS_BROWSER_API_KEY` is not set.
 - `VITE_GOOGLE_MAPS_PROVIDER_STATE`: optional local/test override for the map adapter load state (`ready`, `loading`, or `error`).
-- `VITE_GOOGLE_MAPS_EMBED_API_KEY`: legacy map key name retained for local env compatibility while the workspace map seam migrates to the browser API key.
 - `TPP_BASE_URL`, `TPP_ACCESS_TOKEN`, `TPP_OIDC_PROVIDER`: enable the live `Travel-Plan-Permission` transport client. If they are unset, the repo should continue to present stored-policy and passive/local TPP seams rather than implying a real remote policy round-trip.
 
 That distinction matters for docs and verification messaging:
@@ -172,4 +172,5 @@ That distinction matters for docs and verification messaging:
 - missing local prerequisites such as `.venv` or `frontend/node_modules` are setup failures
 - missing live integration env vars are not setup failures for the shipped MVP
 - missing Google Maps configuration or a provider load error should preserve route context through the fallback map instead of blanking the workspace
+- fallback map behavior is intentionally bounded: route-context overlays, markers, route summaries, and detail panels stay visible, but live provider-only interactions do not
 - live remote `Travel-Plan-Permission` execution remains deferred unless you deliberately configure that seam

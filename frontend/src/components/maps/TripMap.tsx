@@ -89,6 +89,9 @@ function ActiveTripMap({
   policyPosture: string;
   compactLayout: boolean;
 }) {
+  const googleMapsApiKey =
+    import.meta.env.VITE_GOOGLE_MAPS_BROWSER_API_KEY ||
+    import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY;
   const providerLoadState =
     (import.meta.env.VITE_GOOGLE_MAPS_PROVIDER_STATE as MapProviderLoadState | undefined) ?? "ready";
   const mapSurface = buildTripMapSurfaceModel({
@@ -99,7 +102,7 @@ function ActiveTripMap({
     scenarioFocusAreas,
     tripPrimaryRegions,
     policyPosture,
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_BROWSER_API_KEY,
+    googleMapsApiKey,
     providerLoadState,
   });
   const initialMarkerId = mapSurface.markers[0]?.id ?? null;

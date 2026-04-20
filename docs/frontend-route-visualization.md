@@ -29,8 +29,11 @@ Issue `#559` adds visualization-oriented shell surfaces that consume route and f
 ## Local setup note
 
 - `make runtime-check` and `make runtime-smoke` validate the shipped map adapter seam, fallback states, and workspace shell; they do not require a Google Maps key.
-- `VITE_GOOGLE_MAPS_BROWSER_API_KEY` is optional local configuration for exercising the provider adapter seam. If it is unset, the expected behavior is the fallback surface, not a failed runtime bootstrap.
+- `VITE_GOOGLE_MAPS_BROWSER_API_KEY` is the primary local configuration for exercising the provider adapter seam.
+- `VITE_GOOGLE_MAPS_EMBED_API_KEY` remains a compatibility fallback key when the browser-key env var is absent.
+- If neither map key env var is set, the expected behavior is the fallback surface, not a failed runtime bootstrap.
 - `VITE_GOOGLE_MAPS_PROVIDER_STATE=loading` or `error` can be used in local/test runs to verify non-ready provider states without live Google Maps access.
+- Fallback mode is bounded by design: route-state context, scenario switching, marker details, and route/timeline review remain available, but provider-native interactions are intentionally unavailable until the adapter is live.
 
 ## Representative states
 
