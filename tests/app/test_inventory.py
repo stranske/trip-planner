@@ -5,7 +5,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
+from trip_planner.app.services.inventory import _build_inventory_assembly_input
 from trip_planner.persistence.db import reset_database_state
+from trip_planner.persistence.models.trip import PersistedTrip
 
 _LEGACY_FIXTURE_BUNDLE_IDS = {
     "bundle-osaka-gateway",
@@ -48,6 +50,38 @@ def test_inventory_endpoint_returns_seeded_bundle_payload(client: TestClient) ->
     assert payload["bundles"][0]["bundle_id"] == "bundle-osaka-gateway"
     assert payload["summary"]["bundles"][1]["title"] == "Kyoto cultural anchor"
     assert payload["summary"]["bundles"][1]["option_count"] == 3
+
+
+def test_inventory_assembly_prefers_persisted_trip_context_over_seeded_trip_id() -> None:
+    persisted_trip = PersistedTrip(
+        trip_id="trip-leisure-kyoto-draft",
+        user_id="user-test",
+        title="Lisbon override for seeded ID",
+        summary="Persisted context should drive runtime inventory adapter selection.",
+        mode="leisure",
+        status="draft",
+        start_date="2026-07-01",
+        end_date="2026-07-05",
+        duration_days=5,
+        primary_regions=["Lisbon"],
+        traveler_party_kind="solo",
+        traveler_count=2,
+        traveler_notes="",
+    )
+
+    assembly_input = _build_inventory_assembly_input(
+        trip_id=persisted_trip.trip_id,
+        trip_mode=persisted_trip.mode,
+        persisted_trip=persisted_trip,
+        allow_fixture_fallback=True,
+    )
+
+    assert assembly_input.snapshot.adapter_id == "persisted-trip-source-inventory"
+    assert assembly_input.query.destination == "Lisbon"
+    assert assembly_input.query.traveler_segment == "solo"
+    assert assembly_input.record_payloads
+    assert assembly_input.snapshot.records[0].payload_type == "runtime_bundle_seed"
+    assert assembly_input.fixture_names == ()
 
 
 def test_inventory_endpoint_returns_not_found_for_unknown_trip(client: TestClient) -> None:
