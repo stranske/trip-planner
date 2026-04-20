@@ -20,6 +20,12 @@ The current runtime already ships these inspectable application surfaces:
 
 The current runtime does not yet ship live Google Maps rendering or remote `Travel-Plan-Permission` execution. Those remain explicit follow-on integrations, so local runtime checks and product docs should continue to call them out as deferred.
 
+## Persisted Workspace Runtime Behavior
+
+Workspace reads for saved trips are assembled from the persisted trip runtime context. For arbitrary leisure and business trips, inventory, scenario comparison, budget, source metadata, and provenance should be derived from the saved trip record and database-backed runtime state instead of seeded demo trips or fixture adapter identities.
+
+When a persisted trip is missing a destination, dates, or both, the workspace route still returns a coherent partial response. The inventory summary reports zero runtime bundles and includes `runtime_state.issues` entries with AdapterIssue-style reason codes such as `missing_destination` and `missing_dates`, so callers can distinguish incomplete trip inputs from fixture fallback or hard runtime failure.
+
 ## Key Docs
 
 - [Implementation plan](docs/implementation-plan.md)
