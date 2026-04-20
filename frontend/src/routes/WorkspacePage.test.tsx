@@ -391,7 +391,7 @@ const workspacePayload = {
       {
         bundle_id: "bundle-kyoto-culture-day",
         title: "Kyoto cultural anchor",
-        bundle_context: "route_level",
+        bundle_context: "route_level_activity",
         summary: "Expose the Kyoto cultural day as a normalized mixed inventory bundle.",
         destination_names: ["Osaka", "Kyoto"],
         option_count: 3,
@@ -427,7 +427,7 @@ const workspacePayload = {
       {
         bundle_id: "bundle-kyoto-culture-day",
         bundle_title: "Kyoto cultural anchor",
-        bundle_context: "route_level",
+        bundle_context: "route_level_activity",
         status: "caution",
         total_travel_minutes: 175,
         total_transfer_count: 3,
@@ -995,7 +995,7 @@ describe("WorkspacePage", () => {
     await user.click(screen.getByRole("button", { name: /lodging marker: Osaka arrival buffer/ }));
     expect(screen.getAllByRole("heading", { name: "Osaka arrival buffer" }).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /activity marker: Kyoto cultural anchor/ }));
-    expect(screen.getByRole("heading", { name: "Kyoto cultural anchor" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: "Kyoto cultural anchor" }).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /policy marker: Route burden warning/ }));
     expect(screen.getByRole("heading", { name: "Route burden warning" })).toBeInTheDocument();
     expect(screen.getAllByText("Policy or feasibility warning active").length).toBeGreaterThan(0);
