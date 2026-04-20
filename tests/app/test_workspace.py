@@ -329,6 +329,9 @@ def test_workspace_endpoint_creates_non_seeded_persisted_leisure_trip_with_runti
 
     workspace = client.get(f"/api/workspace/{trip_id}")
     assert workspace.status_code == 200
+    workspace_payload = workspace.json()
+    assert isinstance(workspace_payload["inventory_summary"]["bundle_count"], int)
+    assert workspace_payload["inventory_summary"]["bundle_count"] > 0
 
 
 @pytest.mark.parametrize(
