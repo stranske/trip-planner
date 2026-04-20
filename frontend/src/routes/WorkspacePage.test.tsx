@@ -391,7 +391,7 @@ const workspacePayload = {
       {
         bundle_id: "bundle-kyoto-culture-day",
         title: "Kyoto cultural anchor",
-        bundle_context: "route_level",
+        bundle_context: "route_level_activity",
         summary: "Expose the Kyoto cultural day as a normalized mixed inventory bundle.",
         destination_names: ["Osaka", "Kyoto"],
         option_count: 3,
@@ -427,7 +427,7 @@ const workspacePayload = {
       {
         bundle_id: "bundle-kyoto-culture-day",
         bundle_title: "Kyoto cultural anchor",
-        bundle_context: "route_level",
+        bundle_context: "route_level_activity",
         status: "caution",
         total_travel_minutes: 175,
         total_transfer_count: 3,
@@ -740,8 +740,8 @@ describe("WorkspacePage", () => {
 
     expect(screen.getAllByRole("heading", { name: "Kyoto base with Uji day trip" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })).toBeInTheDocument();
-    expect(within(routeContextMap).getAllByRole("heading", { name: "Kyoto" })).toHaveLength(2);
-    expect(within(routeContextMap).getByRole("heading", { name: "Uji" })).toBeInTheDocument();
+    expect(within(routeContextMap).getAllByText("Kyoto").length).toBeGreaterThan(0);
+    expect(within(routeContextMap).getAllByText("Uji").length).toBeGreaterThan(0);
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
     expect(screen.getByText("Trip-scoped planner surface")).toBeInTheDocument();
     await waitFor(() => {
@@ -755,7 +755,7 @@ describe("WorkspacePage", () => {
     });
     expect(screen.getByText("read workspace state")).toBeInTheDocument();
     expect(routeContextMap).toBeInTheDocument();
-    expect(screen.getByText("Destination anchors")).toBeInTheDocument();
+    expect(screen.getByText("Destination context")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trip rhythm and day sequencing" })).toBeInTheDocument();
     expect(screen.getByLabelText("Timeline summary")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Review-ready scenario tradeoffs" })).toBeInTheDocument();
@@ -764,8 +764,8 @@ describe("WorkspacePage", () => {
     expect(
       screen.getByRole("heading", { name: workspacePayload.inventory_summary.runtime_state.title })
     ).toBeInTheDocument();
-    expect(screen.getByText("Osaka arrival buffer")).toBeInTheDocument();
-    expect(screen.getByText("Kyoto cultural anchor")).toBeInTheDocument();
+    expect(screen.getAllByText("Osaka arrival buffer").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Kyoto cultural anchor").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Approval packet is ready" })).toBeInTheDocument();
     expect(screen.getByText("approval-ready")).toBeInTheDocument();
     expect(screen.getAllByText("Advance to approval").length).toBeGreaterThan(0);
@@ -952,18 +952,63 @@ describe("WorkspacePage", () => {
     expect(
       screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })
     ).toBeInTheDocument();
+    expect(screen.getAllByText("kyoto -> uji -> kyoto").length).toBeGreaterThan(0);
+    expect(screen.getByText("93 / 100 planner score")).toBeInTheDocument();
+    expect(screen.getAllByText("Balanced Kyoto culture baseline").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 
     expect(
       screen.getByRole("heading", { name: "Map preview for Kyoto plus Osaka fallback" })
     ).toBeInTheDocument();
-    expect(within(screen.getByLabelText("Route context map")).getByRole("heading", { name: "Osaka" })).toBeInTheDocument();
+    expect(screen.getAllByText("kyoto -> osaka -> kyoto").length).toBeGreaterThan(0);
+    expect(screen.getByText("88 / 100 planner score")).toBeInTheDocument();
+    expect(screen.getAllByText("Higher-energy fallback with extra transfers").length).toBeGreaterThan(0);
+    expect(within(screen.getByLabelText("Route context map")).getAllByText("Osaka").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Higher transfer load to preserve nightlife breadth.").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Selected scenario affordances" })).toBeInTheDocument();
+    expect(screen.getByText("Alternative scenario")).toBeInTheDocument();
+    expect(screen.getByText("7 transfer checkpoint(s)")).toBeInTheDocument();
   });
 
-  it("renders the Google Maps provider path when configured", async () => {
-    vi.stubEnv("VITE_GOOGLE_MAPS_EMBED_API_KEY", "test-key");
+  it("renders the Google Maps JavaScript provider path when configured", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
     const user = userEvent.setup();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    const { container } = renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText("Interactive map for Kyoto base with Uji day trip")
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("Google Maps JavaScript adapter").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Route geometry overlay for Kyoto base with Uji day trip")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /stop marker:/ }).length).toBeGreaterThan(0);
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(screen.queryByTitle(/google maps/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Fallback option markers")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /lodging marker: Osaka arrival buffer/ }));
+    expect(screen.getAllByRole("heading", { name: "Osaka arrival buffer" }).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: /activity marker: Kyoto cultural anchor/ }));
+    expect(screen.getAllByRole("heading", { name: "Kyoto cultural anchor" }).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: /policy marker: Route burden warning/ }));
+    expect(screen.getByRole("heading", { name: "Route burden warning" })).toBeInTheDocument();
+    expect(screen.getAllByText("Policy or feasibility warning active").length).toBeGreaterThan(0);
+    expect(screen.getByText("Live provider path")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
+
+    expect(screen.getByLabelText("Interactive map for Kyoto plus Osaka fallback")).toBeInTheDocument();
+    expect(screen.getAllByText("Osaka").length).toBeGreaterThan(0);
+  });
+
+  it("uses the legacy embed API key env var as a compatibility fallback", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_EMBED_API_KEY", "legacy-test-key");
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve(workspacePayload),
       trips: Promise.resolve(tripComparisonPayload),
@@ -973,20 +1018,12 @@ describe("WorkspacePage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByTitle("Google Maps route preview for Kyoto base with Uji day trip")
+        screen.getByLabelText("Interactive map for Kyoto base with Uji day trip")
       ).toBeInTheDocument();
     });
 
-    const initialFrame = screen.getByTitle("Google Maps route preview for Kyoto base with Uji day trip");
-    expect(initialFrame).toHaveAttribute("src", expect.stringContaining("key=test-key"));
-    expect(initialFrame).toHaveAttribute("src", expect.stringContaining("origin=Kyoto"));
-    expect(initialFrame).toHaveAttribute("src", expect.stringContaining("waypoints=Uji"));
+    expect(screen.getAllByText("Google Maps JavaScript adapter").length).toBeGreaterThan(0);
     expect(screen.getByText("Live provider path")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
-
-    const updatedFrame = screen.getByTitle("Google Maps route preview for Kyoto plus Osaka fallback");
-    expect(updatedFrame).toHaveAttribute("src", expect.stringContaining("waypoints=Osaka"));
   });
 
   it("updates the dedicated comparison surfaces when scenario and trip selections change", async () => {
@@ -1004,6 +1041,9 @@ describe("WorkspacePage", () => {
 
     expect(screen.getAllByText("Moderate travel friction with a clear cultural center of gravity.").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" }));
+    expect(
+      screen.getByRole("heading", { name: "Map preview for Kyoto plus Osaka fallback" })
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Osaka rainy-day fallback").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Higher transfer load to preserve nightlife breadth.").length).toBeGreaterThan(0);
 
@@ -1118,9 +1158,78 @@ describe("WorkspacePage", () => {
     });
 
     expect(screen.getByText("Compact review stack keeps map, timeline, and tradeoff calls visible on smaller screens.")).toBeInTheDocument();
-    expect(screen.getByText("Fallback route path")).toBeInTheDocument();
-    expect(screen.getAllByText(/Google Maps is not configured in this environment/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Textual fallback route path")).toBeInTheDocument();
+    expect(screen.getAllByText(/Google Maps JavaScript is not configured in this environment/).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Compact day-by-day review" })).toBeInTheDocument();
+  });
+
+  it("renders a loading fallback state while the provider adapter is initializing", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
+    vi.stubEnv("VITE_GOOGLE_MAPS_PROVIDER_STATE", "loading");
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Provider loading fallback path")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(/Google Maps JavaScript is loading/).length).toBeGreaterThan(0);
+    expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
+  });
+
+  it("renders a provider-error fallback state and keeps route context visible", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
+    vi.stubEnv("VITE_GOOGLE_MAPS_PROVIDER_STATE", "error");
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Provider error fallback path")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(/failed to load/).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Fallback option markers")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
+  });
+
+  it("renders a sparse-route fallback state and keeps map context visible", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        runtime_scenario_comparison: {
+          ...workspacePayload.runtime_scenario_comparison,
+          scenarios: workspacePayload.runtime_scenario_comparison.scenarios.map((scenario) =>
+            scenario.scenario_id === "scenario:trip-leisure-kyoto-draft:1"
+              ? {
+                  ...scenario,
+                  route_sequence: ["kyoto"],
+                  route_summary: "kyoto",
+                }
+              : scenario
+          ),
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Sparse route fallback path")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(/needs at least an origin and destination/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
   });
 
   it("renders an explicit empty state when runtime scenarios are unavailable", async () => {
