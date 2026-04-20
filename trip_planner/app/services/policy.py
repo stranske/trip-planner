@@ -75,6 +75,38 @@ def _get_latest_policy_state(
     )
 
 
+def _required_tpp_trip_date(value: str | None, field_name: str) -> str:
+    if not value:
+        raise ValueError(f"Live TPP policy sync requires trip {field_name}.")
+    return value
+
+
+def _tpp_trip_plan_payload(record: PersistedTrip, *, user: AuthenticatedUser) -> dict[str, Any]:
+    primary_regions = [region for region in record.primary_regions if region]
+    if not primary_regions:
+        raise ValueError("Live TPP policy sync requires at least one primary region.")
+    return {
+        "trip_id": record.trip_id,
+        "traveler_name": user.display_name,
+        "traveler_role": "business traveler",
+        "department": _owner_profile_id(record),
+        "destination": ", ".join(primary_regions),
+        "destination_city": primary_regions[0],
+        "departure_date": _required_tpp_trip_date(record.start_date, "start_date"),
+        "return_date": _required_tpp_trip_date(record.end_date, "end_date"),
+        "purpose": record.summary or record.title,
+        "transportation_mode": "mixed",
+        "expected_costs": {},
+        "estimated_cost": 0,
+        "status": "draft",
+        "expense_breakdown": {},
+        "selected_providers": {},
+        "validation_results": [],
+        "approval_history": [],
+        "exception_requests": [],
+    }
+
+
 class _PassiveTPPClient:
     def __init__(self, response: TPPResponseEnvelope) -> None:
         self.response = response
@@ -97,10 +129,26 @@ class _PassiveTPPClient:
 def _resolve_policy_response(
     request: TPPRequestEnvelope,
     response_payload: dict[str, Any] | None,
+    *,
+    trip_plan_payload: dict[str, Any],
 ) -> TPPResponseEnvelope:
     if response_payload is not None:
         return TPPResponseEnvelope.from_dict(response_payload)
-    return HTTPTPPIntegrationClient().fetch_policy_constraints(request)
+    live_request = request
+    if not isinstance(request.payload.get("trip_plan"), dict):
+        live_request = TPPRequestEnvelope(
+            operation=request.operation,
+            request_id=request.request_id,
+            correlation_id=request.correlation_id,
+            payload={**request.payload, "trip_plan": trip_plan_payload},
+            transport_pattern=request.transport_pattern,
+            organization_id=request.organization_id,
+            trip_id=request.trip_id,
+            proposal_id=request.proposal_id,
+            submitted_at=request.submitted_at,
+            metadata=dict(request.metadata),
+        )
+    return HTTPTPPIntegrationClient().fetch_policy_constraints(live_request)
 
 
 def _is_effectively_stale(imported: PolicyConstraintImport) -> bool:
@@ -347,7 +395,15 @@ def import_workspace_policy_constraints(
         raise ValueError("Only business trips can import workspace policy constraints.")
 
     request = TPPRequestEnvelope.from_dict(request_payload)
-    response = _resolve_policy_response(request, response_payload)
+    response = _resolve_policy_response(
+        request,
+        response_payload,
+        trip_plan_payload=(
+            _tpp_trip_plan_payload(trip_record, user=user)
+            if response_payload is None
+            else {}
+        ),
+    )
     imported = TPPPolicySyncService(_PassiveTPPClient(response)).import_policy_constraints(request)
     imported_at = _isoformat(datetime.now(UTC))
     existing = _get_latest_policy_state(

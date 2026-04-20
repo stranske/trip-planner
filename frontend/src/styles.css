@@ -129,6 +129,48 @@ a {
   margin-top: 1.25rem;
 }
 
+.planner-runtime-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+}
+
+.planner-runtime-pill,
+.planner-runtime-mode {
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.45rem 0.65rem;
+}
+
+.planner-runtime-pill {
+  background: #e8f2ef;
+  color: #25544e;
+}
+
+.planner-runtime-pill--ready {
+  background: #e8f2ef;
+  color: #25544e;
+}
+
+.planner-runtime-pill--fallback {
+  background: #fff5dc;
+  color: #705016;
+}
+
+.planner-runtime-pill--error {
+  background: #fce8e4;
+  color: #912c22;
+}
+
+.planner-runtime-mode {
+  background: #edf3f8;
+  color: #365063;
+}
+
 .workspace-hero {
   overflow: hidden;
   position: relative;
@@ -285,6 +327,137 @@ a {
 
 .planner-panel-host .planner-panel {
   min-height: 100%;
+}
+
+.planner-conversation-card {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(56, 117, 107, 0.12), rgba(132, 86, 35, 0.08)),
+    rgba(255, 255, 255, 0.68);
+}
+
+.planner-conversation-header {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.planner-conversation-header h3,
+.planner-conversation-header p {
+  margin: 0;
+}
+
+.planner-conversation-header h3 {
+  margin-bottom: 0.35rem;
+}
+
+.planner-conversation-pill {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  background: #13212c;
+  color: #f7f1e5;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.planner-message-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.planner-message {
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  background: rgba(19, 33, 44, 0.05);
+}
+
+.planner-message p {
+  margin: 0;
+}
+
+.planner-message-planner {
+  background: rgba(56, 117, 107, 0.12);
+}
+
+.planner-message-user {
+  background: rgba(132, 86, 35, 0.12);
+}
+
+.planner-message-empty {
+  color: #577186;
+}
+
+.planner-tool-call-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+  padding-left: 1.1rem;
+  color: #365063;
+}
+
+.planner-tool-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.planner-tool-strip span {
+  border-radius: 999px;
+  padding: 0.45rem 0.7rem;
+  background: rgba(19, 33, 44, 0.08);
+  font-size: 0.82rem;
+  text-transform: capitalize;
+}
+
+.planner-conversation-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.planner-conversation-form label {
+  display: grid;
+  gap: 0.4rem;
+  color: #365063;
+  font-weight: 600;
+}
+
+.planner-conversation-form textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid rgba(19, 33, 44, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 0.8rem 0.9rem;
+  color: #13212c;
+  font: inherit;
+}
+
+.planner-conversation-form textarea:focus {
+  outline: 2px solid rgba(56, 117, 107, 0.35);
+  outline-offset: 1px;
+}
+
+.planner-conversation-form button {
+  width: fit-content;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.85rem 1.1rem;
+  background: linear-gradient(135deg, #13212c, #234f48);
+  color: #f7f1e5;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.planner-conversation-form button:disabled {
+  cursor: progress;
+  opacity: 0.72;
 }
 
 .budget-panel-card {

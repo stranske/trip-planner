@@ -5,8 +5,11 @@ import pytest
 
 from trip_planner.integrations.tpp import (
     BaseTPPIntegrationClient,
+    HTTPTPPIntegrationClient,
+    TPPContractError,
     TPPRequestEnvelope,
     TPPResponseEnvelope,
+    TPPRuntimeSettings,
 )
 
 
@@ -106,3 +109,40 @@ def test_base_client_rejects_mismatched_operation() -> None:
 
     with pytest.raises(ValueError, match="submit_proposal"):
         client.submit_proposal(request)
+
+
+def test_http_policy_payload_accepts_trip_plan_trip_id() -> None:
+    fixture = _load_fixture("policy_fetch_success.json")
+    fixture["request"].pop("trip_id", None)
+    fixture["request"]["payload"] = {
+        "trip_plan": {"trip_id": "trip-plan-id", "destination": "Chicago"}
+    }
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    client = HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url="https://tpp.example.test",
+            access_token="token-123",
+            oidc_provider="okta",
+        )
+    )
+
+    payload = client._policy_request_payload(request)
+
+    assert payload["request"]["trip_id"] == "trip-plan-id"
+
+
+def test_http_policy_payload_names_all_trip_id_sources() -> None:
+    fixture = _load_fixture("policy_fetch_success.json")
+    fixture["request"].pop("trip_id", None)
+    fixture["request"]["payload"] = {"trip_plan": {"destination": "Chicago"}}
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    client = HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url="https://tpp.example.test",
+            access_token="token-123",
+            oidc_provider="okta",
+        )
+    )
+
+    with pytest.raises(TPPContractError, match="payload.trip_plan.trip_id"):
+        client._policy_request_payload(request)

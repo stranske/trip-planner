@@ -43,6 +43,14 @@ def _planner_message_records(
 
 
 def _checkpoint_summary(messages: list[PersistedPlannerAction], *, turn_index: int) -> dict[str, Any]:
+    latest_reply_record = next(
+        (
+            record
+            for record in reversed(messages)
+            if record.action_type == "planner_response"
+        ),
+        None,
+    )
     latest_user = next(
         (
             record.payload.get("content", "").strip()
@@ -51,13 +59,20 @@ def _checkpoint_summary(messages: list[PersistedPlannerAction], *, turn_index: i
         ),
         "",
     )
-    latest_reply = next(
-        (
-            record.payload.get("content", "").strip()
-            for record in reversed(messages)
-            if record.action_type == "planner_response"
-        ),
-        "",
+    latest_reply = (
+        latest_reply_record.payload.get("content", "").strip()
+        if latest_reply_record is not None
+        else ""
+    )
+    tool_calls = (
+        list(latest_reply_record.payload.get("tool_calls") or [])
+        if latest_reply_record is not None
+        else []
+    )
+    selected_planning_mode = (
+        str(latest_reply_record.payload.get("selected_planning_mode") or "")
+        if latest_reply_record is not None
+        else ""
     )
     refs = list(
         dict.fromkeys(
@@ -77,11 +92,30 @@ def _checkpoint_summary(messages: list[PersistedPlannerAction], *, turn_index: i
     ]
     if refs:
         detail_lines.append(f"Linked refs: {', '.join(refs[:4])}")
+    if selected_planning_mode:
+        detail_lines.append(f"Selected planning mode: {selected_planning_mode}.")
+    if tool_calls:
+        detail_lines.append(f"Tool traces persisted: {len(tool_calls)}.")
     return {
         "summary": summary,
         "title": f"Planner checkpoint {turn_index}",
         "detail": " ".join(detail_lines),
         "refs": refs[:8],
+        "metadata": {
+            "ref_count": len(refs[:8]),
+            "tool_call_count": len(tool_calls),
+            "selected_planning_mode": selected_planning_mode or None,
+            "planning_stage": (
+                latest_reply_record.payload.get("planning_stage")
+                if latest_reply_record is not None
+                else None
+            ),
+            "runtime_mode": (
+                latest_reply_record.payload.get("runtime_mode")
+                if latest_reply_record is not None
+                else None
+            ),
+        },
     }
 
 
@@ -126,14 +160,14 @@ def refresh_planner_memory(
             message_count=len(messages),
             summary=summary_payload["summary"],
             source_message_ids=source_message_ids,
-            metadata_payload={"ref_count": len(summary_payload["refs"])},
+            metadata_payload=summary_payload["metadata"],
         )
         db_session.add(checkpoint)
     else:
         checkpoint.message_count = len(messages)
         checkpoint.summary = summary_payload["summary"]
         checkpoint.source_message_ids = source_message_ids
-        checkpoint.metadata_payload = {"ref_count": len(summary_payload["refs"])}
+        checkpoint.metadata_payload = summary_payload["metadata"]
 
     artifact = db_session.get(PersistedPlannerMemoryArtifact, artifact_id)
     if artifact is None:

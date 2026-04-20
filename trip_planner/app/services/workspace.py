@@ -29,6 +29,7 @@ from trip_planner.app.services.inventory import (
 from trip_planner.app.services.planner_memory import build_planner_memory_payload
 from trip_planner.app.services.policy import get_workspace_policy_payload
 from trip_planner.app.services.proposal import get_workspace_proposal_payload
+from trip_planner.app.services.planner_runtime_config import get_planner_runtime_config
 from trip_planner.app.services.scenarios import (
     build_scenario_ranking_outputs,
     build_workspace_scenario_search,
@@ -1743,6 +1744,7 @@ def _build_planner_panel_state(
                 },
             )
 
+    runtime_config = get_planner_runtime_config()
     return {
         "trip": trip,
         "option_set": option_set,
@@ -1752,6 +1754,10 @@ def _build_planner_panel_state(
         "outputs": outputs,
         "planner_behavior": {
             "trip_stage": "compare" if scenarios else "bootstrap",
+            "runtime_mode": runtime_config.mode,
+            "runtime_status": runtime_config.status,
+            "runtime_label": runtime_config.title,
+            "runtime_summary": runtime_config.summary,
             "ask_before_next_major_change": session["interaction_state"].get(
                 "ask_before_major_change",
                 True,

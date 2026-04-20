@@ -26,6 +26,20 @@ The repo already contains planner-facing design and UI contract surfaces, but it
 
 That means the repo can render planner state and accept bounded planner interactions, but it still lacks the runtime layer that owns conversational planning, explicit tool use, and long-lived planner memory for arbitrary persisted trips.
 
+## Runtime Configuration
+
+Planner turns use a deterministic fallback unless a planner model is configured. The fallback is intentionally visible in the planner session payload so local development and `make runtime-check` do not require live model credentials.
+
+Set these variables only when exercising the model-backed path:
+
+- `TRIP_PLANNER_PLANNER_MODEL_PROVIDER=openai`
+- `TRIP_PLANNER_PLANNER_MODEL=<OpenAI chat model name>`
+- `OPENAI_API_KEY=<key with model access>`
+
+When those values are present, the planner conversation service creates a LangChain-backed runnable and passes structured trip context, inventory, scenario, budget, policy, proposal, memory, activity, and available tool metadata into the model. The model may request only registered planner tools; unsupported tool names and malformed requests are persisted as visible tool errors rather than treated as successful state transitions. When configuration or credentials are absent, the deterministic fallback remains active and the response payload reports the fallback reason.
+
+CI should cover the model-backed path with fake chat models rather than live provider credentials. Live provider checks belong in explicit integration runs.
+
 ## Dependency Chain
 
 This epic depends on the persisted trip, workspace, and runtime seams established by the current app stack on `main`, especially the workspace route/service surfaces that now assemble persisted trip state, scenario search state, and planner panel payloads.

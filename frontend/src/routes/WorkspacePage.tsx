@@ -1,15 +1,18 @@
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useRef, useState, type FormEvent } from "react";
 import { useLoaderData } from "react-router-dom";
 
 import type { TripRecord } from "../api/trips";
 import {
   answerPlannerDecision,
+  fetchPlannerSession,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
   saveWorkspaceBudget,
+  submitPlannerTurn,
   type ActualSpendEventUpsertPayload,
   type BudgetPlanUpsertPayload,
   type BudgetWorkspaceState,
+  type PlannerSessionResponse,
   submitPlannerOptionFeedback,
   type SavedScenarioRecord,
   type WorkspaceData,
@@ -419,6 +422,32 @@ function mergeWorkspaceBudgetState(
   };
 }
 
+function mergePlannerSessionState(
+  workspace: WorkspaceData,
+  plannerSession: PlannerSessionResponse
+): WorkspaceData {
+  const plannerActivityIds = new Set(
+    plannerSession.activity_log.map((entry) => entry.activity_event_id)
+  );
+  const sessionIncludesWorkspaceActivity = workspace.activity_log.every((entry) =>
+    plannerActivityIds.has(entry.activity_event_id)
+  );
+
+  return {
+    ...workspace,
+    session: plannerSession.session,
+    planner_panel_state: sessionIncludesWorkspaceActivity
+      ? plannerSession.planner_panel_state
+      : workspace.planner_panel_state,
+    planner_memory: sessionIncludesWorkspaceActivity
+      ? plannerSession.planner_memory
+      : workspace.planner_memory,
+    activity_log: sessionIncludesWorkspaceActivity
+      ? plannerSession.activity_log
+      : workspace.activity_log,
+  };
+}
+
 export function WorkspacePage() {
   const { workspace, trips } = useLoaderData() as LoaderData;
 
@@ -460,12 +489,19 @@ function WorkspacePageContent({
   const [selectedTripComparisonId, setSelectedTripComparisonId] = useState<string | null>(
     () => trips.find((trip) => trip.trip_id !== workspace.trip_record.trip.trip_id)?.trip_id ?? null
   );
+  const [plannerSession, setPlannerSession] = useState<PlannerSessionResponse | null>(null);
+  const [plannerConversationDraft, setPlannerConversationDraft] = useState("");
+  const [plannerConversationError, setPlannerConversationError] = useState<string | null>(null);
+  const [plannerConversationBusyLabel, setPlannerConversationBusyLabel] = useState<string | null>(
+    null
+  );
   const [plannerError, setPlannerError] = useState<string | null>(null);
   const [plannerBusyLabel, setPlannerBusyLabel] = useState<string | null>(null);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
   const [proposalError, setProposalError] = useState<string | null>(null);
   const [proposalBusyLabel, setProposalBusyLabel] = useState<string | null>(null);
+  const plannerSessionLoadVersion = useRef(0);
   const isCompactLayout = useCompactWorkspaceLayout();
   useEffect(() => {
     setCurrentWorkspace(workspace);
@@ -473,10 +509,60 @@ function WorkspacePageContent({
     setSelectedScenarioComparisonId(
       workspace.runtime_scenario_comparison.lead_scenario_id
     );
+  }, [workspace]);
+
+  useEffect(() => {
     setSelectedTripComparisonId(
       trips.find((trip) => trip.trip_id !== workspace.trip_record.trip.trip_id)?.trip_id ?? null
     );
   }, [trips, workspace]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    plannerSessionLoadVersion.current += 1;
+    const loadVersion = plannerSessionLoadVersion.current;
+    setPlannerSession(null);
+    setPlannerConversationError(null);
+    setPlannerConversationBusyLabel("Loading planner conversation...");
+
+    fetchPlannerSession(workspace.trip_record.trip.trip_id)
+      .then((nextPlannerSession) => {
+        if (isCancelled || plannerSessionLoadVersion.current !== loadVersion) {
+          return;
+        }
+        startTransition(() => {
+          setPlannerSession(nextPlannerSession);
+          setCurrentWorkspace((current) => {
+            if (
+              current.session === nextPlannerSession.session &&
+              current.planner_panel_state === nextPlannerSession.planner_panel_state &&
+              current.planner_memory === nextPlannerSession.planner_memory &&
+              current.activity_log === nextPlannerSession.activity_log
+            ) {
+              return current;
+            }
+            return mergePlannerSessionState(current, nextPlannerSession);
+          });
+        });
+      })
+      .catch((error) => {
+        if (isCancelled || plannerSessionLoadVersion.current !== loadVersion) {
+          return;
+        }
+        setPlannerConversationError(
+          error instanceof Error ? error.message : "Planner conversation load failed."
+        );
+      })
+      .finally(() => {
+        if (!isCancelled && plannerSessionLoadVersion.current === loadVersion) {
+          setPlannerConversationBusyLabel(null);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [workspace.trip_record.trip.trip_id]);
 
   const timelineStops = buildTimelineStops(currentWorkspace);
   const { trip } = currentWorkspace.trip_record;
@@ -503,11 +589,10 @@ function WorkspacePageContent({
   async function handleDecisionAnswer(decisionId: string, choice: string) {
     setPlannerError(null);
     setPlannerBusyLabel("Saving planner decision...");
+    plannerSessionLoadVersion.current += 1;
     try {
       const nextWorkspace = await answerPlannerDecision(trip.trip_id, decisionId, choice);
-      startTransition(() => {
-        setCurrentWorkspace(nextWorkspace);
-      });
+      setCurrentWorkspace(nextWorkspace);
     } catch (error) {
       setPlannerError(error instanceof Error ? error.message : "Planner decision update failed.");
     } finally {
@@ -522,6 +607,7 @@ function WorkspacePageContent({
   ) {
     setPlannerError(null);
     setPlannerBusyLabel("Saving planner feedback...");
+    plannerSessionLoadVersion.current += 1;
     try {
       const nextWorkspace = await submitPlannerOptionFeedback(
         trip.trip_id,
@@ -534,13 +620,38 @@ function WorkspacePageContent({
           | "do_more_before_asking_again",
         decisionId
       );
-      startTransition(() => {
-        setCurrentWorkspace(nextWorkspace);
-      });
+      setCurrentWorkspace(nextWorkspace);
     } catch (error) {
       setPlannerError(error instanceof Error ? error.message : "Planner feedback update failed.");
     } finally {
       setPlannerBusyLabel(null);
+    }
+  }
+
+  async function handlePlannerTurnSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const message = plannerConversationDraft.trim();
+    if (!message) {
+      setPlannerConversationError("Enter a planner message before sending a turn.");
+      return;
+    }
+
+    setPlannerConversationError(null);
+    setPlannerConversationBusyLabel("Sending planner turn...");
+    plannerSessionLoadVersion.current += 1;
+    try {
+      const nextPlannerSession = await submitPlannerTurn(trip.trip_id, message);
+      startTransition(() => {
+        setPlannerSession(nextPlannerSession);
+        setCurrentWorkspace((current) => mergePlannerSessionState(current, nextPlannerSession));
+        setPlannerConversationDraft("");
+      });
+    } catch (error) {
+      setPlannerConversationError(
+        error instanceof Error ? error.message : "Planner conversation turn failed."
+      );
+    } finally {
+      setPlannerConversationBusyLabel(null);
     }
   }
 
@@ -635,15 +746,105 @@ function WorkspacePageContent({
           <p className="status-label">Planner panel</p>
           <h2>Trip-scoped planner surface</h2>
           <p className="muted-copy">
-            The existing planner side panel now mounts inside the workspace route and reads trip-scoped API data.
+            {currentWorkspace.planner_panel_state.planner_behavior.runtime_summary ??
+              "The existing planner side panel now mounts inside the workspace route and reads trip-scoped API data."}
           </p>
+          <div className="planner-runtime-row" aria-label="Planner runtime state">
+            <span
+              className={`planner-runtime-pill planner-runtime-pill--${
+                currentWorkspace.planner_panel_state.planner_behavior.runtime_status ?? "fallback"
+              }`}
+            >
+              {currentWorkspace.planner_panel_state.planner_behavior.runtime_label ?? "Deterministic fallback planner"}
+            </span>
+            <span className="planner-runtime-mode">
+              {currentWorkspace.planner_panel_state.planner_behavior.runtime_mode === "model"
+                ? "Model-backed"
+                : "Fallback"}
+            </span>
+          </div>
           {plannerBusyLabel ? <p className="muted-copy">{plannerBusyLabel}</p> : null}
           {plannerError ? <p className="planner-inline-error">{plannerError}</p> : null}
           <PlannerSidePanelSurface
+            key={currentWorkspace.planner_panel_state === workspace.planner_panel_state ? "loader" : "workspace"}
             state={currentWorkspace.planner_panel_state}
             onDecisionAnswer={handleDecisionAnswer}
             onOptionFeedback={handleOptionFeedback}
           />
+          <section className="planner-conversation-card" aria-label="Planner conversation">
+            <div className="planner-conversation-header">
+              <div>
+                <p className="scenario-kicker">Conversation runtime</p>
+                <h3>Message the trip planner</h3>
+                <p>
+                  Turns are persisted through the trip-scoped planner API and refresh the same
+                  panel state, memory, and activity trail used by the workspace.
+                </p>
+              </div>
+              <span className="planner-conversation-pill">
+                {plannerSession?.messages.length ?? 0} message
+                {(plannerSession?.messages.length ?? 0) === 1 ? "" : "s"}
+              </span>
+            </div>
+            {plannerConversationBusyLabel ? (
+              <p className="muted-copy">{plannerConversationBusyLabel}</p>
+            ) : null}
+            {plannerConversationError ? (
+              <p className="planner-inline-error">{plannerConversationError}</p>
+            ) : null}
+            <div className="planner-message-list" aria-live="polite">
+              {plannerSession == null || plannerSession.messages.length === 0 ? (
+                <article className="planner-message planner-message-empty">
+                  <p>
+                    No conversation turns have been persisted yet. Send a message to start the
+                    runtime-backed planner thread for this trip.
+                  </p>
+                </article>
+              ) : (
+                plannerSession.messages.map((message) => (
+                  <article
+                    key={message.message_id}
+                    className={`planner-message planner-message-${message.role}`}
+                  >
+                    <p className="scenario-kicker">
+                      {message.role === "user" ? "Traveler" : "Planner"}
+                    </p>
+                    <p>{message.content}</p>
+                    {message.tool_calls.length > 0 ? (
+                      <ul className="planner-tool-call-list">
+                        {message.tool_calls.map((toolCall) => (
+                          <li key={`${message.message_id}-${toolCall.tool_name}`}>
+                            {toolCall.tool_name}: {toolCall.summary}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </article>
+                ))
+              )}
+            </div>
+            {plannerSession?.available_tools.length ? (
+              <div className="planner-tool-strip" aria-label="Planner tools available">
+                {plannerSession.available_tools.slice(0, 4).map((tool) => (
+                  <span key={tool.tool_name}>{tool.tool_name.replace(/_/g, " ")}</span>
+                ))}
+              </div>
+            ) : null}
+            <form className="planner-conversation-form" onSubmit={handlePlannerTurnSubmit}>
+              <label>
+                Message
+                <textarea
+                  value={plannerConversationDraft}
+                  onChange={(event) => setPlannerConversationDraft(event.target.value)}
+                  placeholder="Ask the planner what to compare, revise, or inspect next."
+                  rows={3}
+                />
+              </label>
+              <button type="submit" disabled={Boolean(plannerConversationBusyLabel)}>
+                Send planner turn
+              </button>
+            </form>
+          </section>
         </section>
 
         <WorkspaceBudgetPanel

@@ -1,13 +1,16 @@
 import json
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from urllib import error as urllib_error
 import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
+from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.app.services.policy import _tpp_trip_plan_payload
 from trip_planner.persistence.db import reset_database_state
+from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.integrations.tpp import client as tpp_client_module
 
 
@@ -19,6 +22,31 @@ def _fixture_path(name: str) -> Path:
 
 def _load_fixture(name: str) -> dict:
     return json.loads(_fixture_path(name).read_text(encoding="utf-8"))
+
+
+def test_tpp_trip_plan_payload_falls_back_to_owner_profile_department() -> None:
+    record = PersistedTrip(
+        trip_id="trip-leisure-1",
+        user_id="user-1",
+        title="Leisure policy sync",
+        summary="Check fallback department.",
+        mode="leisure",
+        start_date="2026-05-04",
+        end_date="2026-05-06",
+        duration_days=3,
+        primary_regions=["Chicago"],
+        leisure_profile_id="profile:trip-leisure-1:leisure",
+        business_profile_id=None,
+    )
+    user = AuthenticatedUser(
+        user_id="user-1",
+        email="owner@example.test",
+        display_name="Policy Owner",
+    )
+
+    payload = _tpp_trip_plan_payload(record, user=user)
+
+    assert payload["department"] == "profile:trip-leisure-1:leisure"
 
 
 class _FakeHTTPResponse:
@@ -43,7 +71,7 @@ def _install_fake_http(
     monkeypatch: pytest.MonkeyPatch,
     responses: list[_FakeHTTPResponse | Exception],
     *,
-    captured_requests: list[dict[str, object]] | None = None,
+    captured_requests: list[dict[str, Any]] | None = None,
 ) -> None:
     queue = list(responses)
 
@@ -161,7 +189,7 @@ def test_workspace_policy_import_uses_live_tpp_transport_when_response_is_omitte
     monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
     monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
-    captured_requests: list[dict[str, object]] = []
+    captured_requests: list[dict[str, Any]] = []
     _install_fake_http(
         monkeypatch,
         [
@@ -243,18 +271,32 @@ def test_workspace_policy_import_uses_live_tpp_transport_when_response_is_omitte
     assert payload["policy_state"]["policy_version"] == "d7a6d25a"
     assert payload["summary"]["documentation_rules"] == ["fare_evidence"]
     assert payload["summary"]["approval_triggers"] == ["manager_review"]
-    assert captured_requests == [
-        {
-            "full_url": "https://tpp.example.test/api/planner/policy-snapshot",
-            "method": "GET",
-            "body": {
-                "policy_scope": "business_planning",
-                "organization_context": True,
-                "trip_id": trip_id,
-                "requested_at": "2026-02-15T12:00:00Z",
-            },
-        }
-    ]
+    assert captured_requests[0]["full_url"] == "https://tpp.example.test/api/planner/policy-snapshot"
+    assert captured_requests[0]["method"] == "GET"
+    assert captured_requests[0]["body"]["request"] == {
+        "trip_id": trip_id,
+        "requested_at": "2026-02-15T12:00:00Z",
+    }
+    assert captured_requests[0]["body"]["trip_plan"] == {
+        "trip_id": trip_id,
+        "traveler_name": "Policy Owner",
+        "traveler_role": "business traveler",
+        "department": f"profile:{trip_id}:business",
+        "destination": "Chicago",
+        "destination_city": "Chicago",
+        "departure_date": "2026-05-04",
+        "return_date": "2026-05-06",
+        "purpose": "Use runtime TPP HTTP transport.",
+        "transportation_mode": "mixed",
+        "expected_costs": {},
+        "estimated_cost": 0,
+        "status": "draft",
+        "expense_breakdown": {},
+        "selected_providers": {},
+        "validation_results": [],
+        "approval_history": [],
+        "exception_requests": [],
+    }
 
 
 def test_workspace_policy_import_surfaces_live_tpp_unavailable_errors(

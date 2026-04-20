@@ -66,6 +66,7 @@ class PlannerSessionResponse(BaseModel):
     session_state_id: str
     conversation_id: str
     resumed_at: str | None = None
+    runtime: dict[str, Any] = Field(default_factory=dict)
     session: dict[str, Any]
     planner_panel_state: dict[str, Any]
     planner_memory: PlannerMemoryResponse
