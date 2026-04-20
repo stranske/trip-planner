@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  buildGoogleMapsEmbedUrl,
   buildTripMapSurfaceModel,
   humanizeStop,
 } from "./mapSurface";
@@ -12,21 +11,7 @@ describe("mapSurface", () => {
     expect(humanizeStop("kyoto_station")).toBe("Kyoto Station");
   });
 
-  it("builds a Google Maps directions URL with waypoints", () => {
-    const url = new URL(
-      buildGoogleMapsEmbedUrl(["Kyoto", "Uji", "Kyoto"], "test-key")
-    );
-
-    expect(url.origin).toBe("https://www.google.com");
-    expect(url.pathname).toBe("/maps/embed/v1/directions");
-    expect(url.searchParams.get("key")).toBe("test-key");
-    expect(url.searchParams.get("origin")).toBe("Kyoto");
-    expect(url.searchParams.get("destination")).toBe("Kyoto");
-    expect(url.searchParams.get("mode")).toBe("transit");
-    expect(url.searchParams.get("waypoints")).toBe("Uji");
-  });
-
-  it("selects the live Google Maps provider when a key and route are available", () => {
+  it("selects the live Google Maps JavaScript adapter when a key and route are available", () => {
     const model = buildTripMapSurfaceModel({
       activeScenario: {
         scenario_id: "scenario:1",
@@ -77,9 +62,17 @@ describe("mapSurface", () => {
       googleMapsApiKey: "test-key",
     });
 
-    expect(model.provider.kind).toBe("google-maps");
+    expect(model.provider.kind).toBe("google-maps-js");
     expect(model.destinationAnchors).toEqual(["Kyoto", "Uji"]);
     expect(model.routeStops.map((stop) => stop.label)).toEqual(["Kyoto", "Uji", "Kyoto"]);
+    expect(model.routeSegments).toHaveLength(2);
+    expect(model.markers.map((marker) => marker.kind)).toEqual([
+      "stop",
+      "stop",
+      "stop",
+      "transport",
+      "policy",
+    ]);
   });
 
   it("falls back when Google Maps is not configured", () => {
@@ -123,5 +116,52 @@ describe("mapSurface", () => {
 
     expect(model.provider.kind).toBe("fallback");
     expect(model.provider.summary).toContain("bounded textual route fallback");
+    expect(model.provider.status).toBe("misconfigured");
+  });
+
+  it("keeps route context visible when the provider reports a load error", () => {
+    const model = buildTripMapSurfaceModel({
+      activeScenario: {
+        scenario_id: "scenario:1",
+        title: "Kyoto base",
+        rank: 1,
+        status: "lead",
+        summary: "Baseline",
+        comparison_note: "Lead route",
+        option_count: 2,
+        route_sequence: ["kyoto", "uji"],
+        route_summary: "kyoto -> uji",
+        recommended_for_selection: true,
+        feasible: true,
+        metrics: {
+          score: 0.93,
+          travel_minutes: 265,
+          transfers: 4,
+          estimated_total: null,
+        },
+        delta: {
+          score_delta: 0,
+          travel_minutes_delta: 0,
+          transfers_delta: 0,
+          estimated_total_delta: null,
+        },
+        highlights: ["Low-friction baseline."],
+      },
+      bundles: [],
+      feasibilitySummary: {
+        assessment_count: 0,
+        recommended_bundle_count: 0,
+        blocking_bundle_count: 0,
+        attention_bundle_count: 0,
+        notes: [],
+        assessments: [],
+      },
+      googleMapsApiKey: "test-key",
+      providerLoadState: "error",
+    });
+
+    expect(model.provider.kind).toBe("fallback");
+    expect(model.provider.status).toBe("provider-error");
+    expect(model.routeSegments).toHaveLength(1);
   });
 });

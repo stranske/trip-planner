@@ -7,7 +7,7 @@
 
 The runtime baseline now treats the saved trip record as the durable planning container. New scenario, budget, workspace, and policy work should attach to a persisted trip instead of inventing a parallel root object.
 Saved scenarios and trip-level planning history now persist underneath that same trip container, so later comparison and workspace slices should consume those records instead of reintroducing fixture-only storage.
-The shipped full-stack MVP now includes authenticated trip creation, persisted trip and scenario routes, the workspace shell, planner session APIs, and stored policy/proposal state. Live external policy transport and provider-backed maps remain follow-on integrations, so docs and checks in this repo should describe those gaps explicitly instead of implying they already ship.
+The shipped full-stack MVP now includes authenticated trip creation, persisted trip and scenario routes, the workspace shell, planner session APIs, stored policy/proposal state, and a provider-backed map adapter seam with bounded fallback rendering. Live external policy transport remains a follow-on integration, so docs and checks in this repo should describe that gap explicitly instead of implying it already ships.
 
 ## Current MVP Surfaces
 
@@ -18,7 +18,7 @@ The current runtime already ships these inspectable application surfaces:
 - planner session APIs and workspace state hydration for the frontend app shell
 - stored proposal and policy posture state that later `Travel-Plan-Permission` work can consume
 
-The current runtime does not yet ship live Google Maps rendering or remote `Travel-Plan-Permission` execution. Those remain explicit follow-on integrations, so local runtime checks and product docs should continue to call them out as deferred.
+The current runtime ships a Google Maps JavaScript adapter boundary for the workspace map surface, with CI-safe mocked rendering and fallback states for missing config, provider load errors, and sparse route data. Remote `Travel-Plan-Permission` execution remains an explicit follow-on integration, so local runtime checks and product docs should continue to call that out as deferred.
 
 ## Key Docs
 
@@ -152,7 +152,7 @@ The verification path covers:
 - frontend unit/build checks
 - a smoke test that runs the frontend client against a live backend process
 
-These checks validate the local full-stack MVP that already exists in this repo. They do not prove live Google Maps rendering or remote Travel-Plan-Permission transport, which are still documented as active follow-on integrations.
+These checks validate the local full-stack MVP that already exists in this repo. They exercise the map adapter and fallback seam with mocked provider state, but they do not prove live Google Maps network rendering or remote Travel-Plan-Permission transport.
 The production-focused testing plan in [docs/local-testing-plan.md](docs/local-testing-plan.md) adds the critical auth, trip, workspace, policy, proposal, and preview-verification journeys on top of that baseline.
 
 ## Optional Live Integration Env Vars
@@ -162,11 +162,13 @@ The local MVP does not require live external integrations. `make runtime-check` 
 Use these env vars only when you are intentionally exercising an integration seam that already exists in code:
 
 - `VITE_API_BASE_URL`: overrides the frontend API base URL when you are not using the local Vite proxy.
-- `VITE_GOOGLE_MAPS_EMBED_API_KEY`: enables the optional Google Maps embed path in the workspace. If it is unset, the UI should stay on the textual fallback map surface.
+- `VITE_GOOGLE_MAPS_BROWSER_API_KEY`: enables the Google Maps JavaScript adapter path in the workspace. If it is unset, the UI should stay on the bounded fallback map surface.
+- `VITE_GOOGLE_MAPS_PROVIDER_STATE`: optional local/test override for the map adapter load state (`ready`, `loading`, or `error`).
 - `TPP_BASE_URL`, `TPP_ACCESS_TOKEN`, `TPP_OIDC_PROVIDER`: enable the live `Travel-Plan-Permission` transport client. If they are unset, the repo should continue to present stored-policy and passive/local TPP seams rather than implying a real remote policy round-trip.
 
 That distinction matters for docs and verification messaging:
 
 - missing local prerequisites such as `.venv` or `frontend/node_modules` are setup failures
 - missing live integration env vars are not setup failures for the shipped MVP
-- live Google Maps rendering and remote `Travel-Plan-Permission` execution remain deferred follow-on integrations unless you deliberately configure those seams
+- missing Google Maps configuration or a provider load error should preserve route context through the fallback map instead of blanking the workspace
+- live remote `Travel-Plan-Permission` execution remains deferred unless you deliberately configure that seam
