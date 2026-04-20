@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -27,14 +28,17 @@ def _to_float(value: Any, default: float = 0.0) -> float:
     """Return a finite float for numeric-ish values."""
     if isinstance(value, bool):
         return default
+    parsed: float
     if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
+        parsed = float(value)
+    elif isinstance(value, str):
         try:
-            return float(value)
+            parsed = float(value)
         except ValueError:
             return default
-    return default
+    else:
+        return default
+    return parsed if math.isfinite(parsed) else default
 
 
 def _to_int(value: Any, default: int = 0) -> int:
@@ -135,7 +139,7 @@ _This issue is automatically updated by the coverage guard workflow._
     return body
 
 
-def _find_existing_issue(repo: str, title: str) -> dict[str, Any] | None:
+def _find_existing_issue(repo: str, title: str, state: str = "open") -> dict[str, Any] | None:
     """Find an existing issue by title using gh CLI."""
     import subprocess
 
@@ -147,7 +151,7 @@ def _find_existing_issue(repo: str, title: str) -> dict[str, Any] | None:
             "--repo",
             repo,
             "--state",
-            "all",
+            state,
             "--search",
             f'"{title}" in:title',
             "--json",
@@ -179,7 +183,7 @@ def _find_or_create_issue(repo: str, title: str, body: str, labels: list[str]) -
     """Find existing issue or create a new one using gh CLI."""
     import subprocess
 
-    existing_issue = _find_existing_issue(repo, title)
+    existing_issue = _find_existing_issue(repo, title, state="open")
 
     if existing_issue:
         issue_number = existing_issue["number"]
@@ -216,7 +220,7 @@ def _close_existing_issue(repo: str, title: str, body: str) -> None:
     """Close the existing baseline breach issue after coverage recovers."""
     import subprocess
 
-    existing_issue = _find_existing_issue(repo, title)
+    existing_issue = _find_existing_issue(repo, title, state="all")
     if not existing_issue:
         print("Coverage recovered; no existing breach issue found")
         return
@@ -278,7 +282,8 @@ def main(args: list[str] | None = None) -> int:
 
     # Extract values
     current = _to_float(trend_data.get("current"))
-    baseline = _to_float(baseline_data.get("line"), _to_float(trend_data.get("baseline"), 70.0))
+    baseline_value = baseline_data.get("line", baseline_data.get("coverage"))
+    baseline = _to_float(baseline_value, _to_float(trend_data.get("baseline"), 70.0))
     delta = current - baseline
 
     # Get hotspots
