@@ -290,6 +290,47 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
     assert payload["planner_memory"]["current_checkpoint_id"] is None
 
 
+def test_workspace_endpoint_creates_non_seeded_persisted_leisure_trip_with_runtime_frame(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Lisbon solo long weekend",
+            "summary": "Create a persisted leisure trip from runtime context.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-07-18",
+                "end_date": "2026-07-21",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+                "traveler_party": {
+                    "kind": "solo",
+                    "traveler_count": 1,
+                    "notes": "Prioritize museums and walkable neighborhoods.",
+                },
+            },
+        },
+    )
+    assert created.status_code == 201
+
+    trip = created.json()["trip"]
+    trip_id = trip["trip_id"]
+    assert trip_id
+    assert all(
+        seeded_id not in trip_id
+        for seeded_id in ("trip-leisure-kyoto-draft", "trip-business-client-summit")
+    )
+    assert trip["trip_frame"]["primary_regions"] == ["Lisbon"]
+    assert trip["trip_frame"]["start_date"] == "2026-07-18"
+    assert trip["trip_frame"]["end_date"] == "2026-07-21"
+    assert trip["trip_frame"]["traveler_party"]["kind"] == "solo"
+    assert trip["trip_frame"]["traveler_party"]["traveler_count"] == 1
+
+    workspace = client.get(f"/api/workspace/{trip_id}")
+    assert workspace.status_code == 200
+
+
 @pytest.mark.parametrize(
     ("mode", "title", "summary", "trip_frame"),
     [
