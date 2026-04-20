@@ -105,6 +105,23 @@ def test_planner_session_endpoint_bootstraps_trip_scoped_session(client: TestCli
         assert persisted.trip_id == trip_id
 
 
+def test_planner_session_treats_blank_model_key_as_unconfigured(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trip_id = _create_trip(client)
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL", "gpt-test")
+    monkeypatch.setenv("OPENAI_API_KEY", "   ")
+
+    response = client.get(f"/api/planner/{trip_id}/session")
+
+    assert response.status_code == 200
+    runtime = response.json()["runtime"]
+    assert runtime["mode"] == "fallback"
+    assert runtime["fallback_reason"] == "openai_api_key_missing"
+
+
 def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> None:
     trip_id = _create_trip(client)
 

@@ -39,8 +39,9 @@ def get_planner_runtime_config() -> PlannerRuntimeConfig:
         or ""
     ).strip().lower()
     model = os.getenv("TRIP_PLANNER_PLANNER_MODEL", "").strip()
+    openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
     fake_enabled = provider == "fake"
-    openai_enabled = provider == "openai" and bool(model) and bool(os.getenv("OPENAI_API_KEY"))
+    openai_enabled = provider == "openai" and bool(model) and bool(openai_api_key)
 
     if fake_enabled or openai_enabled:
         provider_label = provider or "configured"
@@ -58,7 +59,7 @@ def get_planner_runtime_config() -> PlannerRuntimeConfig:
         fallback_reason = "unsupported_planner_model_provider"
     elif provider == "openai" and not model:
         fallback_reason = "planner_model_name_missing"
-    elif provider == "openai" and model and not os.getenv("OPENAI_API_KEY"):
+    elif provider == "openai" and model and not openai_api_key:
         fallback_reason = "openai_api_key_missing"
 
     return PlannerRuntimeConfig(

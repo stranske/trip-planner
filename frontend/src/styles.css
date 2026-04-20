@@ -151,6 +151,11 @@ a {
   color: #25544e;
 }
 
+.planner-runtime-pill--ready {
+  background: #e8f2ef;
+  color: #25544e;
+}
+
 .planner-runtime-pill--fallback {
   background: #fff5dc;
   color: #705016;
