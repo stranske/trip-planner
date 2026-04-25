@@ -34,7 +34,10 @@ jobs:
           sparse-checkout: |
             .github/actions/setup-api-client
             .github/scripts/github-api-with-retry.js
+            .github/scripts/terminal_disposition.js
+            .github/scripts/terminal_disposition_coverage.js
             .github/scripts/token_load_balancer.js
+            scripts/aggregate_agent_metrics.py
           sparse-checkout-cone-mode: false
 
       - name: Install GitHub API dependencies
@@ -63,7 +66,8 @@ jobs:
 
           # Get artifact IDs and names
           # shellcheck disable=SC1009,SC1073,SC1039,SC1072
-          node - <<'NODE' |
+          artifact_list="artifacts/metric-artifacts.tsv"
+          node - <<'NODE' > "$artifact_list"
           const { Octokit } = require('@octokit/rest');
           const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
           const core = { info: () => {}, warning: console.warn, debug: () => {} };
@@ -73,7 +77,11 @@ jobs:
             'agents-autofix-metrics',
             'agents-verifier-metrics'
           ]);
-          const prefixes = ['autopilot-metrics-'];
+          const prefixes = [
+            'autopilot-metrics-',
+            'verifier-terminal-disposition-',
+            'review-thread-terminal-disposition-'
+          ];
 
           (async () => {
             const github = new Octokit({ auth: process.env.GH_TOKEN || process.env.GITHUB_TOKEN });
@@ -102,6 +110,9 @@ jobs:
             process.exit(1);
           });
           NODE
+          if [ ! -s "$artifact_list" ]; then
+            echo "No metrics artifacts found"
+          fi
           while IFS=$'\t' read -r id name; do
             echo "Downloading artifact $id ($name)"
             mkdir -p "artifacts/$name"
@@ -110,47 +121,47 @@ jobs:
             export ARTIFACT_DIR="artifacts/$name"
             export ARTIFACT_ZIP="artifacts/$name/$id.zip"
             if ! node - <<'NODE'
-            const fs = require('fs');
-            const { Octokit } = require('@octokit/rest');
-            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
-            const core = { info: () => {}, warning: console.warn, debug: () => {} };
-            const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
-            const artifactId = Number(process.env.ARTIFACT_ID);
-            const zipPath = process.env.ARTIFACT_ZIP;
-            (async () => {
-              const token = process.env.GH_TOKEN ||
-                process.env.GITHUB_TOKEN;
-              const github = new Octokit({ auth: token });
-              const { withRetry } = await createTokenAwareRetry({
-                github,
-                core,
-                env: process.env,
-                task: 'agents-weekly-metrics-download',
-                capabilities: ['actions:read']
-              });
-              const response = await withRetry((client) => client.rest.actions.downloadArtifact({
-                owner,
-                repo,
-                artifact_id: artifactId,
-                archive_format: 'zip'
-              }));
-              const data = response.data;
-              const buffer = Buffer.isBuffer(data)
-                ? data
-                : Buffer.from(data instanceof ArrayBuffer ? new Uint8Array(data) : data);
-              fs.writeFileSync(zipPath, buffer);
-            })().catch((error) => {
-              console.error(error);
-              process.exit(1);
+          const fs = require('fs');
+          const { Octokit } = require('@octokit/rest');
+          const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+          const core = { info: () => {}, warning: console.warn, debug: () => {} };
+          const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
+          const artifactId = Number(process.env.ARTIFACT_ID);
+          const zipPath = process.env.ARTIFACT_ZIP;
+          (async () => {
+            const token = process.env.GH_TOKEN ||
+              process.env.GITHUB_TOKEN;
+            const github = new Octokit({ auth: token });
+            const { withRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'agents-weekly-metrics-download',
+              capabilities: ['actions:read']
             });
-            NODE
+            const response = await withRetry((client) => client.rest.actions.downloadArtifact({
+              owner,
+              repo,
+              artifact_id: artifactId,
+              archive_format: 'zip'
+            }));
+            const data = response.data;
+            const buffer = Buffer.isBuffer(data)
+              ? data
+              : Buffer.from(data instanceof ArrayBuffer ? new Uint8Array(data) : data);
+            fs.writeFileSync(zipPath, buffer);
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
             then
               echo "Warning: Could not download artifact $id ($name)"
               continue
             fi
             unzip -o "artifacts/$name/$id.zip" -d "artifacts/$name" >/dev/null || \
               echo "Warning: Could not unzip artifact $id ($name)"
-          done || true  # Don't fail if no artifacts found
+          done < "$artifact_list"
 
       - name: Aggregate metrics
         env:
@@ -159,11 +170,31 @@ jobs:
         run: |
           python scripts/aggregate_agent_metrics.py
 
+      - name: Review-thread terminal coverage preflight
+        env:
+          TERMINAL_DISPOSITION_METRICS_DIR: artifacts
+          TERMINAL_DISPOSITION_COVERAGE_JSON: terminal-disposition-coverage.json
+          TERMINAL_DISPOSITION_COVERAGE_MD: terminal-disposition-coverage.md
+        run: |
+          node .github/scripts/terminal_disposition_coverage.js
+          if [ -f terminal-disposition-coverage.md ]; then
+            cat terminal-disposition-coverage.md >> "$GITHUB_STEP_SUMMARY"
+            if [ -f agent-weekly-metrics.md ]; then
+              {
+                printf '\n'
+                cat terminal-disposition-coverage.md
+              } >> agent-weekly-metrics.md
+            fi
+          fi
+
       - name: Upload weekly summary
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: agent-weekly-metrics
-          path: agent-weekly-metrics.md
+          path: |
+            agent-weekly-metrics.md
+            terminal-disposition-coverage.json
+            terminal-disposition-coverage.md
           retention-days: 30
 
       - name: Post summary to tracking issue
