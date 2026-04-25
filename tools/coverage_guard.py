@@ -8,10 +8,12 @@ a tracking issue when coverage falls below the threshold.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import math
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +21,38 @@ DEFAULT_TREND_PATH = Path("coverage-trend.json")
 DEFAULT_COVERAGE_PATH = Path("coverage.json")
 DEFAULT_BASELINE_PATH = Path("config/coverage-baseline.json")
 DEFAULT_HISTORY_PATH = Path("coverage-trend-history.ndjson")
+DEFAULT_BASELINE = 80.0
+DEFAULT_WARN_DROP = 1.0
+DEFAULT_RECOVERY_DAYS = 3
+
+
+@dataclass(frozen=True)
+class BaselineConfig:
+    """Coverage baseline settings used by guard comments and issue policy."""
+
+    baseline: float
+    warn_drop: float
+    recovery_days: int
+
+
+@dataclass(frozen=True)
+class CoverageSnapshot:
+    """Current coverage state relative to the configured baseline."""
+
+    current: float
+    baseline: float
+    delta: float
+
+
+@dataclass(frozen=True)
+class FileCoverage:
+    """Coverage details for a file that needs attention."""
+
+    path: str
+    percent: float
+    covered: int
+    total: int
+    missing: int
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -90,6 +124,136 @@ def _to_int(value: Any, default: int = 0) -> int:
         except (OverflowError, ValueError):
             return default
     return default
+
+
+def load_baseline(path: Path) -> BaselineConfig:
+    """Load baseline configuration with conservative defaults."""
+    payload = _load_json(path)
+    baseline = _to_float(payload.get("line", payload.get("coverage")), DEFAULT_BASELINE)
+    warn_drop = _to_float(payload.get("warn_drop"), DEFAULT_WARN_DROP)
+    recovery_days = max(
+        DEFAULT_RECOVERY_DAYS,
+        _to_int(
+            payload.get(
+                "recovery_days",
+                payload.get("recovery_window", payload.get("recovery_runs")),
+            ),
+            DEFAULT_RECOVERY_DAYS,
+        ),
+    )
+    return BaselineConfig(
+        baseline=baseline,
+        warn_drop=warn_drop,
+        recovery_days=recovery_days,
+    )
+
+
+def compute_top_files(coverage_data: dict[str, Any], limit: int = 15) -> list[FileCoverage]:
+    """Return the most useful file-level coverage rows for issue comments."""
+    files = coverage_data.get("files", {})
+    if not isinstance(files, dict) or limit <= 0:
+        return []
+
+    rows: list[FileCoverage] = []
+    for filepath, data in files.items():
+        if not isinstance(filepath, str) or not isinstance(data, dict):
+            continue
+        summary = data.get("summary", {})
+        if not isinstance(summary, dict):
+            continue
+        percent = _parse_finite_float(summary.get("percent_covered"))
+        if percent is None:
+            continue
+        covered = _to_int(summary.get("covered_lines"))
+        missing = _to_int(summary.get("missing_lines"))
+        total = _to_int(summary.get("num_statements"), covered + missing)
+        if total <= 0:
+            total = covered + missing
+        rows.append(
+            FileCoverage(
+                path=filepath,
+                percent=percent,
+                covered=covered,
+                total=total,
+                missing=missing,
+            )
+        )
+
+    if any(row.missing > 0 for row in rows):
+        rows = [row for row in rows if row.missing > 0]
+        rows.sort(key=lambda row: (-row.missing, row.percent, row.path))
+    else:
+        rows.sort(key=lambda row: (-row.total, row.percent, row.path))
+    return rows[:limit]
+
+
+def build_update_comment(
+    snapshot: CoverageSnapshot,
+    config: BaselineConfig,
+    *,
+    below_baseline: bool,
+    date: dt.date,
+    run_url: str,
+    recovery_progress: str | None,
+    top_files: list[FileCoverage],
+) -> str:
+    """Build the durable coverage issue update comment."""
+    status = "Below baseline" if below_baseline else "At or above baseline"
+    lines = [
+        "## Coverage guard update",
+        "",
+        f"Date: {date.isoformat()}",
+        f"Status: {status}",
+        f"Current coverage: {snapshot.current:.2f}%",
+        f"Baseline coverage: {snapshot.baseline:.2f}%",
+        f"Delta vs baseline: {snapshot.delta:+.2f} pts",
+        f"Warning threshold: {config.warn_drop:.2f} pts",
+        f"Recovery window: {config.recovery_days} days",
+    ]
+    if recovery_progress:
+        lines.append(f"Recovery progress: {recovery_progress}")
+    if run_url:
+        lines.append(f"Run: {run_url}")
+
+    lines.extend(["", "### Top changed files"])
+    if top_files:
+        lines.extend(
+            [
+                "",
+                "| File | Coverage | Covered | Missing | Total |",
+                "| --- | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for item in top_files:
+            lines.append(
+                f"| `{item.path}` | {item.percent:.2f}% | {item.covered} | "
+                f"{item.missing} | {item.total} |"
+            )
+    else:
+        lines.append("")
+        lines.append("Top changed files unavailable.")
+    return "\n".join(lines)
+
+
+def build_recovered_comment(
+    snapshot: CoverageSnapshot,
+    config: BaselineConfig,
+    date: dt.date,
+) -> str:
+    """Build the comment used when closing a recovered coverage issue."""
+    return "\n".join(
+        [
+            "Coverage recovered above baseline.",
+            "",
+            f"Date: {date.isoformat()}",
+            f"Current coverage: {snapshot.current:.2f}%",
+            f"Baseline coverage: {snapshot.baseline:.2f}%",
+            f"Delta vs baseline: {snapshot.delta:+.2f} pts",
+            f"Recovered for {config.recovery_days} consecutive days.",
+            "",
+            "Closing this issue.",
+        ]
+    )
 
 
 def _get_hotspots(coverage_data: dict[str, Any], limit: int = 15) -> list[dict[str, Any]]:
