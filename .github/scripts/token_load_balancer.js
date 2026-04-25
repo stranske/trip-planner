@@ -20,6 +20,26 @@
  *   const token = await getOptimalToken({ github, core, capabilities: ['cross-repo'] });
  */
 
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+function requireOrImport(moduleName) {
+  try {
+    return Promise.resolve(require(moduleName));
+  } catch (requireError) {
+    return import(moduleName).catch((importError) => {
+      const error = new Error(
+        `Unable to load ${moduleName}; require failed: ${requireError.message}; ` +
+        `import failed: ${importError.message}`
+      );
+      error.requireError = requireError;
+      error.importError = importError;
+      throw error;
+    });
+  }
+}
+
 // Token registry - tracks all available tokens and their metadata
 const tokenRegistry = {
   // Each entry: { token, type, source, capabilities, rateLimit: { limit, remaining, reset, checked } }
@@ -37,6 +57,8 @@ const tokenRegistry = {
   // Threshold below which we consider a token "critical" (5%)
   criticalThreshold: 0.05,
 };
+
+const invalidAuthWarningMemory = new Set();
 
 /**
  * Token capabilities - what each token type can do
@@ -369,6 +391,11 @@ async function initializeTokenRegistry({ secrets, github, core, githubToken }) {
   }
   
   core?.info?.(`Token registry initialized with ${tokenRegistry.tokens.size} tokens`);
+
+  if (tokenRegistry.tokens.size === 0) {
+    core?.debug?.('Token registry has no token inputs; using provided GitHub client.');
+    return getRegistrySummary();
+  }
   
   // Initial rate limit check for all tokens
   await refreshAllRateLimits({ github, core });
@@ -410,16 +437,14 @@ async function refreshAllRateLimits({ github, core }) {
   // not token-specific.
   let Octokit = null;
   try {
-    ({ Octokit } = await import('@octokit/rest'));
+    ({ Octokit } = await requireOrImport('@octokit/rest'));
   } catch (importErr) {
-    // ESM import() resolves relative to file location — if node_modules
-    // is not co-located (e.g., workflows-lib checkout without symlink),
-    // the import fails.  All tokens get a conservative synthetic budget.
+    // All tokens get a conservative synthetic budget when Octokit is not
+    // resolvable from the action dependency layout.
     core?.error?.(
       `@octokit/rest import failed: ${importErr.message}. ` +
       `Token rotation is degraded — rate limit checks are skipped. ` +
-      `Ensure node_modules is symlinked to the scripts directory ` +
-      `(see setup-api-client install_dir or link step).`
+      `Ensure setup-api-client installs dependencies and exports NODE_PATH.`
     );
   }
   
@@ -442,6 +467,122 @@ async function refreshAllRateLimits({ github, core }) {
   
   tokenRegistry.lastRefresh = now;
   return results;
+}
+
+function getInvalidAuthWarningCachePath() {
+  const configured =
+    process.env.TOKEN_INVALID_AUTH_WARNING_CACHE ||
+    process.env.GITHUB_TOKEN_INVALID_AUTH_WARNING_CACHE ||
+    '';
+  if (configured.trim()) {
+    return path.resolve(configured.trim());
+  }
+
+  const tempRoot = process.env.RUNNER_TEMP || os.tmpdir();
+  return path.join(tempRoot, 'github-token-invalid-auth-warnings.json');
+}
+
+function readInvalidAuthWarningCache(cachePath, core) {
+  if (!cachePath || !fs.existsSync(cachePath)) {
+    return new Set();
+  }
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    if (Array.isArray(parsed)) {
+      return new Set(parsed.filter(Boolean));
+    }
+    if (Array.isArray(parsed?.tokens)) {
+      return new Set(parsed.tokens.filter(Boolean));
+    }
+  } catch (error) {
+    core?.debug?.(`Ignoring invalid token warning cache ${cachePath}: ${error.message}`);
+  }
+
+  return new Set();
+}
+
+function sleepSync(ms) {
+  const signal = new Int32Array(new SharedArrayBuffer(4));
+  Atomics.wait(signal, 0, 0, ms);
+}
+
+function withInvalidAuthWarningCacheLock(cachePath, core, fn) {
+  if (!cachePath) {
+    return fn();
+  }
+
+  const lockPath = `${cachePath}.lock`;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    let lockFd = null;
+    try {
+      fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+      lockFd = fs.openSync(lockPath, 'wx');
+      try {
+        return fn();
+      } finally {
+        fs.closeSync(lockFd);
+        fs.rmSync(lockPath, { force: true });
+      }
+    } catch (error) {
+      if (lockFd !== null) {
+        try {
+          fs.closeSync(lockFd);
+        } catch {
+          // Ignore cleanup failures; the warning cache is best effort.
+        }
+      }
+      if (error?.code !== 'EEXIST') {
+        throw error;
+      }
+      sleepSync(25);
+    }
+  }
+
+  core?.debug?.(`Invalid token warning cache lock timed out for ${cachePath}; writing best effort.`);
+  return fn();
+}
+
+function writeInvalidAuthWarningCache(cachePath, warnedTokens, core) {
+  if (!cachePath) {
+    return;
+  }
+
+  try {
+    withInvalidAuthWarningCacheLock(cachePath, core, () => {
+      const mergedTokens = new Set([
+        ...readInvalidAuthWarningCache(cachePath, core),
+        ...warnedTokens,
+      ]);
+      fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+      const tempPath = `${cachePath}.${process.pid}.tmp`;
+      fs.writeFileSync(
+        tempPath,
+        `${JSON.stringify({ tokens: Array.from(mergedTokens).sort() }, null, 2)}\n`
+      );
+      fs.renameSync(tempPath, cachePath);
+    });
+  } catch (error) {
+    core?.debug?.(`Unable to update invalid token warning cache ${cachePath}: ${error.message}`);
+  }
+}
+
+function shouldWarnInvalidAuth(tokenId, core) {
+  if (invalidAuthWarningMemory.has(tokenId)) {
+    return false;
+  }
+
+  const cachePath = getInvalidAuthWarningCachePath();
+  const warnedTokens = readInvalidAuthWarningCache(cachePath, core);
+  if (warnedTokens.has(tokenId)) {
+    invalidAuthWarningMemory.add(tokenId);
+    return false;
+  }
+
+  warnedTokens.add(tokenId);
+  invalidAuthWarningMemory.add(tokenId);
+  writeInvalidAuthWarningCache(cachePath, warnedTokens, core);
+  return true;
 }
 
 /**
@@ -507,10 +648,16 @@ async function checkTokenRateLimit({ tokenInfo, github, core, Octokit }) {
       throw error;
     }
 
-    core?.warning?.(
-      `Token ${tokenInfo.id} has invalid credentials (HTTP 401). ` +
-      `It will be skipped until the backing secret is corrected.`
-    );
+    if (shouldWarnInvalidAuth(tokenInfo.id, core)) {
+      core?.warning?.(
+        `Token ${tokenInfo.id} has invalid credentials (HTTP 401). ` +
+        `It will be skipped until the backing secret is corrected.`
+      );
+    } else {
+      core?.debug?.(
+        `Token ${tokenInfo.id} still has invalid credentials; repeated warning suppressed.`
+      );
+    }
 
     return {
       limit: 5000,
@@ -531,8 +678,8 @@ async function checkTokenRateLimit({ tokenInfo, github, core, Octokit }) {
  */
 async function mintAppToken({ tokenInfo, core }) {
   try {
-    const { createAppAuth } = await import('@octokit/auth-app');
-    const { Octokit } = await import('@octokit/rest');
+    const { createAppAuth } = await requireOrImport('@octokit/auth-app');
+    const { Octokit } = await requireOrImport('@octokit/rest');
     
     const auth = createAppAuth({
       appId: tokenInfo.appId,
@@ -904,6 +1051,9 @@ module.exports = {
   getBestAvailableToken,
   getTimeUntilReset,
   shouldDefer,
+  requireOrImport,
+  shouldWarnInvalidAuth,
+  getInvalidAuthWarningCachePath,
   TOKEN_CAPABILITIES,
   TOKEN_SPECIALIZATIONS,
   tokenRegistry, // Export for testing/debugging
