@@ -20,6 +20,22 @@
  *   const token = await getOptimalToken({ github, core, capabilities: ['cross-repo'] });
  */
 
+function requireOrImport(moduleName) {
+  try {
+    return Promise.resolve(require(moduleName));
+  } catch (requireError) {
+    return import(moduleName).catch((importError) => {
+      const error = new Error(
+        `Unable to load ${moduleName}; require failed: ${requireError.message}; ` +
+        `import failed: ${importError.message}`
+      );
+      error.requireError = requireError;
+      error.importError = importError;
+      throw error;
+    });
+  }
+}
+
 // Token registry - tracks all available tokens and their metadata
 const tokenRegistry = {
   // Each entry: { token, type, source, capabilities, rateLimit: { limit, remaining, reset, checked } }
@@ -369,6 +385,11 @@ async function initializeTokenRegistry({ secrets, github, core, githubToken }) {
   }
   
   core?.info?.(`Token registry initialized with ${tokenRegistry.tokens.size} tokens`);
+
+  if (tokenRegistry.tokens.size === 0) {
+    core?.debug?.('Token registry has no token inputs; using provided GitHub client.');
+    return getRegistrySummary();
+  }
   
   // Initial rate limit check for all tokens
   await refreshAllRateLimits({ github, core });
@@ -410,16 +431,14 @@ async function refreshAllRateLimits({ github, core }) {
   // not token-specific.
   let Octokit = null;
   try {
-    ({ Octokit } = await import('@octokit/rest'));
+    ({ Octokit } = await requireOrImport('@octokit/rest'));
   } catch (importErr) {
-    // ESM import() resolves relative to file location — if node_modules
-    // is not co-located (e.g., workflows-lib checkout without symlink),
-    // the import fails.  All tokens get a conservative synthetic budget.
+    // All tokens get a conservative synthetic budget when Octokit is not
+    // resolvable from the action dependency layout.
     core?.error?.(
       `@octokit/rest import failed: ${importErr.message}. ` +
       `Token rotation is degraded — rate limit checks are skipped. ` +
-      `Ensure node_modules is symlinked to the scripts directory ` +
-      `(see setup-api-client install_dir or link step).`
+      `Ensure setup-api-client installs dependencies and exports NODE_PATH.`
     );
   }
   
@@ -531,8 +550,8 @@ async function checkTokenRateLimit({ tokenInfo, github, core, Octokit }) {
  */
 async function mintAppToken({ tokenInfo, core }) {
   try {
-    const { createAppAuth } = await import('@octokit/auth-app');
-    const { Octokit } = await import('@octokit/rest');
+    const { createAppAuth } = await requireOrImport('@octokit/auth-app');
+    const { Octokit } = await requireOrImport('@octokit/rest');
     
     const auth = createAppAuth({
       appId: tokenInfo.appId,
@@ -904,6 +923,7 @@ module.exports = {
   getBestAvailableToken,
   getTimeUntilReset,
   shouldDefer,
+  requireOrImport,
   TOKEN_CAPABILITIES,
   TOKEN_SPECIALIZATIONS,
   tokenRegistry, // Export for testing/debugging
