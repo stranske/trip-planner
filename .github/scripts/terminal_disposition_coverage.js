@@ -115,20 +115,39 @@ function summarizeTerminalDispositionCoverage(records = [], options = {}) {
   const artifactSelectionWarning = artifactSelection &&
     artifactSelection.status !== 'pass' &&
     artifactSelection.status !== 'not-configured';
+  const selectedTerminalArtifactCount = artifactSelection?.selected_terminal_artifact_count || 0;
+  const terminalArtifactInputMismatch = selectedTerminalArtifactCount > 0 && inputFileCount === 0;
 
   let status = 'pass';
   if (terminalRecords.length === 0) {
-    status = parseErrors > 0 || nonTerminalRecordCount > 0 || artifactSelectionWarning
+    status = parseErrors > 0 ||
+      nonTerminalRecordCount > 0 ||
+      artifactSelectionWarning ||
+      terminalArtifactInputMismatch
       ? 'warning'
       : 'no-data';
   } else if (missing.length > 0 || parseErrors > 0 || artifactSelectionWarning) {
     status = 'warning';
   }
 
+  const enforcementBlockers = [];
+  if (terminalRecords.length === 0) enforcementBlockers.push('no-terminal-disposition-records');
+  if (terminalArtifactInputMismatch) {
+    enforcementBlockers.push('selected-terminal-artifacts-without-input-files');
+  }
+  if (missing.length > 0) enforcementBlockers.push('missing-review-thread-sources');
+  if (parseErrors > 0) enforcementBlockers.push('parse-errors');
+  if (artifactSelectionWarning) enforcementBlockers.push('artifact-selection-warning');
+
   return {
     schema: COVERAGE_SCHEMA,
     status,
     mode: 'warning-only',
+    enforcement: {
+      mode: 'warning-only',
+      hard_block_eligible: enforcementBlockers.length === 0,
+      blockers: enforcementBlockers,
+    },
     input_file_count: inputFileCount,
     input_files: inputFiles,
     scanned_record_count: scannedRecordCount,
@@ -139,6 +158,7 @@ function summarizeTerminalDispositionCoverage(records = [], options = {}) {
     covered_source_count: covered.length,
     missing_source_count: missing.length,
     parse_errors: parseErrors,
+    terminal_artifact_input_mismatch: terminalArtifactInputMismatch,
     artifact_selection: artifactSelection,
     observed_sources: observedSources,
     expected_sources: expected,
@@ -242,6 +262,12 @@ function formatTerminalDispositionCoverageMarkdown(report) {
     if (selection.error_message) {
       lines.push(`- Artifact selector error: ${selection.error_message}`);
     }
+  }
+
+  if (report.terminal_artifact_input_mismatch) {
+    lines.push(
+      '- Terminal artifact input mismatch: selected terminal artifacts did not yield terminal NDJSON input files'
+    );
   }
 
   if (report.missing_sources.length > 0) {
