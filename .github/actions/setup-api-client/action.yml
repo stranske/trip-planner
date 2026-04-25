@@ -25,8 +25,6 @@ inputs:
     required: false
   actions_bot_pat:
     required: false
-  codespaces_workflows:
-    required: false
   owner_pr_pat:
     required: false
   agents_automation_pat:
@@ -350,7 +348,6 @@ runs:
         INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}
         INPUT_SERVICE_BOT_PAT: ${{ inputs.service_bot_pat }}
         INPUT_ACTIONS_BOT_PAT: ${{ inputs.actions_bot_pat }}
-        INPUT_CODESPACES_WORKFLOWS: ${{ inputs.codespaces_workflows }}
         INPUT_OWNER_PR_PAT: ${{ inputs.owner_pr_pat }}
         INPUT_AGENTS_AUTOMATION_PAT: ${{ inputs.agents_automation_pat }}
         INPUT_WORKFLOWS_APP_ID: ${{ inputs.workflows_app_id }}
@@ -411,7 +408,6 @@ runs:
             # Fall back to individual inputs when jq is unavailable
             SERVICE_BOT_PAT="${INPUT_SERVICE_BOT_PAT:-}"
             ACTIONS_BOT_PAT="${INPUT_ACTIONS_BOT_PAT:-}"
-            CODESPACES_WORKFLOWS="${INPUT_CODESPACES_WORKFLOWS:-}"
             OWNER_PR_PAT="${INPUT_OWNER_PR_PAT:-}"
             AGENTS_AUTOMATION_PAT="${INPUT_AGENTS_AUTOMATION_PAT:-}"
             WORKFLOWS_APP_ID="${INPUT_WORKFLOWS_APP_ID:-}"
@@ -433,7 +429,6 @@ runs:
 
             SERVICE_BOT_PAT=$(extract_secret "SERVICE_BOT_PAT")
             ACTIONS_BOT_PAT=$(extract_secret "ACTIONS_BOT_PAT")
-            CODESPACES_WORKFLOWS=$(extract_secret "CODESPACES_WORKFLOWS")
             OWNER_PR_PAT=$(extract_secret "OWNER_PR_PAT")
             AGENTS_AUTOMATION_PAT=$(extract_secret "AGENTS_AUTOMATION_PAT")
             WORKFLOWS_APP_ID=$(extract_secret "WORKFLOWS_APP_ID")
@@ -451,7 +446,6 @@ runs:
           # Fall back to individual inputs
           SERVICE_BOT_PAT="${INPUT_SERVICE_BOT_PAT:-}"
           ACTIONS_BOT_PAT="${INPUT_ACTIONS_BOT_PAT:-}"
-          CODESPACES_WORKFLOWS="${INPUT_CODESPACES_WORKFLOWS:-}"
           OWNER_PR_PAT="${INPUT_OWNER_PR_PAT:-}"
           AGENTS_AUTOMATION_PAT="${INPUT_AGENTS_AUTOMATION_PAT:-}"
           WORKFLOWS_APP_ID="${INPUT_WORKFLOWS_APP_ID:-}"
@@ -476,7 +470,6 @@ runs:
         # Export PATs
         export_var "SERVICE_BOT_PAT" "${SERVICE_BOT_PAT:-}"
         export_var "ACTIONS_BOT_PAT" "${ACTIONS_BOT_PAT:-}"
-        export_var "CODESPACES_WORKFLOWS" "${CODESPACES_WORKFLOWS:-}"
         export_var "OWNER_PR_PAT" "${OWNER_PR_PAT:-}"
         export_var "AGENTS_AUTOMATION_PAT" "${AGENTS_AUTOMATION_PAT:-}"
 
