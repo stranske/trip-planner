@@ -33,6 +33,7 @@ jobs:
           token: ${{ steps.app_token.outputs.token || github.token }}
           sparse-checkout: |
             .github/actions/setup-api-client
+            .github/scripts/bot_comment_auth_coverage.js
             .github/scripts/github-api-with-retry.js
             .github/scripts/terminal_disposition.js
             .github/scripts/terminal_disposition_coverage.js
@@ -41,8 +42,10 @@ jobs:
             scripts/aggregate_agent_metrics.py
           sparse-checkout-cone-mode: false
 
-      - name: Install GitHub API dependencies
-        run: npm install --no-save --no-package-lock @octokit/rest @octokit/auth-app
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "20"
 
       - name: Setup API client
         uses: ./.github/actions/setup-api-client
@@ -153,8 +156,10 @@ jobs:
           TERMINAL_DISPOSITION_ARTIFACT_SELECTION_JSON: artifacts/metric-artifacts-selection.json
           TERMINAL_DISPOSITION_COVERAGE_JSON: terminal-disposition-coverage.json
           TERMINAL_DISPOSITION_COVERAGE_MD: terminal-disposition-coverage.md
-          TERMINAL_DISPOSITION_COVERAGE_MODE: ${{ vars.TERMINAL_DISPOSITION_COVERAGE_MODE || 'warning-only' }}
-          TERMINAL_DISPOSITION_HARD_BLOCK_APPROVED: ${{ vars.TERMINAL_DISPOSITION_HARD_BLOCK_APPROVED || 'false' }}
+          TERMINAL_DISPOSITION_COVERAGE_MODE: >-
+            ${{ vars.TERMINAL_DISPOSITION_COVERAGE_MODE || 'warning-only' }}
+          TERMINAL_DISPOSITION_HARD_BLOCK_APPROVED: >-
+            ${{ vars.TERMINAL_DISPOSITION_HARD_BLOCK_APPROVED || 'false' }}
         run: |
           set +e
           node .github/scripts/terminal_disposition_coverage.js
@@ -169,7 +174,52 @@ jobs:
               } >> agent-weekly-metrics.md
             fi
           fi
-          echo "TERMINAL_DISPOSITION_COVERAGE_EXIT_STATUS=${terminal_coverage_status}" >> "$GITHUB_ENV"
+          echo \
+            "TERMINAL_DISPOSITION_COVERAGE_EXIT_STATUS=${terminal_coverage_status}" \
+            >> "$GITHUB_ENV"
+
+      - name: Bot-comment auth coverage preflight
+        env:
+          BOT_COMMENT_AUTH_COVERAGE_DIR: artifacts
+          BOT_COMMENT_AUTH_ARTIFACT_SELECTION_JSON: artifacts/metric-artifacts-selection.json
+          BOT_COMMENT_AUTH_COVERAGE_JSON: bot-comment-auth-coverage-summary.json
+          BOT_COMMENT_AUTH_COVERAGE_MD: bot-comment-auth-coverage-summary.md
+          BOT_COMMENT_AUTH_COVERAGE_MODE: >-
+            ${{ vars.BOT_COMMENT_AUTH_COVERAGE_MODE || 'warning-only' }}
+          BOT_COMMENT_AUTH_HARD_BLOCK_APPROVED: >-
+            ${{ vars.BOT_COMMENT_AUTH_HARD_BLOCK_APPROVED || 'false' }}
+          BOT_COMMENT_WRAPPER_EXPECTED_AUTH_MODE: >-
+            ${{ vars.BOT_COMMENT_WRAPPER_EXPECTED_AUTH_MODE || 'client-id' }}
+          BOT_COMMENT_WRAPPER_ALLOWED_AUTH_MODES: >-
+            ${{ vars.BOT_COMMENT_WRAPPER_ALLOWED_AUTH_MODES || 'client-id' }}
+          BOT_COMMENT_REUSABLE_EXPECTED_AUTH_MODE: >-
+            ${{ vars.BOT_COMMENT_REUSABLE_EXPECTED_AUTH_MODE }}
+          BOT_COMMENT_REUSABLE_ALLOWED_AUTH_MODES: >-
+            ${{ vars.BOT_COMMENT_REUSABLE_ALLOWED_AUTH_MODES || 'client-id,none' }}
+          BOT_COMMENT_AUTH_REQUIRED_ORGANIC_EVENTS: >-
+            ${{ vars.BOT_COMMENT_AUTH_REQUIRED_ORGANIC_EVENTS || 'pull_request,workflow_run' }}
+          BOT_COMMENT_AUTH_ORGANIC_COMPONENTS: >-
+            ${{
+              vars.BOT_COMMENT_AUTH_ORGANIC_COMPONENTS ||
+              'agents-bot-comment-handler-wrapper,reusable-bot-comment-handler'
+            }}
+          BOT_COMMENT_AUTH_ORGANIC_EXPECTED_MODE: >-
+            ${{ vars.BOT_COMMENT_AUTH_ORGANIC_EXPECTED_MODE || 'client-id' }}
+        run: |
+          set +e
+          node .github/scripts/bot_comment_auth_coverage.js
+          bot_comment_auth_status=$?
+          set -e
+          if [ -f bot-comment-auth-coverage-summary.md ]; then
+            cat bot-comment-auth-coverage-summary.md >> "$GITHUB_STEP_SUMMARY"
+            if [ -f agent-weekly-metrics.md ]; then
+              {
+                printf '\n'
+                cat bot-comment-auth-coverage-summary.md
+              } >> agent-weekly-metrics.md
+            fi
+          fi
+          echo "BOT_COMMENT_AUTH_COVERAGE_EXIT_STATUS=${bot_comment_auth_status}" >> "$GITHUB_ENV"
 
       - name: Upload weekly summary
         if: ${{ always() }}
@@ -182,6 +232,8 @@ jobs:
             artifacts/metric-artifacts-selection.md
             terminal-disposition-coverage.json
             terminal-disposition-coverage.md
+            bot-comment-auth-coverage-summary.json
+            bot-comment-auth-coverage-summary.md
           if-no-files-found: warn
           retention-days: 30
 
@@ -234,6 +286,20 @@ jobs:
 
             core.setOutput('issue_number', target.number);
 
-      - name: Honor terminal coverage hard-block
+      - name: Honor coverage hard-blocks
         if: ${{ always() }}
-        run: exit "${TERMINAL_DISPOSITION_COVERAGE_EXIT_STATUS:-0}"
+        run: |
+          terminal_status="${TERMINAL_DISPOSITION_COVERAGE_EXIT_STATUS:-0}"
+          bot_comment_auth_status="${BOT_COMMENT_AUTH_COVERAGE_EXIT_STATUS:-0}"
+          if [ "${terminal_status}" != "0" ] || [ "${bot_comment_auth_status}" != "0" ]; then
+            echo "::error::Coverage hard-block triggered: " \
+              "terminal-disposition=${terminal_status}, " \
+              "bot-comment-auth=${bot_comment_auth_status}"
+            if [ "${terminal_status}" != "0" ]; then
+              echo "Failed check: Review-thread terminal coverage preflight"
+            fi
+            if [ "${bot_comment_auth_status}" != "0" ]; then
+              echo "Failed check: Bot-comment auth coverage preflight"
+            fi
+            exit 1
+          fi
