@@ -22,6 +22,11 @@ const PREFIXED_METRICS_ARTIFACTS = [
   'review-thread-terminal-disposition-',
 ];
 
+const PRIORITY_METRICS_FAMILIES = [
+  'verifier-terminal-disposition',
+  'review-thread-terminal-disposition',
+];
+
 function cleanString(value) {
   if (value === null || value === undefined) return '';
   return String(value).trim();
@@ -151,7 +156,29 @@ function selectMetricsArtifacts(artifacts = [], options = {}) {
 
   const familyCounts = new Map();
   const selected = [];
+  const selectedIds = new Set();
+
+  function selectArtifact(artifact) {
+    if (selected.length >= config.max_total) {
+      return false;
+    }
+    const familyCount = familyCounts.get(artifact.family) || 0;
+    if (familyCount >= config.max_per_family) {
+      return false;
+    }
+    selected.push(artifact);
+    selectedIds.add(String(artifact.id));
+    familyCounts.set(artifact.family, familyCount + 1);
+    return true;
+  }
+
+  for (const family of PRIORITY_METRICS_FAMILIES) {
+    const artifact = candidates.find((candidate) => candidate.family === family);
+    if (artifact) selectArtifact(artifact);
+  }
+
   for (const artifact of candidates) {
+    if (selectedIds.has(String(artifact.id))) continue;
     if (selected.length >= config.max_total) {
       stats.ignored_total_limit_count += 1;
       continue;
@@ -161,8 +188,7 @@ function selectMetricsArtifacts(artifacts = [], options = {}) {
       stats.ignored_family_limit_count += 1;
       continue;
     }
-    selected.push(artifact);
-    familyCounts.set(artifact.family, familyCount + 1);
+    selectArtifact(artifact);
   }
 
   stats.selected_count = selected.length;
@@ -378,6 +404,7 @@ module.exports = {
   DEFAULT_MAX_PER_FAMILY,
   DEFAULT_MAX_SCAN_PAGES,
   DEFAULT_MAX_TOTAL,
+  PRIORITY_METRICS_FAMILIES,
   SELECTION_SCHEMA,
   artifactFamily,
   buildSelectionErrorReport,

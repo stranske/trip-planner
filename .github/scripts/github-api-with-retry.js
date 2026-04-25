@@ -445,7 +445,6 @@ function collectTokenSecrets(env = {}) {
   const keys = [
     'SERVICE_BOT_PAT',
     'ACTIONS_BOT_PAT',
-    'CODESPACES_WORKFLOWS',
     'OWNER_PR_PAT',
     'AGENTS_AUTOMATION_PAT',
     'TOKEN_ROTATION_JSON',
@@ -516,13 +515,21 @@ async function createTokenAwareRetry(options = {}) {
   const registry = tokenRegistry || require('./token_load_balancer');
   const secrets = collectTokenSecrets(env || {});
   const resolvedGithubToken = githubToken || env?.GITHUB_TOKEN || env?.GH_TOKEN || '';
+  const hasTokenInputs =
+    Boolean(resolvedGithubToken) ||
+    Object.values(secrets).some((value) => Boolean(value));
 
   let registryInitialized = false;
   if (registry && typeof registry.isInitialized === 'function' && registry.isInitialized()) {
     registryInitialized = true;
   }
 
-  if (!registryInitialized && registry && typeof registry.initializeTokenRegistry === 'function') {
+  if (
+    hasTokenInputs &&
+    !registryInitialized &&
+    registry &&
+    typeof registry.initializeTokenRegistry === 'function'
+  ) {
     try {
       await registry.initializeTokenRegistry({
         secrets,
