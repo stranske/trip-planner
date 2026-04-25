@@ -22,9 +22,22 @@ const PREFIXED_METRICS_ARTIFACTS = [
   'review-thread-terminal-disposition-',
 ];
 
+const PATTERNED_METRICS_ARTIFACTS = [
+  {
+    family: 'bot-comment-auth-coverage-wrapper',
+    pattern: /^bot-comment-auth-coverage-wrapper-\d+(?:-\d+)?$/,
+  },
+  {
+    family: 'bot-comment-auth-coverage-reusable',
+    pattern: /^bot-comment-auth-coverage-reusable-\d+(?:-\d+)?$/,
+  },
+];
+
 const PRIORITY_METRICS_FAMILIES = [
   'verifier-terminal-disposition',
   'review-thread-terminal-disposition',
+  'bot-comment-auth-coverage-wrapper',
+  'bot-comment-auth-coverage-reusable',
 ];
 
 function cleanString(value) {
@@ -54,6 +67,10 @@ function artifactTimestampMs(artifact = {}) {
 function artifactFamily(name) {
   const cleaned = cleanString(name);
   if (EXACT_METRICS_ARTIFACTS.has(cleaned)) return cleaned;
+  const patterned = PATTERNED_METRICS_ARTIFACTS.find((candidate) =>
+    candidate.pattern.test(cleaned)
+  );
+  if (patterned) return patterned.family;
   const prefix = PREFIXED_METRICS_ARTIFACTS.find((candidate) => cleaned.startsWith(candidate));
   return prefix ? prefix.replace(/-$/, '') : '';
 }
