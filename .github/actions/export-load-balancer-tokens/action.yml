@@ -8,8 +8,6 @@ inputs:
     required: false
   actions_bot_pat:
     required: false
-  codespaces_workflows:
-    required: false
   owner_pr_pat:
     required: false
   agents_automation_pat:
@@ -73,7 +71,6 @@ runs:
 
         export_var "SERVICE_BOT_PAT" "${{ inputs.service_bot_pat }}"
         export_var "ACTIONS_BOT_PAT" "${{ inputs.actions_bot_pat }}"
-        export_var "CODESPACES_WORKFLOWS" "${{ inputs.codespaces_workflows }}"
         export_var "OWNER_PR_PAT" "${{ inputs.owner_pr_pat }}"
         export_var "AGENTS_AUTOMATION_PAT" "${{ inputs.agents_automation_pat }}"
 
