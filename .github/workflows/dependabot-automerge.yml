@@ -134,9 +134,9 @@ jobs:
         if: success()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
-          CODESPACES_WORKFLOWS_PAT: ${{ secrets.CODESPACES_WORKFLOWS }}
+          SERVICE_BOT_PAT: ${{ secrets.SERVICE_BOT_PAT }}
         with:
-          github-token: ${{ secrets.CODESPACES_WORKFLOWS || secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.SERVICE_BOT_PAT || secrets.GITHUB_TOKEN }}
           script: |
             const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
             const { withRetry } = await createTokenAwareRetry({
@@ -147,11 +147,11 @@ jobs:
               capabilities: ['pull-requests:write', 'issues:write'],
             });
             const pr = context.payload.pull_request;
-            const hasCrossRepoToken = !!process.env.CODESPACES_WORKFLOWS_PAT;
+            const hasCrossRepoToken = !!process.env.SERVICE_BOT_PAT;
 
             if (!hasCrossRepoToken) {
               core.warning(
-                'CODESPACES_WORKFLOWS secret is not configured; ' +
+                'SERVICE_BOT_PAT secret is not configured; ' +
                 'falling back to GITHUB_TOKEN. Cross-repo auto-merge ' +
                 'may fail due to insufficient permissions.'
               );

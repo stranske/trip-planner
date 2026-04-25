@@ -1396,7 +1396,7 @@ The sync manifest (`config/sync-manifest.json`) controls what gets synced:
 
 | Secret | Purpose | Used By |
 |--------|---------|---------|
-| `CODESPACES_WORKFLOWS` | High-privilege PAT for sync operations | Sync workflows |
+| `OWNER_PR_PAT` | Owner PAT for cross-repo sync operations | Sync workflows |
 | `OPENAI_API_KEY` | OpenAI API access | Agent workflows |
 | `ANTHROPIC_API_KEY` | Anthropic API access | Agent workflows |
 | `GH_APP_PRIVATE_KEY` | GitHub App authentication | Integration workflows |
@@ -1416,7 +1416,7 @@ The sync manifest (`config/sync-manifest.json`) controls what gets synced:
 ### Sync Not Creating PRs
 
 **Check:**
-1. `CODESPACES_WORKFLOWS` token valid and has repo permissions
+1. `OWNER_PR_PAT` or `SERVICE_BOT_PAT` token valid and has repo permissions
 2. Consumer repo exists and accessible
 3. Sync manifest valid (run validation workflow)
 4. No existing open sync PR (closes old ones first)

@@ -207,10 +207,9 @@ jobs:
       - name: Link node_modules for Workflows scripts
         if: steps.check_enabled.outputs.enabled == 'true'
         run: |
-          # ESM import() resolves relative to file location, not NODE_PATH.
-          # token_load_balancer.js uses 'await import("@octokit/rest")' which
-          # fails when scripts run from workflows-lib/ because node_modules
-          # was installed at $GITHUB_WORKSPACE/.github/scripts/ by setup-api-client.
+          # Keep a compatibility link for scripts loaded from workflows-lib/.
+          # token_load_balancer.js now honors NODE_PATH first, but this keeps
+          # older dynamic-import fallback paths resolvable.
           SRC="${GITHUB_WORKSPACE}/.github/scripts/node_modules"
           DST="${GITHUB_WORKSPACE}/workflows-lib/.github/scripts/node_modules"
           if [ -d "$SRC" ] && [ ! -d "$DST" ]; then

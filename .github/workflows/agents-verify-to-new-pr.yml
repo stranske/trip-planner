@@ -49,15 +49,11 @@ jobs:
         id: select-token
         if: steps.check-merged.outputs.merged == 'true'
         env:
-          CODESPACES_WORKFLOWS: ${{ secrets.CODESPACES_WORKFLOWS }}
           OWNER_PR_PAT: ${{ secrets.OWNER_PR_PAT }}
           SERVICE_BOT_PAT: ${{ secrets.SERVICE_BOT_PAT }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          if [ -n "$CODESPACES_WORKFLOWS" ]; then
-            echo "token=$CODESPACES_WORKFLOWS" >> "$GITHUB_OUTPUT"
-            echo "source=codespaces" >> "$GITHUB_OUTPUT"
-          elif [ -n "$OWNER_PR_PAT" ]; then
+          if [ -n "$OWNER_PR_PAT" ]; then
             echo "token=$OWNER_PR_PAT" >> "$GITHUB_OUTPUT"
             echo "source=owner-pat" >> "$GITHUB_OUTPUT"
           elif [ -n "$SERVICE_BOT_PAT" ]; then
