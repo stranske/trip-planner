@@ -39,6 +39,7 @@ jobs:
             .github/scripts/terminal_disposition_coverage.js
             .github/scripts/token_load_balancer.js
             .github/scripts/weekly_metrics_artifacts.js
+            .github/scripts/weekly_metrics_download_manifest.js
             scripts/aggregate_agent_metrics.py
           sparse-checkout-cone-mode: false
 
@@ -73,21 +74,38 @@ jobs:
           artifact_list="artifacts/metric-artifacts.tsv"
           selection_report="artifacts/metric-artifacts-selection.json"
           selection_markdown="artifacts/metric-artifacts-selection.md"
+          download_manifest="artifacts/metric-artifact-download-manifest.json"
+          download_manifest_markdown="artifacts/metric-artifact-download-manifest.md"
+          set +e
           node .github/scripts/weekly_metrics_artifacts.js \
             --output "$artifact_list" \
             --report "$selection_report" \
             --markdown "$selection_markdown"
-          cat "$selection_report"
+          selector_status=$?
+          set -e
+          if [ -f "$selection_report" ]; then
+            cat "$selection_report"
+          fi
+          node .github/scripts/weekly_metrics_download_manifest.js \
+            --init \
+            --selection "$selection_report" \
+            --manifest "$download_manifest" \
+            --markdown "$download_manifest_markdown"
+          if [ "$selector_status" != "0" ]; then
+            exit "$selector_status"
+          fi
           if [ ! -s "$artifact_list" ]; then
             echo "No metrics artifacts found"
           fi
           while IFS=$'\t' read -r id name; do
             echo "Downloading artifact $id ($name)"
-            mkdir -p "artifacts/$name"
+            safe_name="$(node -e 'const name = process.argv[1] || ""; const safe = name.trim().replace(/[\\\\/]+/g, "_").replace(/[^A-Za-z0-9._-]/g, "_").replace(/\.\.+/g, "_").replace(/^\.{1,2}$/, "_") || "unknown"; process.stdout.write(safe);' "$name")"
+            artifact_dir="artifacts/$safe_name/$id"
+            mkdir -p "$artifact_dir"
             # shellcheck disable=SC1009,SC1073,SC1039,SC1072
             export ARTIFACT_ID="$id"
-            export ARTIFACT_DIR="artifacts/$name"
-            export ARTIFACT_ZIP="artifacts/$name/$id.zip"
+            export ARTIFACT_DIR="$artifact_dir"
+            export ARTIFACT_ZIP="$artifact_dir/$id.zip"
             if ! node - <<'NODE'
           const fs = require('fs');
           const { Octokit } = require('@octokit/rest');
@@ -125,16 +143,59 @@ jobs:
           NODE
             then
               echo "Warning: Could not download artifact $id ($name)"
+              node .github/scripts/weekly_metrics_download_manifest.js \
+                --record \
+                --manifest "$download_manifest" \
+                --markdown "$download_manifest_markdown" \
+                --id "$id" \
+                --name "$name" \
+                --artifact-dir "$ARTIFACT_DIR" \
+                --zip-path "$ARTIFACT_ZIP" \
+                --download-status failed \
+                --download-error download-command-failed \
+                --unzip-status skipped \
+                --unzip-error download-failed
               continue
             fi
-            unzip -o "artifacts/$name/$id.zip" -d "artifacts/$name" >/dev/null || \
+            zip_bytes="$(wc -c < "$ARTIFACT_ZIP" | tr -d ' ')"
+            if unzip -o "$ARTIFACT_ZIP" -d "$ARTIFACT_DIR" >/dev/null; then
+              node .github/scripts/weekly_metrics_download_manifest.js \
+                --record \
+                --manifest "$download_manifest" \
+                --markdown "$download_manifest_markdown" \
+                --id "$id" \
+                --name "$name" \
+                --artifact-dir "$ARTIFACT_DIR" \
+                --zip-path "$ARTIFACT_ZIP" \
+                --zip-bytes "$zip_bytes" \
+                --download-status pass \
+                --unzip-status pass
+            else
               echo "Warning: Could not unzip artifact $id ($name)"
+              node .github/scripts/weekly_metrics_download_manifest.js \
+                --record \
+                --manifest "$download_manifest" \
+                --markdown "$download_manifest_markdown" \
+                --id "$id" \
+                --name "$name" \
+                --artifact-dir "$ARTIFACT_DIR" \
+                --zip-path "$ARTIFACT_ZIP" \
+                --zip-bytes "$zip_bytes" \
+                --download-status pass \
+                --unzip-status failed \
+                --unzip-error unzip-command-failed
+            fi
           done < "$artifact_list"
+          node .github/scripts/weekly_metrics_download_manifest.js \
+            --finalize \
+            --manifest "$download_manifest" \
+            --markdown "$download_manifest_markdown"
 
       - name: Aggregate metrics
         env:
           METRICS_DIR: artifacts
           OUTPUT_PATH: agent-weekly-metrics.md
+          OUTPUT_JSON_PATH: agent-weekly-metrics.json
         run: |
           python scripts/aggregate_agent_metrics.py
 
@@ -146,6 +207,15 @@ jobs:
               {
                 printf '\n'
                 cat artifacts/metric-artifacts-selection.md
+              } >> agent-weekly-metrics.md
+            fi
+          fi
+          if [ -f artifacts/metric-artifact-download-manifest.md ]; then
+            cat artifacts/metric-artifact-download-manifest.md >> "$GITHUB_STEP_SUMMARY"
+            if [ -f agent-weekly-metrics.md ]; then
+              {
+                printf '\n'
+                cat artifacts/metric-artifact-download-manifest.md
               } >> agent-weekly-metrics.md
             fi
           fi
@@ -228,8 +298,11 @@ jobs:
           name: agent-weekly-metrics
           path: |
             agent-weekly-metrics.md
+            agent-weekly-metrics.json
             artifacts/metric-artifacts-selection.json
             artifacts/metric-artifacts-selection.md
+            artifacts/metric-artifact-download-manifest.json
+            artifacts/metric-artifact-download-manifest.md
             terminal-disposition-coverage.json
             terminal-disposition-coverage.md
             bot-comment-auth-coverage-summary.json
