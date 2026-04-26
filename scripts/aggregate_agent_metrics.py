@@ -14,6 +14,7 @@ from typing import Any
 
 _DEFAULT_METRICS_DIR = "agent-metrics"
 _DEFAULT_OUTPUT = "agent-metrics-summary.md"
+_DEFAULT_UNSUPPORTED_VERIFIER_MODELS = {"gpt-5.2-codex"}
 
 
 def _parse_timestamp(value: Any) -> _dt.datetime | None:
@@ -123,6 +124,26 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
+def _unsupported_verifier_models() -> set[str]:
+    raw = os.environ.get("UNSUPPORTED_VERIFIER_MODELS", "")
+    if not raw.strip():
+        return set(_DEFAULT_UNSUPPORTED_VERIFIER_MODELS)
+    return {item.strip().lower() for item in raw.split(",") if item.strip()}
+
+
+def _is_verifier_terminal_entry(entry: dict[str, Any]) -> bool:
+    if entry.get("schema") != "workflows-terminal-disposition/v1":
+        return False
+    artifact_family = str(entry.get("artifact_family") or "").strip().lower()
+    workflow = str(entry.get("workflow") or "").strip().lower()
+    verifier_mode = str(entry.get("verifier_mode") or "").strip().lower()
+    return (
+        artifact_family == "verifier-terminal-disposition"
+        or bool(verifier_mode)
+        or "verifier" in workflow
+    )
+
+
 def _summarise_keepalive(entries: list[dict[str, Any]]) -> dict[str, Any]:
     stop_reasons = Counter()
     actions = Counter()
@@ -198,6 +219,13 @@ def _summarise_verifier(entries: list[dict[str, Any]]) -> dict[str, Any]:
     verdicts = Counter()
     terminal_dispositions = Counter()
     terminal_sources = Counter()
+    verifier_models = Counter()
+    model_selection_reasons = Counter()
+    unsupported_verifier_models = Counter()
+    unsupported_model_dispositions = Counter()
+    missing_verifier_model_metadata = Counter()
+    unsupported_models = _unsupported_verifier_models()
+    verifier_modes = Counter()
     verifier_run_keys: set[str] = set()
     prs: set[int] = set()
     issues_created = 0
@@ -205,6 +233,7 @@ def _summarise_verifier(entries: list[dict[str, Any]]) -> dict[str, Any]:
     terminal_records = 0
     for index, entry in enumerate(entries):
         is_terminal_disposition = entry.get("schema") == "workflows-terminal-disposition/v1"
+        is_verifier_terminal = _is_verifier_terminal_entry(entry)
         if not is_terminal_disposition:
             run_id = entry.get("run_id") or entry.get("workflow_run_id")
             run_attempt = entry.get("run_attempt")
@@ -226,6 +255,27 @@ def _summarise_verifier(entries: list[dict[str, Any]]) -> dict[str, Any]:
             source_type = entry.get("source_type") or "unknown"
             source_id = entry.get("source_id") or "unknown"
             terminal_sources[f"{source_type}:{source_id}"] += 1
+        model = entry.get("codex_model") or entry.get("llm_model") or entry.get("model")
+        if model:
+            model_text = str(model)
+            verifier_models[model_text] += 1
+            if model_text.lower() in unsupported_models:
+                unsupported_verifier_models[model_text] += 1
+                disposition = entry.get("disposition") or entry.get("terminal_state") or "unknown"
+                unsupported_model_dispositions[str(disposition)] += 1
+        elif is_verifier_terminal:
+            verifier_mode = str(entry.get("verifier_mode") or "").strip().lower()
+            if verifier_mode != "evaluate":
+                disposition = entry.get("disposition") or entry.get("terminal_state") or "unknown"
+                missing_verifier_model_metadata[str(disposition)] += 1
+        model_selection_reason = entry.get("codex_model_selection_reason") or entry.get(
+            "model_selection_reason"
+        )
+        if model_selection_reason:
+            model_selection_reasons[str(model_selection_reason)] += 1
+        verifier_mode = entry.get("verifier_mode")
+        if verifier_mode:
+            verifier_modes[str(verifier_mode)] += 1
         pr_number = _safe_int(entry.get("pr_number") or entry.get("pr"))
         if pr_number is not None:
             prs.add(pr_number)
@@ -245,6 +295,12 @@ def _summarise_verifier(entries: list[dict[str, Any]]) -> dict[str, Any]:
         "terminal_records": terminal_records,
         "terminal_dispositions": terminal_dispositions,
         "terminal_sources": terminal_sources,
+        "verifier_models": verifier_models,
+        "unsupported_verifier_models": unsupported_verifier_models,
+        "unsupported_model_dispositions": unsupported_model_dispositions,
+        "missing_verifier_model_metadata": missing_verifier_model_metadata,
+        "model_selection_reasons": model_selection_reasons,
+        "verifier_modes": verifier_modes,
     }
 
 
@@ -421,6 +477,18 @@ def build_summary(entries: list[dict[str, Any]], errors: int) -> str:
             f"- Terminal disposition records: {verifier['terminal_records']}",
             f"- Terminal dispositions: {_format_counter(verifier['terminal_dispositions'])}",
             f"- Terminal disposition sources: {_format_counter(verifier['terminal_sources'])}",
+            f"- Verifier models: {_format_counter(verifier['verifier_models'])}",
+            f"- Unsupported verifier models: {_format_counter(verifier['unsupported_verifier_models'])}",
+            (
+                "- Unsupported model dispositions: "
+                f"{_format_counter(verifier['unsupported_model_dispositions'])}"
+            ),
+            (
+                "- Missing verifier model metadata: "
+                f"{_format_counter(verifier['missing_verifier_model_metadata'])}"
+            ),
+            f"- Model selection reasons: {_format_counter(verifier['model_selection_reasons'])}",
+            f"- Verifier modes: {_format_counter(verifier['verifier_modes'])}",
         ]
     )
 
