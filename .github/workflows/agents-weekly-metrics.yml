@@ -135,6 +135,7 @@ jobs:
         env:
           METRICS_DIR: artifacts
           OUTPUT_PATH: agent-weekly-metrics.md
+          OUTPUT_JSON_PATH: agent-weekly-metrics.json
         run: |
           python scripts/aggregate_agent_metrics.py
 
@@ -228,6 +229,7 @@ jobs:
           name: agent-weekly-metrics
           path: |
             agent-weekly-metrics.md
+            agent-weekly-metrics.json
             artifacts/metric-artifacts-selection.json
             artifacts/metric-artifacts-selection.md
             terminal-disposition-coverage.json

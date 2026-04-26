@@ -402,7 +402,7 @@ jobs:
           tasks_completed=$(( tasks_total - tasks_unchecked ))
           if [ "$tasks_completed" -lt 0 ]; then tasks_completed=0; fi
 
-          metrics_json=$(jq -n \
+          metrics_json=$(jq -cn \
             --arg pr "${PR_NUMBER:-0}" \
             --arg iteration "${ITERATION:-0}" \
             --arg action "${ACTION:-}" \
