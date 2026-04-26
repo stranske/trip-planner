@@ -73,6 +73,11 @@ function normalizeRecordBoolean(value) {
   return Boolean(value);
 }
 
+function normalizeOptionalRecordBoolean(value) {
+  if (value === null || value === undefined || cleanString(value) === '') return null;
+  return normalizeRecordBoolean(value);
+}
+
 function normalizeMode(value) {
   const text = cleanString(value).toLowerCase();
   if (['hard-block', 'hard_block', 'hard', 'block', 'blocking', 'enforce'].includes(text)) {
@@ -133,6 +138,12 @@ function normalizeRecord(raw = {}, sourcePath = '') {
     private_key_configured: normalizeRecordBoolean(raw.private_key_configured ?? raw.privateKeyConfigured),
     fallback_warning_active: normalizeRecordBoolean(
       raw.fallback_warning_active ?? raw.fallbackWarningActive
+    ),
+    reusable_invocation_expected: normalizeOptionalRecordBoolean(
+      raw.reusable_invocation_expected ?? raw.reusableInvocationExpected
+    ),
+    reusable_invocation_reason: cleanString(
+      raw.reusable_invocation_reason ?? raw.reusableInvocationReason
     ),
     source_path: sourcePath,
   };
@@ -222,6 +233,7 @@ function summarizeOrganicEvidence(records = [], options = {}) {
       required_components: components,
       expected_mode: expectedMode === 'unknown' ? '' : expectedMode,
       event_counts: eventCounts,
+      skipped_requirements: [],
       blockers,
       status: organicChecksDisabled ? 'pass' : 'no-data',
     };
@@ -240,9 +252,25 @@ function summarizeOrganicEvidence(records = [], options = {}) {
   }
 
   const blockers = [];
+  const skippedRequirements = [];
   for (const component of components) {
     for (const eventName of requiredEvents) {
       const latest = latestByComponentEvent[`${component}:${eventName}`];
+      const latestWrapper = latestByComponentEvent[
+        `agents-bot-comment-handler-wrapper:${eventName}`
+      ];
+      const reusableWasNotExpected = component === 'reusable-bot-comment-handler' &&
+        latestWrapper &&
+        latestWrapper.reusable_invocation_expected === false;
+      if (!latest && reusableWasNotExpected) {
+        skippedRequirements.push({
+          component,
+          event_name: eventName,
+          reason: latestWrapper.reusable_invocation_reason || 'wrapper-did-not-call-reusable',
+          wrapper_run_id: latestWrapper.run_id,
+        });
+        continue;
+      }
       if (!latest) {
         blockers.push(`missing-organic-${component}-${eventName}`);
         continue;
@@ -265,6 +293,7 @@ function summarizeOrganicEvidence(records = [], options = {}) {
     required_components: components,
     expected_mode: expectedMode === 'unknown' ? '' : expectedMode,
     event_counts: eventCounts,
+    skipped_requirements: skippedRequirements,
     blockers,
     status: blockers.length > 0 ? 'warning' : 'pass',
   };
@@ -555,6 +584,14 @@ function formatBotCommentAuthCoverageMarkdown(report) {
   if (report.organic_evidence?.required_events?.length > 0) {
     lines.push(`- Required organic events: ${report.organic_evidence.required_events.join(', ')}`);
     lines.push(`- Organic evidence status: ${report.organic_evidence.status}`);
+    const skipped = report.organic_evidence.skipped_requirements || [];
+    if (skipped.length > 0) {
+      lines.push(
+        `- Skipped organic requirements: ${skipped
+          .map((item) => `${item.component}/${item.event_name}`)
+          .join(', ')}`
+      );
+    }
   }
   if (report.enforcement.blockers.length > 0) {
     lines.push(`- Blockers: ${report.enforcement.blockers.join(', ')}`);

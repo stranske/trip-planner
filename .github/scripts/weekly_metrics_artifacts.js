@@ -128,6 +128,10 @@ function sortedCountObject(counts) {
   );
 }
 
+function missingPriorityFamilies(candidateFamilyCounts = new Map()) {
+  return PRIORITY_METRICS_FAMILIES.filter((family) => !candidateFamilyCounts.has(family));
+}
+
 function selectMetricsArtifacts(artifacts = [], options = {}) {
   const config = normalizeSelectionOptions(options);
   const stats = {
@@ -223,6 +227,7 @@ function selectMetricsArtifacts(artifacts = [], options = {}) {
     ...stats,
     candidate_family_counts: sortedCountObject(candidateFamilyCounts),
     selected_family_counts: sortedCountObject(familyCounts),
+    missing_priority_families: missingPriorityFamilies(candidateFamilyCounts),
     selected_artifacts: selected.map((artifact) => ({
       id: artifact.id,
       name: artifact.name,
@@ -257,6 +262,7 @@ function buildSelectionErrorReport(options = {}, error = {}) {
     ignored_total_limit_count: 0,
     candidate_family_counts: {},
     selected_family_counts: {},
+    missing_priority_families: [...PRIORITY_METRICS_FAMILIES],
     selected_artifacts: [],
   };
 }
@@ -283,6 +289,7 @@ function formatSelectionMarkdown(report) {
     `- Scanned artifacts: ${report.scanned_count}`,
     `- Candidate artifacts: ${report.candidate_count}`,
     `- Selected artifacts: ${report.selected_count}`,
+    `- Missing priority families: ${(report.missing_priority_families || []).join(', ') || 'none'}`,
     `- Ignored: ${report.ignored_old_count} old, ${report.ignored_expired_count} expired, ` +
       `${report.ignored_name_count} non-metrics, ${report.ignored_family_limit_count} over family cap, ` +
       `${report.ignored_total_limit_count} over total cap`,
@@ -428,6 +435,7 @@ module.exports = {
   collectRepoArtifacts,
   formatArtifactTsv,
   formatSelectionMarkdown,
+  missingPriorityFamilies,
   normalizeSelectionOptions,
   selectMetricsArtifacts,
 };
