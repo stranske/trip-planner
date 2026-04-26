@@ -69,6 +69,9 @@ function normalizeTerminalDisposition(input = {}) {
       input.followup_issue_url ?? input.followupIssueUrl ?? input.created_issue_url,
     needs_human: input.needs_human ?? input.needsHuman,
     dispatch_outcome: input.dispatch_outcome ?? input.dispatchOutcome,
+    llm_model: input.llm_model ?? input.llmModel ?? input.model,
+    model_selection_reason: input.model_selection_reason ?? input.modelSelectionReason,
+    verifier_mode: input.verifier_mode ?? input.verifierMode,
   };
 
   for (const [key, value] of Object.entries(optional)) {

@@ -83,11 +83,12 @@ jobs:
           fi
           while IFS=$'\t' read -r id name; do
             echo "Downloading artifact $id ($name)"
-            mkdir -p "artifacts/$name"
+            artifact_dir="artifacts/$name/$id"
+            mkdir -p "$artifact_dir"
             # shellcheck disable=SC1009,SC1073,SC1039,SC1072
             export ARTIFACT_ID="$id"
-            export ARTIFACT_DIR="artifacts/$name"
-            export ARTIFACT_ZIP="artifacts/$name/$id.zip"
+            export ARTIFACT_DIR="$artifact_dir"
+            export ARTIFACT_ZIP="$artifact_dir/$id.zip"
             if ! node - <<'NODE'
           const fs = require('fs');
           const { Octokit } = require('@octokit/rest');
@@ -127,7 +128,7 @@ jobs:
               echo "Warning: Could not download artifact $id ($name)"
               continue
             fi
-            unzip -o "artifacts/$name/$id.zip" -d "artifacts/$name" >/dev/null || \
+            unzip -o "$ARTIFACT_ZIP" -d "$ARTIFACT_DIR" >/dev/null || \
               echo "Warning: Could not unzip artifact $id ($name)"
           done < "$artifact_list"
 
@@ -135,6 +136,7 @@ jobs:
         env:
           METRICS_DIR: artifacts
           OUTPUT_PATH: agent-weekly-metrics.md
+          OUTPUT_JSON_PATH: agent-weekly-metrics.json
         run: |
           python scripts/aggregate_agent_metrics.py
 
@@ -228,6 +230,7 @@ jobs:
           name: agent-weekly-metrics
           path: |
             agent-weekly-metrics.md
+            agent-weekly-metrics.json
             artifacts/metric-artifacts-selection.json
             artifacts/metric-artifacts-selection.md
             terminal-disposition-coverage.json
