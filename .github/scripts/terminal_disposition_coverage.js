@@ -82,6 +82,7 @@ function normalizeEnforcementPolicy(options = {}) {
 function normalizeUnsupportedCodexModels(value) {
   const raw = value ??
     process.env.TERMINAL_DISPOSITION_UNSUPPORTED_CODEX_MODELS ??
+    process.env.UNSUPPORTED_VERIFIER_MODELS ??
     DEFAULT_UNSUPPORTED_CODEX_MODELS.join(',');
   const items = Array.isArray(raw) ? raw : String(raw).split(',');
   return [...new Set(items.map((item) => cleanString(item).toLowerCase()).filter(Boolean))]
@@ -160,6 +161,7 @@ function summarizeVerifierModelCompatibility(records = [], options = {}) {
   const unsupportedRecords = [];
   const missingModelRecords = [];
   const legacyMissingModelRecords = [];
+  let missingUnknownModeRecordCount = 0;
   let verifierRecordCount = 0;
 
   for (const raw of records) {
@@ -174,7 +176,7 @@ function summarizeVerifierModelCompatibility(records = [], options = {}) {
     const model = cleanString(record.llm_model ?? record.model).toLowerCase();
     const reason = cleanString(record.model_selection_reason);
     const verifierMode = cleanString(record.verifier_mode).toLowerCase();
-    const requiresCodexModel = Boolean(verifierMode) && verifierMode !== 'evaluate';
+    const requiresCodexModel = verifierMode !== 'evaluate';
     if (model) selectedModels[model] = (selectedModels[model] || 0) + 1;
     if (reason) modelSelectionReasons[reason] = (modelSelectionReasons[reason] || 0) + 1;
     if (!model && requiresCodexModel && modelMetadataContract.model_metadata_required) {
@@ -191,6 +193,7 @@ function summarizeVerifierModelCompatibility(records = [], options = {}) {
       if (isPreContractVerifierModelRecord(record, metadata, modelMetadataContract)) {
         legacyMissingModelRecords.push(missingRecord);
       } else {
+        if (!verifierMode) missingUnknownModeRecordCount += 1;
         missingModelRecords.push(missingRecord);
       }
     }
@@ -214,6 +217,7 @@ function summarizeVerifierModelCompatibility(records = [], options = {}) {
     unsupported_models: unsupportedModels,
     unsupported_record_count: unsupportedRecords.length,
     missing_model_record_count: missingModelRecords.length,
+    missing_model_unknown_mode_record_count: missingUnknownModeRecordCount,
     legacy_missing_model_record_count: legacyMissingModelRecords.length,
     selected_models: Object.fromEntries(
       Object.entries(selectedModels).sort((a, b) => a[0].localeCompare(b[0]))
@@ -614,6 +618,7 @@ function formatTerminalDispositionCoverageMarkdown(report) {
       `- Verifier model compatibility: ${modelCompatibility.status}`,
       `- Unsupported verifier model records: ${modelCompatibility.unsupported_record_count}`,
       `- Missing verifier model metadata records: ${modelCompatibility.missing_model_record_count}`,
+      `- Missing verifier model metadata records with unknown mode: ${modelCompatibility.missing_model_unknown_mode_record_count || 0}`,
       `- Legacy missing verifier model metadata records: ${modelCompatibility.legacy_missing_model_record_count || 0}`
     );
     if (modelCompatibility.model_metadata_contract?.required_after) {
