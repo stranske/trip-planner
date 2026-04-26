@@ -39,6 +39,27 @@ function selectedArtifactsFromSelection(selection = {}) {
   return Array.isArray(selection.selected_artifacts) ? selection.selected_artifacts : [];
 }
 
+function compactSelectionDetails(selection = {}, selectionPath = '') {
+  return {
+    path: selectionPath,
+    schema: cleanString(selection.schema),
+    status: cleanString(selection.status || 'pass'),
+    selected_count: selectedArtifactsFromSelection(selection).length,
+    candidate_count: Number.isFinite(Number(selection.candidate_count))
+      ? Number(selection.candidate_count)
+      : 0,
+    candidate_family_counts: selection.candidate_family_counts || {},
+    selected_family_counts: selection.selected_family_counts || {},
+    missing_priority_families: Array.isArray(selection.missing_priority_families)
+      ? selection.missing_priority_families
+      : [],
+    priority_family_statuses: Array.isArray(selection.priority_family_statuses)
+      ? selection.priority_family_statuses
+      : [],
+    latest_candidate_by_family: selection.latest_candidate_by_family || {},
+  };
+}
+
 function defaultArtifactDir(root, artifact) {
   return path.posix.join(root, safeArtifactPathSegment(artifact.name), String(artifact.id || ''));
 }
@@ -56,12 +77,7 @@ function buildInitialManifest(selection = {}, options = {}) {
     schema: DOWNLOAD_MANIFEST_SCHEMA,
     status: selection.status === 'error' ? 'error' : 'pending',
     generated_at: generatedAt,
-    selection: {
-      path: selectionPath,
-      schema: cleanString(selection.schema),
-      status: cleanString(selection.status || 'pass'),
-      selected_count: selected.length,
-    },
+    selection: compactSelectionDetails(selection, selectionPath),
     stats: {
       selected_count: selected.length,
       download_pass_count: 0,
@@ -104,11 +120,44 @@ function findArtifact(manifest, id, name) {
   });
 }
 
+function normalizeArtifactResultShape(artifact) {
+  if (!artifact || typeof artifact !== 'object') return;
+  if (!artifact.download || typeof artifact.download !== 'object') {
+    artifact.download = {
+      status: 'pending',
+      bytes: null,
+      error: '',
+    };
+  }
+  if (!artifact.unzip || typeof artifact.unzip !== 'object') {
+    artifact.unzip = {
+      status: 'pending',
+      path: artifact.artifact_dir || '',
+      error: '',
+    };
+  }
+  artifact.download.status = normalizeStatus(
+    artifact.download.status,
+    ['pending', 'pass', 'failed', 'skipped'],
+    'pending'
+  );
+  artifact.unzip.status = normalizeStatus(
+    artifact.unzip.status,
+    ['pending', 'pass', 'failed', 'skipped'],
+    'pending'
+  );
+  if (!artifact.unzip.path) artifact.unzip.path = artifact.artifact_dir || '';
+  if (artifact.download.bytes === undefined) artifact.download.bytes = null;
+  if (artifact.download.error === undefined) artifact.download.error = '';
+  if (artifact.unzip.error === undefined) artifact.unzip.error = '';
+}
+
 function updateArtifactResult(manifest, result = {}) {
   const artifact = findArtifact(manifest, result.id, result.name);
   if (!artifact) {
     throw new Error(`Artifact is not present in manifest: ${cleanString(result.id || result.name)}`);
   }
+  normalizeArtifactResultShape(artifact);
   const artifactDir = cleanString(result.artifact_dir || result.artifactDir);
   const zipPath = cleanString(result.zip_path || result.zipPath);
   const zipBytes = Number.parseInt(cleanString(result.zip_bytes || result.zipBytes), 10);
@@ -313,6 +362,7 @@ if (require.main === module) {
 module.exports = {
   DOWNLOAD_MANIFEST_SCHEMA,
   buildInitialManifest,
+  compactSelectionDetails,
   finalizeManifest,
   formatMarkdown,
   safeArtifactPathSegment,
