@@ -924,7 +924,9 @@ function buildPreamble(sections) {
   
   // Add reference to source issue if available
   if (sections.issueNumber) {
+    lines.push(`<!-- meta:issue:${sections.issueNumber} -->`);
     lines.push(`> **Source:** Issue #${sections.issueNumber}`, '');
+    lines.push(`Closes #${sections.issueNumber}`, '');
   }
   
   if (sections.summary && sections.summary.trim()) {
