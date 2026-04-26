@@ -82,6 +82,7 @@ function normalizeEnforcementPolicy(options = {}) {
 function normalizeUnsupportedCodexModels(value) {
   const raw = value ??
     process.env.TERMINAL_DISPOSITION_UNSUPPORTED_CODEX_MODELS ??
+    process.env.UNSUPPORTED_VERIFIER_MODELS ??
     DEFAULT_UNSUPPORTED_CODEX_MODELS.join(',');
   const items = Array.isArray(raw) ? raw : String(raw).split(',');
   return [...new Set(items.map((item) => cleanString(item).toLowerCase()).filter(Boolean))]
@@ -174,7 +175,7 @@ function summarizeVerifierModelCompatibility(records = [], options = {}) {
     const model = cleanString(record.llm_model ?? record.model).toLowerCase();
     const reason = cleanString(record.model_selection_reason);
     const verifierMode = cleanString(record.verifier_mode).toLowerCase();
-    const requiresCodexModel = Boolean(verifierMode) && verifierMode !== 'evaluate';
+    const requiresCodexModel = verifierMode !== 'evaluate';
     if (model) selectedModels[model] = (selectedModels[model] || 0) + 1;
     if (reason) modelSelectionReasons[reason] = (modelSelectionReasons[reason] || 0) + 1;
     if (!model && requiresCodexModel && modelMetadataContract.model_metadata_required) {

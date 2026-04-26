@@ -37,6 +37,21 @@ function normalizeSourceId(value, fallback) {
   return fallbackText || 'unknown';
 }
 
+function normalizeOptionalValue(key, value) {
+  if (value === null || value === undefined) return undefined;
+  if (key.endsWith('_number') || key === 'chain_depth' || key === 'verification_run_attempt') {
+    const parsed = cleanInt(value);
+    return parsed === null ? undefined : parsed;
+  }
+  if (key === 'needs_human' || key === 'depth_limit_exceeded') {
+    const parsed = cleanBool(value);
+    return parsed === null ? undefined : parsed;
+  }
+  const cleaned = typeof value === 'boolean' ? value : cleanString(value);
+  if (cleaned === '') return undefined;
+  return typeof value === 'string' ? cleaned : value;
+}
+
 function sourceKey(sourceType, sourceId) {
   return `${normalizeSourceType(sourceType)}:${normalizeSourceId(sourceId)}`;
 }
@@ -211,14 +226,13 @@ function normalizeTerminalDisposition(input = {}) {
     dispatch_outcome: input.dispatch_outcome ?? input.dispatchOutcome,
     llm_model: input.llm_model ?? input.llmModel ?? input.model,
     model_selection_reason: input.model_selection_reason ?? input.modelSelectionReason,
+    llm_cli_version: input.llm_cli_version ?? input.llmCliVersion ?? input.cli_version,
     verifier_mode: input.verifier_mode ?? input.verifierMode,
   };
 
   for (const [key, value] of Object.entries(optional)) {
-    if (value === null || value === undefined) continue;
-    const cleaned = typeof value === 'boolean' ? value : cleanString(value);
-    if (cleaned === '') continue;
-    record[key] = typeof value === 'string' ? cleaned : value;
+    const normalized = normalizeOptionalValue(key, value);
+    if (normalized !== undefined) record[key] = normalized;
   }
 
   return record;
@@ -273,15 +287,8 @@ function normalizeVerifierFollowupLedger(input = {}) {
   };
 
   for (const [key, value] of Object.entries(optional)) {
-    if (value === null || value === undefined) continue;
-    if (key.endsWith('_number') || key === 'chain_depth' || key === 'verification_run_attempt') {
-      const parsed = cleanInt(value);
-      if (parsed !== null) record[key] = parsed;
-      continue;
-    }
-    const cleaned = typeof value === 'boolean' ? value : cleanString(value);
-    if (cleaned === '') continue;
-    record[key] = typeof value === 'string' ? cleaned : value;
+    const normalized = normalizeOptionalValue(key, value);
+    if (normalized !== undefined) record[key] = normalized;
   }
 
   return record;
@@ -361,6 +368,7 @@ module.exports = {
   normalizeVerifierFollowupLedger,
   normalizeVerifierFollowupPolicy,
   normalizeLedgerDisposition,
+  normalizeOptionalValue,
   summarizeTerminalDispositionSources,
   formatTerminalDispositionMarkdown,
   sourceKey,
