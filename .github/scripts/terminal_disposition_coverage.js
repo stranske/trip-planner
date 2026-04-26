@@ -95,6 +95,7 @@ function expectedReviewThreadSources(records = []) {
   for (const raw of records) {
     if (!isTerminalDispositionRecord(raw)) continue;
     const record = normalizeTerminalDisposition(raw);
+    if (record.artifact_family === 'verifier-terminal-disposition') continue;
     const prNumber = cleanInt(record.pr_number);
     if (prNumber === null) continue;
     const source = normalizeExpectedSource({
@@ -246,6 +247,59 @@ function terminalFamilyCount(counts = {}) {
   );
 }
 
+function normalizeSelectionArtifact(artifact = {}) {
+  if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact)) return null;
+  const name = cleanString(artifact.name);
+  const normalized = {
+    id: artifact.id ?? artifact.artifact_id ?? artifact.artifactId ?? null,
+    name,
+  };
+  const createdAt = cleanString(artifact.created_at ?? artifact.createdAt);
+  const updatedAt = cleanString(artifact.updated_at ?? artifact.updatedAt);
+  if (createdAt) normalized.created_at = createdAt;
+  if (updatedAt) normalized.updated_at = updatedAt;
+  return normalized;
+}
+
+function normalizeTerminalPriorityFamilyStatuses(report = {}, selectedArtifacts = []) {
+  const rawStatuses = Array.isArray(report.priority_family_statuses)
+    ? report.priority_family_statuses
+    : [];
+  const byFamily = new Map();
+
+  for (const status of rawStatuses) {
+    if (!status || typeof status !== 'object' || Array.isArray(status)) continue;
+    const family = cleanString(status.family);
+    if (!TERMINAL_ARTIFACT_FAMILIES.has(family)) continue;
+    byFamily.set(family, {
+      family,
+      status: cleanString(status.status) || 'missing',
+      candidate_count: Number(status.candidate_count) || 0,
+      selected_count: Number(status.selected_count) || 0,
+      latest_candidate: normalizeSelectionArtifact(status.latest_candidate),
+      selected_artifact: normalizeSelectionArtifact(status.selected_artifact),
+    });
+  }
+
+  for (const family of TERMINAL_ARTIFACT_FAMILIES) {
+    if (byFamily.has(family)) continue;
+    const candidateCount = Number(report.candidate_family_counts?.[family]) || 0;
+    const selectedCount = Number(report.selected_family_counts?.[family]) ||
+      selectedArtifacts.filter((artifact) => artifact.family === family).length;
+    const selectedArtifact = selectedArtifacts.find((artifact) => artifact.family === family) || null;
+    byFamily.set(family, {
+      family,
+      status: selectedCount > 0 ? 'selected' : (candidateCount > 0 ? 'available' : 'missing'),
+      candidate_count: candidateCount,
+      selected_count: selectedCount,
+      latest_candidate: selectedArtifact ? normalizeSelectionArtifact(selectedArtifact) : null,
+      selected_artifact: selectedArtifact ? normalizeSelectionArtifact(selectedArtifact) : null,
+    });
+  }
+
+  return [...byFamily.values()].sort((a, b) => a.family.localeCompare(b.family));
+}
+
 function normalizeArtifactSelectionSummary(report) {
   if (!report) return null;
   if (report.status === 'missing' || report.status === 'parse-error') {
@@ -256,6 +310,8 @@ function normalizeArtifactSelectionSummary(report) {
       candidate_terminal_artifact_count: 0,
       selected_terminal_artifact_count: 0,
       selected_terminal_artifacts: [],
+      terminal_priority_family_statuses: [],
+      missing_terminal_priority_families: [],
     };
   }
   if (typeof report !== 'object' || Array.isArray(report)) {
@@ -266,6 +322,8 @@ function normalizeArtifactSelectionSummary(report) {
       candidate_terminal_artifact_count: 0,
       selected_terminal_artifact_count: 0,
       selected_terminal_artifacts: [],
+      terminal_priority_family_statuses: [],
+      missing_terminal_priority_families: [],
     };
   }
 
@@ -278,6 +336,7 @@ function normalizeArtifactSelectionSummary(report) {
       }))
       .filter((artifact) => TERMINAL_ARTIFACT_FAMILIES.has(artifact.family))
     : [];
+  const terminalFamilyStatuses = normalizeTerminalPriorityFamilyStatuses(report, selectedArtifacts);
 
   return {
     schema: cleanString(report.schema) || 'workflows-weekly-metrics-artifact-selection/v1',
@@ -287,6 +346,10 @@ function normalizeArtifactSelectionSummary(report) {
     selected_terminal_artifact_count: terminalFamilyCount(report.selected_family_counts) ||
       selectedArtifacts.length,
     selected_terminal_artifacts: selectedArtifacts,
+    terminal_priority_family_statuses: terminalFamilyStatuses,
+    missing_terminal_priority_families: terminalFamilyStatuses
+      .filter((status) => status.status === 'missing')
+      .map((status) => status.family),
   };
 }
 
@@ -329,6 +392,11 @@ function formatTerminalDispositionCoverageMarkdown(report) {
     if (selection.error_message) {
       lines.push(`- Artifact selector error: ${selection.error_message}`);
     }
+    if (selection.missing_terminal_priority_families?.length > 0) {
+      lines.push(
+        `- Missing terminal artifact families: ${selection.missing_terminal_priority_families.join(', ')}`
+      );
+    }
   }
 
   if (report.terminal_artifact_input_mismatch) {
@@ -355,6 +423,23 @@ function formatTerminalDispositionCoverageMarkdown(report) {
       const prs = source.pr_numbers.length ? source.pr_numbers.map((value) => `#${value}`).join(', ') : 'n/a';
       lines.push(
         `| ${source.source_key} | ${source.count} | ${formatDispositions(source.dispositions)} | ${prs} |`
+      );
+    }
+  }
+
+  const terminalFamilyStatuses = report.artifact_selection?.terminal_priority_family_statuses || [];
+  if (terminalFamilyStatuses.length > 0) {
+    lines.push(
+      '',
+      '| Terminal artifact family | Status | Candidates | Selected | Latest artifact |',
+      '|--------------------------|--------|------------|----------|-----------------|'
+    );
+    for (const familyStatus of terminalFamilyStatuses) {
+      const latest = familyStatus.selected_artifact?.name ||
+        familyStatus.latest_candidate?.name ||
+        'n/a';
+      lines.push(
+        `| ${familyStatus.family} | ${familyStatus.status} | ${familyStatus.candidate_count} | ${familyStatus.selected_count} | ${latest} |`
       );
     }
   }
@@ -544,6 +629,7 @@ module.exports = {
   normalizeEnforcementMode,
   normalizeEnforcementPolicy,
   normalizeArtifactSelectionSummary,
+  normalizeTerminalPriorityFamilyStatuses,
   readNdjsonFiles,
   readArtifactSelectionReport,
   summarizeTerminalDispositionCoverage,

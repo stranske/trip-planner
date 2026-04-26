@@ -128,6 +128,44 @@ function sortedCountObject(counts) {
   );
 }
 
+function missingPriorityFamilies(candidateFamilyCounts = new Map()) {
+  return PRIORITY_METRICS_FAMILIES.filter((family) => !candidateFamilyCounts.has(family));
+}
+
+function priorityFamilyStatuses({
+  candidates = [],
+  selected = [],
+  candidateFamilyCounts = new Map(),
+  selectedFamilyCounts = new Map(),
+} = {}) {
+  return PRIORITY_METRICS_FAMILIES.map((family) => {
+    const latestCandidate = candidates.find((candidate) => candidate.family === family);
+    const selectedArtifact = selected.find((artifact) => artifact.family === family);
+    return {
+      family,
+      status: selectedArtifact ? 'selected' : candidateFamilyCounts.has(family) ? 'available' : 'missing',
+      candidate_count: candidateFamilyCounts.get(family) || 0,
+      selected_count: selectedFamilyCounts.get(family) || 0,
+      latest_candidate: latestCandidate
+        ? {
+            id: latestCandidate.id,
+            name: latestCandidate.name,
+            created_at: latestCandidate.created_at,
+            updated_at: latestCandidate.updated_at,
+          }
+        : null,
+      selected_artifact: selectedArtifact
+        ? {
+            id: selectedArtifact.id,
+            name: selectedArtifact.name,
+            created_at: selectedArtifact.created_at,
+            updated_at: selectedArtifact.updated_at,
+          }
+        : null,
+    };
+  });
+}
+
 function selectMetricsArtifacts(artifacts = [], options = {}) {
   const config = normalizeSelectionOptions(options);
   const stats = {
@@ -223,6 +261,13 @@ function selectMetricsArtifacts(artifacts = [], options = {}) {
     ...stats,
     candidate_family_counts: sortedCountObject(candidateFamilyCounts),
     selected_family_counts: sortedCountObject(familyCounts),
+    missing_priority_families: missingPriorityFamilies(candidateFamilyCounts),
+    priority_family_statuses: priorityFamilyStatuses({
+      candidates,
+      selected,
+      candidateFamilyCounts,
+      selectedFamilyCounts: familyCounts,
+    }),
     selected_artifacts: selected.map((artifact) => ({
       id: artifact.id,
       name: artifact.name,
@@ -257,6 +302,8 @@ function buildSelectionErrorReport(options = {}, error = {}) {
     ignored_total_limit_count: 0,
     candidate_family_counts: {},
     selected_family_counts: {},
+    missing_priority_families: [...PRIORITY_METRICS_FAMILIES],
+    priority_family_statuses: priorityFamilyStatuses(),
     selected_artifacts: [],
   };
 }
@@ -283,6 +330,7 @@ function formatSelectionMarkdown(report) {
     `- Scanned artifacts: ${report.scanned_count}`,
     `- Candidate artifacts: ${report.candidate_count}`,
     `- Selected artifacts: ${report.selected_count}`,
+    `- Missing priority families: ${(report.missing_priority_families || []).join(', ') || 'none'}`,
     `- Ignored: ${report.ignored_old_count} old, ${report.ignored_expired_count} expired, ` +
       `${report.ignored_name_count} non-metrics, ${report.ignored_family_limit_count} over family cap, ` +
       `${report.ignored_total_limit_count} over total cap`,
@@ -296,6 +344,19 @@ function formatSelectionMarkdown(report) {
     lines.push('', '| Artifact family | Candidates | Selected |', '|-----------------|------------|----------|');
     for (const family of familyNames) {
       lines.push(`| ${family} | ${candidateFamilyCounts[family] || 0} | ${selectedFamilyCounts[family] || 0} |`);
+    }
+  }
+
+  if (Array.isArray(report.priority_family_statuses) && report.priority_family_statuses.length > 0) {
+    lines.push('', '| Priority family | Status | Candidates | Selected artifact |');
+    lines.push('|-----------------|--------|------------|-------------------|');
+    for (const family of report.priority_family_statuses) {
+      lines.push([
+        family.family,
+        family.status,
+        family.candidate_count || 0,
+        family.selected_artifact?.name || 'none',
+      ].join(' | ').replace(/^/, '| ').replace(/$/, ' |'));
     }
   }
 
@@ -428,6 +489,8 @@ module.exports = {
   collectRepoArtifacts,
   formatArtifactTsv,
   formatSelectionMarkdown,
+  missingPriorityFamilies,
   normalizeSelectionOptions,
+  priorityFamilyStatuses,
   selectMetricsArtifacts,
 };

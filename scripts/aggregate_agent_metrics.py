@@ -198,6 +198,9 @@ def _summarise_verifier(entries: list[dict[str, Any]]) -> dict[str, Any]:
     verdicts = Counter()
     terminal_dispositions = Counter()
     terminal_sources = Counter()
+    verifier_models = Counter()
+    model_selection_reasons = Counter()
+    verifier_modes = Counter()
     verifier_run_keys: set[str] = set()
     prs: set[int] = set()
     issues_created = 0
@@ -226,6 +229,17 @@ def _summarise_verifier(entries: list[dict[str, Any]]) -> dict[str, Any]:
             source_type = entry.get("source_type") or "unknown"
             source_id = entry.get("source_id") or "unknown"
             terminal_sources[f"{source_type}:{source_id}"] += 1
+        model = entry.get("codex_model") or entry.get("llm_model") or entry.get("model")
+        if model:
+            verifier_models[str(model)] += 1
+        model_selection_reason = entry.get("codex_model_selection_reason") or entry.get(
+            "model_selection_reason"
+        )
+        if model_selection_reason:
+            model_selection_reasons[str(model_selection_reason)] += 1
+        verifier_mode = entry.get("verifier_mode")
+        if verifier_mode:
+            verifier_modes[str(verifier_mode)] += 1
         pr_number = _safe_int(entry.get("pr_number") or entry.get("pr"))
         if pr_number is not None:
             prs.add(pr_number)
@@ -245,6 +259,9 @@ def _summarise_verifier(entries: list[dict[str, Any]]) -> dict[str, Any]:
         "terminal_records": terminal_records,
         "terminal_dispositions": terminal_dispositions,
         "terminal_sources": terminal_sources,
+        "verifier_models": verifier_models,
+        "model_selection_reasons": model_selection_reasons,
+        "verifier_modes": verifier_modes,
     }
 
 
@@ -421,6 +438,9 @@ def build_summary(entries: list[dict[str, Any]], errors: int) -> str:
             f"- Terminal disposition records: {verifier['terminal_records']}",
             f"- Terminal dispositions: {_format_counter(verifier['terminal_dispositions'])}",
             f"- Terminal disposition sources: {_format_counter(verifier['terminal_sources'])}",
+            f"- Verifier models: {_format_counter(verifier['verifier_models'])}",
+            f"- Model selection reasons: {_format_counter(verifier['model_selection_reasons'])}",
+            f"- Verifier modes: {_format_counter(verifier['verifier_modes'])}",
         ]
     )
 
