@@ -919,12 +919,29 @@ function fallbackChecklist(message) {
   return `- [ ] ${message}`;
 }
 
+function issueLabelNames(issue = {}) {
+  return Array.isArray(issue.labels)
+    ? issue.labels.map((label) => String(typeof label === 'string' ? label : label?.name || '').trim())
+    : [];
+}
+
+function isCampaignIssue(issue = {}) {
+  const labels = new Set(issueLabelNames(issue));
+  return labels.has('campaign:sync-dependabot') || labels.has('campaign:active');
+}
+
 function buildPreamble(sections) {
   const lines = ['<!-- pr-preamble:start -->'];
   
   // Add reference to source issue if available
   if (sections.issueNumber) {
+    lines.push(`<!-- meta:issue:${sections.issueNumber} -->`);
     lines.push(`> **Source:** Issue #${sections.issueNumber}`, '');
+    if (isCampaignIssue(sections.sourceIssue)) {
+      lines.push(`Related to campaign issue #${sections.issueNumber}`, '');
+    } else {
+      lines.push(`Closes #${sections.issueNumber}`, '');
+    }
   }
   
   if (sections.summary && sections.summary.trim()) {
@@ -1300,7 +1317,13 @@ async function run({github: rawGithub, context, core, inputs}) {
     || '';
   contextSection = augmentContextWithRelatedIssues(contextSection, issueBody);
 
-  const preamble = buildPreamble({summary, testing, ci, issueNumber});
+  const preamble = buildPreamble({
+    summary,
+    testing,
+    ci,
+    issueNumber,
+    sourceIssue: issueResponse.data,
+  });
 
   const workflowRunResponse = await withRetries(
     () => github.rest.actions.listWorkflowRunsForRepo({
@@ -1412,6 +1435,7 @@ module.exports = {
   filterWorkflowRunsForStatus,
   buildContextBlock,
   buildPreamble,
+  isCampaignIssue,
   buildStatusBlock,
   withRetries,
   RateLimitError,
