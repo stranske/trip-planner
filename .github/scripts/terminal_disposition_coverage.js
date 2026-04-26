@@ -12,6 +12,8 @@ const TERMINAL_ARTIFACT_FAMILIES = new Set([
   'verifier-terminal-disposition',
   'review-thread-terminal-disposition',
 ]);
+const DEFAULT_UNSUPPORTED_CODEX_MODELS = ['gpt-5.2-codex'];
+const DEFAULT_VERIFIER_MODEL_METADATA_REQUIRED_AFTER = '2026-04-26T04:25:00Z';
 const DEFAULT_ENFORCEMENT_MODE = 'warning-only';
 const HARD_BLOCK_MODE = 'hard-block';
 
@@ -24,6 +26,13 @@ function cleanInt(value) {
   const text = cleanString(value);
   if (!text) return null;
   const parsed = Number.parseInt(text, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseTimestampMs(value) {
+  const text = cleanString(value);
+  if (!text) return null;
+  const parsed = Date.parse(text);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -70,6 +79,158 @@ function normalizeEnforcementPolicy(options = {}) {
   };
 }
 
+function normalizeUnsupportedCodexModels(value) {
+  const raw = value ??
+    process.env.TERMINAL_DISPOSITION_UNSUPPORTED_CODEX_MODELS ??
+    DEFAULT_UNSUPPORTED_CODEX_MODELS.join(',');
+  const items = Array.isArray(raw) ? raw : String(raw).split(',');
+  return [...new Set(items.map((item) => cleanString(item).toLowerCase()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function normalizeVerifierModelMetadataContract(value) {
+  const raw = value ??
+    process.env.TERMINAL_DISPOSITION_VERIFIER_MODEL_METADATA_REQUIRED_AFTER ??
+    DEFAULT_VERIFIER_MODEL_METADATA_REQUIRED_AFTER;
+  const text = cleanString(raw);
+  if (['', '0', 'false', 'none', 'off', 'disabled'].includes(text.toLowerCase())) {
+    return {
+      required_after: '',
+      required_after_epoch_ms: null,
+      suppress_pre_contract_missing_metadata: false,
+    };
+  }
+  const epochMs = parseTimestampMs(text);
+  return {
+    required_after: text,
+    required_after_epoch_ms: epochMs,
+    suppress_pre_contract_missing_metadata: epochMs !== null,
+  };
+}
+
+function runIdFromArtifactName(name) {
+  const match = cleanString(name).match(/-(\d+)$/);
+  return match ? match[1] : '';
+}
+
+function artifactMetadataByRunId(artifactSelection) {
+  const byRunId = new Map();
+  const artifacts = artifactSelection?.selected_terminal_artifacts || [];
+  for (const artifact of artifacts) {
+    if (artifact?.family !== 'verifier-terminal-disposition') continue;
+    const runId = runIdFromArtifactName(artifact.name);
+    if (!runId) continue;
+    byRunId.set(runId, {
+      artifact_name: cleanString(artifact.name),
+      created_at: cleanString(artifact.created_at),
+      updated_at: cleanString(artifact.updated_at),
+    });
+  }
+  return byRunId;
+}
+
+function isPreContractVerifierModelRecord(record, artifactMetadata, contract) {
+  if (!contract.suppress_pre_contract_missing_metadata) return false;
+  const requiredAfter = contract.required_after_epoch_ms;
+  const candidates = [
+    record.created_at,
+    record.timestamp,
+    artifactMetadata?.created_at,
+    artifactMetadata?.updated_at,
+  ];
+  return candidates.some((value) => {
+    const epochMs = parseTimestampMs(value);
+    return epochMs !== null && epochMs < requiredAfter;
+  });
+}
+
+function summarizeVerifierModelCompatibility(records = [], options = {}) {
+  const unsupportedModels = normalizeUnsupportedCodexModels(
+    options.unsupported_codex_models ?? options.unsupportedCodexModels
+  );
+  const modelMetadataContract = normalizeVerifierModelMetadataContract(
+    options.model_metadata_required_after ?? options.modelMetadataRequiredAfter
+  );
+  const artifactMetadata = artifactMetadataByRunId(options.artifact_selection);
+  const unsupportedSet = new Set(unsupportedModels);
+  const selectedModels = {};
+  const modelSelectionReasons = {};
+  const unsupportedRecords = [];
+  const missingModelRecords = [];
+  const legacyMissingModelRecords = [];
+  let verifierRecordCount = 0;
+
+  for (const raw of records) {
+    if (!isTerminalDispositionRecord(raw)) continue;
+    const record = normalizeTerminalDisposition(raw);
+    const isVerifierRecord = record.artifact_family === 'verifier-terminal-disposition' ||
+      Boolean(record.verifier_mode) ||
+      cleanString(record.workflow).toLowerCase().includes('verifier');
+    if (!isVerifierRecord) continue;
+    verifierRecordCount += 1;
+
+    const model = cleanString(record.llm_model ?? record.model).toLowerCase();
+    const reason = cleanString(record.model_selection_reason);
+    const verifierMode = cleanString(record.verifier_mode).toLowerCase();
+    const requiresCodexModel = verifierMode !== 'evaluate';
+    if (model) selectedModels[model] = (selectedModels[model] || 0) + 1;
+    if (reason) modelSelectionReasons[reason] = (modelSelectionReasons[reason] || 0) + 1;
+    if (!model && requiresCodexModel) {
+      const runId = cleanString(record.run_id);
+      const metadata = artifactMetadata.get(runId);
+      const missingRecord = {
+        source_key: record.source_key,
+        pr_number: record.pr_number || null,
+        run_id: runId,
+        disposition: record.disposition,
+        verifier_mode: verifierMode || 'unknown',
+      };
+      if (metadata?.created_at) missingRecord.artifact_created_at = metadata.created_at;
+      if (isPreContractVerifierModelRecord(record, metadata, modelMetadataContract)) {
+        legacyMissingModelRecords.push(missingRecord);
+      } else {
+        missingModelRecords.push(missingRecord);
+      }
+    }
+    if (model && unsupportedSet.has(model)) {
+      unsupportedRecords.push({
+        source_key: record.source_key,
+        pr_number: record.pr_number || null,
+        run_id: cleanString(record.run_id),
+        model,
+        disposition: record.disposition,
+        model_selection_reason: reason,
+      });
+    }
+  }
+
+  return {
+    schema: 'workflows-verifier-model-compatibility/v1',
+    status: unsupportedRecords.length > 0 || missingModelRecords.length > 0 ? 'warning' : 'pass',
+    model_metadata_contract: modelMetadataContract,
+    verifier_record_count: verifierRecordCount,
+    unsupported_models: unsupportedModels,
+    unsupported_record_count: unsupportedRecords.length,
+    missing_model_record_count: missingModelRecords.length,
+    legacy_missing_model_record_count: legacyMissingModelRecords.length,
+    selected_models: Object.fromEntries(
+      Object.entries(selectedModels).sort((a, b) => a[0].localeCompare(b[0]))
+    ),
+    model_selection_reasons: Object.fromEntries(
+      Object.entries(modelSelectionReasons).sort((a, b) => a[0].localeCompare(b[0]))
+    ),
+    unsupported_records: unsupportedRecords.sort((a, b) =>
+      `${a.source_key}:${a.run_id}`.localeCompare(`${b.source_key}:${b.run_id}`)
+    ),
+    missing_model_records: missingModelRecords.sort((a, b) =>
+      `${a.source_key}:${a.run_id}`.localeCompare(`${b.source_key}:${b.run_id}`)
+    ),
+    legacy_missing_model_records: legacyMissingModelRecords.sort((a, b) =>
+      `${a.source_key}:${a.run_id}`.localeCompare(`${b.source_key}:${b.run_id}`)
+    ),
+  };
+}
+
 function normalizeExpectedSource(input = {}) {
   const sourceType = cleanString(input.source_type ?? input.sourceType) || 'review-thread';
   const prNumber = cleanInt(input.pr_number ?? input.prNumber ?? input.pr);
@@ -95,6 +256,7 @@ function expectedReviewThreadSources(records = []) {
   for (const raw of records) {
     if (!isTerminalDispositionRecord(raw)) continue;
     const record = normalizeTerminalDisposition(raw);
+    if (record.artifact_family === 'verifier-terminal-disposition') continue;
     const prNumber = cleanInt(record.pr_number);
     if (prNumber === null) continue;
     const source = normalizeExpectedSource({
@@ -119,6 +281,10 @@ function summarizeTerminalDispositionCoverage(records = [], options = {}) {
   const terminalRecords = records
     .filter(isTerminalDispositionRecord)
     .map((record) => normalizeTerminalDisposition(record));
+  const verifierModelCompatibility = summarizeVerifierModelCompatibility(terminalRecords, {
+    ...options,
+    artifact_selection: artifactSelection,
+  });
   const scannedRecordCount = records.length;
   const nonTerminalRecordCount = scannedRecordCount - terminalRecords.length;
   const inputFiles = Array.isArray(options.input_files) ? options.input_files.map(cleanString).filter(Boolean) : [];
@@ -174,7 +340,12 @@ function summarizeTerminalDispositionCoverage(records = [], options = {}) {
       terminalArtifactInputMismatch
       ? 'warning'
       : 'no-data';
-  } else if (missing.length > 0 || parseErrors > 0 || artifactSelectionWarning) {
+  } else if (
+    missing.length > 0 ||
+    parseErrors > 0 ||
+    artifactSelectionWarning ||
+    verifierModelCompatibility.status !== 'pass'
+  ) {
     status = 'warning';
   }
 
@@ -186,6 +357,9 @@ function summarizeTerminalDispositionCoverage(records = [], options = {}) {
   if (missing.length > 0) enforcementBlockers.push('missing-review-thread-sources');
   if (parseErrors > 0) enforcementBlockers.push('parse-errors');
   if (artifactSelectionWarning) enforcementBlockers.push('artifact-selection-warning');
+  if (verifierModelCompatibility.status !== 'pass') {
+    enforcementBlockers.push('unsupported-verifier-model');
+  }
 
   const hardBlockEligible = enforcementBlockers.length === 0;
   const hardBlockActive = policy.effective_mode === HARD_BLOCK_MODE;
@@ -221,6 +395,7 @@ function summarizeTerminalDispositionCoverage(records = [], options = {}) {
     parse_errors: parseErrors,
     terminal_artifact_input_mismatch: terminalArtifactInputMismatch,
     artifact_selection: artifactSelection,
+    verifier_model_compatibility: verifierModelCompatibility,
     observed_sources: observedSources,
     expected_sources: expected,
     missing_sources: missing,
@@ -246,6 +421,59 @@ function terminalFamilyCount(counts = {}) {
   );
 }
 
+function normalizeSelectionArtifact(artifact = {}) {
+  if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact)) return null;
+  const name = cleanString(artifact.name);
+  const normalized = {
+    id: artifact.id ?? artifact.artifact_id ?? artifact.artifactId ?? null,
+    name,
+  };
+  const createdAt = cleanString(artifact.created_at ?? artifact.createdAt);
+  const updatedAt = cleanString(artifact.updated_at ?? artifact.updatedAt);
+  if (createdAt) normalized.created_at = createdAt;
+  if (updatedAt) normalized.updated_at = updatedAt;
+  return normalized;
+}
+
+function normalizeTerminalPriorityFamilyStatuses(report = {}, selectedArtifacts = []) {
+  const rawStatuses = Array.isArray(report.priority_family_statuses)
+    ? report.priority_family_statuses
+    : [];
+  const byFamily = new Map();
+
+  for (const status of rawStatuses) {
+    if (!status || typeof status !== 'object' || Array.isArray(status)) continue;
+    const family = cleanString(status.family);
+    if (!TERMINAL_ARTIFACT_FAMILIES.has(family)) continue;
+    byFamily.set(family, {
+      family,
+      status: cleanString(status.status) || 'missing',
+      candidate_count: Number(status.candidate_count) || 0,
+      selected_count: Number(status.selected_count) || 0,
+      latest_candidate: normalizeSelectionArtifact(status.latest_candidate),
+      selected_artifact: normalizeSelectionArtifact(status.selected_artifact),
+    });
+  }
+
+  for (const family of TERMINAL_ARTIFACT_FAMILIES) {
+    if (byFamily.has(family)) continue;
+    const candidateCount = Number(report.candidate_family_counts?.[family]) || 0;
+    const selectedCount = Number(report.selected_family_counts?.[family]) ||
+      selectedArtifacts.filter((artifact) => artifact.family === family).length;
+    const selectedArtifact = selectedArtifacts.find((artifact) => artifact.family === family) || null;
+    byFamily.set(family, {
+      family,
+      status: selectedCount > 0 ? 'selected' : (candidateCount > 0 ? 'available' : 'missing'),
+      candidate_count: candidateCount,
+      selected_count: selectedCount,
+      latest_candidate: selectedArtifact ? normalizeSelectionArtifact(selectedArtifact) : null,
+      selected_artifact: selectedArtifact ? normalizeSelectionArtifact(selectedArtifact) : null,
+    });
+  }
+
+  return [...byFamily.values()].sort((a, b) => a.family.localeCompare(b.family));
+}
+
 function normalizeArtifactSelectionSummary(report) {
   if (!report) return null;
   if (report.status === 'missing' || report.status === 'parse-error') {
@@ -256,6 +484,8 @@ function normalizeArtifactSelectionSummary(report) {
       candidate_terminal_artifact_count: 0,
       selected_terminal_artifact_count: 0,
       selected_terminal_artifacts: [],
+      terminal_priority_family_statuses: [],
+      missing_terminal_priority_families: [],
     };
   }
   if (typeof report !== 'object' || Array.isArray(report)) {
@@ -266,18 +496,28 @@ function normalizeArtifactSelectionSummary(report) {
       candidate_terminal_artifact_count: 0,
       selected_terminal_artifact_count: 0,
       selected_terminal_artifacts: [],
+      terminal_priority_family_statuses: [],
+      missing_terminal_priority_families: [],
     };
   }
 
   const selectedArtifacts = Array.isArray(report.selected_artifacts)
     ? report.selected_artifacts
-      .map((artifact) => ({
-        id: artifact.id ?? artifact.artifact_id ?? artifact.artifactId ?? null,
-        name: cleanString(artifact.name),
-        family: artifactFamilyFromSelection(artifact),
-      }))
+      .map((artifact) => {
+        const normalized = {
+          id: artifact.id ?? artifact.artifact_id ?? artifact.artifactId ?? null,
+          name: cleanString(artifact.name),
+          family: artifactFamilyFromSelection(artifact),
+        };
+        const createdAt = cleanString(artifact.created_at ?? artifact.createdAt);
+        const updatedAt = cleanString(artifact.updated_at ?? artifact.updatedAt);
+        if (createdAt) normalized.created_at = createdAt;
+        if (updatedAt) normalized.updated_at = updatedAt;
+        return normalized;
+      })
       .filter((artifact) => TERMINAL_ARTIFACT_FAMILIES.has(artifact.family))
     : [];
+  const terminalFamilyStatuses = normalizeTerminalPriorityFamilyStatuses(report, selectedArtifacts);
 
   return {
     schema: cleanString(report.schema) || 'workflows-weekly-metrics-artifact-selection/v1',
@@ -287,6 +527,10 @@ function normalizeArtifactSelectionSummary(report) {
     selected_terminal_artifact_count: terminalFamilyCount(report.selected_family_counts) ||
       selectedArtifacts.length,
     selected_terminal_artifacts: selectedArtifacts,
+    terminal_priority_family_statuses: terminalFamilyStatuses,
+    missing_terminal_priority_families: terminalFamilyStatuses
+      .filter((status) => status.status === 'missing')
+      .map((status) => status.family),
   };
 }
 
@@ -329,12 +573,35 @@ function formatTerminalDispositionCoverageMarkdown(report) {
     if (selection.error_message) {
       lines.push(`- Artifact selector error: ${selection.error_message}`);
     }
+    if (selection.missing_terminal_priority_families?.length > 0) {
+      lines.push(
+        `- Missing terminal artifact families: ${selection.missing_terminal_priority_families.join(', ')}`
+      );
+    }
   }
 
   if (report.terminal_artifact_input_mismatch) {
     lines.push(
       '- Terminal artifact input mismatch: selected terminal artifacts did not yield terminal NDJSON input files'
     );
+  }
+
+  const modelCompatibility = report.verifier_model_compatibility;
+  if (modelCompatibility) {
+    lines.push(
+      `- Verifier model compatibility: ${modelCompatibility.status}`,
+      `- Unsupported verifier model records: ${modelCompatibility.unsupported_record_count}`,
+      `- Missing verifier model metadata records: ${modelCompatibility.missing_model_record_count}`,
+      `- Legacy missing verifier model metadata records: ${modelCompatibility.legacy_missing_model_record_count || 0}`
+    );
+    if (modelCompatibility.model_metadata_contract?.required_after) {
+      lines.push(
+        `- Verifier model metadata required after: ${modelCompatibility.model_metadata_contract.required_after}`
+      );
+    }
+    if (modelCompatibility.unsupported_models?.length > 0) {
+      lines.push(`- Unsupported verifier models: ${modelCompatibility.unsupported_models.join(', ')}`);
+    }
   }
 
   const policyBlockers = report.enforcement?.policy_blockers || [];
@@ -355,6 +622,72 @@ function formatTerminalDispositionCoverageMarkdown(report) {
       const prs = source.pr_numbers.length ? source.pr_numbers.map((value) => `#${value}`).join(', ') : 'n/a';
       lines.push(
         `| ${source.source_key} | ${source.count} | ${formatDispositions(source.dispositions)} | ${prs} |`
+      );
+    }
+  }
+
+  const terminalFamilyStatuses = report.artifact_selection?.terminal_priority_family_statuses || [];
+  if (terminalFamilyStatuses.length > 0) {
+    lines.push(
+      '',
+      '| Terminal artifact family | Status | Candidates | Selected | Latest artifact |',
+      '|--------------------------|--------|------------|----------|-----------------|'
+    );
+    for (const familyStatus of terminalFamilyStatuses) {
+      const latest = familyStatus.selected_artifact?.name ||
+        familyStatus.latest_candidate?.name ||
+        'n/a';
+      lines.push(
+        `| ${familyStatus.family} | ${familyStatus.status} | ${familyStatus.candidate_count} | ${familyStatus.selected_count} | ${latest} |`
+      );
+    }
+  }
+
+  const unsupportedRecords = modelCompatibility?.unsupported_records || [];
+  if (unsupportedRecords.length > 0) {
+    lines.push(
+      '',
+      '| Unsupported verifier model source | Model | Disposition | PR | Run |',
+      '|-----------------------------------|-------|-------------|----|-----|'
+    );
+    for (const record of unsupportedRecords) {
+      const pr = record.pr_number ? `#${record.pr_number}` : 'n/a';
+      const run = record.run_id || 'n/a';
+      lines.push(
+        `| ${record.source_key} | ${record.model} | ${record.disposition} | ${pr} | ${run} |`
+      );
+    }
+  }
+
+  const missingModelRecords = modelCompatibility?.missing_model_records || [];
+  if (missingModelRecords.length > 0) {
+    lines.push(
+      '',
+      '| Missing verifier model source | Disposition | Mode | PR | Run |',
+      '|-------------------------------|-------------|------|----|-----|'
+    );
+    for (const record of missingModelRecords) {
+      const pr = record.pr_number ? `#${record.pr_number}` : 'n/a';
+      const run = record.run_id || 'n/a';
+      lines.push(
+        `| ${record.source_key} | ${record.disposition} | ${record.verifier_mode} | ${pr} | ${run} |`
+      );
+    }
+  }
+
+  const legacyMissingModelRecords = modelCompatibility?.legacy_missing_model_records || [];
+  if (legacyMissingModelRecords.length > 0) {
+    lines.push(
+      '',
+      '| Legacy missing verifier model source | Disposition | Mode | PR | Run | Artifact created |',
+      '|--------------------------------------|-------------|------|----|-----|------------------|'
+    );
+    for (const record of legacyMissingModelRecords) {
+      const pr = record.pr_number ? `#${record.pr_number}` : 'n/a';
+      const run = record.run_id || 'n/a';
+      const createdAt = record.artifact_created_at || 'n/a';
+      lines.push(
+        `| ${record.source_key} | ${record.disposition} | ${record.verifier_mode} | ${pr} | ${run} | ${createdAt} |`
       );
     }
   }
@@ -544,7 +877,11 @@ module.exports = {
   normalizeEnforcementMode,
   normalizeEnforcementPolicy,
   normalizeArtifactSelectionSummary,
+  normalizeTerminalPriorityFamilyStatuses,
+  normalizeUnsupportedCodexModels,
+  normalizeVerifierModelMetadataContract,
   readNdjsonFiles,
   readArtifactSelectionReport,
+  summarizeVerifierModelCompatibility,
   summarizeTerminalDispositionCoverage,
 };
