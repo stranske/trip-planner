@@ -63,6 +63,7 @@ jobs:
     outputs:
       pr_number: ${{ steps.resolve.outputs.pr_number }}
       should_run: ${{ steps.resolve.outputs.should_run }}
+      skip_reason: ${{ steps.resolve.outputs.skip_reason }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -70,6 +71,7 @@ jobs:
           sparse-checkout: |
             .github/actions/setup-api-client
             .github/scripts/github-api-with-retry.js
+            .github/scripts/terminal_disposition.js
             .github/scripts/token_load_balancer.js
           sparse-checkout-cone-mode: false
 
@@ -90,10 +92,12 @@ jobs:
             const eventName = context.eventName;
             let prNumber = null;
             let shouldRun = false;
+            let skipReason = 'unmatched-trigger';
 
             if (eventName === 'workflow_dispatch') {
               prNumber = '${{ inputs.pr_number }}';
               shouldRun = true;
+              skipReason = '';
               console.log(`Manual dispatch for PR #${prNumber}`);
             }
             else if (eventName === 'pull_request') {
@@ -102,8 +106,10 @@ jobs:
               if (label === 'autofix:bot-comments') {
                 prNumber = context.payload.pull_request.number;
                 shouldRun = true;
+                skipReason = '';
                 console.log(`Label trigger for PR #${prNumber}`);
               } else {
+                skipReason = 'non-bot-comment-label';
                 console.log(`Ignoring label: ${label}`);
               }
             }
@@ -121,6 +127,7 @@ jobs:
               }
               if (!defaultBranch) {
                 console.log('Could not determine default branch; skipping.');
+                core.setOutput('skip_reason', 'missing-default-branch');
                 core.setOutput('should_run', 'false');
                 return;
               }
@@ -128,12 +135,14 @@ jobs:
               // Skip default branch
               if (workflowRun.head_branch === defaultBranch) {
                 console.log(`Skipping default branch ${defaultBranch}`);
+                core.setOutput('skip_reason', 'gate-run-on-default-branch');
                 core.setOutput('should_run', 'false');
                 return;
               }
 
               if (workflowRun.conclusion !== 'success') {
                 console.log(`Gate did not succeed (${workflowRun.conclusion}), skipping`);
+                core.setOutput('skip_reason', 'gate-not-success');
                 core.setOutput('should_run', 'false');
                 return;
               }
@@ -142,6 +151,7 @@ jobs:
               const prs = workflowRun.pull_requests;
               if (!prs || prs.length === 0) {
                 console.log('No PR associated with workflow run');
+                core.setOutput('skip_reason', 'no-pull-request-associated-with-workflow-run');
                 core.setOutput('should_run', 'false');
                 return;
               }
@@ -162,6 +172,7 @@ jobs:
                   `Failed to fetch PR #${prNumber} details, skipping. ` +
                     `Error: ${error.message || error}`
                 );
+                core.setOutput('skip_reason', 'pr-fetch-failed');
                 core.setOutput('should_run', 'false');
                 return;
               }
@@ -169,6 +180,7 @@ jobs:
               const hasAgentLabel = pr.labels.some(l => /^agent:/.test(l.name));
               if (!hasAgentLabel) {
                 console.log(`PR #${prNumber} has no agent label, skipping`);
+                core.setOutput('skip_reason', 'missing-agent-label');
                 core.setOutput('should_run', 'false');
                 return;
               }
@@ -177,16 +189,82 @@ jobs:
               const hasAutoPilot = pr.labels.some(l => l.name === 'agents:auto-pilot');
               if (hasAutoPilot) {
                 console.log(`PR #${prNumber} is auto-pilot managed, skipping bot-comment handler`);
+                core.setOutput('skip_reason', 'auto-pilot-managed');
                 core.setOutput('should_run', 'false');
                 return;
               }
 
               shouldRun = true;
+              skipReason = '';
               console.log(`Gate completion trigger for agent PR #${prNumber}`);
             }
 
             core.setOutput('pr_number', prNumber || '');
             core.setOutput('should_run', shouldRun ? 'true' : 'false');
+            core.setOutput('skip_reason', skipReason);
+
+      - name: Write wrapper terminal disposition
+        if: always()
+        env:
+          RESOLVED_PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
+          REUSABLE_INVOCATION_EXPECTED: ${{ steps.resolve.outputs.should_run }}
+          SKIP_REASON: ${{ steps.resolve.outputs.skip_reason }}
+        run: |
+          mkdir -p agent-metrics
+          node <<'NODE'
+          const fs = require('fs');
+          const helperPath = './.github/scripts/terminal_disposition.js';
+          const fallback = {
+            normalizeTerminalDisposition: (value) => value,
+            formatTerminalDispositionMarkdown: (records) =>
+              records.map((record) => `- ${record.source_type}:${record.source_id} ${record.disposition}`).join('\n'),
+          };
+          const {
+            normalizeTerminalDisposition,
+            formatTerminalDispositionMarkdown,
+          } = fs.existsSync(helperPath) ? require(helperPath) : fallback;
+          const reusableExpected =
+            String(process.env.REUSABLE_INVOCATION_EXPECTED || '').toLowerCase() === 'true';
+          const prNumber = Number.parseInt(process.env.RESOLVED_PR_NUMBER || '', 10) || null;
+          const disposition = reusableExpected ? 'reusable-invocation-expected' : 'wrapper-skipped';
+          const reason = reusableExpected
+            ? 'Wrapper resolved an eligible PR and invoked the reusable bot-comment handler.'
+            : (process.env.SKIP_REASON || 'Wrapper did not find eligible bot-comment work.');
+          const record = normalizeTerminalDisposition({
+            source_type: 'review-thread',
+            source_id: prNumber || process.env.GITHUB_RUN_ID || 'unknown',
+            pr_number: prNumber,
+            disposition,
+            reason,
+            workflow: process.env.GITHUB_WORKFLOW || '',
+            run_id: process.env.GITHUB_RUN_ID || '',
+            run_attempt: process.env.GITHUB_RUN_ATTEMPT || '',
+            artifact_name: `review-thread-terminal-disposition-${process.env.GITHUB_RUN_ID || ''}`,
+            artifact_family: 'review-thread-terminal-disposition',
+            actor: process.env.GITHUB_ACTOR || '',
+            needs_human: false,
+            dispatch_outcome: reusableExpected ? 'reusable-expected' : 'wrapper-skipped',
+          });
+          fs.writeFileSync(
+            'agent-metrics/review-thread-terminal-disposition.ndjson',
+            `${JSON.stringify(record)}\n`
+          );
+          fs.writeFileSync(
+            'terminal-disposition-summary.md',
+            `${formatTerminalDispositionMarkdown([record])}\n`
+          );
+          NODE
+
+      - name: Upload wrapper terminal disposition
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: review-thread-terminal-disposition-${{ github.run_id }}
+          path: |
+            agent-metrics/review-thread-terminal-disposition.ndjson
+            terminal-disposition-summary.md
+          if-no-files-found: error
+          retention-days: 14
 
   # Dismiss ignored-path bot reviews to prevent noisy inline comments
   dismiss_ignored:
