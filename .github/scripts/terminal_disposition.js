@@ -24,6 +24,18 @@ function normalizeToken(value, fallback = 'unknown') {
   return normalized || fallback;
 }
 
+function normalizeCliVersion(value) {
+  const text = cleanString(value);
+  if (!text) return '';
+  const versionMatch = text.match(/(\d+\.\d+\.\d+(?:[-+][A-Za-z0-9._-]+)?)/);
+  const version = versionMatch ? versionMatch[1] : '';
+  const lower = text.toLowerCase().replace(/_/g, '-');
+  if (version && /\bcodex(?:-|\s+)cli\b|\bopenai\/codex\b|\bcodex\b/.test(lower)) {
+    return `codex-cli ${version}`;
+  }
+  return lower;
+}
+
 function normalizeSourceType(value) {
   const text = cleanString(value).toLowerCase();
   if (!text) return 'unknown';
@@ -35,6 +47,25 @@ function normalizeSourceId(value, fallback) {
   if (text) return text;
   const fallbackText = cleanString(fallback);
   return fallbackText || 'unknown';
+}
+
+function normalizeOptionalValue(key, value) {
+  if (value === null || value === undefined) return undefined;
+  if (key.endsWith('_number') || key === 'chain_depth' || key === 'verification_run_attempt') {
+    const parsed = cleanInt(value);
+    return parsed === null ? undefined : parsed;
+  }
+  if (key === 'needs_human' || key === 'depth_limit_exceeded') {
+    const parsed = cleanBool(value);
+    return parsed === null ? undefined : parsed;
+  }
+  if (key === 'llm_cli_version' || key === 'codex_cli_version' || key === 'cli_version') {
+    const normalized = normalizeCliVersion(value);
+    return normalized || undefined;
+  }
+  const cleaned = typeof value === 'boolean' ? value : cleanString(value);
+  if (cleaned === '') return undefined;
+  return typeof value === 'string' ? cleaned : value;
 }
 
 function sourceKey(sourceType, sourceId) {
@@ -211,14 +242,13 @@ function normalizeTerminalDisposition(input = {}) {
     dispatch_outcome: input.dispatch_outcome ?? input.dispatchOutcome,
     llm_model: input.llm_model ?? input.llmModel ?? input.model,
     model_selection_reason: input.model_selection_reason ?? input.modelSelectionReason,
+    llm_cli_version: input.llm_cli_version ?? input.llmCliVersion ?? input.cli_version,
     verifier_mode: input.verifier_mode ?? input.verifierMode,
   };
 
   for (const [key, value] of Object.entries(optional)) {
-    if (value === null || value === undefined) continue;
-    const cleaned = typeof value === 'boolean' ? value : cleanString(value);
-    if (cleaned === '') continue;
-    record[key] = typeof value === 'string' ? cleaned : value;
+    const normalized = normalizeOptionalValue(key, value);
+    if (normalized !== undefined) record[key] = normalized;
   }
 
   return record;
@@ -273,15 +303,8 @@ function normalizeVerifierFollowupLedger(input = {}) {
   };
 
   for (const [key, value] of Object.entries(optional)) {
-    if (value === null || value === undefined) continue;
-    if (key.endsWith('_number') || key === 'chain_depth' || key === 'verification_run_attempt') {
-      const parsed = cleanInt(value);
-      if (parsed !== null) record[key] = parsed;
-      continue;
-    }
-    const cleaned = typeof value === 'boolean' ? value : cleanString(value);
-    if (cleaned === '') continue;
-    record[key] = typeof value === 'string' ? cleaned : value;
+    const normalized = normalizeOptionalValue(key, value);
+    if (normalized !== undefined) record[key] = normalized;
   }
 
   return record;
@@ -361,6 +384,8 @@ module.exports = {
   normalizeVerifierFollowupLedger,
   normalizeVerifierFollowupPolicy,
   normalizeLedgerDisposition,
+  normalizeOptionalValue,
+  normalizeCliVersion,
   summarizeTerminalDispositionSources,
   formatTerminalDispositionMarkdown,
   sourceKey,
