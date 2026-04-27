@@ -15,6 +15,13 @@ const fs = require('fs');
 const os = require('os');
 const childProcess = require('child_process');
 const { ensureRateLimitWrapped } = require('./github-rate-limited-wrapper.js');
+const {
+  formatSourceContextForLog,
+  normalizeSourceType,
+  resolvePrSourceContext,
+  SOURCE_TYPES,
+  VALID_SOURCE_TYPES,
+} = require('./source_context.js');
 
 class RateLimitError extends Error {
   constructor(message, options = {}) {
@@ -930,6 +937,125 @@ function isCampaignIssue(issue = {}) {
   return labels.has('campaign:sync-dependabot') || labels.has('campaign:active');
 }
 
+function buildSourceContextRepairCommentBody(prNumber) {
+  return [
+    '<!-- missing-issue-warning -->',
+    '### Workflow source needed',
+    '',
+    `PR #${prNumber} needs either a linked GitHub issue or one valid non-issue Workflow Source before PR metadata automation can manage it safely.`,
+    '',
+    'Please do one of:',
+    '',
+    '- Add `<!-- meta:issue:123 -->` or a normal `Closes #123` / `Related to #123` line.',
+    '- Check one `Workflow Source` option in the PR body.',
+    '- Add a hidden marker such as `<!-- workflow-source:local_request -->`, `<!-- workflow-source:manual_remote -->`, `<!-- workflow-source:review_followup -->`, `<!-- workflow-source:sync_campaign -->`, or `<!-- workflow-source:dependabot -->`.',
+    '- Add a workflow source label such as `workflow:source-direct-pr`, `workflow:source-local-request`, `workflow:source-review-followup`, `workflow:source-sync`, or `workflow:no-automation`.',
+    '',
+    'Once a valid source is present, this warning will not be reposted.',
+  ].join('\n');
+}
+
+async function updateIssueCommentWithRetry({ github, owner, repo, commentId, body, core }) {
+  return withRetries(
+    () => github.rest.issues.updateComment({
+      owner,
+      repo,
+      comment_id: commentId,
+      body,
+    }),
+    { description: `issues.updateComment #${commentId}`, core },
+  );
+}
+
+async function createIssueCommentWithRetry({ github, owner, repo, issueNumber, body, core }) {
+  return withRetries(
+    () => github.rest.issues.createComment({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      body,
+    }),
+    { description: `issues.createComment #${issueNumber}`, core },
+  );
+}
+
+function buildSourceContextResolvedCommentBody(prNumber, sourceContext) {
+  return [
+    '<!-- missing-issue-warning -->',
+    '### Workflow source detected',
+    '',
+    `PR #${prNumber} now has valid workflow source context (${formatSourceContextForLog(sourceContext)}).`,
+    '',
+    'No linked GitHub issue is required for this PR.',
+  ].join('\n');
+}
+
+function parseHtmlMarker(body, name) {
+  const pattern = new RegExp(`<!--\\s*${name}\\s*:\\s*([\\s\\S]*?)\\s*-->`, 'i');
+  const match = String(body || '').match(pattern);
+  return match ? String(match[1] || '').trim() : '';
+}
+
+function resolveExplicitNonIssueWorkflowSourceContext(pr = {}) {
+  const body = String(pr.body || '');
+  const sourceType = normalizeSourceType(parseHtmlMarker(body, 'workflow-source'));
+  if (
+    !VALID_SOURCE_TYPES.has(sourceType)
+    || sourceType === SOURCE_TYPES.GITHUB_ISSUE
+    || sourceType === SOURCE_TYPES.UNKNOWN
+  ) {
+    return null;
+  }
+
+  const sourceRef = parseHtmlMarker(body, 'workflow-source-ref');
+  const lifecycle = parseHtmlMarker(body, 'workflow-lifecycle');
+  const automation = parseHtmlMarker(body, 'workflow-automation');
+  return {
+    sourceType,
+    issueNumber: null,
+    sourceRef,
+    lifecycle,
+    automation,
+    isKnown: true,
+    isValid: true,
+    isExplicit: true,
+    requiresIssue: false,
+  };
+}
+
+async function resolveSourceContextRepairComment({
+  github,
+  owner,
+  repo,
+  prNumber,
+  comments,
+  sourceContext,
+  core,
+}) {
+  const marker = '<!-- missing-issue-warning -->';
+  const existingWarning = comments.find((c) => c.body && c.body.includes(marker));
+  if (!existingWarning) {
+    return false;
+  }
+
+  const resolvedBody = buildSourceContextResolvedCommentBody(prNumber, sourceContext);
+  if (existingWarning.body === resolvedBody) {
+    core?.info?.(`Workflow source repair comment already resolved (id: ${existingWarning.id})`);
+    return false;
+  }
+
+  await updateIssueCommentWithRetry({
+    github,
+    owner,
+    repo,
+    commentId: existingWarning.id,
+    body: resolvedBody,
+    core,
+  });
+  core?.info?.(`Resolved workflow source repair comment (id: ${existingWarning.id})`);
+  return true;
+}
+
 function buildPreamble(sections) {
   const lines = ['<!-- pr-preamble:start -->'];
   
@@ -1230,10 +1356,62 @@ async function run({github: rawGithub, context, core, inputs}) {
     return;
   }
 
+  const explicitNonIssueSourceContext = resolveExplicitNonIssueWorkflowSourceContext(pr);
+  if (explicitNonIssueSourceContext) {
+    core.info(
+      `PR #${pr.number} has explicit non-issue workflow source context (${formatSourceContextForLog(explicitNonIssueSourceContext)}); skipping issue-sourced body sync.`,
+    );
+    try {
+      const comments = await github.paginate(github.rest.issues.listComments, {
+        owner,
+        repo,
+        issue_number: pr.number,
+      });
+      await resolveSourceContextRepairComment({
+        github,
+        owner,
+        repo,
+        prNumber: pr.number,
+        comments,
+        sourceContext: explicitNonIssueSourceContext,
+        core,
+      });
+    } catch (error) {
+      core.warning(`Failed to resolve workflow source repair comment: ${error.message}`);
+    }
+    return;
+  }
+
   const issueNumber = extractIssueNumberFromPull(pr);
+  const sourceContext = resolvePrSourceContext(pr);
   if (!issueNumber) {
+    if (sourceContext.isValid && !sourceContext.requiresIssue) {
+      core.info(
+        `PR #${pr.number} has valid non-issue workflow source context (${formatSourceContextForLog(sourceContext)}); skipping issue-sourced body sync.`,
+      );
+      try {
+        const comments = await github.paginate(github.rest.issues.listComments, {
+          owner,
+          repo,
+          issue_number: pr.number,
+        });
+        await resolveSourceContextRepairComment({
+          github,
+          owner,
+          repo,
+          prNumber: pr.number,
+          comments,
+          sourceContext,
+          core,
+        });
+      } catch (error) {
+        core.warning(`Failed to resolve workflow source repair comment: ${error.message}`);
+      }
+      return;
+    }
+
     const marker = '<!-- missing-issue-warning -->';
-    const warningMsg = `Unable to determine source issue for PR #${pr.number}. The PR title, branch name, or body must contain the issue number (e.g. #123, branch: issue-123, or the hidden marker <!-- meta:issue:123 -->).`;
+    const warningMsg = `Unable to determine workflow source context for PR #${pr.number}. Add a GitHub issue reference or another valid Workflow Source entry.`;
     core.warning(warningMsg);
 
     try {
@@ -1244,17 +1422,30 @@ async function run({github: rawGithub, context, core, inputs}) {
       });
       // Find existing warning comment by marker to enable upsert pattern
       const existingWarning = comments.find((c) => c.body && c.body.includes(marker));
-      const commentBody = `${marker}\n⚠️ **Action Required**: ${warningMsg}`;
+      const commentBody = buildSourceContextRepairCommentBody(pr.number);
       
       if (existingWarning) {
-        // Update existing comment (avoids duplicates from race conditions)
-        core.info(`Warning comment already exists (id: ${existingWarning.id}), skipping duplicate`);
+        if (existingWarning.body !== commentBody) {
+          await updateIssueCommentWithRetry({
+            github,
+            owner,
+            repo,
+            commentId: existingWarning.id,
+            body: commentBody,
+            core,
+          });
+          core.info(`Updated workflow source repair comment (id: ${existingWarning.id})`);
+        } else {
+          core.info(`Workflow source repair comment already exists (id: ${existingWarning.id})`);
+        }
       } else {
-        await github.rest.issues.createComment({
+        await createIssueCommentWithRetry({
+          github,
           owner,
           repo,
-          issue_number: pr.number,
-          body: commentBody
+          issueNumber: pr.number,
+          body: commentBody,
+          core,
         });
       }
     } catch (error) {
@@ -1435,6 +1626,10 @@ module.exports = {
   filterWorkflowRunsForStatus,
   buildContextBlock,
   buildPreamble,
+  buildSourceContextRepairCommentBody,
+  buildSourceContextResolvedCommentBody,
+  resolveExplicitNonIssueWorkflowSourceContext,
+  resolveSourceContextRepairComment,
   isCampaignIssue,
   buildStatusBlock,
   withRetries,
