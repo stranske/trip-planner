@@ -21,6 +21,20 @@ _DEFAULT_DOWNLOAD_MANIFEST_PATH = "artifacts/metric-artifact-download-manifest.j
 _DEFAULT_ARTIFACT_SELECTION_PATH = "artifacts/metric-artifacts-selection.json"
 _DEFAULT_UNSUPPORTED_VERIFIER_MODELS = {"gpt-5.2-codex"}
 _DEFAULT_VERIFIER_MODEL_METADATA_REQUIRED_AFTER = ""
+_NULL_EQUIVALENT_TOKENS = {
+    "",
+    "0",
+    "false",
+    "none",
+    "null",
+    "nil",
+    "n/a",
+    "na",
+    "off",
+    "disabled",
+    "undefined",
+}
+_KNOWN_VERIFIER_MODES = {"checkbox", "compare", "evaluate"}
 _TERMINAL_ARTIFACT_FAMILIES = (
     "review-thread-terminal-disposition",
     "verifier-terminal-disposition",
@@ -423,7 +437,7 @@ def _verifier_model_metadata_required_after() -> _dt.datetime | None:
         or os.environ.get("VERIFIER_MODEL_METADATA_REQUIRED_AFTER")
         or _DEFAULT_VERIFIER_MODEL_METADATA_REQUIRED_AFTER
     ).strip()
-    if raw.lower() in {"", "0", "false", "none", "off", "disabled"}:
+    if raw.lower() in _NULL_EQUIVALENT_TOKENS:
         return None
     return _parse_timestamp(raw)
 
@@ -434,7 +448,7 @@ def _verifier_model_metadata_required() -> bool:
         or os.environ.get("VERIFIER_MODEL_METADATA_REQUIRED_AFTER")
         or _DEFAULT_VERIFIER_MODEL_METADATA_REQUIRED_AFTER
     ).strip()
-    return raw.lower() not in {"", "0", "false", "none", "off", "disabled"}
+    return raw.lower() not in _NULL_EQUIVALENT_TOKENS
 
 
 def _is_pre_contract_verifier_model_record(
@@ -454,7 +468,7 @@ def _is_verifier_terminal_entry(entry: dict[str, Any]) -> bool:
         return False
     artifact_family = str(entry.get("artifact_family") or "").strip().lower()
     workflow = str(entry.get("workflow") or "").strip().lower()
-    verifier_mode = str(entry.get("verifier_mode") or "").strip().lower()
+    verifier_mode = _normalize_verifier_mode(entry.get("verifier_mode"))
     return (
         artifact_family == "verifier-terminal-disposition"
         or bool(verifier_mode)
@@ -462,15 +476,22 @@ def _is_verifier_terminal_entry(entry: dict[str, Any]) -> bool:
     )
 
 
+def _normalize_verifier_mode(value: Any) -> str:
+    verifier_mode = str(value).strip().lower() if value is not None else ""
+    if verifier_mode in _NULL_EQUIVALENT_TOKENS:
+        return ""
+    return verifier_mode
+
+
 def _verifier_mode_requires_model_metadata(entry: dict[str, Any]) -> bool:
-    verifier_mode = str(entry.get("verifier_mode") or "").strip().lower()
+    verifier_mode = _normalize_verifier_mode(entry.get("verifier_mode"))
     return bool(verifier_mode) and verifier_mode != "evaluate"
 
 
 def _summarise_keepalive(entries: list[dict[str, Any]]) -> dict[str, Any]:
-    stop_reasons = Counter()
-    actions = Counter()
-    gate_results = Counter()
+    stop_reasons: Counter[str] = Counter()
+    actions: Counter[str] = Counter()
+    gate_results: Counter[str] = Counter()
     iterations: list[int] = []
     prs: set[int] = set()
     tasks_complete = 0
@@ -513,8 +534,8 @@ def _summarise_keepalive(entries: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _summarise_autofix(entries: list[dict[str, Any]]) -> dict[str, Any]:
-    triggers = Counter()
-    gate_results = Counter()
+    triggers: Counter[str] = Counter()
+    gate_results: Counter[str] = Counter()
     prs: set[int] = set()
     fixes_applied = 0
     for entry in entries:
@@ -542,28 +563,29 @@ def _summarise_verifier(
     entries: list[dict[str, Any]],
     ledger_entries: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    verdicts = Counter()
-    terminal_dispositions = Counter()
-    terminal_sources = Counter()
-    verifier_models = Counter()
-    model_selection_reasons = Counter()
-    verifier_cli_versions = Counter()
-    unsupported_verifier_models = Counter()
-    unsupported_model_dispositions = Counter()
-    missing_verifier_model_metadata = Counter()
+    verdicts: Counter[str] = Counter()
+    terminal_dispositions: Counter[str] = Counter()
+    terminal_sources: Counter[str] = Counter()
+    verifier_models: Counter[str] = Counter()
+    model_selection_reasons: Counter[str] = Counter()
+    verifier_cli_versions: Counter[str] = Counter()
+    unsupported_verifier_models: Counter[str] = Counter()
+    unsupported_model_dispositions: Counter[str] = Counter()
+    missing_verifier_model_metadata: Counter[str] = Counter()
     unsupported_models = _unsupported_verifier_models()
     model_metadata_required = _verifier_model_metadata_required()
     model_metadata_required_after = _verifier_model_metadata_required_after()
-    legacy_missing_verifier_model_metadata = Counter()
-    verifier_modes = Counter()
-    ledger_dispositions = Counter()
+    legacy_missing_verifier_model_metadata: Counter[str] = Counter()
+    verifier_modes: Counter[str] = Counter()
+    unknown_verifier_modes: Counter[str] = Counter()
+    ledger_dispositions: Counter[str] = Counter()
     ledger_followup_issues: set[int] = set()
     ledger_prs: set[int] = set()
     ledger_needs_human = 0
     ledger_chain_depths: list[int] = []
     ledger_policy_records = 0
-    ledger_policy_actions = Counter()
-    ledger_policy_triggers = Counter()
+    ledger_policy_actions: Counter[str] = Counter()
+    ledger_policy_triggers: Counter[str] = Counter()
     ledger_policy_depth_limit_exceeded = 0
     verifier_run_keys: set[str] = set()
     prs: set[int] = set()
@@ -626,9 +648,11 @@ def _summarise_verifier(
         cli_version_text = str(cli_version).strip() if cli_version is not None else ""
         if cli_version_text:
             verifier_cli_versions[_normalize_cli_version(cli_version_text)] += 1
-        verifier_mode = str(entry.get("verifier_mode") or "").strip().lower()
+        verifier_mode = _normalize_verifier_mode(entry.get("verifier_mode"))
         if verifier_mode:
             verifier_modes[verifier_mode] += 1
+            if verifier_mode not in _KNOWN_VERIFIER_MODES:
+                unknown_verifier_modes[verifier_mode] += 1
         pr_number = _safe_int(entry.get("pr_number") or entry.get("pr"))
         if pr_number is not None:
             prs.add(pr_number)
@@ -682,6 +706,7 @@ def _summarise_verifier(
         "legacy_missing_verifier_model_metadata": legacy_missing_verifier_model_metadata,
         "model_selection_reasons": model_selection_reasons,
         "verifier_modes": verifier_modes,
+        "unknown_verifier_modes": unknown_verifier_modes,
         "ledger_records": len(ledger_entries or []),
         "ledger_dispositions": ledger_dispositions,
         "ledger_prs": len(ledger_prs),
@@ -702,9 +727,9 @@ def _summarise_autopilot(entries: list[dict[str, Any]]) -> dict[str, Any]:
     step_durations: dict[str, list[float]] = {}
     step_successes: dict[str, int] = {}
     step_failures: dict[str, int] = {}
-    cycle_counts = Counter()
-    failure_reasons = Counter()
-    escalation_reasons = Counter()
+    cycle_counts: Counter[str] = Counter()
+    failure_reasons: Counter[str] = Counter()
+    escalation_reasons: Counter[str] = Counter()
     cycle_records = 0
     cycle_steps_attempted = 0
     cycle_steps_completed = 0
@@ -782,14 +807,14 @@ def _summarise_autopilot(entries: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _summarise_codex_cli_freshness(entries: list[dict[str, Any]]) -> dict[str, Any]:
-    statuses = Counter()
-    packages = Counter()
-    pinned_versions = Counter()
-    latest_versions = Counter()
+    statuses: Counter[str] = Counter()
+    packages: Counter[str] = Counter()
+    pinned_versions: Counter[str] = Counter()
+    latest_versions: Counter[str] = Counter()
     max_major_delta = 0
     max_minor_delta = 0
     max_patch_delta = 0
-    update_targets = Counter()
+    update_targets: Counter[str] = Counter()
     for entry in entries:
         status = _normalize_counter_token(entry.get("status"))
         statuses[status] += 1
@@ -1088,13 +1113,21 @@ def _artifact_selection_contract(selection: dict[str, Any], selection_path: Path
         for item in statuses
         if item["status"] == "missing" or item["selected_count"] <= 0
     ]
+    missing_priority_families = selection.get("missing_priority_families")
+    if isinstance(missing_priority_families, (list, tuple)):
+        missing_priority_families = [
+            str(family) for family in missing_priority_families if isinstance(family, str)
+        ]
+    else:
+        missing_priority_families = []
+
     return {
         "schema": selection.get("schema") or "unknown",
         "path": selection_path.as_posix(),
         "status": selection.get("status") or "unknown",
         "selected_count": _safe_int(selection.get("selected_count")) or 0,
         "candidate_count": _safe_int(selection.get("candidate_count")) or 0,
-        "missing_priority_families": list(selection.get("missing_priority_families") or []),
+        "missing_priority_families": missing_priority_families,
         "terminal_artifact_families": statuses,
         "missing_terminal_artifact_families": missing_terminal,
     }
@@ -1277,6 +1310,7 @@ def build_summary(
             ),
             f"- Model selection reasons: {_format_counter(verifier['model_selection_reasons'])}",
             f"- Verifier modes: {_format_counter(verifier['verifier_modes'])}",
+            f"- Unknown verifier modes: {_format_counter(verifier['unknown_verifier_modes'])}",
             "",
             "## Codex CLI Freshness",
             f"- Records: {codex_cli_freshness['records']}",
