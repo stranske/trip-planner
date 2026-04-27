@@ -12,12 +12,15 @@ const EXACT_METRICS_ARTIFACTS = new Set([
   'agents-autofix-metrics',
   'agents-verifier-metrics',
   'agents-verifier-disposition-metrics',
+  'codex-cli-freshness',
+  'pr-source-context',
 ]);
 
 const PREFIXED_METRICS_ARTIFACTS = [
   'autopilot-metrics-',
   'issue-optimizer-metrics-',
   'issue-intake-format-metrics-',
+  'codex-cli-freshness-',
   'verifier-terminal-disposition-',
   'review-thread-terminal-disposition-',
 ];
@@ -34,10 +37,12 @@ const PATTERNED_METRICS_ARTIFACTS = [
 ];
 
 const PRIORITY_METRICS_FAMILIES = [
+  'codex-cli-freshness',
   'verifier-terminal-disposition',
   'review-thread-terminal-disposition',
   'bot-comment-auth-coverage-wrapper',
   'bot-comment-auth-coverage-reusable',
+  'pr-source-context',
 ];
 
 function cleanString(value) {
