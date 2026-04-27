@@ -18,18 +18,26 @@ _DEFAULT_METRICS_DIR = "agent-metrics"
 _DEFAULT_OUTPUT = "agent-metrics-summary.md"
 _DEFAULT_JSON_OUTPUT = "agent-metrics-summary.json"
 _DEFAULT_DOWNLOAD_MANIFEST_PATH = "artifacts/metric-artifact-download-manifest.json"
+_DEFAULT_ARTIFACT_SELECTION_PATH = "artifacts/metric-artifacts-selection.json"
 _DEFAULT_UNSUPPORTED_VERIFIER_MODELS = {"gpt-5.2-codex"}
 _DEFAULT_VERIFIER_MODEL_METADATA_REQUIRED_AFTER = ""
+_TERMINAL_ARTIFACT_FAMILIES = (
+    "review-thread-terminal-disposition",
+    "verifier-terminal-disposition",
+)
 _EXACT_ARTIFACT_FAMILIES = {
     "keepalive-metrics",
     "agents-autofix-metrics",
     "agents-verifier-metrics",
     "agents-verifier-disposition-metrics",
+    "codex-cli-freshness",
+    "pr-source-context",
 }
 _PREFIXED_ARTIFACT_FAMILIES = (
     "autopilot-metrics-",
     "issue-optimizer-metrics-",
     "issue-intake-format-metrics-",
+    "codex-cli-freshness-",
     "verifier-terminal-disposition-",
     "review-thread-terminal-disposition-",
 )
@@ -98,6 +106,32 @@ def _parse_timestamp(value: Any) -> _dt.datetime | None:
             parsed = parsed.replace(tzinfo=_dt.UTC)
         return parsed
     return None
+
+
+def _normalize_version_text(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    match = re.search(r"(\d+\.\d+\.\d+(?:[-+][A-Za-z0-9._-]+)?)", text)
+    return match.group(1) if match else text
+
+
+def _normalize_cli_version(value: Any) -> str:
+    text = str(value).strip() if value is not None else ""
+    if not text:
+        return ""
+    version = _normalize_version_text(text)
+    lower = text.lower().replace("_", "-")
+    if version and re.search(r"\bcodex(?:-|\s+)cli\b|\bopenai/codex\b|\bcodex\b", lower):
+        return f"codex-cli {version}".lower()
+    return lower
+
+
+def _normalize_counter_token(value: Any, fallback: str = "unknown") -> str:
+    text = str(value).strip().lower().replace("_", "-") if value is not None else ""
+    return text or fallback
 
 
 def _gather_metrics_files(metrics_paths: list[str], metrics_dir: str) -> list[Path]:
@@ -323,6 +357,8 @@ def _classify_entry(entry: dict[str, Any]) -> str:
         return "terminal_disposition"
     if schema == "workflows-verifier-followup-ledger/v1":
         return "verifier_followup_ledger"
+    if schema == "workflows-codex-cli-freshness/v1":
+        return "codex_cli_freshness"
     explicit = entry.get("metric_type") or entry.get("type") or entry.get("workflow")
     if isinstance(explicit, str):
         lowered = explicit.lower()
@@ -426,6 +462,11 @@ def _is_verifier_terminal_entry(entry: dict[str, Any]) -> bool:
     )
 
 
+def _verifier_mode_requires_model_metadata(entry: dict[str, Any]) -> bool:
+    verifier_mode = str(entry.get("verifier_mode") or "").strip().lower()
+    return bool(verifier_mode) and verifier_mode != "evaluate"
+
+
 def _summarise_keepalive(entries: list[dict[str, Any]]) -> dict[str, Any]:
     stop_reasons = Counter()
     actions = Counter()
@@ -506,6 +547,7 @@ def _summarise_verifier(
     terminal_sources = Counter()
     verifier_models = Counter()
     model_selection_reasons = Counter()
+    verifier_cli_versions = Counter()
     unsupported_verifier_models = Counter()
     unsupported_model_dispositions = Counter()
     missing_verifier_model_metadata = Counter()
@@ -561,19 +603,29 @@ def _summarise_verifier(
                 unsupported_verifier_models[normalized_model_text] += 1
                 disposition = entry.get("disposition") or entry.get("terminal_state") or "unknown"
                 unsupported_model_dispositions[str(disposition)] += 1
-        elif is_verifier_terminal and model_metadata_required:
-            verifier_mode = str(entry.get("verifier_mode") or "").strip().lower()
-            if verifier_mode and verifier_mode != "evaluate":
-                disposition = entry.get("disposition") or entry.get("terminal_state") or "unknown"
-                if _is_pre_contract_verifier_model_record(entry, model_metadata_required_after):
-                    legacy_missing_verifier_model_metadata[str(disposition)] += 1
-                else:
-                    missing_verifier_model_metadata[str(disposition)] += 1
+        elif (
+            is_verifier_terminal
+            and model_metadata_required
+            and _verifier_mode_requires_model_metadata(entry)
+        ):
+            disposition = entry.get("disposition") or entry.get("terminal_state") or "unknown"
+            if _is_pre_contract_verifier_model_record(entry, model_metadata_required_after):
+                legacy_missing_verifier_model_metadata[str(disposition)] += 1
+            else:
+                missing_verifier_model_metadata[str(disposition)] += 1
         model_selection_reason = entry.get("codex_model_selection_reason") or entry.get(
             "model_selection_reason"
         )
         if model_selection_reason:
             model_selection_reasons[str(model_selection_reason)] += 1
+        cli_version = (
+            entry.get("codex_cli_version")
+            or entry.get("llm_cli_version")
+            or entry.get("cli_version")
+        )
+        cli_version_text = str(cli_version).strip() if cli_version is not None else ""
+        if cli_version_text:
+            verifier_cli_versions[_normalize_cli_version(cli_version_text)] += 1
         verifier_mode = str(entry.get("verifier_mode") or "").strip().lower()
         if verifier_mode:
             verifier_modes[verifier_mode] += 1
@@ -623,6 +675,7 @@ def _summarise_verifier(
         "terminal_dispositions": terminal_dispositions,
         "terminal_sources": terminal_sources,
         "verifier_models": verifier_models,
+        "verifier_cli_versions": verifier_cli_versions,
         "unsupported_verifier_models": unsupported_verifier_models,
         "unsupported_model_dispositions": unsupported_model_dispositions,
         "missing_verifier_model_metadata": missing_verifier_model_metadata,
@@ -728,6 +781,54 @@ def _summarise_autopilot(entries: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _summarise_codex_cli_freshness(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    statuses = Counter()
+    packages = Counter()
+    pinned_versions = Counter()
+    latest_versions = Counter()
+    max_major_delta = 0
+    max_minor_delta = 0
+    max_patch_delta = 0
+    update_targets = Counter()
+    for entry in entries:
+        status = _normalize_counter_token(entry.get("status"))
+        statuses[status] += 1
+        package = str(entry.get("package") or "unknown").strip() or "unknown"
+        packages[package] += 1
+        pinned = _normalize_version_text(entry.get("pinned_version")) or "unknown"
+        latest = _normalize_version_text(entry.get("latest_version")) or "unknown"
+        pinned_versions[pinned] += 1
+        latest_versions[latest] += 1
+        delta = entry.get("version_delta")
+        if isinstance(delta, dict):
+            max_major_delta = max(max_major_delta, _safe_int(delta.get("major")) or 0)
+            max_minor_delta = max(max_minor_delta, _safe_int(delta.get("minor")) or 0)
+            max_patch_delta = max(max_patch_delta, _safe_int(delta.get("patch")) or 0)
+        targets = entry.get("update_targets")
+        if isinstance(targets, list):
+            for target in targets:
+                if not isinstance(target, dict):
+                    continue
+                path = str(target.get("path") or "").strip()
+                if path:
+                    update_targets[path] += 1
+    return {
+        "records": len(entries),
+        "statuses": statuses,
+        "packages": packages,
+        "pinned_versions": pinned_versions,
+        "latest_versions": latest_versions,
+        "outdated_records": statuses.get("outdated", 0),
+        "latest_unavailable_records": statuses.get("latest-unavailable", 0),
+        "max_version_delta": {
+            "major": max_major_delta,
+            "minor": max_minor_delta,
+            "patch": max_patch_delta,
+        },
+        "update_targets": update_targets,
+    }
+
+
 def _format_counter(counter: Counter[str]) -> str:
     if not counter:
         return "n/a"
@@ -765,6 +866,7 @@ def _bucket_entries(entries: list[dict[str, Any]]) -> dict[str, list[dict[str, A
         "verifier": [],
         "terminal_disposition": [],
         "verifier_followup_ledger": [],
+        "codex_cli_freshness": [],
         "autopilot": [],
         "unknown": [],
     }
@@ -784,6 +886,7 @@ def _summary_metrics_contract(buckets: dict[str, list[dict[str, Any]]]) -> dict[
                 buckets["verifier_followup_ledger"],
             ),
             "autopilot": _summarise_autopilot(buckets["autopilot"]),
+            "codex_cli_freshness": _summarise_codex_cli_freshness(buckets["codex_cli_freshness"]),
             "unknown": {"records": len(buckets["unknown"])},
         }
     )
@@ -925,10 +1028,142 @@ def _read_artifact_download_contract(manifest_path: Path) -> dict[str, Any] | No
     return _artifact_download_contract(manifest, manifest_path)
 
 
+def _compact_artifact_ref(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    return {
+        "id": value.get("id"),
+        "name": value.get("name") or "",
+        "created_at": value.get("created_at") or "",
+        "updated_at": value.get("updated_at") or "",
+    }
+
+
+def _artifact_selection_contract(selection: dict[str, Any], selection_path: Path) -> dict[str, Any]:
+    statuses: list[dict[str, Any]] = []
+    priority_statuses = selection.get("priority_family_statuses")
+    if isinstance(priority_statuses, list):
+        for item in priority_statuses:
+            if not isinstance(item, dict):
+                continue
+            family = str(item.get("family") or "")
+            if family not in _TERMINAL_ARTIFACT_FAMILIES:
+                continue
+            statuses.append(
+                {
+                    "family": family,
+                    "status": str(item.get("status") or "unknown"),
+                    "candidate_count": _safe_int(item.get("candidate_count")) or 0,
+                    "selected_count": _safe_int(item.get("selected_count")) or 0,
+                    "latest_candidate": _compact_artifact_ref(item.get("latest_candidate")),
+                    "selected_artifact": _compact_artifact_ref(item.get("selected_artifact")),
+                }
+            )
+
+    seen = {item["family"] for item in statuses}
+    candidate_counts = selection.get("candidate_family_counts")
+    selected_counts = selection.get("selected_family_counts")
+    candidate_counts = candidate_counts if isinstance(candidate_counts, dict) else {}
+    selected_counts = selected_counts if isinstance(selected_counts, dict) else {}
+    for family in _TERMINAL_ARTIFACT_FAMILIES:
+        if family in seen:
+            continue
+        candidate_count = _safe_int(candidate_counts.get(family)) or 0
+        selected_count = _safe_int(selected_counts.get(family)) or 0
+        status = "selected" if selected_count else "missing"
+        statuses.append(
+            {
+                "family": family,
+                "status": status,
+                "candidate_count": candidate_count,
+                "selected_count": selected_count,
+                "latest_candidate": None,
+                "selected_artifact": None,
+            }
+        )
+
+    statuses.sort(key=lambda item: _TERMINAL_ARTIFACT_FAMILIES.index(item["family"]))
+    missing_terminal = [
+        item["family"]
+        for item in statuses
+        if item["status"] == "missing" or item["selected_count"] <= 0
+    ]
+    return {
+        "schema": selection.get("schema") or "unknown",
+        "path": selection_path.as_posix(),
+        "status": selection.get("status") or "unknown",
+        "selected_count": _safe_int(selection.get("selected_count")) or 0,
+        "candidate_count": _safe_int(selection.get("candidate_count")) or 0,
+        "missing_priority_families": list(selection.get("missing_priority_families") or []),
+        "terminal_artifact_families": statuses,
+        "missing_terminal_artifact_families": missing_terminal,
+    }
+
+
+def _read_artifact_selection_contract(selection_path: Path) -> dict[str, Any] | None:
+    if not selection_path.exists():
+        return None
+    try:
+        selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "schema": "workflows-weekly-metrics-artifact-selection/v1",
+            "path": selection_path.as_posix(),
+            "status": "error",
+            "error_message": str(exc),
+            "selected_count": 0,
+            "candidate_count": 0,
+            "missing_priority_families": [],
+            "terminal_artifact_families": [],
+            "missing_terminal_artifact_families": list(_TERMINAL_ARTIFACT_FAMILIES),
+        }
+    if not isinstance(selection, dict):
+        return {
+            "schema": "workflows-weekly-metrics-artifact-selection/v1",
+            "path": selection_path.as_posix(),
+            "status": "error",
+            "error_message": "selection-not-object",
+            "selected_count": 0,
+            "candidate_count": 0,
+            "missing_priority_families": [],
+            "terminal_artifact_families": [],
+            "missing_terminal_artifact_families": list(_TERMINAL_ARTIFACT_FAMILIES),
+        }
+    return _artifact_selection_contract(selection, selection_path)
+
+
+def _format_terminal_artifact_statuses(artifact_selection: dict[str, Any] | None) -> str:
+    if not artifact_selection:
+        return "n/a"
+    statuses = artifact_selection.get("terminal_artifact_families")
+    if not isinstance(statuses, list) or not statuses:
+        return "n/a"
+    parts = []
+    for item in statuses:
+        if not isinstance(item, dict):
+            continue
+        family = item.get("family") or "unknown"
+        status = item.get("status") or "unknown"
+        selected = item.get("selected_count") or 0
+        candidates = item.get("candidate_count") or 0
+        parts.append(f"{family}: {status} ({selected}/{candidates})")
+    return ", ".join(parts) if parts else "n/a"
+
+
+def _format_missing_terminal_artifact_families(
+    artifact_selection: dict[str, Any] | None,
+) -> str:
+    if not artifact_selection:
+        return "n/a"
+    missing = artifact_selection.get("missing_terminal_artifact_families") or []
+    return ", ".join(str(item) for item in missing) if missing else "none"
+
+
 def build_summary(
     entries: list[dict[str, Any]],
     errors: int,
     parse_error_details: list[ParseErrorDetail] | None = None,
+    artifact_selection: dict[str, Any] | None = None,
 ) -> str:
     buckets = _bucket_entries(entries)
     timestamps: list[_dt.datetime] = []
@@ -947,6 +1182,7 @@ def build_summary(
         buckets["verifier_followup_ledger"],
     )
     autopilot = _summarise_autopilot(buckets["autopilot"])
+    codex_cli_freshness = _summarise_codex_cli_freshness(buckets["codex_cli_freshness"])
 
     now = _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     lines = [
@@ -959,6 +1195,7 @@ def build_summary(
             f"verifier {verifier['runs']}, "
             f"terminal dispositions {verifier['terminal_records']}, "
             f"verifier follow-up ledgers {verifier['ledger_records']}, "
+            f"codex CLI freshness {codex_cli_freshness['records']}, "
             f"autopilot {autopilot['records']}, "
             f"unknown {len(buckets['unknown'])})"
         ),
@@ -1001,6 +1238,11 @@ def build_summary(
             f"- Terminal disposition records: {verifier['terminal_records']}",
             f"- Terminal dispositions: {_format_counter(verifier['terminal_dispositions'])}",
             f"- Terminal disposition sources: {_format_counter(verifier['terminal_sources'])}",
+            f"- Terminal artifact families: {_format_terminal_artifact_statuses(artifact_selection)}",
+            (
+                "- Missing terminal artifact families: "
+                f"{_format_missing_terminal_artifact_families(artifact_selection)}"
+            ),
             f"- Verifier follow-up ledger records: {verifier['ledger_records']}",
             f"- Verifier follow-up ledger dispositions: {_format_counter(verifier['ledger_dispositions'])}",
             f"- Verifier follow-up ledger PRs: {verifier['ledger_prs']}",
@@ -1019,6 +1261,7 @@ def build_summary(
                 f"{verifier['ledger_policy_depth_limit_exceeded']}"
             ),
             f"- Verifier models: {_format_counter(verifier['verifier_models'])}",
+            f"- Verifier CLI versions: {_format_counter(verifier['verifier_cli_versions'])}",
             f"- Unsupported verifier models: {_format_counter(verifier['unsupported_verifier_models'])}",
             (
                 "- Unsupported model dispositions: "
@@ -1034,6 +1277,25 @@ def build_summary(
             ),
             f"- Model selection reasons: {_format_counter(verifier['model_selection_reasons'])}",
             f"- Verifier modes: {_format_counter(verifier['verifier_modes'])}",
+            "",
+            "## Codex CLI Freshness",
+            f"- Records: {codex_cli_freshness['records']}",
+            f"- Statuses: {_format_counter(codex_cli_freshness['statuses'])}",
+            f"- Packages: {_format_counter(codex_cli_freshness['packages'])}",
+            f"- Pinned versions: {_format_counter(codex_cli_freshness['pinned_versions'])}",
+            f"- Latest versions: {_format_counter(codex_cli_freshness['latest_versions'])}",
+            f"- Outdated records: {codex_cli_freshness['outdated_records']}",
+            (
+                "- Latest unavailable records: "
+                f"{codex_cli_freshness['latest_unavailable_records']}"
+            ),
+            (
+                "- Max version delta: "
+                f"major {codex_cli_freshness['max_version_delta']['major']}, "
+                f"minor {codex_cli_freshness['max_version_delta']['minor']}, "
+                f"patch {codex_cli_freshness['max_version_delta']['patch']}"
+            ),
+            f"- Update targets: {_format_counter(codex_cli_freshness['update_targets'])}",
         ]
     )
 
@@ -1078,6 +1340,7 @@ def build_summary_contract(
     entries: list[dict[str, Any]],
     parse_error_details: list[ParseErrorDetail],
     artifact_downloads: dict[str, Any] | None = None,
+    artifact_selection: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     entry_buckets = _bucket_entries(entries)
     buckets: dict[str, int] = Counter(
@@ -1104,6 +1367,8 @@ def build_summary_contract(
     }
     if artifact_downloads is not None:
         contract["artifact_downloads"] = artifact_downloads
+    if artifact_selection is not None:
+        contract["artifact_selection"] = artifact_selection
     if timestamps:
         contract["range"] = {
             "earliest": min(timestamps).isoformat().replace("+00:00", "Z"),
@@ -1122,6 +1387,10 @@ def main() -> int:
         os.environ.get("METRICS_ARTIFACT_DOWNLOAD_MANIFEST_JSON", _DEFAULT_DOWNLOAD_MANIFEST_PATH)
     )
     artifact_downloads = _read_artifact_download_contract(download_manifest_path)
+    artifact_selection_path = Path(
+        os.environ.get("METRICS_ARTIFACT_SELECTION_JSON", _DEFAULT_ARTIFACT_SELECTION_PATH)
+    )
+    artifact_selection = _read_artifact_selection_contract(artifact_selection_path)
 
     files = _gather_metrics_files(metrics_paths, metrics_dir)
     if not files:
@@ -1130,7 +1399,7 @@ def main() -> int:
         output_json_path.parent.mkdir(parents=True, exist_ok=True)
         output_json_path.write_text(
             json.dumps(
-                build_summary_contract([], [], artifact_downloads),
+                build_summary_contract([], [], artifact_downloads, artifact_selection),
                 indent=2,
                 sort_keys=True,
             )
@@ -1141,8 +1410,18 @@ def main() -> int:
         return 0
 
     entries, parse_error_details = _read_ndjson(files)
-    summary = build_summary(entries, _parse_error_count(parse_error_details), parse_error_details)
-    summary_contract = build_summary_contract(entries, parse_error_details, artifact_downloads)
+    summary = build_summary(
+        entries,
+        _parse_error_count(parse_error_details),
+        parse_error_details,
+        artifact_selection,
+    )
+    summary_contract = build_summary_contract(
+        entries,
+        parse_error_details,
+        artifact_downloads,
+        artifact_selection,
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(summary, encoding="utf-8")
