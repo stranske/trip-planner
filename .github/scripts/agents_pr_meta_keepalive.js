@@ -661,6 +661,15 @@ async function detectKeepalive({ core, github, context, env = process.env }) {
     outputs.source_ref = sourceContext.sourceRef;
   }
 
+  if (sourceContext.noAutomation) {
+    outputs.reason = 'no-automation-source-context';
+    outputs.dispatch = 'false';
+    core.info(
+      `Keepalive dispatch skipped: PR source context opts out of automation (${formatSourceContextForLog(sourceContext)}).`,
+    );
+    return finalise();
+  }
+
   let reactions = [];
   try {
     reactions = await github.paginate(github.rest.reactions.listForIssueComment, {
