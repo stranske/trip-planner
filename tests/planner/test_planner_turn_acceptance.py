@@ -25,6 +25,7 @@ and link the implementation issue.
 
 from __future__ import annotations
 
+import importlib
 import inspect
 
 import pytest
@@ -78,19 +79,23 @@ def test_tpp_approval_flow_round_trip_from_planner_turn() -> None:
     This test fails when those entry points are absent so the implementer has a
     clear next step.
     """
-    try:
-        from trip_planner.integrations.tpp import (  # noqa: F401
-            poll_approval_status,
-            request_approval,
-        )
-    except ImportError as exc:
+    # importlib + hasattr keeps mypy/static-analysis happy while still
+    # asserting the runtime contract: we expect these symbols to be missing
+    # until the live TPP flow is wired through trip-planner.
+    tpp_module = importlib.import_module("trip_planner.integrations.tpp")
+    missing = [
+        name
+        for name in ("request_approval", "poll_approval_status")
+        if not hasattr(tpp_module, name)
+    ]
+    if missing:
         pytest.fail(
             "TPP approval-flow contract is not yet wired into "
-            f"trip_planner.integrations.tpp: {exc}. Required by "
-            "docs/live-tpp-execution-reoptimization-epic.md. Implement "
-            "``request_approval`` and ``poll_approval_status`` (or the "
-            "equivalent named entry points referenced in the epic) and route "
-            "them from a planner-turn tool call so the round-trip "
+            f"trip_planner.integrations.tpp: missing entry points {missing}. "
+            "Required by docs/live-tpp-execution-reoptimization-epic.md. "
+            "Implement ``request_approval`` and ``poll_approval_status`` (or "
+            "the equivalent named entry points referenced in the epic) and "
+            "route them from a planner-turn tool call so the round-trip "
             "(permission request → approval evidence → confirmation) is "
             "exercisable."
         )
