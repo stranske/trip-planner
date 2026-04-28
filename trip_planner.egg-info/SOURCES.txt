@@ -1,10 +1,12 @@
 README.md
 pyproject.toml
 scripts/__init__.py
+scripts/aggregate_agent_metrics.py
 scripts/autopilot_metrics_collector.py
 scripts/autopilot_step_timer.py
 scripts/build_html.py
 scripts/calc_penalty.py
+scripts/check_full_product_verification.py
 scripts/ci_coverage_delta.py
 scripts/ci_history.py
 scripts/ci_metrics.py
