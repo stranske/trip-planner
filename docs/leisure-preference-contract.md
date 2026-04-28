@@ -10,12 +10,18 @@ This package is the source of truth for the first implementation pass of the lei
   - canonical dataclass contracts for `LeisurePreferenceProfile` and its main nested records
 - `trip_planner/preferences/schema.py`
   - first-tier dimension keys, hybrid-factor keys, polarity map, and other schema constants
+- `trip_planner/preferences/questionnaire.py`
+  - stable question ids, answer types (`choice`, `scale`, `integer`, `boolean`, `text_list`), allowed values, defaults, and missing-answer behavior; `validate_response()` collects all validation errors in one pass
+- `trip_planner/preferences/normalization.py`
+  - maps raw questionnaire answers to `NormalizedPreferences`; Likert 1–5 maps to `[-1.0, 1.0]` axis for tradeoff dimensions and `[0.0, 1.0]` probability for budget/salience; explicit answers get confidence 0.7, defaults get 0.1
 - `trip_planner/preferences/evidence.py`
   - evidence records for direct statements, tradeoff choices, scenario reactions, concrete option choices, and revisions
 - `trip_planner/preferences/evidence_catalog.py`
   - allowed evidence pathways and strength levels for tradeoffs, hybrid factors, and anchors
 - `trip_planner/preferences/legacy_request_adapter.py`
   - narrow compatibility adapter from the repo's older `request.json` shape into the canonical contract
+- `tests/fixtures/preferences/questionnaire_responses.json`
+  - fixture responses covering complete, partial, contradictory, and invalid scenarios; used by normalization tests
 - `tests/fixtures/preferences/leisure_traveler_corpus.json`
   - regression corpus of leisure archetypes and tension cases used to validate future resolver work
 - `tests/preferences/fixture_corpus.py`
