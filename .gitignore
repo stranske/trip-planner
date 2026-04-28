@@ -14,11 +14,7 @@ __pycache__/
 .mypy_cache/
 .venv/
 
-# Application JavaScript dependencies belong under frontend/.
-# Keep repo-root installs out of git while preserving the workflow-local vendored helpers.
-node_modules/
-!.github/scripts/node_modules/
-!.github/scripts/node_modules/**
+# JavaScript dependencies — never track node_modules; use npm ci to install.
 node_modules/
 dist/
 *.tsbuildinfo

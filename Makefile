@@ -6,7 +6,7 @@ test:
 install:
 	python -m venv .venv
 	.venv/bin/pip install -e ".[dev]"
-	npm --prefix frontend install
+	npm --prefix frontend ci
 
 runtime-backend:
 	python -m uvicorn trip_planner.app.main:app --reload --host 127.0.0.1 --port 8000

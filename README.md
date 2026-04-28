@@ -116,7 +116,7 @@ If you prefer to manage the virtualenv yourself:
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[dev]"
-npm --prefix frontend install
+npm --prefix frontend ci
 ```
 
 `make runtime-check` and `make runtime-smoke` require those installs to have completed. If either the backend dev extras or frontend dependencies are missing, the check script exits early with instructions pointing back to `make install`.
@@ -125,8 +125,7 @@ Repo dependency layout:
 
 - Python tooling installs into the active `.venv` from the repo root.
 - Application JavaScript dependencies install under `frontend/node_modules`.
-- Workflow automation keeps its own vendored helpers under `.github/scripts/node_modules`.
-- Do not create or commit a repo-root `node_modules/`; CI and local runtime commands do not depend on it.
+- Do not create or commit `node_modules/` anywhere in the repo; use `npm ci` to install from the lock file.
 - `TRIP_PLANNER_DATABASE_URL` is optional for local work; if unset, the backend falls back to the default SQLite path under the repo.
 
 Run the full stack together from the repo root:
