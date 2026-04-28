@@ -1,0 +1,65 @@
+{
+  "schema_version": "0.1.0",
+  "records": [
+    {
+      "name": "explicit-answer",
+      "dimension": "structure_vs_elasticity",
+      "signal_type": "explicit_answer",
+      "value": -0.62,
+      "source": "user_message",
+      "confidence": 0.7,
+      "observed_at": "2026-04-20T14:00:00Z",
+      "provenance": {
+        "source_id": "msg-001",
+        "channel": "chat",
+        "captured_by": "planner-turn-1"
+      },
+      "evidence_type": "direct_statement"
+    },
+    {
+      "name": "revealed-behavior",
+      "dimension": "movement_vs_friction",
+      "signal_type": "revealed_behavior",
+      "value": -0.74,
+      "source": "option_menu",
+      "confidence": 0.86,
+      "observed_at": "2026-04-24T10:30:00Z",
+      "provenance": {
+        "source_id": "choice-775",
+        "channel": "option-comparison",
+        "captured_by": "planner-turn-3"
+      },
+      "evidence_type": "option_selection"
+    },
+    {
+      "name": "default-assumption",
+      "dimension": "historic_vs_contemporary",
+      "signal_type": "default_assumption",
+      "value": 0.15,
+      "source": "planner_inference_review",
+      "confidence": 0.1,
+      "observed_at": "2026-01-05T09:00:00Z",
+      "provenance": {
+        "source_id": "inference-42",
+        "channel": "model-inference",
+        "captured_by": "normalization-pass"
+      },
+      "evidence_type": "scenario_reaction"
+    },
+    {
+      "name": "conflicting-explicit",
+      "dimension": "movement_vs_friction",
+      "signal_type": "explicit_answer",
+      "value": 0.58,
+      "source": "structured_input",
+      "confidence": 0.67,
+      "observed_at": "2026-04-26T08:00:00Z",
+      "provenance": {
+        "source_id": "form-88",
+        "channel": "questionnaire",
+        "captured_by": "planner-turn-4"
+      },
+      "evidence_type": "direct_statement"
+    }
+  ]
+}
