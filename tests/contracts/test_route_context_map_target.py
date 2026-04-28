@@ -21,12 +21,8 @@ from pathlib import Path
 
 import pytest
 
-
 _FIXTURE_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "fixtures"
-    / "maps"
-    / "route_context_map_target.json"
+    Path(__file__).resolve().parents[1] / "fixtures" / "maps" / "route_context_map_target.json"
 )
 
 
@@ -144,7 +140,9 @@ def test_route_context_map_target_segments_emit_optional_warning_field() -> None
             )
 
 
-def test_route_context_map_target_scenarios_carry_metrics_estimated_total_currency_when_present() -> None:
+def test_route_context_map_target_scenarios_carry_metrics_estimated_total_currency_when_present() -> (
+    None
+):
     """``metrics.estimated_total`` is optional, but if present must carry currency + amounts.
 
     The map surface formats this via Intl.NumberFormat. A scenario carrying a

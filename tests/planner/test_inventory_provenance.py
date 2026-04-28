@@ -28,6 +28,7 @@ from trip_planner.contracts import ItineraryObjectives
 from trip_planner.itinerary import assemble_itinerary_scenarios, evaluate_bundle_feasibility
 from trip_planner.options import InventoryBundle
 from trip_planner.ranking import LeisureRankingEngine
+from trip_planner.ranking.models import RankedResultSet
 from trip_planner.sources import SourceQuery
 
 from tests.preferences.fixture_corpus import build_profile_from_overrides
@@ -247,7 +248,7 @@ def test_generated_destination_has_source_ref_with_stable_source_id() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _rank_bundles(bundles: list[InventoryBundle]) -> object:
+def _rank_bundles(bundles: list[InventoryBundle]) -> RankedResultSet:
     engine = LeisureRankingEngine()
     return engine.rank_bundles(
         build_profile_from_overrides({}),

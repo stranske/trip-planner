@@ -68,7 +68,9 @@ def db_session_with_fixture_trip(
 
     factory = get_session_factory()
     with factory() as session:
-        user = create_account(session, email="gap@example.com", password="password123", display_name="Gap")
+        user = create_account(
+            session, email="gap@example.com", password="password123", display_name="Gap"
+        )
         trip_id = "trip-leisure-kyoto-draft"
         record = PersistedTrip(
             trip_id=trip_id,

@@ -207,7 +207,7 @@ def _resolve_submission_response(
             proposal_id=request.proposal_id,
             submitted_at=request.submitted_at,
             metadata=dict(request.metadata),
-    )
+        )
     return HTTPTPPIntegrationClient().submit_proposal(live_request)
 
 
@@ -389,8 +389,7 @@ def _build_summary(
     if follow_up.get("summary"):
         highlights = [str(follow_up["summary"]), *highlights][:3]
     submission_requires_polling = (
-        execution_status.get("terminal") is False
-        or evaluation_transport.get("terminal") is False
+        execution_status.get("terminal") is False or evaluation_transport.get("terminal") is False
     )
     return {
         "trip_id": proposal_payload.get("trip_id"),
@@ -440,9 +439,7 @@ def _resolved_follow_up_payload(record: PersistedProposalState) -> dict[str, Any
     )
 
 
-def _resolve_manual_follow_up_path(
-    *, existing_follow_up: dict[str, Any], status: str
-) -> str:
+def _resolve_manual_follow_up_path(*, existing_follow_up: dict[str, Any], status: str) -> str:
     if status in _FOLLOW_UP_PATH_BY_STATUS:
         return _FOLLOW_UP_PATH_BY_STATUS[status]
     if status in _FOLLOW_UP_STATUSES_USING_EXISTING_PATH:
@@ -525,8 +522,8 @@ def _update_submission_record_from_poll(
     submission_record["status_endpoint"] = response.status_endpoint or submission_record.get(
         "status_endpoint"
     )
-    submission_record["last_poll_status_endpoint"] = response.status_endpoint or submission_record.get(
-        "last_poll_status_endpoint"
+    submission_record["last_poll_status_endpoint"] = (
+        response.status_endpoint or submission_record.get("last_poll_status_endpoint")
     )
     submission_record["execution_id"] = execution_id
     if response_payload.get("queue_state") is not None:
@@ -818,7 +815,9 @@ def save_workspace_proposal_evaluation(
         existing=existing,
         proposal_version=proposal_version,
     )
-    evaluation = TPPEvaluationResultIngestionService(_PassiveTPPClient(response)).fetch_evaluation_result(
+    evaluation = TPPEvaluationResultIngestionService(
+        _PassiveTPPClient(response)
+    ).fetch_evaluation_result(
         request,
         proposal_version=proposal_version,
         scenario_id=scenario_id,

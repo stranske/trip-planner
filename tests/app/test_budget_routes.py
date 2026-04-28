@@ -10,9 +10,7 @@ from trip_planner.persistence.db import reset_database_state
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    monkeypatch.setenv(
-        "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'budget.db'}"
-    )
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'budget.db'}")
     reset_database_state()
     app = create_app()
 
@@ -103,7 +101,10 @@ def test_workspace_budget_route_persists_plan_and_spend_events(client: TestClien
     workspace_payload = workspace.json()
     assert workspace_payload["budget_state"]["summary"]["planned_total"] == 920
     assert workspace_payload["budget_state"]["summary"]["actual_total"] == 42.5
-    assert workspace_payload["trip_record"]["artifact_refs"]["budget_state_id"] == "budget-plan:" + trip_id
+    assert (
+        workspace_payload["trip_record"]["artifact_refs"]["budget_state_id"]
+        == "budget-plan:" + trip_id
+    )
     assert workspace_payload["session"]["active_budget_plan_id"] == "budget-plan:" + trip_id
 
 

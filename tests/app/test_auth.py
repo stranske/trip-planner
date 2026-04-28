@@ -15,9 +15,7 @@ from trip_planner.persistence.db import reset_database_state
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    monkeypatch.setenv(
-        "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'trip-planner.db'}"
-    )
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'trip-planner.db'}")
     reset_database_state()
     app = create_app()
 
@@ -77,9 +75,7 @@ def test_login_logout_and_workspace_auth_gate(client: TestClient) -> None:
 
     workspace = client.get("/api/workspace/trip-leisure-kyoto-draft")
     assert workspace.status_code == 200
-    assert (
-        workspace.json()["trip_record"]["trip"]["trip_id"] == "trip-leisure-kyoto-draft"
-    )
+    assert workspace.json()["trip_record"]["trip"]["trip_id"] == "trip-leisure-kyoto-draft"
 
     logout = client.post("/api/auth/logout")
     assert logout.status_code == 200
@@ -122,9 +118,7 @@ def test_signup_sets_secure_cookie_for_https_requests(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(
-        "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'trip-planner.db'}"
-    )
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'trip-planner.db'}")
     reset_database_state()
     app = create_app()
 

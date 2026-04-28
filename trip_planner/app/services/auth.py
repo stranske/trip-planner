@@ -76,9 +76,7 @@ def verify_password(password: str, encoded_hash: str) -> bool:
     if len(salt) != 16 or not stored_digest:
         return False
 
-    provided_digest = hashlib.scrypt(
-        password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1
-    )
+    provided_digest = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1)
     return hmac.compare_digest(stored_digest, provided_digest)
 
 
@@ -105,13 +103,9 @@ def create_account(
     validated_password = validate_password(password)
     validated_name = validate_display_name(display_name)
 
-    existing = db_session.scalar(
-        select(UserAccount).where(UserAccount.email == normalized_email)
-    )
+    existing = db_session.scalar(select(UserAccount).where(UserAccount.email == normalized_email))
     if existing is not None:
-        raise HTTPException(
-            status_code=409, detail="An account with that email already exists."
-        )
+        raise HTTPException(status_code=409, detail="An account with that email already exists.")
 
     user = UserAccount(
         user_id=f"user:{secrets.token_hex(8)}",
@@ -128,19 +122,13 @@ def create_account(
 
 def authenticate_user(db_session: Session, *, email: str, password: str) -> UserAccount:
     normalized_email = normalize_email(email)
-    user = db_session.scalar(
-        select(UserAccount).where(UserAccount.email == normalized_email)
-    )
+    user = db_session.scalar(select(UserAccount).where(UserAccount.email == normalized_email))
     if user is None or not verify_password(password, user.password_hash):
-        raise HTTPException(
-            status_code=401, detail="Email or password was not recognized."
-        )
+        raise HTTPException(status_code=401, detail="Email or password was not recognized.")
     return user
 
 
-def create_session_for_user(
-    db_session: Session, *, user: UserAccount
-) -> tuple[str, AuthSession]:
+def create_session_for_user(db_session: Session, *, user: UserAccount) -> tuple[str, AuthSession]:
     raw_token = secrets.token_urlsafe(32)
     session_record = AuthSession(
         session_id=f"session:{secrets.token_hex(8)}",
@@ -200,7 +188,5 @@ def require_authenticated_user(
         token=request.cookies.get(SESSION_COOKIE_NAME),
     )
     if user is None:
-        raise HTTPException(
-            status_code=401, detail="Sign in to access the planner workspace."
-        )
+        raise HTTPException(status_code=401, detail="Sign in to access the planner workspace.")
     return user
