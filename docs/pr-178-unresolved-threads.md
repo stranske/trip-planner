@@ -4,14 +4,14 @@ This file tracks the unresolved inline review threads for PR #178 and records wh
 
 ## Status
 
-The repo now supports loading review threads from a local JSON snapshot via `node scripts/list_unresolved_pr_threads.js --input <path>`.
-It also supports `--expect-count <n>` so the same command can fail fast when the unresolved-thread count does not match the expected live PR state.
+As of April 28, 2026, PR #178 still exposes 4 unresolved review threads in the public GitHub conversation HTML (`review-thread-collapsible data-resolved="false"`). This means the "zero unresolved threads" acceptance criterion is still open until those threads are resolved in the GitHub UI.
 
-The exact 4 unresolved threads for PR #178 are still not available in this environment because live GitHub review-thread access is blocked and no exported PR #178 snapshot is checked into the repository yet.
+The inventory below is now populated from the live PR #178 conversation page and includes thread IDs, thread URLs, locations, classifications, and rationales.
 
-The checked-in fixture at `tests/fixtures/scripts/review_threads_snapshot.json` is synthetic test data only. It must not be used to classify or disposition PR #178 review threads.
+The repo supports loading review threads from a local JSON snapshot via `node scripts/list_unresolved_pr_threads.js --input <path>`.
+It also supports `--expect-count <n>` so the same command can fail fast when the unresolved-thread count does not match the expected state.
 
-When a verified snapshot or `GITHUB_TOKEN` is available, use one of these commands before populating the sections below:
+When a verified snapshot or `GITHUB_TOKEN` is available, use one of these commands:
 
 ```bash
 node scripts/list_unresolved_pr_threads.js stranske/trip-planner 178 --format markdown --expect-count 4
@@ -108,48 +108,48 @@ The acceptance checker fails loudly when the inventory is still incomplete, and 
 Use `--github-ui-confirmed` only after manually confirming in the PR #178 GitHub UI that no unresolved inline review threads remain.
 Use `--results` to reuse a persisted `resolve_disposition_threads_from_manifest.js --write-results ...` artifact instead of manually re-entering the doc path, PR number, and remaining snapshot path.
 
-## Thread Template
+## Thread Inventory
 
 ### Thread 1
 
-- Thread ID:
-- Original Thread URL:
-- Location:
-- Classification:
-- Follow-up PR:
-- Rationale:
-- Content:
-- Outdated:
+- Thread ID: 1762828877
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2684232287
+- Location: `.github/workflows/autofix.yml` (line 117 in the reviewed diff)
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/622
+- Rationale: Reviewer requested a wording correction from `autofix-loop` to `keepalive-loop`; current workflow text no longer uses `autofix-loop`, so this is treated as fixed via follow-up updates.
+- Content: The comment says the note should reference `keepalive-loop` instead of `autofix-loop`.
+- Outdated: no
 
 ### Thread 2
 
-- Thread ID:
-- Original Thread URL:
-- Location:
-- Classification:
-- Follow-up PR:
-- Rationale:
-- Content:
-- Outdated:
+- Thread ID: 1762828888
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2684232300
+- Location: `.github/workflows/agents-keepalive-loop.yml` (line 38 in the reviewed diff)
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/622
+- Rationale: Reviewer flagged `FALLBACK_TOKEN` as unused. Current workflow no longer declares that variable, so this is treated as fixed via follow-up updates.
+- Content: The comment asks to remove an unused workflow-level `FALLBACK_TOKEN` environment variable.
+- Outdated: no
 
 ### Thread 3
 
-- Thread ID:
-- Original Thread URL:
-- Location:
-- Classification:
-- Follow-up PR:
-- Rationale:
-- Content:
-- Outdated:
+- Thread ID: 1762828901
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2684232315
+- Location: `.github/workflows/agents-63-issue-intake.yml` (line 112 context in the reviewed diff)
+- Classification: fix
+- Follow-up PR: https://github.com/stranske/trip-planner/pull/622
+- Rationale: Same wording correction request as Thread 1; current workflow references `keepalive-loop`, so this is treated as fixed via follow-up updates.
+- Content: The comment says the note should reference `keepalive-loop` instead of `autofix-loop`.
+- Outdated: no
 
 ### Thread 4
 
-- Thread ID:
-- Original Thread URL:
-- Location:
-- Classification:
-- Follow-up PR:
-- Rationale:
-- Content:
-- Outdated:
+- Thread ID: 1762828908
+- Original Thread URL: https://github.com/stranske/trip-planner/pull/178#discussion_r2684232323
+- Location: `.github/workflows/agents-63-issue-intake.yml` (line 183 in the reviewed diff)
+- Classification: disposition
+- Follow-up PR: N/A
+- Rationale: Reviewer asked for intent validation of `mode: "create"` and `force_mode: true`. Current workflow still carries that behavior intentionally; this requires a PR-thread disposition comment/resolve action in GitHub UI rather than additional code change in this repo.
+- Content: The comment asks to verify and document the intentional behavior change from `invite` to `create` with forced mode.
+- Outdated: no
