@@ -1,7 +1,12 @@
-.PHONY: test runtime-backend runtime-frontend runtime-dev runtime-check runtime-smoke runtime-production-check runtime-preview-smoke runtime-full-product-check full-product-check
+.PHONY: test install runtime-backend runtime-frontend runtime-dev runtime-check runtime-smoke runtime-production-check runtime-preview-smoke runtime-full-product-check full-product-check
 
 test:
 	python -m pytest
+
+install:
+	python -m venv .venv
+	.venv/bin/pip install -e ".[dev]"
+	npm --prefix frontend install
 
 runtime-backend:
 	python -m uvicorn trip_planner.app.main:app --reload --host 127.0.0.1 --port 8000
