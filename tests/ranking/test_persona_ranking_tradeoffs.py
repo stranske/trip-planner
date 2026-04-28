@@ -6,6 +6,8 @@ affect how options are scored — not just which options score highest overall, 
 specifically which tradeoffs are resolved differently across profile types.
 """
 
+import json
+from pathlib import Path
 from typing import Any, cast
 
 from trip_planner.candidates import CandidateSeed, CandidateSet
@@ -21,7 +23,6 @@ from trip_planner.contracts import (
     RecoveryExpectations,
     TransportStrategy,
 )
-from trip_planner.itinerary.feasibility import FeasibilityAssessment
 from trip_planner.options import (
     ActivityOption,
     BundleCompositionSummary,
@@ -33,12 +34,8 @@ from trip_planner.options import (
     LodgingOption,
     TransportOption,
 )
-from trip_planner.preferences import LeisurePreferenceProfile
 from trip_planner.ranking import LeisureRankingEngine
-from tests.preferences.fixture_corpus import build_profile_from_overrides, load_fixture_map
-
-import json
-from pathlib import Path
+from tests.preferences.fixture_corpus import load_fixture_map
 
 # ---------------------------------------------------------------------------
 # Shared fixture builders — mirrors the standard candidate set used in
@@ -254,7 +251,7 @@ def _result_option_id(result: object) -> str:
 # Objectives presets used across multiple tests
 # ---------------------------------------------------------------------------
 
-_COMFORT_OBJECTIVES = dict(
+_COMFORT_OBJECTIVES: dict[str, Any] = dict(
     route_shape="hub_and_spoke",
     discovery_style="balanced",
     protect_open_blocks=False,
@@ -263,7 +260,7 @@ _COMFORT_OBJECTIVES = dict(
     transit_is_feature=False,
 )
 
-_DISCOVERY_OBJECTIVES = dict(
+_DISCOVERY_OBJECTIVES: dict[str, Any] = dict(
     route_shape="mixed",
     discovery_style="discovery_forward",
     protect_open_blocks=True,
@@ -272,7 +269,7 @@ _DISCOVERY_OBJECTIVES = dict(
     transit_is_feature=True,
 )
 
-_STRUCTURED_OBJECTIVES = dict(
+_STRUCTURED_OBJECTIVES: dict[str, Any] = dict(
     route_shape="hub_and_spoke",
     discovery_style="iconic",
     protect_open_blocks=False,

@@ -157,10 +157,9 @@ def test_family_leisure_persona_encodes_recovery_and_stable_logistics() -> None:
     ), f"family-leisure should lean toward structure, got {structure.value}"
 
     # Quality floors exist for family-suitable lodging
-    assert profile.budget_model.quality_floors.get(
-        "lodging"
-    ), "family-leisure must define a lodging quality floor"
-    assert "family" in profile.budget_model.quality_floors["lodging"].lower()
+    lodging_floor = profile.budget_model.quality_floors.get("lodging")
+    assert lodging_floor, "family-leisure must define a lodging quality floor"
+    assert "family" in lodging_floor.lower()
 
     # Tension flag is present reflecting pacing vs breadth conflict
     assert profile.tension_flags, "family-leisure should surface a pacing tension flag"
@@ -256,9 +255,6 @@ def test_persona_fixtures_have_distinct_dominant_dimension_signatures() -> None:
         fixture_map["accessibility-aware"].intended_interpretation.dominant_dimensions
     )
     family = set(fixture_map["family-leisure"].intended_interpretation.dominant_dimensions)
-    business = set(
-        fixture_map["business-policy-constrained"].intended_interpretation.dominant_dimensions
-    )
 
     # budget-focused and schedule-sensitive differ in at least one dominant dimension
     assert budget != schedule, "budget-focused and schedule-sensitive should have distinct profiles"
