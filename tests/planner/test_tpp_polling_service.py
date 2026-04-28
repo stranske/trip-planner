@@ -52,7 +52,9 @@ def test_polling_service_poll_returns_timeout_without_terminal_state() -> None:
     )
 
     assert service.poll("proposal-123") == PollingOutcome.PENDING
-    assert service.poll("proposal-123") == PollingOutcome.TIMEOUT
+    timeout_outcome = service.poll("proposal-123")
+    assert timeout_outcome == PollingOutcome.TIMEOUT
+    assert timeout_outcome not in (PollingOutcome.APPROVED, PollingOutcome.REJECTED)
 
 
 @pytest.mark.parametrize("payload", [{}, {"state": ""}, {"state": "   "}, {"state": None}])

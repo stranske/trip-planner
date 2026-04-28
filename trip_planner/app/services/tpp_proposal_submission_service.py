@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Mapping
+from typing import Any, Mapping, MutableMapping
 from uuid import uuid4
 
+from trip_planner.app.services.workspace_state import persist_tpp_proposal_id
 from trip_planner.integrations.tpp.client import TPPIntegrationClient
 from trip_planner.integrations.tpp.contracts import (
     TPPCorrelationId,
     TPPRequestEnvelope,
-    TPPResponseEnvelope,
 )
+from trip_planner.integrations.tpp.client import TPPContractError
+
+
+@dataclass(frozen=True, slots=True)
+class ProposalSubmissionResult:
+    proposal_id: str
+    success: bool
 
 
 class TPPWorkspaceProposalSubmissionService:
@@ -20,7 +28,9 @@ class TPPWorkspaceProposalSubmissionService:
     def __init__(self, client: TPPIntegrationClient) -> None:
         self._client = client
 
-    def submit(self, workspace_data: Mapping[str, Any]) -> TPPResponseEnvelope:
+    def submit(
+        self, workspace_data: Mapping[str, Any], workspace_state: MutableMapping[str, Any]
+    ) -> ProposalSubmissionResult:
         payload = dict(workspace_data)
         request_id = str(payload.get("request_id") or f"req-{uuid4()}")
         correlation_value = str(payload.get("correlation_id") or request_id)
@@ -42,7 +52,21 @@ class TPPWorkspaceProposalSubmissionService:
             proposal_id=proposal_id,
             submitted_at=submitted_at,
         )
-        return self._client.submit_proposal(request)
+        response = self._client.submit_proposal(request)
+        extracted_proposal_id = _extract_submit_proposal_id(response.result_payload)
+        persist_tpp_proposal_id(workspace_state, extracted_proposal_id)
+        return ProposalSubmissionResult(proposal_id=extracted_proposal_id, success=True)
+
+
+def _extract_submit_proposal_id(result_payload: object) -> str:
+    if not isinstance(result_payload, Mapping):
+        raise TPPContractError("TPP submit response contract requires 'result_payload'.")
+    proposal_id = result_payload.get("proposal_id")
+    if not isinstance(proposal_id, str) or not proposal_id.strip():
+        raise TPPContractError(
+            "TPP submit response contract requires non-empty 'result_payload.proposal_id'."
+        )
+    return proposal_id.strip()
 
 
 def _optional_non_empty_string(value: object) -> str | None:
