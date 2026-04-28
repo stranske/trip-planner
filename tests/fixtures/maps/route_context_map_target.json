@@ -1,0 +1,87 @@
+{
+  "_doc": "Canonical fixture for the route-context map target contract (issue #959).\nMirrors the workspace payload subset that frontend/src/components/maps/TripMap.tsx consumes. See docs/contracts/route-context-map-target.md.",
+  "trip": {
+    "trip_id": "trip-route-context-001",
+    "primary_regions": ["Chicago", "Madison"]
+  },
+  "policy_evaluation": {
+    "posture": "approval-ready"
+  },
+  "feasibility_summary": {
+    "summary_text": "All scenarios meet baseline meeting-timing constraints.",
+    "assessments": [
+      {
+        "scenario_id": "scenario-best-approval",
+        "route_attention": "low",
+        "bundle_readiness": "ready",
+        "notes": ["Direct ORD-MSN segment under burden cap."]
+      }
+    ]
+  },
+  "inventory_summary": {
+    "bundles": [
+      {
+        "bundle_id": "bundle-001",
+        "destination_names": ["Chicago", "Madison"]
+      }
+    ]
+  },
+  "runtime_scenario_comparison": {
+    "scenarios": [
+      {
+        "scenario_id": "scenario-best-approval",
+        "policy_posture": "approval-ready",
+        "route_sequence": ["dest-city-chicago", "dest-city-madison"],
+        "route_summary": "ORD → MSN with direct rental and policy-aligned lodging.",
+        "route_segments": [
+          {
+            "id": "seg-1",
+            "fromLabel": "Chicago",
+            "toLabel": "Madison",
+            "x1": 0.18,
+            "y1": 0.42,
+            "x2": 0.62,
+            "y2": 0.31,
+            "warning": null
+          }
+        ],
+        "metrics": {
+          "estimated_total": {
+            "currency": "USD",
+            "typical_amount": 1840.0,
+            "min_amount": 1820.0,
+            "max_amount": 1880.0
+          },
+          "travel_burden_score": 0.32
+        }
+      },
+      {
+        "scenario_id": "scenario-faster-with-debt",
+        "policy_posture": "approval-debt",
+        "route_sequence": ["dest-city-chicago", "dest-city-madison"],
+        "route_summary": "Premium fare with policy exception path.",
+        "route_segments": [
+          {
+            "id": "seg-1b",
+            "fromLabel": "Chicago",
+            "toLabel": "Madison",
+            "x1": 0.18,
+            "y1": 0.42,
+            "x2": 0.62,
+            "y2": 0.31,
+            "warning": "Requires exception approval before booking."
+          }
+        ],
+        "metrics": {
+          "estimated_total": {
+            "currency": "USD",
+            "typical_amount": 2410.0,
+            "min_amount": 2380.0,
+            "max_amount": 2480.0
+          },
+          "travel_burden_score": 0.18
+        }
+      }
+    ]
+  }
+}
