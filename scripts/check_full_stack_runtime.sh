@@ -3,6 +3,14 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Use .venv if present (created by `make install`), otherwise fall back to $PATH python.
+if [ -x "${repo_root}/.venv/bin/python" ]; then
+  PYTHON="${repo_root}/.venv/bin/python"
+else
+  PYTHON="python"
+fi
+
 backend_host="${BACKEND_HOST:-127.0.0.1}"
 backend_port="${BACKEND_PORT:-8000}"
 backend_url="http://${backend_host}:${backend_port}"
@@ -12,12 +20,19 @@ backend_pid=""
 
 prereq_failure() {
   cat >&2 <<'EOF'
-Full-stack runtime checks require an active virtualenv plus both dependency installs:
+Full-stack runtime checks require a virtualenv and both dependency installs.
+Run once from the repo root:
+
+  make install
+
+Or manually:
   1. python -m venv .venv && source .venv/bin/activate
   2. python -m pip install -e ".[dev]"
   3. npm --prefix frontend install
 
 Then rerun `make runtime-check` (or `make runtime-smoke`).
+`make install` creates .venv and installs both backend and frontend deps;
+no manual activation is needed before running make runtime-check afterward.
 These commands validate the local FastAPI + Vite MVP in this repo; they do not
 prove live Google Maps rendering or remote Travel-Plan-Permission transport.
 Do not create a repo-root `node_modules/`; local frontend tooling should live
@@ -29,8 +44,8 @@ EOF
 }
 
 require_backend_prereqs() {
-  if ! python -m pytest --version >/dev/null 2>&1; then
-    echo "Missing backend test dependencies (`python -m pytest` is unavailable)." >&2
+  if ! "${PYTHON}" -m pytest --version >/dev/null 2>&1; then
+    echo "Missing backend test dependencies (pytest is unavailable under ${PYTHON})." >&2
     prereq_failure
   fi
 }
@@ -62,7 +77,7 @@ cleanup() {
 }
 
 wait_for_backend() {
-  python - "${backend_url}" <<'PY'
+  "${PYTHON}" - "${backend_url}" <<'PY'
 import json
 import sys
 import time
@@ -92,12 +107,12 @@ require_backend_prereqs
 require_frontend_prereqs
 
 if [ "${smoke_only}" != "true" ]; then
-  python -m pytest tests/app/test_health.py tests/app/test_workspace.py
+  "${PYTHON}" -m pytest tests/app/test_health.py tests/app/test_workspace.py
   npm --prefix frontend test
   npm --prefix frontend run build
 fi
 
-python -m uvicorn trip_planner.app.main:app \
+"${PYTHON}" -m uvicorn trip_planner.app.main:app \
   --host "${backend_host}" \
   --port "${backend_port}" \
   >"${backend_log}" 2>&1 &

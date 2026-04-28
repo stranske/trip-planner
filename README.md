@@ -101,21 +101,24 @@ python scripts/build_html.py
 
 ## App Runtime Quick Start
 
-Create and activate a repo-local virtualenv first:
+Install all backend and frontend dependencies once from a clean checkout:
+
+```bash
+make install
+```
+
+This creates `.venv`, installs the Python dev extras into it, and installs `frontend/node_modules`. No manual venv activation is needed before running `make runtime-check` afterward — the script detects `.venv` automatically.
+
+If you prefer to manage the virtualenv yourself:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-```
-
-Then install the backend and frontend dependencies once:
-
-```bash
 python -m pip install -e ".[dev]"
 npm --prefix frontend install
 ```
 
-`make runtime-check` and `make runtime-smoke` assume those installs have already completed inside the active `.venv` and `frontend/node_modules`. If either the backend dev extras or frontend dependencies are missing, the check script exits early and points back to these commands.
+`make runtime-check` and `make runtime-smoke` require those installs to have completed. If either the backend dev extras or frontend dependencies are missing, the check script exits early with instructions pointing back to `make install`.
 
 Repo dependency layout:
 

@@ -16,7 +16,7 @@ That baseline is still required, but it is not the whole production-readiness st
 
 ## Canonical Local Sequence
 
-Run these commands from the repo root after activating `.venv` and installing `frontend/node_modules`:
+Run `make install` once from a clean checkout to create `.venv` and install all deps, then run these commands from the repo root:
 
 ```bash
 make runtime-production-check
