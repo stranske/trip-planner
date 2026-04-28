@@ -174,6 +174,16 @@ The verification path covers:
 These checks validate the local full-stack MVP that already exists in this repo. They exercise the map adapter and fallback seam with mocked provider state. They do not prove live Google Maps rendering or remote Travel-Plan-Permission transport.
 The production-focused testing plan in [docs/local-testing-plan.md](docs/local-testing-plan.md) adds the critical auth, trip, workspace, policy, proposal, and preview-verification journeys on top of that baseline.
 
+## Python Unit Tests
+
+After installing the backend dev extras (`python -m pip install -e ".[dev]"`), run the unit test suite from the repo root:
+
+```bash
+make test
+```
+
+That runs `pytest` against the `tests/` directory. `testpaths` is set in `pyproject.toml`, so `pytest` alone is equivalent. The full CI test suite also adds type checking and coverage reporting; see `.github/workflows/ci.yml` for those details.
+
 ## Optional Live Integration Env Vars
 
 The local MVP does not require live external integrations. `make runtime-check` should pass without the env vars below.
