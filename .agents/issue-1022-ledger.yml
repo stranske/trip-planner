@@ -1,0 +1,203 @@
+version: 1
+issue: 1022
+base: main
+branch: claude/issue-1022
+tasks:
+  - id: task-01
+    title: Remove seeded fixture injection from the planner inventory construction
+      path and ensure all inventory fetching routes through adapter interfaces
+    status: doing
+    started_at: '2026-04-28T15:16:52Z'
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-02
+    title: Wire the persisted trip source inventory adapter into the planner dependency
+      injection configuration
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: Update planner orchestration to fetch destinations, lodging, transport,
+      and activities exclusively through production adapter interfaces
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: Add provenance metadata to inventory bundle items during the generation
+      pipeline
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: Implement stable source ID assignment for all inventory options in the
+      generation pipeline
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: Normalize option contracts in the inventory generation pipeline to match
+      downstream ranking and itinerary expectations
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: Replace planner test setup that seeds inventory or workspace data with
+      fixtures that invoke local or fake repository adapters through production code
+      paths
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: Update planner test assertions to verify provenance metadata presence in
+      inventory items
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: Update planner test assertions to verify stable source IDs and normalized
+      option contracts in inventory items
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: Remove the handcrafted RankedResult/RankedResultSet conversion helper used
+      in itinerary assembly tests and make the itinerary-facing path consume the ranking
+      module's native output format directly within production/test code
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: Refactor ranking integration tests to use adapter-generated inventory instead
+      of seeded fixtures
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: Refactor itinerary integration tests to consume ranking module native output
+      directly without seeded-format transformations
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: Create an end-to-end integration test that passes adapter-generated inventory
+      through ranking into itinerary assembly
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: Search for and remove remaining repository test references that construct
+      seeded inventory/workspace shortcuts for the planner path, replacing them with
+      adapter-based test helpers where those tests cover the same production flow
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: Running the planner integration flow through the production service entrypoint
+      with fake/local repository adapters and without any test-seeded inventory input
+      produces an inventory bundle containing at least 1 destination option, 1 lodging
+      option, 1 transport option, and 1 activity option, and the returned bundle is
+      populated only from adapter responses exposed through the production adapter
+      interfaces, and code inspection confirms no seeded fixture injection code paths
+      are reachable from the production service entrypoint when invoked with fake/local
+      repository adapters
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-16
+    title: In the planner integration test path, replacing all seeded inventory fixture
+      builders with adapter-backed fixture setup results in planner output whose inventory
+      bundle items each include non-empty provenance metadata, a non-empty stable
+      source ID, and a normalized option contract shape that includes all fields required
+      by the ranking module input interface and itinerary assembly input interface
+      as documented in their respective type definitions
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-17
+    title: The production/test codebase contains no references in planner-path integration
+      tests or test helpers to seeded inventory injection helpers or seeded workspace
+      shortcut helpers that bypass adapter-based inventory generation
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-18
+    title: The handcrafted RankedResult/RankedResultSet conversion helper is deleted
+      from the codebase, and itinerary assembly tests pass ranking module native output
+      objects directly into itinerary assembly without any test-only conversion layer
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-19
+    title: A ranking-to-itinerary integration test using adapter-generated inventory
+      completes end to end offline by passing inventory into ranking and passing the
+      ranking output directly into itinerary assembly, with no seeded-format transformations,
+      and produces a non-empty itinerary result
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-20
+    title: Repeated execution of the adapter-based planner, ranking, and itinerary
+      integration tests with the same fake/local repository data produces identical
+      source IDs and identical provenance-bearing normalized option contracts for
+      inventory records with matching primary keys in the fake/local repository data
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-21
+    title: Repository-wide planner-related tests no longer construct seeded inventory/workspace
+      shortcuts for code paths that are intended to validate the production planner
+      flow; those tests instead use shared adapter-based helpers
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-22
+    title: The persisted trip source inventory adapter is exercised in at least one
+      planner integration test, and the test asserts that planner inventory includes
+      data originating from persisted trip source records rather than fixture-only
+      objects
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
