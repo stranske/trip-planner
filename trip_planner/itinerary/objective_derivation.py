@@ -184,8 +184,11 @@ def _budget_protection(
     interaction_biases: dict[str, float],
 ) -> BudgetProtection:
     priorities = resolved.profile.budget_model.spending_priorities
+    # Canonical sort: alphabetical by category key so output is independent of dict iteration order.
     protected_categories = sorted(key for key, value in priorities.items() if value >= 0.45)
     if not protected_categories:
+        # Tie-break: descending value, then ascending key so equal-priority categories resolve
+        # deterministically regardless of the dict's insertion order.
         protected_categories = [
             key
             for key, _ in sorted(
@@ -220,6 +223,7 @@ def _quality_floor(resolved: ResolvedLeisureProfile) -> QualityFloorProtection:
         categories.update(("lodging", "sleep_recovery"))
     if not categories:
         categories.add("transport_reliability")
+    # Canonical sort: alphabetical so set iteration order does not affect output.
     return QualityFloorProtection(required_categories=sorted(categories))
 
 
@@ -272,6 +276,7 @@ def _transport_strategy(
         preferred_modes.append("door_to_door_transfer")
     if self_reliance_vs_convenience >= 0.3:
         avoid_modes.append("chauffeur_transfer")
+    # Canonical sort: alphabetical so list-build order does not affect output.
     preferred_modes = sorted(set(preferred_modes))
     avoid_modes = sorted(set(avoid_modes))
     notes = [
@@ -290,6 +295,15 @@ def _transport_strategy(
 
 
 def _build_explanations(resolved: ResolvedLeisureProfile) -> list[str]:
+    """Build a deterministic explanation list.
+
+    Sorting rules (canonical tie-breaking):
+    - Tradeoff dimensions: fixed iteration order defined by the tuple below.
+    - tension_flags: ascending ``tension.id`` (alphabetical string sort).
+    - activated_interactions: ascending ``activation.rule_id`` (alphabetical string sort).
+    - Bias items within each interaction: ascending key (``sorted(items())``).
+    - must_include_places / must_protect_experiences: alphabetical join.
+    """
     explanations: list[str] = []
     for key in (
         "movement_vs_friction",
