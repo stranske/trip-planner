@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Final
 
-from . import schema
 from .questionnaire import QUESTION_REGISTRY, validate_response
 
 # Maps each dimension question id to the canonical TRADEOFF_DIMENSION_KEYS key.

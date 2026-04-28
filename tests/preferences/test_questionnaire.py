@@ -6,7 +6,6 @@ from trip_planner.preferences.questionnaire import (
     QUESTION_IDS,
     QUESTION_REGISTRY,
     ROUTE_MODE_VALUES,
-    QuestionSpec,
     validate_response,
 )
 from trip_planner.preferences.schema import TRAVELER_PARTIES, TRIP_STAGES
