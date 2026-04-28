@@ -184,8 +184,11 @@ def _budget_protection(
     interaction_biases: dict[str, float],
 ) -> BudgetProtection:
     priorities = resolved.profile.budget_model.spending_priorities
+    # Canonical sort: alphabetical by category key so output is independent of dict iteration order.
     protected_categories = sorted(key for key, value in priorities.items() if value >= 0.45)
     if not protected_categories:
+        # Tie-break: descending value, then ascending key so equal-priority categories resolve
+        # deterministically regardless of the dict's insertion order.
         protected_categories = [
             key
             for key, _ in sorted(
@@ -202,6 +205,7 @@ def _budget_protection(
     if interaction_biases.get("protect_quality_floors", 0.0) >= 0.9:
         if not any(category.startswith("lodging") for category in protected_categories):
             protected_categories.append("lodging")
+            protected_categories.sort()
         notes.append("Interaction bias protects quality floors before relaxing comfort targets.")
     return BudgetProtection(
         protected_categories=protected_categories,
@@ -219,6 +223,7 @@ def _quality_floor(resolved: ResolvedLeisureProfile) -> QualityFloorProtection:
         categories.update(("lodging", "sleep_recovery"))
     if not categories:
         categories.add("transport_reliability")
+    # Canonical sort: alphabetical so set iteration order does not affect output.
     return QualityFloorProtection(required_categories=sorted(categories))
 
 
@@ -271,6 +276,7 @@ def _transport_strategy(
         preferred_modes.append("door_to_door_transfer")
     if self_reliance_vs_convenience >= 0.3:
         avoid_modes.append("chauffeur_transfer")
+    # Canonical sort: alphabetical so list-build order does not affect output.
     preferred_modes = sorted(set(preferred_modes))
     avoid_modes = sorted(set(avoid_modes))
     notes = [
@@ -289,6 +295,15 @@ def _transport_strategy(
 
 
 def _build_explanations(resolved: ResolvedLeisureProfile) -> list[str]:
+    """Build a deterministic explanation list.
+
+    Sorting rules (canonical tie-breaking):
+    - Tradeoff dimensions: fixed iteration order defined by the tuple below.
+    - tension_flags: ascending ``tension.id`` (alphabetical string sort).
+    - activated_interactions: ascending ``activation.rule_id`` (alphabetical string sort).
+    - Bias items within each interaction: ascending key (``sorted(items())``).
+    - must_include_places / must_protect_experiences: alphabetical join.
+    """
     explanations: list[str] = []
     for key in (
         "movement_vs_friction",
@@ -305,21 +320,21 @@ def _build_explanations(resolved: ResolvedLeisureProfile) -> list[str]:
                 f"salience={dimension.salience:.2f}"
             )
         )
-    for tension in resolved.profile.tension_flags:
+    for tension in sorted(resolved.profile.tension_flags, key=lambda t: t.id):
         explanations.append(f"tension:{tension.id}:{tension.description}")
-    for activation in resolved.explanation.activated_interactions:
+    for activation in sorted(resolved.explanation.activated_interactions, key=lambda a: a.rule_id):
         explanations.append(
             f"interaction:{activation.rule_id}:biases={sorted(activation.planning_biases.items())}"
         )
     if resolved.profile.hard_constraints.must_include_places:
         explanations.append(
             "hard_constraints:must_include_places="
-            + ",".join(resolved.profile.hard_constraints.must_include_places)
+            + ",".join(sorted(resolved.profile.hard_constraints.must_include_places))
         )
     if resolved.profile.hard_constraints.must_protect_experiences:
         explanations.append(
             "hard_constraints:must_protect_experiences="
-            + ",".join(resolved.profile.hard_constraints.must_protect_experiences)
+            + ",".join(sorted(resolved.profile.hard_constraints.must_protect_experiences))
         )
     return explanations
 
