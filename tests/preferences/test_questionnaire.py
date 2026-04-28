@@ -81,16 +81,19 @@ def test_choice_questions_have_allowed_values() -> None:
 
 def test_traveler_party_allowed_values_match_schema() -> None:
     spec = QUESTION_REGISTRY["q_traveler_party"]
+    assert spec.allowed_values is not None
     assert set(spec.allowed_values) == set(TRAVELER_PARTIES)
 
 
 def test_trip_stage_allowed_values_match_schema() -> None:
     spec = QUESTION_REGISTRY["q_trip_stage"]
+    assert spec.allowed_values is not None
     assert set(spec.allowed_values) == set(TRIP_STAGES)
 
 
 def test_route_modes_allowed_values_match_constant() -> None:
     spec = QUESTION_REGISTRY["q_route_modes_preference"]
+    assert spec.allowed_values is not None
     assert set(spec.allowed_values) == set(ROUTE_MODE_VALUES)
 
 
