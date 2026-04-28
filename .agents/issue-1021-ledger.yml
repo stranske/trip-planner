@@ -6,10 +6,10 @@ tasks:
   - id: task-01
     title: Create the TPP proposal submission service method in `planner/services/tpp_proposal_submission_service.py`
       that calls `planner/clients/tpp_client.py` with workspace data
-    status: doing
+    status: done
     started_at: '2026-04-28T15:16:29Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-04-28T15:16:44Z'
+    commit: a5569c02cabe8f1cf71b9051a274eb5a7c06fd59
     notes: []
   - id: task-02
     title: Implement extraction logic in `planner/services/tpp_proposal_submission_service.py`
