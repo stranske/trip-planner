@@ -229,6 +229,8 @@ def test_generated_transport_option_has_provenance_reference() -> None:
     ref = transport.source_refs[0]
     assert ref.provenance_id == f"prov:{_TRIP_ID}:runtime:transport"
     assert ref.contribution_kind == "inventory"
+    assert ref.source_id == "persisted-trip-runtime-source"
+    assert ref.source_id, "transport source_id must be non-empty"
 
 
 def test_generated_activity_option_has_provenance_reference() -> None:
@@ -239,6 +241,20 @@ def test_generated_activity_option_has_provenance_reference() -> None:
     ref = activity.source_refs[0]
     assert ref.provenance_id == f"prov:{_TRIP_ID}:runtime:activity"
     assert ref.contribution_kind == "inventory"
+    assert ref.source_id == "persisted-trip-runtime-source"
+    assert ref.source_id, "activity source_id must be non-empty"
+
+
+def test_generated_destination_has_source_ref_with_stable_source_id() -> None:
+    """Each destination must carry a DestinationSourceRef with a non-empty stable source_id."""
+    bundle = _generate_bundles()[0]
+
+    for destination in bundle.destinations:
+        assert destination.source_refs, f"{destination.name} source_refs must be non-empty"
+        ref = destination.source_refs[0]
+        assert ref.source_id == "persisted-trip-runtime-source"
+        assert ref.source_id, f"{destination.name} source_ref source_id must be non-empty"
+        assert ref.provenance_id, f"{destination.name} source_ref provenance_id must be non-empty"
 
 
 # ---------------------------------------------------------------------------
@@ -353,3 +369,60 @@ def test_scenario_source_refs_trace_back_to_generated_inventory() -> None:
 
     assert ranked.result_set_id in search_result.source_refs
     assert search_result.trip_id == _TRIP_ID
+
+
+# ---------------------------------------------------------------------------
+# Stable source ID determinism — repeated runs must produce identical IDs
+# ---------------------------------------------------------------------------
+
+
+def test_stable_source_id_is_identical_across_repeated_runs() -> None:
+    """Running the generation pipeline twice must yield identical source IDs for all option types.
+
+    This verifies acceptance criterion: repeated execution with the same repository
+    data produces identical source IDs for inventory records with matching primary keys.
+    """
+    bundles_first = _generate_bundles()
+    bundles_second = _generate_bundles()
+
+    assert len(bundles_first) == len(bundles_second)
+    bundle_a = bundles_first[0]
+    bundle_b = bundles_second[0]
+
+    # Lodging source IDs are identical across runs
+    assert bundle_a.lodging_options[0].source_refs[0].source_id == (
+        bundle_b.lodging_options[0].source_refs[0].source_id
+    )
+    # Transport source IDs are identical across runs
+    assert bundle_a.transport_options[0].source_refs[0].source_id == (
+        bundle_b.transport_options[0].source_refs[0].source_id
+    )
+    # Activity source IDs are identical across runs
+    assert bundle_a.activity_options[0].source_refs[0].source_id == (
+        bundle_b.activity_options[0].source_refs[0].source_id
+    )
+    # Provenance IDs are also identical (full determinism check)
+    assert bundle_a.lodging_options[0].source_refs[0].provenance_id == (
+        bundle_b.lodging_options[0].source_refs[0].provenance_id
+    )
+    assert bundle_a.transport_options[0].source_refs[0].provenance_id == (
+        bundle_b.transport_options[0].source_refs[0].provenance_id
+    )
+    assert bundle_a.activity_options[0].source_refs[0].provenance_id == (
+        bundle_b.activity_options[0].source_refs[0].provenance_id
+    )
+    # Destination source IDs are identical across runs
+    for dest_a, dest_b in zip(bundle_a.destinations, bundle_b.destinations):
+        assert dest_a.source_refs[0].source_id == dest_b.source_refs[0].source_id
+
+
+def test_stable_source_adapter_exposes_stable_source_id_property() -> None:
+    """PersistedTripSourceInventoryAdapter must expose stable_source_id matching the source record."""
+    adapter = PersistedTripSourceInventoryAdapter(
+        trip_id=_TRIP_ID,
+        trip_mode=_TRIP_MODE,
+        primary_regions=_REGIONS,
+        duration_days=_DURATION,
+    )
+    assert adapter.stable_source_id == "persisted-trip-runtime-source"
+    assert adapter.stable_source_id == adapter.source_record.source_id
