@@ -1,0 +1,171 @@
+{
+  "schema_version": "0.1.0",
+  "description": "Fixture questionnaire responses for normalization contract tests.",
+  "fixtures": [
+    {
+      "id": "complete",
+      "description": "All 19 questions answered — scenic-rail solo traveller.",
+      "answers": {
+        "q_traveler_party": "solo",
+        "q_trip_stage": "first_visit",
+        "q_duration_days": 21,
+        "q_movement_vs_friction": 2,
+        "q_recovery_vs_intensity": 3,
+        "q_nature_vs_culture": 2,
+        "q_structure_vs_elasticity": 3,
+        "q_breadth_vs_depth": 2,
+        "q_self_reliance_vs_convenience": 2,
+        "q_historic_vs_contemporary": 2,
+        "q_scenic_transit_vs_destination_time": 1,
+        "q_route_coherence_vs_eclectic_contrast": 2,
+        "q_social_energy_vs_solitude": 4,
+        "q_iconic_vs_discovery": 4,
+        "q_budget_sensitivity": 3,
+        "q_splurge_allowed": true,
+        "q_food_salience": 4,
+        "q_rest_salience": 3,
+        "q_music_salience": 1,
+        "q_route_modes_preference": ["rail", "boat"]
+      },
+      "expected": {
+        "traveler_party": "solo",
+        "trip_stage": "first_visit",
+        "duration_days": 21,
+        "tradeoff_values": {
+          "movement_vs_friction": -0.5,
+          "recovery_vs_intensity": 0.0,
+          "nature_vs_culture": -0.5,
+          "structure_vs_elasticity": 0.0,
+          "breadth_vs_depth": -0.5,
+          "self_reliance_vs_convenience": -0.5,
+          "historic_vs_contemporary": -0.5,
+          "scenic_transit_vs_destination_time": -1.0,
+          "route_coherence_vs_eclectic_contrast": -0.5,
+          "social_energy_vs_solitude": 0.5,
+          "iconic_vs_discovery": 0.5
+        },
+        "budget_sensitivity": 0.5,
+        "splurge_allowed": true,
+        "route_modes": ["rail", "boat"]
+      }
+    },
+    {
+      "id": "partial",
+      "description": "Only the two required questions answered — all optional fields use defaults.",
+      "answers": {
+        "q_traveler_party": "pair",
+        "q_budget_sensitivity": 2
+      },
+      "expected": {
+        "traveler_party": "pair",
+        "trip_stage": "first_visit",
+        "duration_days": null,
+        "tradeoff_values": {
+          "movement_vs_friction": 0.0,
+          "recovery_vs_intensity": 0.0,
+          "nature_vs_culture": 0.0,
+          "structure_vs_elasticity": 0.0,
+          "breadth_vs_depth": 0.0,
+          "self_reliance_vs_convenience": 0.0,
+          "historic_vs_contemporary": 0.0,
+          "scenic_transit_vs_destination_time": 0.0,
+          "route_coherence_vs_eclectic_contrast": 0.0,
+          "social_energy_vs_solitude": 0.0,
+          "iconic_vs_discovery": 0.0
+        },
+        "budget_sensitivity": 0.25,
+        "splurge_allowed": false,
+        "route_modes": []
+      }
+    },
+    {
+      "id": "contradictory",
+      "description": "Valid answers that create a breadth-vs-recovery tension: wants to cover many places (breadth=1) but also needs lots of rest (recovery=5).",
+      "answers": {
+        "q_traveler_party": "solo",
+        "q_budget_sensitivity": 3,
+        "q_breadth_vs_depth": 1,
+        "q_recovery_vs_intensity": 5
+      },
+      "expected": {
+        "traveler_party": "solo",
+        "tradeoff_values": {
+          "breadth_vs_depth": -1.0,
+          "recovery_vs_intensity": 1.0
+        },
+        "breadth_recovery_tension": true
+      }
+    },
+    {
+      "id": "invalid_missing_required",
+      "description": "Both required questions missing — validation must list both errors.",
+      "answers": {
+        "q_nature_vs_culture": 3
+      },
+      "expected_error_fragments": [
+        "q_traveler_party",
+        "q_budget_sensitivity"
+      ]
+    },
+    {
+      "id": "invalid_out_of_range",
+      "description": "Scale answer exceeds max value of 5.",
+      "answers": {
+        "q_traveler_party": "solo",
+        "q_budget_sensitivity": 6
+      },
+      "expected_error_fragments": [
+        "q_budget_sensitivity",
+        "1–5"
+      ]
+    },
+    {
+      "id": "invalid_wrong_type",
+      "description": "Scale answer is a string instead of int.",
+      "answers": {
+        "q_traveler_party": "solo",
+        "q_budget_sensitivity": "three"
+      },
+      "expected_error_fragments": [
+        "q_budget_sensitivity"
+      ]
+    },
+    {
+      "id": "invalid_unknown_choice",
+      "description": "Choice answer not in allowed values.",
+      "answers": {
+        "q_traveler_party": "enterprise",
+        "q_budget_sensitivity": 3
+      },
+      "expected_error_fragments": [
+        "q_traveler_party",
+        "enterprise"
+      ]
+    },
+    {
+      "id": "invalid_unknown_question_id",
+      "description": "Answers dict contains a key that does not exist in the registry.",
+      "answers": {
+        "q_traveler_party": "solo",
+        "q_budget_sensitivity": 3,
+        "q_nonexistent_field": "value"
+      },
+      "expected_error_fragments": [
+        "q_nonexistent_field"
+      ]
+    },
+    {
+      "id": "invalid_bad_route_mode",
+      "description": "Route modes list contains a value not in ROUTE_MODE_VALUES.",
+      "answers": {
+        "q_traveler_party": "solo",
+        "q_budget_sensitivity": 3,
+        "q_route_modes_preference": ["rail", "helicopter"]
+      },
+      "expected_error_fragments": [
+        "q_route_modes_preference",
+        "helicopter"
+      ]
+    }
+  ]
+}

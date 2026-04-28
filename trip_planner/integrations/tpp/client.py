@@ -195,9 +195,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 status_code=502,
             ) from exc
         except urllib_error.URLError as exc:
-            raise TPPServiceUnavailableError(
-                f"TPP request to {path} failed: {exc}."
-            ) from exc
+            raise TPPServiceUnavailableError(f"TPP request to {path} failed: {exc}.") from exc
 
         if status_code >= 400:
             body_excerpt = raw_body.strip()
@@ -211,13 +209,9 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         try:
             payload = json.loads(raw_body)
         except ValueError:
-            raise TPPContractError(
-                f"TPP request to {path} returned a non-JSON response."
-            )
+            raise TPPContractError(f"TPP request to {path} returned a non-JSON response.")
         if not isinstance(payload, dict):
-            raise TPPContractError(
-                f"TPP request to {path} returned a non-object JSON payload."
-            )
+            raise TPPContractError(f"TPP request to {path} returned a non-object JSON payload.")
         return payload
 
     def _policy_request_payload(self, request: TPPRequestEnvelope) -> dict[str, Any]:
@@ -285,17 +279,11 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             payload.setdefault("requested_at", request.submitted_at)
         payload = self._strip_none_values(payload)
         if payload.get("trip_id") in (None, "") or payload.get("proposal_id") in (None, ""):
-            raise TPPContractError(
-                "Live TPP status operations require trip_id and proposal_id."
-            )
+            raise TPPContractError("Live TPP status operations require trip_id and proposal_id.")
         if payload.get("proposal_version") in (None, ""):
-            raise TPPContractError(
-                "Live TPP status operations require payload.proposal_version."
-            )
+            raise TPPContractError("Live TPP status operations require payload.proposal_version.")
         if payload.get("execution_id") in (None, ""):
-            raise TPPContractError(
-                "Live TPP status operations require payload.execution_id."
-            )
+            raise TPPContractError("Live TPP status operations require payload.execution_id.")
         return payload
 
     def _adapt_execution_status(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -373,9 +361,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         )
         versioning = payload.get("versioning")
         if not isinstance(versioning, dict):
-            raise TPPContractError(
-                "TPP policy snapshot response is missing versioning metadata."
-            )
+            raise TPPContractError("TPP policy snapshot response is missing versioning metadata.")
 
         policy_version = str(versioning.get("policy_version") or "").strip()
         if not policy_version:
@@ -511,9 +497,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         )
         outcome = str(payload.get("outcome") or "").strip()
         if outcome not in {"compliant", "non_compliant", "exception_required"}:
-            raise TPPContractError(
-                "TPP evaluation response is missing a supported outcome."
-            )
+            raise TPPContractError("TPP evaluation response is missing a supported outcome.")
 
         evaluation_result = {
             "evaluation_id": str(payload.get("request_id") or request.request_id),
@@ -522,7 +506,9 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             "approval_requirements": [
                 {
                     "role": str(item.get("required_role") or item.get("role") or "approver"),
-                    "reason": str(item.get("summary") or item.get("reason") or "Approval required."),
+                    "reason": str(
+                        item.get("summary") or item.get("reason") or "Approval required."
+                    ),
                     "mandatory": True,
                 }
                 for item in payload.get("exception_requirements") or []
@@ -542,7 +528,11 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 {
                     "category": str(item.get("category") or "policy"),
                     "summary": str(item.get("summary") or "Preferred alternative available."),
-                    "rationale": str(item.get("rationale") or item.get("summary") or "Follow the suggested alternative."),
+                    "rationale": str(
+                        item.get("rationale")
+                        or item.get("summary")
+                        or "Follow the suggested alternative."
+                    ),
                     "comparable_ref": item.get("comparable_ref"),
                 }
                 for item in payload.get("preferred_alternatives") or []
@@ -554,7 +544,8 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                     list(payload.get("reoptimization_guidance") or [])
                     + list(payload.get("exception_requirements") or [])
                 )
-                if isinstance(item, dict) and str(item.get("summary") or item.get("message") or "").strip()
+                if isinstance(item, dict)
+                and str(item.get("summary") or item.get("message") or "").strip()
             ],
             "notes": [
                 f"Planner evaluation outcome: {outcome}.",
@@ -582,7 +573,8 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                     "proposal_id": payload.get("proposal_id") or request.proposal_id,
                     "proposal_version": payload.get("proposal_version")
                     or status_request.get("proposal_version"),
-                    "execution_id": payload.get("execution_id") or status_request.get("execution_id"),
+                    "execution_id": payload.get("execution_id")
+                    or status_request.get("execution_id"),
                     "evaluation_result": evaluation_result,
                 },
                 "received_at": payload.get("generated_at"),

@@ -233,7 +233,9 @@ def _build_budget_summary(
     return {
         "currency": currency,
         "has_budget_plan": budget_plan is not None,
-        "current_scenario_budget_id": budget_plan["current_scenario_budget_id"] if budget_plan else None,
+        "current_scenario_budget_id": (
+            budget_plan["current_scenario_budget_id"] if budget_plan else None
+        ),
         "current_scenario_title": current_scenario["title"] if current_scenario else None,
         "planned_total": planned_total,
         "actual_total": actual_total,
@@ -246,8 +248,12 @@ def _build_budget_summary(
 
 
 def _budget_fixture_payload(trip_id: str, trip_mode: str) -> dict[str, Any]:
-    plan_name = "business_budget_plan.json" if trip_mode == "business" else "leisure_budget_plan.json"
-    budget_plan = BudgetPlan.from_dict(_load_json(_state_fixture_dir("budget") / plan_name)).to_dict()
+    plan_name = (
+        "business_budget_plan.json" if trip_mode == "business" else "leisure_budget_plan.json"
+    )
+    budget_plan = BudgetPlan.from_dict(
+        _load_json(_state_fixture_dir("budget") / plan_name)
+    ).to_dict()
     event_payload = _load_json(_state_fixture_dir("budget") / "actual_spend_events.json")
     spend_events = [
         ActualSpendEvent.from_dict(item).to_dict()
@@ -377,7 +383,9 @@ def upsert_workspace_budget_plan(
     plan_id = existing.budget_plan_id if existing is not None else f"budget-plan:{record.trip_id}"
     normalized_scenarios: list[dict[str, Any]] = []
     for index, scenario_payload in enumerate(scenario_budgets):
-        scenario_id = scenario_payload.get("scenario_budget_id") or f"{plan_id}:scenario-{index + 1}"
+        scenario_id = (
+            scenario_payload.get("scenario_budget_id") or f"{plan_id}:scenario-{index + 1}"
+        )
         allocations = [
             BudgetCategoryAllocation(
                 category_key=item["category_key"],

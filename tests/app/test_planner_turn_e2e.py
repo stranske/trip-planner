@@ -46,7 +46,6 @@ from trip_planner.app.main import create_app
 from trip_planner.app.services.planner import set_planner_chat_model_factory_for_tests
 from trip_planner.persistence.db import reset_database_state
 
-
 # Documented response contract fields drawn from
 # trip_planner.app.schemas.planner.PlannerSessionResponse and PlannerMessageResponse.
 # Asserting by name (not by HTTP 200 alone) is what gives the test teeth — if the
@@ -239,9 +238,7 @@ def test_planner_turn_e2e_persists_across_app_instances(
     # ---- First app instance: create + run a turn ----
     trip_id = _create_trip(first_client)
 
-    turn_message = (
-        "Plan a long weekend in Chicago and summarize the current workspace state."
-    )
+    turn_message = "Plan a long weekend in Chicago and summarize the current workspace state."
     first_turn = first_client.post(
         f"/api/planner/{trip_id}/turns",
         json={"message": turn_message},
@@ -289,23 +286,19 @@ def test_planner_turn_e2e_persists_across_app_instances(
         "contract violated."
     )
 
-    persisted_user = next(
-        (m for m in persisted_messages if m["role"] == "user"), None
-    )
-    assert persisted_user is not None, (
-        "Reload is missing the persisted user-role message from the prior turn."
-    )
+    persisted_user = next((m for m in persisted_messages if m["role"] == "user"), None)
+    assert (
+        persisted_user is not None
+    ), "Reload is missing the persisted user-role message from the prior turn."
     assert turn_message in persisted_user["content"], (
         f"Persisted user message diverged from what was sent. "
         f"Sent {turn_message!r}, reload returned {persisted_user['content']!r}."
     )
 
-    persisted_planner = next(
-        (m for m in persisted_messages if m["role"] == "planner"), None
-    )
-    assert persisted_planner is not None, (
-        "Reload is missing the persisted planner-role reply from the prior turn."
-    )
+    persisted_planner = next((m for m in persisted_messages if m["role"] == "planner"), None)
+    assert (
+        persisted_planner is not None
+    ), "Reload is missing the persisted planner-role reply from the prior turn."
     _assert_documented_fields(persisted_planner, _DOCUMENTED_MESSAGE_FIELDS)
 
     # The reloaded checkpoint must match the one returned by the original turn.

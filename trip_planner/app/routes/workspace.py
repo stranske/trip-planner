@@ -30,7 +30,7 @@ def read_workspace(
     if payload is None:
         raise HTTPException(
             status_code=404, detail=f"Workspace for trip '{trip_id}' was not found."
-    )
+        )
     return WorkspaceResponse.model_validate(payload)
 
 
@@ -51,7 +51,9 @@ def read_workspace_scenario_comparison(
     return ScenarioComparisonSurfaceResponse.model_validate(payload)
 
 
-@router.post("/workspace/{trip_id}/planner/decisions/{decision_id}/answer", response_model=WorkspaceResponse)
+@router.post(
+    "/workspace/{trip_id}/planner/decisions/{decision_id}/answer", response_model=WorkspaceResponse
+)
 def answer_planner_decision(
     trip_id: str,
     decision_id: str,
@@ -74,7 +76,9 @@ def answer_planner_decision(
     return WorkspaceResponse.model_validate(result)
 
 
-@router.post("/workspace/{trip_id}/planner/options/{option_id}/feedback", response_model=WorkspaceResponse)
+@router.post(
+    "/workspace/{trip_id}/planner/options/{option_id}/feedback", response_model=WorkspaceResponse
+)
 def record_planner_option_feedback(
     trip_id: str,
     option_id: str,

@@ -60,7 +60,6 @@ from fastapi.testclient import TestClient
 from trip_planner.app.main import create_app
 from trip_planner.persistence.db import reset_database_state
 
-
 # Documented contract fields drawn from ``WorkspaceProposalResponse`` /
 # ``proposal_state`` in the workspace proposal API. Asserting by name is what
 # gives the smoke teeth — if the contract drifts, the assertion fails loudly.
@@ -84,13 +83,7 @@ _DOCUMENTED_SUMMARY_FIELDS_AFTER_EVAL = (
 
 
 def _fixture_path(*parts: str) -> Path:
-    return (
-        Path(__file__).resolve().parents[1]
-        / "fixtures"
-        / "integrations"
-        / "tpp"
-        / Path(*parts)
-    )
+    return Path(__file__).resolve().parents[1] / "fixtures" / "integrations" / "tpp" / Path(*parts)
 
 
 def _load_fixture(*parts: str) -> dict:
@@ -332,9 +325,7 @@ def test_tpp_cross_repo_smoke_submit_evaluate_and_reload_across_instances(
     assert evaluated.status_code == 200, evaluated.text
     evaluated_state = evaluated.json()["proposal_state"]
     _assert_documented_fields(evaluated_state, _DOCUMENTED_PROPOSAL_STATE_FIELDS)
-    _assert_documented_fields(
-        evaluated_state["summary"], _DOCUMENTED_SUMMARY_FIELDS_AFTER_EVAL
-    )
+    _assert_documented_fields(evaluated_state["summary"], _DOCUMENTED_SUMMARY_FIELDS_AFTER_EVAL)
 
     # Acceptance: the smoke fails if trip-planner cannot poll or parse the TPP
     # result. The compliant status and approval-ready summary must round-trip.
@@ -352,9 +343,7 @@ def test_tpp_cross_repo_smoke_submit_evaluate_and_reload_across_instances(
     assert reloaded.status_code == 200, reloaded.text
     reloaded_state = reloaded.json()["proposal_state"]
     _assert_documented_fields(reloaded_state, _DOCUMENTED_PROPOSAL_STATE_FIELDS)
-    _assert_documented_fields(
-        reloaded_state["summary"], _DOCUMENTED_SUMMARY_FIELDS_AFTER_EVAL
-    )
+    _assert_documented_fields(reloaded_state["summary"], _DOCUMENTED_SUMMARY_FIELDS_AFTER_EVAL)
 
     # Acceptance: the smoke fails if persisted approval state is missing after
     # reload. The second app instance must surface the same proposal id,

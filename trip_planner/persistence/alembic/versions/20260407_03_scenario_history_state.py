@@ -23,9 +23,7 @@ def upgrade() -> None:
         sa.Column("notes", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["trip_id"], ["persisted_trips.trip_id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["trip_id"], ["persisted_trips.trip_id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("saved_scenario_id"),
     )
     op.create_index(
@@ -54,9 +52,7 @@ def upgrade() -> None:
         sa.Column("tags", sa.JSON(), nullable=False),
         sa.Column("notes", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["trip_id"], ["persisted_trips.trip_id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["trip_id"], ["persisted_trips.trip_id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("activity_event_id"),
     )
     op.create_index(

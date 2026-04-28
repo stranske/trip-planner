@@ -121,7 +121,9 @@ def _ref_list(*refs: str | None) -> list[str]:
     return [ref for ref in refs if ref]
 
 
-def _category_allocations(total_amount: float, categories: list[str], currency: str) -> list[dict[str, Any]]:
+def _category_allocations(
+    total_amount: float, categories: list[str], currency: str
+) -> list[dict[str, Any]]:
     if total_amount <= 0:
         raise ValueError("update_budget_plan requires total_amount > 0.")
     if not categories:
@@ -217,7 +219,9 @@ def _refresh_scenarios(
         status="completed",
         summary="Read the current ranked scenario and comparison outputs.",
         mutates_state=False,
-        refs=_ref_list(payload["session"]["session_state_id"], runtime_comparison["lead_scenario_id"]),
+        refs=_ref_list(
+            payload["session"]["session_state_id"], runtime_comparison["lead_scenario_id"]
+        ),
         output=output,
     )
 
@@ -243,7 +247,9 @@ def _read_budget_state(
         status="completed",
         summary="Read the current workspace budget summary.",
         mutates_state=False,
-        refs=_ref_list(payload.get("budget_plan", {}) and payload["budget_plan"].get("budget_plan_id")),
+        refs=_ref_list(
+            payload.get("budget_plan", {}) and payload["budget_plan"].get("budget_plan_id")
+        ),
         output=output,
     )
 
@@ -283,7 +289,9 @@ def _update_budget_plan(
         scenario_budgets=[
             {
                 "scenario_budget_id": scenario_budget_id,
-                "saved_scenario_id": saved_scenario["saved_scenario_id"] if saved_scenario else None,
+                "saved_scenario_id": (
+                    saved_scenario["saved_scenario_id"] if saved_scenario else None
+                ),
                 "title": scenario_title,
                 "summary": "Planner-generated budget baseline.",
                 "tags": ["planner-tool"],
@@ -303,7 +311,9 @@ def _update_budget_plan(
         status="completed",
         summary=f"Updated the workspace budget plan to {currency} {total_amount:.2f}.",
         mutates_state=True,
-        refs=_ref_list(result["budget_plan"]["budget_plan_id"], result["summary"]["current_scenario_budget_id"]),
+        refs=_ref_list(
+            result["budget_plan"]["budget_plan_id"], result["summary"]["current_scenario_budget_id"]
+        ),
         output=output,
     )
 
@@ -334,7 +344,9 @@ def _read_policy_state(
         status="completed",
         summary="Read the current workspace policy state.",
         mutates_state=False,
-        refs=_ref_list(payload.get("policy_state", {}) and payload["policy_state"].get("policy_state_id")),
+        refs=_ref_list(
+            payload.get("policy_state", {}) and payload["policy_state"].get("policy_state_id")
+        ),
         output=output,
     )
 
@@ -371,7 +383,9 @@ def _read_proposal_state(
         status="completed",
         summary="Read the current workspace proposal state.",
         mutates_state=False,
-        refs=_ref_list(payload.get("proposal_state", {}) and payload["proposal_state"].get("proposal_state_id")),
+        refs=_ref_list(
+            payload.get("proposal_state", {}) and payload["proposal_state"].get("proposal_state_id")
+        ),
         output=output,
     )
 
@@ -383,11 +397,15 @@ def _answer_pending_decision(
     arguments: dict[str, Any],
 ) -> PlannerToolResult:
     workspace_payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
-    pending_decisions = list(workspace_payload["planner_panel_state"].get("pending_decisions") or [])
+    pending_decisions = list(
+        workspace_payload["planner_panel_state"].get("pending_decisions") or []
+    )
     if not pending_decisions:
         raise ValueError("No pending planner decisions are available for this trip.")
     decision_id = str(arguments.get("decision_id") or pending_decisions[0]["decision_id"])
-    matching = next((item for item in pending_decisions if item["decision_id"] == decision_id), None)
+    matching = next(
+        (item for item in pending_decisions if item["decision_id"] == decision_id), None
+    )
     if matching is None:
         raise ValueError(f"Decision '{decision_id}' is not available in the planner panel.")
     choice = str(arguments.get("choice") or "").strip()
@@ -402,7 +420,9 @@ def _answer_pending_decision(
     )
     output = {
         "decision_id": decision_id,
-        "remaining_pending_decisions": len(result["planner_panel_state"].get("pending_decisions") or []),
+        "remaining_pending_decisions": len(
+            result["planner_panel_state"].get("pending_decisions") or []
+        ),
     }
     return PlannerToolResult(
         tool_name="answer_pending_decision",
@@ -424,7 +444,9 @@ def _record_option_feedback(
     if not action_type:
         raise ValueError("record_option_feedback requires action_type.")
     workspace_payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
-    options = list((workspace_payload["planner_panel_state"].get("option_set") or {}).get("options") or [])
+    options = list(
+        (workspace_payload["planner_panel_state"].get("option_set") or {}).get("options") or []
+    )
     if not options:
         raise ValueError("No planner options are available for this trip.")
     option_id = str(arguments.get("option_id") or options[0]["option_id"])

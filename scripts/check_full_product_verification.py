@@ -29,7 +29,6 @@ from fastapi.testclient import TestClient  # noqa: E402
 from trip_planner.app.main import create_app  # noqa: E402
 from trip_planner.persistence.db import ensure_database_ready, reset_database_state  # noqa: E402
 
-
 DEFAULT_TPP_REPO_PATH = REPO_ROOT.parent / "Travel-Plan-Permission"
 TPP_PORT = 8765
 
@@ -203,7 +202,9 @@ def _prepared_submission_request(trip_id: str, proposal_id: str) -> dict[str, An
     return request_payload
 
 
-def _prepared_evaluation_request(trip_id: str, proposal_id: str, execution_id: str) -> dict[str, Any]:
+def _prepared_evaluation_request(
+    trip_id: str, proposal_id: str, execution_id: str
+) -> dict[str, Any]:
     request_payload = copy.deepcopy(_fixture("results", "approved_evaluation.json")["request"])
     request_payload["trip_id"] = trip_id
     request_payload["proposal_id"] = proposal_id
@@ -364,11 +365,7 @@ def tpp_prerequisite_status(
                 "default_repo_path": str(default_repo_path),
             },
         )
-    missing = [
-        name
-        for name in ("TPP_ACCESS_TOKEN", "TPP_OIDC_PROVIDER")
-        if not configured[name]
-    ]
+    missing = [name for name in ("TPP_ACCESS_TOKEN", "TPP_OIDC_PROVIDER") if not configured[name]]
     invalid_path: dict[str, str] = {}
     if not configured["TPP_BASE_URL"] and not configured["TPP_REPO_PATH"]:
         if live_tpp == "required" and default_repo_path.is_dir():
@@ -425,7 +422,9 @@ def _free_local_port(preferred: int) -> int:
 
 
 @contextmanager
-def _started_tpp_service(env: dict[str, str]) -> Iterator[tuple[str, subprocess.Popen[bytes] | None]]:
+def _started_tpp_service(
+    env: dict[str, str],
+) -> Iterator[tuple[str, subprocess.Popen[bytes] | None]]:
     base_url = env.get("TPP_BASE_URL", "").strip()
     repo_path = env.get("TPP_REPO_PATH", "").strip()
     if base_url:
@@ -580,9 +579,9 @@ def _temporary_database_url(database_url: str) -> Iterator[None]:
 
 
 def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
-    with tempfile.TemporaryDirectory(prefix="trip-planner-full-product.") as tmpdir, (
-        _temporary_database_url(f"sqlite:///{Path(tmpdir) / 'full_product.db'}")
-    ):
+    with tempfile.TemporaryDirectory(
+        prefix="trip-planner-full-product."
+    ) as tmpdir, _temporary_database_url(f"sqlite:///{Path(tmpdir) / 'full_product.db'}"):
         reset_database_state()
         ensure_database_ready()
         app = create_app()

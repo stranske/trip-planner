@@ -12,9 +12,7 @@ from trip_planner.persistence.db import reset_database_state
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    monkeypatch.setenv(
-        "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'trips.db'}"
-    )
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'trips.db'}")
     reset_database_state()
     app = create_app()
 
@@ -82,15 +80,18 @@ def test_trip_create_list_and_detail_flow(client: TestClient) -> None:
 
 def test_trip_routes_require_authentication(client: TestClient) -> None:
     assert client.get("/api/trips").status_code == 401
-    assert client.post(
-        "/api/trips",
-        json={
-            "title": "Kyoto Spring",
-            "summary": "",
-            "mode": "leisure",
-            "trip_frame": {},
-        },
-    ).status_code == 401
+    assert (
+        client.post(
+            "/api/trips",
+            json={
+                "title": "Kyoto Spring",
+                "summary": "",
+                "mode": "leisure",
+                "trip_frame": {},
+            },
+        ).status_code
+        == 401
+    )
 
 
 def test_trip_detail_hides_other_users_records(client: TestClient) -> None:
@@ -251,7 +252,9 @@ def test_trip_scenario_history_create_list_and_reload_flow(client: TestClient) -
     assert payload["saved_scenarios"][0]["saved_scenario_id"] == saved_scenario["saved_scenario_id"]
     assert payload["saved_scenarios"][0]["versions"][0]["title"] == "Kyoto baseline"
     assert payload["planning_history"][0]["event_kind"] == "scenario_saved"
-    assert payload["planning_history"][0]["saved_scenario_id"] == saved_scenario["saved_scenario_id"]
+    assert (
+        payload["planning_history"][0]["saved_scenario_id"] == saved_scenario["saved_scenario_id"]
+    )
 
     repeat_listing = client.get(f"/api/trips/{trip_id}/scenario-history")
     assert repeat_listing.status_code == 200
