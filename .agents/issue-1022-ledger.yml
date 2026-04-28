@@ -6,10 +6,10 @@ tasks:
   - id: task-01
     title: Remove seeded fixture injection from the planner inventory construction
       path and ensure all inventory fetching routes through adapter interfaces
-    status: doing
+    status: done
     started_at: '2026-04-28T15:16:52Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-04-28T15:17:11Z'
+    commit: 441aa87eaf13b00de1fbf1c1fb8f502898afc1af
     notes: []
   - id: task-02
     title: Wire the persisted trip source inventory adapter into the planner dependency
