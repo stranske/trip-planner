@@ -28,7 +28,7 @@ Run once from the repo root:
 Or manually:
   1. python -m venv .venv && source .venv/bin/activate
   2. python -m pip install -e ".[dev]"
-  3. npm --prefix frontend install
+  3. npm --prefix frontend ci
 
 Then rerun `make runtime-check` (or `make runtime-smoke`).
 `make install` creates .venv and installs both backend and frontend deps;
