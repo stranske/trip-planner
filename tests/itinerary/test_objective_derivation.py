@@ -1,7 +1,8 @@
 from copy import deepcopy
 
 from trip_planner.itinerary import derive_itinerary_objectives
-from trip_planner.preferences import resolve_leisure_profile
+from trip_planner.preferences import resolve_leisure_profile, TensionFlag
+from trip_planner.preferences.explanations import InteractionActivation
 from tests.preferences.fixture_corpus import (
     build_profile_from_overrides,
     load_fixture_map,
@@ -172,3 +173,165 @@ def test_short_trip_base_count_respects_duration_cap_with_many_required_places()
     assert max_value is not None
     assert min_value >= 2
     assert max_value <= duration_cap
+
+
+# ── Determinism / ordering regression tests ─────────────────────────────────
+
+
+def test_explanations_stable_across_shuffled_tension_flags() -> None:
+    """Shuffling tension_flags must not change explanation order.
+
+    Pre-fix, iterating profile.tension_flags in raw input order produced
+    unstable explanation lines; the fix sorts by tension.id before iterating.
+    """
+    base_fixture = load_fixture_map()["scenic-rail-nomad"]
+    resolved_base = resolve_leisure_profile(base_fixture.profile, base_fixture.evidence)
+
+    tensions = [
+        TensionFlag(id="tension-z", severity=0.5, description="last alphabetically"),
+        TensionFlag(id="tension-a", severity=0.5, description="first alphabetically"),
+        TensionFlag(id="tension-m", severity=0.5, description="middle alphabetically"),
+    ]
+
+    forward = deepcopy(resolved_base)
+    forward.profile.tension_flags = tensions
+
+    reversed_ = deepcopy(resolved_base)
+    reversed_.profile.tension_flags = list(reversed(tensions))
+
+    obj_forward = derive_itinerary_objectives(forward, trip_id="trip-det")
+    obj_reversed = derive_itinerary_objectives(reversed_, trip_id="trip-det")
+
+    assert obj_forward.explanations == obj_reversed.explanations
+    tension_lines = [e for e in obj_forward.explanations if e.startswith("tension:")]
+    assert tension_lines == [
+        "tension:tension-a:first alphabetically",
+        "tension:tension-m:middle alphabetically",
+        "tension:tension-z:last alphabetically",
+    ]
+
+
+def test_explanations_stable_across_shuffled_activated_interactions() -> None:
+    """Shuffling activated_interactions must not change explanation order.
+
+    Pre-fix, activated_interactions were serialised in raw list order, making
+    explanation output depend on resolution traversal order.
+    """
+    base_fixture = load_fixture_map()["scenic-rail-nomad"]
+    resolved_base = resolve_leisure_profile(base_fixture.profile, base_fixture.evidence)
+
+    activations = [
+        InteractionActivation(
+            rule_id="rule-zz",
+            dimensions=[],
+            planning_biases={"compress_route_before_downgrading_lodging": 0.5},
+        ),
+        InteractionActivation(
+            rule_id="rule-aa", dimensions=[], planning_biases={"cluster_bases": 0.7}
+        ),
+        InteractionActivation(
+            rule_id="rule-mm", dimensions=[], planning_biases={"protect_recovery_blocks": 0.4}
+        ),
+    ]
+
+    forward = deepcopy(resolved_base)
+    forward.explanation.activated_interactions = activations
+
+    reversed_ = deepcopy(resolved_base)
+    reversed_.explanation.activated_interactions = list(reversed(activations))
+
+    obj_forward = derive_itinerary_objectives(forward, trip_id="trip-det")
+    obj_reversed = derive_itinerary_objectives(reversed_, trip_id="trip-det")
+
+    assert obj_forward.explanations == obj_reversed.explanations
+    interaction_lines = [e for e in obj_forward.explanations if e.startswith("interaction:")]
+    rule_ids_in_output = [line.split(":")[1] for line in interaction_lines]
+    assert rule_ids_in_output == ["rule-aa", "rule-mm", "rule-zz"]
+
+
+def test_explanations_stable_across_shuffled_must_include_places() -> None:
+    """must_include_places joined in sorted order regardless of input order."""
+    places_forward = ["Zurich", "Athens", "Lisbon"]
+    places_reversed = list(reversed(places_forward))
+
+    def _objectives(places: list[str]):
+        profile = build_profile_from_overrides(
+            {"hard_constraints": {"must_include_places": places}}
+        )
+        resolved = resolve_leisure_profile(profile, [])
+        return derive_itinerary_objectives(resolved, trip_id="trip-places")
+
+    obj_forward = _objectives(places_forward)
+    obj_reversed = _objectives(places_reversed)
+
+    assert obj_forward.explanations == obj_reversed.explanations
+    place_line = next(
+        e for e in obj_forward.explanations if e.startswith("hard_constraints:must_include_places=")
+    )
+    assert place_line == "hard_constraints:must_include_places=Athens,Lisbon,Zurich"
+
+
+def test_explanations_stable_across_shuffled_must_protect_experiences() -> None:
+    """must_protect_experiences joined in sorted order regardless of input order."""
+    experiences_forward = ["spa-day", "cooking-class", "boat-trip"]
+    experiences_reversed = list(reversed(experiences_forward))
+
+    def _objectives(experiences: list[str]):
+        profile = build_profile_from_overrides(
+            {"hard_constraints": {"must_protect_experiences": experiences}}
+        )
+        resolved = resolve_leisure_profile(profile, [])
+        return derive_itinerary_objectives(resolved, trip_id="trip-exp")
+
+    obj_forward = _objectives(experiences_forward)
+    obj_reversed = _objectives(experiences_reversed)
+
+    assert obj_forward.explanations == obj_reversed.explanations
+    exp_line = next(
+        e
+        for e in obj_forward.explanations
+        if e.startswith("hard_constraints:must_protect_experiences=")
+    )
+    assert exp_line == "hard_constraints:must_protect_experiences=boat-trip,cooking-class,spa-day"
+
+
+def test_budget_protection_categories_sorted_after_lodging_insertion() -> None:
+    """protected_categories remains sorted when 'lodging' is injected by protect_quality_floors bias.
+
+    Pre-fix, append() left the list unsorted (e.g. ['transport', 'lodging']).
+    """
+    base_fixture = load_fixture_map()["scenic-rail-nomad"]
+    resolved_base = resolve_leisure_profile(base_fixture.profile, base_fixture.evidence)
+
+    resolved = deepcopy(resolved_base)
+    # Set spending priorities so that categories starting with 't' get protected
+    # but no "lodging*" category is present, so the bias will inject "lodging".
+    resolved.profile.budget_model.spending_priorities = {
+        "transport": 0.9,
+        "activities": 0.7,
+    }
+    # Inject protect_quality_floors bias with sufficient weight.
+    resolved.explanation.activated_interactions = [
+        InteractionActivation(
+            rule_id="rule-quality",
+            dimensions=[],
+            planning_biases={"protect_quality_floors": 0.95},
+        )
+    ]
+
+    objectives = derive_itinerary_objectives(resolved, trip_id="trip-budget-sort")
+
+    cats = objectives.budget_protection.protected_categories
+    assert cats == sorted(cats), f"categories not sorted: {cats}"
+    assert "lodging" in cats
+
+
+def test_repeated_serialized_runs_return_identical_output() -> None:
+    """Running derivation twice on the same input must produce byte-identical serialised output."""
+    fixture = load_fixture_map()["breadth-under-recovery-pressure"]
+    resolved = resolve_leisure_profile(fixture.profile, fixture.evidence)
+
+    first = derive_itinerary_objectives(resolved, trip_id="trip-repeat", objective_id="obj-1")
+    second = derive_itinerary_objectives(resolved, trip_id="trip-repeat", objective_id="obj-1")
+
+    assert first.to_dict() == second.to_dict()

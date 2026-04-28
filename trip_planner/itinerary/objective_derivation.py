@@ -202,6 +202,7 @@ def _budget_protection(
     if interaction_biases.get("protect_quality_floors", 0.0) >= 0.9:
         if not any(category.startswith("lodging") for category in protected_categories):
             protected_categories.append("lodging")
+            protected_categories.sort()
         notes.append("Interaction bias protects quality floors before relaxing comfort targets.")
     return BudgetProtection(
         protected_categories=protected_categories,
@@ -305,21 +306,21 @@ def _build_explanations(resolved: ResolvedLeisureProfile) -> list[str]:
                 f"salience={dimension.salience:.2f}"
             )
         )
-    for tension in resolved.profile.tension_flags:
+    for tension in sorted(resolved.profile.tension_flags, key=lambda t: t.id):
         explanations.append(f"tension:{tension.id}:{tension.description}")
-    for activation in resolved.explanation.activated_interactions:
+    for activation in sorted(resolved.explanation.activated_interactions, key=lambda a: a.rule_id):
         explanations.append(
             f"interaction:{activation.rule_id}:biases={sorted(activation.planning_biases.items())}"
         )
     if resolved.profile.hard_constraints.must_include_places:
         explanations.append(
             "hard_constraints:must_include_places="
-            + ",".join(resolved.profile.hard_constraints.must_include_places)
+            + ",".join(sorted(resolved.profile.hard_constraints.must_include_places))
         )
     if resolved.profile.hard_constraints.must_protect_experiences:
         explanations.append(
             "hard_constraints:must_protect_experiences="
-            + ",".join(resolved.profile.hard_constraints.must_protect_experiences)
+            + ",".join(sorted(resolved.profile.hard_constraints.must_protect_experiences))
         )
     return explanations
 
