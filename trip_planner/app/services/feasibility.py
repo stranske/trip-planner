@@ -124,9 +124,7 @@ def build_feasibility_planner_outputs(
             "status": (
                 "critical"
                 if feasibility_summary["blocking_bundle_count"]
-                else "caution"
-                if feasibility_summary["attention_bundle_count"]
-                else "positive"
+                else "caution" if feasibility_summary["attention_bundle_count"] else "positive"
             ),
             "highlights": list(feasibility_summary["notes"]),
         }
@@ -141,9 +139,11 @@ def build_feasibility_planner_outputs(
                     (
                         "Blocked until feasibility conflicts are resolved. "
                         if assessment["status"] == "critical"
-                        else "Feasible but not yet ready for ranking. "
-                        if assessment["status"] == "caution"
-                        else "Ready for ranking with current feasibility signals. "
+                        else (
+                            "Feasible but not yet ready for ranking. "
+                            if assessment["status"] == "caution"
+                            else "Ready for ranking with current feasibility signals. "
+                        )
                     )
                     + (
                         f"{assessment['total_travel_minutes']} travel minutes, "
@@ -154,9 +154,7 @@ def build_feasibility_planner_outputs(
                 "tags": [
                     "feasibility",
                     assessment["bundle_context"],
-                    "ranking-ready"
-                    if assessment["recommended_for_ranking"]
-                    else "needs-attention",
+                    "ranking-ready" if assessment["recommended_for_ranking"] else "needs-attention",
                 ],
                 "status": assessment["status"],
                 "highlights": _assessment_highlights(assessment),

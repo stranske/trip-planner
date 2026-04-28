@@ -34,10 +34,14 @@ class PlannerRuntimeConfig:
 
 def get_planner_runtime_config() -> PlannerRuntimeConfig:
     provider = (
-        os.getenv("TRIP_PLANNER_PLANNER_PROVIDER")
-        or os.getenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER")
-        or ""
-    ).strip().lower()
+        (
+            os.getenv("TRIP_PLANNER_PLANNER_PROVIDER")
+            or os.getenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER")
+            or ""
+        )
+        .strip()
+        .lower()
+    )
     model = os.getenv("TRIP_PLANNER_PLANNER_MODEL", "").strip()
     openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
     fake_enabled = provider == "fake"

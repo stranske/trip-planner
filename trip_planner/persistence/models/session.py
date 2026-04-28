@@ -18,18 +18,12 @@ class AuthSession(Base):
     __tablename__ = "auth_sessions"
 
     session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    user_id: Mapped[str] = mapped_column(
-        ForeignKey("user_accounts.user_id", ondelete="CASCADE")
-    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("user_accounts.user_id", ondelete="CASCADE"))
     token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    last_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow
-    )
-    revoked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     user = relationship("UserAccount", back_populates="sessions")
 
 

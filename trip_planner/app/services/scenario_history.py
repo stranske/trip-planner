@@ -37,9 +37,7 @@ _SESSION_STATE_ID_PREFIX = "session-state:"
 _SESSION_STATE_ID_SUFFIX_LENGTH = 7
 _SESSION_STATE_ID_MAX_LENGTH = 96
 _SESSION_STATE_SLUG_MAX_LENGTH = (
-    _SESSION_STATE_ID_MAX_LENGTH
-    - len(_SESSION_STATE_ID_PREFIX)
-    - _SESSION_STATE_ID_SUFFIX_LENGTH
+    _SESSION_STATE_ID_MAX_LENGTH - len(_SESSION_STATE_ID_PREFIX) - _SESSION_STATE_ID_SUFFIX_LENGTH
 )
 
 
@@ -211,9 +209,7 @@ def list_trip_scenario_history(
     return {
         "saved_scenarios": [_serialize_saved_scenario(record) for record in saved_scenarios],
         "planning_history": [_serialize_activity_entry(record) for record in planning_history],
-        "planning_sessions": [
-            _serialize_planning_session(record) for record in planning_sessions
-        ],
+        "planning_sessions": [_serialize_planning_session(record) for record in planning_sessions],
     }
 
 
@@ -379,17 +375,14 @@ def create_planning_session(
                 "started_at": started_at,
                 "updated_at": updated_at,
                 "interaction_state": payload.get("interaction_state", {}),
-                "recent_option_presentations": payload.get(
-                    "recent_option_presentations", []
-                ),
+                "recent_option_presentations": payload.get("recent_option_presentations", []),
                 "pending_decisions": payload.get("pending_decisions", []),
                 "status": payload.get("status", "active"),
                 "current_checkpoint_id": payload.get("current_checkpoint_id"),
                 "current_saved_scenario_id": payload.get("current_saved_scenario_id"),
                 "active_budget_plan_id": payload.get("active_budget_plan_id"),
                 "activity_log_id": payload.get("activity_log_id"),
-                "schema_version": payload.get("schema_version")
-                or SESSION_STATE_SCHEMA_VERSION,
+                "schema_version": payload.get("schema_version") or SESSION_STATE_SCHEMA_VERSION,
                 "tags": payload.get("tags", []),
                 "notes": payload.get("notes", []),
             }

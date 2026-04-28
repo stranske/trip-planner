@@ -33,7 +33,9 @@ def _planner_message_records(
         db_session.scalars(
             select(PersistedPlannerAction)
             .where(PersistedPlannerAction.session_state_id == session_state_id)
-            .where(PersistedPlannerAction.action_type.in_(["planner_user_turn", "planner_response"]))
+            .where(
+                PersistedPlannerAction.action_type.in_(["planner_user_turn", "planner_response"])
+            )
             .order_by(
                 PersistedPlannerAction.created_at.asc(),
                 PersistedPlannerAction.planner_action_id.asc(),
@@ -42,13 +44,11 @@ def _planner_message_records(
     )
 
 
-def _checkpoint_summary(messages: list[PersistedPlannerAction], *, turn_index: int) -> dict[str, Any]:
+def _checkpoint_summary(
+    messages: list[PersistedPlannerAction], *, turn_index: int
+) -> dict[str, Any]:
     latest_reply_record = next(
-        (
-            record
-            for record in reversed(messages)
-            if record.action_type == "planner_response"
-        ),
+        (record for record in reversed(messages) if record.action_type == "planner_response"),
         None,
     )
     latest_user = next(
