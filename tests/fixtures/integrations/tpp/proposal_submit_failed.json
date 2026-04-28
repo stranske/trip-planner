@@ -1,0 +1,47 @@
+{
+  "request": {
+    "operation": "submit_proposal",
+    "request_id": "req-submit-failed",
+    "correlation_id": {
+      "value": "corr-submit-failed",
+      "issued_by": "trip-planner"
+    },
+    "payload": {
+      "proposal_ref": "proposal-123",
+      "proposal_version": "proposal-v3"
+    },
+    "transport_pattern": "async",
+    "organization_id": "org-acme",
+    "trip_id": "trip-100",
+    "proposal_id": "proposal-123",
+    "submitted_at": "2026-04-03T04:00:00Z"
+  },
+  "response": {
+    "operation": "submit_proposal",
+    "request_id": "req-submit-failed",
+    "correlation_id": {
+      "value": "corr-submit-failed",
+      "issued_by": "trip-planner"
+    },
+    "transport_pattern": "async",
+    "execution_status": {
+      "state": "failed",
+      "terminal": true,
+      "summary": "Proposal rejected due to invalid submission contract",
+      "external_status": "422 Unprocessable Entity",
+      "updated_at": "2026-04-03T04:00:01Z"
+    },
+    "error": {
+      "code": "proposal_contract_invalid",
+      "message": "The submitted proposal payload does not satisfy TPP contract requirements.",
+      "category": "contract",
+      "retryable": false,
+      "details": {
+        "field": "selected_options",
+        "reason": "At least one selected option is required"
+      }
+    },
+    "received_at": "2026-04-03T04:00:01Z",
+    "status_endpoint": null
+  }
+}

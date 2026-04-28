@@ -1,0 +1,71 @@
+{
+  "request": {
+    "operation": "fetch_evaluation_result",
+    "request_id": "req-result-exception",
+    "correlation_id": {
+      "value": "corr-result-exception",
+      "issued_by": "trip-planner"
+    },
+    "payload": {
+      "execution_id": "exec-exception-001"
+    },
+    "transport_pattern": "async",
+    "organization_id": "org-acme",
+    "trip_id": "trip-100",
+    "proposal_id": "proposal-123",
+    "submitted_at": "2026-04-03T03:00:00Z"
+  },
+  "response": {
+    "operation": "fetch_evaluation_result",
+    "request_id": "req-result-exception",
+    "correlation_id": {
+      "value": "corr-result-exception",
+      "issued_by": "trip-planner"
+    },
+    "transport_pattern": "async",
+    "execution_status": {
+      "state": "succeeded",
+      "terminal": true,
+      "summary": "Policy evaluation completed — exception path required",
+      "external_status": "200 OK",
+      "updated_at": "2026-04-03T03:00:05Z"
+    },
+    "result_payload": {
+      "execution_id": "exec-exception-001",
+      "trip_id": "trip-100",
+      "proposal_id": "proposal-123",
+      "proposal_version": "proposal-v3",
+      "scenario_id": "scenario-b",
+      "evaluation_result": {
+        "evaluation_id": "eval-exception-001",
+        "proposal_id": "proposal-123",
+        "status": "exception_required",
+        "approval_requirements": [
+          {
+            "role": "vp",
+            "reason": "Airfare exceeds policy cap and requires VP exception approval",
+            "mandatory": true
+          }
+        ],
+        "failure_reasons": [
+          {
+            "code": "airfare_cap_exceeded",
+            "message": "Selected airfare of $1,200 exceeds the $800 policy cap.",
+            "severity": "blocking",
+            "related_category": "airfare"
+          }
+        ],
+        "preferred_alternatives": [],
+        "exception_guidance": [
+          "Submit a VP exception request citing the vendor proximity and scheduling requirement."
+        ],
+        "notes": [
+          "Exception path required before booking can proceed."
+        ],
+        "compliance_score": 0.45
+      }
+    },
+    "received_at": "2026-04-03T03:00:05Z",
+    "status_endpoint": "https://tpp.example.test/executions/exec-exception-001"
+  }
+}
