@@ -67,6 +67,7 @@ When a persisted trip is missing a destination, dates, or both, the workspace ro
 - [Source channel strategy](docs/source-channel-strategy.md)
 - [Legacy itinerary methodology](docs/methodology.md)
 - [CI system guide](docs/CI_SYSTEM_GUIDE.md)
+- [Design coverage map](docs/design-coverage-map.md)
 - [Legacy static demo archive](archive/legacy-static-demo/README.md)
 
 ## Current Repo Reality
