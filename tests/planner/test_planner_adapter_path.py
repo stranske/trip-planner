@@ -19,7 +19,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
-from trip_planner.app.services.auth import AuthenticatedUser, create_account
+from trip_planner.app.services.auth import create_account
 from trip_planner.app.services.workspace import get_workspace_payload
 from trip_planner.persistence.db import (
     ensure_database_ready,
