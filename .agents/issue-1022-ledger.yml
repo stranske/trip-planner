@@ -38,10 +38,10 @@ tasks:
   - id: task-05
     title: Implement stable source ID assignment for all inventory options in the
       generation pipeline
-    status: todo
-    started_at: null
-    finished_at: null
-    commit: ''
+    status: done
+    started_at: '2026-04-28T16:00:00Z'
+    finished_at: '2026-04-28T16:30:00Z'
+    commit: 869f3786
     notes: []
   - id: task-06
     title: Normalize option contracts in the inventory generation pipeline to match
