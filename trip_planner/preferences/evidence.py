@@ -26,6 +26,11 @@ EVIDENCE_SOURCE_TYPES: tuple[str, ...] = (
     "trip_revision",
     "imported_trip_notes",
 )
+EVIDENCE_SIGNAL_FAMILIES: tuple[str, ...] = (
+    "explicit_answer",
+    "revealed_behavior",
+    "default_assumption",
+)
 EVIDENCE_SUPPORT_LEVELS: tuple[str, ...] = ("weak", "medium", "strong")
 SIGNAL_DIRECTIONS: tuple[str, ...] = ("positive", "negative", "contradiction")
 OPTION_KINDS: tuple[str, ...] = (
@@ -35,6 +40,24 @@ OPTION_KINDS: tuple[str, ...] = (
     "destination_bundle",
     "mixed_bundle",
 )
+_BASELINE_CONFIDENCE_BY_SIGNAL_FAMILY: dict[str, float] = {
+    "explicit_answer": 0.7,
+    "revealed_behavior": 0.85,
+    "default_assumption": 0.1,
+}
+
+
+def evidence_signal_family(*, evidence_type: str, source_type: str) -> str:
+    if evidence_type in {"option_selection", "option_rejection", "trip_revision"}:
+        return "revealed_behavior"
+    if source_type in {"user_message", "structured_input", "scenario_prompt"}:
+        return "explicit_answer"
+    return "default_assumption"
+
+
+def baseline_confidence_hint(*, evidence_type: str, source_type: str) -> float:
+    family = evidence_signal_family(evidence_type=evidence_type, source_type=source_type)
+    return _BASELINE_CONFIDENCE_BY_SIGNAL_FAMILY[family]
 
 
 def _require_probability(value: float, field_name: str) -> None:

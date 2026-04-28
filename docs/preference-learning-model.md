@@ -116,6 +116,14 @@ Use:
 
 Not all evidence should count equally.
 
+Confidence should start from a signal-family baseline before other weighting rules are applied:
+
+- `revealed_behavior` (for concrete option selections/rejections and trip revisions): `0.85`
+- `explicit_answer` (for direct statements and structured answers): `0.70`
+- `default_assumption` (for fallback/inferred assumptions with no direct user signal): `0.10`
+
+These baselines are implemented in `trip_planner.preferences.evidence.baseline_confidence_hint`.
+
 The first pass should score evidence strength using:
 
 - `explicitness`: how directly the user expressed the preference
@@ -126,6 +134,12 @@ The first pass should score evidence strength using:
 - `conflict_penalty`: whether later evidence materially contradicts earlier evidence
 
 Revealed preference and resource-allocation evidence should usually outrank abstract self-description when the two conflict, unless the higher-level preference is anchored or constrained explicitly.
+
+Freshness rules:
+
+- evidence older than the current planning cycle should be down-weighted relative to fresh evidence
+- stale default assumptions should decay fastest because they are the weakest class
+- repeated, recent revealed behavior can override older explicit self-description unless blocked by hard constraints or anchors
 
 ## Preference Resolution Rules
 
