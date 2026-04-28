@@ -2,6 +2,8 @@ from copy import deepcopy
 
 from tests.preferences.fixture_corpus import load_fixture_corpus
 from trip_planner.preferences import EvidenceSummary, resolve_leisure_profile
+from trip_planner.preferences.evidence import PreferenceEvidence
+from trip_planner.preferences.resolution import resolve_dimension_evidence
 
 EXPECTED_TENSION_IDS = {
     "social-recovery-balancer": {"social-energy-recovery-conflict"},
@@ -110,3 +112,125 @@ def test_directional_seed_artifacts_removed_after_interaction_moves_off_zero() -
         != note
         for note in result.profile.evidence_summary.confidence_notes
     )
+
+
+def test_dimension_resolution_is_deterministic_for_input_order() -> None:
+    records = [
+        PreferenceEvidence(
+            id="ev-b",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="positive",
+            confidence_hint=0.7,
+            salience_hint=0.7,
+            sequence=3,
+        ),
+        PreferenceEvidence(
+            id="ev-a",
+            evidence_type="direct_statement",
+            source_type="user_message",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="negative",
+            confidence_hint=0.9,
+            salience_hint=0.8,
+            sequence=2,
+        ),
+    ]
+    first = resolve_dimension_evidence("movement_vs_friction", 0.4, records)
+    second = resolve_dimension_evidence("movement_vs_friction", 0.4, list(reversed(records)))
+    assert first.final_value == second.final_value
+    assert first.confidence == second.confidence
+    assert first.explanation_code == second.explanation_code
+    assert first.contributing_evidence_ids == second.contributing_evidence_ids
+
+
+def test_dimension_resolution_explicit_override_beats_behavioral_signal() -> None:
+    records = [
+        PreferenceEvidence(
+            id="ev-explicit",
+            evidence_type="direct_statement",
+            source_type="user_message",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="negative",
+            confidence_hint=0.95,
+            salience_hint=0.8,
+            sequence=9,
+        ),
+        PreferenceEvidence(
+            id="ev-behavior",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="positive",
+            confidence_hint=0.7,
+            salience_hint=0.7,
+            sequence=10,
+        ),
+    ]
+    resolved = resolve_dimension_evidence("movement_vs_friction", 0.6, records)
+    assert resolved.final_value < 0.0
+    assert resolved.explanation_code in {"explicit_override", "conflict_low_confidence"}
+    assert "ev-explicit" in resolved.contributing_evidence_ids
+
+
+def test_dimension_resolution_tie_keeps_seed_value() -> None:
+    records = [
+        PreferenceEvidence(
+            id="ev-left",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="negative",
+            confidence_hint=0.9,
+            salience_hint=0.8,
+            sequence=1,
+        ),
+        PreferenceEvidence(
+            id="ev-right",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="positive",
+            confidence_hint=0.9,
+            salience_hint=0.8,
+            sequence=1,
+        ),
+    ]
+    resolved = resolve_dimension_evidence("movement_vs_friction", 0.25, records)
+    assert resolved.final_value == 0.25
+
+
+def test_dimension_resolution_stale_behavior_is_discounted() -> None:
+    records = [
+        PreferenceEvidence(
+            id="ev-stale",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="negative",
+            confidence_hint=0.8,
+            salience_hint=0.8,
+            sequence=1,
+        ),
+        PreferenceEvidence(
+            id="ev-recent",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="positive",
+            confidence_hint=0.8,
+            salience_hint=0.8,
+            sequence=30,
+        ),
+    ]
+    resolved = resolve_dimension_evidence("movement_vs_friction", 0.0, records)
+    assert resolved.recent_behavior_support > abs(resolved.older_behavior_support)
+    assert resolved.final_value > 0.0
+
+
+def test_dimension_resolution_missing_evidence_uses_default_seed() -> None:
+    resolved = resolve_dimension_evidence("movement_vs_friction", -0.35, [])
+    assert resolved.final_value == -0.35
+    assert resolved.explanation_code == "default_seed"
+    assert resolved.contributing_evidence_ids == []
