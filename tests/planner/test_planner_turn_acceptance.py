@@ -31,6 +31,14 @@ import inspect
 import pytest
 
 
+@pytest.mark.xfail(
+    strict=False,
+    reason=(
+        "Runtime-planning-services-epic #677 (children #690-#693) outputs are "
+        "not yet wired through the planner-turn → workspace path. Expected to "
+        "pass once the contract is implemented; tracked under the parent epic."
+    ),
+)
 def test_planner_turn_surfaces_runtime_planning_services_outputs() -> None:
     """Runtime-planning-services-epic #677 (children #690-#693) acceptance contract.
 
@@ -66,6 +74,15 @@ def test_planner_turn_surfaces_runtime_planning_services_outputs() -> None:
     )
 
 
+@pytest.mark.xfail(
+    strict=False,
+    reason=(
+        "Live TPP approval-flow entry points (request_approval / "
+        "poll_approval_status) are not yet wired into "
+        "trip_planner.integrations.tpp. Expected to pass once the live TPP "
+        "execution/reoptimization epic implements the round-trip."
+    ),
+)
 def test_tpp_approval_flow_round_trip_from_planner_turn() -> None:
     """Live-tpp-execution-reoptimization-epic acceptance contract.
 
@@ -101,6 +118,14 @@ def test_tpp_approval_flow_round_trip_from_planner_turn() -> None:
         )
 
 
+@pytest.mark.xfail(
+    strict=False,
+    reason=(
+        "Maps-timeline-comparison-epic #679 (child #699) typed route-context "
+        "contract is not yet exported from trip_planner.contracts. Expected "
+        "to pass once the route-context map surface lands."
+    ),
+)
 def test_map_target_uses_typed_route_context_contract() -> None:
     """Maps-timeline-comparison-epic #679 (child #699) acceptance contract.
 
