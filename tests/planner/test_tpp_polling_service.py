@@ -31,6 +31,30 @@ def test_polling_service_maps_state_from_payload() -> None:
     assert service.map_poll_response_to_outcome({"state": "approved"}) == PollingOutcome.APPROVED
 
 
+def test_polling_service_poll_returns_rejected_outcome() -> None:
+    service = TPPPollingService(lambda _proposal_id: {"state": "rejected"})
+
+    assert service.poll("proposal-123") == PollingOutcome.REJECTED
+
+
+def test_polling_service_poll_returns_pending_outcome() -> None:
+    service = TPPPollingService(lambda _proposal_id: {"state": "pending"}, timeout_seconds=0.0)
+
+    assert service.poll("proposal-123") == PollingOutcome.PENDING
+
+
+def test_polling_service_poll_returns_timeout_without_terminal_state() -> None:
+    ticks = iter([0.0, 3.1])
+    service = TPPPollingService(
+        lambda _proposal_id: {"state": "pending"},
+        timeout_seconds=3.0,
+        now=lambda: next(ticks),
+    )
+
+    assert service.poll("proposal-123") == PollingOutcome.PENDING
+    assert service.poll("proposal-123") == PollingOutcome.TIMEOUT
+
+
 @pytest.mark.parametrize("payload", [{}, {"state": ""}, {"state": "   "}, {"state": None}])
 def test_polling_service_rejects_missing_or_blank_state(payload: dict[str, object]) -> None:
     service = TPPPollingService()
