@@ -33,7 +33,7 @@ from trip_planner.app.services.inventory import (
     assemble_inventory_bundles_for_trip,
 )
 from trip_planner.contracts import ItineraryObjectives
-from trip_planner.itinerary import assemble_itinerary_scenarios
+from trip_planner.itinerary import assemble_itinerary_scenarios, evaluate_bundle_feasibility
 from trip_planner.options import InventoryBundle
 from trip_planner.ranking import (
     ExplanationRecord,
@@ -426,3 +426,71 @@ def test_stable_source_adapter_exposes_stable_source_id_property() -> None:
     )
     assert adapter.stable_source_id == "persisted-trip-runtime-source"
     assert adapter.stable_source_id == adapter.source_record.source_id
+
+
+# ---------------------------------------------------------------------------
+# Normalized option contracts — downstream ranking and itinerary compliance
+# ---------------------------------------------------------------------------
+
+
+def test_generated_lodging_has_checkin_window_for_feasibility() -> None:
+    """Generated lodging must carry a non-empty checkin_window so feasibility can parse it.
+
+    Without checkin_window, evaluate_bundle_feasibility adds it to missing_data_fields,
+    which prevents the bundle from being recommended_for_ranking.
+    """
+    lodging = _generate_bundles()[0].lodging_options[0]
+    assert lodging.booking_terms.checkin_window, "lodging checkin_window must be non-empty"
+    assert (
+        "-" in lodging.booking_terms.checkin_window
+    ), "checkin_window must be a parseable time range (e.g. '15:00-22:00')"
+
+
+def test_generated_activity_has_typical_start_window_for_feasibility() -> None:
+    """Generated activity must carry a non-empty typical_start_window so feasibility can parse it.
+
+    Without typical_start_window, evaluate_bundle_feasibility adds it to missing_data_fields,
+    which prevents the bundle from being recommended_for_ranking.
+    """
+    activity = _generate_bundles()[0].activity_options[0]
+    assert (
+        activity.timing_summary.typical_start_window
+    ), "activity typical_start_window must be non-empty"
+    assert (
+        "-" in activity.timing_summary.typical_start_window
+    ), "typical_start_window must be a parseable time range (e.g. '09:00-18:00')"
+
+
+def test_generated_bundle_feasibility_has_no_missing_data_fields() -> None:
+    """Normalized option contracts must produce zero missing_data_fields in feasibility output.
+
+    This verifies the normalized contract shape satisfies both the ranking module input
+    interface (no missing_data_fields → recommended_for_ranking=True) and the itinerary
+    assembly input interface (feasible=True, recommended_for_selection=True).
+    """
+    bundle = _generate_bundles()[0]
+    assessment = evaluate_bundle_feasibility(bundle)
+
+    assert not assessment.missing_data_fields, (
+        f"Normalized option contracts must not produce missing_data_fields; "
+        f"got: {assessment.missing_data_fields}"
+    )
+    assert assessment.feasible, "Bundle must be feasible after contract normalization"
+    assert (
+        assessment.recommended_for_ranking
+    ), "Bundle must be recommended_for_ranking once all required contract fields are populated"
+
+
+def test_itinerary_scenario_recommended_for_selection_after_normalization() -> None:
+    """After option contract normalization, itinerary scenario must be recommended_for_selection."""
+    bundles = _generate_bundles()
+    ranked = _bundle_ranked_result_set(bundles, trip_id=_TRIP_ID)
+    search_result = assemble_itinerary_scenarios(ranked, bundles=bundles, objectives=_objectives())
+
+    assert (
+        search_result.scenarios
+    ), "assemble_itinerary_scenarios must produce at least one scenario"
+    scenario = search_result.scenarios[0]
+    assert (
+        scenario.scenario_summary.recommended_for_selection
+    ), "Scenario must be recommended_for_selection once option contracts are normalized"

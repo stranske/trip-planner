@@ -505,6 +505,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                         "access_summary": "Central location selected from persisted trip scope.",
                     },
                     "room_summary": {"lodging_kind": "hotel"},
+                    "booking_terms": {"checkin_window": "15:00-22:00"},
                     "cost_summary": {
                         "total": {"currency": "USD", "typical_amount": lodging_total},
                     },
@@ -576,7 +577,10 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                     "category": {
                         "primary": "meeting" if self.trip_mode == "business" else "museum",
                     },
-                    "timing_summary": {"duration_minutes": 120},
+                    "timing_summary": {
+                        "duration_minutes": 120,
+                        "typical_start_window": "09:00-18:00",
+                    },
                     "significance_summary": {
                         "overall_signal": baseline_signal,
                         "anchor_worthy": True,
