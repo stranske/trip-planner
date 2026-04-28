@@ -211,6 +211,13 @@ def test_normalize_contradictory_breadth_recovery_tension_detectable() -> None:
     assert result.tradeoff_values["recovery_vs_intensity"] >= 0.4
 
 
+def test_normalize_contradictory_trip_frame_preserved() -> None:
+    """Trip-frame fields are carried through even when dimension answers are contradictory."""
+    fx = _load_fixture("contradictory")
+    result = normalize(fx["answers"])
+    assert result.traveler_party == fx["expected"]["traveler_party"]
+
+
 # ── Normalize: invalid responses raise ValueError ────────────────────────────
 
 

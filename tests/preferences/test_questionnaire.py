@@ -292,3 +292,35 @@ def test_validate_response_error_message_lists_all_problems() -> None:
     msg = str(exc_info.value)
     assert "q_budget_sensitivity" in msg
     assert "q_totally_unknown" in msg
+
+
+def test_choice_error_shows_allowed_values() -> None:
+    """Error message lists the valid options so the caller knows exactly what to send."""
+    spec = QUESTION_REGISTRY["q_traveler_party"]
+    with pytest.raises(ValueError) as exc_info:
+        spec.validate("cruise_ship")
+    msg = str(exc_info.value)
+    # Invalid value named
+    assert "cruise_ship" in msg
+    # All allowed values present so the caller can choose the right one
+    for allowed in spec.allowed_values:  # type: ignore[union-attr]
+        assert allowed in msg, f"Allowed value {allowed!r} missing from error: {msg}"
+
+
+def test_text_list_error_names_unrecognized_values() -> None:
+    """Error message names the unrecognized element(s) so the caller can correct them."""
+    spec = QUESTION_REGISTRY["q_route_modes_preference"]
+    with pytest.raises(ValueError) as exc_info:
+        spec.validate(["rail", "hovercraft"])
+    msg = str(exc_info.value)
+    assert "hovercraft" in msg
+
+
+def test_validate_response_choice_error_includes_allowed_options() -> None:
+    """validate_response passes through the allowed-values list for choice failures."""
+    with pytest.raises(ValueError) as exc_info:
+        validate_response({"q_traveler_party": "enterprise", "q_budget_sensitivity": 3})
+    msg = str(exc_info.value)
+    # Caller sees both what was wrong and what the valid choices are
+    assert "enterprise" in msg
+    assert "solo" in msg  # one of the canonical allowed values
