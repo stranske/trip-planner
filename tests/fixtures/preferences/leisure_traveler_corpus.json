@@ -1126,6 +1126,648 @@
       }
     },
     {
+      "id": "budget-focused",
+      "fixture_kind": "archetype",
+      "summary": "Cost-disciplined traveler who optimizes every category for value and accepts friction, logistics self-reliance, and lower comfort floors in exchange for budget efficiency.",
+      "tags": ["budget", "value", "self-reliance", "efficiency"],
+      "raw_inputs": {
+        "trip_brief": "I want to see as much as possible without spending more than I need to. I am comfortable booking my own trains, staying in simple places, and doing research myself.",
+        "stated_constraints": ["trip length around 20 days", "total budget under 2800"],
+        "planning_style_notes": ["wants cheapest viable option not just average option", "happy to trade convenience for savings"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 20,
+          "traveler_party": "solo",
+          "season_window": ["October", "November"],
+          "trip_stage": "first_visit",
+          "regions_in_scope": ["Portugal", "Spain"],
+          "special_themes": ["budget travel", "local transport", "self-guided"]
+        },
+        "hard_constraints": {
+          "budget_ceiling": 2800.0
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.92,
+          "spending_priorities": {
+            "transport_experience": 0.38,
+            "lodging_location": 0.48,
+            "food": 0.54
+          },
+          "quality_floors": {
+            "lodging": "clean, safe, and reasonably located"
+          },
+          "splurge_allowed": false,
+          "splurge_style": null
+        },
+        "tradeoff_dimensions": {
+          "self_reliance_vs_convenience": {
+            "value": 0.78,
+            "confidence": 0.9,
+            "salience": 0.94,
+            "stability": 0.86
+          },
+          "movement_vs_friction": {
+            "value": 0.54,
+            "confidence": 0.76,
+            "salience": 0.72,
+            "stability": 0.7
+          },
+          "structure_vs_elasticity": {
+            "value": -0.22,
+            "confidence": 0.54,
+            "salience": 0.48,
+            "stability": 0.42
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "budget_focused_value_guardrail",
+            "dimensions": ["self_reliance_vs_convenience"],
+            "activation": {
+              "all_of": [
+                {"dimension": "self_reliance_vs_convenience", "min_value": 0.65}
+              ]
+            },
+            "effect": {
+              "deprioritize": ["convenience upgrades", "guided tours", "airport transfers"],
+              "prioritize": ["public transport", "self-booked accommodation", "local markets"]
+            },
+            "strength": 0.88,
+            "priority": 0.84
+          }
+        ],
+        "evidence_summary": {
+          "sources": {
+            "direct_statements": ["Traveler explicitly references a hard budget ceiling and comfort with doing logistics themselves."],
+            "revealed_preferences": ["Traveler selects cheaper self-managed options over packaged alternatives."]
+          },
+          "confidence_notes": ["High signal because both stated constraint and option-choice evidence align on cost discipline."]
+        }
+      },
+      "evidence": [
+        {
+          "id": "budget-focused-ev-1",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["self_reliance_vs_convenience", "movement_vs_friction"],
+          "sequence": 1,
+          "confidence_hint": 0.92,
+          "salience_hint": 0.94,
+          "note": "Traveler names budget ceiling and comfort with self-managed logistics."
+        },
+        {
+          "id": "budget-focused-ev-2",
+          "evidence_type": "option_selection",
+          "source_type": "option_menu",
+          "affected_dimensions": ["self_reliance_vs_convenience"],
+          "sequence": 2,
+          "confidence_hint": 0.86,
+          "salience_hint": 0.88,
+          "note": "Traveler selects independent public transport over guided package at roughly half the cost.",
+          "option_evidence": {
+            "option_set_id": "intercity-transport-options",
+            "option_id": "local-bus-and-train",
+            "option_kind": "transport",
+            "presented_option_ids": ["local-bus-and-train", "private-transfer", "guided-day-trip"],
+            "comparison_label": "intercity travel options"
+          }
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "This traveler treats budget discipline as a first-order constraint rather than a secondary preference. Value efficiency should guide every category, not just lodging.",
+        "dominant_dimensions": [
+          "self_reliance_vs_convenience",
+          "movement_vs_friction"
+        ],
+        "expected_tensions": [
+          "Budget ceiling may force route contraction or longer transit legs that reduce overall experience quality."
+        ],
+        "planning_implications": [
+          "Present cheapest viable option prominently, not just middle-of-range options.",
+          "Do not silently upgrade any category without surfacing the cost delta.",
+          "Prefer self-bookable options over convenience packages unless the price gap is small."
+        ]
+      }
+    },
+    {
+      "id": "schedule-sensitive",
+      "fixture_kind": "archetype",
+      "summary": "Traveler with fixed calendar anchors and a low tolerance for timing uncertainty, who needs every transition and commitment protected from schedule drift.",
+      "tags": ["schedule", "calendar", "structured", "reliability"],
+      "raw_inputs": {
+        "trip_brief": "I have a limited window and a few things I absolutely cannot miss. I do not like arriving late, rearranging at the last minute, or having contingency days eaten by delays.",
+        "stated_constraints": ["trip length exactly 14 days", "fixed departure and return dates", "event commitment on day 4"],
+        "planning_style_notes": ["wants buffer built into transition days", "needs the plan to stay on track without heroic adjustment"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 14,
+          "traveler_party": "pair",
+          "season_window": ["March"],
+          "trip_stage": "first_visit",
+          "regions_in_scope": ["Netherlands", "Belgium"],
+          "special_themes": ["calendar-constrained", "event travel", "reliable logistics"]
+        },
+        "hard_constraints": {
+          "date_window": {"start": "2026-03-10", "end": "2026-03-24"},
+          "must_protect_experiences": ["concert in Amsterdam on day 4"]
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.6,
+          "spending_priorities": {
+            "transport_simplicity": 0.86,
+            "lodging_location": 0.72
+          },
+          "splurge_allowed": true,
+          "splurge_style": "pay for timing reliability and direct connections that protect calendar commitments"
+        },
+        "anchors": {
+          "calendar_anchors": [
+            {
+              "type": "calendar",
+              "label": "Amsterdam concert day 4",
+              "strength": 0.98,
+              "flexibility": 0.02,
+              "notes": "Fixed calendar commitment. All route planning must protect this date."
+            }
+          ],
+          "mode_anchors": [
+            {
+              "type": "mode",
+              "label": "Direct or simple connections",
+              "strength": 0.76,
+              "flexibility": 0.36,
+              "notes": "Avoid connection chains with tight transfer windows."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "structure_vs_elasticity": {
+            "value": -0.88,
+            "confidence": 0.92,
+            "salience": 0.96,
+            "stability": 0.9
+          },
+          "movement_vs_friction": {
+            "value": 0.46,
+            "confidence": 0.72,
+            "salience": 0.68,
+            "stability": 0.74
+          },
+          "self_reliance_vs_convenience": {
+            "value": -0.56,
+            "confidence": 0.78,
+            "salience": 0.76,
+            "stability": 0.8
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "schedule_sensitive_anchor_protection",
+            "dimensions": ["structure_vs_elasticity", "self_reliance_vs_convenience"],
+            "activation": {
+              "all_of": [
+                {"dimension": "structure_vs_elasticity", "max_value": -0.7}
+              ]
+            },
+            "effect": {
+              "prioritize": ["direct connections", "buffer-padded transfers", "early arrival windows"],
+              "deprioritize": ["open-ended days before fixed commitments", "tight connection chains"]
+            },
+            "strength": 0.94,
+            "priority": 0.92
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": "schedule-sensitive-ev-1",
+          "evidence_type": "hard_constraint_declaration",
+          "source_type": "structured_input",
+          "anchor_groups": ["calendar_anchors"],
+          "sequence": 1,
+          "confidence_hint": 0.96,
+          "salience_hint": 0.96,
+          "note": "Traveler names fixed date window and a must-protect event on day 4."
+        },
+        {
+          "id": "schedule-sensitive-ev-2",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["structure_vs_elasticity", "self_reliance_vs_convenience"],
+          "sequence": 2,
+          "confidence_hint": 0.88,
+          "salience_hint": 0.92,
+          "note": "Traveler says they dislike last-minute rearrangement and want the plan to stay on track."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "Reliability and schedule integrity are load-bearing for this traveler. The planner should protect fixed commitments as hard anchors before assembling any flexible content.",
+        "dominant_dimensions": [
+          "structure_vs_elasticity",
+          "self_reliance_vs_convenience"
+        ],
+        "expected_tensions": [
+          "Tight date windows reduce room to recover from delays, so transition padding and simple logistics matter more than optimal routing."
+        ],
+        "planning_implications": [
+          "Lock calendar anchors first and build all other content around them.",
+          "Prefer direct or simple connections over cheaper chains with tight windows.",
+          "Flag any transition day that touches a fixed commitment as schedule-sensitive in the plan."
+        ]
+      }
+    },
+    {
+      "id": "accessibility-aware",
+      "fixture_kind": "archetype",
+      "summary": "Traveler with mobility constraints who needs step-free access, accessible rooms, and logistics that do not assume full ambulatory independence.",
+      "tags": ["accessibility", "mobility", "lodging", "logistics"],
+      "raw_inputs": {
+        "trip_brief": "I use a wheelchair and need rooms and venues that are genuinely accessible, not just technically compliant on paper. I also need arrivals that do not involve stairs or heroic workarounds.",
+        "stated_constraints": ["trip length around 16 days", "step-free access required throughout"],
+        "planning_style_notes": ["has had bad experiences with nominally accessible rooms that were not actually usable", "wants accessibility verified not just listed"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 16,
+          "traveler_party": "pair",
+          "season_window": ["May", "June"],
+          "trip_stage": "first_visit",
+          "regions_in_scope": ["France", "Belgium"],
+          "special_themes": ["accessibility", "urban exploration", "verified access"]
+        },
+        "hard_constraints": {
+          "mobility_constraints": ["wheelchair user", "step-free access required throughout"],
+          "lodging_constraints": ["wheelchair accessible room", "roll-in shower or accessible bathroom", "elevator required if above ground floor"]
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.62,
+          "spending_priorities": {
+            "lodging_quality": 0.88,
+            "transport_simplicity": 0.82
+          },
+          "quality_floors": {
+            "lodging": "wheelchair accessible room with verified step-free bathroom",
+            "transport": "step-free boarding confirmed"
+          },
+          "splurge_allowed": true,
+          "splurge_style": "pay extra to ensure genuine accessibility rather than nominal compliance"
+        },
+        "anchors": {
+          "quality_floor_anchors": [
+            {
+              "type": "quality_floor",
+              "label": "Verified step-free lodging",
+              "strength": 0.96,
+              "flexibility": 0.06,
+              "notes": "Accessibility is a hard requirement, not a preference."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "self_reliance_vs_convenience": {
+            "value": -0.62,
+            "confidence": 0.86,
+            "salience": 0.92,
+            "stability": 0.88
+          },
+          "movement_vs_friction": {
+            "value": 0.66,
+            "confidence": 0.84,
+            "salience": 0.88,
+            "stability": 0.84
+          },
+          "recovery_vs_intensity": {
+            "value": -0.52,
+            "confidence": 0.72,
+            "salience": 0.74,
+            "stability": 0.76
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "accessibility_quality_floor_enforcement",
+            "dimensions": ["self_reliance_vs_convenience", "movement_vs_friction"],
+            "activation": {
+              "all_of": [
+                {"dimension": "self_reliance_vs_convenience", "max_value": -0.45}
+              ]
+            },
+            "effect": {
+              "enforce_quality_floors": ["lodging", "transport"],
+              "deprioritize": ["options without verified accessibility data"]
+            },
+            "strength": 0.96,
+            "priority": 0.96
+          }
+        ],
+        "evidence_summary": {
+          "sources": {
+            "direct_statements": ["Traveler names mobility constraints explicitly and highlights past failures with nominal accessibility."]
+          },
+          "confidence_notes": ["Accessibility requirements are hard constraints not open to budget negotiation."]
+        }
+      },
+      "evidence": [
+        {
+          "id": "accessibility-aware-ev-1",
+          "evidence_type": "hard_constraint_declaration",
+          "source_type": "structured_input",
+          "anchor_groups": ["quality_floor_anchors"],
+          "sequence": 1,
+          "confidence_hint": 0.96,
+          "salience_hint": 0.96,
+          "note": "Traveler declares wheelchair use and step-free requirement as non-negotiable."
+        },
+        {
+          "id": "accessibility-aware-ev-2",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["self_reliance_vs_convenience", "movement_vs_friction"],
+          "sequence": 2,
+          "confidence_hint": 0.88,
+          "salience_hint": 0.9,
+          "note": "Traveler describes past bad experiences with options that were listed as accessible but were not usable."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "Accessibility requirements are hard constraints that must be verified before an option can be considered at all. Budget flexibility exists to guarantee access, not to trade it away.",
+        "dominant_dimensions": [
+          "movement_vs_friction"
+        ],
+        "expected_tensions": [
+          "Verified accessible options may be fewer, more expensive, or less centrally located, requiring route trade-offs."
+        ],
+        "planning_implications": [
+          "Filter all options by verified accessibility data before ranking.",
+          "Do not offer nominally accessible options without confirming specifics.",
+          "Budget flexibility should go to accessibility assurance first, not comfort upgrades."
+        ]
+      }
+    },
+    {
+      "id": "family-leisure",
+      "fixture_kind": "archetype",
+      "summary": "Family traveler with young children who needs recovery-friendly pacing, stable logistics, and accommodations that work for a group with mixed energy levels.",
+      "tags": ["family", "children", "recovery", "structure"],
+      "raw_inputs": {
+        "trip_brief": "We are travelling with two kids under ten. We need flexibility for bad days, rooms that fit a family, and a pace that does not destroy everyone by day four.",
+        "stated_constraints": ["trip length around 14 days", "traveling with children aged 6 and 9"],
+        "planning_style_notes": ["needs escape hatches when kids hit a wall", "wants a mix of engaging activities and low-key base time", "does not want to move lodging more than twice"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 14,
+          "traveler_party": "family",
+          "season_window": ["July"],
+          "trip_stage": "first_visit",
+          "regions_in_scope": ["Croatia", "Slovenia"],
+          "special_themes": ["family travel", "child-friendly pacing", "stable bases"]
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.66,
+          "spending_priorities": {
+            "lodging_quality": 0.82,
+            "transport_simplicity": 0.76
+          },
+          "quality_floors": {
+            "lodging": "family room or connecting rooms with space for children"
+          },
+          "splurge_allowed": true,
+          "splurge_style": "spend to protect family sleep quality and avoid logistics that stress children"
+        },
+        "anchors": {
+          "quality_floor_anchors": [
+            {
+              "type": "quality_floor",
+              "label": "Family-suitable lodging",
+              "strength": 0.88,
+              "flexibility": 0.22,
+              "notes": "Room must fit the full family. Double rooms shared with children are not acceptable."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "recovery_vs_intensity": {
+            "value": -0.68,
+            "confidence": 0.88,
+            "salience": 0.94,
+            "stability": 0.82
+          },
+          "movement_vs_friction": {
+            "value": 0.72,
+            "confidence": 0.84,
+            "salience": 0.88,
+            "stability": 0.82
+          },
+          "structure_vs_elasticity": {
+            "value": -0.52,
+            "confidence": 0.76,
+            "salience": 0.78,
+            "stability": 0.72
+          },
+          "breadth_vs_depth": {
+            "value": 0.46,
+            "confidence": 0.64,
+            "salience": 0.58,
+            "stability": 0.52
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "family_recovery_pacing_guardrail",
+            "dimensions": ["recovery_vs_intensity", "movement_vs_friction"],
+            "activation": {
+              "all_of": [
+                {"dimension": "recovery_vs_intensity", "max_value": -0.5},
+                {"dimension": "movement_vs_friction", "min_value": 0.5}
+              ]
+            },
+            "effect": {
+              "prioritize": ["stable bases", "half-day or rest-day options", "low-move itineraries"],
+              "deprioritize": ["multi-city sprint routes", "tight transfer chains with children"]
+            },
+            "strength": 0.9,
+            "priority": 0.88
+          }
+        ],
+        "tension_flags": [
+          {
+            "id": "family-pacing-breadth-conflict",
+            "severity": 0.62,
+            "description": "Family wants to experience multiple areas but children's energy limits daily intensity and move density."
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": "family-leisure-ev-1",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["recovery_vs_intensity", "movement_vs_friction", "structure_vs_elasticity"],
+          "sequence": 1,
+          "confidence_hint": 0.9,
+          "salience_hint": 0.94,
+          "note": "Traveler names children's energy limits and need to avoid pace that exhausts the family."
+        },
+        {
+          "id": "family-leisure-ev-2",
+          "evidence_type": "hard_constraint_declaration",
+          "source_type": "structured_input",
+          "anchor_groups": ["quality_floor_anchors"],
+          "sequence": 2,
+          "confidence_hint": 0.88,
+          "salience_hint": 0.88,
+          "note": "Traveler sets lodging requirement for family-sized rooms and limits moves to two bases."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "Family pacing and stable logistics dominate this profile. Recovery and friction reduction are protective constraints, not preferences to be balanced against coverage ambitions.",
+        "dominant_dimensions": [
+          "recovery_vs_intensity",
+          "movement_vs_friction",
+          "structure_vs_elasticity"
+        ],
+        "expected_tensions": [
+          "Desire to show children diverse places competes with the energy and logistics ceiling imposed by travelling with young children."
+        ],
+        "planning_implications": [
+          "Build in regular low-demand half-days or base days.",
+          "Keep lodging moves to a minimum and prefer longer stays in family-suitable accommodation.",
+          "Surface child-friendly activity options alongside adult-oriented alternatives for each day."
+        ]
+      }
+    },
+    {
+      "id": "business-policy-constrained",
+      "fixture_kind": "archetype",
+      "summary": "Frequent traveler who extends business trips with personal days but must stay within policy-like budget and schedule discipline for the whole trip.",
+      "tags": ["business", "policy", "budget", "structure"],
+      "raw_inputs": {
+        "trip_brief": "I am adding personal days to a business trip. I cannot go over a fixed total budget and my calendar has hard windows. I want the leisure days to feel like real travel, not just filler.",
+        "stated_constraints": ["trip length 10 days total with 4 work days fixed", "hard budget ceiling from company policy extended to personal portion"],
+        "planning_style_notes": ["comfortable with reliable logistics", "does not want to deal with uncertainty on work days", "leisure portion should not bleed into work commitments"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 10,
+          "traveler_party": "solo",
+          "season_window": ["February", "March"],
+          "trip_stage": "repeat_visit",
+          "regions_in_scope": ["Germany", "Austria"],
+          "special_themes": ["bleisure travel", "policy-constrained budget", "structured leisure window"]
+        },
+        "hard_constraints": {
+          "budget_ceiling": 3200.0,
+          "must_protect_experiences": ["work commitments days 1-4"]
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.86,
+          "spending_priorities": {
+            "transport_simplicity": 0.8,
+            "lodging_location": 0.74,
+            "food": 0.52
+          },
+          "quality_floors": {
+            "lodging": "business-grade: quiet, reliable internet, central"
+          },
+          "splurge_allowed": false,
+          "splurge_style": null
+        },
+        "anchors": {
+          "calendar_anchors": [
+            {
+              "type": "calendar",
+              "label": "Work commitment days 1-4",
+              "strength": 1.0,
+              "flexibility": 0.0,
+              "notes": "Work days are completely fixed. Leisure must be scheduled around them."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "structure_vs_elasticity": {
+            "value": -0.74,
+            "confidence": 0.88,
+            "salience": 0.92,
+            "stability": 0.88
+          },
+          "self_reliance_vs_convenience": {
+            "value": -0.44,
+            "confidence": 0.74,
+            "salience": 0.76,
+            "stability": 0.8
+          },
+          "movement_vs_friction": {
+            "value": 0.34,
+            "confidence": 0.64,
+            "salience": 0.62,
+            "stability": 0.72
+          },
+          "iconic_vs_discovery": {
+            "value": -0.28,
+            "confidence": 0.56,
+            "salience": 0.5,
+            "stability": 0.54
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "policy_budget_and_calendar_guardrail",
+            "dimensions": ["structure_vs_elasticity", "self_reliance_vs_convenience"],
+            "activation": {
+              "all_of": [
+                {"dimension": "structure_vs_elasticity", "max_value": -0.6}
+              ]
+            },
+            "effect": {
+              "prioritize": ["direct connections on work days", "predictable lodging near work venues"],
+              "deprioritize": ["spontaneous detours that could conflict with work schedule"]
+            },
+            "strength": 0.9,
+            "priority": 0.9
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": "business-policy-constrained-ev-1",
+          "evidence_type": "hard_constraint_declaration",
+          "source_type": "structured_input",
+          "anchor_groups": ["calendar_anchors"],
+          "sequence": 1,
+          "confidence_hint": 0.94,
+          "salience_hint": 0.94,
+          "note": "Traveler names fixed work days and a hard budget ceiling from company policy."
+        },
+        {
+          "id": "business-policy-constrained-ev-2",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["structure_vs_elasticity", "self_reliance_vs_convenience"],
+          "sequence": 2,
+          "confidence_hint": 0.82,
+          "salience_hint": 0.86,
+          "note": "Traveler wants leisure days to feel real but cannot let them drift into work windows."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "The work calendar and budget ceiling are absolute constraints. Leisure planning fills the remaining window and should feel substantive, not residual.",
+        "dominant_dimensions": [
+          "structure_vs_elasticity"
+        ],
+        "expected_tensions": [
+          "The leisure window is short enough that any plan which overreaches risks bleeding into work commitments or busting the budget."
+        ],
+        "planning_implications": [
+          "Design leisure content inside a clearly bounded window, not as additions that compress work time.",
+          "Keep all options within policy-level cost discipline even for the personal days.",
+          "Surface high-value compact options rather than expansive multi-day plans."
+        ]
+      }
+    },
+    {
       "id": "quality-floors-under-budget-pressure",
       "fixture_kind": "tension_case",
       "summary": "Traveler has strict lodging and comfort minimums but also a real budget ceiling that makes those standards costly to maintain everywhere.",
