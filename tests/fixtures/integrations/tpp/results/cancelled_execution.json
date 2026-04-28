@@ -1,0 +1,46 @@
+{
+  "request": {
+    "operation": "fetch_evaluation_result",
+    "request_id": "req-result-cancelled",
+    "correlation_id": {
+      "value": "corr-result-cancelled",
+      "issued_by": "trip-planner"
+    },
+    "payload": {
+      "execution_id": "exec-cancelled-001"
+    },
+    "transport_pattern": "async",
+    "organization_id": "org-acme",
+    "trip_id": "trip-100",
+    "proposal_id": "proposal-123",
+    "submitted_at": "2026-04-03T01:00:00Z"
+  },
+  "response": {
+    "operation": "fetch_evaluation_result",
+    "request_id": "req-result-cancelled",
+    "correlation_id": {
+      "value": "corr-result-cancelled",
+      "issued_by": "trip-planner"
+    },
+    "transport_pattern": "async",
+    "execution_status": {
+      "state": "cancelled",
+      "terminal": true,
+      "summary": "Proposal evaluation was cancelled due to policy queue timeout",
+      "external_status": "408 Request Timeout",
+      "updated_at": "2026-04-03T01:10:00Z"
+    },
+    "error": {
+      "code": "evaluation_timeout",
+      "message": "Proposal evaluation did not complete within the allowed window and was cancelled.",
+      "category": "timeout",
+      "retryable": false,
+      "details": {
+        "timeout_seconds": 600,
+        "queue_state": "expired"
+      }
+    },
+    "received_at": "2026-04-03T01:10:00Z",
+    "status_endpoint": "https://tpp.example.test/executions/exec-cancelled-001"
+  }
+}
