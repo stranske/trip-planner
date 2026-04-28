@@ -1,0 +1,328 @@
+version: 1
+issue: 1021
+base: main
+branch: codex/issue-1021
+tasks:
+  - id: task-01
+    title: Create the TPP proposal submission service method in `planner/services/tpp_proposal_submission_service.py`
+      that calls `planner/clients/tpp_client.py` with workspace data
+    status: doing
+    started_at: '2026-04-28T15:16:29Z'
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-02
+    title: Implement extraction logic in `planner/services/tpp_proposal_submission_service.py`
+      to parse the `proposal_id` from the TPP client response
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: Add workspace state persistence method in `planner/services/workspace_state.py`
+      to store the extracted `proposal_id`
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: Write unit tests in `tests/planner/test_tpp_proposal_submission_service.py`
+      verifying the submission service calls the TPP client with correct parameters
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: Write unit tests in `tests/planner/test_tpp_proposal_submission_service.py`
+      verifying `proposal_id` extraction handles valid response structures
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: Write unit tests in `tests/planner/test_tpp_proposal_submission_service.py`
+      verifying `proposal_id` is correctly persisted to workspace state
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: Define the application outcome enumeration or types in `planner/models/tpp.py`
+      for `approved`, `rejected`, `failed`, `pending`, and `timeout` states
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: Implement the state mapping function in `planner/services/tpp_polling_service.py`
+      that converts TPP poll response states to application outcomes
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: Implement the routing logic in `planner/services/tpp_polling_service.py`
+      that directs each application outcome to its corresponding handler branch
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: Implement the timeout detection mechanism in `planner/services/tpp_polling_service.py`
+      that triggers when polling exceeds configured duration
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: Write unit tests in `tests/planner/test_tpp_polling_service.py` verifying
+      each TPP state (`approved`, `rejected`, `failed`, `pending`) maps to the correct
+      application outcome
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: Write unit tests in `tests/planner/test_tpp_polling_service.py` verifying
+      timeout condition triggers the timeout outcome without terminal state
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: Implement the workspace state method in `planner/services/workspace_state.py`
+      to persist TPP evaluation result payloads without transformation
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: Implement the workspace state method in `planner/services/workspace_state.py`
+      to reload persisted TPP result payloads during rehydration
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: Write unit tests in `tests/planner/test_tpp_result_service.py` verifying
+      result payloads are stored with exact structure preservation
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-16
+    title: Write unit tests in `tests/planner/test_workspace_state.py` verifying reloaded
+      payloads match originally stored values including nested structures
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-17
+    title: Define the contract schema in `planner/contracts/tpp.py` for TPP submit
+      responses including required `proposal_id` field
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-18
+    title: Define the contract schema in `planner/contracts/tpp.py` for TPP poll responses
+      including required `state` field
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-19
+    title: Define the contract schema in `planner/contracts/tpp.py` for TPP result
+      responses including required evaluation fields
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-20
+    title: Implement validation logic in `planner/services/tpp_proposal_submission_service.py`
+      for submit responses that raises domain error on contract violations
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-21
+    title: Implement validation logic in `planner/services/tpp_polling_service.py`
+      for poll responses that raises domain error on contract violations
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-22
+    title: Implement validation logic in `planner/services/tpp_result_service.py`
+      for result responses that raises domain error on contract violations
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-23
+    title: Write unit tests in `tests/planner/test_tpp_proposal_submission_service.py`
+      verifying domain error is raised for malformed submit responses
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-24
+    title: Write unit tests in `tests/planner/test_tpp_polling_service.py` verifying
+      domain error is raised for malformed poll responses
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-25
+    title: Write unit tests in `tests/planner/test_tpp_result_service.py` verifying
+      domain error is raised for malformed result responses
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-26
+    title: Fix the branch diff by reverting or removing modifications to `tests/planner/test_inventory_provenance.py`
+      from this work
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-27
+    title: Calling the production TPP proposal submission service with a valid workspace
+      and a mocked TPP submit response containing `proposal_id='test-123'` persists
+      the value `'test-123'` into `workspace.state.tpp_proposal_id` and returns a
+      result object where `result.proposal_id == 'test-123'` and `result.success ==
+      True`
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-28
+    title: If the TPP submit response is missing `proposal_id` or otherwise violates
+      the submit response contract, the submission service raises the existing domain
+      error and does not write any proposal id into workspace state
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-29
+    title: The production polling service maps a poll response with `state='approved'`
+      to return `PollingOutcome.APPROVED` (or equivalent enum value) and does not
+      return `PollingOutcome.PENDING`, `PollingOutcome.REJECTED`, `PollingOutcome.FAILED`,
+      or `PollingOutcome.TIMEOUT`
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-30
+    title: The production polling service maps a poll response with `state='rejected'`
+      to return `PollingOutcome.REJECTED`, and `tests/planner/test_tpp_polling_service.py`
+      contains an assertion verifying `polling_service.poll(proposal_id) == PollingOutcome.REJECTED`
+      for that exact outcome
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-31
+    title: The production polling service maps a poll response with `state='pending'`
+      to return `PollingOutcome.PENDING`, and `tests/planner/test_tpp_polling_service.py`
+      contains an assertion verifying `polling_service.poll(proposal_id) == PollingOutcome.PENDING`
+      for that exact outcome
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-32
+    title: The production polling service maps a poll response with `state='failed'`
+      to return `PollingOutcome.FAILED` and does not return `PollingOutcome.APPROVED`,
+      `PollingOutcome.PENDING`, `PollingOutcome.REJECTED`, or `PollingOutcome.TIMEOUT`
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-33
+    title: When the polling workflow reaches its configured timeout condition without
+      receiving a terminal poll state, it returns `PollingOutcome.TIMEOUT` and does
+      not persist an approved or rejected result
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-34
+    title: If a poll response payload is malformed or missing required contract fields,
+      the polling service raises the existing domain error instead of returning any
+      `PollingOutcome` value
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-35
+    title: When a contract-valid TPP evaluation/result payload is received, the production
+      result service persists it into `workspace.state.tpp_result` such that `json.dumps(workspace.state.tpp_result,
+      sort_keys=True)` equals `json.dumps(original_payload, sort_keys=True)`, preserving
+      all keys and nested structures
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-36
+    title: Reloading or rehydrating a workspace after a TPP result has been persisted
+      returns the same result payload shape and values that were originally stored,
+      verified by `json.dumps(rehydrated_result, sort_keys=True) == json.dumps(original_result,
+      sort_keys=True)`
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-37
+    title: If a TPP result payload is malformed or missing required contract fields,
+      the result-processing path raises the existing domain error and does not persist
+      the malformed payload into workspace state
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-38
+    title: The TPP follow-up change set does not modify `tests/planner/test_inventory_provenance.py`,
+      verified by `git diff --name-only` not listing that file
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
