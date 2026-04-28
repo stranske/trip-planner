@@ -42,6 +42,19 @@ _APPROVAL_SIGNALS: dict[str, float] = {
     "disallowed": 0.0,
 }
 
+# Hard constraint ceiling: disallowed inventory cannot score above this regardless of other signals.
+# Any preference, schedule, or comfort advantage is irrelevant once a hard policy block applies.
+_HARD_BLOCK_SCORE_CAP: float = 0.35
+
+# Documented soft penalty amounts by reason code. These reduce the score but allow exception paths.
+_SOFT_PENALTY_AMOUNTS: dict[str, float] = {
+    "feasibility_not_recommended": 0.14,
+    "disallowed_inventory": 0.16,
+    "comparables_missing": 0.08,
+    "booking_links_missing": 0.05,
+    "documentation_gap": 0.04,
+}
+
 
 def _clamp(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
     return max(minimum, min(maximum, value))
@@ -106,9 +119,27 @@ class _RankableBusinessCandidate:
 
 
 class BusinessRankingEngine:
-    """Rank business candidates without replacing policy evaluation or approvals."""
+    """Rank business candidates without replacing policy evaluation or approvals.
+
+    Scoring semantics
+    -----------------
+    Hard constraints (``disallowed`` approval status on any inventory component) apply an
+    inviolable score ceiling of ``HARD_BLOCK_SCORE_CAP``.  No combination of traveler
+    preference, schedule quality, or comfort advantage can push a hard-blocked bundle
+    above that ceiling.
+
+    Soft constraints (``restricted`` approval status, missing comparables, missing booking
+    links, documentation gaps, feasibility warnings) are applied as explicit penalty
+    deductions whose amounts are documented in ``SOFT_PENALTY_AMOUNTS``.  Soft-penalised
+    bundles remain rankable and may still surface through the exception path when
+    objectives explicitly permit it.
+    """
 
     BASELINE_SCORE = 0.24
+    # Hard policy ceiling — disallowed inventory cannot exceed this score.
+    HARD_BLOCK_SCORE_CAP: float = _HARD_BLOCK_SCORE_CAP
+    # Documented soft penalty amounts keyed by reason_code.
+    SOFT_PENALTY_AMOUNTS: Mapping[str, float] = _SOFT_PENALTY_AMOUNTS
     COMPONENT_WEIGHTS: Mapping[str, float] = {
         "policy_compliance": 0.2,
         "schedule_protection": 0.18,
@@ -118,6 +149,16 @@ class BusinessRankingEngine:
         "comfort_floor": 0.12,
         "exception_path_fit": 0.14,
     }
+
+    @staticmethod
+    def _has_disallowed_inventory(bundle: InventoryBundle) -> bool:
+        return any(
+            lodging.feasibility.business_approval_status == "disallowed"
+            for lodging in bundle.lodging_options
+        ) or any(
+            transport.policy_summary.business_approval_status == "disallowed"
+            for transport in bundle.transport_options
+        )
 
     def validate_profile(self, profile: BusinessTravelProfile) -> BusinessTravelProfile:
         if not isinstance(profile, BusinessTravelProfile):
@@ -282,21 +323,50 @@ class BusinessRankingEngine:
                 assessment,
                 constraint_set=constraint_set,
             )
-            final_score = self.BASELINE_SCORE
-            final_score += sum(item.weighted_impact for item in contributions)
-            final_score -= sum(item.amount for item in penalties)
-            final_score -= sum(item.amount for item in missing_data_penalties)
-            final_score = _round(final_score)
+            # Accumulate before rounding so the hard-block cap is exact.
+            accumulated_score = self.BASELINE_SCORE
+            accumulated_score += sum(item.weighted_impact for item in contributions)
+            accumulated_score -= sum(item.amount for item in penalties)
+            accumulated_score -= sum(item.amount for item in missing_data_penalties)
+
+            # Hard constraint: disallowed inventory cannot be outweighed by preference.
+            # Add an explicit capping penalty so the ScoreBreakdown arithmetic stays exact.
+            hard_blocked = self._has_disallowed_inventory(candidate.bundle)
+            if hard_blocked and accumulated_score > self.HARD_BLOCK_SCORE_CAP:
+                cap_amount = accumulated_score - self.HARD_BLOCK_SCORE_CAP
+                penalties = list(penalties) + [
+                    ScoreAdjustment(
+                        adjustment_id=f"penalty:{candidate.bundle.bundle_id}:hard-block-cap",
+                        label="Hard policy block cap",
+                        kind="penalty",
+                        amount=cap_amount,
+                        reason_code="hard_block_cap",
+                        summary=(
+                            "Score capped at hard policy ceiling because disallowed inventory "
+                            "cannot be outweighed by schedule, comfort, or preference signals."
+                        ),
+                        affected_factor_keys=["policy_compliance"],
+                    )
+                ]
+                final_score = self.HARD_BLOCK_SCORE_CAP
+            else:
+                final_score = _round(accumulated_score)
+
+            breakdown_notes = [
+                "Business ranking remains policy-aware but not policy-authoritative.",
+                "Exception-path fit can outrank strict compliance only when objectives explicitly allow it.",
+            ]
+            if hard_blocked:
+                breakdown_notes.append(
+                    f"Hard policy block applied: score capped at {self.HARD_BLOCK_SCORE_CAP}."
+                )
             breakdown = ScoreBreakdown(
                 baseline_score=self.BASELINE_SCORE,
                 component_contributions=contributions,
                 penalties=penalties,
                 missing_data_penalties=missing_data_penalties,
                 final_score=final_score,
-                notes=[
-                    "Business ranking remains policy-aware but not policy-authoritative.",
-                    "Exception-path fit can outrank strict compliance only when objectives explicitly allow it.",
-                ],
+                notes=breakdown_notes,
             )
             confidence = self._confidence_summary(
                 profile,
@@ -904,6 +974,52 @@ class BusinessRankingEngine:
                 source_refs=candidate.source_refs[:3],
             )
         ]
+
+        # Policy constraint impact record — surfaces which constraints modified the score.
+        hard_block_penalty = next(
+            (p for p in breakdown.penalties if p.reason_code == "hard_block_cap"), None
+        )
+        soft_penalties = [
+            p
+            for p in breakdown.penalties + breakdown.missing_data_penalties
+            if p.reason_code
+            in {
+                "disallowed_inventory",
+                "feasibility_not_recommended",
+                "comparables_missing",
+                "booking_links_missing",
+                "documentation_gap",
+            }
+        ]
+        if hard_block_penalty or soft_penalties:
+            constraint_lines: list[str] = []
+            if hard_block_penalty:
+                constraint_lines.append(
+                    f"Hard policy block: score capped at {self.HARD_BLOCK_SCORE_CAP} "
+                    "(disallowed inventory cannot be outweighed by preference signals)."
+                )
+            for penalty in soft_penalties:
+                constraint_lines.append(
+                    f"{penalty.label}: -{penalty.amount:.4f} ({penalty.reason_code})."
+                )
+            records.append(
+                ExplanationRecord(
+                    explanation_id=f"{candidate.candidate_id}:policy-constraints",
+                    record_type="penalty",
+                    target_kind="item",
+                    target_id=candidate.target_option.option_id,
+                    headline="Policy constraints modified this option's score.",
+                    summary=constraint_lines[0] if constraint_lines else "",
+                    factor_keys=["policy_compliance"],
+                    machine_context={
+                        "hard_blocked": str(hard_block_penalty is not None).lower(),
+                        "soft_penalty_count": str(len(soft_penalties)),
+                    },
+                    human_summary=constraint_lines,
+                    source_refs=candidate.source_refs[:2],
+                )
+            )
+
         if confidence.missing_data_fields:
             records.append(
                 ExplanationRecord(
