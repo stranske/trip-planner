@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass, field
 
 from . import schema
 from .evidence import PreferenceEvidence
@@ -57,6 +58,36 @@ EVIDENCE_STAGE_BOOSTS: dict[str, dict[str, float]] = {
     "option_rejection": {"inventory_selection": 0.14},
     "trip_revision": {"in_trip_adjustment": 0.18, "daily_activity_design": 0.1},
 }
+EXPLICIT_EVIDENCE_TYPES: tuple[str, ...] = (
+    "direct_statement",
+    "hard_constraint_declaration",
+    "anchor_declaration",
+    "forced_tradeoff_choice",
+)
+BEHAVIORAL_EVIDENCE_TYPES: tuple[str, ...] = (
+    "scenario_reaction",
+    "option_selection",
+    "option_rejection",
+    "trip_revision",
+)
+STALE_SEQUENCE_WINDOW = 12
+
+
+@dataclass(slots=True)
+class DimensionEvidenceResolution:
+    dimension_key: str
+    final_value: float
+    confidence: float
+    contributing_evidence_ids: list[str] = field(default_factory=list)
+    explanation_code: str = "default_seed"
+    explanation_text: str = ""
+    explicit_support: float = 0.0
+    recent_behavior_support: float = 0.0
+    older_behavior_support: float = 0.0
+    contradiction_support: float = 0.0
+    salience_boost: float = 0.0
+    stability_bonus: float = 0.0
+    stage_boosts: dict[str, float] = field(default_factory=dict)
 
 
 def _clamp_probability(value: float) -> float:
@@ -121,6 +152,138 @@ def _new_hybrid_explanation(
         mode=factor.mode,
         salience=factor.salience,
         anchor_strength=factor.anchor_strength,
+    )
+
+
+def resolve_dimension_evidence(
+    dimension_key: str,
+    seed_value: float,
+    evidence_records: list[PreferenceEvidence],
+    *,
+    stale_sequence_window: int = STALE_SEQUENCE_WINDOW,
+) -> DimensionEvidenceResolution:
+    applicable = [item for item in evidence_records if dimension_key in item.affected_dimensions]
+    if not applicable:
+        return DimensionEvidenceResolution(
+            dimension_key=dimension_key,
+            final_value=seed_value,
+            confidence=0.0,
+            explanation_code="default_seed",
+            explanation_text="No evidence found; retained seed value.",
+            stage_boosts={stage: 0.0 for stage in schema.PLANNING_STAGES},
+        )
+
+    max_sequence = max(
+        (item.sequence for item in applicable if item.sequence is not None),
+        default=None,
+    )
+    explicit_support = 0.0
+    recent_behavior_support = 0.0
+    older_behavior_support = 0.0
+    contradiction_support = 0.0
+    salience_boost = 0.0
+    stability_bonus = 0.0
+    stage_boosts = {stage: 0.0 for stage in schema.PLANNING_STAGES}
+    contributions: list[tuple[float, str]] = []
+
+    for record in _sorted_evidence(applicable):
+        support_level = support_for_dimension(dimension_key, record.evidence_type)
+        if support_level is None:
+            continue
+        weight = _influence_weight(record, support_level)
+        signed_weight = 0.0
+        if record.signal_direction == "positive":
+            signed_weight = weight
+        elif record.signal_direction == "negative":
+            signed_weight = -weight
+        elif record.signal_direction == "contradiction":
+            contradiction_support += weight * 0.5
+        contradiction_support += sum(
+            marker.weakening_strength * weight * 0.65 for marker in record.contradictions
+        )
+
+        if record.evidence_type in EXPLICIT_EVIDENCE_TYPES:
+            explicit_support += signed_weight
+        elif record.evidence_type in BEHAVIORAL_EVIDENCE_TYPES:
+            is_stale = (
+                max_sequence is not None
+                and record.sequence is not None
+                and (max_sequence - record.sequence) > stale_sequence_window
+            )
+            if is_stale:
+                older_behavior_support += signed_weight * 0.6
+            else:
+                recent_behavior_support += signed_weight
+        salience_boost += max(0.0, weight) * record.salience_hint * 0.45
+        stability_bonus += max(0.0, weight) * 0.12
+        for stage, boost in EVIDENCE_STAGE_BOOSTS.get(record.evidence_type, {}).items():
+            stage_boosts[stage] = max(stage_boosts[stage], boost)
+        contributions.append((abs(signed_weight), record.id))
+
+    seed_direction = _base_direction(seed_value)
+    precedence_score = (
+        (explicit_support * 1.4)
+        + (recent_behavior_support * 0.75)
+        + (older_behavior_support * 0.45)
+    )
+    behavioral_net = recent_behavior_support + older_behavior_support
+    if explicit_support != 0.0 and behavioral_net != 0.0:
+        if _base_direction(explicit_support) != _base_direction(behavioral_net):
+            if abs(explicit_support) >= abs(behavioral_net) * 0.6:
+                precedence_score = explicit_support
+    if precedence_score == 0.0:
+        final_value = seed_value
+        code = "default_seed"
+        text = "Evidence netted to neutral; retained seed value."
+    elif precedence_score > 0.0:
+        direction = 1.0
+        magnitude = _clamp_probability(
+            abs(seed_value) + abs(explicit_support) * 0.22 + abs(recent_behavior_support) * 0.18
+        )
+        final_value = _clamp_axis(direction * magnitude)
+        code = "explicit_override" if explicit_support > 0 else "behavioral_inference"
+        text = "Evidence favored the positive pole after precedence and recency weighting."
+    else:
+        direction = -1.0
+        magnitude = _clamp_probability(
+            abs(seed_value) + abs(explicit_support) * 0.22 + abs(recent_behavior_support) * 0.18
+        )
+        final_value = _clamp_axis(direction * magnitude)
+        code = "explicit_override" if explicit_support < 0 else "behavioral_inference"
+        text = "Evidence favored the negative pole after precedence and recency weighting."
+
+    if (
+        seed_direction != 0.0
+        and precedence_score != 0.0
+        and _base_direction(final_value) != seed_direction
+    ):
+        code = "explicit_override" if explicit_support != 0 else "conflict_override"
+
+    if contradiction_support >= 0.18:
+        code = "conflict_low_confidence"
+        text = "Conflicting evidence reduced confidence and triggered contradiction handling."
+
+    ordered_ids = [
+        item[1] for item in sorted(contributions, key=lambda pair: (-pair[0], pair[1]))[:5]
+    ]
+    return DimensionEvidenceResolution(
+        dimension_key=dimension_key,
+        final_value=final_value,
+        confidence=_clamp_probability(
+            0.25
+            + min(0.55, abs(explicit_support) * 0.5 + abs(recent_behavior_support) * 0.3)
+            - contradiction_support * 0.22
+        ),
+        contributing_evidence_ids=ordered_ids,
+        explanation_code=code,
+        explanation_text=text,
+        explicit_support=explicit_support,
+        recent_behavior_support=recent_behavior_support,
+        older_behavior_support=older_behavior_support,
+        contradiction_support=contradiction_support,
+        salience_boost=salience_boost,
+        stability_bonus=stability_bonus,
+        stage_boosts=stage_boosts,
     )
 
 
