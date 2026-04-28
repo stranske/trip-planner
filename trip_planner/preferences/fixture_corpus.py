@@ -10,6 +10,7 @@ from trip_planner.preferences.evidence import (
     ContradictionMarker,
     OptionEvidence,
     PreferenceEvidence,
+    baseline_confidence_hint,
 )
 from trip_planner.preferences.models import (
     Anchor,
@@ -260,7 +261,13 @@ def build_evidence_record(payload: dict[str, Any]) -> PreferenceEvidence:
         affected_hybrid_factors=list(payload.get("affected_hybrid_factors", [])),
         anchor_groups=list(payload.get("anchor_groups", [])),
         signal_direction=payload.get("signal_direction", "positive"),
-        confidence_hint=payload.get("confidence_hint", 0.5),
+        confidence_hint=payload.get(
+            "confidence_hint",
+            baseline_confidence_hint(
+                evidence_type=payload["evidence_type"],
+                source_type=payload["source_type"],
+            ),
+        ),
         salience_hint=payload.get("salience_hint", 0.5),
         observed_at=payload.get("observed_at"),
         sequence=payload.get("sequence"),

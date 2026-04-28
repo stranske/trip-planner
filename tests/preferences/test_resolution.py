@@ -86,6 +86,21 @@ def test_resolution_flags_dimensions_that_need_directional_seed() -> None:
     )
 
 
+def test_resolution_explanation_reports_value_delta_from_seed() -> None:
+    fixture = next(item for item in load_fixture_corpus() if item.id == "scenic-rail-nomad")
+    seed = _resolution_seed(fixture.profile)
+    seed.tradeoff_dimensions["movement_vs_friction"].value = 0.2
+
+    result = resolve_leisure_profile(seed, fixture.evidence)
+
+    detail = result.explanation.dimension_explanations["movement_vs_friction"]
+    assert detail.initial_value == 0.2
+    assert detail.resolved_value == result.profile.tradeoff_dimensions["movement_vs_friction"].value
+    assert detail.value_delta == detail.resolved_value - detail.initial_value
+    assert detail.value_delta > 0.0
+    assert any(influence.source_kind == "evidence" for influence in detail.influences)
+
+
 def test_directional_seed_artifacts_removed_after_interaction_moves_off_zero() -> None:
     fixture = next(item for item in load_fixture_corpus() if item.id == "discovery-wanderer")
     seed = _resolution_seed(fixture.profile)

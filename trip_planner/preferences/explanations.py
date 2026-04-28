@@ -20,10 +20,12 @@ class MaterialInfluence:
 @dataclass(slots=True)
 class DimensionResolutionExplanation:
     dimension_key: str
+    initial_value: float
     resolved_value: float
     confidence: float
     salience: float
     stability: float
+    value_delta: float = 0.0
     influences: list[MaterialInfluence] = field(default_factory=list)
     interaction_rule_ids: list[str] = field(default_factory=list)
     tension_flag_ids: list[str] = field(default_factory=list)

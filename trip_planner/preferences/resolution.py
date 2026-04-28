@@ -136,6 +136,7 @@ def _new_dimension_explanation(
     dimension = profile.tradeoff_dimensions[dimension_key]
     return DimensionResolutionExplanation(
         dimension_key=dimension_key,
+        initial_value=dimension.value,
         resolved_value=dimension.value,
         confidence=dimension.confidence,
         salience=dimension.salience,
@@ -532,6 +533,7 @@ def _finalize_explanations(
             explanation.tension_explanations.pop(directional_seed_tension_id, None)
             confidence_notes = [note for note in confidence_notes if note != directional_seed_note]
         detail.resolved_value = dimension.value
+        detail.value_delta = _clamp_axis(dimension.value - detail.initial_value)
         detail.confidence = dimension.confidence
         detail.salience = dimension.salience
         detail.stability = dimension.stability
