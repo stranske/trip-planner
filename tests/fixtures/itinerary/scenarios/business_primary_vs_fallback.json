@@ -9,7 +9,7 @@
     "fallback"
   ],
   "expected_fallback_tradeoff_codes": [
-    "policy_exception_path",
+    "blocking_reason",
     "ranking_not_recommended"
   ]
 }

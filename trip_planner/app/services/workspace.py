@@ -1244,6 +1244,14 @@ def _build_runtime_scenario_comparison_payload(
 ) -> dict[str, Any] | None:
     fixture = _FIXTURES.get(trip_id)
     if fixture is not None:
+        _db_record = db_session.scalar(
+            select(PersistedTrip)
+            .where(PersistedTrip.trip_id == trip_id)
+            .where(PersistedTrip.user_id == user.user_id)
+        )
+        if _db_record is not None:
+            fixture = None
+    if fixture is not None:
         trip_record = _load_trip_record(fixture.trip_fixture)
         inventory_bundles = assemble_inventory_bundles_for_trip(
             trip_id=trip_id,
@@ -1801,6 +1809,14 @@ def get_workspace_payload(
     trip_id: str,
 ) -> dict[str, Any] | None:
     fixture = _FIXTURES.get(trip_id)
+    if fixture is not None:
+        _db_record = db_session.scalar(
+            select(PersistedTrip)
+            .where(PersistedTrip.trip_id == trip_id)
+            .where(PersistedTrip.user_id == user.user_id)
+        )
+        if _db_record is not None:
+            fixture = None
     if fixture is not None:
         trip_record = _load_trip_record(fixture.trip_fixture)
         saved_scenarios, scenario_comparison = _load_saved_scenarios(fixture.scenarios_fixture)
