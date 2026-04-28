@@ -38,7 +38,7 @@ trip_planner = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-norecursedirs = ["1. tests", "scripts"]
+norecursedirs = ["scripts"]
 addopts = ["--ignore=tests/test_build_html.py"]
 
 [tool.mypy]
