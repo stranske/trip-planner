@@ -82,6 +82,66 @@ POLARITY_MAP: Final[dict[str, tuple[str, str]]] = {
     "social_energy_vs_solitude": ("social energy", "solitude"),
     "iconic_vs_discovery": ("iconic certainty", "curious discovery"),
 }
+# Human-readable descriptions for each tradeoff dimension.
+# Tuple: (short_description, negative_extreme_note, positive_extreme_note)
+# Value range for all dimensions: [-1.0, 1.0]; 0.0 = balanced / unresolved.
+DIMENSION_DESCRIPTIONS: Final[dict[str, tuple[str, str, str]]] = {
+    "movement_vs_friction": (
+        "How much the traveler enjoys frequent relocation versus preferring fewer, longer stays.",
+        "Strong movement appetite: comfortable with daily or near-daily moves, treats transit as part of the experience.",
+        "High friction sensitivity: values settled bases, dislikes repeated packing and logistical overhead.",
+    ),
+    "recovery_vs_intensity": (
+        "Balance between needing deliberate rest periods and sustaining a packed, high-activity pace.",
+        "High recovery need: requires built-in slow days, fatigue accumulates quickly without rest.",
+        "Sustainable intensity: can maintain a full agenda across many consecutive active days.",
+    ),
+    "nature_vs_culture": (
+        "Whether the traveler is drawn toward natural landscapes and outdoor settings or toward urban cultural immersion.",
+        "Strong nature preference: landscapes, hiking, wildlife, and open terrain dominate the ideal trip.",
+        "Strong culture preference: cities, museums, architecture, food scenes, and human history dominate.",
+    ),
+    "structure_vs_elasticity": (
+        "Preference for pre-planned, detailed itineraries versus open, improvised days.",
+        "Structured days: wants bookings, schedules, and an advance plan for most of the trip.",
+        "Elastic days: prefers loose scaffolding, follows impulse, resists tight hour-by-hour planning.",
+    ),
+    "breadth_vs_depth": (
+        "Whether the traveler wants to cover many places or linger and go deep in fewer locations.",
+        "Strong breadth: maximizes the number of distinct places, regions, or countries visited.",
+        "Strong depth: spends multiple days in each stop, prioritizes understanding over coverage.",
+    ),
+    "self_reliance_vs_convenience": (
+        "Preference for handling logistics independently versus relying on pre-arranged services and support.",
+        "Logistical self-reliance: books independently, navigates on foot or by public transit, avoids package services.",
+        "Convenience support: values pre-arranged transfers, guided access, concierge help, and reduced friction.",
+    ),
+    "historic_vs_contemporary": (
+        "Whether the traveler engages primarily with historical heritage or contemporary local life.",
+        "Historic depth: ruins, heritage sites, old towns, museums of history, and layered architectural periods.",
+        "Contemporary life: modern neighborhoods, current art, local food culture, and present-day urban texture.",
+    ),
+    "scenic_transit_vs_destination_time": (
+        "Whether travel time between places is valued for scenic experience or minimized to maximize time at destinations.",
+        "Scenic transit: slow trains, coastal ferries, and scenic passes are highlights, not overheads.",
+        "Destination time: favors fastest practical transport to protect time on the ground.",
+    ),
+    "route_coherence_vs_eclectic_contrast": (
+        "Whether the route should follow a thematic or geographic thread versus assembling contrasting, varied stops.",
+        "Route coherence: logical geographic or thematic progression, aesthetic unity across the trip arc.",
+        "Eclectic contrast: variety is the point — different landscapes, cultures, and moods in deliberate juxtaposition.",
+    ),
+    "social_energy_vs_solitude": (
+        "Preference for busy, social environments versus quiet, low-stimulus settings.",
+        "Social energy: thrives around crowds, lively neighborhoods, street life, and public social spaces.",
+        "Solitude: seeks quiet lodging, low-traffic routes, and deliberate separation from tourist density.",
+    ),
+    "iconic_vs_discovery": (
+        "Whether the trip prioritizes well-known must-see experiences or off-the-beaten-path finds.",
+        "Iconic certainty: validates the trip through canonical highlights; Eiffel Tower, Colosseum, etc.",
+        "Curious discovery: the best moments are unexpected; avoids crowds, seeks lesser-known places.",
+    ),
+}
 COMPLEXITY_TOLERANCE_MAP: Final[dict[str, dict[str, float]]] = {
     "low": {
         "movement_vs_friction": -0.75,
