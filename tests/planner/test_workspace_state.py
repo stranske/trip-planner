@@ -81,10 +81,15 @@ def test_persist_tpp_result_isolates_nested_mutations() -> None:
     workspace_state: dict[str, Any] = {}
 
     persist_tpp_result(workspace_state, payload)
+    persisted = workspace_state["tpp_result"]
+
+    # Persisted payload should not share nested references with caller payload.
+    assert persisted["result_payload"] is not payload["result_payload"]
+    assert persisted["result_payload"]["nested"] is not payload["result_payload"]["nested"]
+
     payload["result_payload"]["nested"]["status"] = "changed"
     payload["result_payload"]["nested"]["count"] = 2
 
-    persisted = workspace_state["tpp_result"]
     assert persisted["result_payload"]["nested"] == {"status": "ok", "count": 1}
 
 
@@ -117,6 +122,14 @@ def test_load_tpp_result_isolates_nested_mutations() -> None:
 
     loaded = load_tpp_result(workspace_state)
     assert loaded is not None
+
+    # Loaded payload should not share nested references with persisted state.
+    assert loaded["result_payload"] is not workspace_state["tpp_result"]["result_payload"]
+    assert (
+        loaded["result_payload"]["nested"]
+        is not workspace_state["tpp_result"]["result_payload"]["nested"]
+    )
+
     loaded["result_payload"]["nested"]["items"].append(4)
 
     assert workspace_state["tpp_result"]["result_payload"]["nested"]["items"] == [1, 2, 3]
