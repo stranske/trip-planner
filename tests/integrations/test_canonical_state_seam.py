@@ -123,6 +123,7 @@ def first_client(
 ) -> Iterator[TestClient]:
     """First app instance — exercises the seam end-to-end."""
     monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.delenv("TRIP_PLANNER_PLANNER_PROVIDER", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -154,6 +155,7 @@ def second_client(
 ) -> Iterator[TestClient]:
     """Second app instance — re-binds to the same SQLite path to verify reload."""
     monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.delenv("TRIP_PLANNER_PLANNER_PROVIDER", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
