@@ -6,10 +6,10 @@ tasks:
   - id: task-01
     title: Implement a guard in this PR so no `git mv` occurs until the sub-decision
       (B-1 / B-2 / B-3) is recorded in the PR body.
-    status: doing
+    status: done
     started_at: '2026-04-29T18:50:34Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-04-29T18:50:50Z'
+    commit: bcbe976f9991c58846490358f4c4ae5190fad954
     notes: []
   - id: task-02
     title: Create the destination package directory for the chosen option (e.g., for
