@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 
+from scripts import tpp_migration_guard
+
 
 def _git_ls_files(pattern: str) -> list[str]:
     result = subprocess.run(
@@ -119,3 +121,9 @@ def test_readme_documents_local_bootstrap_and_optional_integrations() -> None:
 
     for snippet in expected_snippets:
         assert snippet in readme, f"README.md must document {snippet!r}."
+
+
+def test_tpp_renames_require_recorded_sub_decision_in_pr_body() -> None:
+    """Block TPP git mv operations until the PR body records B-1/B-2/B-3."""
+    ok, message = tpp_migration_guard.enforce_guard()
+    assert ok, message
