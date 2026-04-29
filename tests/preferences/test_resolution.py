@@ -185,7 +185,7 @@ def test_dimension_resolution_explicit_override_beats_behavioral_signal() -> Non
     ]
     resolved = resolve_dimension_evidence("movement_vs_friction", 0.6, records)
     assert resolved.final_value < 0.0
-    assert resolved.explanation_code in {"explicit_override", "conflict_low_confidence"}
+    assert resolved.explanation_code == "explicit_override"
     assert "ev-explicit" in resolved.contributing_evidence_ids
 
 
@@ -214,6 +214,37 @@ def test_dimension_resolution_tie_keeps_seed_value() -> None:
     ]
     resolved = resolve_dimension_evidence("movement_vs_friction", 0.25, records)
     assert resolved.final_value == 0.25
+    assert resolved.explanation_code == "balanced_conflict"
+    assert {"ev-left", "ev-right"}.issubset(set(resolved.contributing_evidence_ids))
+
+
+def test_dimension_resolution_pure_behavioral_conflict_emits_balanced_code() -> None:
+    records = [
+        PreferenceEvidence(
+            id="ev-bpos",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="positive",
+            confidence_hint=0.85,
+            salience_hint=0.7,
+            sequence=10,
+        ),
+        PreferenceEvidence(
+            id="ev-bneg",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="negative",
+            confidence_hint=0.85,
+            salience_hint=0.7,
+            sequence=10,
+        ),
+    ]
+    resolved = resolve_dimension_evidence("movement_vs_friction", 0.0, records)
+    assert resolved.final_value == 0.0
+    assert resolved.explanation_code == "balanced_conflict"
+    assert {"ev-bpos", "ev-bneg"}.issubset(set(resolved.contributing_evidence_ids))
 
 
 def test_dimension_resolution_stale_behavior_is_discounted() -> None:
