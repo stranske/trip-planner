@@ -54,3 +54,13 @@ def test_validate_succeeded_response_rejects_missing_required_fields(
 def test_validate_succeeded_response_accepts_all_required_fields() -> None:
     payload = _valid_payload()
     assert validate_succeeded_response(payload) == payload
+
+
+def test_validate_succeeded_response_rejects_malformed_result_payload() -> None:
+    payload = _valid_payload()
+    result_payload = payload["result_payload"]
+    assert isinstance(result_payload, dict)
+    result_payload[1] = "bad-key"
+
+    with pytest.raises(TPPContractError, match="Malformed 'result_payload' contract."):
+        validate_succeeded_response(payload)
