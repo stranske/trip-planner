@@ -29,7 +29,10 @@ def _forbidden_overrides_for_source(source: str) -> list[tuple[str, str]]:
         if "BaseTPPIntegrationClient" not in base_names:
             continue
         for body_node in node.body:
-            if isinstance(body_node, ast.FunctionDef) and body_node.name in FORBIDDEN_METHODS:
+            if (
+                isinstance(body_node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and body_node.name in FORBIDDEN_METHODS
+            ):
                 violations.append((node.name, body_node.name))
     return violations
 
@@ -66,6 +69,18 @@ class BadFake(client.BaseTPPIntegrationClient):
         return request
 """
     assert _forbidden_overrides_for_source(source) == [("BadFake", "poll_execution_status")]
+
+
+def test_interface_rule_detector_catches_async_forbidden_override() -> None:
+    source = """
+class BadFake(BaseTPPIntegrationClient):
+    def execute(self, request):
+        return request
+
+    async def fetch_evaluation_result(self, request):
+        return request
+"""
+    assert _forbidden_overrides_for_source(source) == [("BadFake", "fetch_evaluation_result")]
 
 
 def test_policy_passive_client_inherits_base_and_overrides_only_execute() -> None:

@@ -152,7 +152,7 @@ A coverage task is NOT complete just because you added tests. It is complete ONL
 
 ### ⚠️ IMPORTANT: Task Reconciliation Required
 
-The previous iteration changed **5 file(s)** but did not update task checkboxes.
+The previous iteration changed **4 file(s)** but did not update task checkboxes.
 
 **Before continuing, you MUST:**
 1. Review the recent commits to understand what was changed
