@@ -247,6 +247,30 @@ def test_dimension_resolution_pure_behavioral_conflict_emits_balanced_code() -> 
     assert {"ev-bpos", "ev-bneg"}.issubset(set(resolved.contributing_evidence_ids))
 
 
+def test_dimension_resolution_contradiction_only_evidence_uses_default_seed() -> None:
+    # Contradiction-direction signals carry no directional weight on their own,
+    # so a record-set containing only contradictions must NOT be labelled
+    # "balanced_conflict" — there is no opposing directional support to balance.
+    # Confidence/salience are kept low so contradiction_support stays under
+    # the 0.18 conflict_low_confidence override threshold and we exercise the
+    # default_seed branch.
+    records = [
+        PreferenceEvidence(
+            id="ev-contradicting",
+            evidence_type="direct_statement",
+            source_type="user_message",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="contradiction",
+            confidence_hint=0.0,
+            salience_hint=0.0,
+            sequence=5,
+        ),
+    ]
+    resolved = resolve_dimension_evidence("movement_vs_friction", 0.25, records)
+    assert resolved.final_value == 0.25
+    assert resolved.explanation_code == "default_seed"
+
+
 def test_dimension_resolution_stale_behavior_is_discounted() -> None:
     records = [
         PreferenceEvidence(

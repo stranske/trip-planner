@@ -239,7 +239,12 @@ def resolve_dimension_evidence(
                 precedence_score = explicit_support
     if precedence_score == 0.0:
         final_value = seed_value
-        if contributions:
+        # ``contributions`` includes every applicable record (including
+        # contradiction-only ones with ``signed_weight == 0``). We only call this
+        # a "balanced_conflict" when at least one record carried directional
+        # weight that was then cancelled by an opposing signal.
+        has_directional_support = any(abs_w > 0.0 for abs_w, _ in contributions)
+        if has_directional_support:
             code = "balanced_conflict"
             text = "Opposing evidence netted to neutral; retained seed value."
         else:
