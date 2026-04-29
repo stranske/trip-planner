@@ -30,6 +30,9 @@ class DimensionResolutionExplanation:
     interaction_rule_ids: list[str] = field(default_factory=list)
     tension_flag_ids: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    explanation_code: str = "default_seed"
+    explanation_text: str = ""
+    contributing_evidence_ids: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

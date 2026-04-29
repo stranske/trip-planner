@@ -314,10 +314,11 @@ def _build_explanations(resolved: ResolvedLeisureProfile) -> list[str]:
         "route_coherence_vs_eclectic_contrast",
     ):
         dimension = resolved.profile.tradeoff_dimensions[key]
+        evidence_code = resolved.explanation.dimension_explanations[key].explanation_code
         explanations.append(
             (
                 f"{key}: value={dimension.value:.2f}, confidence={dimension.confidence:.2f}, "
-                f"salience={dimension.salience:.2f}"
+                f"salience={dimension.salience:.2f}, evidence_code={evidence_code}"
             )
         )
     for tension in sorted(resolved.profile.tension_flags, key=lambda t: t.id):

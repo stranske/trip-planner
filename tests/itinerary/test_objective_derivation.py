@@ -433,3 +433,62 @@ def test_pre_fix_path_would_fail_for_unsorted_tensions() -> None:
     assert (
         raw_forward_lines != raw_reversed_lines
     ), "pre-fix simulation: raw iteration order differs, confirming sorted() is necessary"
+
+
+VALID_EVIDENCE_CODES = {
+    "default_seed",
+    "explicit_override",
+    "behavioral_inference",
+    "conflict_override",
+    "conflict_low_confidence",
+}
+
+
+def test_derivation_explanations_carry_evidence_codes() -> None:
+    """_build_explanations must embed explanation_code from DimensionResolutionExplanation.
+
+    This verifies that the provenance fields emitted by resolve_dimension_evidence are
+    wired through _apply_dimension_resolution into DimensionResolutionExplanation, and
+    then consumed by the objective-derivation layer.
+    """
+    fixture = load_fixture_map()["scenic-rail-nomad"]
+    resolved = resolve_leisure_profile(fixture.profile, fixture.evidence)
+
+    objectives = derive_itinerary_objectives(resolved, trip_id="trip-provenance")
+
+    dimension_lines = [
+        line for line in objectives.explanations if ": value=" in line and "evidence_code=" in line
+    ]
+    assert len(dimension_lines) == 6, f"expected 6 dimension lines, got: {dimension_lines}"
+
+    for line in dimension_lines:
+        code = line.split("evidence_code=")[-1]
+        assert code in VALID_EVIDENCE_CODES, f"unexpected evidence_code {code!r} in line: {line}"
+
+    # Confirm the resolved explanation object carries the same codes.
+    for key in (
+        "movement_vs_friction",
+        "recovery_vs_intensity",
+        "structure_vs_elasticity",
+        "breadth_vs_depth",
+        "iconic_vs_discovery",
+        "route_coherence_vs_eclectic_contrast",
+    ):
+        dim_expl = resolved.explanation.dimension_explanations[key]
+        assert dim_expl.explanation_code in VALID_EVIDENCE_CODES
+        assert isinstance(dim_expl.explanation_text, str)
+        assert isinstance(dim_expl.contributing_evidence_ids, list)
+
+
+def test_derivation_no_evidence_yields_default_seed_code() -> None:
+    """With no evidence, every dimension explanation_code is 'default_seed'."""
+    profile = build_profile_from_overrides({})
+    resolved = resolve_leisure_profile(profile, [])
+
+    objectives = derive_itinerary_objectives(resolved, trip_id="trip-no-evidence")
+
+    dimension_lines = [line for line in objectives.explanations if "evidence_code=" in line]
+    assert dimension_lines
+    for line in dimension_lines:
+        code = line.split("evidence_code=")[-1]
+        assert code == "default_seed", f"expected default_seed, got {code!r} in: {line}"

@@ -81,13 +81,8 @@ class DimensionEvidenceResolution:
     contributing_evidence_ids: list[str] = field(default_factory=list)
     explanation_code: str = "default_seed"
     explanation_text: str = ""
-    explicit_support: float = 0.0
     recent_behavior_support: float = 0.0
     older_behavior_support: float = 0.0
-    contradiction_support: float = 0.0
-    salience_boost: float = 0.0
-    stability_bonus: float = 0.0
-    stage_boosts: dict[str, float] = field(default_factory=dict)
 
 
 def _clamp_probability(value: float) -> float:
@@ -171,7 +166,6 @@ def resolve_dimension_evidence(
             confidence=0.0,
             explanation_code="default_seed",
             explanation_text="No evidence found; retained seed value.",
-            stage_boosts={stage: 0.0 for stage in schema.PLANNING_STAGES},
         )
 
     max_sequence = max(
@@ -278,13 +272,8 @@ def resolve_dimension_evidence(
         contributing_evidence_ids=ordered_ids,
         explanation_code=code,
         explanation_text=text,
-        explicit_support=explicit_support,
         recent_behavior_support=recent_behavior_support,
         older_behavior_support=older_behavior_support,
-        contradiction_support=contradiction_support,
-        salience_boost=salience_boost,
-        stability_bonus=stability_bonus,
-        stage_boosts=stage_boosts,
     )
 
 
@@ -324,6 +313,7 @@ def _apply_dimension_resolution(
 ) -> None:
     for dimension_key in schema.TRADEOFF_DIMENSION_KEYS:
         dimension = profile.tradeoff_dimensions[dimension_key]
+        seed_value = dimension.value
         base_direction = _base_direction(dimension.value)
         base_magnitude = abs(dimension.value)
         positive_support = 0.0
@@ -419,6 +409,11 @@ def _apply_dimension_resolution(
             profile.evidence_summary.confidence_notes.append(
                 f"{dimension_key} includes contradictory evidence that should remain visible downstream."
             )
+        provenance = resolve_dimension_evidence(dimension_key, seed_value, evidence_records)
+        dim_expl = explanation.dimension_explanations[dimension_key]
+        dim_expl.explanation_code = provenance.explanation_code
+        dim_expl.explanation_text = provenance.explanation_text
+        dim_expl.contributing_evidence_ids = provenance.contributing_evidence_ids
 
 
 def _apply_hybrid_resolution(
