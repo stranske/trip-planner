@@ -70,7 +70,12 @@ BEHAVIORAL_EVIDENCE_TYPES: tuple[str, ...] = (
     "option_rejection",
     "trip_revision",
 )
+# Behavioral evidence whose ``sequence`` is older than the most recent applicable
+# record by more than this many sequence steps is treated as "stale" and discounted.
+# Sized to roughly span a single planning iteration's worth of recent activity.
 STALE_SEQUENCE_WINDOW = 12
+# Stale behavioral evidence still contributes, but at this fraction of fresh weight.
+STALE_BEHAVIOR_DISCOUNT = 0.6
 
 
 @dataclass(slots=True)
@@ -206,7 +211,7 @@ def resolve_dimension_evidence(
                 and (max_sequence - record.sequence) > stale_sequence_window
             )
             if is_stale:
-                older_behavior_support += signed_weight * 0.6
+                older_behavior_support += signed_weight * STALE_BEHAVIOR_DISCOUNT
             else:
                 recent_behavior_support += signed_weight
         salience_boost += max(0.0, weight) * record.salience_hint * 0.45
@@ -228,8 +233,17 @@ def resolve_dimension_evidence(
                 precedence_score = explicit_support
     if precedence_score == 0.0:
         final_value = seed_value
-        code = "default_seed"
-        text = "Evidence netted to neutral; retained seed value."
+        # ``contributions`` includes every applicable record (including
+        # contradiction-only ones with ``signed_weight == 0``). We only call this
+        # a "balanced_conflict" when at least one record carried directional
+        # weight that was then cancelled by an opposing signal.
+        has_directional_support = any(abs_w > 0.0 for abs_w, _ in contributions)
+        if has_directional_support:
+            code = "balanced_conflict"
+            text = "Opposing evidence netted to neutral; retained seed value."
+        else:
+            code = "default_seed"
+            text = "Evidence had no directional support; retained seed value."
     elif precedence_score > 0.0:
         direction = 1.0
         magnitude = _clamp_probability(
