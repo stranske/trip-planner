@@ -46,3 +46,19 @@ class BadFake(BaseTPPIntegrationClient):
         return request
 """
     assert _forbidden_overrides_for_source(source) == [("BadFake", "submit_proposal")]
+
+
+def test_policy_passive_client_inherits_base_and_overrides_only_execute() -> None:
+    policy_source = Path("trip_planner/app/services/policy.py").read_text(encoding="utf-8")
+    tree = ast.parse(policy_source)
+    passive_client = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef) and node.name == "_PassiveTPPClient"
+    )
+
+    base_names = {base.id for base in passive_client.bases if isinstance(base, ast.Name)}
+    assert "BaseTPPIntegrationClient" in base_names
+
+    method_names = {node.name for node in passive_client.body if isinstance(node, ast.FunctionDef)}
+    assert method_names <= {"__init__", "execute"}
