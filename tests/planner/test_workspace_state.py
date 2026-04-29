@@ -145,6 +145,18 @@ def test_round_trip_with_nested_lists() -> None:
     persist_tpp_result(workspace_state, payload)
     loaded = load_tpp_result(workspace_state)
     assert loaded is not None
+
+    # Round-tripped list and its nested dict elements should be detached copies.
+    assert (
+        loaded["result_payload"]["nested"]["items"]
+        is not payload["result_payload"]["nested"]["items"]
+    )
+    assert (
+        loaded["result_payload"]["nested"]["items"][0]
+        is not payload["result_payload"]["nested"]["items"][0]
+    )
+
     loaded["result_payload"]["nested"]["items"].append({"id": "c"})
+    loaded["result_payload"]["nested"]["items"][0]["id"] = "changed"
 
     assert payload["result_payload"]["nested"]["items"] == [{"id": "a"}, {"id": "b"}]
