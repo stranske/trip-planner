@@ -528,7 +528,10 @@ def _finalize_explanations(
             explanation.tension_explanations.pop(directional_seed_tension_id, None)
             confidence_notes = [note for note in confidence_notes if note != directional_seed_note]
         detail.resolved_value = dimension.value
-        detail.value_delta = _clamp_axis(dimension.value - detail.initial_value)
+        # Both ``initial_value`` and ``dimension.value`` are clamped to [-1, 1], so the
+        # delta naturally lies in [-2, 2]. Clamping it to [-1, 1] would silently lose
+        # information for full-axis swings (e.g. -1 -> +1).
+        detail.value_delta = dimension.value - detail.initial_value
         detail.confidence = dimension.confidence
         detail.salience = dimension.salience
         detail.stability = dimension.stability

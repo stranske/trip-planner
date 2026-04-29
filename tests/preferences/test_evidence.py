@@ -173,6 +173,25 @@ def test_signal_family_classification_for_explicit_revealed_and_default() -> Non
     )
 
 
+def test_signal_family_classifies_scenario_reactions_as_revealed_behavior() -> None:
+    # scenario_reaction is behavioral evidence (the user reacted to a presented scenario);
+    # it should not be reclassified as an explicit_answer just because the source_type is
+    # 'scenario_prompt'.
+    assert (
+        evidence_signal_family(evidence_type="scenario_reaction", source_type="scenario_prompt")
+        == "revealed_behavior"
+    )
+
+
+def test_signal_family_treats_planner_inference_as_default_for_any_evidence_type() -> None:
+    assert (
+        evidence_signal_family(
+            evidence_type="option_selection", source_type="planner_inference_review"
+        )
+        == "default_assumption"
+    )
+
+
 def test_baseline_confidence_prefers_revealed_then_explicit_then_default() -> None:
     explicit = baseline_confidence_hint(
         evidence_type="direct_statement",

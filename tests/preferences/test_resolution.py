@@ -101,6 +101,25 @@ def test_resolution_explanation_reports_value_delta_from_seed() -> None:
     assert any(influence.source_kind == "evidence" for influence in detail.influences)
 
 
+def test_value_delta_is_not_clamped_for_full_axis_swings() -> None:
+    # ``self_reliance_vs_convenience`` is force-raised to at least 0.35 by the
+    # quality-floor guardrail in ``_apply_anchor_and_constraint_precedence``.
+    # Seeding it at -1.0 and letting the public resolver run produces a natural
+    # delta of 1.35, which would be silently truncated to 1.0 if value_delta
+    # were ever clamped to the [-1, 1] axis range again.
+    fixture = next(item for item in load_fixture_corpus() if item.id == "comfort-floor-traveler")
+    seed = _resolution_seed(fixture.profile)
+    seed.tradeoff_dimensions["self_reliance_vs_convenience"].value = -1.0
+
+    result = resolve_leisure_profile(seed, fixture.evidence)
+
+    detail = result.explanation.dimension_explanations["self_reliance_vs_convenience"]
+    assert detail.initial_value == -1.0
+    assert detail.resolved_value >= 0.35
+    assert detail.value_delta == detail.resolved_value - detail.initial_value
+    assert detail.value_delta > 1.0
+
+
 def test_directional_seed_artifacts_removed_after_interaction_moves_off_zero() -> None:
     fixture = next(item for item in load_fixture_corpus() if item.id == "discovery-wanderer")
     seed = _resolution_seed(fixture.profile)
