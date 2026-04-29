@@ -7,10 +7,10 @@ tasks:
     title: Fix `trip_planner/app/services/workspace_state.py` `persist_tpp_result`
       to deep-copy the payload (e.g., replace `dict(...)` with `copy.deepcopy(...)`)
       so nested-object references are not shared with the input.
-    status: doing
+    status: done
     started_at: '2026-04-29T18:49:45Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-04-29T18:49:56Z'
+    commit: 81e4d67f34a7d34d903eb13670dc8d396dcc250e
     notes: []
   - id: task-02
     title: Fix `trip_planner/app/services/workspace_state.py` `load_tpp_result` to
