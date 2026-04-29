@@ -7,10 +7,10 @@ tasks:
     title: 'Add constructor arguments `timeout_seconds: float` and `sleeper: Callable[[float],
       None]` to the polling service class in `tpp_polling_service.py`, removing any
       module-level/production default timeout from the service module.'
-    status: doing
+    status: done
     started_at: '2026-04-29T18:56:58Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-04-29T18:57:10Z'
+    commit: 7cb5d75afd50e59ea5c6795428af2d6a01b690b5
     notes: []
   - id: task-02
     title: "Implement exponential backoff cadence calculation in `tpp_polling_service.py`\
