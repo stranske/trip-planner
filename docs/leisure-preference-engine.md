@@ -657,3 +657,53 @@ Once `LeisurePreferenceProfile` exists, the next layers should be:
 3. itinerary objective mapping
 4. ranking
 5. explanation
+
+## Explanation and Provenance Integration
+
+### Design
+
+`resolve_dimension_evidence` produces three provenance fields per dimension:
+
+- `explanation_code` — a short machine-readable tag indicating how evidence resolved:
+  `default_seed`, `explicit_override`, `behavioral_inference`, `conflict_override`,
+  `conflict_low_confidence`
+- `explanation_text` — a human-readable sentence describing the resolution outcome
+- `contributing_evidence_ids` — the top-5 evidence IDs by weight that drove the result
+
+### Integration Approach: Augment
+
+`_apply_dimension_resolution` retains its own value-update logic (it uses the seed direction
+and accumulated positive/weakening support rather than `resolve_dimension_evidence`'s
+precedence-score approach).  After processing each dimension's evidence it calls
+`resolve_dimension_evidence` a second time — solely to obtain the provenance fields — and
+writes them onto `DimensionResolutionExplanation`.
+
+This means `DimensionResolutionExplanation` carries:
+- the existing influence list, tension references, and interaction rule IDs
+- the new `explanation_code`, `explanation_text`, and `contributing_evidence_ids`
+
+### Consumer: `_build_explanations` in `objective_derivation.py`
+
+The itinerary-objective derivation layer already builds a structured explanation list from
+`ResolvedLeisureProfile`.  Each tradeoff-dimension line is augmented with the evidence code:
+
+```
+movement_vs_friction: value=0.40, confidence=0.52, salience=0.45, evidence_code=explicit_override
+```
+
+This gives the downstream ranking and UI layers a stable, auditable signal about how
+confident the resolver was for each dimension and why.
+
+### Unused Fields on `DimensionEvidenceResolution`
+
+`DimensionEvidenceResolution` also carries `explicit_support`, `recent_behavior_support`,
+`older_behavior_support`, and `contradiction_support`.  These are intermediate computation
+values used inside `resolve_dimension_evidence` to derive `confidence`, `salience_boost`, and
+`stability_bonus`.  They are retained as first-class fields because:
+
+- they make the stale-recency test (`test_dimension_resolution_stale_behavior_is_discounted`)
+  directly assertable
+- they aid debugging when a confidence score looks wrong
+
+They are NOT expected to propagate into `DimensionResolutionExplanation`; the already-computed
+`confidence` on that object is the downstream surface.

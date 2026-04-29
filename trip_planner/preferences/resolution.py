@@ -324,6 +324,7 @@ def _apply_dimension_resolution(
 ) -> None:
     for dimension_key in schema.TRADEOFF_DIMENSION_KEYS:
         dimension = profile.tradeoff_dimensions[dimension_key]
+        seed_value = dimension.value
         base_direction = _base_direction(dimension.value)
         base_magnitude = abs(dimension.value)
         positive_support = 0.0
@@ -419,6 +420,11 @@ def _apply_dimension_resolution(
             profile.evidence_summary.confidence_notes.append(
                 f"{dimension_key} includes contradictory evidence that should remain visible downstream."
             )
+        provenance = resolve_dimension_evidence(dimension_key, seed_value, evidence_records)
+        dim_expl = explanation.dimension_explanations[dimension_key]
+        dim_expl.explanation_code = provenance.explanation_code
+        dim_expl.explanation_text = provenance.explanation_text
+        dim_expl.contributing_evidence_ids = provenance.contributing_evidence_ids
 
 
 def _apply_hybrid_resolution(
