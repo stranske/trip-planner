@@ -81,13 +81,8 @@ class DimensionEvidenceResolution:
     contributing_evidence_ids: list[str] = field(default_factory=list)
     explanation_code: str = "default_seed"
     explanation_text: str = ""
-    explicit_support: float = 0.0
     recent_behavior_support: float = 0.0
     older_behavior_support: float = 0.0
-    contradiction_support: float = 0.0
-    salience_boost: float = 0.0
-    stability_bonus: float = 0.0
-    stage_boosts: dict[str, float] = field(default_factory=dict)
 
 
 def _clamp_probability(value: float) -> float:
@@ -171,7 +166,6 @@ def resolve_dimension_evidence(
             confidence=0.0,
             explanation_code="default_seed",
             explanation_text="No evidence found; retained seed value.",
-            stage_boosts={stage: 0.0 for stage in schema.PLANNING_STAGES},
         )
 
     max_sequence = max(
@@ -278,13 +272,8 @@ def resolve_dimension_evidence(
         contributing_evidence_ids=ordered_ids,
         explanation_code=code,
         explanation_text=text,
-        explicit_support=explicit_support,
         recent_behavior_support=recent_behavior_support,
         older_behavior_support=older_behavior_support,
-        contradiction_support=contradiction_support,
-        salience_boost=salience_boost,
-        stability_bonus=stability_bonus,
-        stage_boosts=stage_boosts,
     )
 
 

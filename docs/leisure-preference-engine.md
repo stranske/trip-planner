@@ -694,16 +694,21 @@ movement_vs_friction: value=0.40, confidence=0.52, salience=0.45, evidence_code=
 This gives the downstream ranking and UI layers a stable, auditable signal about how
 confident the resolver was for each dimension and why.
 
-### Unused Fields on `DimensionEvidenceResolution`
+### Fields on `DimensionEvidenceResolution`
 
-`DimensionEvidenceResolution` also carries `explicit_support`, `recent_behavior_support`,
-`older_behavior_support`, and `contradiction_support`.  These are intermediate computation
-values used inside `resolve_dimension_evidence` to derive `confidence`, `salience_boost`, and
-`stability_bonus`.  They are retained as first-class fields because:
+`DimensionEvidenceResolution` exposes only fields that are consumed by callers:
 
-- they make the stale-recency test (`test_dimension_resolution_stale_behavior_is_discounted`)
-  directly assertable
-- they aid debugging when a confidence score looks wrong
+| Field | Consumer |
+|-------|----------|
+| `final_value` | tests and direct callers of `resolve_dimension_evidence` |
+| `confidence` | tests; factored from `explicit_support` and `contradiction_support` internally |
+| `explanation_code` | `_apply_dimension_resolution` → `DimensionResolutionExplanation` |
+| `explanation_text` | `_apply_dimension_resolution` → `DimensionResolutionExplanation` |
+| `contributing_evidence_ids` | `_apply_dimension_resolution` → `DimensionResolutionExplanation` |
+| `recent_behavior_support` | `test_dimension_resolution_stale_behavior_is_discounted` |
+| `older_behavior_support` | `test_dimension_resolution_stale_behavior_is_discounted` |
 
-They are NOT expected to propagate into `DimensionResolutionExplanation`; the already-computed
-`confidence` on that object is the downstream surface.
+Intermediate scalars (`explicit_support`, `contradiction_support`, `salience_boost`,
+`stability_bonus`, `stage_boosts`) were dropped from the dataclass; they remain local
+variables inside `resolve_dimension_evidence` and their effect is already captured in
+`confidence` and the explanation fields.
