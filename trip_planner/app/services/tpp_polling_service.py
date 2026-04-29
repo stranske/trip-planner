@@ -8,6 +8,7 @@ from typing import Any, Mapping
 
 from trip_planner.app.models.tpp import PollingOutcome
 from trip_planner.integrations.tpp.client import TPPContractError
+from trip_planner.integrations.tpp.validation import validate_poll_response_state
 
 _STATE_TO_OUTCOME: dict[str, PollingOutcome] = {
     "approved": PollingOutcome.APPROVED,
@@ -45,9 +46,7 @@ class TPPPollingService:
         self,
         poll_response_payload: Mapping[str, Any],
     ) -> PollingOutcome:
-        state = poll_response_payload.get("state")
-        if not isinstance(state, str) or not state.strip():
-            raise TPPContractError("TPP poll response contract requires non-empty 'state'.")
+        state = validate_poll_response_state(poll_response_payload)
         return map_poll_response_state_to_outcome(state)
 
     def poll(self, proposal_id: str) -> PollingOutcome:
