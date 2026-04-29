@@ -17,8 +17,9 @@ from trip_planner.integrations.tpp.contracts import (
 
 
 class _FakeTPPClient(BaseTPPIntegrationClient):
-    def __init__(self) -> None:
+    def __init__(self, *, response_proposal_id: str = "proposal-from-response") -> None:
         self.last_request: TPPRequestEnvelope | None = None
+        self._response_proposal_id = response_proposal_id
 
     def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         self.last_request = request
@@ -28,18 +29,20 @@ class _FakeTPPClient(BaseTPPIntegrationClient):
             correlation_id=request.correlation_id,
             transport_pattern="sync",
             execution_status=TPPExecutionStatus(state="accepted", terminal=False),
-            result_payload={"proposal_id": request.proposal_id or "proposal-fallback"},
+            result_payload={"proposal_id": self._response_proposal_id},
         )
 
 
 def test_submit_builds_submit_proposal_request_from_workspace_data() -> None:
-    client = _FakeTPPClient()
+    # Use distinct request and response proposal_ids so the assertion proves the
+    # persisted value comes from the response (not coincidentally from the request).
+    client = _FakeTPPClient(response_proposal_id="proposal-from-tpp-server")
     service = TPPWorkspaceProposalSubmissionService(client)
     workspace_state: dict[str, object] = {}
     workspace_data = {
         "organization_id": "org-123",
         "trip_id": "trip-123",
-        "proposal_id": "proposal-123",
+        "proposal_id": "proposal-from-workspace",
         "request_id": "req-123",
         "correlation_id": "corr-123",
         "custom": {"priority": "high"},
@@ -53,10 +56,12 @@ def test_submit_builds_submit_proposal_request_from_workspace_data() -> None:
     assert client.last_request.correlation_id == TPPCorrelationId(value="corr-123")
     assert client.last_request.organization_id == "org-123"
     assert client.last_request.trip_id == "trip-123"
-    assert client.last_request.proposal_id == "proposal-123"
+    assert client.last_request.proposal_id == "proposal-from-workspace"
     assert client.last_request.payload == workspace_data
-    assert response == ProposalSubmissionResult(proposal_id="proposal-123", success=True)
-    assert workspace_state["tpp_proposal_id"] == "proposal-123"
+    assert response == ProposalSubmissionResult(
+        proposal_id="proposal-from-tpp-server", success=True
+    )
+    assert workspace_state["tpp_proposal_id"] == "proposal-from-tpp-server"
 
 
 def test_submit_raises_domain_error_and_does_not_persist_proposal_id_for_bad_contract() -> None:
