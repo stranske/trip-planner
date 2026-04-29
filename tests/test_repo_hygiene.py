@@ -130,6 +130,16 @@ def test_tpp_renames_require_recorded_sub_decision_in_pr_body() -> None:
     assert ok, message
 
 
+def test_no_tpp_files_remain_under_legacy_app_tree() -> None:
+    """TPP modules must not remain in trip_planner/app after canonical migration."""
+    legacy_tpp_paths = _git_ls_files("trip_planner/app/**/*tpp*.py")
+    assert not legacy_tpp_paths, (
+        "Found TPP-related Python files under trip_planner/app. "
+        "Move them to trip_planner/integrations/tpp or document intentional shims in the PR body.\n"
+        f"Offending paths: {', '.join(legacy_tpp_paths[:20])}"
+    )
+
+
 def test_no_production_tpp_imports_from_legacy_app_namespaces() -> None:
     """Keep production TPP imports on the canonical integrations path."""
     pattern = re.compile(
