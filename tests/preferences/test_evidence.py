@@ -1,3 +1,5 @@
+import pytest
+
 from trip_planner.preferences.evidence import (
     ContradictionMarker,
     DimensionEvidenceRecord,
@@ -211,7 +213,7 @@ def test_baseline_confidence_prefers_revealed_then_explicit_then_default() -> No
 
 
 def test_dimension_evidence_record_requires_supported_source() -> None:
-    try:
+    with pytest.raises(ValueError, match="source must be one of"):
         DimensionEvidenceRecord(
             dimension="movement_vs_friction",
             signal_type="revealed_behavior",
@@ -225,7 +227,3 @@ def test_dimension_evidence_record_requires_supported_source() -> None:
                 captured_by="planner-turn",
             ),
         )
-    except ValueError as exc:
-        assert "source must be one of" in str(exc)
-    else:
-        raise AssertionError("Dimension evidence should reject unsupported sources")

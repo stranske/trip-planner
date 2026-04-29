@@ -99,6 +99,9 @@ def test_resolution_explanation_reports_value_delta_from_seed() -> None:
     assert detail.value_delta == detail.resolved_value - detail.initial_value
     assert detail.value_delta > 0.0
     assert any(influence.source_kind == "evidence" for influence in detail.influences)
+    assert "Score increased from 0.20" in detail.explanation_text
+    assert "delta +" in detail.explanation_text
+    assert "based on" in detail.explanation_text
 
 
 def test_value_delta_is_not_clamped_for_full_axis_swings() -> None:

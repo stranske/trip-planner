@@ -214,6 +214,22 @@ Every first-tier dimension has a confidence-guidance entry in `DIMENSION_CONFIDE
 - `structure_vs_elasticity`: structured-input preferences start strong and decay when later trip revisions loosen the plan.
 - `social_energy_vs_solitude`: lodging and neighborhood selections can confirm stated social-energy preference.
 
+`DIMENSION_EVIDENCE_SOURCE_GUIDANCE` enumerates the primary source channels and stale/conflict rule for each first-tier dimension:
+
+| Dimension | Primary source channels | Confidence and freshness rule |
+|---|---|---|
+| `movement_vs_friction` | `option_menu`, `scenario_prompt`, `trip_revision` | Prefer recent relocation, routing, and packing-friction choices over generic movement appetite statements; older routing choices become stale after later base-cadence revisions. |
+| `recovery_vs_intensity` | `user_message`, `structured_input`, `trip_revision` | Raise confidence when fatigue notes, rest-day edits, and rejected packed plans agree; early stamina assumptions become stale after later fatigue or recovery edits. |
+| `nature_vs_culture` | `user_message`, `option_menu`, `imported_trip_notes` | Treat direct destination interests as strong, but require repeated behavior before overriding stated nature or culture priorities; prior-trip notes become stale after conflicting current stops. |
+| `structure_vs_elasticity` | `structured_input`, `trip_revision`, `scenario_prompt` | Structured-input answers start strong and decay when later revisions loosen or tighten the itinerary. |
+| `breadth_vs_depth` | `option_menu`, `trip_revision`, `user_message` | Chosen stay lengths and rejected fast routes outrank abstract statements; early coverage goals become stale after actual stay changes. |
+| `self_reliance_vs_convenience` | `option_menu`, `structured_input`, `scenario_prompt` | Transfer, guide, booking-support, and self-navigation choices are highest confidence; assumptions become stale after conflicting support-seeking or self-service behavior. |
+| `historic_vs_contemporary` | `option_menu`, `imported_trip_notes`, `user_message` | Keep confidence moderate until attraction choices repeatedly favor one pole across multiple cities; prior-trip interests become stale when current attraction choices diverge. |
+| `scenic_transit_vs_destination_time` | `option_menu`, `scenario_prompt`, `trip_revision` | Revealed transport choices outrank generic travel-style answers; the signal becomes stale after later revisions trade scenery for time, or vice versa. |
+| `route_coherence_vs_eclectic_contrast` | `scenario_prompt`, `option_menu`, `structured_input` | Increase confidence when scenario reactions and selected route bundles agree on route shape; initial route answers become stale after bundle selections introduce a new pattern. |
+| `social_energy_vs_solitude` | `option_menu`, `user_message`, `trip_revision` | Lodging, neighborhood, and crowd-exposure choices confirm stated social energy; declarations become stale after conflicting lodging or neighborhood choices. |
+| `iconic_vs_discovery` | `user_message`, `option_menu`, `imported_trip_notes` | Must-see declarations are strong explicit evidence, while off-list substitutions are strong revealed evidence; imported must-see lists become stale after the traveler drops or replaces the anchor. |
+
 Fixture coverage lives in `tests/fixtures/preferences/evidence_records.json` and validates explicit, revealed, default, stale, and conflicting evidence cases.
 
 ### First-Tier Dimension Keys

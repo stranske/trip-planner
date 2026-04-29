@@ -177,6 +177,95 @@ DIMENSION_CONFIDENCE_GUIDANCE: Final[dict[str, str]] = {
         "Use must-see declarations as strong explicit evidence and off-list substitutions as revealed evidence."
     ),
 }
+DIMENSION_EVIDENCE_SOURCE_GUIDANCE: Final[dict[str, dict[str, tuple[str, ...] | str]]] = {
+    "movement_vs_friction": {
+        "primary_sources": ("option_menu", "scenario_prompt", "trip_revision"),
+        "confidence_rule": (
+            "Prefer recent relocation, routing, and packing-friction choices over generic "
+            "movement appetite statements when the signals conflict."
+        ),
+        "stale_when": "Older routing choices are stale once later revisions choose a different base cadence.",
+    },
+    "recovery_vs_intensity": {
+        "primary_sources": ("user_message", "structured_input", "trip_revision"),
+        "confidence_rule": (
+            "Raise confidence when fatigue notes, rest-day edits, and rejected packed plans "
+            "point in the same direction."
+        ),
+        "stale_when": "Early stamina assumptions are stale after later fatigue or recovery edits.",
+    },
+    "nature_vs_culture": {
+        "primary_sources": ("user_message", "option_menu", "imported_trip_notes"),
+        "confidence_rule": (
+            "Treat direct destination interests as strong evidence, but require repeated "
+            "behavior before overriding stated nature or culture priorities."
+        ),
+        "stale_when": "Imported trip notes are stale once the traveler chooses conflicting current stops.",
+    },
+    "structure_vs_elasticity": {
+        "primary_sources": ("structured_input", "trip_revision", "scenario_prompt"),
+        "confidence_rule": (
+            "Structured-input planning preferences start strong and decay when later revisions "
+            "loosen or tighten the itinerary."
+        ),
+        "stale_when": "Initial planning-form answers are stale after later in-trip revision behavior.",
+    },
+    "breadth_vs_depth": {
+        "primary_sources": ("option_menu", "trip_revision", "user_message"),
+        "confidence_rule": (
+            "Chosen stay lengths and rejected fast routes outrank abstract statements about "
+            "coverage or lingering."
+        ),
+        "stale_when": "Early coverage goals are stale after the traveler extends or cuts actual stays.",
+    },
+    "self_reliance_vs_convenience": {
+        "primary_sources": ("option_menu", "structured_input", "scenario_prompt"),
+        "confidence_rule": (
+            "Transfer, guide, booking-support, and self-navigation choices are the highest "
+            "confidence signals."
+        ),
+        "stale_when": "Convenience assumptions are stale after later self-service or support-seeking choices.",
+    },
+    "historic_vs_contemporary": {
+        "primary_sources": ("option_menu", "imported_trip_notes", "user_message"),
+        "confidence_rule": (
+            "Keep confidence moderate until attraction choices repeatedly favor one pole "
+            "across more than one city or segment."
+        ),
+        "stale_when": "Prior-trip interests are stale when current attraction choices consistently diverge.",
+    },
+    "scenic_transit_vs_destination_time": {
+        "primary_sources": ("option_menu", "scenario_prompt", "trip_revision"),
+        "confidence_rule": (
+            "Revealed transport choices carry more confidence than generic travel-style answers."
+        ),
+        "stale_when": "A transport preference is stale after later revisions trade scenery for time, or vice versa.",
+    },
+    "route_coherence_vs_eclectic_contrast": {
+        "primary_sources": ("scenario_prompt", "option_menu", "structured_input"),
+        "confidence_rule": (
+            "Increase confidence when scenario reactions and selected route bundles agree "
+            "on the route shape."
+        ),
+        "stale_when": "Initial route-shape answers are stale after bundle selections introduce a new pattern.",
+    },
+    "social_energy_vs_solitude": {
+        "primary_sources": ("option_menu", "user_message", "trip_revision"),
+        "confidence_rule": (
+            "Lodging, neighborhood, and crowd-exposure choices are strong behavioral "
+            "confirmation of stated social energy."
+        ),
+        "stale_when": "Social-energy declarations are stale after later lodging or neighborhood choices conflict.",
+    },
+    "iconic_vs_discovery": {
+        "primary_sources": ("user_message", "option_menu", "imported_trip_notes"),
+        "confidence_rule": (
+            "Must-see declarations are strong explicit evidence; off-list substitutions "
+            "are strong revealed evidence."
+        ),
+        "stale_when": "Imported must-see lists are stale after the traveler drops or replaces the anchor.",
+    },
+}
 COMPLEXITY_TOLERANCE_MAP: Final[dict[str, dict[str, float]]] = {
     "low": {
         "movement_vs_friction": -0.75,
