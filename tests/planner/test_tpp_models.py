@@ -1,4 +1,4 @@
-from trip_planner.app.models.tpp import PollingOutcome
+from trip_planner.integrations.tpp.models import PollingOutcome
 
 
 def test_polling_outcome_enum_defines_expected_states() -> None:

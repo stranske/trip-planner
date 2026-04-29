@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from trip_planner.app.services.tpp_proposal_submission_service import (
+from trip_planner.integrations.tpp.services.tpp_proposal_submission_service import (
     ProposalSubmissionResult,
     TPPWorkspaceProposalSubmissionService,
 )
