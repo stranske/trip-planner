@@ -165,6 +165,33 @@ Dimension-specific support strength defines how strongly each evidence type shou
 | `social_energy_vs_solitude` | `forced_tradeoff_choice`, `scenario_reaction` | `direct_statement`, `option_selection`, `trip_revision` |
 | `iconic_vs_discovery` | `forced_tradeoff_choice`, `scenario_reaction`, `option_selection` | `direct_statement`, `option_rejection` |
 
+#### Hybrid Factor Evidence Sources
+
+Hybrid factors (food, rest, music, route_modes) carry both directional and anchor-strength
+signals. Canonical mapping lives in `trip_planner.preferences.evidence_catalog.HYBRID_FACTOR_EVIDENCE_STRENGTH`.
+
+| Hybrid factor | Strong evidence types | Medium evidence types |
+|---|---|---|
+| `food` | `anchor_declaration`, `option_selection`, `option_rejection` | `direct_statement`, `scenario_reaction`, `trip_revision` |
+| `rest` | `anchor_declaration`, `scenario_reaction`, `option_selection`, `trip_revision` | `direct_statement`, `option_rejection` |
+| `music` | `anchor_declaration`, `option_selection` | `direct_statement`, `scenario_reaction`, `trip_revision` |
+| `route_modes` | `anchor_declaration`, `option_selection`, `option_rejection` | `direct_statement`, `forced_tradeoff_choice`, `trip_revision` |
+
+#### Anchor Group Evidence Sources
+
+Anchor groups carry commitment-like signals about what the trip must protect or organize
+around. Canonical mapping lives in `trip_planner.preferences.evidence_catalog.ANCHOR_GROUP_EVIDENCE_STRENGTH`.
+
+| Anchor group | Strong evidence types | Medium evidence types |
+|---|---|---|
+| `place_anchors` | `hard_constraint_declaration`, `anchor_declaration` | `trip_revision`, `option_selection` |
+| `experience_anchors` | `anchor_declaration`, `option_selection`, `trip_revision` | `direct_statement`, `scenario_reaction` |
+| `mode_anchors` | `anchor_declaration`, `option_selection` | `forced_tradeoff_choice`, `option_rejection` |
+| `rhythm_anchors` | `anchor_declaration`, `trip_revision` | `scenario_reaction`, `option_selection` |
+| `calendar_anchors` | `hard_constraint_declaration`, `anchor_declaration` | `trip_revision` |
+| `quality_floor_anchors` | `hard_constraint_declaration`, `anchor_declaration`, `option_rejection` | `trip_revision` |
+| `regional_adjacency_preferences` | `option_selection` | `anchor_declaration`, `scenario_reaction`, `trip_revision` |
+
 ## Preference Resolution Rules
 
 The resolver should compute each first-tier dimension using four layers.
