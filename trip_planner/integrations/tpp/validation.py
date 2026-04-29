@@ -7,6 +7,7 @@ from typing import Any
 
 from trip_planner.business.policy_contracts import PolicyEvaluationResult
 from trip_planner.integrations.tpp.client import TPPContractError
+from trip_planner.integrations.tpp.contracts import TPPExecutionStatus
 
 
 def validate_succeeded_response(
@@ -17,12 +18,17 @@ def validate_succeeded_response(
     if not isinstance(result_response_payload, Mapping):
         raise TPPContractError("TPP result response contract requires an object payload.")
 
-    execution_status = result_response_payload.get("execution_status")
-    if not isinstance(execution_status, Mapping):
+    execution_status_payload = result_response_payload.get("execution_status")
+    if not isinstance(execution_status_payload, Mapping):
         raise TPPContractError("TPP result response contract requires 'execution_status'.")
 
-    state = execution_status.get("state")
-    if not isinstance(state, str) or not state.strip():
+    try:
+        execution_status = TPPExecutionStatus(**dict(execution_status_payload))
+    except (TypeError, ValueError) as exc:
+        raise TPPContractError("Malformed 'execution_status' contract.") from exc
+
+    state = execution_status.state.strip().lower()
+    if not state:
         raise TPPContractError(
             "TPP result response contract requires non-empty 'execution_status.state'."
         )
@@ -38,7 +44,7 @@ def validate_succeeded_response(
                 f"TPP result response contract requires non-empty 'result_payload.{required_field}'."
             )
 
-    if state.strip().lower() == "succeeded":
+    if state == "succeeded":
         evaluation_result = result_payload.get("evaluation_result")
         if not isinstance(evaluation_result, dict):
             raise TPPContractError(
