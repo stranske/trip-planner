@@ -11,13 +11,21 @@ FORBIDDEN_METHODS = {
 }
 
 
+def _base_name(base: ast.expr) -> str | None:
+    if isinstance(base, ast.Name):
+        return base.id
+    if isinstance(base, ast.Attribute):
+        return base.attr
+    return None
+
+
 def _forbidden_overrides_for_source(source: str) -> list[tuple[str, str]]:
     tree = ast.parse(source)
     violations: list[tuple[str, str]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef):
             continue
-        base_names = {base.id for base in node.bases if isinstance(base, ast.Name)}
+        base_names = {name for base in node.bases if (name := _base_name(base)) is not None}
         if "BaseTPPIntegrationClient" not in base_names:
             continue
         for body_node in node.body:
@@ -48,6 +56,18 @@ class BadFake(BaseTPPIntegrationClient):
     assert _forbidden_overrides_for_source(source) == [("BadFake", "submit_proposal")]
 
 
+def test_interface_rule_detector_catches_forbidden_override_with_qualified_base() -> None:
+    source = """
+class BadFake(client.BaseTPPIntegrationClient):
+    def execute(self, request):
+        return request
+
+    def poll_execution_status(self, request):
+        return request
+"""
+    assert _forbidden_overrides_for_source(source) == [("BadFake", "poll_execution_status")]
+
+
 def test_policy_passive_client_inherits_base_and_overrides_only_execute() -> None:
     policy_source = Path("trip_planner/app/services/policy.py").read_text(encoding="utf-8")
     tree = ast.parse(policy_source)
@@ -57,7 +77,7 @@ def test_policy_passive_client_inherits_base_and_overrides_only_execute() -> Non
         if isinstance(node, ast.ClassDef) and node.name == "_PassiveTPPClient"
     )
 
-    base_names = {base.id for base in passive_client.bases if isinstance(base, ast.Name)}
+    base_names = {name for base in passive_client.bases if (name := _base_name(base)) is not None}
     assert "BaseTPPIntegrationClient" in base_names
 
     method_names = {node.name for node in passive_client.body if isinstance(node, ast.FunctionDef)}

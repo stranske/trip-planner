@@ -148,7 +148,7 @@ A coverage task is NOT complete just because you added tests. It is complete ONL
 ---
 ## PR Tasks and Acceptance Criteria
 
-**Progress:** 1/12 tasks complete, 11 remaining
+**Progress:** 3/12 tasks complete, 9 remaining
 
 ### ⚠️ IMPORTANT: Task Reconciliation Required
 
@@ -206,11 +206,9 @@ The PR is complete when ALL of these are satisfied:
 ### Recently Attempted Tasks
 Avoid repeating these unless a task needs explicit follow-up:
 
-- The `BaseTPPIntegrationClient` ABC at `trip_planner/integrations/tpp/client.py:28-54` is the source of truth. Read it before changing anything else.
 - When centralizing validation, the existing `TPPResponseEnvelope` dataclass already has structure for `execution_status`, `result_payload`, `evaluation_result` — validation just needs to assert those keys/attributes are present and well-formed for the `succeeded` state. Don't reinvent the dataclass.
-
-### Suggested Next Task
 - This PR's diff should be small (≤300 LOC). If it grows past 500 LOC, scope is leaking — split further or call out the reason.
+- no-focus
 
 ### Source Context
 _For additional background, check these linked issues/PRs:_
