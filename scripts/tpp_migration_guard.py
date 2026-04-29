@@ -97,6 +97,13 @@ def load_pr_body() -> str:
     return os.getenv("PR_BODY", "") or _read_pr_body_from_event()
 
 
+def _is_pr_context() -> bool:
+    event_name = os.getenv("GITHUB_EVENT_NAME", "").strip().lower()
+    if event_name in {"pull_request", "pull_request_target"}:
+        return True
+    return bool(os.getenv("GITHUB_BASE_REF", "").strip())
+
+
 def enforce_guard() -> tuple[bool, str]:
     try:
         diff_range = _resolve_diff_range()
@@ -110,6 +117,9 @@ def enforce_guard() -> tuple[bool, str]:
     blocked_moves = find_blocked_tpp_moves(rename_records)
     if not blocked_moves:
         return True, "No guarded TPP rename moves detected."
+
+    if not _is_pr_context():
+        return True, "Skipping TPP rename guard outside PR context."
 
     pr_body = load_pr_body()
     if not pr_body:
