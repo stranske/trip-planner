@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 from . import schema
@@ -26,6 +27,11 @@ EVIDENCE_SOURCE_TYPES: tuple[str, ...] = (
     "trip_revision",
     "imported_trip_notes",
 )
+EVIDENCE_SIGNAL_FAMILIES: tuple[str, ...] = (
+    "explicit_answer",
+    "revealed_behavior",
+    "default_assumption",
+)
 EVIDENCE_SUPPORT_LEVELS: tuple[str, ...] = ("weak", "medium", "strong")
 SIGNAL_DIRECTIONS: tuple[str, ...] = ("positive", "negative", "contradiction")
 OPTION_KINDS: tuple[str, ...] = (
@@ -35,6 +41,46 @@ OPTION_KINDS: tuple[str, ...] = (
     "destination_bundle",
     "mixed_bundle",
 )
+_BASELINE_CONFIDENCE_BY_SIGNAL_FAMILY: dict[str, float] = {
+    "explicit_answer": 0.7,
+    "revealed_behavior": 0.85,
+    "default_assumption": 0.1,
+}
+
+
+def _parse_iso8601_utc(value: str, field_name: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be an ISO-8601 timestamp") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"{field_name} must include timezone information")
+    return parsed.astimezone(UTC)
+
+
+_BEHAVIORAL_EVIDENCE_TYPES_FOR_FAMILY: frozenset[str] = frozenset(
+    {"option_selection", "option_rejection", "trip_revision", "scenario_reaction"}
+)
+_EXPLICIT_SOURCE_TYPES_FOR_FAMILY: frozenset[str] = frozenset(
+    {"user_message", "structured_input", "scenario_prompt"}
+)
+
+
+def evidence_signal_family(*, evidence_type: str, source_type: str) -> str:
+    # Planner-inferred records are treated as default assumptions regardless of evidence_type;
+    # they represent the system's prior, not a user signal.
+    if source_type == "planner_inference_review":
+        return "default_assumption"
+    if evidence_type in _BEHAVIORAL_EVIDENCE_TYPES_FOR_FAMILY:
+        return "revealed_behavior"
+    if source_type in _EXPLICIT_SOURCE_TYPES_FOR_FAMILY:
+        return "explicit_answer"
+    return "default_assumption"
+
+
+def baseline_confidence_hint(*, evidence_type: str, source_type: str) -> float:
+    family = evidence_signal_family(evidence_type=evidence_type, source_type=source_type)
+    return _BASELINE_CONFIDENCE_BY_SIGNAL_FAMILY[family]
 
 
 def _require_probability(value: float, field_name: str) -> None:
@@ -84,6 +130,70 @@ class ContradictionMarker:
         if not self.reason:
             raise ValueError("reason is required")
         _require_probability(self.weakening_strength, "weakening_strength")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class EvidenceProvenance:
+    source_id: str
+    channel: str
+    captured_by: str
+
+    def __post_init__(self) -> None:
+        if not self.source_id:
+            raise ValueError("source_id is required")
+        if not self.channel:
+            raise ValueError("channel is required")
+        if not self.captured_by:
+            raise ValueError("captured_by is required")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class DimensionEvidenceRecord:
+    dimension: str
+    signal_type: str
+    value: float
+    source: str
+    confidence: float
+    observed_at: str
+    provenance: EvidenceProvenance
+    evidence_type: str | None = None
+    evidence_id: str = ""
+
+    def __post_init__(self) -> None:
+        if self.dimension not in schema.TRADEOFF_DIMENSION_KEYS:
+            raise ValueError(f"dimension must be one of {schema.TRADEOFF_DIMENSION_KEYS}")
+        if self.signal_type not in EVIDENCE_SIGNAL_FAMILIES:
+            raise ValueError(f"signal_type must be one of {EVIDENCE_SIGNAL_FAMILIES}")
+        if not -1.0 <= self.value <= 1.0:
+            raise ValueError("value must be between -1.0 and 1.0")
+        if not self.source:
+            raise ValueError("source is required")
+        _require_probability(self.confidence, "confidence")
+        _parse_iso8601_utc(self.observed_at, "observed_at")
+        if not isinstance(self.provenance, EvidenceProvenance):
+            raise ValueError("provenance must be an EvidenceProvenance")
+        if self.evidence_type is not None and self.evidence_type not in EVIDENCE_TYPES:
+            raise ValueError(f"evidence_type must be one of {EVIDENCE_TYPES}")
+
+    def is_stale(self, *, as_of: str, max_age_days: int) -> bool:
+        observed = _parse_iso8601_utc(self.observed_at, "observed_at")
+        cutoff = _parse_iso8601_utc(as_of, "as_of")
+        age_days = (cutoff - observed).days
+        return age_days > max_age_days
+
+    def conflicts_with(self, other: "DimensionEvidenceRecord") -> bool:
+        return (
+            self.dimension == other.dimension
+            and self.value != 0.0
+            and other.value != 0.0
+            and (self.value > 0 > other.value or self.value < 0 < other.value)
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

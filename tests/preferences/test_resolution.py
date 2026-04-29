@@ -2,6 +2,8 @@ from copy import deepcopy
 
 from tests.preferences.fixture_corpus import load_fixture_corpus
 from trip_planner.preferences import EvidenceSummary, resolve_leisure_profile
+from trip_planner.preferences.evidence import PreferenceEvidence
+from trip_planner.preferences.resolution import resolve_dimension_evidence
 
 EXPECTED_TENSION_IDS = {
     "social-recovery-balancer": {"social-energy-recovery-conflict"},
@@ -84,6 +86,40 @@ def test_resolution_flags_dimensions_that_need_directional_seed() -> None:
     )
 
 
+def test_resolution_explanation_reports_value_delta_from_seed() -> None:
+    fixture = next(item for item in load_fixture_corpus() if item.id == "scenic-rail-nomad")
+    seed = _resolution_seed(fixture.profile)
+    seed.tradeoff_dimensions["movement_vs_friction"].value = 0.2
+
+    result = resolve_leisure_profile(seed, fixture.evidence)
+
+    detail = result.explanation.dimension_explanations["movement_vs_friction"]
+    assert detail.initial_value == 0.2
+    assert detail.resolved_value == result.profile.tradeoff_dimensions["movement_vs_friction"].value
+    assert detail.value_delta == detail.resolved_value - detail.initial_value
+    assert detail.value_delta > 0.0
+    assert any(influence.source_kind == "evidence" for influence in detail.influences)
+
+
+def test_value_delta_is_not_clamped_for_full_axis_swings() -> None:
+    # ``self_reliance_vs_convenience`` is force-raised to at least 0.35 by the
+    # quality-floor guardrail in ``_apply_anchor_and_constraint_precedence``.
+    # Seeding it at -1.0 and letting the public resolver run produces a natural
+    # delta of 1.35, which would be silently truncated to 1.0 if value_delta
+    # were ever clamped to the [-1, 1] axis range again.
+    fixture = next(item for item in load_fixture_corpus() if item.id == "comfort-floor-traveler")
+    seed = _resolution_seed(fixture.profile)
+    seed.tradeoff_dimensions["self_reliance_vs_convenience"].value = -1.0
+
+    result = resolve_leisure_profile(seed, fixture.evidence)
+
+    detail = result.explanation.dimension_explanations["self_reliance_vs_convenience"]
+    assert detail.initial_value == -1.0
+    assert detail.resolved_value >= 0.35
+    assert detail.value_delta == detail.resolved_value - detail.initial_value
+    assert detail.value_delta > 1.0
+
+
 def test_directional_seed_artifacts_removed_after_interaction_moves_off_zero() -> None:
     fixture = next(item for item in load_fixture_corpus() if item.id == "discovery-wanderer")
     seed = _resolution_seed(fixture.profile)
@@ -110,3 +146,125 @@ def test_directional_seed_artifacts_removed_after_interaction_moves_off_zero() -
         != note
         for note in result.profile.evidence_summary.confidence_notes
     )
+
+
+def test_dimension_resolution_is_deterministic_for_input_order() -> None:
+    records = [
+        PreferenceEvidence(
+            id="ev-b",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="positive",
+            confidence_hint=0.7,
+            salience_hint=0.7,
+            sequence=3,
+        ),
+        PreferenceEvidence(
+            id="ev-a",
+            evidence_type="direct_statement",
+            source_type="user_message",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="negative",
+            confidence_hint=0.9,
+            salience_hint=0.8,
+            sequence=2,
+        ),
+    ]
+    first = resolve_dimension_evidence("movement_vs_friction", 0.4, records)
+    second = resolve_dimension_evidence("movement_vs_friction", 0.4, list(reversed(records)))
+    assert first.final_value == second.final_value
+    assert first.confidence == second.confidence
+    assert first.explanation_code == second.explanation_code
+    assert first.contributing_evidence_ids == second.contributing_evidence_ids
+
+
+def test_dimension_resolution_explicit_override_beats_behavioral_signal() -> None:
+    records = [
+        PreferenceEvidence(
+            id="ev-explicit",
+            evidence_type="direct_statement",
+            source_type="user_message",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="negative",
+            confidence_hint=0.95,
+            salience_hint=0.8,
+            sequence=9,
+        ),
+        PreferenceEvidence(
+            id="ev-behavior",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="positive",
+            confidence_hint=0.7,
+            salience_hint=0.7,
+            sequence=10,
+        ),
+    ]
+    resolved = resolve_dimension_evidence("movement_vs_friction", 0.6, records)
+    assert resolved.final_value < 0.0
+    assert resolved.explanation_code in {"explicit_override", "conflict_low_confidence"}
+    assert "ev-explicit" in resolved.contributing_evidence_ids
+
+
+def test_dimension_resolution_tie_keeps_seed_value() -> None:
+    records = [
+        PreferenceEvidence(
+            id="ev-left",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="negative",
+            confidence_hint=0.9,
+            salience_hint=0.8,
+            sequence=1,
+        ),
+        PreferenceEvidence(
+            id="ev-right",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="positive",
+            confidence_hint=0.9,
+            salience_hint=0.8,
+            sequence=1,
+        ),
+    ]
+    resolved = resolve_dimension_evidence("movement_vs_friction", 0.25, records)
+    assert resolved.final_value == 0.25
+
+
+def test_dimension_resolution_stale_behavior_is_discounted() -> None:
+    records = [
+        PreferenceEvidence(
+            id="ev-stale",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="negative",
+            confidence_hint=0.8,
+            salience_hint=0.8,
+            sequence=1,
+        ),
+        PreferenceEvidence(
+            id="ev-recent",
+            evidence_type="scenario_reaction",
+            source_type="scenario_prompt",
+            affected_dimensions=["movement_vs_friction"],
+            signal_direction="positive",
+            confidence_hint=0.8,
+            salience_hint=0.8,
+            sequence=30,
+        ),
+    ]
+    resolved = resolve_dimension_evidence("movement_vs_friction", 0.0, records)
+    assert resolved.recent_behavior_support > abs(resolved.older_behavior_support)
+    assert resolved.final_value > 0.0
+
+
+def test_dimension_resolution_missing_evidence_uses_default_seed() -> None:
+    resolved = resolve_dimension_evidence("movement_vs_friction", -0.35, [])
+    assert resolved.final_value == -0.35
+    assert resolved.explanation_code == "default_seed"
+    assert resolved.contributing_evidence_ids == []

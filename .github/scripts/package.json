@@ -1,6 +1,8 @@
 {
   "private": true,
   "dependencies": {
-    "minimatch": "file:node_modules/minimatch"
+    "@octokit/auth-app": "^6.0.3",
+    "@octokit/rest": "^20.0.2",
+    "minimatch": "^10.0.1"
   }
 }

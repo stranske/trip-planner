@@ -481,3 +481,439 @@ def test_business_ranking_exposes_proposal_readiness_records() -> None:
     assert result.confidence_summary.overall_confidence is not None
     assert "proposal_readiness" in [axis.key for axis in result_set.comparison_axes]
     assert result_set.comparison_axes[2].key == "proposal_readiness"
+
+
+# ---------------------------------------------------------------------------
+# Hard constraint: disallowed inventory cannot be outweighed by preference
+# ---------------------------------------------------------------------------
+
+
+def _disallowed_high_comfort_bundle() -> InventoryBundle:
+    """Bundle with disallowed policy status but artificially high schedule/comfort signals."""
+    home = _home_destination()
+    destination = _conference_destination()
+    lodging = _load_lodging("conference_hotel.json")
+    transport = _load_transport("coastal_flight.json")
+    lodging.destination_id = destination.destination_id
+    # Excellent comfort and workspace signals
+    lodging.room_summary.workspace_signal = 0.99
+    lodging.room_summary.comfort_signal = 0.99
+    lodging.location_summary.business_access_signal = 0.99
+    # Hard policy block on both components
+    lodging.feasibility.business_approval_status = "disallowed"
+    transport.origin_id = "dest-home"
+    transport.destination_id = destination.destination_id
+    transport.policy_summary.business_approval_status = "disallowed"
+    transport.policy_summary.approved_booking_channel = False
+    # Excellent schedule signals — these must NOT outweigh the hard block
+    transport.fit_summary.schedule_fit_signal = 0.99
+    transport.transfer_burden.schedule_protection_signal = 0.99
+    transport.experience_summary.workability_signal = 0.99
+    transport.experience_summary.comfort_signal = 0.99
+    return InventoryBundle(
+        bundle_id="bundle:disallowed-high-comfort",
+        title="Disallowed but high-comfort package",
+        destinations=[home, destination],
+        lodging_options=[lodging],
+        transport_options=[transport],
+        composition_summary=BundleCompositionSummary(
+            assembly_role="business_candidate",
+            primary_destination_id=destination.destination_id,
+            component_option_ids=[lodging.option_id, transport.option_id],
+        ),
+        provenance_summary=BundleProvenanceSummary(
+            source_refs=[transport.source_refs[0].provenance_id],
+            booking_links=[transport.booking_links[0]],
+        ),
+        quality_value_fit=BundleQualityValueFitSummary(
+            quality_signal=0.99,
+            value_signal=0.99,
+            fit_signal=0.99,
+        ),
+        explanation=BundleExplanation(
+            strengths=["Excellent comfort, great timing."],
+            tradeoffs=["Hard disallowed policy status on all components."],
+        ),
+        summary="High-comfort bundle explicitly blocked by policy.",
+        tags=["disallowed", "high-comfort"],
+    )
+
+
+def _mediocre_compliant_bundle() -> InventoryBundle:
+    """Bundle that is fully compliant but only mediocre on schedule/comfort."""
+    home = _home_destination()
+    destination = _conference_destination()
+    lodging = _load_lodging("central_urban_hotel.json")
+    transport = _load_transport("regional_rental_car.json")
+    lodging.destination_id = destination.destination_id
+    lodging.room_summary.workspace_signal = 0.5
+    lodging.room_summary.comfort_signal = 0.5
+    lodging.location_summary.business_access_signal = 0.55
+    lodging.feasibility.business_approval_status = "approved"
+    transport.origin_id = "dest-home"
+    transport.destination_id = destination.destination_id
+    transport.policy_summary.business_approval_status = "approved"
+    transport.policy_summary.approved_booking_channel = True
+    transport.fit_summary.schedule_fit_signal = 0.55
+    transport.transfer_burden.schedule_protection_signal = 0.5
+    return InventoryBundle(
+        bundle_id="bundle:mediocre-compliant",
+        title="Mediocre but compliant package",
+        destinations=[home, destination],
+        lodging_options=[lodging],
+        transport_options=[transport],
+        composition_summary=BundleCompositionSummary(
+            assembly_role="business_candidate",
+            primary_destination_id=destination.destination_id,
+            component_option_ids=[lodging.option_id, transport.option_id],
+        ),
+        provenance_summary=BundleProvenanceSummary(
+            source_refs=[transport.source_refs[0].provenance_id],
+        ),
+        quality_value_fit=BundleQualityValueFitSummary(
+            quality_signal=0.55,
+            value_signal=0.6,
+            fit_signal=0.5,
+        ),
+        explanation=BundleExplanation(
+            strengths=["Fully policy compliant."],
+            tradeoffs=["Average comfort and timing."],
+        ),
+        summary="Compliant package with average attributes.",
+        tags=["compliant"],
+    )
+
+
+def test_hard_block_cannot_be_outweighed_by_preference() -> None:
+    """Disallowed inventory is capped below the minimum compliant score regardless of other signals."""
+    profile, objectives, constraint_set = _objectives_for_scenario("compliant_conference_trip.json")
+    engine = BusinessRankingEngine()
+
+    disallowed = _disallowed_high_comfort_bundle()
+    compliant = _mediocre_compliant_bundle()
+
+    result_set = engine.rank_bundles(
+        profile,
+        objectives,
+        [disallowed, compliant],
+        trip_id="trip-hard-block-test",
+        constraint_set=constraint_set,
+    )
+
+    disallowed_result = next(
+        r
+        for r in result_set.results
+        if r.target_option and "disallowed" in r.target_option.option_id
+    )
+    compliant_result = next(
+        r
+        for r in result_set.results
+        if r.target_option and "mediocre-compliant" in r.target_option.option_id
+    )
+
+    # Hard block ceiling applied
+    assert disallowed_result.score <= engine.HARD_BLOCK_SCORE_CAP
+
+    # Compliant ranks above hard-blocked even though blocked bundle has superior comfort
+    assert compliant_result.score > disallowed_result.score
+    assert compliant_result.rank < disallowed_result.rank
+
+    # Breakdown carries the hard-block-cap penalty
+    assert any(
+        p.reason_code == "hard_block_cap" for p in disallowed_result.score_breakdown.penalties
+    )
+
+    # Explanation records surface the policy constraint impact
+    policy_record = next(
+        (r for r in disallowed_result.explanation_records if r.record_type == "penalty"),
+        None,
+    )
+    assert policy_record is not None
+    assert policy_record.machine_context.get("hard_blocked") == "true"
+    assert "policy_compliance" in policy_record.factor_keys
+
+
+# ---------------------------------------------------------------------------
+# Soft constraint: restricted inventory reduces score by documented penalty
+# ---------------------------------------------------------------------------
+
+
+def _approved_bundle() -> InventoryBundle:
+    home = _home_destination()
+    destination = _conference_destination()
+    lodging = _load_lodging("conference_hotel.json")
+    transport = _load_transport("coastal_flight.json")
+    lodging.destination_id = destination.destination_id
+    lodging.feasibility.business_approval_status = "approved"
+    transport.origin_id = "dest-home"
+    transport.destination_id = destination.destination_id
+    transport.policy_summary.business_approval_status = "approved"
+    transport.policy_summary.approved_booking_channel = True
+    transport.fit_summary.schedule_fit_signal = 0.75
+    transport.transfer_burden.schedule_protection_signal = 0.7
+    return InventoryBundle(
+        bundle_id="bundle:approved-baseline",
+        title="Approved baseline package",
+        destinations=[home, destination],
+        lodging_options=[lodging],
+        transport_options=[transport],
+        composition_summary=BundleCompositionSummary(
+            assembly_role="business_candidate",
+            primary_destination_id=destination.destination_id,
+            component_option_ids=[lodging.option_id, transport.option_id],
+        ),
+        provenance_summary=BundleProvenanceSummary(
+            source_refs=[transport.source_refs[0].provenance_id],
+        ),
+        quality_value_fit=BundleQualityValueFitSummary(
+            quality_signal=0.75, value_signal=0.72, fit_signal=0.74
+        ),
+        explanation=BundleExplanation(strengths=["Approved."]),
+        summary="Approved bundle for soft-penalty comparison.",
+        tags=["approved"],
+    )
+
+
+def _restricted_bundle() -> InventoryBundle:
+    """Same structure as approved bundle but with restricted approval status."""
+    home = _home_destination()
+    destination = _conference_destination()
+    lodging = _load_lodging("conference_hotel.json")
+    transport = _load_transport("coastal_flight.json")
+    lodging.destination_id = destination.destination_id
+    lodging.feasibility.business_approval_status = "restricted"
+    transport.origin_id = "dest-home"
+    transport.destination_id = destination.destination_id
+    transport.policy_summary.business_approval_status = "restricted"
+    transport.policy_summary.approved_booking_channel = False
+    transport.fit_summary.schedule_fit_signal = 0.75
+    transport.transfer_burden.schedule_protection_signal = 0.7
+    return InventoryBundle(
+        bundle_id="bundle:restricted-baseline",
+        title="Restricted baseline package",
+        destinations=[home, destination],
+        lodging_options=[lodging],
+        transport_options=[transport],
+        composition_summary=BundleCompositionSummary(
+            assembly_role="business_candidate",
+            primary_destination_id=destination.destination_id,
+            component_option_ids=[lodging.option_id, transport.option_id],
+        ),
+        provenance_summary=BundleProvenanceSummary(
+            source_refs=[transport.source_refs[0].provenance_id],
+        ),
+        quality_value_fit=BundleQualityValueFitSummary(
+            quality_signal=0.75, value_signal=0.72, fit_signal=0.74
+        ),
+        explanation=BundleExplanation(strengths=["Restricted."], tradeoffs=["Needs exception."]),
+        summary="Restricted bundle for soft-penalty comparison.",
+        tags=["restricted"],
+    )
+
+
+def test_soft_penalty_restricted_reduces_score() -> None:
+    """Restricted inventory scores lower than otherwise-identical approved inventory."""
+    profile, objectives, constraint_set = _objectives_for_scenario("compliant_conference_trip.json")
+    engine = BusinessRankingEngine()
+
+    approved = _approved_bundle()
+    restricted = _restricted_bundle()
+
+    result_set = engine.rank_bundles(
+        profile,
+        objectives,
+        [approved, restricted],
+        trip_id="trip-soft-penalty-test",
+        constraint_set=constraint_set,
+    )
+
+    approved_result = next(
+        r
+        for r in result_set.results
+        if r.target_option and "approved-baseline" in r.target_option.option_id
+    )
+    restricted_result = next(
+        r
+        for r in result_set.results
+        if r.target_option and "restricted-baseline" in r.target_option.option_id
+    )
+
+    # Approved outscores restricted (all else equal)
+    assert approved_result.score > restricted_result.score
+    assert approved_result.rank < restricted_result.rank
+
+    # Restricted bundle does NOT hit the hard block cap (it's a soft, not hard, constraint)
+    assert restricted_result.score > engine.HARD_BLOCK_SCORE_CAP
+    assert not any(
+        p.reason_code == "hard_block_cap" for p in restricted_result.score_breakdown.penalties
+    )
+
+
+# ---------------------------------------------------------------------------
+# Compliant option: no hard-block cap applied
+# ---------------------------------------------------------------------------
+
+
+def test_compliant_option_scores_without_policy_cap() -> None:
+    """A fully compliant bundle scores above the hard block cap with no hard-block penalty."""
+    profile, objectives, constraint_set = _objectives_for_scenario("compliant_conference_trip.json")
+    engine = BusinessRankingEngine()
+
+    compliant = _compliant_conference_bundle()
+
+    result_set = engine.rank_bundles(
+        profile,
+        objectives,
+        [compliant],
+        trip_id="trip-compliant-check",
+        constraint_set=constraint_set,
+    )
+
+    result = result_set.results[0]
+
+    # Score exceeds the hard block ceiling
+    assert result.score > engine.HARD_BLOCK_SCORE_CAP
+
+    # No hard-block-cap penalty in the breakdown
+    assert not any(p.reason_code == "hard_block_cap" for p in result.score_breakdown.penalties)
+
+    # Explanation records present and structurally valid
+    assert result.explanation_records
+    assert result.explanation_records[0].record_type == "summary"
+
+
+# ---------------------------------------------------------------------------
+# Tie-breaking: preference signals resolve ties when policy compliance is equal
+# ---------------------------------------------------------------------------
+
+
+def _schedule_heavy_bundle() -> InventoryBundle:
+    """Approved bundle with strong schedule protection signals."""
+    home = _home_destination()
+    destination = _conference_destination()
+    lodging = _load_lodging("conference_hotel.json")
+    transport = _load_transport("coastal_flight.json")
+    lodging.destination_id = destination.destination_id
+    lodging.feasibility.business_approval_status = "approved"
+    lodging.location_summary.business_access_signal = 0.95
+    transport.origin_id = "dest-home"
+    transport.destination_id = destination.destination_id
+    transport.policy_summary.business_approval_status = "approved"
+    transport.policy_summary.approved_booking_channel = True
+    # High schedule signals
+    transport.fit_summary.schedule_fit_signal = 0.95
+    transport.transfer_burden.schedule_protection_signal = 0.93
+    # Lower value/cost signals
+    transport.experience_summary.workability_signal = 0.55
+    return InventoryBundle(
+        bundle_id="bundle:schedule-heavy",
+        title="Schedule-heavy package",
+        destinations=[home, destination],
+        lodging_options=[lodging],
+        transport_options=[transport],
+        composition_summary=BundleCompositionSummary(
+            assembly_role="business_candidate",
+            primary_destination_id=destination.destination_id,
+            component_option_ids=[lodging.option_id, transport.option_id],
+        ),
+        provenance_summary=BundleProvenanceSummary(
+            source_refs=[transport.source_refs[0].provenance_id],
+        ),
+        quality_value_fit=BundleQualityValueFitSummary(
+            quality_signal=0.72, value_signal=0.58, fit_signal=0.72
+        ),
+        explanation=BundleExplanation(strengths=["Protected schedule."]),
+        summary="Approved bundle optimised for schedule protection.",
+        tags=["approved", "schedule-first"],
+    )
+
+
+def _cost_heavy_bundle() -> InventoryBundle:
+    """Approved bundle with strong value signals but weaker schedule protection."""
+    home = _home_destination()
+    destination = _conference_destination()
+    lodging = _load_lodging("central_urban_hotel.json")
+    transport = _load_transport("regional_rental_car.json")
+    lodging.destination_id = destination.destination_id
+    lodging.feasibility.business_approval_status = "approved"
+    lodging.location_summary.business_access_signal = 0.65
+    transport.origin_id = "dest-home"
+    transport.destination_id = destination.destination_id
+    transport.policy_summary.business_approval_status = "approved"
+    transport.policy_summary.approved_booking_channel = True
+    # Lower schedule signals
+    transport.fit_summary.schedule_fit_signal = 0.58
+    transport.transfer_burden.schedule_protection_signal = 0.52
+    # Higher value signals
+    transport.experience_summary.workability_signal = 0.72
+    return InventoryBundle(
+        bundle_id="bundle:cost-heavy",
+        title="Cost-heavy package",
+        destinations=[home, destination],
+        lodging_options=[lodging],
+        transport_options=[transport],
+        composition_summary=BundleCompositionSummary(
+            assembly_role="business_candidate",
+            primary_destination_id=destination.destination_id,
+            component_option_ids=[lodging.option_id, transport.option_id],
+        ),
+        provenance_summary=BundleProvenanceSummary(
+            source_refs=[transport.source_refs[0].provenance_id],
+        ),
+        quality_value_fit=BundleQualityValueFitSummary(
+            quality_signal=0.62, value_signal=0.88, fit_signal=0.65
+        ),
+        explanation=BundleExplanation(strengths=["Lower cost."]),
+        summary="Approved bundle optimised for cost posture.",
+        tags=["approved", "cost-first"],
+    )
+
+
+def test_preference_signals_break_policy_tie() -> None:
+    """When two bundles share equal policy compliance, preference signals determine rank."""
+    # Use schedule-sensitive client trip — schedule_protection has highest weight after policy
+    profile, objectives, constraint_set = _objectives_for_scenario(
+        "schedule_sensitive_client_trip.json"
+    )
+    engine = BusinessRankingEngine()
+
+    schedule_bundle = _schedule_heavy_bundle()
+    cost_bundle = _cost_heavy_bundle()
+
+    result_set = engine.rank_bundles(
+        profile,
+        objectives,
+        [schedule_bundle, cost_bundle],
+        trip_id="trip-tiebreak-test",
+        constraint_set=constraint_set,
+    )
+
+    schedule_result = next(
+        r
+        for r in result_set.results
+        if r.target_option and "schedule-heavy" in r.target_option.option_id
+    )
+    cost_result = next(
+        r
+        for r in result_set.results
+        if r.target_option and "cost-heavy" in r.target_option.option_id
+    )
+
+    # Both are compliant — neither hits the hard block cap
+    assert schedule_result.score > engine.HARD_BLOCK_SCORE_CAP
+    assert cost_result.score > engine.HARD_BLOCK_SCORE_CAP
+
+    # For a schedule-sensitive mission-critical trip, schedule protection should win
+    schedule_contribution = next(
+        c
+        for c in schedule_result.score_breakdown.component_contributions
+        if c.axis_key == "schedule_protection"
+    )
+    cost_schedule_contribution = next(
+        c
+        for c in cost_result.score_breakdown.component_contributions
+        if c.axis_key == "schedule_protection"
+    )
+    assert schedule_contribution.weighted_impact > cost_schedule_contribution.weighted_impact
+    assert schedule_result.score > cost_result.score
+    assert schedule_result.rank < cost_result.rank

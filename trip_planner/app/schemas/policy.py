@@ -9,7 +9,7 @@ class PolicySyncImportRequest(BaseModel):
     )
     response: dict[str, Any] | None = Field(
         default=None,
-        description="Optional serialized TPPResponseEnvelope payload for fixture-driven imports."
+        description="Optional serialized TPPResponseEnvelope payload for fixture-driven imports.",
     )
     source_kind: Literal["tpp_sync", "manual_import"] = "tpp_sync"
     tags: list[str] = Field(default_factory=list)

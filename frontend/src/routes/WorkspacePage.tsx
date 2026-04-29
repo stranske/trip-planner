@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useRef, useState, type FormEvent } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useLoaderData } from "react-router-dom";
 
 import type { TripRecord } from "../api/trips";
@@ -446,10 +446,14 @@ function mergePlannerSessionState(
 
 export function WorkspacePage() {
   const { workspace, trips } = useLoaderData() as LoaderData;
+  const resolve = useMemo(
+    () => Promise.all([workspace, trips ?? Promise.resolve([] as TripRecord[])]),
+    [workspace, trips]
+  );
 
   return (
     <AsyncRouteContent
-      resolve={Promise.all([workspace, trips ?? Promise.resolve([] as TripRecord[])])}
+      resolve={resolve}
       loading={{
         label: "Workspace",
         title: "Loading persisted trip state",

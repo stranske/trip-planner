@@ -16,20 +16,48 @@ def _git_ls_files(pattern: str) -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
-def test_root_node_modules_is_not_tracked() -> None:
-    tracked = _git_ls_files("node_modules/**")
+def _all_tracked_files() -> list[str]:
+    result = subprocess.run(
+        ["git", "ls-files"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return [line for line in result.stdout.splitlines() if line]
+
+
+def test_no_node_modules_tracked_anywhere() -> None:
+    """node_modules/ must never be tracked in git anywhere in the repo.
+
+    Install JS dependencies with `npm ci` from the relevant package-lock.json.
+    """
+    tracked = [p for p in _all_tracked_files() if "node_modules" in p]
     assert not tracked, (
-        "Root node_modules must stay untracked; install app JS dependencies with "
-        "`npm --prefix frontend install` instead."
+        f"Found {len(tracked)} tracked node_modules path(s). "
+        "Remove them with `git rm -r --cached <path>/node_modules/` and ensure "
+        "node_modules/ is listed in .gitignore without exceptions.\n"
+        f"First offending path: {tracked[0]}"
     )
 
 
-def test_gitignore_documents_expected_node_modules_layout() -> None:
+def test_gitignore_covers_node_modules() -> None:
     gitignore = Path(".gitignore").read_text(encoding="utf-8")
+    assert "node_modules/" in gitignore, (
+        ".gitignore must include a `node_modules/` rule so generated JS dependencies "
+        "are never accidentally committed."
+    )
+    assert "!.github/scripts/node_modules/" not in gitignore, (
+        ".gitignore must not exempt .github/scripts/node_modules/ — "
+        "workflow script dependencies should be installed with `npm ci`, not tracked."
+    )
 
-    assert "node_modules/" in gitignore
-    assert "!.github/scripts/node_modules/" in gitignore
-    assert "!.github/scripts/node_modules/**" in gitignore
+
+def test_github_scripts_has_package_lock() -> None:
+    lock = Path(".github/scripts/package-lock.json")
+    assert lock.exists(), (
+        ".github/scripts/package-lock.json must exist so CI can run `npm ci` "
+        "to install workflow script dependencies reproducibly."
+    )
 
 
 def test_makefile_has_test_target() -> None:
@@ -37,6 +65,14 @@ def test_makefile_has_test_target() -> None:
     assert "test:" in makefile, (
         "Makefile must have a 'test' target so agents and contributors have a documented "
         "default Python test command. Add: test:\\n\\tpython -m pytest"
+    )
+
+
+def test_makefile_uses_npm_ci_for_frontend() -> None:
+    makefile = Path("Makefile").read_text(encoding="utf-8")
+    assert "npm --prefix frontend ci" in makefile, (
+        "Makefile install target must use `npm --prefix frontend ci` (not `npm install`) "
+        "so local installs are reproducible from the lock file."
     )
 
 
@@ -70,7 +106,7 @@ def test_readme_documents_local_bootstrap_and_optional_integrations() -> None:
 
     expected_snippets = [
         "python -m venv .venv",
-        "npm --prefix frontend install",
+        "npm --prefix frontend ci",
         "frontend/node_modules",
         "TRIP_PLANNER_DATABASE_URL",
         "VITE_API_BASE_URL",

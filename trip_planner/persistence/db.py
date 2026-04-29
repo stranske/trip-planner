@@ -24,9 +24,7 @@ class Base(DeclarativeBase):
 
 
 def get_database_url() -> str:
-    return os.environ.get(
-        "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{_DEFAULT_SQLITE_PATH}"
-    )
+    return os.environ.get("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{_DEFAULT_SQLITE_PATH}")
 
 
 def _engine_options(url: str) -> dict[str, Any]:
@@ -55,9 +53,7 @@ def get_engine(url: str | None = None) -> Engine:
     engine = _ENGINE_CACHE.get(resolved_url)
     if engine is None:
         _ensure_sqlite_parent_dir(resolved_url)
-        engine = create_engine(
-            resolved_url, future=True, **_engine_options(resolved_url)
-        )
+        engine = create_engine(resolved_url, future=True, **_engine_options(resolved_url))
         _ENGINE_CACHE[resolved_url] = engine
     return engine
 

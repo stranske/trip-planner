@@ -116,6 +116,14 @@ Use:
 
 Not all evidence should count equally.
 
+Confidence should start from a signal-family baseline before other weighting rules are applied:
+
+- `revealed_behavior` (for concrete option selections/rejections and trip revisions): `0.85`
+- `explicit_answer` (for direct statements and structured answers): `0.70`
+- `default_assumption` (for fallback/inferred assumptions with no direct user signal): `0.10`
+
+These baselines are implemented in `trip_planner.preferences.evidence.baseline_confidence_hint`.
+
 The first pass should score evidence strength using:
 
 - `explicitness`: how directly the user expressed the preference
@@ -126,6 +134,63 @@ The first pass should score evidence strength using:
 - `conflict_penalty`: whether later evidence materially contradicts earlier evidence
 
 Revealed preference and resource-allocation evidence should usually outrank abstract self-description when the two conflict, unless the higher-level preference is anchored or constrained explicitly.
+
+Freshness rules:
+
+- evidence older than the current planning cycle should be down-weighted relative to fresh evidence
+- stale default assumptions should decay fastest because they are the weakest class
+- repeated, recent revealed behavior can override older explicit self-description unless blocked by hard constraints or anchors
+
+### Per-Dimension Evidence Sources And Confidence Rules
+
+All first-tier dimensions use the same signal-family baseline confidence rules:
+
+- `explicit_answer`: `0.70`
+- `revealed_behavior`: `0.85`
+- `default_assumption`: `0.10`
+
+Dimension-specific support strength defines how strongly each evidence type should influence scoring (`strong > medium > weak`). Canonical mapping lives in `trip_planner.preferences.evidence_catalog.DIMENSION_EVIDENCE_STRENGTH`.
+
+| Dimension | Strong evidence types | Medium evidence types |
+|---|---|---|
+| `movement_vs_friction` | `forced_tradeoff_choice`, `scenario_reaction`, `option_selection`, `trip_revision` | `direct_statement`, `option_rejection` |
+| `recovery_vs_intensity` | `forced_tradeoff_choice`, `scenario_reaction`, `option_selection`, `trip_revision` | `direct_statement`, `option_rejection` |
+| `nature_vs_culture` | `forced_tradeoff_choice`, `scenario_reaction`, `option_selection` | `direct_statement`, `option_rejection`, `trip_revision` |
+| `structure_vs_elasticity` | `scenario_reaction`, `forced_tradeoff_choice`, `trip_revision` | `direct_statement`, `option_selection` |
+| `breadth_vs_depth` | `forced_tradeoff_choice`, `scenario_reaction`, `trip_revision` | `direct_statement`, `option_selection` |
+| `self_reliance_vs_convenience` | `forced_tradeoff_choice`, `scenario_reaction`, `option_selection` | `direct_statement`, `option_rejection`, `trip_revision` |
+| `historic_vs_contemporary` | `forced_tradeoff_choice`, `scenario_reaction` | `direct_statement`, `option_selection`, `trip_revision` |
+| `scenic_transit_vs_destination_time` | `forced_tradeoff_choice`, `scenario_reaction`, `option_selection` | `direct_statement`, `option_rejection` |
+| `route_coherence_vs_eclectic_contrast` | `forced_tradeoff_choice`, `scenario_reaction`, `trip_revision` | `direct_statement`, `option_selection` |
+| `social_energy_vs_solitude` | `forced_tradeoff_choice`, `scenario_reaction` | `direct_statement`, `option_selection`, `trip_revision` |
+| `iconic_vs_discovery` | `forced_tradeoff_choice`, `scenario_reaction`, `option_selection` | `direct_statement`, `option_rejection` |
+
+#### Hybrid Factor Evidence Sources
+
+Hybrid factors (food, rest, music, route_modes) carry both directional and anchor-strength
+signals. Canonical mapping lives in `trip_planner.preferences.evidence_catalog.HYBRID_FACTOR_EVIDENCE_STRENGTH`.
+
+| Hybrid factor | Strong evidence types | Medium evidence types |
+|---|---|---|
+| `food` | `anchor_declaration`, `option_selection`, `option_rejection` | `direct_statement`, `scenario_reaction`, `trip_revision` |
+| `rest` | `anchor_declaration`, `scenario_reaction`, `option_selection`, `trip_revision` | `direct_statement`, `option_rejection` |
+| `music` | `anchor_declaration`, `option_selection` | `direct_statement`, `scenario_reaction`, `trip_revision` |
+| `route_modes` | `anchor_declaration`, `option_selection`, `option_rejection` | `direct_statement`, `forced_tradeoff_choice`, `trip_revision` |
+
+#### Anchor Group Evidence Sources
+
+Anchor groups carry commitment-like signals about what the trip must protect or organize
+around. Canonical mapping lives in `trip_planner.preferences.evidence_catalog.ANCHOR_GROUP_EVIDENCE_STRENGTH`.
+
+| Anchor group | Strong evidence types | Medium evidence types |
+|---|---|---|
+| `place_anchors` | `hard_constraint_declaration`, `anchor_declaration` | `trip_revision`, `option_selection` |
+| `experience_anchors` | `anchor_declaration`, `option_selection`, `trip_revision` | `direct_statement`, `scenario_reaction` |
+| `mode_anchors` | `anchor_declaration`, `option_selection` | `forced_tradeoff_choice`, `option_rejection` |
+| `rhythm_anchors` | `anchor_declaration`, `trip_revision` | `scenario_reaction`, `option_selection` |
+| `calendar_anchors` | `hard_constraint_declaration`, `anchor_declaration` | `trip_revision` |
+| `quality_floor_anchors` | `hard_constraint_declaration`, `anchor_declaration`, `option_rejection` | `trip_revision` |
+| `regional_adjacency_preferences` | `option_selection` | `anchor_declaration`, `scenario_reaction`, `trip_revision` |
 
 ## Preference Resolution Rules
 

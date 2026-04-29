@@ -37,14 +37,8 @@ from trip_planner.options import (
     LodgingOption,
     TransportOption,
 )
-from trip_planner.ranking import (
-    ExplanationRecord,
-    RankedResult,
-    RankedResultSet,
-    RiskFlag,
-    ScoreBreakdown,
-    ScoreConfidenceSummary,
-)
+from trip_planner.ranking import BusinessRankingEngine, LeisureRankingEngine, RankedResultSet
+from tests.preferences.fixture_corpus import build_profile_from_overrides
 
 
 def _fixture_path(*parts: str) -> Path:
@@ -306,119 +300,36 @@ def _business_objectives() -> BusinessPlanningObjectives:
     )
 
 
-def _ranked_result(
-    *,
-    bundle: InventoryBundle,
-    result_id: str,
-    rank: int,
-    score: float,
-    note: str,
-    risk: RiskFlag | None = None,
-) -> RankedResult:
-    return RankedResult(
-        result_id=result_id,
-        result_kind="bundle",
-        rank=rank,
-        score=score,
-        target_bundle_id=bundle.bundle_id,
-        supporting_option_ids=bundle.option_ids,
-        supporting_destination_ids=bundle.destination_ids,
-        route_sequence=bundle.destination_ids,
-        score_breakdown=ScoreBreakdown(baseline_score=score, final_score=score),
-        confidence_summary=ScoreConfidenceSummary(overall_confidence=0.81),
-        explanation_records=[
-            ExplanationRecord(
-                explanation_id=f"exp:{result_id}",
-                target_kind="bundle",
-                target_id=bundle.bundle_id,
-                headline=bundle.title,
-                summary=note,
-                factor_keys=["scenario_assembly"],
-                machine_context={"bundle_id": bundle.bundle_id},
-                human_summary=[note],
-                source_refs=[bundle.bundle_id],
-            )
-        ],
-        unresolved_risks=[risk] if risk is not None else [],
-        source_refs=[bundle.bundle_id],
+def _run_leisure_ranking(candidate_set: CandidateSet) -> RankedResultSet:
+    bundles = [seed.bundle for seed in candidate_set.seeds]
+    return LeisureRankingEngine().rank_bundles(
+        build_profile_from_overrides({}),
+        _leisure_objectives(),
+        bundles,
+        trip_id=candidate_set.trip_id,
+        purpose=candidate_set.purpose,
     )
 
 
-def _leisure_ranked_results(candidate_set: CandidateSet) -> RankedResultSet:
-    by_id = {seed.bundle.bundle_id: seed.bundle for seed in candidate_set.seeds}
-    return RankedResultSet(
-        result_set_id="result-set:itinerary:leisure",
+def _run_business_ranking(candidate_set: CandidateSet) -> RankedResultSet:
+    profile = _load_business_profile("client_meeting_profile.json")
+    constraint_set = _load_constraint_set("policy_round_trip_exception.json")
+    objectives = _business_objectives()
+    bundles = [seed.bundle for seed in candidate_set.seeds]
+    return BusinessRankingEngine().rank_bundles(
+        profile,
+        objectives,
+        bundles,
         trip_id=candidate_set.trip_id,
         purpose=candidate_set.purpose,
-        scope="mixed",
-        title="Leisure route ranking",
-        results=[
-            _ranked_result(
-                bundle=by_id["bundle:urban-culture"],
-                result_id="result:urban-culture",
-                rank=1,
-                score=0.91,
-                note="Dense cultural coverage and easy movement make this the lead route.",
-            ),
-            _ranked_result(
-                bundle=by_id["bundle:quiet-recovery"],
-                result_id="result:quiet-recovery",
-                rank=2,
-                score=0.86,
-                note="Recovery-first route remains a coherent alternative.",
-            ),
-            _ranked_result(
-                bundle=by_id["bundle:scenic-wanderer"],
-                result_id="result:scenic-wanderer",
-                rank=3,
-                score=0.8,
-                note="Scenic wandering route stays available as an explainable option.",
-            ),
-        ],
-        explanation=["Rank leisure bundles before assembling route scenarios."],
-        source_refs=["fixture:itinerary:leisure:results"],
-    )
-
-
-def _business_ranked_results(candidate_set: CandidateSet) -> RankedResultSet:
-    by_id = {seed.bundle.bundle_id: seed.bundle for seed in candidate_set.seeds}
-    return RankedResultSet(
-        result_set_id="result-set:itinerary:business",
-        trip_id=candidate_set.trip_id,
-        purpose=candidate_set.purpose,
-        scope="mixed",
-        title="Business route ranking",
-        results=[
-            _ranked_result(
-                bundle=by_id["bundle:approved-business"],
-                result_id="result:approved-business",
-                rank=1,
-                score=0.94,
-                note="Approved channel and buffer protection make this the primary business route.",
-            ),
-            _ranked_result(
-                bundle=by_id["bundle:exception-business"],
-                result_id="result:exception-business",
-                rank=2,
-                score=0.73,
-                note="Fallback route remains visible when the compliant-first option is unavailable.",
-                risk=RiskFlag(
-                    risk_id="risk:policy-exception",
-                    code="policy_exception_path",
-                    severity="warning",
-                    summary="Requires explicit exception handling before booking.",
-                ),
-            ),
-        ],
-        explanation=["Rank business bundles before assembling route scenarios."],
-        source_refs=["fixture:itinerary:business:results"],
+        constraint_set=constraint_set,
     )
 
 
 def test_assemble_itinerary_scenarios_preserves_leisure_alternatives() -> None:
     fixture = _load_json("itinerary", "scenarios", "leisure_multi_scenario.json")
     candidate_set = _leisure_candidate_set()
-    ranked_results = _leisure_ranked_results(candidate_set)
+    ranked_results = _run_leisure_ranking(candidate_set)
     feasibility = [
         FeasibilityAssessment(
             assessment_id=f"assessment:{seed.bundle.bundle_id}",
@@ -453,7 +364,7 @@ def test_assemble_itinerary_scenarios_preserves_leisure_alternatives() -> None:
 def test_assemble_itinerary_scenarios_supports_business_primary_and_fallback() -> None:
     fixture = _load_json("itinerary", "scenarios", "business_primary_vs_fallback.json")
     candidate_set = _business_candidate_set()
-    ranked_results = _business_ranked_results(candidate_set)
+    ranked_results = _run_business_ranking(candidate_set)
     feasibility = {
         "bundle:approved-business": FeasibilityAssessment(
             assessment_id="assessment:approved-business",
@@ -496,16 +407,19 @@ def test_assemble_itinerary_scenarios_supports_business_primary_and_fallback() -
     assert result.explanation[0] == "objective_mode:business"
     assert result.scenarios[0].scenario_summary.recommended_for_selection is True
     assert result.scenarios[1].scenario_summary.recommended_for_selection is False
-    assert result.scenarios[1].unresolved_tradeoffs[0].tradeoff_id == "risk:policy-exception"
+    assert (
+        result.scenarios[1].unresolved_tradeoffs[0].tradeoff_id
+        == "blocking:bundle:exception-business:1"
+    )
     assert (
         result.scenarios[1].unresolved_tradeoffs[1].tradeoff_id
-        == "blocking:bundle:exception-business:1"
+        == "ranking:bundle:exception-business:not-recommended"
     )
 
 
 def test_assemble_itinerary_scenarios_marks_infeasible_results_as_not_coherent() -> None:
     candidate_set = _leisure_candidate_set()
-    ranked_results = _leisure_ranked_results(candidate_set)
+    ranked_results = _run_leisure_ranking(candidate_set)
     lead_bundle = candidate_set.seeds[0].bundle
 
     result = assemble_itinerary_scenarios(
@@ -533,7 +447,7 @@ def test_assemble_itinerary_scenarios_marks_infeasible_results_as_not_coherent()
 
 def test_scenario_search_result_validates_purpose_against_shared_vocab() -> None:
     candidate_set = _leisure_candidate_set()
-    ranked_results = _leisure_ranked_results(candidate_set)
+    ranked_results = _run_leisure_ranking(candidate_set)
     result = assemble_itinerary_scenarios(
         ranked_results,
         candidate_set=candidate_set,

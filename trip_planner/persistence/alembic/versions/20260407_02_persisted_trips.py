@@ -41,9 +41,7 @@ def upgrade() -> None:
         sa.Column("policy_state_id", sa.String(length=96), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["user_id"], ["user_accounts.user_id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["user_id"], ["user_accounts.user_id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("trip_id"),
     )
     op.create_index(

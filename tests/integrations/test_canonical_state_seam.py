@@ -50,13 +50,7 @@ from trip_planner.persistence.models.session import PersistedPlanningSessionStat
 
 
 def _fixture_path(*parts: str) -> Path:
-    return (
-        Path(__file__).resolve().parents[1]
-        / "fixtures"
-        / "integrations"
-        / "tpp"
-        / Path(*parts)
-    )
+    return Path(__file__).resolve().parents[1] / "fixtures" / "integrations" / "tpp" / Path(*parts)
 
 
 def _load_fixture(*parts: str) -> dict:
@@ -305,8 +299,7 @@ def test_canonical_state_seam_persists_planner_turn_and_proposal_lifecycle(
         )
 
         activity_events = db.scalars(
-            select(PersistedActivityLogEvent)
-            .where(PersistedActivityLogEvent.trip_id == trip_id)
+            select(PersistedActivityLogEvent).where(PersistedActivityLogEvent.trip_id == trip_id)
         ).all()
         assert activity_events, (
             f"Canonical seam broken: planner turn did not produce activity log "
@@ -329,9 +322,7 @@ def test_canonical_state_seam_persists_planner_turn_and_proposal_lifecycle(
         )
 
         proposal_states = db.scalars(
-            select(PersistedProposalState).where(
-                PersistedProposalState.trip_id == trip_id
-            )
+            select(PersistedProposalState).where(PersistedProposalState.trip_id == trip_id)
         ).all()
         assert proposal_states, (
             f"Canonical seam broken: proposal submission did not produce a "

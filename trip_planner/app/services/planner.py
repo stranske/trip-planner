@@ -47,6 +47,7 @@ from trip_planner.state.sessions import PlanningSessionState
 class WorkspacePlannerTripNotFoundError(ValueError):
     """Raised when the planner conversation targets an unknown trip."""
 
+
 @dataclass(frozen=True, slots=True)
 class PlannerConversationRequest:
     trip_id: str
@@ -113,15 +114,11 @@ class DeterministicPlannerConversationRunnable:
         if decisions:
             active = decisions[0]
             choice_labels = ", ".join(active.get("choices") or [])
-            lines.append(
-                f"Current blocking decision: {active['prompt']} Choices: {choice_labels}."
-            )
+            lines.append(f"Current blocking decision: {active['prompt']} Choices: {choice_labels}.")
             refs.append(active["decision_id"])
         elif options:
             lead = options[0]
-            lines.append(
-                f"Current lead option: {lead['label']}. {lead['summary']}"
-            )
+            lines.append(f"Current lead option: {lead['label']}. {lead['summary']}")
             if len(options) > 1:
                 lines.append(f"Alternative to compare next: {options[1]['label']}.")
             refs.append(lead["option_id"])
@@ -216,7 +213,9 @@ class ModelBackedPlannerConversationRunnable:
         )
         content = str(raw.get("content") or "").strip()
         if not content:
-            content = "Planner model returned an empty response after reading the current trip context."
+            content = (
+                "Planner model returned an empty response after reading the current trip context."
+            )
         requested_tool_calls = [
             {
                 "tool_name": str(item.get("tool_name") or item.get("name") or ""),
@@ -235,7 +234,9 @@ class ModelBackedPlannerConversationRunnable:
 def _planner_runnable(config: PlannerRuntimeConfig) -> PlannerConversationRunnable:
     if config.mode != "model":
         return DeterministicPlannerConversationRunnable()
-    factory = _PLANNER_CHAT_MODEL_FACTORY or (lambda runtime_config: _OpenAIPlannerChatModel(runtime_config))
+    factory = _PLANNER_CHAT_MODEL_FACTORY or (
+        lambda runtime_config: _OpenAIPlannerChatModel(runtime_config)
+    )
     return ModelBackedPlannerConversationRunnable(config, factory(config))
 
 
@@ -434,7 +435,9 @@ def _execute_model_tool_calls(
     return executed
 
 
-def _missing_grounding_tool_calls(executed_tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _missing_grounding_tool_calls(
+    executed_tool_calls: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     seen = {
         str(item.get("tool_name") or "")
         for item in executed_tool_calls
@@ -615,7 +618,11 @@ def submit_planner_turn(
         tool_summary = " ".join(item["summary"] for item in executed_tool_calls)
         reply = PlannerConversationReply(
             content=f"{reply.content} Tool results: {tool_summary}",
-            refs=list(dict.fromkeys(reply.refs + [ref for item in executed_tool_calls for ref in item["refs"]])),
+            refs=list(
+                dict.fromkeys(
+                    reply.refs + [ref for item in executed_tool_calls for ref in item["refs"]]
+                )
+            ),
             tool_calls=executed_tool_calls,
         )
 

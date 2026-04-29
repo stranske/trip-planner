@@ -243,11 +243,16 @@ def assemble_itinerary_scenarios(
 
     scenarios: list[ItineraryScenario] = []
     for result in sorted(ranked_results.results, key=lambda item: item.rank)[:max_scenarios]:
-        if not result.target_bundle_id:
-            raise ValueError("route assembly requires ranked results with target_bundle_id values")
-        bundle = bundle_map.get(result.target_bundle_id)
+        bundle_id = result.target_bundle_id
+        if not bundle_id and result.target_option is not None:
+            bundle_id = result.target_option.option_id
+        if not bundle_id:
+            raise ValueError(
+                "route assembly requires ranked results with target_bundle_id or target_option.option_id"
+            )
+        bundle = bundle_map.get(bundle_id)
         if bundle is None:
-            raise ValueError(f"missing bundle for ranked result target {result.target_bundle_id!r}")
+            raise ValueError(f"missing bundle for ranked result target {bundle_id!r}")
 
         assessment = assessments.get(bundle.bundle_id) or evaluate_bundle_feasibility(bundle)
         tradeoffs = _build_tradeoffs(result, assessment)

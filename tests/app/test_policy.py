@@ -271,7 +271,9 @@ def test_workspace_policy_import_uses_live_tpp_transport_when_response_is_omitte
     assert payload["policy_state"]["policy_version"] == "d7a6d25a"
     assert payload["summary"]["documentation_rules"] == ["fare_evidence"]
     assert payload["summary"]["approval_triggers"] == ["manager_review"]
-    assert captured_requests[0]["full_url"] == "https://tpp.example.test/api/planner/policy-snapshot"
+    assert (
+        captured_requests[0]["full_url"] == "https://tpp.example.test/api/planner/policy-snapshot"
+    )
     assert captured_requests[0]["method"] == "GET"
     assert captured_requests[0]["body"]["request"] == {
         "trip_id": trip_id,

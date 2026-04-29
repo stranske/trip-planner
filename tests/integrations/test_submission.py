@@ -160,3 +160,50 @@ def test_submission_rejects_non_terminal_response_without_execution_id() -> None
             proposal_version="proposal-v3",
             scenario_id="scenario-a",
         )
+
+
+def test_submission_normalizes_terminal_failed_state() -> None:
+    fixture = _load_fixture("proposal_submit_failed.json")
+    proposal = _proposal_fixture()
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    response = TPPResponseEnvelope.from_dict(fixture["response"])
+    service = TPPProposalSubmissionService(FakeTPPSubmissionClient(response))
+
+    record = service.submit_proposal(
+        request,
+        proposal,
+        proposal_version="proposal-v3",
+        scenario_id=None,
+    )
+
+    assert record.execution_status.state == "failed"
+    assert record.execution_status.terminal is True
+    assert record.requires_polling is False
+    assert record.error is not None
+    assert record.error.code == "proposal_contract_invalid"
+    assert record.error.retryable is False
+    assert record.linkage.trip_id == "trip-100"
+    assert record.linkage.proposal_id == "proposal-123"
+
+
+def test_submission_normalizes_accepted_state_stores_proposal_id() -> None:
+    fixture = _load_fixture("proposal_submit_deferred.json")
+    proposal = _proposal_fixture()
+    fixture["response"]["execution_status"]["state"] = "accepted"
+    fixture["response"]["execution_status"]["terminal"] = False
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    response = TPPResponseEnvelope.from_dict(fixture["response"])
+    service = TPPProposalSubmissionService(FakeTPPSubmissionClient(response))
+
+    record = service.submit_proposal(
+        request,
+        proposal,
+        proposal_version="proposal-v4",
+        scenario_id="scenario-x",
+    )
+
+    assert record.execution_status.state == "accepted"
+    assert record.requires_polling is True
+    assert record.execution_id == "exec-001"
+    assert record.linkage.proposal_id == "proposal-123"
+    assert record.linkage.proposal_version == "proposal-v4"
