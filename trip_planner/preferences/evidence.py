@@ -58,10 +58,22 @@ def _parse_iso8601_utc(value: str, field_name: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
+_BEHAVIORAL_EVIDENCE_TYPES_FOR_FAMILY: frozenset[str] = frozenset(
+    {"option_selection", "option_rejection", "trip_revision", "scenario_reaction"}
+)
+_EXPLICIT_SOURCE_TYPES_FOR_FAMILY: frozenset[str] = frozenset(
+    {"user_message", "structured_input", "scenario_prompt"}
+)
+
+
 def evidence_signal_family(*, evidence_type: str, source_type: str) -> str:
-    if evidence_type in {"option_selection", "option_rejection", "trip_revision"}:
+    # Planner-inferred records are treated as default assumptions regardless of evidence_type;
+    # they represent the system's prior, not a user signal.
+    if source_type == "planner_inference_review":
+        return "default_assumption"
+    if evidence_type in _BEHAVIORAL_EVIDENCE_TYPES_FOR_FAMILY:
         return "revealed_behavior"
-    if source_type in {"user_message", "structured_input", "scenario_prompt"}:
+    if source_type in _EXPLICIT_SOURCE_TYPES_FOR_FAMILY:
         return "explicit_answer"
     return "default_assumption"
 

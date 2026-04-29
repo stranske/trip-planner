@@ -3,7 +3,7 @@ from copy import deepcopy
 from tests.preferences.fixture_corpus import load_fixture_corpus
 from trip_planner.preferences import EvidenceSummary, resolve_leisure_profile
 from trip_planner.preferences.evidence import PreferenceEvidence
-from trip_planner.preferences.resolution import resolve_dimension_evidence
+from trip_planner.preferences.resolution import _finalize_explanations, resolve_dimension_evidence
 
 EXPECTED_TENSION_IDS = {
     "social-recovery-balancer": {"social-energy-recovery-conflict"},
@@ -99,6 +99,21 @@ def test_resolution_explanation_reports_value_delta_from_seed() -> None:
     assert detail.value_delta == detail.resolved_value - detail.initial_value
     assert detail.value_delta > 0.0
     assert any(influence.source_kind == "evidence" for influence in detail.influences)
+
+
+def test_value_delta_is_not_clamped_for_full_axis_swings() -> None:
+    # Both endpoints of the axis are valid: a swing from -1.0 to +1.0 is a delta of 2.0
+    # and must not be silently clamped to 1.0.
+    fixture = next(item for item in load_fixture_corpus() if item.id == "scenic-rail-nomad")
+    seed = _resolution_seed(fixture.profile)
+    result = resolve_leisure_profile(seed, fixture.evidence)
+
+    detail = result.explanation.dimension_explanations["movement_vs_friction"]
+    detail.initial_value = -1.0
+    result.profile.tradeoff_dimensions["movement_vs_friction"].value = 1.0
+    _finalize_explanations(result.profile, result.explanation)
+
+    assert detail.value_delta == 2.0
 
 
 def test_directional_seed_artifacts_removed_after_interaction_moves_off_zero() -> None:
