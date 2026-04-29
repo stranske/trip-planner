@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 
@@ -49,9 +50,10 @@ def test_load_tpp_result_rehydrates_payload_with_exact_structure_preservation() 
 
 
 def test_persist_tpp_result_isolates_persisted_snapshot_from_caller_mutation() -> None:
-    # Mutating the original payload after persisting must not leak into workspace state,
-    # and mutating the persisted snapshot must not leak back into the caller's payload.
-    original_payload = {
+    # Mutating the caller's payload after persisting must not leak into workspace state.
+    # (The reverse direction — mutating the persisted snapshot leaking into the caller —
+    # is covered by ``test_load_tpp_result_returns_independent_copy`` below.)
+    original_payload: dict[str, Any] = {
         "execution_status": {"state": "succeeded", "terminal": True},
         "result_payload": {
             "trip_id": "trip-100",
@@ -59,7 +61,7 @@ def test_persist_tpp_result_isolates_persisted_snapshot_from_caller_mutation() -
             "nested": {"flag": True, "items": [1, 2, 3]},
         },
     }
-    workspace_state: dict[str, object] = {}
+    workspace_state: dict[str, Any] = {}
 
     persist_tpp_result(workspace_state, original_payload)
     snapshot_before_mutation = json.dumps(workspace_state["tpp_result"], sort_keys=True)
@@ -73,7 +75,7 @@ def test_persist_tpp_result_isolates_persisted_snapshot_from_caller_mutation() -
 
 
 def test_load_tpp_result_returns_independent_copy() -> None:
-    original_result = {
+    original_result: dict[str, Any] = {
         "execution_status": {"state": "succeeded", "terminal": True},
         "result_payload": {
             "trip_id": "trip-100",
@@ -81,7 +83,7 @@ def test_load_tpp_result_returns_independent_copy() -> None:
             "nested": {"items": [1, 2, 3]},
         },
     }
-    workspace_state: dict[str, object] = {}
+    workspace_state: dict[str, Any] = {}
     persist_tpp_result(workspace_state, original_result)
 
     rehydrated = load_tpp_result(workspace_state)

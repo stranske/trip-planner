@@ -32,5 +32,5 @@ def load_tpp_result(workspace_state: Mapping[str, Any]) -> dict[str, Any] | None
     if result_payload is None:
         return None
     if not isinstance(result_payload, dict):
-        raise ValueError("workspace_state.tpp_result must be a mapping when present")
+        raise ValueError("workspace_state.tpp_result must be a dict when present")
     return deepcopy(result_payload)
