@@ -181,6 +181,41 @@ Examples:
 - `stability` answers "how persistently true is this preference?"
 - `trip_stage_sensitivity` answers "when in the planning lifecycle does this preference matter most?"
 
+### Dimension Evidence Record
+
+Each dimension inference can be traced to one or more normalized evidence records. The implementation contract is `DimensionEvidenceRecord` in `trip_planner.preferences.evidence`.
+
+```json
+{
+  "dimension": "movement_vs_friction",
+  "signal_type": "explicit_answer|revealed_behavior|default_assumption",
+  "value": -0.74,
+  "source": "user_message|structured_input|option_menu|scenario_prompt|planner_inference_review|trip_revision|imported_trip_notes",
+  "confidence": 0.86,
+  "observed_at": "2026-04-24T10:30:00Z",
+  "provenance": {
+    "source_id": "choice-775",
+    "channel": "option-comparison",
+    "captured_by": "planner-turn-3"
+  },
+  "evidence_type": "direct_statement|hard_constraint_declaration|anchor_declaration|forced_tradeoff_choice|scenario_reaction|option_selection|option_rejection|trip_revision"
+}
+```
+
+Confidence starts from the signal family, then is adjusted by dimension context:
+
+- `explicit_answer`: direct user statements and structured answers, useful for declared intent.
+- `revealed_behavior`: option choices, rejections, scenario reactions, and trip revisions; this is the strongest signal when behavior conflicts with stated intent.
+- `default_assumption`: planner inference or imported context; this is low confidence and should become stale quickly unless confirmed.
+
+Every first-tier dimension has a confidence-guidance entry in `DIMENSION_CONFIDENCE_GUIDANCE`. Examples:
+
+- `movement_vs_friction`: prefer revealed routing or relocation choices over stated appetite when they conflict.
+- `structure_vs_elasticity`: structured-input preferences start strong and decay when later trip revisions loosen the plan.
+- `social_energy_vs_solitude`: lodging and neighborhood selections can confirm stated social-energy preference.
+
+Fixture coverage lives in `tests/fixtures/preferences/evidence_records.json` and validates explicit, revealed, default, stale, and conflicting evidence cases.
+
 ### First-Tier Dimension Keys
 
 ```json

@@ -2,7 +2,11 @@ import json
 from pathlib import Path
 
 from trip_planner.preferences.evidence import DimensionEvidenceRecord, EvidenceProvenance
-from trip_planner.preferences.schema import SCHEMA_VERSION
+from trip_planner.preferences.schema import (
+    DIMENSION_CONFIDENCE_GUIDANCE,
+    SCHEMA_VERSION,
+    TRADEOFF_DIMENSION_KEYS,
+)
 
 
 def _fixture_payload() -> dict:
@@ -56,3 +60,8 @@ def test_conflicting_fixture_records_detect_directional_conflict() -> None:
     records = {entry["name"]: _record(entry) for entry in _fixture_payload()["records"]}
 
     assert records["revealed-behavior"].conflicts_with(records["conflicting-explicit"])
+
+
+def test_confidence_guidance_covers_every_tradeoff_dimension() -> None:
+    assert set(DIMENSION_CONFIDENCE_GUIDANCE) == set(TRADEOFF_DIMENSION_KEYS)
+    assert all(DIMENSION_CONFIDENCE_GUIDANCE.values())

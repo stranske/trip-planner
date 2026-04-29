@@ -172,8 +172,8 @@ class DimensionEvidenceRecord:
             raise ValueError(f"signal_type must be one of {EVIDENCE_SIGNAL_FAMILIES}")
         if not -1.0 <= self.value <= 1.0:
             raise ValueError("value must be between -1.0 and 1.0")
-        if not self.source:
-            raise ValueError("source is required")
+        if self.source not in EVIDENCE_SOURCE_TYPES:
+            raise ValueError(f"source must be one of {EVIDENCE_SOURCE_TYPES}")
         _require_probability(self.confidence, "confidence")
         _parse_iso8601_utc(self.observed_at, "observed_at")
         if not isinstance(self.provenance, EvidenceProvenance):

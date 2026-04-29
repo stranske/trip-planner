@@ -142,6 +142,41 @@ DIMENSION_DESCRIPTIONS: Final[dict[str, tuple[str, str, str]]] = {
         "Curious discovery: the best moments are unexpected; avoids crowds, seeks lesser-known places.",
     ),
 }
+DIMENSION_CONFIDENCE_GUIDANCE: Final[dict[str, str]] = {
+    "movement_vs_friction": (
+        "Prefer revealed routing or relocation choices over stated appetite when they conflict."
+    ),
+    "recovery_vs_intensity": (
+        "Raise confidence when explicit fatigue notes and itinerary edits both protect recovery."
+    ),
+    "nature_vs_culture": (
+        "Treat direct destination interests as strong, but require repeated behavior before overriding them."
+    ),
+    "structure_vs_elasticity": (
+        "Structured-input planning preferences start strong and decay when later trip revisions loosen the plan."
+    ),
+    "breadth_vs_depth": (
+        "Use chosen stay lengths and rejected fast routes as higher-confidence evidence than abstract statements."
+    ),
+    "self_reliance_vs_convenience": (
+        "Option selections involving transfers, guided access, and booking support are the strongest signals."
+    ),
+    "historic_vs_contemporary": (
+        "Keep confidence moderate unless attraction choices repeatedly favor one pole across multiple cities."
+    ),
+    "scenic_transit_vs_destination_time": (
+        "Give revealed transport choices higher confidence than generic travel-style answers."
+    ),
+    "route_coherence_vs_eclectic_contrast": (
+        "Increase confidence when scenario reactions and selected route bundles agree on route shape."
+    ),
+    "social_energy_vs_solitude": (
+        "Treat lodging and neighborhood selections as strong behavioral confirmation of stated social energy."
+    ),
+    "iconic_vs_discovery": (
+        "Use must-see declarations as strong explicit evidence and off-list substitutions as revealed evidence."
+    ),
+}
 COMPLEXITY_TOLERANCE_MAP: Final[dict[str, dict[str, float]]] = {
     "low": {
         "movement_vs_friction": -0.75,

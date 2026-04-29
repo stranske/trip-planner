@@ -1,5 +1,7 @@
 from trip_planner.preferences.evidence import (
     ContradictionMarker,
+    DimensionEvidenceRecord,
+    EvidenceProvenance,
     OptionEvidence,
     PreferenceEvidence,
     baseline_confidence_hint,
@@ -206,3 +208,24 @@ def test_baseline_confidence_prefers_revealed_then_explicit_then_default() -> No
         source_type="planner_inference_review",
     )
     assert revealed > explicit > default
+
+
+def test_dimension_evidence_record_requires_supported_source() -> None:
+    try:
+        DimensionEvidenceRecord(
+            dimension="movement_vs_friction",
+            signal_type="revealed_behavior",
+            value=-0.4,
+            source="spreadsheet_import",
+            confidence=0.8,
+            observed_at="2026-04-28T12:00:00Z",
+            provenance=EvidenceProvenance(
+                source_id="choice-1",
+                channel="option-comparison",
+                captured_by="planner-turn",
+            ),
+        )
+    except ValueError as exc:
+        assert "source must be one of" in str(exc)
+    else:
+        raise AssertionError("Dimension evidence should reject unsupported sources")
