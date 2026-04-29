@@ -1,12 +1,32 @@
 import json
 from pathlib import Path
 
-from trip_planner.preferences.evidence import DimensionEvidenceRecord, EvidenceProvenance
+from trip_planner.preferences.evidence import (
+    EVIDENCE_SOURCE_TYPES,
+    DimensionEvidenceRecord,
+    EvidenceProvenance,
+)
 from trip_planner.preferences.schema import (
     DIMENSION_CONFIDENCE_GUIDANCE,
+    DIMENSION_EVIDENCE_SOURCE_GUIDANCE,
     SCHEMA_VERSION,
     TRADEOFF_DIMENSION_KEYS,
 )
+
+EXPECTED_FIXTURE_CASES = {
+    "explicit-answer": ("explicit_answer", "user_message", "direct_statement"),
+    "revealed-behavior": ("revealed_behavior", "option_menu", "option_selection"),
+    "default-assumption": (
+        "default_assumption",
+        "planner_inference_review",
+        "scenario_reaction",
+    ),
+    "conflicting-explicit": (
+        "explicit_answer",
+        "structured_input",
+        "direct_statement",
+    ),
+}
 
 
 def _fixture_payload() -> dict:
@@ -42,9 +62,11 @@ def test_evidence_fixture_records_validate_against_schema() -> None:
 def test_evidence_fixtures_cover_explicit_revealed_and_default_signals() -> None:
     records = {entry["name"]: _record(entry) for entry in _fixture_payload()["records"]}
 
-    assert records["explicit-answer"].signal_type == "explicit_answer"
-    assert records["revealed-behavior"].signal_type == "revealed_behavior"
-    assert records["default-assumption"].signal_type == "default_assumption"
+    assert set(EXPECTED_FIXTURE_CASES).issubset(records)
+    for name, (signal_type, source, evidence_type) in EXPECTED_FIXTURE_CASES.items():
+        assert records[name].signal_type == signal_type
+        assert records[name].source == source
+        assert records[name].evidence_type == evidence_type
 
 
 def test_default_assumption_fixture_is_stale() -> None:
@@ -65,3 +87,13 @@ def test_conflicting_fixture_records_detect_directional_conflict() -> None:
 def test_confidence_guidance_covers_every_tradeoff_dimension() -> None:
     assert set(DIMENSION_CONFIDENCE_GUIDANCE) == set(TRADEOFF_DIMENSION_KEYS)
     assert all(DIMENSION_CONFIDENCE_GUIDANCE.values())
+
+
+def test_source_guidance_covers_every_tradeoff_dimension_with_supported_sources() -> None:
+    assert set(DIMENSION_EVIDENCE_SOURCE_GUIDANCE) == set(TRADEOFF_DIMENSION_KEYS)
+    supported_sources = set(EVIDENCE_SOURCE_TYPES)
+
+    for dimension, guidance in DIMENSION_EVIDENCE_SOURCE_GUIDANCE.items():
+        assert guidance["confidence_rule"]
+        assert guidance["stale_when"]
+        assert set(guidance["primary_sources"]).issubset(supported_sources), dimension

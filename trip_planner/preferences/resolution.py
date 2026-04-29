@@ -546,6 +546,19 @@ def _finalize_explanations(
         # delta naturally lies in [-2, 2]. Clamping it to [-1, 1] would silently lose
         # information for full-axis swings (e.g. -1 -> +1).
         detail.value_delta = dimension.value - detail.initial_value
+        if detail.value_delta != 0.0:
+            evidence_ids = detail.contributing_evidence_ids or [
+                f"{influence.source_kind}:{influence.source_id}"
+                for influence in detail.influences[:3]
+            ]
+            evidence_summary = ", ".join(evidence_ids) if evidence_ids else "profile rules"
+            direction = "increased" if detail.value_delta > 0 else "decreased"
+            prior_text = detail.explanation_text or "Resolution changed the seed value."
+            detail.explanation_text = (
+                f"Score {direction} from {detail.initial_value:.2f} to "
+                f"{detail.resolved_value:.2f} (delta {detail.value_delta:+.2f}) "
+                f"based on {evidence_summary}. {prior_text}"
+            )
         detail.confidence = dimension.confidence
         detail.salience = dimension.salience
         detail.stability = dimension.stability
