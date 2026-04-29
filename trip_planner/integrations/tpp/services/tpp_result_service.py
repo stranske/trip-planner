@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping, MutableMapping
 
-from trip_planner.app.services.workspace_state import persist_tpp_result
+from trip_planner.integrations.tpp.services.workspace_state import persist_tpp_result
 from trip_planner.business.policy_contracts import PolicyEvaluationResult
 from trip_planner.integrations.tpp.client import TPPContractError
 
