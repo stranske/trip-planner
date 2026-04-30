@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any, Mapping, MutableMapping
 from uuid import uuid4
 
-from trip_planner.app.services.workspace_state import persist_tpp_proposal_id
+from trip_planner.integrations.tpp.services.workspace_state import persist_tpp_proposal_id
 from trip_planner.integrations.tpp.client import TPPIntegrationClient
 from trip_planner.integrations.tpp.contracts import (
     TPPCorrelationId,

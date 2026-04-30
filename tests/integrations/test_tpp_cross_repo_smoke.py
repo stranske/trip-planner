@@ -58,6 +58,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
+from trip_planner.app.services.planner import set_planner_chat_model_factory_for_tests
 from trip_planner.persistence.db import reset_database_state
 
 # Documented contract fields drawn from ``WorkspaceProposalResponse`` /
@@ -158,7 +159,11 @@ def first_client(
 ) -> Iterator[TestClient]:
     """First app instance — creates the trip and runs the full submit/evaluate flow."""
     monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{db_path}")
-    reset_database_state()
+    monkeypatch.delenv("TRIP_PLANNER_PLANNER_PROVIDER", raising=False)
+    monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", raising=False)
+    monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    set_planner_chat_model_factory_for_tests(None)
     app = create_app()
 
     with TestClient(app) as test_client:
@@ -173,50 +178,9 @@ def first_client(
         assert signup.status_code == 201, signup.text
         yield test_client
 
+    set_planner_chat_model_factory_for_tests(None)
     # Intentionally do NOT call reset_database_state() here — the second app
     # instance must read the same persisted SQLite file.
-
-
-@pytest.fixture
-def second_client(
-    db_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> Iterator[TestClient]:
-    """Second app instance — re-binds to the same SQLite file to verify reload.
-
-    Only used after the first client's ``with`` block exits, simulating a
-    process restart against the on-disk database.
-    """
-    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{db_path}")
-    reset_database_state()
-    app = create_app()
-
-    with TestClient(app) as test_client:
-        login = test_client.post(
-            "/api/auth/login",
-            json={
-                "email": "tpp-smoke@example.com",
-                "password": "password123",
-            },
-        )
-        if login.status_code == 404:
-            login = test_client.post(
-                "/api/auth/signin",
-                json={
-                    "email": "tpp-smoke@example.com",
-                    "password": "password123",
-                },
-            )
-        assert login.status_code in (200, 201, 204), (
-            f"Could not re-authenticate the same user against the persisted DB. "
-            f"This either means the auth route is misnamed or persisted user "
-            f"state is not surviving a create_app() boundary — both are "
-            f"workspace-state reload failures the #958 contract is meant to "
-            f"catch. status={login.status_code}, body={login.text}"
-        )
-        yield test_client
-
-    reset_database_state()
 
 
 def _assert_documented_fields(payload: dict, fields: tuple[str, ...]) -> None:
@@ -230,7 +194,8 @@ def _assert_documented_fields(payload: dict, fields: tuple[str, ...]) -> None:
 
 def test_tpp_cross_repo_smoke_submit_evaluate_and_reload_across_instances(
     first_client: TestClient,
-    second_client: TestClient,
+    db_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The cross-repo TPP lifecycle round-trip per #958.
 
@@ -339,9 +304,45 @@ def test_tpp_cross_repo_smoke_submit_evaluate_and_reload_across_instances(
     assert evaluated_state["follow_up"]["status"] == "resolved"
 
     # ---- Second instance (same DB): reload and assert state survived ----
-    reloaded = second_client.get(f"/api/workspace/{trip_id}/proposal")
-    assert reloaded.status_code == 200, reloaded.text
-    reloaded_state = reloaded.json()["proposal_state"]
+    first_client.close()
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.delenv("TRIP_PLANNER_PLANNER_PROVIDER", raising=False)
+    monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", raising=False)
+    monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    set_planner_chat_model_factory_for_tests(None)
+    reset_database_state()
+    app = create_app()
+    with TestClient(app) as second_client:
+        login = second_client.post(
+            "/api/auth/login",
+            json={
+                "email": "tpp-smoke@example.com",
+                "password": "password123",
+            },
+        )
+        if login.status_code == 404:
+            login = second_client.post(
+                "/api/auth/signin",
+                json={
+                    "email": "tpp-smoke@example.com",
+                    "password": "password123",
+                },
+            )
+        assert login.status_code in (200, 201, 204), (
+            f"Could not re-authenticate the same user against the persisted DB. "
+            f"This either means the auth route is misnamed or persisted user "
+            f"state is not surviving a create_app() boundary — both are "
+            f"workspace-state reload failures the #958 contract is meant to "
+            f"catch. status={login.status_code}, body={login.text}"
+        )
+
+        reloaded = second_client.get(f"/api/workspace/{trip_id}/proposal")
+        assert reloaded.status_code == 200, reloaded.text
+        reloaded_state = reloaded.json()["proposal_state"]
+
+    set_planner_chat_model_factory_for_tests(None)
+    reset_database_state()
     _assert_documented_fields(reloaded_state, _DOCUMENTED_PROPOSAL_STATE_FIELDS)
     _assert_documented_fields(reloaded_state["summary"], _DOCUMENTED_SUMMARY_FIELDS_AFTER_EVAL)
 

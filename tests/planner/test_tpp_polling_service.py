@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from trip_planner.app.models.tpp import PollingOutcome
-from trip_planner.app.services.tpp_polling_service import (
+from trip_planner.integrations.tpp.models import PollingOutcome
+from trip_planner.integrations.tpp.services.tpp_polling_service import (
     TPPPollingService,
     map_poll_response_state_to_outcome,
 )

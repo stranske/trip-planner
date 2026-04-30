@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import subprocess
+
+from scripts import tpp_migration_guard
 
 
 def _git_ls_files(pattern: str) -> list[str]:
@@ -119,3 +122,40 @@ def test_readme_documents_local_bootstrap_and_optional_integrations() -> None:
 
     for snippet in expected_snippets:
         assert snippet in readme, f"README.md must document {snippet!r}."
+
+
+def test_tpp_renames_require_recorded_sub_decision_in_pr_body() -> None:
+    """Block TPP git mv operations until the PR body records B-1/B-2/B-3."""
+    ok, message = tpp_migration_guard.enforce_guard()
+    assert ok, message
+
+
+def test_no_tpp_files_remain_under_legacy_app_tree() -> None:
+    """TPP modules must not remain in trip_planner/app after canonical migration."""
+    legacy_tpp_paths = _git_ls_files("trip_planner/app/**/*tpp*.py")
+    assert not legacy_tpp_paths, (
+        "Found TPP-related Python files under trip_planner/app. "
+        "Move them to trip_planner/integrations/tpp or document intentional shims in the PR body.\n"
+        f"Offending paths: {', '.join(legacy_tpp_paths[:20])}"
+    )
+
+
+def test_no_production_tpp_imports_from_legacy_app_namespaces() -> None:
+    """Keep production TPP imports on the canonical integrations path."""
+    pattern = re.compile(
+        r"^\s*(from|import)\s+trip_planner\.app\.(services|models|clients)\.[^\n#]*tpp",
+        re.IGNORECASE,
+    )
+    offenders: list[str] = []
+
+    for path_str in _git_ls_files("trip_planner/**/*.py"):
+        path = Path(path_str)
+        for index, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if pattern.search(line):
+                offenders.append(f"{path_str}:{index}")
+
+    assert not offenders, (
+        "Production TPP imports must not use trip_planner.app.services/models/clients. "
+        "Use trip_planner.integrations.tpp instead.\n"
+        f"Offending locations: {', '.join(offenders[:20])}"
+    )

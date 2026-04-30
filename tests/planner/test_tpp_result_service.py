@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from trip_planner.app.services.tpp_result_service import TPPResultService
+from trip_planner.integrations.tpp.services.tpp_result_service import TPPResultService
 from trip_planner.integrations.tpp.client import TPPContractError
 
 

@@ -6,7 +6,7 @@ from collections.abc import Callable
 from time import monotonic
 from typing import Any, Mapping
 
-from trip_planner.app.models.tpp import PollingOutcome
+from trip_planner.integrations.tpp.models import PollingOutcome
 from trip_planner.integrations.tpp.client import TPPContractError
 from trip_planner.integrations.tpp.validation import validate_poll_response_state
 

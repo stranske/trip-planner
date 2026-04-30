@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from trip_planner.app.services.workspace_state import (
+from trip_planner.integrations.tpp.services.workspace_state import (
     load_tpp_result,
     persist_tpp_proposal_id,
     persist_tpp_result,

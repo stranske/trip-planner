@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping, MutableMapping
 
-from trip_planner.app.services.workspace_state import persist_tpp_result
 from trip_planner.integrations.tpp.validation import validate_succeeded_response
+from trip_planner.integrations.tpp.services.workspace_state import persist_tpp_result
 
 
 class TPPResultService:
