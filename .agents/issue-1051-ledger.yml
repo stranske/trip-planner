@@ -1,0 +1,153 @@
+version: 1
+issue: 1051
+base: main
+branch: codex/issue-1051
+tasks:
+  - id: task-01
+    title: Fix `trip_planner/app/services/workspace_state.py` `persist_tpp_result`
+      to deep-copy the payload (e.g., replace `dict(...)` with `copy.deepcopy(...)`)
+      so nested-object references are not shared with the input.
+    status: done
+    started_at: '2026-04-29T18:49:45Z'
+    finished_at: '2026-04-29T18:49:56Z'
+    commit: 81e4d67f34a7d34d903eb13670dc8d396dcc250e
+    notes: []
+  - id: task-02
+    title: Fix `trip_planner/app/services/workspace_state.py` `load_tpp_result` to
+      deep-copy the stored payload (e.g., replace `dict(...)` with `copy.deepcopy(...)`)
+      so nested-object references are not shared with the underlying workspace state.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: Add `test_persist_tpp_result_isolates_nested_mutations` in `tests/.../test_workspace_state.py`
+      to persist a payload with a nested dict, mutate the original nested dict, and
+      assert the persisted state did not change.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: Add `test_load_tpp_result_isolates_nested_mutations` in `tests/.../test_workspace_state.py`
+      to load a payload, mutate a nested dict in the loaded copy, and assert the source
+      workspace state did not change.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: "Add `test_round_trip_with_nested_lists` in `tests/.../test_workspace_state.py`\
+      \ to persist \u2192 load \u2192 mutate the loaded list and assert the original\
+      \ list is unaffected."
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: '`trip_planner/app/services/workspace_state.py:persist_tpp_result` returns/stores
+      a payload that does not share nested-object references with the input (verifiable
+      by mutating an input nested structure and asserting persisted state is unchanged).'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: '`trip_planner/app/services/workspace_state.py:load_tpp_result` returns
+      a payload that does not share nested-object references with the underlying workspace
+      state (verifiable by mutating a loaded nested structure and asserting source
+      state is unchanged).'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: '`test_persist_tpp_result_isolates_nested_mutations` passes.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: '`test_load_tpp_result_isolates_nested_mutations` passes.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: '`test_round_trip_with_nested_lists` passes.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: Existing tests for `workspace_state.py` pass without modification.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: CI checks pass (Gate, ruff, mypy).
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: '`persist_tpp_result` does not share nested-object references with the
+      input.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: '`load_tpp_result` does not share nested-object references with the underlying
+      workspace state.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: The three named tests above pass.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-16
+    title: Existing tests for `workspace_state.py` continue to pass without modification.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-17
+    title: 'CI green: Gate, ruff, mypy.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-18
+    title: CI checks pass (Gate, ruff, mypy). (Agent cannot retry CI pipelines or
+      guarantee CI will pass due to external factors (infrastructure issues, flaky
+      tests, etc.). Agent can only ensure code changes are syntactically correct and
+      follow best practices. | Rephrase as 'Code changes pass local linting (ruff)
+      and type checking (mypy) validation' or move to a manual verification step outside
+      agent scope.)
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
