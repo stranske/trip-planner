@@ -64,7 +64,9 @@ def _is_xfail_call(call: ast.Call) -> bool:
     chain = _decorator_attribute_chain(call.func)
     if not chain:
         return False
-    return chain[-1] == "xfail" and (chain == ["xfail"] or chain[-2:] == ["mark", "xfail"])
+    return chain[-1] == "xfail" and (
+        chain == ["xfail"] or chain[-2:] == ["mark", "xfail"]
+    )
 
 
 def _is_strict_true(call: ast.Call) -> bool:
@@ -96,6 +98,21 @@ def _violations_in_file(path: Path) -> list[tuple[int, str]]:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             continue
         for decorator in node.decorator_list:
+            # @pytest.mark.xfail without parentheses — AST gives an Attribute, not a Call.
+            # No parentheses means no strict= keyword at all, so always non-strict.
+            if isinstance(decorator, ast.Attribute):
+                chain = _decorator_attribute_chain(decorator)
+                if chain[-1] == "xfail" and (
+                    chain == ["xfail"] or chain[-2:] == ["mark", "xfail"]
+                ):
+                    if not _line_has_exemption(source_lines, decorator.lineno):
+                        violations.append(
+                            (
+                                decorator.lineno,
+                                f"@xfail without strict=True on '{node.name}'",
+                            )
+                        )
+                continue
             if not isinstance(decorator, ast.Call):
                 continue
             if not _is_xfail_call(decorator):
@@ -119,8 +136,11 @@ def check(directories: Iterable[str], repo_root: Path) -> int:
         root = repo_root / directory
         for path in _iter_python_files(root):
             for lineno, message in _violations_in_file(path):
-                rel = path.relative_to(repo_root)
-                print(f"{rel}:{lineno}: {message}", file=sys.stderr)
+                try:
+                    display = path.relative_to(repo_root)
+                except ValueError:
+                    display = path
+                print(f"{display}:{lineno}: {message}", file=sys.stderr)
                 rc = 1
     if rc:
         print(
