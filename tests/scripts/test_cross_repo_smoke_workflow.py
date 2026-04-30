@@ -8,16 +8,14 @@ with `pytest tests/scripts/test_cross_repo_smoke_workflow.py`.
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
 import yaml
 
 WORKFLOW_PATH = (
-    Path(__file__).resolve().parents[2]
-    / ".github"
-    / "workflows"
-    / "cross-repo-smoke.yml"
+    Path(__file__).resolve().parents[2] / ".github" / "workflows" / "cross-repo-smoke.yml"
 )
 
 
@@ -72,3 +70,21 @@ def test_workflow_runs_full_product_check_with_repo_path(workflow: dict) -> None
     env = run_step.get("env", {})
     assert "${{ github.workspace }}/Travel-Plan-Permission" in str(env.get("TPP_REPO_PATH", ""))
     assert "--live-tpp required" in run_step["run"]
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_ACTIONLINT = _REPO_ROOT / ".workflows-lib" / "actionlint"
+
+
+@pytest.mark.skipif(
+    not _ACTIONLINT.is_file(), reason="actionlint binary not present in .workflows-lib/"
+)
+def test_workflow_passes_actionlint() -> None:
+    result = subprocess.run(
+        [str(_ACTIONLINT), str(WORKFLOW_PATH)],
+        capture_output=True,
+        text=True,
+    )
+    assert (
+        result.returncode == 0
+    ), f"actionlint reported errors in {WORKFLOW_PATH.name}:\n{result.stdout}{result.stderr}"
