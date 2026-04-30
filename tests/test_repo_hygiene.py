@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 import re
 import subprocess
@@ -179,4 +180,24 @@ def test_tpp_canonical_services_package_exists() -> None:
     )
     assert package_init.is_file(), (
         "Expected package marker at " "trip_planner/integrations/tpp/services/__init__.py."
+    )
+
+
+def test_acceptance_xfail_strictness_guard_passes() -> None:
+    """Acceptance-style xfails in guarded dirs must be ``strict=True`` or exempt.
+
+    Runs ``scripts/check_xfail_strictness.py`` as a subprocess so the guard
+    behaves identically in CI and at the dev machine. See ``tests/planner/MIGRATIONS.md``
+    and issue #1046 for the audit policy this enforces.
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "scripts/check_xfail_strictness.py"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        "scripts/check_xfail_strictness.py reported violations:\n"
+        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     )
