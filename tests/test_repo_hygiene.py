@@ -167,3 +167,16 @@ def test_no_production_tpp_imports_from_legacy_app_namespaces() -> None:
         "Use trip_planner.integrations.tpp instead.\n"
         f"Offending locations: {', '.join(offenders[:20])}"
     )
+
+
+def test_tpp_canonical_services_package_exists() -> None:
+    """Canonical TPP service package must exist for migrated modules."""
+    services_dir = Path("trip_planner/integrations/tpp/services")
+    package_init = services_dir / "__init__.py"
+
+    assert services_dir.is_dir(), (
+        "Expected canonical TPP services directory at " "trip_planner/integrations/tpp/services."
+    )
+    assert package_init.is_file(), (
+        "Expected package marker at " "trip_planner/integrations/tpp/services/__init__.py."
+    )
