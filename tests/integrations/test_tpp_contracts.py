@@ -403,7 +403,10 @@ def test_http_transport_integration_against_stub_http_server_reports_server_erro
         def log_message(self, *_args) -> None:
             return
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    except PermissionError:
+        pytest.skip("Local socket bind is not permitted in this execution environment.")
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
