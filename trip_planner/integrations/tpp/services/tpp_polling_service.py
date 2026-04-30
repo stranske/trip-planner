@@ -34,6 +34,8 @@ class TPPPollingService:
         sleeper: Callable[[float], None] = time.sleep,
         now: Callable[[], float] = time.monotonic,
     ) -> None:
+        if not callable(poll_response_provider):
+            raise ValueError("poll_response_provider must be callable")
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be > 0")
         self._poll_response_provider = poll_response_provider
@@ -97,4 +99,5 @@ class TPPPollingService:
                 external_status="timeout",
             ),
             result_payload={},
+            evaluation_result={},
         )
