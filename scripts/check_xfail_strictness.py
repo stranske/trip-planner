@@ -64,10 +64,7 @@ def _is_xfail_call(call: ast.Call) -> bool:
     chain = _decorator_attribute_chain(call.func)
     if not chain:
         return False
-    return chain[-1] == "xfail" and (
-        chain == ["xfail"]
-        or chain[-2:] == ["mark", "xfail"]
-    )
+    return chain[-1] == "xfail" and (chain == ["xfail"] or chain[-2:] == ["mark", "xfail"])
 
 
 def _is_strict_true(call: ast.Call) -> bool:

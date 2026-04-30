@@ -332,7 +332,7 @@ These design commitments have no corresponding source implementation. Each is a 
 
 ## How to Use This Map in Weekly Reviews
 
-1. Check the **xfailed tests** first: `pytest -q tests/planner/test_planner_turn_acceptance.py` shows the three live deferred areas.
+1. Check the **xfailed tests** first: `pytest -q tests/planner/test_planner_turn_acceptance.py` shows the one remaining deferred area (ranking and route_comparison in the workspace payload — see §11).
 2. The **Docs-only** rows in each section identify items that are design commitments but not yet scheduled work.
 3. **Partial** rows identify items where code exists but is seeded/fixture-backed — these are the next implementation lane.
 4. The **Summary: Docs-Only Claims** section lists everything that would require a new issue before implementation can start.
