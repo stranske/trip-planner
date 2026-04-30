@@ -55,6 +55,7 @@ STDLIB_MODULES = {
     "gc",
     "glob",
     "hashlib",
+    "http",
     "importlib",
     "inspect",
     "io",
