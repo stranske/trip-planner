@@ -45,6 +45,8 @@ make full-product-check
 
 That command creates fresh leisure and business trips through the runtime API, opens their workspaces, asserts runtime/source-backed inventory and scenario comparison identifiers, submits one planner turn, persists a business proposal submission, and ingests an evaluation result. It also reports map-provider and live Travel-Plan-Permission readiness explicitly. Missing map or TPP configuration is reported as `SKIPPED` or `BLOCKED` with the exact missing env var or sibling checkout path; it is never reported as live readiness.
 
+When live TPP auto-start is enabled with `TPP_REPO_PATH`, the verifier runs the sibling service with that repo's own Python environment. Resolution order is `<TPP_REPO_PATH>/.venv/bin/python`, then `uv run --directory <TPP_REPO_PATH> python` when `uv.lock` is present and `uv` is installed, then a fail-fast setup error. If startup does not reach `/readyz`, the verifier includes the resolved command plus the last 50 lines of captured TPP stdout and stderr so missing dependency errors are visible in CI logs. Setting `TPP_BASE_URL` skips auto-start and trusts the externally managed service as before.
+
 ## Critical Journeys Covered
 
 ### Automated Local Checks
