@@ -8,7 +8,11 @@ from typing import Any
 from trip_planner._validators import require_non_empty
 from trip_planner.business.policy_contracts import PolicyEvaluationResult
 
-from .client import TPPIntegrationClient
+from .client import (
+    TPPIntegrationClient,
+    TPPTransportError,
+    tpp_transport_error_from_exception,
+)
 from .contracts import (
     TPPErrorRecord,
     TPPExecutionStatus,
@@ -136,7 +140,18 @@ class TPPEvaluationResultIngestionService:
         proposal_version: str,
         scenario_id: str | None = None,
     ) -> PersistedEvaluationResult:
-        response = self.client.fetch_evaluation_result(request)
+        try:
+            response = self.client.fetch_evaluation_result(request)
+        except TPPTransportError:
+            raise
+        except Exception as exc:
+            transport_error = tpp_transport_error_from_exception(
+                exc,
+                operation="fetch_evaluation_result",
+            )
+            if transport_error is None:
+                raise
+            raise transport_error from exc
         return self.normalize_response(
             request,
             response,

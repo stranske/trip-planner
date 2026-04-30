@@ -1,8 +1,13 @@
 import json
+import socket
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
+from urllib import error as urllib_error
 
 import pytest
 
+from trip_planner.integrations.tpp import client as tpp_client_module
 from trip_planner.integrations.tpp import (
     BaseTPPIntegrationClient,
     HTTPTPPIntegrationClient,
@@ -10,6 +15,8 @@ from trip_planner.integrations.tpp import (
     TPPRequestEnvelope,
     TPPResponseEnvelope,
     TPPRuntimeSettings,
+    TPPTransportError,
+    TPPTransportPolicy,
 )
 
 
@@ -146,3 +153,254 @@ def test_http_policy_payload_names_all_trip_id_sources() -> None:
 
     with pytest.raises(TPPContractError, match="payload.trip_plan.trip_id"):
         client._policy_request_payload(request)
+
+
+class _FakeHTTPResponse:
+    def __init__(self, status_code: int, body: dict | list | str) -> None:
+        self.status = status_code
+        self._body = body
+
+    def read(self) -> bytes:
+        if isinstance(self._body, str):
+            return self._body.encode("utf-8")
+        return json.dumps(self._body).encode("utf-8")
+
+    def __enter__(self) -> "_FakeHTTPResponse":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        del exc_type, exc, tb
+        return False
+
+
+def _http_client(
+    *,
+    policy: TPPTransportPolicy | None = None,
+    clock=lambda: 0.0,
+    breaker_registry=None,
+) -> HTTPTPPIntegrationClient:
+    return HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url="https://tpp.example.test",
+            access_token="token-123",
+            oidc_provider="okta",
+        ),
+        policy=policy
+        or TPPTransportPolicy(backoff_initial_seconds=0.0, backoff_max_seconds=0.0),
+        sleep=lambda _delay: None,
+        clock=clock,
+        jitter=lambda _start, _end: 0.0,
+        breaker_registry=breaker_registry if breaker_registry is not None else {},
+    )
+
+
+def _install_urlopen(
+    monkeypatch: pytest.MonkeyPatch,
+    responses: list[_FakeHTTPResponse | Exception],
+    *,
+    captured_timeouts: list[float] | None = None,
+) -> None:
+    queue = list(responses)
+
+    def _fake_urlopen(request, timeout=0):
+        del request
+        if captured_timeouts is not None:
+            captured_timeouts.append(timeout)
+        response = queue.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    monkeypatch.setattr(tpp_client_module.urllib_request, "urlopen", _fake_urlopen)
+
+
+def test_transport_policy_defaults_and_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "TPP_TIMEOUT_SECONDS",
+        "TPP_TRANSPORT_CONNECT_TIMEOUT_SECONDS",
+        "TPP_TRANSPORT_READ_TIMEOUT_SECONDS",
+        "TPP_TRANSPORT_MAX_ATTEMPTS",
+        "TPP_TRANSPORT_BACKOFF_INITIAL_SECONDS",
+        "TPP_TRANSPORT_BACKOFF_MAX_SECONDS",
+        "TPP_TRANSPORT_BREAKER_FAILURE_THRESHOLD",
+        "TPP_TRANSPORT_BREAKER_RESET_SECONDS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    default_policy = TPPTransportPolicy.from_env()
+
+    assert default_policy.connect_timeout_seconds == 5.0
+    assert default_policy.read_timeout_seconds == 15.0
+    assert default_policy.max_attempts == 3
+    assert default_policy.backoff_initial_seconds == 0.5
+    assert default_policy.backoff_max_seconds == 4.0
+    assert default_policy.breaker_failure_threshold == 5
+    assert default_policy.breaker_reset_seconds == 30.0
+
+    monkeypatch.setenv("TPP_TRANSPORT_CONNECT_TIMEOUT_SECONDS", "2")
+    monkeypatch.setenv("TPP_TRANSPORT_READ_TIMEOUT_SECONDS", "9")
+    monkeypatch.setenv("TPP_TRANSPORT_MAX_ATTEMPTS", "4")
+    monkeypatch.setenv("TPP_TRANSPORT_BACKOFF_INITIAL_SECONDS", "0.1")
+    monkeypatch.setenv("TPP_TRANSPORT_BACKOFF_MAX_SECONDS", "1.5")
+    monkeypatch.setenv("TPP_TRANSPORT_BREAKER_FAILURE_THRESHOLD", "7")
+    monkeypatch.setenv("TPP_TRANSPORT_BREAKER_RESET_SECONDS", "11")
+
+    policy = TPPTransportPolicy.from_env()
+
+    assert policy.connect_timeout_seconds == 2.0
+    assert policy.read_timeout_seconds == 9.0
+    assert policy.max_attempts == 4
+    assert policy.backoff_initial_seconds == 0.1
+    assert policy.backoff_max_seconds == 1.5
+    assert policy.breaker_failure_threshold == 7
+    assert policy.breaker_reset_seconds == 11.0
+
+
+def test_http_transport_retries_server_errors_then_surfaces_typed_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_urlopen(
+        monkeypatch,
+        [
+            _FakeHTTPResponse(503, {"detail": "try later"}),
+            _FakeHTTPResponse(503, {"detail": "still later"}),
+            _FakeHTTPResponse(503, {"detail": "failed"}),
+        ],
+    )
+    client = _http_client(
+        policy=TPPTransportPolicy(
+            max_attempts=3,
+            backoff_initial_seconds=0.0,
+            backoff_max_seconds=0.0,
+            breaker_failure_threshold=5,
+        )
+    )
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/api/fail", json_payload={})
+
+    assert exc_info.value.error_code == "server_error"
+    assert exc_info.value.retryable is True
+
+
+def test_http_transport_classifies_connection_timeout_unauthorized_and_invalid_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cases: list[tuple[_FakeHTTPResponse | Exception, str]] = [
+        (urllib_error.URLError(ConnectionRefusedError("refused")), "connection_error"),
+        (socket.timeout("slow response"), "timeout"),
+        (_FakeHTTPResponse(401, {"detail": "bad token"}), "unauthorized"),
+        (_FakeHTTPResponse(200, "not-json"), "invalid_response"),
+    ]
+    for response, error_code in cases:
+        _install_urlopen(monkeypatch, [response])
+        client = _http_client(policy=TPPTransportPolicy(max_attempts=1))
+
+        with pytest.raises(TPPTransportError) as exc_info:
+            client._request_json(method="POST", path=f"/api/{error_code}", json_payload={})
+
+        assert exc_info.value.error_code == error_code
+
+
+def test_http_transport_opens_breaker_after_consecutive_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_urlopen(
+        monkeypatch,
+        [urllib_error.URLError(ConnectionRefusedError("refused")) for _ in range(5)],
+    )
+    registry = {}
+    client = _http_client(
+        policy=TPPTransportPolicy(max_attempts=1, breaker_failure_threshold=5),
+        breaker_registry=registry,
+    )
+    for _ in range(5):
+        with pytest.raises(TPPTransportError) as exc_info:
+            client._request_json(method="POST", path="/api/down", json_payload={})
+        assert exc_info.value.error_code == "connection_error"
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/api/down", json_payload={})
+
+    assert exc_info.value.error_code == "breaker_open"
+
+
+def test_http_transport_half_open_success_closes_breaker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current_time = 0.0
+
+    def _clock() -> float:
+        return current_time
+
+    _install_urlopen(
+        monkeypatch,
+        [
+            urllib_error.URLError(ConnectionRefusedError("refused")),
+            _FakeHTTPResponse(200, {"ok": True}),
+            urllib_error.URLError(ConnectionRefusedError("refused-again")),
+        ],
+    )
+    client = _http_client(
+        policy=TPPTransportPolicy(
+            max_attempts=1,
+            breaker_failure_threshold=1,
+            breaker_reset_seconds=10.0,
+        ),
+        clock=_clock,
+        breaker_registry={},
+    )
+
+    with pytest.raises(TPPTransportError) as first_failure:
+        client._request_json(method="POST", path="/api/down", json_payload={})
+    assert first_failure.value.error_code == "connection_error"
+
+    current_time = 5.0
+    with pytest.raises(TPPTransportError) as open_breaker:
+        client._request_json(method="POST", path="/api/down", json_payload={})
+    assert open_breaker.value.error_code == "breaker_open"
+
+    current_time = 11.0
+    assert client._request_json(method="POST", path="/api/down", json_payload={}) == {
+        "ok": True
+    }
+
+    current_time = 12.0
+    with pytest.raises(TPPTransportError) as after_close:
+        client._request_json(method="POST", path="/api/down", json_payload={})
+    assert after_close.value.error_code == "connection_error"
+
+
+def test_http_transport_integration_against_stub_http_server_reports_server_error() -> None:
+    class _Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.send_response(503)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"detail": "temporarily unavailable"}')
+
+        def log_message(self, *_args) -> None:
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = HTTPTPPIntegrationClient(
+            TPPRuntimeSettings(
+                base_url=f"http://127.0.0.1:{server.server_port}",
+                access_token="token-123",
+                oidc_provider="okta",
+            ),
+            policy=TPPTransportPolicy(max_attempts=1, breaker_failure_threshold=5),
+            breaker_registry={},
+        )
+
+        with pytest.raises(TPPTransportError) as exc_info:
+            client._request_json(method="POST", path="/stub", json_payload={})
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
+
+    assert exc_info.value.error_code == "server_error"

@@ -1,4 +1,5 @@
 import json
+import socket
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Literal, cast
@@ -1240,6 +1241,114 @@ def test_workspace_proposal_live_transport_rejects_invalid_upstream_contract(
         response.json()["detail"]
         == "result_payload.execution_id is required for non-terminal submissions"
     )
+
+
+def test_workspace_proposal_submission_persists_stored_policy_when_live_tpp_times_out(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    monkeypatch.setenv("TPP_TRANSPORT_MAX_ATTEMPTS", "1")
+    _install_fake_http(monkeypatch, [socket.timeout("slow response")])
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Timeout fallback workspace",
+            "summary": "Persist stored-policy posture when live TPP times out.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+
+    response = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "proposal_version": "proposal-v3",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["proposal_state"]
+    assert payload["submission_status"] == "retry_scheduled"
+    assert payload["summary"]["submission_error"]["code"] == "timeout"
+    assert payload["summary"]["submission_error"]["details"]["error_code"] == "timeout"
+    assert "stored-policy posture" in payload["summary"]["submission_summary"]
+    assert payload["summary"]["submission_retry"]["retryable"] is True
+
+
+def test_workspace_proposal_submission_persists_stored_policy_when_breaker_is_open(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+
+    def _raise_breaker_open(self, request):
+        del self, request
+        raise tpp_client_module.TPPTransportError(
+            "TPP circuit breaker is open for https://tpp.example.test:443.",
+            error_code="breaker_open",
+            status_code=503,
+            retryable=True,
+        )
+
+    monkeypatch.setattr(
+        tpp_client_module.HTTPTPPIntegrationClient,
+        "submit_proposal",
+        _raise_breaker_open,
+    )
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Breaker fallback workspace",
+            "summary": "Persist stored-policy posture when live TPP breaker is open.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+
+    response = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "proposal_version": "proposal-v3",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["proposal_state"]
+    assert payload["submission_status"] == "retry_scheduled"
+    assert payload["summary"]["submission_error"]["code"] == "breaker_open"
+    assert payload["summary"]["submission_error"]["details"]["error_code"] == "breaker_open"
+    assert "stored-policy posture" in payload["summary"]["submission_summary"]
 
 
 def test_workspace_proposal_refresh_polls_live_status_and_persists_evaluation(

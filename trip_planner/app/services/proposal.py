@@ -211,6 +211,65 @@ def _resolve_submission_response(
     return HTTPTPPIntegrationClient().submit_proposal(live_request)
 
 
+def _transport_error_details(error: Exception, *, source: str) -> dict[str, str]:
+    details: dict[str, str] = {"source": source}
+    error_code = getattr(error, "error_code", None)
+    status_code = getattr(error, "status_code", None)
+    if error_code:
+        details["error_code"] = str(error_code)
+    if status_code is not None:
+        details["status_code"] = str(status_code)
+    return details
+
+
+def _should_persist_stored_policy_fallback(error: TPPTransportError) -> bool:
+    return error.error_code in {"breaker_open", "timeout"}
+
+
+def _fallback_submission_response(
+    *,
+    request: TPPRequestEnvelope,
+    error: TPPTransportError,
+) -> TPPResponseEnvelope:
+    if error.error_code == "breaker_open":
+        summary = (
+            "Live TPP transport circuit breaker is open; the workspace is using stored-policy "
+            "posture until the next retry window."
+        )
+    else:
+        summary = (
+            "Live TPP transport timed out; the workspace is using stored-policy posture until "
+            "the next retry."
+        )
+    return TPPResponseEnvelope(
+        operation=request.operation,
+        request_id=request.request_id,
+        correlation_id=request.correlation_id,
+        transport_pattern="deferred",
+        execution_status=TPPExecutionStatus(
+            state="retry_scheduled",
+            terminal=False,
+            summary=summary,
+            updated_at=_now_iso(),
+        ),
+        result_payload={},
+        error=TPPErrorRecord(
+            code=error.error_code,
+            message=str(error) or summary,
+            category="transport",
+            retryable=True,
+            details=_transport_error_details(error, source="workspace_proposal_submission"),
+        ),
+        retry=TPPRetryMetadata(
+            attempt=1,
+            max_attempts=5,
+            retryable=True,
+            reason=summary,
+        ),
+        received_at=_now_iso(),
+    )
+
+
 def _normalize_evaluation_request(
     request: TPPRequestEnvelope,
     *,
@@ -548,10 +607,7 @@ def _persist_evaluation_refresh_failure(
     request: TPPRequestEnvelope,
     error: Exception,
 ) -> None:
-    status_code = getattr(error, "status_code", None)
-    details: dict[str, str] = {"source": "workspace_proposal_refresh"}
-    if status_code is not None:
-        details["status_code"] = str(status_code)
+    details = _transport_error_details(error, source="workspace_proposal_refresh")
 
     if isinstance(error, TPPTransportError):
         category = "transport"
@@ -607,10 +663,7 @@ def _persist_submission_refresh_failure(
     request: TPPRequestEnvelope,
     error: Exception,
 ) -> None:
-    status_code = getattr(error, "status_code", None)
-    details: dict[str, str] = {"source": "workspace_proposal_refresh"}
-    if status_code is not None:
-        details["status_code"] = str(status_code)
+    details = _transport_error_details(error, source="workspace_proposal_refresh")
 
     if isinstance(error, TPPConfigurationError):
         category = "configuration"
@@ -632,7 +685,7 @@ def _persist_submission_refresh_failure(
         retryable = True
         terminal = False
         summary = "Workspace refresh could not reach the live proposal status endpoint. Retry the status check."
-        code = "submission_refresh_transport_failed"
+        code = f"submission_refresh_{error.error_code}"
     else:
         category = "application"
         state = "failed"
@@ -719,14 +772,19 @@ def save_workspace_proposal_submission(
         raise ValueError("proposal.trip_id must match the workspace trip.")
 
     request = TPPRequestEnvelope.from_dict(request_payload)
-    response = _resolve_submission_response(
-        request,
-        response_payload,
-        proposal_version=proposal_version,
-        trip_record=trip_record,
-        user=user,
-        proposal=proposal,
-    )
+    try:
+        response = _resolve_submission_response(
+            request,
+            response_payload,
+            proposal_version=proposal_version,
+            trip_record=trip_record,
+            user=user,
+            proposal=proposal,
+        )
+    except TPPTransportError as error:
+        if not _should_persist_stored_policy_fallback(error):
+            raise
+        response = _fallback_submission_response(request=request, error=error)
     submission = TPPProposalSubmissionService(_PassiveTPPClient(response)).submit_proposal(
         request,
         proposal,
