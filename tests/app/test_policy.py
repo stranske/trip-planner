@@ -308,6 +308,7 @@ def test_workspace_policy_import_surfaces_live_tpp_unavailable_errors(
     monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
     monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    monkeypatch.setenv("TPP_TRANSPORT_MAX_ATTEMPTS", "1")
     _install_fake_http(
         monkeypatch,
         [
