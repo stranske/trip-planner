@@ -26,6 +26,7 @@ TPP_EXECUTION_STATES: tuple[str, ...] = (
     "deferred",
     "retry_scheduled",
     "cancelled",
+    "timeout",
 )
 
 

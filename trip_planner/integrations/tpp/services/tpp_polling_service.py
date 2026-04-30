@@ -2,70 +2,99 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from time import monotonic
-from typing import Any, Mapping
+from collections.abc import Callable, Mapping
+import time
+from typing import Any
 
-from trip_planner.integrations.tpp.models import PollingOutcome
 from trip_planner.integrations.tpp.client import TPPContractError
-from trip_planner.integrations.tpp.validation import validate_poll_response_state
-
-_STATE_TO_OUTCOME: dict[str, PollingOutcome] = {
-    "approved": PollingOutcome.APPROVED,
-    "rejected": PollingOutcome.REJECTED,
-    "failed": PollingOutcome.FAILED,
-    "pending": PollingOutcome.PENDING,
-}
+from trip_planner.integrations.tpp.contracts import (
+    TPPExecutionStatus,
+    TPPRequestEnvelope,
+    TPPResponseEnvelope,
+)
 
 
-def map_poll_response_state_to_outcome(state: str) -> PollingOutcome:
-    """Map a normalized TPP poll-response state string to an application outcome."""
-    normalized = state.strip().lower()
-    outcome = _STATE_TO_OUTCOME.get(normalized)
-    if outcome is None:
-        raise TPPContractError(f"Unsupported TPP poll state {state!r}.")
-    return outcome
+def _next_wait(attempt: int) -> float:
+    """Return exponential backoff wait in seconds with a 30s cap."""
+    if attempt < 1:
+        raise ValueError("attempt must be >= 1")
+    return min(2 ** (attempt - 1), 30)
 
 
 class TPPPollingService:
-    """Map poll response payload states to application outcomes."""
+    """Drive polling to terminal state or timeout and return a response envelope."""
 
     def __init__(
         self,
-        poll_response_provider: Callable[[str], Mapping[str, Any]] | None = None,
+        poll_response_provider: Callable[
+            [TPPRequestEnvelope], TPPResponseEnvelope | Mapping[str, Any]
+        ],
         *,
-        timeout_seconds: float = 30.0,
-        now: Callable[[], float] | None = None,
+        timeout_seconds: float,
+        sleeper: Callable[[float], None] = time.sleep,
+        now: Callable[[], float] = time.monotonic,
     ) -> None:
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be > 0")
         self._poll_response_provider = poll_response_provider
         self._timeout_seconds = timeout_seconds
-        self._now = now or monotonic
-        self._poll_started_at: float | None = None
+        self._sleeper = sleeper
+        self._now = now
 
-    def map_poll_response_to_outcome(
-        self,
-        poll_response_payload: Mapping[str, Any],
-    ) -> PollingOutcome:
-        state = validate_poll_response_state(poll_response_payload)
-        return map_poll_response_state_to_outcome(state)
+    def poll(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
+        if not isinstance(request, TPPRequestEnvelope):
+            raise ValueError("request must be a TPPRequestEnvelope")
 
-    def poll(self, proposal_id: str) -> PollingOutcome:
-        if self._poll_response_provider is None:
-            raise ValueError("poll_response_provider is required to poll proposal status.")
-        if not proposal_id.strip():
-            raise ValueError("proposal_id must be a non-empty string")
+        started_at = self._now()
+        deadline = started_at + self._timeout_seconds
+        attempt = 1
 
-        now = self._now()
-        if self._poll_started_at is None:
-            self._poll_started_at = now
+        while True:
+            envelope = self._normalize_poll_response(self._poll_response_provider(request))
+            if self._is_terminal(envelope):
+                return envelope
 
-        payload = self._poll_response_provider(proposal_id)
-        outcome = self.map_poll_response_to_outcome(payload)
-        if outcome is PollingOutcome.PENDING:
-            if now - self._poll_started_at > self._timeout_seconds:
-                self._poll_started_at = None
-                return PollingOutcome.TIMEOUT
-            return PollingOutcome.PENDING
+            remaining = deadline - self._now()
+            if remaining <= 0:
+                return self._timeout_response(request)
 
-        self._poll_started_at = None
-        return outcome
+            wait_seconds = min(_next_wait(attempt), remaining)
+            self._sleeper(wait_seconds)
+            attempt += 1
+
+            if self._now() >= deadline:
+                return self._timeout_response(request)
+
+    def _normalize_poll_response(
+        self, response: TPPResponseEnvelope | Mapping[str, Any]
+    ) -> TPPResponseEnvelope:
+        if isinstance(response, TPPResponseEnvelope):
+            return response
+        if isinstance(response, Mapping):
+            try:
+                return TPPResponseEnvelope.from_dict(dict(response))
+            except (KeyError, TypeError, ValueError) as exc:
+                raise TPPContractError("Malformed TPP poll response envelope.") from exc
+        raise TPPContractError("TPP poll response contract requires an object payload.")
+
+    @staticmethod
+    def _is_terminal(envelope: TPPResponseEnvelope) -> bool:
+        if envelope.execution_status.terminal:
+            return True
+        return envelope.execution_status.state in {"succeeded", "failed", "cancelled"}
+
+    @staticmethod
+    def _timeout_response(request: TPPRequestEnvelope) -> TPPResponseEnvelope:
+        return TPPResponseEnvelope(
+            operation=request.operation,
+            request_id=request.request_id,
+            correlation_id=request.correlation_id,
+            transport_pattern=request.transport_pattern,
+            execution_status=TPPExecutionStatus(
+                state="timeout",
+                terminal=True,
+                summary="timeout",
+                external_status="timeout",
+            ),
+            result_payload={},
+        )
