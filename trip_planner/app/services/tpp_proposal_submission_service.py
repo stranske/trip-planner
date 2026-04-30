@@ -13,7 +13,7 @@ from trip_planner.integrations.tpp.contracts import (
     TPPCorrelationId,
     TPPRequestEnvelope,
 )
-from trip_planner.integrations.tpp.client import TPPContractError
+from trip_planner.integrations.tpp.validation import validate_submit_response_proposal_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,20 +53,9 @@ class TPPWorkspaceProposalSubmissionService:
             submitted_at=submitted_at,
         )
         response = self._client.submit_proposal(request)
-        extracted_proposal_id = _extract_submit_proposal_id(response.result_payload)
+        extracted_proposal_id = validate_submit_response_proposal_id(response.to_dict())
         persist_tpp_proposal_id(workspace_state, extracted_proposal_id)
         return ProposalSubmissionResult(proposal_id=extracted_proposal_id, success=True)
-
-
-def _extract_submit_proposal_id(result_payload: object) -> str:
-    if not isinstance(result_payload, Mapping):
-        raise TPPContractError("TPP submit response contract requires 'result_payload'.")
-    proposal_id = result_payload.get("proposal_id")
-    if not isinstance(proposal_id, str) or not proposal_id.strip():
-        raise TPPContractError(
-            "TPP submit response contract requires non-empty 'result_payload.proposal_id'."
-        )
-    return proposal_id.strip()
 
 
 def _optional_non_empty_string(value: object) -> str | None:

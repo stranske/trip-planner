@@ -17,6 +17,7 @@ from trip_planner.business import (
     TripPlanProposal,
 )
 from trip_planner.integrations.tpp import (
+    BaseTPPIntegrationClient,
     HTTPTPPIntegrationClient,
     OrganizationContextSnapshot,
     PolicyConstraintImport,
@@ -107,21 +108,12 @@ def _tpp_trip_plan_payload(record: PersistedTrip, *, user: AuthenticatedUser) ->
     }
 
 
-class _PassiveTPPClient:
+class _PassiveTPPClient(BaseTPPIntegrationClient):
     def __init__(self, response: TPPResponseEnvelope) -> None:
         self.response = response
 
-    def fetch_policy_constraints(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
+    def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         return self.response
-
-    def submit_proposal(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
-        raise NotImplementedError("Passive policy import client does not submit proposals.")
-
-    def fetch_evaluation_result(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
-        raise NotImplementedError("Passive policy import client does not fetch evaluation results.")
-
-    def poll_execution_status(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
-        raise NotImplementedError("Passive policy import client does not poll execution status.")
 
 
 def _resolve_policy_response(
