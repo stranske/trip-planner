@@ -497,6 +497,7 @@ def _started_tpp_service(
             raise VerificationFailure(
                 "TPP service did not become ready",
                 ready_url=f"{base_url}/readyz",
+                interpreter=" ".join(interpreter),
                 command=" ".join(command),
                 cwd=str(repo_root),
                 returncode=process.poll(),

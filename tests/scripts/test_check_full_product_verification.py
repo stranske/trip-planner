@@ -57,6 +57,8 @@ def test_started_tpp_service_starts_and_terminates_cleanly(monkeypatch, tmp_path
         assert process is process_holder["proc"]
 
     process = process_holder["proc"]
+    assert process.command[0] == str(repo_path / ".venv" / "bin" / "python")
+    assert process.command[1:3] == ["-m", "travel_plan_permission.http_service"]
     assert process.terminated is True
     assert process.wait_calls == 1
 
@@ -98,5 +100,6 @@ def test_started_tpp_service_readiness_failure_includes_captured_stderr(
 
     message = str(exc_info.value)
     assert str(venv_python) in message
+    assert '"interpreter"' in message
     assert "ModuleNotFoundError: No module named 'jinja2'" in message
     assert "stderr_tail" in message
