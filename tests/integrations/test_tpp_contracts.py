@@ -392,6 +392,48 @@ def test_http_transport_half_open_success_closes_breaker(
     assert after_close.value.error_code == "connection_error"
 
 
+def test_http_transport_half_open_allows_single_trial_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current_time = 0.0
+
+    def _clock() -> float:
+        return current_time
+
+    _install_urlopen(
+        monkeypatch,
+        [
+            urllib_error.URLError(ConnectionRefusedError("refused")),
+            _FakeHTTPResponse(200, {"ok": True}),
+        ],
+    )
+    client = _http_client(
+        policy=TPPTransportPolicy(
+            max_attempts=1,
+            breaker_failure_threshold=1,
+            breaker_reset_seconds=10.0,
+        ),
+        clock=_clock,
+        breaker_registry={},
+    )
+
+    with pytest.raises(TPPTransportError):
+        client._request_json(method="POST", path="/api/down", json_payload={})
+
+    current_time = 11.0
+    assert client._request_json(method="POST", path="/api/down", json_payload={}) == {"ok": True}
+
+    breaker = next(iter(client._breaker_registry.values()))
+    breaker.opened_at = 11.0
+    breaker.half_open = True
+    breaker._half_open_trial_in_flight = True
+    current_time = 22.0
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/api/down", json_payload={})
+    assert exc_info.value.error_code == "breaker_open"
+
+
 def test_http_transport_integration_against_stub_http_server_reports_server_error() -> None:
     class _Handler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:

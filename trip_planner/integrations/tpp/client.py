@@ -178,6 +178,7 @@ class _CircuitBreaker:
         self.failures = 0
         self.opened_at: float | None = None
         self.half_open = False
+        self._half_open_trial_in_flight = False
 
     @property
     def state(self) -> str:
@@ -198,21 +199,32 @@ class _CircuitBreaker:
                 retryable=True,
             )
         self.half_open = True
+        if self._half_open_trial_in_flight:
+            raise TPPTransportError(
+                f"TPP circuit breaker is half-open for {host}; trial already in flight.",
+                error_code="breaker_open",
+                status_code=503,
+                retryable=True,
+            )
+        self._half_open_trial_in_flight = True
 
     def record_success(self) -> None:
         self.failures = 0
         self.opened_at = None
         self.half_open = False
+        self._half_open_trial_in_flight = False
 
     def record_failure(self, *, policy: TPPTransportPolicy, now: float) -> None:
         if self.half_open:
             self.opened_at = now
             self.half_open = False
+            self._half_open_trial_in_flight = False
             return
         self.failures += 1
         if self.failures >= policy.breaker_failure_threshold:
             self.opened_at = now
             self.half_open = False
+            self._half_open_trial_in_flight = False
 
 
 def tpp_transport_error_from_exception(
