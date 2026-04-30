@@ -190,6 +190,7 @@ class TPPResponseEnvelope:
     transport_pattern: str
     execution_status: TPPExecutionStatus
     result_payload: dict[str, Any] = field(default_factory=dict)
+    evaluation_result: dict[str, Any] | None = None
     error: TPPErrorRecord | None = None
     retry: TPPRetryMetadata | None = None
     received_at: str | None = None
@@ -207,6 +208,11 @@ class TPPResponseEnvelope:
             raise ValueError("execution_status must be a TPPExecutionStatus")
         self.result_payload = _optional_mapping(self.result_payload, "result_payload")
         require_string_mapping(self.result_payload, "result_payload")
+        if self.evaluation_result is not None:
+            self.evaluation_result = _require_mapping(
+                self.evaluation_result, "evaluation_result"
+            )
+            require_string_mapping(self.evaluation_result, "evaluation_result")
         if self.error is not None and not isinstance(self.error, TPPErrorRecord):
             raise ValueError("error must be a TPPErrorRecord when provided")
         if self.retry is not None and not isinstance(self.retry, TPPRetryMetadata):
@@ -222,6 +228,8 @@ class TPPResponseEnvelope:
         payload = asdict(self)
         payload["correlation_id"] = self.correlation_id.to_dict()
         payload["execution_status"] = self.execution_status.to_dict()
+        if self.evaluation_result is None:
+            payload.pop("evaluation_result", None)
         if self.error is not None:
             payload["error"] = self.error.to_dict()
         if self.retry is not None:
@@ -238,6 +246,11 @@ class TPPResponseEnvelope:
             transport_pattern=response.get("transport_pattern", "sync"),
             execution_status=TPPExecutionStatus(**response["execution_status"]),
             result_payload=_optional_mapping(response.get("result_payload"), "result_payload"),
+            evaluation_result=(
+                _require_mapping(response["evaluation_result"], "evaluation_result")
+                if "evaluation_result" in response
+                else None
+            ),
             error=(
                 TPPErrorRecord(**response["error"]) if response.get("error") is not None else None
             ),

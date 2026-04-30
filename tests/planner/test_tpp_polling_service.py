@@ -140,14 +140,15 @@ def test_poll_pending_until_timeout_returns_timeout_envelope() -> None:
     assert response.request_id == "request-1"
     assert response.correlation_id.value == "corr-1"
     assert response.result_payload == {}
-    assert response.result_payload.get("evaluation_result", {}) == {}
+    assert response.evaluation_result == {}
     assert response.error is None
     assert payload["execution_status"]["state"] == "timeout"
     assert payload["result_payload"] == {}
-    assert payload.get("evaluation_result", {}) == {}
+    assert payload["evaluation_result"] == {}
     round_tripped = TPPResponseEnvelope.from_dict(payload)
     assert round_tripped.execution_status.state == "timeout"
     assert round_tripped.result_payload == {}
+    assert round_tripped.evaluation_result == {}
     assert call_count == 3
     assert sleeps == [1.0, 2.0, 2.0]
 
@@ -182,7 +183,8 @@ def test_poll_timeout_returns_empty_payload_and_evaluation_result_lookup() -> No
 
     assert response.execution_status.state == "timeout"
     assert response.result_payload == {}
-    assert payload.get("evaluation_result", {}) == {}
+    assert response.evaluation_result == {}
+    assert payload["evaluation_result"] == {}
     assert response.error is None
 
 
@@ -206,7 +208,7 @@ def test_poll_truncates_first_sleep_to_remaining_timeout() -> None:
 
     assert response.execution_status.state == "timeout"
     assert response.result_payload == {}
-    assert response.result_payload.get("evaluation_result", {}) == {}
+    assert response.evaluation_result == {}
     assert sleeps == [0.5]
     assert call_count == 1
 
@@ -232,3 +234,8 @@ def test_poll_uses_capped_cadence_and_truncates_final_sleep_to_timeout_remaining
     assert response.execution_status.state == "timeout"
     assert sleeps == [1.0, 2.0, 4.0, 8.0, 16.0, 30.0, 30.0, 4.0]
     assert calls == 8
+
+
+def test_polling_service_rejects_non_callable_provider() -> None:
+    with pytest.raises(ValueError, match="poll_response_provider must be callable"):
+        TPPPollingService(None, timeout_seconds=1.0)  # type: ignore[arg-type]
