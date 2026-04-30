@@ -164,7 +164,6 @@ def first_client(
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     set_planner_chat_model_factory_for_tests(None)
-    reset_database_state()
     app = create_app()
 
     with TestClient(app) as test_client:
