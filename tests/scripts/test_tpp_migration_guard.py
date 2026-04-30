@@ -11,6 +11,16 @@ def test_has_recorded_sub_decision_detects_any_supported_option() -> None:
     assert not guard.has_recorded_sub_decision("B-1 and B-2 are both under consideration.")
 
 
+def test_has_recorded_sub_decision_accepts_single_explicit_choice_line() -> None:
+    pr_body = "\n".join(
+        [
+            "Sub-decision options considered: B-1 / B-2 / B-3.",
+            "Chosen sub-decision: B-2.",
+        ]
+    )
+    assert guard.has_recorded_sub_decision(pr_body)
+
+
 def test_has_recorded_sub_decision_accepts_single_checked_checkbox() -> None:
     pr_body = "\n".join(
         [

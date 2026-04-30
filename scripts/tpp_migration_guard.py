@@ -10,6 +10,10 @@ import subprocess
 from typing import Iterable
 
 _DECISION_RE = re.compile(r"\b(B-[123])\b")
+_CHOICE_HINT_RE = re.compile(
+    r"\b(chosen|selected|decision|sub-decision|we picked|pick|target)\b",
+    re.IGNORECASE,
+)
 _TPP_SERVICE_PREFIX = "trip_planner/app/services/"
 _TPP_MODEL_PATH = "trip_planner/app/models/tpp.py"
 
@@ -17,6 +21,10 @@ _TPP_MODEL_PATH = "trip_planner/app/models/tpp.py"
 def has_recorded_sub_decision(pr_body: str) -> bool:
     decisions = _extract_checked_decisions(pr_body)
     if len(decisions) == 1:
+        return True
+
+    chosen = _extract_chosen_decisions(pr_body)
+    if len(chosen) == 1:
         return True
 
     explicit = _extract_explicit_decisions(pr_body)
@@ -46,6 +54,16 @@ def _extract_explicit_decisions(pr_body: str) -> set[str]:
             and "b-2" in lower_line
             and "b-3" in lower_line
         ):
+            continue
+        found = {match.group(1) for match in _DECISION_RE.finditer(line)}
+        matches.update(found)
+    return matches
+
+
+def _extract_chosen_decisions(pr_body: str) -> set[str]:
+    matches: set[str] = set()
+    for line in pr_body.splitlines():
+        if not _CHOICE_HINT_RE.search(line):
             continue
         found = {match.group(1) for match in _DECISION_RE.finditer(line)}
         matches.update(found)
