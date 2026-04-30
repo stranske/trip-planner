@@ -9,13 +9,47 @@ import re
 import subprocess
 from typing import Iterable
 
-_DECISION_RE = re.compile(r"\bB-[123]\b")
+_DECISION_RE = re.compile(r"\b(B-[123])\b")
 _TPP_SERVICE_PREFIX = "trip_planner/app/services/"
 _TPP_MODEL_PATH = "trip_planner/app/models/tpp.py"
 
 
 def has_recorded_sub_decision(pr_body: str) -> bool:
-    return bool(_DECISION_RE.search(pr_body))
+    decisions = _extract_checked_decisions(pr_body)
+    if len(decisions) == 1:
+        return True
+
+    explicit = _extract_explicit_decisions(pr_body)
+    return len(explicit) == 1
+
+
+def _extract_checked_decisions(pr_body: str) -> set[str]:
+    matches: set[str] = set()
+    for line in pr_body.splitlines():
+        if not re.search(r"^\s*[-*]\s*\[[xX]\]", line):
+            continue
+        decision_match = _DECISION_RE.search(line)
+        if decision_match:
+            matches.add(decision_match.group(1))
+    return matches
+
+
+def _extract_explicit_decisions(pr_body: str) -> set[str]:
+    matches: set[str] = set()
+    for line in pr_body.splitlines():
+        lower_line = line.lower()
+        if "/" in line and "b-1" in lower_line and "b-2" in lower_line and "b-3" in lower_line:
+            continue
+        if (
+            "or" in lower_line
+            and "b-1" in lower_line
+            and "b-2" in lower_line
+            and "b-3" in lower_line
+        ):
+            continue
+        found = {match.group(1) for match in _DECISION_RE.finditer(line)}
+        matches.update(found)
+    return matches
 
 
 def parse_rename_records(diff_output: str) -> list[tuple[str, str]]:
