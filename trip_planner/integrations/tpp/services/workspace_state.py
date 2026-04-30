@@ -23,7 +23,10 @@ def persist_tpp_result(
     the stored copy) cannot leak through nested structures and corrupt the
     persisted snapshot.
     """
-    workspace_state["tpp_result"] = deepcopy(dict(result_payload))
+    copied_payload = deepcopy(result_payload)
+    if not isinstance(copied_payload, dict):
+        copied_payload = dict(copied_payload)
+    workspace_state["tpp_result"] = copied_payload
 
 
 def load_tpp_result(workspace_state: Mapping[str, Any]) -> dict[str, Any] | None:

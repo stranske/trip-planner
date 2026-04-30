@@ -74,6 +74,25 @@ def test_persist_tpp_result_isolates_persisted_snapshot_from_caller_mutation() -
     assert snapshot_before_mutation == snapshot_after_mutation
 
 
+def test_persist_tpp_result_isolates_nested_mutations() -> None:
+    payload: dict[str, Any] = {
+        "result_payload": {"nested": {"status": "ok", "count": 1}},
+    }
+    workspace_state: dict[str, Any] = {}
+
+    persist_tpp_result(workspace_state, payload)
+    persisted = workspace_state["tpp_result"]
+
+    # Persisted payload should not share nested references with caller payload.
+    assert persisted["result_payload"] is not payload["result_payload"]
+    assert persisted["result_payload"]["nested"] is not payload["result_payload"]["nested"]
+
+    payload["result_payload"]["nested"]["status"] = "changed"
+    payload["result_payload"]["nested"]["count"] = 2
+
+    assert persisted["result_payload"]["nested"] == {"status": "ok", "count": 1}
+
+
 def test_load_tpp_result_returns_independent_copy() -> None:
     original_result: dict[str, Any] = {
         "execution_status": {"state": "succeeded", "terminal": True},
@@ -94,3 +113,50 @@ def test_load_tpp_result_returns_independent_copy() -> None:
     second_load = load_tpp_result(workspace_state)
     assert second_load is not None
     assert second_load["result_payload"]["nested"]["items"] == [1, 2, 3]
+
+
+def test_load_tpp_result_isolates_nested_mutations() -> None:
+    workspace_state: dict[str, Any] = {
+        "tpp_result": {"result_payload": {"nested": {"items": [1, 2, 3]}}}
+    }
+
+    loaded = load_tpp_result(workspace_state)
+    assert loaded is not None
+
+    # Loaded payload should not share nested references with persisted state.
+    assert loaded["result_payload"] is not workspace_state["tpp_result"]["result_payload"]
+    assert (
+        loaded["result_payload"]["nested"]
+        is not workspace_state["tpp_result"]["result_payload"]["nested"]
+    )
+
+    loaded["result_payload"]["nested"]["items"].append(4)
+
+    assert workspace_state["tpp_result"]["result_payload"]["nested"]["items"] == [1, 2, 3]
+
+
+def test_round_trip_with_nested_lists() -> None:
+    original_items = [{"id": "a"}, {"id": "b"}]
+    payload: dict[str, Any] = {
+        "result_payload": {"nested": {"items": original_items}},
+    }
+    workspace_state: dict[str, Any] = {}
+
+    persist_tpp_result(workspace_state, payload)
+    loaded = load_tpp_result(workspace_state)
+    assert loaded is not None
+
+    # Round-tripped list and its nested dict elements should be detached copies.
+    assert (
+        loaded["result_payload"]["nested"]["items"]
+        is not payload["result_payload"]["nested"]["items"]
+    )
+    assert (
+        loaded["result_payload"]["nested"]["items"][0]
+        is not payload["result_payload"]["nested"]["items"][0]
+    )
+
+    loaded["result_payload"]["nested"]["items"].append({"id": "c"})
+    loaded["result_payload"]["nested"]["items"][0]["id"] = "changed"
+
+    assert payload["result_payload"]["nested"]["items"] == [{"id": "a"}, {"id": "b"}]
