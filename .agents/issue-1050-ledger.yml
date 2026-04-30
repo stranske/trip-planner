@@ -16,7 +16,7 @@ tasks:
     title: "Implement exponential backoff cadence calculation in `tpp_polling_service.py`\
       \ as a pure function `_next_wait(attempt: int) -> float` that returns `min(2\
       \ ** (attempt - 1), 30.0)` for attempt \u2265 1."
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -25,7 +25,7 @@ tasks:
     title: Create the internal polling loop structure in `tpp_polling_service.py`
       that repeatedly calls `poll_execution_status` until a terminal condition is
       met.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -34,7 +34,7 @@ tasks:
     title: Implement terminal state detection logic in `tpp_polling_service.py` that
       identifies success and failure states from the response envelope and returns
       immediately.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -42,7 +42,7 @@ tasks:
   - id: task-05
     title: Implement timeout detection logic in `tpp_polling_service.py` using `time.monotonic()`
       to track elapsed time against the configured deadline.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -50,7 +50,7 @@ tasks:
   - id: task-06
     title: Implement sleep truncation logic in `tpp_polling_service.py` that limits
       each sleep duration to the remaining time before the timeout deadline.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -58,7 +58,7 @@ tasks:
   - id: task-07
     title: Integrate the exponential backoff mechanism into the polling loop in `tpp_polling_service.py`
       between non-terminal poll attempts, using `sleeper` for waits.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -67,7 +67,7 @@ tasks:
     title: Implement synthetic timeout return in `tpp_polling_service.py` that returns
       a `TPPResponseEnvelope` with `execution_status.state == "timeout"`, `result_payload
       == {}`, and `evaluation_result == {}` (do not raise).
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -75,7 +75,7 @@ tasks:
   - id: task-09
     title: Identify all code locations that currently call the polling service and
       maintain external polling state, documenting file paths and line numbers.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -83,7 +83,7 @@ tasks:
   - id: task-10
     title: Refactor each identified caller to remove external polling loops and invoke
       the service method once.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -91,7 +91,7 @@ tasks:
   - id: task-11
     title: Update each caller to handle the new timeout response envelope with `execution_status.state
       == "timeout"`.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -99,7 +99,7 @@ tasks:
   - id: task-12
     title: Remove any caller-side timeout tracking logic that is now redundant with
       the internal service implementation.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -108,7 +108,7 @@ tasks:
     title: "Write test in `tests/planner/test_tpp_polling_service.py` (or canonical\
       \ path) covering pending\u2192success: client returns 2\xD7 pending then success,\
       \ service returns success envelope, sleeper cadence equals `[1.0, 2.0]`."
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -117,7 +117,7 @@ tasks:
     title: "Write test in `tests/planner/test_tpp_polling_service.py` (or canonical\
       \ path) covering pending\u2192failure: client returns 1\xD7 pending then failure,\
       \ service returns failure envelope, sleeper cadence equals `[1.0]`."
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -127,7 +127,7 @@ tasks:
       path) covering pending until timeout: client always returns pending, service
       returns `state="timeout"` with `result_payload == {}` and `evaluation_result
       == {}` for configured `timeout_seconds`.'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -136,7 +136,7 @@ tasks:
     title: Write test in `tests/planner/test_tpp_polling_service.py` (or canonical
       path) verifying no second external poll call is needed after a single `service.poll(...)`
       invocation by counting calls into a fake TPP client.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -145,7 +145,7 @@ tasks:
     title: Write cadence verification test in `tests/planner/test_tpp_polling_service.py`
       (or canonical path) that asserts sleeper durations follow `[1.0, 2.0, 4.0, 8.0,
       16.0, 30.0, 30.0, ...]` pattern using a stubbed `time.monotonic`.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -155,7 +155,7 @@ tasks:
       polling request and returns a `TPPResponseEnvelope` with a terminal state or
       `execution_status.state == "timeout"` without requiring any caller-side polling
       loop.'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -164,7 +164,7 @@ tasks:
     title: 'The polling service constructor in `tpp_polling_service.py` accepts `timeout_seconds:
       float` and `sleeper: Callable[[float], None]` and the module contains no hardcoded
       production default timeout value.'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -174,7 +174,7 @@ tasks:
       elapses, the service returns a `TPPResponseEnvelope` where `execution_status.state
       == "timeout"`, `result_payload == {}`, and `evaluation_result == {}`, and no
       exception is raised.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -183,7 +183,7 @@ tasks:
     title: When the client returns pending then success, a single `service.poll(...)`
       call returns the success envelope and the recorded sleeper durations equal `[1.0,
       2.0]`.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -191,7 +191,7 @@ tasks:
   - id: task-22
     title: When the client returns pending then failure, a single `service.poll(...)`
       call returns the failure envelope and the recorded sleeper durations equal `[1.0]`.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -199,7 +199,7 @@ tasks:
   - id: task-23
     title: 'Cadence inside the loop produces sleeper durations matching the doubling-with-30s-cap
       pattern: `[1.0, 2.0, 4.0, 8.0, 16.0, 30.0, 30.0, ...]`.'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -209,7 +209,7 @@ tasks:
       \ contains tests covering pending\u2192success, pending\u2192failure, pending\u2192\
       timeout, no second external poll call needed, and cadence verification, and\
       \ all tests pass."
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -219,7 +219,7 @@ tasks:
       files modified: `tpp_polling_service.py`, `test_tpp_polling_service.py`, and
       files containing import statements for these modules (no logic changes in other
       modules).'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
