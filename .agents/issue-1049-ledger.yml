@@ -2,6 +2,13 @@ version: 1
 issue: 1049
 base: main
 branch: codex/issue-1049
+disposition:
+  status: verifier-follow-up-opened
+  updated_at: '2026-04-30T10:31:18Z'
+  evidence: docs/verification/issue-1049-tpp-migration-disposition.md
+  notes:
+    - PR #1054 completed the migration and merged, but the ledger was left stale.
+    - This follow-up reconciles the task statuses and records durable verifier evidence.
 tasks:
   - id: task-01
     title: Implement a guard in this PR so no `git mv` occurs until the sub-decision
@@ -14,7 +21,7 @@ tasks:
   - id: task-02
     title: Create the destination package directory for the chosen option (e.g., for
       B-1 create `trip_planner/integrations/tpp/services/`).
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -22,7 +29,7 @@ tasks:
   - id: task-03
     title: Move TPP service files matching `trip_planner/app/services/*tpp*.py` to
       the chosen canonical location using `git mv`.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -30,7 +37,7 @@ tasks:
   - id: task-04
     title: 'Move `trip_planner/app/models/tpp.py` to the chosen canonical location
       using `git mv` (B-1 target: `trip_planner/integrations/tpp/models.py` or `trip_planner/integrations/tpp/models/tpp.py`).'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -39,7 +46,7 @@ tasks:
     title: Update production imports across the codebase to reference the new module
       paths (remove TPP-related imports from `trip_planner.app.services` / `trip_planner.app.models`
       / `trip_planner.app.clients` namespaces).
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -47,7 +54,7 @@ tasks:
   - id: task-06
     title: 'Define scope for: Identify all production files that import from trip_planner.app.services
       with TPP-related modules using grep (verify: confirm completion in repo)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -56,7 +63,7 @@ tasks:
     title: 'Implement focused slice for: Identify all production files that import
       from trip_planner.app.services with TPP-related modules using grep (verify:
       confirm completion in repo)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -65,7 +72,7 @@ tasks:
     title: 'Validate focused slice for: Identify all production files that import
       from trip_planner.app.services with TPP-related modules using grep (verify:
       confirm completion in repo)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -73,7 +80,7 @@ tasks:
   - id: task-09
     title: 'Define scope for: Update imports in identified production files to reference
       the new canonical TPP module paths (verify: confirm completion in repo)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -82,7 +89,7 @@ tasks:
     title: 'Implement focused slice for: Update imports in identified production files
       to reference the new canonical TPP module paths (verify: confirm completion
       in repo)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -91,7 +98,7 @@ tasks:
     title: 'Validate focused slice for: Update imports in identified production files
       to reference the new canonical TPP module paths (verify: confirm completion
       in repo)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -99,7 +106,7 @@ tasks:
   - id: task-12
     title: 'Define scope for: Verify that all production imports resolve correctly
       by running static type checking with mypy'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -107,7 +114,7 @@ tasks:
   - id: task-13
     title: 'Implement focused slice for: Verify that all production imports resolve
       correctly by running static type checking with mypy'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -115,7 +122,7 @@ tasks:
   - id: task-14
     title: 'Validate focused slice for: Verify that all production imports resolve
       correctly by running static type checking with mypy'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -123,7 +130,7 @@ tasks:
   - id: task-15
     title: 'Define scope for: Document any import conflicts or circular dependencies
       discovered during the migration (verify: dependencies updated)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -131,7 +138,7 @@ tasks:
   - id: task-16
     title: 'Implement focused slice for: Document any import conflicts or circular
       dependencies discovered during the migration (verify: dependencies updated)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -139,7 +146,7 @@ tasks:
   - id: task-17
     title: 'Validate focused slice for: Document any import conflicts or circular
       dependencies discovered during the migration (verify: dependencies updated)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -147,7 +154,7 @@ tasks:
   - id: task-18
     title: Update test imports in `tests/planner/test_tpp_*.py` and `tests/integrations/test_*.py`
       to reference the new module paths.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -155,7 +162,7 @@ tasks:
   - id: task-19
     title: 'Define scope for: Identify all test files matching tests/planner/test_tpp_*.py
       that import TPP modules (verify: tests pass)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -163,7 +170,7 @@ tasks:
   - id: task-20
     title: 'Implement focused slice for: Identify all test files matching tests/planner/test_tpp_*.py
       that import TPP modules (verify: tests pass)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -171,7 +178,7 @@ tasks:
   - id: task-21
     title: 'Validate focused slice for: Identify all test files matching tests/planner/test_tpp_*.py
       that import TPP modules (verify: tests pass)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -179,7 +186,7 @@ tasks:
   - id: task-22
     title: 'Define scope for: Update imports in tests/planner/test_tpp_*.py files
       to reference the new canonical paths (verify: tests pass)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -187,7 +194,7 @@ tasks:
   - id: task-23
     title: 'Implement focused slice for: Update imports in tests/planner/test_tpp_*.py
       files to reference the new canonical paths (verify: tests pass)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -195,7 +202,7 @@ tasks:
   - id: task-24
     title: 'Validate focused slice for: Update imports in tests/planner/test_tpp_*.py
       files to reference the new canonical paths (verify: tests pass)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -203,14 +210,14 @@ tasks:
   - id: task-25
     title: 'Update imports in tests/integrations/test_*.py files that reference TPP
       modules (verify: tests pass)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
     notes: []
   - id: task-26
     title: Run the affected test suite to verify all test imports resolve correctly
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -219,7 +226,7 @@ tasks:
     title: Add/update any minimal shim/legacy stubs under `trip_planner/app/` only
       if required to keep non-TPP imports working, and document any intentional leftovers
       in the PR body.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -227,7 +234,7 @@ tasks:
   - id: task-28
     title: "Write a PR body inventory listing every renamed file (old path \u2192\
       \ new path) to demonstrate 1:1 moves."
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -235,7 +242,7 @@ tasks:
   - id: task-29
     title: The PR body records the chosen sub-decision (B-1 / B-2 / B-3) before any
       file is moved.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -243,7 +250,7 @@ tasks:
   - id: task-30
     title: All TPP-related production files are located under one canonical sub-tree
       (per the chosen option) and no additional production TPP files remain elsewhere.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -252,7 +259,7 @@ tasks:
     title: Running `find trip_planner/app -name "*tpp*"` returns zero results, or
       only intentional shim/legacy stubs that are explicitly documented in the PR
       body.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -260,7 +267,7 @@ tasks:
   - id: task-32
     title: Running `grep -rE "from trip_planner\.app\.(services|models|clients)" --include="*.py"`
       returns zero TPP-related imports.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -268,14 +275,14 @@ tasks:
   - id: task-33
     title: All tests pass with only import-path updates (no behavioral changes required
       to make tests pass).
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
     notes: []
   - id: task-34
     title: CI is green (Gate, ruff, mypy, all test jobs).
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -283,7 +290,7 @@ tasks:
   - id: task-35
     title: "The PR body includes an inventory of every renamed file (old path \u2192\
       \ new path)."
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -291,7 +298,7 @@ tasks:
   - id: task-36
     title: Sub-decision (B-1 / B-2 / B-3) is recorded in the PR body before any file
       is moved.
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -299,7 +306,7 @@ tasks:
   - id: task-37
     title: All TPP-related production files live under one canonical sub-tree (whichever
       B-1/B-2/B-3 picked).
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -307,7 +314,7 @@ tasks:
   - id: task-38
     title: '`find trip_planner/app -name "*tpp*"` returns either zero results or only
       intentional shim/legacy stubs documented in the PR body.'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -315,7 +322,7 @@ tasks:
   - id: task-39
     title: '`grep -rE "from trip_planner\.app\.(services|models|clients)" --include="*.py"`
       returns zero TPP-related imports.'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -323,14 +330,14 @@ tasks:
   - id: task-40
     title: "All existing tests pass without behavioral changes \u2014 only import\
       \ paths updated."
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
     notes: []
   - id: task-41
     title: 'CI green: Gate, ruff, mypy, all test jobs.'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -338,7 +345,7 @@ tasks:
   - id: task-42
     title: PR body inventory of every renamed file is included (so reviewers can confirm
       1:1 moves and no accidental rewrites).
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -353,7 +360,7 @@ tasks:
       reviewer has documented the chosen option (B-1, B-2, or B-3) in a comment before
       any file moves begin.'' Remove this from the task list and add a note that the
       agent should pause and request human input if the decision is not present.)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''
@@ -364,7 +371,7 @@ tasks:
       to fail, but cannot control or guarantee CI execution. | Rephrase as: ''Fix
       any linting, type-checking, or test failures reported by CI'' and move ''CI
       is green'' to a human verification step in acceptance criteria.)'
-    status: todo
+    status: done
     started_at: null
     finished_at: null
     commit: ''

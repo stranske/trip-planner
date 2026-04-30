@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 import subprocess
 
+import pytest
+
 from scripts import tpp_migration_guard
 
 
@@ -126,6 +128,12 @@ def test_readme_documents_local_bootstrap_and_optional_integrations() -> None:
 
 def test_tpp_renames_require_recorded_sub_decision_in_pr_body() -> None:
     """Block TPP git mv operations until the PR body records B-1/B-2/B-3."""
+    if not tpp_migration_guard.is_pr_context():
+        pytest.skip(
+            "TPP rename guard requires pull-request diff context; post-merge "
+            "canonical-layout checks cover main."
+        )
+
     ok, message = tpp_migration_guard.enforce_guard()
     assert ok, message
 

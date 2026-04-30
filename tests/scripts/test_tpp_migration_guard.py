@@ -133,3 +133,40 @@ def test_collect_rename_diff_output_falls_back_to_two_dot_diff(monkeypatch) -> N
 
     assert guard._collect_rename_diff_output().startswith("R100\t")
     assert calls == ["origin/main...HEAD", "origin/main..HEAD"]
+
+
+def test_enforce_guard_blocks_pr_rename_without_pr_body(monkeypatch) -> None:
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    monkeypatch.delenv("PR_BODY", raising=False)
+    monkeypatch.delenv("GITHUB_EVENT_PATH", raising=False)
+    monkeypatch.setattr(
+        guard,
+        "_collect_rename_diff_output",
+        lambda: (
+            "R100\ttrip_planner/app/services/tpp_result_service.py\t"
+            "trip_planner/integrations/tpp/services/tpp_result_service.py\n"
+        ),
+    )
+
+    ok, message = guard.enforce_guard()
+
+    assert not ok
+    assert "could not read PR body" in message
+
+
+def test_enforce_guard_accepts_pr_rename_with_recorded_decision(monkeypatch) -> None:
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    monkeypatch.setenv("PR_BODY", "Chosen sub-decision: B-1 canonical TPP subtree.")
+    monkeypatch.setattr(
+        guard,
+        "_collect_rename_diff_output",
+        lambda: (
+            "R100\ttrip_planner/app/models/tpp.py\t"
+            "trip_planner/integrations/tpp/models.py\n"
+        ),
+    )
+
+    ok, message = guard.enforce_guard()
+
+    assert ok
+    assert "records B-1/B-2/B-3 decision" in message
