@@ -71,6 +71,11 @@ def test_started_tpp_service_readiness_failure_includes_captured_stderr(
     class FakeProcess:
         def __init__(self, command, **kwargs):
             self.command = command
+            stdout_lines = "\n".join(f"stdout-{index}" for index in range(60)) + "\n"
+            stderr_lines = "\n".join(f"stderr-{index}" for index in range(60)) + "\n"
+            kwargs["stdout"].write(stdout_lines.encode("utf-8"))
+            kwargs["stdout"].flush()
+            kwargs["stderr"].write(stderr_lines.encode("utf-8"))
             kwargs["stderr"].write(b"ModuleNotFoundError: No module named 'jinja2'\n")
             kwargs["stderr"].flush()
 
@@ -102,4 +107,9 @@ def test_started_tpp_service_readiness_failure_includes_captured_stderr(
     assert str(venv_python) in message
     assert '"interpreter"' in message
     assert "ModuleNotFoundError: No module named 'jinja2'" in message
+    assert "stdout_tail" in message
     assert "stderr_tail" in message
+    assert "stdout-59" in message
+    assert "stderr-59" in message
+    assert "stdout-9" not in message
+    assert "stderr-9" not in message
