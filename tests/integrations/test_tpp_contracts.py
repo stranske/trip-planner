@@ -3,6 +3,7 @@ import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
+from typing import Literal
 from urllib import error as urllib_error
 
 import pytest
@@ -168,7 +169,7 @@ class _FakeHTTPResponse:
     def __enter__(self) -> "_FakeHTTPResponse":
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> bool:
+    def __exit__(self, exc_type, exc, tb) -> Literal[False]:
         del exc_type, exc, tb
         return False
 
@@ -331,7 +332,7 @@ def test_http_transport_opens_breaker_after_consecutive_failures(
         monkeypatch,
         [urllib_error.URLError(ConnectionRefusedError("refused")) for _ in range(5)],
     )
-    registry = {}
+    registry: dict[str, object] = {}
     client = _http_client(
         policy=TPPTransportPolicy(max_attempts=1, breaker_failure_threshold=5),
         breaker_registry=registry,
