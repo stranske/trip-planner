@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 import subprocess
 
+import pytest
+
 from scripts import tpp_migration_guard
 
 
@@ -126,6 +128,12 @@ def test_readme_documents_local_bootstrap_and_optional_integrations() -> None:
 
 def test_tpp_renames_require_recorded_sub_decision_in_pr_body() -> None:
     """Block TPP git mv operations until the PR body records B-1/B-2/B-3."""
+    if not tpp_migration_guard.is_pr_context():
+        pytest.skip(
+            "TPP rename guard requires pull-request diff context; post-merge "
+            "canonical-layout checks cover main."
+        )
+
     ok, message = tpp_migration_guard.enforce_guard()
     assert ok, message
 
@@ -158,4 +166,17 @@ def test_no_production_tpp_imports_from_legacy_app_namespaces() -> None:
         "Production TPP imports must not use trip_planner.app.services/models/clients. "
         "Use trip_planner.integrations.tpp instead.\n"
         f"Offending locations: {', '.join(offenders[:20])}"
+    )
+
+
+def test_tpp_canonical_services_package_exists() -> None:
+    """Canonical TPP service package must exist for migrated modules."""
+    services_dir = Path("trip_planner/integrations/tpp/services")
+    package_init = services_dir / "__init__.py"
+
+    assert services_dir.is_dir(), (
+        "Expected canonical TPP services directory at " "trip_planner/integrations/tpp/services."
+    )
+    assert package_init.is_file(), (
+        "Expected package marker at " "trip_planner/integrations/tpp/services/__init__.py."
     )

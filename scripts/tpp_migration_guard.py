@@ -207,7 +207,7 @@ def load_pr_body() -> str:
     return os.getenv("PR_BODY", "") or _read_pr_body_from_event()
 
 
-def _is_pr_context() -> bool:
+def is_pr_context() -> bool:
     event_name = os.getenv("GITHUB_EVENT_NAME", "").strip().lower()
     if event_name in {"pull_request", "pull_request_target"}:
         return True
@@ -225,7 +225,7 @@ def enforce_guard() -> tuple[bool, str]:
     if not blocked_moves:
         return True, "No guarded TPP rename moves detected."
 
-    if not _is_pr_context():
+    if not is_pr_context():
         return True, "Skipping TPP rename guard outside PR context."
 
     pr_body = load_pr_body()
