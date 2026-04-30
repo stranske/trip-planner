@@ -1,3 +1,5 @@
+import subprocess
+
 from scripts import tpp_migration_guard as guard
 
 
@@ -87,3 +89,47 @@ def test_find_blocked_tpp_moves_only_includes_guarded_tpp_paths() -> None:
         ),
         ("trip_planner/app/models/tpp.py", "trip_planner/integrations/tpp/models.py"),
     ]
+
+
+def test_resolve_diff_ranges_fetches_missing_github_base_ref(monkeypatch) -> None:
+    existing_refs: set[str] = set()
+    fetched_refs: list[str] = []
+
+    def fake_git_ref_exists(ref_name: str) -> bool:
+        return ref_name in existing_refs
+
+    def fake_fetch_remote_ref(ref_name: str) -> None:
+        fetched_refs.append(ref_name)
+        existing_refs.add(f"refs/remotes/origin/{ref_name}")
+
+    monkeypatch.setenv("GITHUB_BASE_REF", "main")
+    monkeypatch.setattr(guard, "_git_ref_exists", fake_git_ref_exists)
+    monkeypatch.setattr(guard, "_fetch_remote_ref", fake_fetch_remote_ref)
+    monkeypatch.setattr(guard, "_git_rev_exists", lambda _rev_name: False)
+
+    assert guard._resolve_diff_ranges() == ["origin/main...HEAD", "origin/main..HEAD"]
+    assert fetched_refs == ["main"]
+
+
+def test_collect_rename_diff_output_falls_back_to_two_dot_diff(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def fake_run_git(args: list[str]) -> str:
+        diff_range = args[-1]
+        calls.append(diff_range)
+        if diff_range == "origin/main...HEAD":
+            raise subprocess.CalledProcessError(returncode=128, cmd=args)
+        return (
+            "R100\ttrip_planner/app/services/tpp_result_service.py\t"
+            "trip_planner/integrations/tpp/services/results.py\n"
+        )
+
+    monkeypatch.setattr(
+        guard,
+        "_resolve_diff_ranges",
+        lambda: ["origin/main...HEAD", "origin/main..HEAD"],
+    )
+    monkeypatch.setattr(guard, "_run_git", fake_run_git)
+
+    assert guard._collect_rename_diff_output().startswith("R100\t")
+    assert calls == ["origin/main...HEAD", "origin/main..HEAD"]

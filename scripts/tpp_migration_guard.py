@@ -109,18 +109,76 @@ def _git_ref_exists(ref_name: str) -> bool:
     return result.returncode == 0
 
 
-def _resolve_diff_range() -> str:
-    base_ref = os.getenv("GITHUB_BASE_REF", "").strip()
-    if base_ref and _git_ref_exists(f"refs/remotes/origin/{base_ref}"):
-        return f"origin/{base_ref}...HEAD"
+def _git_rev_exists(rev_name: str) -> bool:
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", rev_name],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
 
-    if _git_ref_exists("refs/remotes/origin/main"):
-        return "origin/main...HEAD"
+
+def _fetch_remote_ref(ref_name: str) -> None:
+    subprocess.run(
+        [
+            "git",
+            "fetch",
+            "--no-tags",
+            "--depth=1",
+            "origin",
+            f"{ref_name}:refs/remotes/origin/{ref_name}",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _remote_ref_exists(ref_name: str) -> bool:
+    remote_ref = f"refs/remotes/origin/{ref_name}"
+    if not _git_ref_exists(remote_ref):
+        _fetch_remote_ref(ref_name)
+    return _git_ref_exists(remote_ref)
+
+
+def _add_remote_diff_ranges(candidates: list[str], ref_name: str) -> None:
+    if _remote_ref_exists(ref_name):
+        candidates.extend([f"origin/{ref_name}...HEAD", f"origin/{ref_name}..HEAD"])
+
+
+def _resolve_diff_ranges() -> list[str]:
+    candidates: list[str] = []
+    base_ref = os.getenv("GITHUB_BASE_REF", "").strip()
+    if base_ref:
+        _add_remote_diff_ranges(candidates, base_ref)
+
+    _add_remote_diff_ranges(candidates, "main")
 
     if _git_ref_exists("refs/heads/main"):
-        return "main...HEAD"
+        candidates.extend(["main...HEAD", "main..HEAD"])
 
-    return "HEAD~1..HEAD"
+    if _git_rev_exists("HEAD~1"):
+        candidates.append("HEAD~1..HEAD")
+
+    return list(dict.fromkeys(candidates))
+
+
+def _collect_rename_diff_output() -> str:
+    errors: list[str] = []
+    diff_ranges = _resolve_diff_ranges()
+    if not diff_ranges:
+        return ""
+
+    for diff_range in diff_ranges:
+        try:
+            return _run_git(
+                ["diff", "--name-status", "--find-renames", "--diff-filter=R", diff_range]
+            )
+        except (subprocess.CalledProcessError, OSError, ValueError) as exc:
+            errors.append(f"{diff_range}: {exc}")
+
+    raise RuntimeError("; ".join(errors))
 
 
 def _read_pr_body_from_event() -> str:
@@ -158,11 +216,8 @@ def _is_pr_context() -> bool:
 
 def enforce_guard() -> tuple[bool, str]:
     try:
-        diff_range = _resolve_diff_range()
-        diff_output = _run_git(
-            ["diff", "--name-status", "--find-renames", "--diff-filter=R", diff_range]
-        )
-    except (subprocess.CalledProcessError, OSError, ValueError) as exc:
+        diff_output = _collect_rename_diff_output()
+    except (subprocess.CalledProcessError, OSError, RuntimeError, ValueError) as exc:
         return False, f"Unable to evaluate git renames for the TPP migration guard: {exc}"
 
     rename_records = parse_rename_records(diff_output)
