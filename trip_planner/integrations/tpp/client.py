@@ -161,20 +161,14 @@ class TPPTransportPolicy:
     def from_env(cls) -> "TPPTransportPolicy":
         default_read_timeout = _env_float("TPP_TIMEOUT_SECONDS", 15.0)
         return cls(
-            connect_timeout_seconds=_env_float(
-                "TPP_TRANSPORT_CONNECT_TIMEOUT_SECONDS", 5.0
-            ),
+            connect_timeout_seconds=_env_float("TPP_TRANSPORT_CONNECT_TIMEOUT_SECONDS", 5.0),
             read_timeout_seconds=_env_float(
                 "TPP_TRANSPORT_READ_TIMEOUT_SECONDS", default_read_timeout
             ),
             max_attempts=_env_int("TPP_TRANSPORT_MAX_ATTEMPTS", 3),
-            backoff_initial_seconds=_env_float(
-                "TPP_TRANSPORT_BACKOFF_INITIAL_SECONDS", 0.5
-            ),
+            backoff_initial_seconds=_env_float("TPP_TRANSPORT_BACKOFF_INITIAL_SECONDS", 0.5),
             backoff_max_seconds=_env_float("TPP_TRANSPORT_BACKOFF_MAX_SECONDS", 4.0),
-            breaker_failure_threshold=_env_int(
-                "TPP_TRANSPORT_BREAKER_FAILURE_THRESHOLD", 5
-            ),
+            breaker_failure_threshold=_env_int("TPP_TRANSPORT_BREAKER_FAILURE_THRESHOLD", 5),
             breaker_reset_seconds=_env_float("TPP_TRANSPORT_BREAKER_RESET_SECONDS", 30.0),
         )
 
@@ -363,7 +357,9 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         self._sleep = sleep or time.sleep
         self._clock = clock or time.monotonic
         self._jitter = jitter or random.uniform
-        self._breaker_registry = breaker_registry if breaker_registry is not None else self._breakers
+        self._breaker_registry = (
+            breaker_registry if breaker_registry is not None else self._breakers
+        )
 
     def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         if request.operation == "fetch_policy_constraints":
@@ -465,7 +461,11 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             method=method,
         )
         try:
-            with urllib_request.urlopen(request, timeout=self.policy.read_timeout_seconds) as response:
+            with urllib_request.urlopen(
+                request,
+                timeout=self.policy.connect_timeout_seconds,
+            ) as response:
+                self._apply_read_timeout(response)
                 status_code = response.status
                 raw_body = response.read().decode("utf-8")
         except urllib_error.HTTPError as exc:
@@ -478,8 +478,16 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 status_code=exc.code,
                 body_excerpt=raw_body,
             ) from exc
-        except (urllib_error.URLError, TimeoutError, socket.timeout, ConnectionError, OSError) as exc:
-            transport_error = tpp_transport_error_from_exception(exc, operation="request", path=path)
+        except (
+            urllib_error.URLError,
+            TimeoutError,
+            socket.timeout,
+            ConnectionError,
+            OSError,
+        ) as exc:
+            transport_error = tpp_transport_error_from_exception(
+                exc, operation="request", path=path
+            )
             if transport_error is None:
                 raise
             raise transport_error from exc
@@ -498,6 +506,16 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         if not isinstance(payload, dict):
             raise TPPContractError(f"TPP request to {path} returned a non-object JSON payload.")
         return payload
+
+    def _apply_read_timeout(self, response: Any) -> None:
+        # urllib does not expose separate connect/read timeout knobs; apply read timeout
+        # on the opened socket when accessible and otherwise fall back silently.
+        sock = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
+        if sock is None:
+            return
+        settimeout = getattr(sock, "settimeout", None)
+        if callable(settimeout):
+            settimeout(self.policy.read_timeout_seconds)
 
     def _retry_delay(self, attempt: int) -> float:
         delay = min(

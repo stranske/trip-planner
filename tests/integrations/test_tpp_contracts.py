@@ -185,8 +185,7 @@ def _http_client(
             access_token="token-123",
             oidc_provider="okta",
         ),
-        policy=policy
-        or TPPTransportPolicy(backoff_initial_seconds=0.0, backoff_max_seconds=0.0),
+        policy=policy or TPPTransportPolicy(backoff_initial_seconds=0.0, backoff_max_seconds=0.0),
         sleep=lambda _delay: None,
         clock=clock,
         jitter=lambda _start, _end: 0.0,
@@ -283,6 +282,29 @@ def test_http_transport_retries_server_errors_then_surfaces_typed_error(
     assert exc_info.value.retryable is True
 
 
+def test_http_transport_uses_connect_timeout_policy_for_urlopen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_timeouts: list[float] = []
+    _install_urlopen(
+        monkeypatch,
+        [_FakeHTTPResponse(200, {"ok": True})],
+        captured_timeouts=captured_timeouts,
+    )
+    client = _http_client(
+        policy=TPPTransportPolicy(
+            connect_timeout_seconds=2.5,
+            read_timeout_seconds=9.0,
+            max_attempts=1,
+        )
+    )
+
+    payload = client._request_json(method="POST", path="/api/ok", json_payload={})
+
+    assert payload == {"ok": True}
+    assert captured_timeouts == [2.5]
+
+
 def test_http_transport_classifies_connection_timeout_unauthorized_and_invalid_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -361,9 +383,7 @@ def test_http_transport_half_open_success_closes_breaker(
     assert open_breaker.value.error_code == "breaker_open"
 
     current_time = 11.0
-    assert client._request_json(method="POST", path="/api/down", json_payload={}) == {
-        "ok": True
-    }
+    assert client._request_json(method="POST", path="/api/down", json_payload={}) == {"ok": True}
 
     current_time = 12.0
     with pytest.raises(TPPTransportError) as after_close:
