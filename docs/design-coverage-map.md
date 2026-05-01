@@ -4,8 +4,8 @@ This document maps every major design commitment in `trip-planner` to source cod
 It distinguishes docs-only claims from tested implementations so weekly reviews can assess real delivery status
 without re-reading every design doc.
 
-**Last updated:** 2026-04-28  
-**Test suite baseline:** 524 passed, 3 xfailed  
+**Last updated:** 2026-04-30  
+**Test suite baseline:** 524 passed, 1 xfailed (was 3; two resolved by issue #1046 audit — see `tests/planner/MIGRATIONS.md`)  
 **Source baseline:** 159 Python modules (~21.5 K LOC), 84 test modules (~18 K LOC), 38 TypeScript/React files
 
 ---
@@ -189,14 +189,14 @@ Issues: `#676` (epic), `#687`–`#689`
 Design ref: [`docs/runtime-planning-services-epic.md`](runtime-planning-services-epic.md)  
 Issues: `#677` (epic), `#690`–`#693`
 
-> **Partial / xfailed.** The workspace service imports all four service outputs, but three of the four are backed by seeded fixture branches rather than arbitrary persisted trips. One acceptance test (`test_planner_turn_surfaces_runtime_planning_services_outputs`) is marked `xfail` and tracks this gap.
+> **Partial / xfailed.** Inventory bundle assembly (`#690`) and feasibility (`#691`) are now surfaced via top-level keys of the dict returned by `get_workspace_payload` — specifically `inventory_summary` (with the assembled bundles nested inside) and `feasibility_summary`. Ranking (`#692`) is computed inside `_build_planner_panel_state` rather than surfaced as a top-level key, and the route/scenario comparison output (`#693`) is exposed under `runtime_scenario_comparison` rather than the documented `route_comparison` shape. The narrowed acceptance test (`test_planner_turn_surfaces_runtime_planning_services_outputs`) is now `strict=True` and tracks only those two remaining gaps; surfacing both flips the test to XPASS and forces the implementer to delete the xfail. (Issue #1046 audit, 2026-04-30.)
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
-| Inventory bundle assembly surfaced in workspace (`#690`) | `trip_planner/app/services/inventory.py` | `tests/app/test_inventory.py` | 🟡 Partial (seeded trip IDs only) |
-| Feasibility + move-cost evaluation in planner outputs (`#691`) | `trip_planner/app/services/feasibility.py` | `tests/app/test_workspace.py` | 🟡 Partial |
-| Ranking + scenario-generation services with workspace results (`#692`) | `trip_planner/app/services/scenarios.py` | `tests/app/test_workspace.py` | 🟡 Partial (fixture branch present) |
-| Route-search + scenario-comparison in workspace (`#693`) | `trip_planner/app/services/workspace.py` (`_build_runtime_scenario_comparison`) | `tests/planner/test_planner_turn_acceptance.py` (xfail) | 🟡 Partial |
+| Inventory bundle assembly surfaced in workspace (`#690`) | `trip_planner/app/services/inventory.py`, `app/services/workspace.py` (top-level `inventory_summary` key, with assembled `bundles` nested inside) | `tests/app/test_inventory.py` | ✅ Implemented |
+| Feasibility + move-cost evaluation in planner outputs (`#691`) | `trip_planner/app/services/feasibility.py`, `app/services/workspace.py` (top-level `feasibility_summary` key) | `tests/app/test_workspace.py` | ✅ Implemented |
+| Ranking + scenario-generation services with workspace results (`#692`) | `trip_planner/app/services/scenarios.py` (computed inside `_build_planner_panel_state`; not yet surfaced as a top-level workspace key) | `tests/app/test_workspace.py`, `tests/planner/test_planner_turn_acceptance.py` (xfail strict=True) | 🟡 Partial (no top-level `ranking` surface) |
+| Route-search + scenario-comparison in workspace (`#693`) | `trip_planner/app/services/workspace.py` (`_build_runtime_scenario_comparison`; surfaced as `runtime_scenario_comparison`, not the documented `route_comparison` name) | `tests/planner/test_planner_turn_acceptance.py` (xfail strict=True) | 🟡 Partial (naming mismatch) |
 
 **Gap:** Arbitrary persisted trips do not yet receive the same normalized inventory and scenario depth as the two seeded examples (`trip-leisure-kyoto-draft`, `trip-business-client-summit`). Tracked in live-runtime-completion epic `#753` (children `#757`–`#759`).
 
@@ -252,17 +252,18 @@ Issues: `#678` (epic), `#694`–`#697`
 
 Design ref: [`docs/live-tpp-execution-reoptimization-epic.md`](live-tpp-execution-reoptimization-epic.md)
 
-> **Blocked on live TPP transport.** All contracts and seams exist. The acceptance test `test_tpp_approval_flow_round_trip_from_planner_turn` is `xfail`. The CI smoke test (`test_full_product_verification.py`) auto-skips when `LIVE_TPP` config is absent.
+> **Blocked on live TPP transport.** All contracts and seams exist. The planner-turn → TPP round-trip (permission request → approval evidence → confirmation) is exercisable via `HTTPTPPIntegrationClient.submit_proposal` / `fetch_evaluation_result` (used by `app/services/proposal.py`); the original `test_tpp_approval_flow_round_trip_from_planner_turn` xfail was deleted by the issue #1046 audit (2026-04-30) and recorded in `tests/planner/MIGRATIONS.md`. The CI smoke test (`test_full_product_verification.py`) still auto-skips when `LIVE_TPP` config is absent.
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
 | TPP client + policy sync contract | `trip_planner/integrations/tpp/client.py`, `policy_sync.py` | `tests/integrations/test_policy_sync.py`, `test_canonical_state_seam.py` | ✅ Implemented |
 | Proposal lifecycle + submission | `trip_planner/integrations/tpp/submission.py`, `contracts.py` | `tests/integrations/test_submission.py`, `test_tpp_contracts.py` | ✅ Implemented |
 | Result ingestion | `trip_planner/integrations/tpp/results.py` | `tests/integrations/test_results.py` | ✅ Implemented |
+| Planner-turn-driven approval round-trip (in-process) | `trip_planner/app/services/proposal.py` (calls `HTTPTPPIntegrationClient.submit_proposal` + `fetch_evaluation_result`) | `tests/integrations/test_submission.py`, `test_results.py`, `test_tpp_cross_repo_smoke.py` | ✅ Implemented |
 | Reoptimization seam | `trip_planner/integrations/tpp/reoptimization.py` | `tests/integrations/test_reoptimization.py` | 🟡 Partial (seam only; no live round-trip) |
-| Live remote TPP transport | — | `tests/planner/test_planner_turn_acceptance.py::test_tpp_approval_flow_round_trip_from_planner_turn` (xfail) | ❌ Missing |
+| Live remote TPP transport | — | `tests/integrations/test_tpp_cross_repo_smoke.py` (contract-shape only) | ❌ Missing |
 
-**Gap detail (follow-up issue candidate):** The remote TPP call path (`integrations/tpp/client.py`) is not wired to a real HTTP transport. `test_tpp_cross_repo_smoke.py` validates the contract shape, but end-to-end round-trip testing requires a running `Travel-Plan-Permission` instance or a contract-level mock server. Tracked as a follow-on integration in `live-tpp-execution-reoptimization-epic.md`.
+**Gap detail (follow-up issue candidate):** The remote TPP call path (`integrations/tpp/client.py`) is wired to a real HTTP transport (`HTTPTPPIntegrationClient` dispatches via `urllib.request.urlopen`), but it is not yet exercised end-to-end. `test_tpp_cross_repo_smoke.py` validates the contract shape only; live round-trip coverage requires a running `Travel-Plan-Permission` instance behind the `LIVE_TPP` env config plus transport hardening (timeouts/retries/circuit breaker around the existing `urlopen` call). Tracked as a follow-on integration in `live-tpp-execution-reoptimization-epic.md`.
 
 ---
 
@@ -271,13 +272,13 @@ Design ref: [`docs/live-tpp-execution-reoptimization-epic.md`](live-tpp-executio
 Design refs: [`docs/google-maps-platform-hardening-epic.md`](google-maps-platform-hardening-epic.md), [`docs/maps-timeline-comparison-epic.md`](maps-timeline-comparison-epic.md)  
 Issues: `#679` (epic), `#698`–`#700`
 
-> **Partial.** The map adapter boundary and fallback rendering are implemented. Timeline view and dedicated route/context map surface are missing. The acceptance test `test_map_target_uses_typed_route_context_contract` is `xfail`.
+> **Partial.** The map adapter boundary and fallback rendering are implemented. The route-context map contract shipped as a doc + fixture-validation contract (PR #1008) plus the `frontend/src/components/maps/mapSurface.ts` TypeScript surface; the original `test_map_target_uses_typed_route_context_contract` xfail (which incorrectly asserted on a Python type export from `trip_planner.contracts`) was deleted by the issue #1046 audit (2026-04-30) and recorded in `tests/planner/MIGRATIONS.md`. Timeline view (`#698`) and the dedicated map surface UI (`#699`) remain missing.
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
 | Google Maps JS adapter boundary + fallback rendering | `frontend/src/components/maps/TripMap.tsx`, `mapSurface.ts` | `frontend/src/components/maps/mapSurface.test.ts` | ✅ Implemented |
-| Route-context map contract (`docs/contracts/route-context-map-target.md`) | `docs/contracts/route-context-map-target.md` | `tests/contracts/test_route_context_map_target.py` | 🟡 Partial (contract tested; UI not wired) |
-| Timeline view for trip structure + day sequencing (`#698`) | — | `tests/planner/test_planner_turn_acceptance.py::test_map_target_uses_typed_route_context_contract` (xfail) | ❌ Missing |
+| Route-context map contract (`docs/contracts/route-context-map-target.md`) | `docs/contracts/route-context-map-target.md`, `frontend/src/components/maps/mapSurface.ts` | `tests/contracts/test_route_context_map_target.py` | 🟡 Partial (contract tested; UI not wired) |
+| Timeline view for trip structure + day sequencing (`#698`) | — | — | ❌ Missing |
 | Dedicated map surface for route + option context (`#699`) | — | — | ❌ Missing |
 | Saved-scenario + trip comparison views (`#700`) | `frontend/src/components/workspace/ScenarioComparison.tsx`, `components/trips/TripComparison.tsx` | — | 🟡 Partial (components exist; no dedicated tests) |
 | Workspace timeline contract | `docs/workspace_timeline_contract.md` | — | 📄 Docs-only |
@@ -331,7 +332,7 @@ These design commitments have no corresponding source implementation. Each is a 
 
 ## How to Use This Map in Weekly Reviews
 
-1. Check the **xfailed tests** first: `pytest -q tests/planner/test_planner_turn_acceptance.py` shows the three live deferred areas.
+1. Check the **xfailed tests** first: `pytest -q tests/planner/test_planner_turn_acceptance.py` shows the one remaining deferred area (ranking and route_comparison in the workspace payload — see §11).
 2. The **Docs-only** rows in each section identify items that are design commitments but not yet scheduled work.
 3. **Partial** rows identify items where code exists but is seeded/fixture-backed — these are the next implementation lane.
 4. The **Summary: Docs-Only Claims** section lists everything that would require a new issue before implementation can start.

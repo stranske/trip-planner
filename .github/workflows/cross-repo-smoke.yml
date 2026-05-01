@@ -1,0 +1,87 @@
+name: Cross-Repo Smoke
+
+# Gate the planner-side cross-repo contract: run `make full-product-check`
+# against a pinned Travel-Plan-Permission checkout via the local subprocess
+# path that `scripts/check_full_product_verification.py` already supports.
+#
+# Bumping the pin: edit TPP_PINNED_REF below and open a paired PR on the
+# TPP-side cross-repo-smoke job that pins the corresponding trip-planner SHA.
+# See docs/CI_SYSTEM_GUIDE.md ("Cross-repo smoke gate").
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  TPP_PINNED_REF: d7c5c310018f4242e33f7df3d06c0e76f7b79ee9
+
+jobs:
+  cross-repo-full-product:
+    name: cross-repo-full-product
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout trip-planner (PR head)
+        uses: actions/checkout@v4
+        with:
+          path: trip-planner
+
+      - name: Checkout Travel-Plan-Permission at pinned ref
+        uses: actions/checkout@v4
+        with:
+          repository: stranske/Travel-Plan-Permission
+          ref: ${{ env.TPP_PINNED_REF }}
+          path: Travel-Plan-Permission
+
+      - name: Log resolved pinned TPP SHA
+        working-directory: Travel-Plan-Permission
+        run: |
+          echo "TPP_PINNED_REF=${TPP_PINNED_REF}"
+          echo "TPP_RESOLVED_SHA=$(git rev-parse HEAD)"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'trip-planner/frontend/package-lock.json'
+
+      - name: Install trip-planner backend dependencies
+        working-directory: trip-planner
+        run: python -m pip install -e ".[dev]"
+
+      - name: Install Travel-Plan-Permission dependencies
+        working-directory: Travel-Plan-Permission
+        run: |
+          if [ -f pyproject.toml ]; then
+            python -m pip install -e ".[dev]" || python -m pip install -e .
+          elif [ -f setup.py ]; then
+            python -m pip install -e .
+          else
+            echo "No installable Python project layout in TPP checkout" >&2
+            exit 1
+          fi
+
+      - name: Install trip-planner frontend dependencies
+        working-directory: trip-planner
+        run: npm --prefix frontend ci
+
+      - name: Run full-product-check against sibling TPP checkout
+        working-directory: trip-planner
+        env:
+          TPP_REPO_PATH: ${{ github.workspace }}/Travel-Plan-Permission
+          TPP_ACCESS_TOKEN: ci-cross-repo-smoke-token
+          TPP_OIDC_PROVIDER: google
+          LIVE_TPP: required
+        run: |
+          echo "Using TPP_REPO_PATH=${TPP_REPO_PATH}"
+          make full-product-check

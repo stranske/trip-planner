@@ -29,8 +29,12 @@ runtime-production-check:
 runtime-preview-smoke:
 	./scripts/check_production_readiness.sh --preview "${TRIP_PLANNER_PREVIEW_URL}"
 
+# LIVE_TPP: pass --live-tpp <mode> (auto|off|required).  Set LIVE_TPP=required
+# in CI (with TPP_REPO_PATH) to gate on the live cross-repo handshake.
+LIVE_TPP ?= auto
+
 full-product-check:
 	@echo "Live TPP auto-start resolves Python as TPP .venv/bin/python, then uv run from uv.lock, then fails fast; set TPP_BASE_URL to skip auto-start."
-	python scripts/check_full_product_verification.py
+	python scripts/check_full_product_verification.py --live-tpp $(LIVE_TPP)
 
 runtime-full-product-check: full-product-check
