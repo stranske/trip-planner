@@ -16,11 +16,16 @@ import pytest
 import yaml
 
 WORKFLOW_PATH = (
-    Path(__file__).resolve().parents[2] / ".github" / "workflows" / "cross-repo-smoke.yml"
+    Path(__file__).resolve().parents[2]
+    / ".github"
+    / "workflows"
+    / "cross-repo-smoke.yml"
 )
 GATE_WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2] / ".github" / "workflows" / "pr-00-gate.yml"
 )
+CI_GUIDE_PATH = Path(__file__).resolve().parents[2] / "docs" / "CI_SYSTEM_GUIDE.md"
+MAKEFILE_PATH = Path(__file__).resolve().parents[2] / "Makefile"
 
 
 @pytest.fixture(scope="module")
@@ -55,18 +60,21 @@ def test_workflow_checks_out_both_repos(workflow: dict) -> None:
     checkout_steps = [
         step
         for step in job["steps"]
-        if isinstance(step.get("uses"), str) and step["uses"].startswith("actions/checkout@")
+        if isinstance(step.get("uses"), str)
+        and step["uses"].startswith("actions/checkout@")
     ]
     paths = [step.get("with", {}).get("path") for step in checkout_steps]
     assert "trip-planner" in paths, paths
     assert "Travel-Plan-Permission" in paths, paths
 
     planner_step = next(
-        step for step in checkout_steps if step.get("with", {}).get("path") == "trip-planner"
+        step
+        for step in checkout_steps
+        if step.get("with", {}).get("path") == "trip-planner"
     )
-    assert "repository" not in planner_step.get(
-        "with", {}
-    ), "planner checkout should use the PR head repository via default actions/checkout behavior"
+    assert "repository" not in planner_step.get("with", {}), (
+        "planner checkout should use the PR head repository via default actions/checkout behavior"
+    )
 
     tpp_step = next(
         step
@@ -92,7 +100,9 @@ def test_workflow_uses_stable_setup_action_tags(workflow: dict) -> None:
 def test_workflow_runs_full_product_check_with_repo_path(workflow: dict) -> None:
     job = workflow["jobs"]["cross-repo-full-product"]
     run_step = next(
-        step for step in job["steps"] if "make full-product-check" in str(step.get("run", ""))
+        step
+        for step in job["steps"]
+        if "make full-product-check" in str(step.get("run", ""))
     )
     env = run_step.get("env", {})
     assert env.get("TPP_REPO_PATH") == "../Travel-Plan-Permission"
@@ -104,7 +114,9 @@ def test_workflow_runs_full_product_check_with_repo_path(workflow: dict) -> None
 def test_workflow_logs_pinned_and_resolved_tpp_sha(workflow: dict) -> None:
     job = workflow["jobs"]["cross-repo-full-product"]
     log_step = next(
-        step for step in job["steps"] if step.get("name") == "Log resolved pinned TPP SHA"
+        step
+        for step in job["steps"]
+        if step.get("name") == "Log resolved pinned TPP SHA"
     )
     run_script = str(log_step.get("run", ""))
     assert "TPP_PINNED_REF=${TPP_PINNED_REF}" in run_script
@@ -115,8 +127,30 @@ def test_gate_summary_requires_cross_repo_smoke_job() -> None:
     gate = yaml.safe_load(GATE_WORKFLOW_PATH.read_text())
     jobs = gate["jobs"]
 
-    assert jobs["cross-repo-smoke"]["uses"] == "./.github/workflows/cross-repo-smoke.yml"
+    assert (
+        jobs["cross-repo-smoke"]["uses"] == "./.github/workflows/cross-repo-smoke.yml"
+    )
     assert "cross-repo-smoke" in jobs["summary"]["needs"]
+
+
+def test_gate_summary_reports_required_gate_status_context() -> None:
+    gate_text = GATE_WORKFLOW_PATH.read_text()
+
+    assert "CROSS_REPO_RESULT" in gate_text
+    assert "Cross-repo smoke check failed" in gate_text
+    assert "context: 'Gate / gate'" in gate_text
+
+
+def test_ci_guide_matches_make_full_product_check_contract() -> None:
+    guide = CI_GUIDE_PATH.read_text()
+    makefile = MAKEFILE_PATH.read_text()
+
+    assert "make full-product-check" in guide
+    assert "TPP_REPO_PATH=../Travel-Plan-Permission" in guide
+    assert (
+        "python scripts/check_full_product_verification.py --live-tpp $(LIVE_TPP)"
+        in makefile
+    )
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -132,9 +166,9 @@ def test_workflow_passes_actionlint() -> None:
         capture_output=True,
         text=True,
     )
-    assert (
-        result.returncode == 0
-    ), f"actionlint reported errors in {WORKFLOW_PATH.name}:\n{result.stdout}{result.stderr}"
+    assert result.returncode == 0, (
+        f"actionlint reported errors in {WORKFLOW_PATH.name}:\n{result.stdout}{result.stderr}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +215,9 @@ _POLICY_SERVICE_SYMBOLS = [
 ]
 
 
-@pytest.mark.parametrize("symbol", sorted(set(_PROPOSAL_SERVICE_SYMBOLS + _POLICY_SERVICE_SYMBOLS)))
+@pytest.mark.parametrize(
+    "symbol", sorted(set(_PROPOSAL_SERVICE_SYMBOLS + _POLICY_SERVICE_SYMBOLS))
+)
 def test_tpp_integration_exports_required_symbol(symbol: str) -> None:
     """Each symbol must be importable from the public TPP integration package.
 

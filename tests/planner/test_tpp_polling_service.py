@@ -287,6 +287,35 @@ def test_zero_timeout_polls_until_terminal_without_timeout_response() -> None:
     assert sleeps == [1.0, 2.0]
 
 
+def test_zero_timeout_keeps_finite_attempt_guard() -> None:
+    clock = FakeClock()
+    calls = 0
+    sleeps: list[float] = []
+
+    def provider(_request: TPPRequestEnvelope) -> TPPResponseEnvelope:
+        nonlocal calls
+        calls += 1
+        return _response("running", terminal=False)
+
+    def sleeper(seconds: float) -> None:
+        sleeps.append(seconds)
+        clock.sleep(seconds)
+
+    service = TPPPollingService(
+        provider,
+        timeout_seconds=0.0,
+        no_deadline_max_attempts=3,
+        sleeper=sleeper,
+        now=clock.now,
+    )
+
+    response = service.poll(_request())
+
+    assert response.execution_status.state == "timeout"
+    assert sleeps == [1.0, 2.0]
+    assert calls == 3
+
+
 def test_polling_service_rejects_non_callable_provider() -> None:
     with pytest.raises(ValueError, match="poll_response_provider must be callable"):
         TPPPollingService(None, timeout_seconds=1.0)  # type: ignore[arg-type]
@@ -296,4 +325,13 @@ def test_polling_service_rejects_negative_timeout() -> None:
     with pytest.raises(ValueError, match="timeout_seconds must be >= 0"):
         TPPPollingService(
             lambda request: _response("succeeded", terminal=True), timeout_seconds=-1.0
+        )
+
+
+def test_polling_service_rejects_invalid_no_deadline_attempt_guard() -> None:
+    with pytest.raises(ValueError, match="no_deadline_max_attempts must be >= 1"):
+        TPPPollingService(
+            lambda request: _response("succeeded", terminal=True),
+            timeout_seconds=0.0,
+            no_deadline_max_attempts=0,
         )
