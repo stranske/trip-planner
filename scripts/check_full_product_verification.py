@@ -446,6 +446,16 @@ def _tail_file(path: Path, *, line_count: int = 50) -> str:
     return "\n".join(lines[-line_count:])
 
 
+def _stop_process(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:  # pragma: no cover - defensive cleanup
+            process.kill()
+            process.wait(timeout=5)
+
+
 @contextmanager
 def _started_tpp_service(
     env: dict[str, str],
@@ -494,6 +504,7 @@ def _started_tpp_service(
         try:
             _wait_for_http(f"{base_url}/readyz")
         except VerificationFailure as exc:
+            _stop_process(process)
             raise VerificationFailure(
                 "TPP service did not become ready",
                 ready_url=f"{base_url}/readyz",
@@ -506,13 +517,7 @@ def _started_tpp_service(
             ) from exc
         yield base_url, process
     finally:
-        if process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:  # pragma: no cover - defensive cleanup
-                process.kill()
-                process.wait(timeout=5)
+        _stop_process(process)
         stdout_path.unlink(missing_ok=True)
         stderr_path.unlink(missing_ok=True)
 
