@@ -558,6 +558,77 @@ def test_http_transport_half_open_untyped_failure_releases_trial(
     assert client._request_json(method="POST", path="/api/down", json_payload={}) == {"ok": True}
 
 
+def test_http_transport_breaker_is_per_host_and_shared_across_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_urlopen(
+        monkeypatch,
+        [
+            urllib_error.URLError(ConnectionRefusedError("down")),
+            urllib_error.URLError(ConnectionRefusedError("down")),
+        ],
+    )
+    client = _http_client(
+        policy=TPPTransportPolicy(
+            max_attempts=1,
+            breaker_failure_threshold=1,
+            breaker_reset_seconds=60.0,
+        ),
+        breaker_registry={},
+    )
+
+    with pytest.raises(TPPTransportError) as first:
+        client._request_json(method="POST", path="/api/down", json_payload={})
+    assert first.value.error_code == "connection_error"
+
+    with pytest.raises(TPPTransportError) as second:
+        client._request_json(method="POST", path="/api/another", json_payload={})
+    assert second.value.error_code == "breaker_open"
+
+
+def test_http_transport_breaker_is_isolated_per_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_urlopen(
+        monkeypatch,
+        [
+            urllib_error.URLError(ConnectionRefusedError("down")),
+            _FakeHTTPResponse(200, {"ok": True}),
+        ],
+    )
+    shared_registry: dict[tuple[str, str, int], object] = {}
+    failing_client = _http_client(
+        policy=TPPTransportPolicy(
+            max_attempts=1,
+            breaker_failure_threshold=1,
+            breaker_reset_seconds=60.0,
+        ),
+        breaker_registry=shared_registry,
+    )
+    healthy_client = HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url="https://other.example.test",
+            access_token="token-123",
+            oidc_provider="okta",
+        ),
+        policy=TPPTransportPolicy(
+            max_attempts=1,
+            backoff_initial_seconds=0.0,
+            backoff_max_seconds=0.0,
+            breaker_failure_threshold=1,
+            breaker_reset_seconds=60.0,
+        ),
+        sleep=lambda _delay: None,
+        clock=lambda: 0.0,
+        jitter=lambda _start, _end: 0.0,
+        breaker_registry=shared_registry,
+    )
+
+    with pytest.raises(TPPTransportError) as first:
+        failing_client._request_json(method="POST", path="/api/down", json_payload={})
+    assert first.value.error_code == "connection_error"
+
+    assert healthy_client._request_json(method="POST", path="/api/ok", json_payload={}) == {"ok": True}
+
+
 def test_http_transport_integration_against_stub_http_server_reports_server_error() -> None:
     class _Handler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
