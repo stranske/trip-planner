@@ -51,6 +51,7 @@ def _client(base_url: str, *, policy: TPPTransportPolicy | None = None) -> HTTPT
         breaker_registry={},
     )
 
+
 def test_httpserver_surfaces_server_error_after_retry_budget(httpserver: HTTPServer) -> None:
     httpserver.expect_request("/server", method="POST").respond_with_json(
         {"detail": "temporarily unavailable"}, status=503
@@ -96,6 +97,18 @@ def test_httpserver_surfaces_invalid_response(httpserver: HTTPServer) -> None:
     assert exc_info.value.error_code == "invalid_response"
 
 
+def test_httpserver_surfaces_unknown_for_non_retryable_http_status(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/unknown", method="POST").respond_with_json(
+        {"detail": "teapot"}, status=418
+    )
+    client = _client(httpserver.url_for(""))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/unknown", json_payload={})
+
+    assert exc_info.value.error_code == "unknown"
+
+
 def test_httpserver_surfaces_timeout() -> None:
     class SlowBodyHandler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
@@ -136,6 +149,26 @@ def test_httpserver_surfaces_timeout() -> None:
         thread.join(timeout=1.0)
 
     assert exc_info.value.error_code == "timeout"
+
+
+def test_httpserver_surfaces_connection_error() -> None:
+    unreachable_port = 9
+    client = _client(
+        f"http://127.0.0.1:{unreachable_port}",
+        policy=TPPTransportPolicy(
+            connect_timeout_seconds=0.2,
+            read_timeout_seconds=0.2,
+            max_attempts=1,
+            backoff_initial_seconds=0.0,
+            backoff_max_seconds=0.0,
+            breaker_failure_threshold=5,
+        ),
+    )
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/connection", json_payload={})
+
+    assert exc_info.value.error_code == "connection_error"
 
 
 def test_httpserver_breaker_opens_after_consecutive_failures(httpserver: HTTPServer) -> None:
