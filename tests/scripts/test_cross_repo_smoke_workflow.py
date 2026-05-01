@@ -69,6 +69,7 @@ def test_workflow_runs_full_product_check_with_repo_path(workflow: dict) -> None
     )
     env = run_step.get("env", {})
     assert "${{ github.workspace }}/Travel-Plan-Permission" in str(env.get("TPP_REPO_PATH", ""))
+    assert env.get("TPP_OIDC_PROVIDER") in {"azure_ad", "google", "okta"}
     assert "--live-tpp required" in run_step["run"]
 
 

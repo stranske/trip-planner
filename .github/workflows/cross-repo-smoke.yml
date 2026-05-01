@@ -80,7 +80,7 @@ jobs:
         env:
           TPP_REPO_PATH: ${{ github.workspace }}/Travel-Plan-Permission
           TPP_ACCESS_TOKEN: ci-cross-repo-smoke-token
-          TPP_OIDC_PROVIDER: ci-cross-repo-smoke-provider
+          TPP_OIDC_PROVIDER: google
         run: |
           echo "Using TPP_REPO_PATH=${TPP_REPO_PATH}"
           python scripts/check_full_product_verification.py --live-tpp required
