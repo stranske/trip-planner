@@ -1758,7 +1758,10 @@ def _build_planner_panel_state(
                         "body": notice_body,
                         "tags": ["proposal", "transport", "stored-policy", trip["mode"]],
                         "status": "caution",
-                        "highlights": [str(submission_error.get("message") or "")],
+                        "highlights": [
+                            f"error_code={error_code}",
+                            str(submission_error.get("message") or ""),
+                        ],
                     }
                 )
         if follow_up:
