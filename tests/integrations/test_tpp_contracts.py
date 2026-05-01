@@ -199,11 +199,14 @@ def _install_urlopen(
     responses: list[_FakeHTTPResponse | Exception],
     *,
     captured_timeouts: list[float] | None = None,
+    call_counter: list[int] | None = None,
 ) -> None:
     queue = list(responses)
 
     def _fake_urlopen(request, timeout=0):
         del request
+        if call_counter is not None:
+            call_counter[0] += 1
         if captured_timeouts is not None:
             captured_timeouts.append(timeout)
         response = queue.pop(0)
@@ -259,6 +262,7 @@ def test_transport_policy_defaults_and_env_overrides(monkeypatch: pytest.MonkeyP
 def test_http_transport_retries_server_errors_then_surfaces_typed_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    call_counter = [0]
     _install_urlopen(
         monkeypatch,
         [
@@ -266,6 +270,7 @@ def test_http_transport_retries_server_errors_then_surfaces_typed_error(
             _FakeHTTPResponse(503, {"detail": "still later"}),
             _FakeHTTPResponse(503, {"detail": "failed"}),
         ],
+        call_counter=call_counter,
     )
     client = _http_client(
         policy=TPPTransportPolicy(
@@ -281,6 +286,7 @@ def test_http_transport_retries_server_errors_then_surfaces_typed_error(
 
     assert exc_info.value.error_code == "server_error"
     assert exc_info.value.retryable is True
+    assert call_counter[0] == 3
 
 
 def test_http_transport_uses_connect_timeout_policy_for_urlopen(
@@ -388,8 +394,11 @@ def test_http_transport_half_open_success_closes_breaker(
         client._request_json(method="POST", path="/api/down", json_payload={})
     assert open_breaker.value.error_code == "breaker_open"
 
+    breaker = next(iter(client._breaker_registry.values()))
+    assert breaker.state == "open"
     current_time = 11.0
     assert client._request_json(method="POST", path="/api/down", json_payload={}) == {"ok": True}
+    assert breaker.state == "closed"
 
     current_time = 12.0
     with pytest.raises(TPPTransportError) as after_close:
