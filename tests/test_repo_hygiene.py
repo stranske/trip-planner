@@ -240,3 +240,36 @@ def test_acceptance_xfail_strictness_guard_rejects_non_strict() -> None:
     assert "xfail without strict=True" in result.stderr, (
         "Expected violation message not found in stderr.\n" f"stderr:\n{result.stderr}"
     )
+
+
+def test_acceptance_xfail_strictness_guard_rejects_bare_name_xfail() -> None:
+    """Guard must reject `@xfail` (bare-Name decorator) used without parentheses.
+
+    Covers the AST ``Name`` form when ``xfail`` is imported directly
+    (``from pytest import xfail``) and applied without arguments. Without this
+    case, a non-strict xfail can bypass the ratchet — see issue #1046 review
+    feedback on PR #1059.
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fake_test = Path(tmpdir) / "test_bare_name_xfail.py"
+        fake_test.write_text(
+            "from pytest import xfail\n\n"
+            "@xfail\n"
+            "def test_bare_name_missing_strict() -> None:\n"
+            "    pass\n",
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [sys.executable, "scripts/check_xfail_strictness.py", tmpdir],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+    assert result.returncode != 0, (
+        "scripts/check_xfail_strictness.py should have rejected the bare-Name "
+        "@xfail decorator but returned exit code 0."
+    )
+    assert "xfail without strict=True" in result.stderr, (
+        "Expected violation message not found in stderr.\n" f"stderr:\n{result.stderr}"
+    )

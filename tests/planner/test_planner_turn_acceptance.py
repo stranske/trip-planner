@@ -57,8 +57,9 @@ def test_planner_turn_surfaces_runtime_planning_services_outputs() -> None:
     - ranking and scenario generation (#692)
     - route search and scenario comparison (#693)
 
-    The 2026-04-30 audit (issue #1046) confirmed that #690 (``inventory_bundle``)
-    and #691 (``feasibility``) are now surfaced as top-level keys of the dict
+    The 2026-04-30 audit (issue #1046) confirmed that #690 (surfaced as
+    ``inventory_summary``, with the assembled bundles nested inside) and #691
+    (surfaced as ``feasibility_summary``) are now top-level keys of the dict
     returned by ``get_workspace_payload``. The two children that remain
     deferred — #692 (``ranking``) and #693 (``route_comparison``) — are still
     only reachable indirectly: ranking is computed inside

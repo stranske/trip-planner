@@ -98,12 +98,15 @@ def _violations_in_file(path: Path) -> list[tuple[int, str]]:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             continue
         for decorator in node.decorator_list:
-            # @pytest.mark.xfail without parentheses — AST gives an Attribute, not a Call.
-            # No parentheses means no strict= keyword at all, so always non-strict.
-            if isinstance(decorator, ast.Attribute):
+            # @pytest.mark.xfail / @mark.xfail / @xfail without parentheses — AST gives
+            # an Attribute or a bare Name, not a Call. No parentheses means no strict=
+            # keyword at all, so always non-strict.
+            if isinstance(decorator, (ast.Attribute, ast.Name)):
                 chain = _decorator_attribute_chain(decorator)
-                if chain[-1] == "xfail" and (
-                    chain == ["xfail"] or chain[-2:] == ["mark", "xfail"]
+                if (
+                    chain
+                    and chain[-1] == "xfail"
+                    and (chain == ["xfail"] or chain[-2:] == ["mark", "xfail"])
                 ):
                     if not _line_has_exemption(source_lines, decorator.lineno):
                         violations.append(
