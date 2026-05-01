@@ -36,6 +36,7 @@ jobs:
           repository: stranske/Travel-Plan-Permission
           ref: ${{ env.TPP_PINNED_REF }}
           path: Travel-Plan-Permission
+          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
 
       - name: Log resolved pinned TPP SHA
         working-directory: Travel-Plan-Permission
@@ -44,12 +45,12 @@ jobs:
           echo "TPP_RESOLVED_SHA=$(git rev-parse HEAD)"
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -78,7 +79,7 @@ jobs:
       - name: Run full-product-check against sibling TPP checkout
         working-directory: trip-planner
         env:
-          TPP_REPO_PATH: ${{ github.workspace }}/Travel-Plan-Permission
+          TPP_REPO_PATH: ../Travel-Plan-Permission
           TPP_ACCESS_TOKEN: ci-cross-repo-smoke-token
           TPP_OIDC_PROVIDER: google
           LIVE_TPP: required

@@ -36,10 +36,12 @@ class TPPPollingService:
     ) -> None:
         if not callable(poll_response_provider):
             raise ValueError("poll_response_provider must be callable")
-        if timeout_seconds <= 0:
-            raise ValueError("timeout_seconds must be > 0")
+        if timeout_seconds < 0:
+            raise ValueError("timeout_seconds must be >= 0")
         self._poll_response_provider = poll_response_provider
-        self._timeout_seconds = timeout_seconds
+        self._timeout_seconds: float | None = (
+            timeout_seconds if timeout_seconds > 0 else None
+        )
         self._sleeper = sleeper
         self._now = now
 
@@ -48,23 +50,31 @@ class TPPPollingService:
             raise ValueError("request must be a TPPRequestEnvelope")
 
         started_at = self._now()
-        deadline = started_at + self._timeout_seconds
+        deadline = (
+            None
+            if self._timeout_seconds is None
+            else started_at + self._timeout_seconds
+        )
         attempt = 1
 
         while True:
-            envelope = self._normalize_poll_response(self._poll_response_provider(request))
+            envelope = self._normalize_poll_response(
+                self._poll_response_provider(request)
+            )
             if self._is_terminal(envelope):
                 return envelope
 
-            remaining = deadline - self._now()
-            if remaining <= 0:
-                return self._timeout_response(request)
+            wait_seconds = _next_wait(attempt)
+            if deadline is not None:
+                remaining = deadline - self._now()
+                if remaining <= 0:
+                    return self._timeout_response(request)
+                wait_seconds = min(wait_seconds, remaining)
 
-            wait_seconds = min(_next_wait(attempt), remaining)
             self._sleeper(wait_seconds)
             attempt += 1
 
-            if self._now() >= deadline:
+            if deadline is not None and self._now() >= deadline:
                 return self._timeout_response(request)
 
     def _normalize_poll_response(
