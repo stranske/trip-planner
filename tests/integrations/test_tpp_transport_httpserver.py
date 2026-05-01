@@ -1,4 +1,6 @@
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
@@ -76,14 +78,27 @@ def test_httpserver_surfaces_invalid_response(httpserver: HTTPServer) -> None:
     assert exc_info.value.error_code == "invalid_response"
 
 
-def test_httpserver_surfaces_timeout(httpserver: HTTPServer) -> None:
-    def _slow_response(_request):
-        time.sleep(0.15)
-        return "slow"
+def test_httpserver_surfaces_timeout() -> None:
+    class SlowBodyHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "12")
+            self.end_headers()
+            time.sleep(0.25)
+            try:
+                self.wfile.write(b'{"ok": true}')
+            except BrokenPipeError:
+                pass
 
-    httpserver.expect_request("/timeout", method="POST").respond_with_handler(_slow_response)
+        def log_message(self, _format: str, *args: object) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), SlowBodyHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
     client = _client(
-        httpserver.url_for(""),
+        f"http://127.0.0.1:{server.server_port}",
         policy=TPPTransportPolicy(
             connect_timeout_seconds=1.0,
             read_timeout_seconds=0.05,
@@ -94,8 +109,13 @@ def test_httpserver_surfaces_timeout(httpserver: HTTPServer) -> None:
         ),
     )
 
-    with pytest.raises(TPPTransportError) as exc_info:
-        client._request_json(method="POST", path="/timeout", json_payload={})
+    try:
+        with pytest.raises(TPPTransportError) as exc_info:
+            client._request_json(method="POST", path="/timeout", json_payload={})
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1.0)
 
     assert exc_info.value.error_code == "timeout"
 
