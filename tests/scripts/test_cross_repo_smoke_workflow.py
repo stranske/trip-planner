@@ -46,6 +46,13 @@ def test_workflow_pins_tpp_ref(workflow: dict) -> None:
     assert re.fullmatch(r"[0-9a-f]{40}", pinned), pinned
 
 
+def test_workflow_call_declares_optional_cross_repo_token(workflow: dict) -> None:
+    workflow_call = workflow.get(True, {}).get("workflow_call", {})
+    secrets = workflow_call.get("secrets", {})
+
+    assert secrets.get("CROSS_REPO_TOKEN") == {"required": False}
+
+
 def test_workflow_checks_out_both_repos(workflow: dict) -> None:
     job = workflow["jobs"]["cross-repo-full-product"]
     checkout_steps = [

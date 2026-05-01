@@ -15,6 +15,9 @@ on:
     branches: [main]
   workflow_dispatch:
   workflow_call:
+    secrets:
+      CROSS_REPO_TOKEN:
+        required: false
 
 env:
   TPP_PINNED_REF: d7c5c310018f4242e33f7df3d06c0e76f7b79ee9

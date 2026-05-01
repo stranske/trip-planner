@@ -131,6 +131,11 @@ env:
 CI logs print both `TPP_PINNED_REF` and the resolved SHA so the actually
 checked-out commit is easy to verify.
 
+When this workflow runs through `workflow_call`, the optional `CROSS_REPO_TOKEN`
+secret is preferred for the pinned TPP checkout and falls back to `github.token`.
+Callers should pass it with `secrets: inherit` when the default token cannot read
+the pinned repo or ref.
+
 #### Bumping the pin
 
 The pin is intentionally manual so a TPP-side breakage cannot land green by

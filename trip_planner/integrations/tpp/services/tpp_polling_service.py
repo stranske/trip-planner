@@ -22,7 +22,11 @@ def _next_wait(attempt: int) -> float:
 
 
 class TPPPollingService:
-    """Drive polling to terminal state or timeout and return a response envelope."""
+    """Drive polling to terminal state or timeout and return a response envelope.
+
+    Set ``timeout_seconds`` to ``0`` only when the provider is expected to
+    eventually return a terminal state; that disables the polling deadline.
+    """
 
     def __init__(
         self,
