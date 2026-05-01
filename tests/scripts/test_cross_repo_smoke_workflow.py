@@ -150,3 +150,54 @@ def test_tpp_integration_exports_required_symbol(symbol: str) -> None:
         "Removing this export breaks the live planner-TPP handshake and will fail the "
         "cross-repo-smoke CI job."
     )
+
+
+# ---------------------------------------------------------------------------
+# Client method guards (AC#2 — method-level surface)
+#
+# The cross-repo handshake depends on specific methods of BaseTPPIntegrationClient
+# and HTTPTPPIntegrationClient.  Removing `submit_proposal` (or any method below)
+# from the client class — even if the class itself remains exported — breaks the
+# TPP dispatch path and causes `full-product-check --live-tpp required` to fail.
+# ---------------------------------------------------------------------------
+
+# Operations that form the cross-repo dispatch contract.
+# Grouped to match the four TPP workflow phases: policy-sync, submission,
+# result-ingestion, and status-poll.
+_CLIENT_CONTRACT_METHODS = [
+    "fetch_policy_constraints",  # policy-sync path
+    "submit_proposal",  # submission path (mentioned in AC#2)
+    "fetch_evaluation_result",  # result-ingestion path
+    "poll_execution_status",  # status-poll path
+]
+
+
+@pytest.mark.parametrize("method_name", _CLIENT_CONTRACT_METHODS)
+def test_base_client_exposes_contract_method(method_name: str) -> None:
+    """BaseTPPIntegrationClient must expose every dispatch method.
+
+    Removing any of these breaks the planner → TPP handshake and fails the
+    cross-repo-smoke CI job (AC#2 failure-mode guard).
+    """
+    mod = importlib.import_module("trip_planner.integrations.tpp")
+    cls = mod.BaseTPPIntegrationClient
+    assert callable(getattr(cls, method_name, None)), (
+        f"BaseTPPIntegrationClient.{method_name} is missing or not callable. "
+        "This breaks the cross-repo dispatch contract and will fail the smoke job."
+    )
+
+
+@pytest.mark.parametrize("method_name", _CLIENT_CONTRACT_METHODS)
+def test_http_client_exposes_contract_method(method_name: str) -> None:
+    """HTTPTPPIntegrationClient must expose every dispatch method.
+
+    The HTTP client is the concrete implementation used in production and in
+    the full-product-check subprocess; a missing method causes an AttributeError
+    at runtime and exits the smoke job non-zero.
+    """
+    mod = importlib.import_module("trip_planner.integrations.tpp")
+    cls = mod.HTTPTPPIntegrationClient
+    assert callable(getattr(cls, method_name, None)), (
+        f"HTTPTPPIntegrationClient.{method_name} is missing or not callable. "
+        "This breaks the live cross-repo handshake and will fail the smoke job."
+    )
