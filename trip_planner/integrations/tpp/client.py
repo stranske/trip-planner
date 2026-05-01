@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import math
 import os
 import random
 import socket
+import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -136,9 +138,12 @@ def _env_float(name: str, default: float) -> float:
     if not raw:
         return default
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError as exc:
         raise TPPConfigurationError(f"{name} must be a numeric value when provided.") from exc
+    if not math.isfinite(value):
+        raise TPPConfigurationError(f"{name} must be a finite numeric value when provided.")
+    return value
 
 
 def _env_int(name: str, default: int) -> int:
@@ -168,12 +173,12 @@ class TPPTransportPolicy:
             "breaker_reset_seconds",
         ):
             value = float(getattr(self, field_name))
-            if value <= 0:
+            if not math.isfinite(value) or value <= 0:
                 raise TPPConfigurationError(f"{field_name} must be greater than 0.")
             setattr(self, field_name, value)
         for field_name in ("backoff_initial_seconds", "backoff_max_seconds"):
             value = float(getattr(self, field_name))
-            if value < 0:
+            if not math.isfinite(value) or value < 0:
                 raise TPPConfigurationError(f"{field_name} must not be negative.")
             setattr(self, field_name, value)
         for field_name in ("max_attempts", "breaker_failure_threshold"):
@@ -204,52 +209,57 @@ class _CircuitBreaker:
         self.opened_at: float | None = None
         self.half_open = False
         self._half_open_trial_in_flight = False
+        self._lock = threading.RLock()
 
     @property
     def state(self) -> str:
-        if self.opened_at is None:
-            return "closed"
-        if self.half_open:
-            return "half-open"
-        return "open"
+        with self._lock:
+            if self.opened_at is None:
+                return "closed"
+            if self.half_open:
+                return "half-open"
+            return "open"
 
     def before_request(self, *, policy: TPPTransportPolicy, now: float, host: str) -> None:
-        if self.opened_at is None:
-            return
-        if now - self.opened_at < policy.breaker_reset_seconds:
-            raise TPPTransportError(
-                f"TPP circuit breaker is open for {host}; retry after the reset window.",
-                error_code="breaker_open",
-                status_code=503,
-                retryable=True,
-            )
-        self.half_open = True
-        if self._half_open_trial_in_flight:
-            raise TPPTransportError(
-                f"TPP circuit breaker is half-open for {host}; trial already in flight.",
-                error_code="breaker_open",
-                status_code=503,
-                retryable=True,
-            )
-        self._half_open_trial_in_flight = True
+        with self._lock:
+            if self.opened_at is None:
+                return
+            if now - self.opened_at < policy.breaker_reset_seconds:
+                raise TPPTransportError(
+                    f"TPP circuit breaker is open for {host}; retry after the reset window.",
+                    error_code="breaker_open",
+                    status_code=503,
+                    retryable=True,
+                )
+            self.half_open = True
+            if self._half_open_trial_in_flight:
+                raise TPPTransportError(
+                    f"TPP circuit breaker is half-open for {host}; trial already in flight.",
+                    error_code="breaker_open",
+                    status_code=503,
+                    retryable=True,
+                )
+            self._half_open_trial_in_flight = True
 
     def record_success(self) -> None:
-        self.failures = 0
-        self.opened_at = None
-        self.half_open = False
-        self._half_open_trial_in_flight = False
+        with self._lock:
+            self.failures = 0
+            self.opened_at = None
+            self.half_open = False
+            self._half_open_trial_in_flight = False
 
     def record_failure(self, *, policy: TPPTransportPolicy, now: float) -> None:
-        if self.half_open:
-            self.opened_at = now
-            self.half_open = False
-            self._half_open_trial_in_flight = False
-            return
-        self.failures += 1
-        if self.failures >= policy.breaker_failure_threshold:
-            self.opened_at = now
-            self.half_open = False
-            self._half_open_trial_in_flight = False
+        with self._lock:
+            if self.half_open:
+                self.opened_at = now
+                self.half_open = False
+                self._half_open_trial_in_flight = False
+                return
+            self.failures += 1
+            if self.failures >= policy.breaker_failure_threshold:
+                self.opened_at = now
+                self.half_open = False
+                self._half_open_trial_in_flight = False
 
 
 def tpp_transport_error_from_exception(
@@ -308,7 +318,7 @@ def _http_status_error(*, path: str, status_code: int, body_excerpt: str) -> TPP
         return TPPTransportError(
             message,
             error_code="unauthorized",
-            status_code=401,
+            status_code=status_code,
             retryable=False,
         )
     if 500 <= status_code <= 599:
@@ -363,8 +373,10 @@ class TPPRuntimeSettings:
                 raise TPPConfigurationError(
                     "TPP_TIMEOUT_SECONDS must be a numeric value when provided."
                 ) from exc
-            if timeout_seconds <= 0:
-                raise TPPConfigurationError("TPP_TIMEOUT_SECONDS must be greater than 0.")
+            if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+                raise TPPConfigurationError(
+                    "TPP_TIMEOUT_SECONDS must be a finite value greater than 0."
+                )
 
         return cls(
             base_url=base_url.rstrip("/"),
@@ -378,6 +390,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
     """Executes TPP operations over the planner-facing HTTP seam."""
 
     _breakers: ClassVar[dict[tuple[str, str, int], _CircuitBreaker]] = {}
+    _breaker_registry_lock: ClassVar[threading.Lock] = threading.Lock()
 
     def __init__(
         self,
@@ -439,7 +452,8 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
     ) -> dict[str, Any]:
         url = f"{self.settings.base_url}{path}"
         breaker_key = self._breaker_key(url)
-        breaker = self._breaker_registry.setdefault(breaker_key, _CircuitBreaker())
+        with self._breaker_registry_lock:
+            breaker = self._breaker_registry.setdefault(breaker_key, _CircuitBreaker())
         host_label = self._host_label(breaker_key)
         last_error: TPPTransportError | None = None
 
@@ -456,16 +470,28 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                     url=url,
                     json_payload=json_payload,
                 )
-            except TPPTransportError as exc:
-                last_error = exc
-                if exc.error_code != "breaker_open":
+            except Exception as exc:
+                transport_error = tpp_transport_error_from_exception(
+                    exc,
+                    operation=method,
+                    path=path,
+                ) or TPPTransportError(
+                    f"TPP request to {path} failed: {exc}.",
+                    error_code="unknown",
+                    status_code=502,
+                    retryable=False,
+                )
+                if transport_error is not exc:
+                    transport_error.__cause__ = exc
+                last_error = transport_error
+                if transport_error.error_code != "breaker_open":
                     breaker.record_failure(policy=self.policy, now=self._clock())
                 if (
-                    exc.error_code == "breaker_open"
-                    or not exc.retryable
+                    transport_error.error_code == "breaker_open"
+                    or not transport_error.retryable
                     or attempt >= self.policy.max_attempts
                 ):
-                    raise
+                    raise transport_error
                 delay = self._retry_delay(attempt)
                 if delay > 0:
                     self._sleep(delay)
@@ -504,7 +530,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             ) as response:
                 self._apply_read_timeout(response)
                 status_code = response.status
-                raw_body = response.read().decode("utf-8")
+                raw_body = response.read().decode("utf-8", errors="replace")
         except urllib_error.HTTPError as exc:
             try:
                 raw_body = exc.read().decode("utf-8", errors="replace")
