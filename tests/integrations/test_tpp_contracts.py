@@ -563,6 +563,42 @@ def test_http_transport_half_open_success_closes_breaker(
     assert after_close.value.error_code == "connection_error"
 
 
+def test_http_transport_reset_window_transitions_to_half_open_then_closes_on_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current_time = 0.0
+
+    def _clock() -> float:
+        return current_time
+
+    _install_urlopen(
+        monkeypatch,
+        [
+            urllib_error.URLError(ConnectionRefusedError("refused")),
+            _FakeHTTPResponse(200, {"ok": True}),
+        ],
+    )
+    client = _http_client(
+        policy=TPPTransportPolicy(
+            max_attempts=1,
+            breaker_failure_threshold=1,
+            breaker_reset_seconds=10.0,
+        ),
+        clock=_clock,
+        breaker_registry={},
+    )
+
+    with pytest.raises(TPPTransportError) as first_failure:
+        client._request_json(method="POST", path="/api/down", json_payload={})
+    assert first_failure.value.error_code == "connection_error"
+
+    current_time = 10.0
+    assert client._request_json(method="POST", path="/api/down", json_payload={}) == {"ok": True}
+
+    breaker = next(iter(client._breaker_registry.values()))
+    assert breaker.state == "closed"
+
+
 def test_http_transport_half_open_allows_single_trial_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
