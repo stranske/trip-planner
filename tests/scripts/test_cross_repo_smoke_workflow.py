@@ -64,14 +64,13 @@ def test_workflow_checks_out_both_repos(workflow: dict) -> None:
 def test_workflow_runs_full_product_check_with_repo_path(workflow: dict) -> None:
     job = workflow["jobs"]["cross-repo-full-product"]
     run_step = next(
-        step
-        for step in job["steps"]
-        if "scripts/check_full_product_verification.py" in str(step.get("run", ""))
+        step for step in job["steps"] if "make full-product-check" in str(step.get("run", ""))
     )
     env = run_step.get("env", {})
     assert "${{ github.workspace }}/Travel-Plan-Permission" in str(env.get("TPP_REPO_PATH", ""))
     assert env.get("TPP_OIDC_PROVIDER") in {"azure_ad", "google", "okta"}
-    assert "--live-tpp required" in run_step["run"]
+    assert env.get("LIVE_TPP") == "required"
+    assert "make full-product-check" in run_step["run"]
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
