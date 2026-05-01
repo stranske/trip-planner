@@ -50,6 +50,11 @@ jobs:
       enable-soft-gate: true
     secrets: inherit
 
+  cross-repo-smoke:
+    name: Cross-Repo Smoke
+    uses: ./.github/workflows/cross-repo-smoke.yml
+    secrets: inherit
+
   runtime-ci:
     name: Runtime CI
     runs-on: ubuntu-latest
@@ -79,7 +84,7 @@ jobs:
 
   summary:
     name: gate-summary
-    needs: [python-ci, runtime-ci]
+    needs: [python-ci, runtime-ci, cross-repo-smoke]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -102,11 +107,13 @@ jobs:
         env:
           PYTHON_RESULT: ${{ needs.python-ci.result || 'skipped' }}
           RUNTIME_RESULT: ${{ needs.runtime-ci.result || 'skipped' }}
+          CROSS_REPO_RESULT: ${{ needs.cross-repo-smoke.result || 'skipped' }}
         run: |
           set -euo pipefail
 
           python_result="${PYTHON_RESULT:-skipped}"
           runtime_result="${RUNTIME_RESULT:-skipped}"
+          cross_repo_result="${CROSS_REPO_RESULT:-skipped}"
           state="success"
           description="All checks passed"
 
@@ -116,19 +123,22 @@ jobs:
           elif [ "$runtime_result" = "failure" ]; then
             state="failure"
             description="Runtime CI failed"
-          elif [ "$python_result" = "cancelled" ] || [ "$runtime_result" = "cancelled" ]; then
+          elif [ "$cross_repo_result" = "failure" ]; then
+            state="failure"
+            description="Cross-repo smoke check failed"
+          elif [ "$python_result" = "cancelled" ] || [ "$runtime_result" = "cancelled" ] || [ "$cross_repo_result" = "cancelled" ]; then
             state="error"
             description="Checks were cancelled"
-          elif [ "$python_result" = "success" ] && [ "$runtime_result" = "success" ]; then
+          elif [ "$python_result" = "success" ] && [ "$runtime_result" = "success" ] && [ "$cross_repo_result" = "success" ]; then
             state="success"
-            description="Python and runtime CI passed"
-          elif [ "$python_result" = "success" ] && [ "$runtime_result" = "skipped" ]; then
+            description="Python, runtime, and cross-repo CI passed"
+          elif [ "$python_result" = "success" ] && [ "$runtime_result" = "skipped" ] && [ "$cross_repo_result" = "skipped" ]; then
             state="success"
-            description="Python CI passed; runtime CI skipped"
-          elif [ "$python_result" = "skipped" ] && [ "$runtime_result" = "success" ]; then
+            description="Python CI passed; runtime and cross-repo CI skipped"
+          elif [ "$python_result" = "skipped" ] && [ "$runtime_result" = "success" ] && [ "$cross_repo_result" = "skipped" ]; then
             state="success"
-            description="Runtime CI passed; Python CI skipped"
-          elif [ "$python_result" = "skipped" ] && [ "$runtime_result" = "skipped" ]; then
+            description="Runtime CI passed; Python and cross-repo CI skipped"
+          elif [ "$python_result" = "skipped" ] && [ "$runtime_result" = "skipped" ] && [ "$cross_repo_result" = "skipped" ]; then
             state="success"
             description="Checks skipped (no relevant changes)"
           else

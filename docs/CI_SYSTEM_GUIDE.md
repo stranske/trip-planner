@@ -147,12 +147,18 @@ racing with `Travel-Plan-Permission@main`. Bump procedure:
 
 #### Required-check on `main`
 
-Once the new job has run green at least once, add `cross-repo-full-product`
-to the required status checks for `main` in repository branch-protection
-settings (Settings → Branches → Branch protection rule for `main` →
-"Require status checks to pass"). Branch protection cannot be edited from a
-workflow file; the toggle must be flipped by a repo admin after the first
-green run.
+The `cross-repo-smoke.yml` workflow exposes a `workflow_call` trigger and is
+called from `pr-00-gate.yml` as the `cross-repo-smoke` job. The gate's
+`summary` job declares `needs: [python-ci, runtime-ci, cross-repo-smoke]`, so
+a failure in the cross-repo smoke check propagates to the `Gate / gate` commit
+status and blocks merge.
+
+Since `Gate / gate` is the required status check on `main`, no additional
+branch-protection configuration is needed for day-to-day use. If a repo admin
+wants the raw `cross-repo-full-product` job to appear as a named required
+check in addition to the gate, they can add it in Settings → Branches →
+Branch protection rule for `main` → "Require status checks to pass" after the
+first green run. That toggle cannot be set from a workflow file.
 
 ---
 
