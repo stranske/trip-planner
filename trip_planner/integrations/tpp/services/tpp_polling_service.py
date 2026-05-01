@@ -24,8 +24,9 @@ def _next_wait(attempt: int) -> float:
 class TPPPollingService:
     """Drive polling to terminal state or timeout and return a response envelope.
 
-    Set ``timeout_seconds`` to ``0`` only when the provider is expected to
-    eventually return a terminal state; that disables the polling deadline.
+    Set ``timeout_seconds`` to ``0`` to disable the wall-clock polling deadline.
+    That mode still keeps a finite attempt guard so a misbehaving provider
+    cannot block the planner indefinitely.
     """
 
     def __init__(
@@ -35,6 +36,7 @@ class TPPPollingService:
         ],
         *,
         timeout_seconds: float,
+        no_deadline_max_attempts: int = 120,
         sleeper: Callable[[float], None] = time.sleep,
         now: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -42,9 +44,14 @@ class TPPPollingService:
             raise ValueError("poll_response_provider must be callable")
         if timeout_seconds < 0:
             raise ValueError("timeout_seconds must be >= 0")
+        if timeout_seconds == 0 and no_deadline_max_attempts < 1:
+            raise ValueError("no_deadline_max_attempts must be >= 1")
         self._poll_response_provider = poll_response_provider
         self._timeout_seconds: float | None = (
             timeout_seconds if timeout_seconds > 0 else None
+        )
+        self._no_deadline_max_attempts = (
+            no_deadline_max_attempts if self._timeout_seconds is None else None
         )
         self._sleeper = sleeper
         self._now = now
@@ -67,6 +74,11 @@ class TPPPollingService:
             )
             if self._is_terminal(envelope):
                 return envelope
+            if (
+                self._no_deadline_max_attempts is not None
+                and attempt >= self._no_deadline_max_attempts
+            ):
+                return self._timeout_response(request)
 
             wait_seconds = _next_wait(attempt)
             if deadline is not None:

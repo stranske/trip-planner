@@ -116,10 +116,12 @@ contract with `stranske/Travel-Plan-Permission`. On every PR and on push to
 2. Checks out `stranske/Travel-Plan-Permission` at a pinned ref into
    `Travel-Plan-Permission/` beside the trip-planner checkout.
 3. Installs both repos' dev extras and the trip-planner frontend deps.
-4. Runs `python scripts/check_full_product_verification.py --live-tpp required`
-   with `TPP_REPO_PATH=../Travel-Plan-Permission`, matching the local sibling
-   checkout contract used by `make full-product-check`. A green run proves the
-   live cross-repo handshake (planner → local TPP subprocess) is intact.
+4. Runs `make full-product-check` with
+   `TPP_REPO_PATH=../Travel-Plan-Permission`, matching the local sibling
+   checkout contract. The Makefile target invokes
+   `python scripts/check_full_product_verification.py --live-tpp required`, so
+   a green run proves the live cross-repo handshake (planner → local TPP
+   subprocess) is intact.
 
 The pinned TPP ref is configurable via a single workflow-level env var:
 
@@ -159,11 +161,13 @@ a failure in the cross-repo smoke check propagates to the `Gate / gate` commit
 status and blocks merge.
 
 Since `Gate / gate` is the required status check on `main`, no additional
-branch-protection configuration is needed for day-to-day use. If a repo admin
-wants the raw `cross-repo-full-product` job to appear as a named required
-check in addition to the gate, they can add it in Settings → Branches →
-Branch protection rule for `main` → "Require status checks to pass" after the
-first green run. That toggle cannot be set from a workflow file.
+branch-protection configuration is needed for day-to-day use. The repository
+contract is the `Gate / gate` commit status, and the workflow test suite asserts
+that `cross-repo-smoke` is a required input to that status. If a repo admin wants
+the raw `cross-repo-full-product` job to appear as a named required check in
+addition to the gate, they can add it in Settings → Branches → Branch protection
+rule for `main` → "Require status checks to pass" after the first green run.
+That toggle cannot be set from a workflow file.
 
 ---
 
