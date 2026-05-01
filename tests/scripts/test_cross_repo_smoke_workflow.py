@@ -162,6 +162,7 @@ _ACTIONLINT_CMD = str(_ACTIONLINT) if _ACTIONLINT.is_file() else shutil.which("a
     reason="actionlint not found (checked .workflows-lib/actionlint and PATH)",
 )
 def test_workflow_passes_actionlint() -> None:
+    assert _ACTIONLINT_CMD is not None
     result = subprocess.run(
         [_ACTIONLINT_CMD, str(WORKFLOW_PATH)],
         capture_output=True,
