@@ -1,5 +1,6 @@
 from pathlib import Path
 import stat
+import time
 
 import pytest
 
@@ -36,6 +37,25 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+""".strip() + "\n",
+        encoding="utf-8",
+    )
+    venv_python.write_text(
+        f'#!/usr/bin/env bash\nexec {verifier.sys.executable} "$@"\n',
+        encoding="utf-8",
+    )
+    venv_python.chmod(venv_python.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return repo_path, venv_python
+
+
+def _make_missing_deps_tpp_repo(tmp_path: Path) -> tuple[Path, Path]:
+    repo_path, venv_python = _make_repo_with_venv(tmp_path)
+    package_path = repo_path / "src" / "travel_plan_permission"
+    package_path.mkdir(parents=True)
+    (package_path / "__init__.py").write_text("", encoding="utf-8")
+    (package_path / "http_service.py").write_text(
+        """
+import definitely_missing_dependency
 """.strip() + "\n",
         encoding="utf-8",
     )
@@ -169,3 +189,32 @@ def test_started_tpp_service_readiness_failure_includes_captured_stderr(
     assert "stderr-59" in message
     assert "stdout-9" not in message
     assert "stderr-9" not in message
+
+
+def test_started_tpp_service_missing_deps_failure_includes_stderr(
+    monkeypatch, tmp_path: Path
+) -> None:
+    repo_path, venv_python = _make_missing_deps_tpp_repo(tmp_path)
+    monkeypatch.setattr(verifier, "_free_local_port", lambda _preferred: 43124)
+
+    def fail_readiness_after_process_boot(_url: str) -> None:
+        time.sleep(0.2)
+        raise verifier.VerificationFailure("not ready")
+
+    monkeypatch.setattr(verifier, "_wait_for_http", fail_readiness_after_process_boot)
+
+    with pytest.raises(verifier.VerificationFailure) as exc_info:
+        with verifier._started_tpp_service(
+            {
+                "TPP_REPO_PATH": str(repo_path),
+                "TPP_ACCESS_TOKEN": "token",
+                "TPP_OIDC_PROVIDER": "google",
+            }
+        ):
+            pass
+
+    message = str(exc_info.value)
+    assert str(venv_python) in message
+    assert "ModuleNotFoundError" in message
+    assert "definitely_missing_dependency" in message
+    assert "stderr_tail" in message
