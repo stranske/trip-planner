@@ -1,3 +1,4 @@
+import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -5,6 +6,24 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 pytest.importorskip("pytest_httpserver")
+
+_SOCKET_BIND_AVAILABLE = True
+try:
+    _socket_probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    _socket_probe.bind(("127.0.0.1", 0))
+except PermissionError:
+    _SOCKET_BIND_AVAILABLE = False
+finally:
+    try:
+        _socket_probe.close()
+    except Exception:
+        pass
+
+pytestmark = pytest.mark.skipif(
+    not _SOCKET_BIND_AVAILABLE,
+    reason="socket bind is not permitted in this environment",
+)
+
 from pytest_httpserver import HTTPServer
 
 from trip_planner.integrations.tpp import (
@@ -31,7 +50,6 @@ def _client(base_url: str, *, policy: TPPTransportPolicy | None = None) -> HTTPT
         ),
         breaker_registry={},
     )
-
 
 def test_httpserver_surfaces_server_error_after_retry_budget(httpserver: HTTPServer) -> None:
     httpserver.expect_request("/server", method="POST").respond_with_json(
