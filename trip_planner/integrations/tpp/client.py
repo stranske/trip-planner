@@ -174,11 +174,15 @@ class TPPTransportPolicy:
         ):
             value = float(getattr(self, field_name))
             if not math.isfinite(value) or value <= 0:
-                raise TPPConfigurationError(f"{field_name} must be greater than 0.")
+                raise TPPConfigurationError(
+                    f"{field_name} must be a finite value greater than 0."
+                )
             setattr(self, field_name, value)
         for field_name in ("backoff_initial_seconds", "backoff_max_seconds"):
             value = float(getattr(self, field_name))
-            if not math.isfinite(value) or value < 0:
+            if not math.isfinite(value):
+                raise TPPConfigurationError(f"{field_name} must be finite.")
+            if value < 0:
                 raise TPPConfigurationError(f"{field_name} must not be negative.")
             setattr(self, field_name, value)
         for field_name in ("max_attempts", "breaker_failure_threshold"):
@@ -481,8 +485,6 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                     status_code=502,
                     retryable=False,
                 )
-                if transport_error is not exc:
-                    transport_error.__cause__ = exc
                 last_error = transport_error
                 if transport_error.error_code != "breaker_open":
                     breaker.record_failure(policy=self.policy, now=self._clock())
@@ -491,7 +493,9 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                     or not transport_error.retryable
                     or attempt >= self.policy.max_attempts
                 ):
-                    raise transport_error
+                    if transport_error is exc:
+                        raise
+                    raise transport_error from exc
                 delay = self._retry_delay(attempt)
                 if delay > 0:
                     self._sleep(delay)
