@@ -9,6 +9,7 @@ from trip_planner.integrations.tpp import (
     TPPEvaluationResultIngestionService,
     TPPRequestEnvelope,
     TPPResponseEnvelope,
+    TPPTransportError,
 )
 
 
@@ -28,6 +29,15 @@ class FakeTPPResultClient(BaseTPPIntegrationClient):
 
     def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         return self.response
+
+
+class RaisingTPPResultClient(BaseTPPIntegrationClient):
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
+        del request
+        raise self.error
 
 
 def test_result_ingestion_normalizes_approved_evaluation() -> None:
@@ -218,3 +228,20 @@ def test_result_ingestion_rejects_malformed_evaluation_result_shape() -> None:
             proposal_version="proposal-v3",
             scenario_id="scenario-a",
         )
+
+
+def test_result_ingestion_converts_raw_transport_exception_with_cause() -> None:
+    fixture = _load_fixture("approved_evaluation.json")
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    error = TimeoutError("upstream timeout")
+    service = TPPEvaluationResultIngestionService(RaisingTPPResultClient(error))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        service.fetch_evaluation_result(
+            request,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+    assert exc_info.value.error_code == "timeout"
+    assert exc_info.value.__cause__ is error

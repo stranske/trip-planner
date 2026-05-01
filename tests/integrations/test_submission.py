@@ -10,6 +10,7 @@ from trip_planner.integrations.tpp import (
     TPPProposalSubmissionService,
     TPPRequestEnvelope,
     TPPResponseEnvelope,
+    TPPTransportError,
 )
 
 
@@ -120,6 +121,15 @@ class FakeTPPSubmissionClient(BaseTPPIntegrationClient):
         return self.response
 
 
+class RaisingTPPSubmissionClient(BaseTPPIntegrationClient):
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
+        del request
+        raise self.error
+
+
 def test_submission_normalizes_deferred_response_and_linkage() -> None:
     fixture = _load_fixture("proposal_submit_deferred.json")
     proposal = _proposal_fixture()
@@ -207,3 +217,22 @@ def test_submission_normalizes_accepted_state_stores_proposal_id() -> None:
     assert record.execution_id == "exec-001"
     assert record.linkage.proposal_id == "proposal-123"
     assert record.linkage.proposal_version == "proposal-v4"
+
+
+def test_submission_converts_raw_transport_exception_with_cause() -> None:
+    fixture = _load_fixture("proposal_submit_deferred.json")
+    proposal = _proposal_fixture()
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    error = TimeoutError("upstream timeout")
+    service = TPPProposalSubmissionService(RaisingTPPSubmissionClient(error))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        service.submit_proposal(
+            request,
+            proposal,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+    assert exc_info.value.error_code == "timeout"
+    assert exc_info.value.__cause__ is error
