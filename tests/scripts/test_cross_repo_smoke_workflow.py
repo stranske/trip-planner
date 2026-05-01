@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -153,14 +154,16 @@ def test_ci_guide_matches_make_full_product_check_contract() -> None:
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _ACTIONLINT = _REPO_ROOT / ".workflows-lib" / "actionlint"
+_ACTIONLINT_CMD = str(_ACTIONLINT) if _ACTIONLINT.is_file() else shutil.which("actionlint")
 
 
 @pytest.mark.skipif(
-    not _ACTIONLINT.is_file(), reason="actionlint binary not present in .workflows-lib/"
+    _ACTIONLINT_CMD is None,
+    reason="actionlint not found (checked .workflows-lib/actionlint and PATH)",
 )
 def test_workflow_passes_actionlint() -> None:
     result = subprocess.run(
-        [str(_ACTIONLINT), str(WORKFLOW_PATH)],
+        [_ACTIONLINT_CMD, str(WORKFLOW_PATH)],
         capture_output=True,
         text=True,
     )
