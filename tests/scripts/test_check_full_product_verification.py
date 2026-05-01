@@ -36,12 +36,11 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-""".strip()
-        + "\n",
+""".strip() + "\n",
         encoding="utf-8",
     )
     venv_python.write_text(
-        f"#!/usr/bin/env bash\nexec {verifier.sys.executable} \"$@\"\n",
+        f'#!/usr/bin/env bash\nexec {verifier.sys.executable} "$@"\n',
         encoding="utf-8",
     )
     venv_python.chmod(venv_python.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -113,7 +112,9 @@ def test_started_tpp_service_starts_known_good_repo_and_tears_down(
     with verifier._started_tpp_service(env) as (_base_url, process):
         assert process is not None
         assert process.poll() is None
-        assert process.args[0] == str(venv_python)
+        process_args = process.args
+        assert isinstance(process_args, (list, tuple))
+        assert process_args[0] == str(venv_python)
 
     assert process.poll() is not None
 

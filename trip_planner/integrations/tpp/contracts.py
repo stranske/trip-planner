@@ -209,9 +209,7 @@ class TPPResponseEnvelope:
         self.result_payload = _optional_mapping(self.result_payload, "result_payload")
         require_string_mapping(self.result_payload, "result_payload")
         if self.evaluation_result is not None:
-            self.evaluation_result = _require_mapping(
-                self.evaluation_result, "evaluation_result"
-            )
+            self.evaluation_result = _require_mapping(self.evaluation_result, "evaluation_result")
             require_string_mapping(self.evaluation_result, "evaluation_result")
         if self.error is not None and not isinstance(self.error, TPPErrorRecord):
             raise ValueError("error must be a TPPErrorRecord when provided")
