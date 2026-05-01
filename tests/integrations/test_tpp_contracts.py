@@ -1,6 +1,7 @@
 import json
 import io
 import socket
+from http.client import HTTPMessage
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
@@ -425,7 +426,7 @@ def test_transport_error_helper_maps_http_429_to_unknown() -> None:
         url="https://example.test/api/rate-limited",
         code=429,
         msg="Too Many Requests",
-        hdrs=None,
+        hdrs=HTTPMessage(),
         fp=io.BytesIO(b'{"detail":"slow down"}'),
     )
 
