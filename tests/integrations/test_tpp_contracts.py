@@ -261,6 +261,17 @@ def test_transport_policy_defaults_and_env_overrides(monkeypatch: pytest.MonkeyP
     assert policy.breaker_reset_seconds == 11.0
 
 
+def test_transport_policy_read_timeout_falls_back_to_tpp_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_TIMEOUT_SECONDS", "8.5")
+    monkeypatch.delenv("TPP_TRANSPORT_READ_TIMEOUT_SECONDS", raising=False)
+
+    policy = TPPTransportPolicy.from_env()
+
+    assert policy.read_timeout_seconds == 8.5
+
+
 def test_http_client_constructor_policy_overrides_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TPP_TRANSPORT_CONNECT_TIMEOUT_SECONDS", "1")
     monkeypatch.setenv("TPP_TRANSPORT_READ_TIMEOUT_SECONDS", "2")
