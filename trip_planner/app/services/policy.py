@@ -25,6 +25,7 @@ from trip_planner.integrations.tpp import (
     TPPPolicySyncService,
     TPPRequestEnvelope,
     TPPResponseEnvelope,
+    TPPTransportError,
 )
 from trip_planner.persistence.models.policy import PersistedPolicyState
 from trip_planner.persistence.models.trip import PersistedTrip
@@ -431,6 +432,55 @@ def _build_workspace_policy_payload(
     }
 
 
+def _transport_error_details(error: TPPTransportError, *, source: str) -> dict[str, Any]:
+    return {
+        "source": source,
+        "error_code": error.error_code,
+        "status_code": error.status_code,
+        "retryable": error.retryable,
+        "message": str(error),
+    }
+
+
+def _should_use_stored_policy_fallback(error: TPPTransportError) -> bool:
+    return error.error_code in {"breaker_open", "timeout"}
+
+
+def _build_stored_policy_fallback_payload(
+    *,
+    trip_record: PersistedTrip,
+    policy_record: PersistedPolicyState,
+    error: TPPTransportError,
+) -> dict[str, Any]:
+    payload = _build_workspace_policy_payload(
+        trip_record=trip_record,
+        policy_record=policy_record,
+    )
+    summary = dict(payload["summary"])
+    if error.error_code == "breaker_open":
+        fallback_reason = (
+            "Live TPP policy sync circuit breaker is open; the workspace is rendering "
+            "stored-policy posture until the reset window."
+        )
+    else:
+        fallback_reason = (
+            "Live TPP policy sync timed out; the workspace is rendering stored-policy "
+            "posture until the next retry."
+        )
+    summary.update(
+        {
+            "status": "stored_policy_fallback",
+            "fallback_reason": fallback_reason,
+            "transport_error": _transport_error_details(
+                error,
+                source="workspace_policy_sync",
+            ),
+        }
+    )
+    payload["summary"] = summary
+    return payload
+
+
 def get_workspace_policy_payload(
     db_session: Session,
     *,
@@ -472,20 +522,34 @@ def import_workspace_policy_constraints(
         raise ValueError("Only business trips can import workspace policy constraints.")
 
     request = TPPRequestEnvelope.from_dict(request_payload)
-    response = _resolve_policy_response(
-        request,
-        response_payload,
-        trip_plan_payload=(
-            _tpp_trip_plan_payload(trip_record, user=user) if response_payload is None else {}
-        ),
-    )
-    imported = TPPPolicySyncService(_PassiveTPPClient(response)).import_policy_constraints(request)
-    imported_at = _isoformat(datetime.now(UTC))
     existing = _get_latest_policy_state(
         db_session,
         trip_id=trip_id,
         user_id=user.user_id,
     )
+    try:
+        response = _resolve_policy_response(
+            request,
+            response_payload,
+            trip_plan_payload=(
+                _tpp_trip_plan_payload(trip_record, user=user) if response_payload is None else {}
+            ),
+        )
+    except TPPTransportError as error:
+        if (
+            response_payload is None
+            and existing is not None
+            and _should_use_stored_policy_fallback(error)
+        ):
+            return _build_stored_policy_fallback_payload(
+                trip_record=trip_record,
+                policy_record=existing,
+                error=error,
+            )
+        raise
+
+    imported = TPPPolicySyncService(_PassiveTPPClient(response)).import_policy_constraints(request)
+    imported_at = _isoformat(datetime.now(UTC))
     policy_state_id = (
         existing.policy_state_id if existing is not None else f"policy-state:{trip_id}"
     )
