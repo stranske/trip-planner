@@ -113,12 +113,12 @@ contract with `stranske/Travel-Plan-Permission`. On every PR and on push to
 `main` it:
 
 1. Checks out trip-planner (PR head) into `trip-planner/`.
-2. Checks out `stranske/Travel-Plan-Permission` at a pinned ref into a
-   sibling `Travel-Plan-Permission/` directory.
+2. Checks out `stranske/Travel-Plan-Permission` at a pinned ref into
+   `Travel-Plan-Permission/` beside the trip-planner checkout.
 3. Installs both repos' dev extras and the trip-planner frontend deps.
 4. Runs `python scripts/check_full_product_verification.py --live-tpp required`
-   with `TPP_REPO_PATH` pointing at the sibling checkout. This is the same
-   path `make full-product-check` uses locally, so a green run proves the
+   with `TPP_REPO_PATH=../Travel-Plan-Permission`, matching the local sibling
+   checkout contract used by `make full-product-check`. A green run proves the
    live cross-repo handshake (planner → local TPP subprocess) is intact.
 
 The pinned TPP ref is configurable via a single workflow-level env var:
@@ -130,6 +130,11 @@ env:
 
 CI logs print both `TPP_PINNED_REF` and the resolved SHA so the actually
 checked-out commit is easy to verify.
+
+When this workflow runs through `workflow_call`, the optional `CROSS_REPO_TOKEN`
+secret is preferred for the pinned TPP checkout and falls back to `github.token`.
+Callers should pass it with `secrets: inherit` when the default token cannot read
+the pinned repo or ref.
 
 #### Bumping the pin
 
