@@ -106,6 +106,60 @@ To add a domain-specific job:
 2. Add your job with appropriate triggers
 3. Include the job in the Gate aggregation (if using custom Gate)
 
+### Cross-repo smoke gate
+
+The `.github/workflows/cross-repo-smoke.yml` workflow gates the planner-side
+contract with `stranske/Travel-Plan-Permission`. On every PR and on push to
+`main` it:
+
+1. Checks out trip-planner (PR head) into `trip-planner/`.
+2. Checks out `stranske/Travel-Plan-Permission` at a pinned ref into a
+   sibling `Travel-Plan-Permission/` directory.
+3. Installs both repos' dev extras and the trip-planner frontend deps.
+4. Runs `python scripts/check_full_product_verification.py --live-tpp required`
+   with `TPP_REPO_PATH` pointing at the sibling checkout. This is the same
+   path `make full-product-check` uses locally, so a green run proves the
+   live cross-repo handshake (planner → local TPP subprocess) is intact.
+
+The pinned TPP ref is configurable via a single workflow-level env var:
+
+```yaml
+env:
+  TPP_PINNED_REF: <40-char SHA>
+```
+
+CI logs print both `TPP_PINNED_REF` and the resolved SHA so the actually
+checked-out commit is easy to verify.
+
+#### Bumping the pin
+
+The pin is intentionally manual so a TPP-side breakage cannot land green by
+racing with `Travel-Plan-Permission@main`. Bump procedure:
+
+1. Open a paired PR on `stranske/Travel-Plan-Permission` that bumps that
+   repo's `TRIP_PLANNER_PINNED_REF` to the trip-planner SHA you intend to
+   publish.
+2. In this repo, bump `TPP_PINNED_REF` in
+   `.github/workflows/cross-repo-smoke.yml` to the latest known-good TPP
+   `main` SHA.
+3. Land the two PRs together; both `cross-repo-smoke` jobs should be green
+   on the paired branches before merge.
+
+#### Required-check on `main`
+
+The `cross-repo-smoke.yml` workflow exposes a `workflow_call` trigger and is
+called from `pr-00-gate.yml` as the `cross-repo-smoke` job. The gate's
+`summary` job declares `needs: [python-ci, runtime-ci, cross-repo-smoke]`, so
+a failure in the cross-repo smoke check propagates to the `Gate / gate` commit
+status and blocks merge.
+
+Since `Gate / gate` is the required status check on `main`, no additional
+branch-protection configuration is needed for day-to-day use. If a repo admin
+wants the raw `cross-repo-full-product` job to appear as a named required
+check in addition to the gate, they can add it in Settings → Branches →
+Branch protection rule for `main` → "Require status checks to pass" after the
+first green run. That toggle cannot be set from a workflow file.
+
 ---
 
 ## Agent Automation System
