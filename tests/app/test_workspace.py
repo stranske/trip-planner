@@ -15,6 +15,7 @@ from trip_planner.app.services.feasibility import (
 )
 from trip_planner.app.services.scenarios import _runtime_business_profile
 from trip_planner.app.services.trips import create_trip
+from trip_planner.app.services import workspace as workspace_service
 from trip_planner.app.services.workspace import get_workspace_payload
 from trip_planner.options import InventoryBundle
 from trip_planner.persistence.db import (
@@ -1838,6 +1839,47 @@ def test_workspace_endpoint_hides_other_users_persisted_trips(
     response = client.get(f"/api/workspace/{trip_id}")
 
     assert response.status_code == 404
+
+
+def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_breaker_open() -> None:
+    panel_state = workspace_service._build_planner_panel_state(
+        trip={
+            "trip_id": "trip-fallback",
+            "title": "Fallback trip",
+            "mode": "business",
+            "trip_frame": {"primary_regions": ["Chicago"]},
+        },
+        scenario_search={"scenarios": [], "explanation": [], "source_refs": []},
+        session={"pending_decisions": [], "interaction_state": {}},
+        saved_scenarios=[],
+        activity_log=[],
+        feasibility_summary={"assessment_count": 0, "assessments": []},
+        policy_context=None,
+        proposal_context={
+            "proposal_state": {
+                "proposal": {"proposal_id": "proposal:trip-fallback"},
+                "summary": {
+                    "submission_error": {
+                        "code": "breaker_open",
+                        "message": "TPP circuit breaker is open for host.",
+                    }
+                },
+            }
+        },
+    )
+
+    fallback_output = next(
+        (
+            item
+            for item in panel_state["outputs"]
+            if item["output_id"].endswith(":proposal-transport-fallback")
+        ),
+        None,
+    )
+    assert fallback_output is not None
+    assert fallback_output["title"] == "Live TPP breaker is open"
+    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["status"] == "caution"
 
 
 def _load_feasibility_fixture(name: str) -> InventoryBundle:
