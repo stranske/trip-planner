@@ -419,6 +419,50 @@ def test_transport_error_rejects_unknown_error_code() -> None:
         TPPTransportError("bad code", error_code="not_a_real_code")  # type: ignore[arg-type]
 
 
+def test_circuit_breaker_state_machine_transitions() -> None:
+    breaker = tpp_client_module._CircuitBreaker()
+    policy = TPPTransportPolicy(breaker_failure_threshold=2, breaker_reset_seconds=10.0)
+    host = "https://example.test:443"
+
+    assert breaker.state == "closed"
+    breaker.before_request(policy=policy, now=0.0, host=host)
+    breaker.record_failure(policy=policy, now=1.0)
+    assert breaker.state == "closed"
+
+    breaker.record_failure(policy=policy, now=2.0)
+    assert breaker.state == "open"
+
+    with pytest.raises(TPPTransportError, match="open"):
+        breaker.before_request(policy=policy, now=5.0, host=host)
+
+    breaker.before_request(policy=policy, now=12.0, host=host)
+    assert breaker.state == "half-open"
+
+    with pytest.raises(TPPTransportError, match="trial already in flight"):
+        breaker.before_request(policy=policy, now=12.1, host=host)
+
+    breaker.record_success()
+    assert breaker.state == "closed"
+
+
+def test_circuit_breaker_half_open_failure_reopens() -> None:
+    breaker = tpp_client_module._CircuitBreaker()
+    policy = TPPTransportPolicy(breaker_failure_threshold=1, breaker_reset_seconds=10.0)
+    host = "https://example.test:443"
+
+    breaker.record_failure(policy=policy, now=0.0)
+    assert breaker.state == "open"
+
+    breaker.before_request(policy=policy, now=11.0, host=host)
+    assert breaker.state == "half-open"
+
+    breaker.record_failure(policy=policy, now=11.1)
+    assert breaker.state == "open"
+
+    with pytest.raises(TPPTransportError, match="open"):
+        breaker.before_request(policy=policy, now=11.2, host=host)
+
+
 def test_http_transport_opens_breaker_after_consecutive_failures(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
