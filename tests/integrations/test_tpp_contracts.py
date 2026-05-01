@@ -626,7 +626,9 @@ def test_http_transport_breaker_is_isolated_per_host(monkeypatch: pytest.MonkeyP
         failing_client._request_json(method="POST", path="/api/down", json_payload={})
     assert first.value.error_code == "connection_error"
 
-    assert healthy_client._request_json(method="POST", path="/api/ok", json_payload={}) == {"ok": True}
+    assert healthy_client._request_json(method="POST", path="/api/ok", json_payload={}) == {
+        "ok": True
+    }
 
 
 def test_http_transport_integration_against_stub_http_server_reports_server_error() -> None:
