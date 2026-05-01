@@ -1,4 +1,5 @@
 import json
+import io
 import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -417,6 +418,34 @@ def test_http_transport_decode_errors_are_typed_invalid_response(
 def test_transport_error_rejects_unknown_error_code() -> None:
     with pytest.raises(ValueError, match="error_code must be one of"):
         TPPTransportError("bad code", error_code="not_a_real_code")  # type: ignore[arg-type]
+
+
+def test_transport_error_helper_maps_http_429_to_unknown() -> None:
+    error = urllib_error.HTTPError(
+        url="https://example.test/api/rate-limited",
+        code=429,
+        msg="Too Many Requests",
+        hdrs=None,
+        fp=io.BytesIO(b'{"detail":"slow down"}'),
+    )
+
+    mapped = tpp_client_module.tpp_transport_error_from_exception(
+        error,
+        operation="submit_proposal",
+    )
+
+    assert mapped is not None
+    assert mapped.error_code == "unknown"
+    assert mapped.retryable is False
+
+
+def test_transport_error_helper_returns_none_for_non_transport_error() -> None:
+    mapped = tpp_client_module.tpp_transport_error_from_exception(
+        ValueError("not transport related"),
+        operation="submit_proposal",
+    )
+
+    assert mapped is None
 
 
 def test_circuit_breaker_state_machine_transitions() -> None:
