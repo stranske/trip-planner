@@ -61,6 +61,13 @@ def test_workflow_checks_out_both_repos(workflow: dict) -> None:
     assert "trip-planner" in paths, paths
     assert "Travel-Plan-Permission" in paths, paths
 
+    planner_step = next(
+        step for step in checkout_steps if step.get("with", {}).get("path") == "trip-planner"
+    )
+    assert "repository" not in planner_step.get(
+        "with", {}
+    ), "planner checkout should use the PR head repository via default actions/checkout behavior"
+
     tpp_step = next(
         step
         for step in checkout_steps
