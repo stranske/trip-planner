@@ -82,6 +82,19 @@ def test_httpserver_surfaces_unauthorized(httpserver: HTTPServer) -> None:
     assert exc_info.value.error_code == "unauthorized"
 
 
+def test_httpserver_surfaces_forbidden_as_unauthorized(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/forbidden", method="POST").respond_with_json(
+        {"detail": "forbidden"}, status=403
+    )
+    client = _client(httpserver.url_for(""))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/forbidden", json_payload={})
+
+    assert exc_info.value.error_code == "unauthorized"
+    assert exc_info.value.status_code == 403
+
+
 def test_httpserver_surfaces_invalid_response(httpserver: HTTPServer) -> None:
     httpserver.expect_request("/invalid", method="POST").respond_with_data(
         "not-json", status=200, content_type="text/plain"
