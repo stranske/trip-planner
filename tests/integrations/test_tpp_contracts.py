@@ -325,6 +325,11 @@ def test_http_transport_classifies_connection_timeout_unauthorized_and_invalid_r
         assert exc_info.value.error_code == error_code
 
 
+def test_transport_error_rejects_unknown_error_code() -> None:
+    with pytest.raises(ValueError, match="error_code must be one of"):
+        TPPTransportError("bad code", error_code="not_a_real_code")  # type: ignore[arg-type]
+
+
 def test_http_transport_opens_breaker_after_consecutive_failures(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

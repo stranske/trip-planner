@@ -8,7 +8,7 @@ import socket
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, ClassVar, Callable, Protocol
+from typing import Any, ClassVar, Callable, Literal, Protocol
 import json
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
@@ -61,14 +61,39 @@ class BaseTPPIntegrationClient(ABC):
 class TPPTransportError(RuntimeError):
     """Raised when a live TPP transport call cannot be completed safely."""
 
+    VALID_ERROR_CODES = frozenset(
+        {
+            "timeout",
+            "connection_error",
+            "server_error",
+            "breaker_open",
+            "unauthorized",
+            "invalid_response",
+            "unknown",
+        }
+    )
+
     def __init__(
         self,
         message: str,
         *,
-        error_code: str = "unknown",
+        error_code: Literal[
+            "timeout",
+            "connection_error",
+            "server_error",
+            "breaker_open",
+            "unauthorized",
+            "invalid_response",
+            "unknown",
+        ] = "unknown",
         status_code: int = 502,
         retryable: bool = False,
     ) -> None:
+        if error_code not in self.VALID_ERROR_CODES:
+            raise ValueError(
+                "error_code must be one of "
+                f"{sorted(self.VALID_ERROR_CODES)!r}, got {error_code!r}."
+            )
         super().__init__(message)
         self.error_code = error_code
         self.status_code = status_code
