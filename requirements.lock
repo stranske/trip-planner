@@ -120,6 +120,8 @@ pytest==9.0.3
     #   pytest-cov
 pytest-cov==7.1.0
     # via trip-planner (pyproject.toml)
+pytest-httpserver==1.1.3
+    # via trip-planner (pyproject.toml)
 pytokens==0.4.1
     # via black
 pyyaml==6.0.3

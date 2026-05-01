@@ -8,7 +8,11 @@ from typing import Any
 from trip_planner._validators import require_non_empty
 from trip_planner.business.policy_contracts import TripPlanProposal
 
-from .client import TPPIntegrationClient
+from .client import (
+    TPPIntegrationClient,
+    TPPTransportError,
+    tpp_transport_error_from_exception,
+)
 from .contracts import (
     TPPErrorRecord,
     TPPExecutionStatus,
@@ -139,7 +143,18 @@ class TPPProposalSubmissionService:
         proposal_version: str,
         scenario_id: str | None = None,
     ) -> ProposalSubmissionRecord:
-        response = self.client.submit_proposal(request)
+        try:
+            response = self.client.submit_proposal(request)
+        except TPPTransportError:
+            raise
+        except Exception as exc:
+            transport_error = tpp_transport_error_from_exception(
+                exc,
+                operation="submit_proposal",
+            )
+            if transport_error is None:
+                raise
+            raise transport_error from exc
         return self.normalize_response(
             request,
             proposal,

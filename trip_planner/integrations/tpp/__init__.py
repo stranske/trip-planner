@@ -8,7 +8,9 @@ from .client import (
     TPPIntegrationClient,
     TPPRuntimeSettings,
     TPPServiceUnavailableError,
+    TPPTransportPolicy,
     TPPTransportError,
+    tpp_transport_error_from_exception,
 )
 from .contracts import (
     TPPErrorRecord,
@@ -73,7 +75,9 @@ __all__ = [
     "TPPPolicySyncService",
     "TPPRuntimeSettings",
     "TPPServiceUnavailableError",
+    "TPPTransportPolicy",
     "TPPTransportError",
+    "tpp_transport_error_from_exception",
     "TPPReoptimizationService",
     "TPPRequestEnvelope",
     "TPPResponseEnvelope",

@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import os
+import random
+import socket
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, ClassVar, Callable, Literal, Protocol
 import json
 from urllib import error as urllib_error
+from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 
 from .contracts import TPPRequestEnvelope, TPPResponseEnvelope
@@ -57,27 +61,269 @@ class BaseTPPIntegrationClient(ABC):
 class TPPTransportError(RuntimeError):
     """Raised when a live TPP transport call cannot be completed safely."""
 
-    def __init__(self, message: str, *, status_code: int = 502) -> None:
+    VALID_ERROR_CODES = frozenset(
+        {
+            "timeout",
+            "connection_error",
+            "server_error",
+            "breaker_open",
+            "unauthorized",
+            "invalid_response",
+            "unknown",
+        }
+    )
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: Literal[
+            "timeout",
+            "connection_error",
+            "server_error",
+            "breaker_open",
+            "unauthorized",
+            "invalid_response",
+            "unknown",
+        ] = "unknown",
+        status_code: int = 502,
+        retryable: bool = False,
+    ) -> None:
+        if error_code not in self.VALID_ERROR_CODES:
+            raise ValueError(
+                "error_code must be one of "
+                f"{sorted(self.VALID_ERROR_CODES)!r}, got {error_code!r}."
+            )
         super().__init__(message)
+        self.error_code = error_code
         self.status_code = status_code
+        self.retryable = retryable
 
 
 class TPPConfigurationError(TPPTransportError):
     """Raised when live TPP transport is requested without runtime config."""
 
     def __init__(self, message: str) -> None:
-        super().__init__(message, status_code=503)
+        super().__init__(message, error_code="unknown", status_code=503, retryable=True)
 
 
 class TPPContractError(TPPTransportError):
     """Raised when the upstream TPP service returns an invalid contract."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            message,
+            error_code="invalid_response",
+            status_code=502,
+            retryable=False,
+        )
 
 
 class TPPServiceUnavailableError(TPPTransportError):
     """Raised when the upstream TPP service cannot be reached."""
 
     def __init__(self, message: str) -> None:
-        super().__init__(message, status_code=503)
+        super().__init__(
+            message,
+            error_code="connection_error",
+            status_code=503,
+            retryable=True,
+        )
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise TPPConfigurationError(f"{name} must be a numeric value when provided.") from exc
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise TPPConfigurationError(f"{name} must be an integer value when provided.") from exc
+
+
+@dataclass(slots=True)
+class TPPTransportPolicy:
+    connect_timeout_seconds: float = 5.0
+    read_timeout_seconds: float = 15.0
+    max_attempts: int = 3
+    backoff_initial_seconds: float = 0.5
+    backoff_max_seconds: float = 4.0
+    breaker_failure_threshold: int = 5
+    breaker_reset_seconds: float = 30.0
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "connect_timeout_seconds",
+            "read_timeout_seconds",
+            "breaker_reset_seconds",
+        ):
+            value = float(getattr(self, field_name))
+            if value <= 0:
+                raise TPPConfigurationError(f"{field_name} must be greater than 0.")
+            setattr(self, field_name, value)
+        for field_name in ("backoff_initial_seconds", "backoff_max_seconds"):
+            value = float(getattr(self, field_name))
+            if value < 0:
+                raise TPPConfigurationError(f"{field_name} must not be negative.")
+            setattr(self, field_name, value)
+        for field_name in ("max_attempts", "breaker_failure_threshold"):
+            value = int(getattr(self, field_name))
+            if value <= 0:
+                raise TPPConfigurationError(f"{field_name} must be greater than 0.")
+            setattr(self, field_name, value)
+
+    @classmethod
+    def from_env(cls) -> "TPPTransportPolicy":
+        default_read_timeout = _env_float("TPP_TIMEOUT_SECONDS", 15.0)
+        return cls(
+            connect_timeout_seconds=_env_float("TPP_TRANSPORT_CONNECT_TIMEOUT_SECONDS", 5.0),
+            read_timeout_seconds=_env_float(
+                "TPP_TRANSPORT_READ_TIMEOUT_SECONDS", default_read_timeout
+            ),
+            max_attempts=_env_int("TPP_TRANSPORT_MAX_ATTEMPTS", 3),
+            backoff_initial_seconds=_env_float("TPP_TRANSPORT_BACKOFF_INITIAL_SECONDS", 0.5),
+            backoff_max_seconds=_env_float("TPP_TRANSPORT_BACKOFF_MAX_SECONDS", 4.0),
+            breaker_failure_threshold=_env_int("TPP_TRANSPORT_BREAKER_FAILURE_THRESHOLD", 5),
+            breaker_reset_seconds=_env_float("TPP_TRANSPORT_BREAKER_RESET_SECONDS", 30.0),
+        )
+
+
+class _CircuitBreaker:
+    def __init__(self) -> None:
+        self.failures = 0
+        self.opened_at: float | None = None
+        self.half_open = False
+        self._half_open_trial_in_flight = False
+
+    @property
+    def state(self) -> str:
+        if self.opened_at is None:
+            return "closed"
+        if self.half_open:
+            return "half-open"
+        return "open"
+
+    def before_request(self, *, policy: TPPTransportPolicy, now: float, host: str) -> None:
+        if self.opened_at is None:
+            return
+        if now - self.opened_at < policy.breaker_reset_seconds:
+            raise TPPTransportError(
+                f"TPP circuit breaker is open for {host}; retry after the reset window.",
+                error_code="breaker_open",
+                status_code=503,
+                retryable=True,
+            )
+        self.half_open = True
+        if self._half_open_trial_in_flight:
+            raise TPPTransportError(
+                f"TPP circuit breaker is half-open for {host}; trial already in flight.",
+                error_code="breaker_open",
+                status_code=503,
+                retryable=True,
+            )
+        self._half_open_trial_in_flight = True
+
+    def record_success(self) -> None:
+        self.failures = 0
+        self.opened_at = None
+        self.half_open = False
+        self._half_open_trial_in_flight = False
+
+    def record_failure(self, *, policy: TPPTransportPolicy, now: float) -> None:
+        if self.half_open:
+            self.opened_at = now
+            self.half_open = False
+            self._half_open_trial_in_flight = False
+            return
+        self.failures += 1
+        if self.failures >= policy.breaker_failure_threshold:
+            self.opened_at = now
+            self.half_open = False
+            self._half_open_trial_in_flight = False
+
+
+def tpp_transport_error_from_exception(
+    exc: BaseException,
+    *,
+    operation: str,
+    path: str | None = None,
+) -> TPPTransportError | None:
+    target = path or operation
+    if isinstance(exc, TPPTransportError):
+        return exc
+    if isinstance(exc, urllib_error.HTTPError):
+        try:
+            body_excerpt = exc.read().decode("utf-8", errors="replace").strip()
+        except OSError:
+            body_excerpt = ""
+        return _http_status_error(path=target, status_code=exc.code, body_excerpt=body_excerpt)
+    if isinstance(exc, urllib_error.URLError):
+        reason = exc.reason
+        if isinstance(reason, (TimeoutError, socket.timeout)):
+            return TPPTransportError(
+                f"TPP request for {target} timed out: {reason}.",
+                error_code="timeout",
+                status_code=504,
+                retryable=True,
+            )
+        return TPPTransportError(
+            f"TPP request for {target} failed: {exc}.",
+            error_code="connection_error",
+            status_code=503,
+            retryable=True,
+        )
+    if isinstance(exc, (TimeoutError, socket.timeout)):
+        return TPPTransportError(
+            f"TPP request for {target} timed out: {exc}.",
+            error_code="timeout",
+            status_code=504,
+            retryable=True,
+        )
+    if isinstance(exc, (ConnectionError, OSError)):
+        return TPPTransportError(
+            f"TPP request for {target} failed: {exc}.",
+            error_code="connection_error",
+            status_code=503,
+            retryable=True,
+        )
+    return None
+
+
+def _http_status_error(*, path: str, status_code: int, body_excerpt: str) -> TPPTransportError:
+    excerpt = body_excerpt.strip()
+    if len(excerpt) > 280:
+        excerpt = f"{excerpt[:277]}..."
+    message = f"TPP request to {path} returned HTTP {status_code}: {excerpt or 'no response body'}"
+    if status_code in {401, 403}:
+        return TPPTransportError(
+            message,
+            error_code="unauthorized",
+            status_code=401,
+            retryable=False,
+        )
+    if 500 <= status_code <= 599:
+        return TPPTransportError(
+            message,
+            error_code="server_error",
+            status_code=503,
+            retryable=True,
+        )
+    return TPPTransportError(
+        message,
+        error_code="unknown",
+        status_code=502,
+        retryable=False,
+    )
 
 
 @dataclass(slots=True)
@@ -131,8 +377,26 @@ class TPPRuntimeSettings:
 class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
     """Executes TPP operations over the planner-facing HTTP seam."""
 
-    def __init__(self, settings: TPPRuntimeSettings | None = None) -> None:
+    _breakers: ClassVar[dict[tuple[str, str, int], _CircuitBreaker]] = {}
+
+    def __init__(
+        self,
+        settings: TPPRuntimeSettings | None = None,
+        *,
+        policy: TPPTransportPolicy | None = None,
+        sleep: Callable[[float], None] | None = None,
+        clock: Callable[[], float] | None = None,
+        jitter: Callable[[float, float], float] | None = None,
+        breaker_registry: dict[tuple[str, str, int], _CircuitBreaker] | None = None,
+    ) -> None:
         self.settings = settings or TPPRuntimeSettings.from_env()
+        self.policy = policy or TPPTransportPolicy.from_env()
+        self._sleep = sleep or time.sleep
+        self._clock = clock or time.monotonic
+        self._jitter = jitter or random.uniform
+        self._breaker_registry = (
+            breaker_registry if breaker_registry is not None else self._breakers
+        )
 
     def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         if request.operation == "fetch_policy_constraints":
@@ -174,6 +438,58 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         json_payload: dict[str, Any],
     ) -> dict[str, Any]:
         url = f"{self.settings.base_url}{path}"
+        breaker_key = self._breaker_key(url)
+        breaker = self._breaker_registry.setdefault(breaker_key, _CircuitBreaker())
+        host_label = self._host_label(breaker_key)
+        last_error: TPPTransportError | None = None
+
+        for attempt in range(1, self.policy.max_attempts + 1):
+            try:
+                breaker.before_request(
+                    policy=self.policy,
+                    now=self._clock(),
+                    host=host_label,
+                )
+                payload = self._send_json_request(
+                    method=method,
+                    path=path,
+                    url=url,
+                    json_payload=json_payload,
+                )
+            except TPPTransportError as exc:
+                last_error = exc
+                if exc.error_code != "breaker_open":
+                    breaker.record_failure(policy=self.policy, now=self._clock())
+                if (
+                    exc.error_code == "breaker_open"
+                    or not exc.retryable
+                    or attempt >= self.policy.max_attempts
+                ):
+                    raise
+                delay = self._retry_delay(attempt)
+                if delay > 0:
+                    self._sleep(delay)
+                continue
+            breaker.record_success()
+            return payload
+
+        if last_error is not None:
+            raise last_error
+        raise TPPTransportError(
+            f"TPP request to {path} failed without a typed transport result.",
+            error_code="unknown",
+            status_code=502,
+            retryable=False,
+        )
+
+    def _send_json_request(
+        self,
+        *,
+        method: str,
+        path: str,
+        url: str,
+        json_payload: dict[str, Any],
+    ) -> dict[str, Any]:
         body = json.dumps(json_payload).encode("utf-8")
         request = urllib_request.Request(
             url,
@@ -182,28 +498,42 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             method=method,
         )
         try:
-            with urllib_request.urlopen(request, timeout=self.settings.timeout_seconds) as response:
+            with urllib_request.urlopen(
+                request,
+                timeout=self.policy.connect_timeout_seconds,
+            ) as response:
+                self._apply_read_timeout(response)
                 status_code = response.status
                 raw_body = response.read().decode("utf-8")
         except urllib_error.HTTPError as exc:
-            raw_body = exc.read().decode("utf-8", errors="replace")
-            body_excerpt = raw_body.strip()
-            if len(body_excerpt) > 280:
-                body_excerpt = f"{body_excerpt[:277]}..."
-            raise TPPTransportError(
-                f"TPP request to {path} returned HTTP {exc.code}: {body_excerpt or 'no response body'}",
-                status_code=502,
+            try:
+                raw_body = exc.read().decode("utf-8", errors="replace")
+            except OSError:
+                raw_body = ""
+            raise _http_status_error(
+                path=path,
+                status_code=exc.code,
+                body_excerpt=raw_body,
             ) from exc
-        except urllib_error.URLError as exc:
-            raise TPPServiceUnavailableError(f"TPP request to {path} failed: {exc}.") from exc
+        except (
+            urllib_error.URLError,
+            TimeoutError,
+            socket.timeout,
+            ConnectionError,
+            OSError,
+        ) as exc:
+            transport_error = tpp_transport_error_from_exception(
+                exc, operation="request", path=path
+            )
+            if transport_error is None:
+                raise
+            raise transport_error from exc
 
         if status_code >= 400:
-            body_excerpt = raw_body.strip()
-            if len(body_excerpt) > 280:
-                body_excerpt = f"{body_excerpt[:277]}..."
-            raise TPPTransportError(
-                f"TPP request to {path} returned HTTP {status_code}: {body_excerpt or 'no response body'}",
-                status_code=502,
+            raise _http_status_error(
+                path=path,
+                status_code=status_code,
+                body_excerpt=raw_body,
             )
 
         try:
@@ -213,6 +543,40 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         if not isinstance(payload, dict):
             raise TPPContractError(f"TPP request to {path} returned a non-object JSON payload.")
         return payload
+
+    def _apply_read_timeout(self, response: Any) -> None:
+        # urllib does not expose separate connect/read timeout knobs; apply read timeout
+        # on the opened socket when accessible and otherwise fall back silently.
+        sock = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
+        if sock is None:
+            return
+        settimeout = getattr(sock, "settimeout", None)
+        if callable(settimeout):
+            settimeout(self.policy.read_timeout_seconds)
+
+    def _retry_delay(self, attempt: int) -> float:
+        delay = min(
+            self.policy.backoff_initial_seconds * (2 ** max(attempt - 1, 0)),
+            self.policy.backoff_max_seconds,
+        )
+        if delay <= 0:
+            return 0.0
+        return self._jitter(0.0, delay)
+
+    @staticmethod
+    def _breaker_key(url: str) -> tuple[str, str, int]:
+        parsed = urllib_parse.urlsplit(url)
+        scheme = parsed.scheme or "http"
+        host = parsed.hostname or ""
+        if not host:
+            raise TPPContractError("TPP_BASE_URL must include a host.")
+        port = parsed.port or (443 if scheme == "https" else 80)
+        return (scheme, host, port)
+
+    @staticmethod
+    def _host_label(key: tuple[str, str, int]) -> str:
+        scheme, host, port = key
+        return f"{scheme}://{host}:{port}"
 
     def _policy_request_payload(self, request: TPPRequestEnvelope) -> dict[str, Any]:
         payload = dict(request.payload)

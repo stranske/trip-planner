@@ -1735,6 +1735,32 @@ def _build_planner_panel_state(
                 "highlights": list(summary.get("highlights") or [])[:3],
             }
         )
+        submission_error = summary.get("submission_error")
+        if isinstance(submission_error, dict):
+            error_code = submission_error.get("code")
+            if error_code in {"breaker_open", "timeout"}:
+                if error_code == "breaker_open":
+                    notice_title = "Live TPP breaker is open"
+                    notice_body = (
+                        "Live policy transport is temporarily unavailable. The workspace is using "
+                        "stored-policy posture until the breaker reset window elapses."
+                    )
+                else:
+                    notice_title = "Live TPP request timed out"
+                    notice_body = (
+                        "Live policy transport timed out. The workspace is using stored-policy "
+                        "posture while live transport recovers."
+                    )
+                outputs.append(
+                    {
+                        "output_id": f"output:{trip['trip_id']}:proposal-transport-fallback",
+                        "title": notice_title,
+                        "body": notice_body,
+                        "tags": ["proposal", "transport", "stored-policy", trip["mode"]],
+                        "status": "caution",
+                        "highlights": [str(submission_error.get("message") or "")],
+                    }
+                )
         if follow_up:
             outputs.append(
                 {
