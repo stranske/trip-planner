@@ -594,7 +594,7 @@ def test_http_transport_breaker_is_isolated_per_host(monkeypatch: pytest.MonkeyP
             _FakeHTTPResponse(200, {"ok": True}),
         ],
     )
-    shared_registry: dict[tuple[str, str, int], object] = {}
+    shared_registry: dict[tuple[str, str, int], tpp_client_module._CircuitBreaker] = {}
     failing_client = _http_client(
         policy=TPPTransportPolicy(
             max_attempts=1,
