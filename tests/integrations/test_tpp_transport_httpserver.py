@@ -4,8 +4,14 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+from pytest_httpserver import HTTPServer
 
-pytest.importorskip("pytest_httpserver")
+from trip_planner.integrations.tpp import (
+    HTTPTPPIntegrationClient,
+    TPPRuntimeSettings,
+    TPPTransportError,
+    TPPTransportPolicy,
+)
 
 _SOCKET_BIND_AVAILABLE = True
 try:
@@ -22,15 +28,6 @@ finally:
 pytestmark = pytest.mark.skipif(
     not _SOCKET_BIND_AVAILABLE,
     reason="socket bind is not permitted in this environment",
-)
-
-from pytest_httpserver import HTTPServer
-
-from trip_planner.integrations.tpp import (
-    HTTPTPPIntegrationClient,
-    TPPRuntimeSettings,
-    TPPTransportError,
-    TPPTransportPolicy,
 )
 
 
