@@ -1,4 +1,5 @@
 from pathlib import Path
+import stat
 
 import pytest
 
@@ -10,6 +11,40 @@ def _make_repo_with_venv(tmp_path: Path) -> tuple[Path, Path]:
     venv_python = repo_path / ".venv" / "bin" / "python"
     venv_python.parent.mkdir(parents=True)
     venv_python.write_text("#!/usr/bin/env python\n", encoding="utf-8")
+    return repo_path, venv_python
+
+
+def _make_runnable_tpp_repo(tmp_path: Path) -> tuple[Path, Path]:
+    repo_path, venv_python = _make_repo_with_venv(tmp_path)
+    package_path = repo_path / "src" / "travel_plan_permission"
+    package_path.mkdir(parents=True)
+    (package_path / "__init__.py").write_text("", encoding="utf-8")
+    (package_path / "http_service.py").write_text(
+        """
+import argparse
+import time
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", required=True)
+    parser.add_argument("--port", type=int, required=True)
+    parser.parse_args()
+    while True:
+        time.sleep(0.1)
+
+
+if __name__ == "__main__":
+    main()
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    venv_python.write_text(
+        f"#!/usr/bin/env bash\nexec {verifier.sys.executable} \"$@\"\n",
+        encoding="utf-8",
+    )
+    venv_python.chmod(venv_python.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return repo_path, venv_python
 
 
@@ -61,6 +96,26 @@ def test_started_tpp_service_starts_and_terminates_cleanly(monkeypatch, tmp_path
     assert captured_process.command[1:3] == ["-m", "travel_plan_permission.http_service"]
     assert captured_process.terminated is True
     assert captured_process.wait_calls == 1
+
+
+def test_started_tpp_service_starts_known_good_repo_and_tears_down(
+    monkeypatch, tmp_path: Path
+) -> None:
+    repo_path, venv_python = _make_runnable_tpp_repo(tmp_path)
+    env = {
+        "TPP_REPO_PATH": str(repo_path),
+        "TPP_ACCESS_TOKEN": "token",
+        "TPP_OIDC_PROVIDER": "google",
+    }
+    monkeypatch.setattr(verifier, "_wait_for_http", lambda _url: None)
+    monkeypatch.setattr(verifier, "_free_local_port", lambda _preferred: 42124)
+
+    with verifier._started_tpp_service(env) as (_base_url, process):
+        assert process is not None
+        assert process.poll() is None
+        assert process.args[0] == str(venv_python)
+
+    assert process.poll() is not None
 
 
 def test_started_tpp_service_readiness_failure_includes_captured_stderr(
