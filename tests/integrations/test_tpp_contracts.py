@@ -538,6 +538,35 @@ def test_http_transport_opens_breaker_after_consecutive_failures(
     assert exc_info.value.error_code == "breaker_open"
 
 
+def test_http_transport_open_breaker_fails_fast_without_new_network_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    call_counter = [0]
+    _install_urlopen(
+        monkeypatch,
+        [urllib_error.URLError(ConnectionRefusedError("refused"))],
+        call_counter=call_counter,
+    )
+    client = _http_client(
+        policy=TPPTransportPolicy(
+            max_attempts=1,
+            breaker_failure_threshold=1,
+            breaker_reset_seconds=60.0,
+        ),
+        breaker_registry={},
+    )
+
+    with pytest.raises(TPPTransportError) as first_failure:
+        client._request_json(method="POST", path="/api/down", json_payload={})
+    assert first_failure.value.error_code == "connection_error"
+    assert call_counter[0] == 1
+
+    with pytest.raises(TPPTransportError) as open_breaker:
+        client._request_json(method="POST", path="/api/down", json_payload={})
+    assert open_breaker.value.error_code == "breaker_open"
+    assert call_counter[0] == 1
+
+
 def test_http_transport_half_open_success_closes_breaker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
