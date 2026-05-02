@@ -399,6 +399,9 @@ def test_workspace_policy_import_uses_stored_policy_fallback_on_live_timeout(
     assert payload["policy_state"]["policy_id"] == "policy-standard-2026-02"
     assert payload["summary"]["status"] == "stored_policy_fallback"
     assert payload["summary"]["transport_error"]["error_code"] == "timeout"
+    assert payload["summary"]["transport_error"]["status_code"] == 504
+    assert payload["summary"]["transport_error"]["retryable"] is True
+    assert "timed out" in payload["summary"]["transport_error"]["message"]
     assert payload["summary"]["transport_error"]["source"] == "workspace_policy_sync"
     assert "stored-policy posture" in payload["summary"]["fallback_reason"]
 
@@ -471,5 +474,8 @@ def test_workspace_policy_import_uses_stored_policy_fallback_on_breaker_open(
     assert payload["policy_state"]["policy_id"] == "policy-standard-2026-02"
     assert payload["summary"]["status"] == "stored_policy_fallback"
     assert payload["summary"]["transport_error"]["error_code"] == "breaker_open"
+    assert payload["summary"]["transport_error"]["status_code"] == 503
+    assert payload["summary"]["transport_error"]["retryable"] is True
+    assert "circuit breaker is open" in payload["summary"]["transport_error"]["message"]
     assert payload["summary"]["transport_error"]["source"] == "workspace_policy_sync"
     assert "stored-policy posture" in payload["summary"]["fallback_reason"]
