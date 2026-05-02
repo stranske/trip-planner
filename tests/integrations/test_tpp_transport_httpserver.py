@@ -107,6 +107,18 @@ def test_httpserver_surfaces_invalid_response(httpserver: HTTPServer) -> None:
     assert exc_info.value.error_code == "invalid_response"
 
 
+def test_httpserver_surfaces_invalid_utf8_as_invalid_response(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/invalid-utf8", method="POST").respond_with_data(
+        b"\xff\xfe\xfa", status=200, content_type="application/json"
+    )
+    client = _client(httpserver.url_for(""))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/invalid-utf8", json_payload={})
+
+    assert exc_info.value.error_code == "invalid_response"
+
+
 def test_httpserver_surfaces_unknown_for_non_retryable_http_status(httpserver: HTTPServer) -> None:
     httpserver.expect_request("/unknown", method="POST").respond_with_json(
         {"detail": "teapot"}, status=418

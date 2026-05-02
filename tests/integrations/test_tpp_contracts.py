@@ -751,6 +751,16 @@ def test_http_transport_breaker_is_isolated_per_host(monkeypatch: pytest.MonkeyP
     }
 
 
+def test_http_transport_shared_breaker_registry_uses_shared_lock() -> None:
+    shared_registry: dict[tuple[str, str, int], tpp_client_module._CircuitBreaker] = {}
+    first_client = _http_client(breaker_registry=shared_registry)
+    second_client = _http_client(breaker_registry=shared_registry)
+
+    assert first_client._breaker_registry is shared_registry
+    assert second_client._breaker_registry is shared_registry
+    assert first_client._breaker_registry_lock is second_client._breaker_registry_lock
+
+
 def test_http_transport_integration_against_stub_http_server_reports_server_error() -> None:
     class _Handler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
