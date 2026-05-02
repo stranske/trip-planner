@@ -198,6 +198,15 @@ Use these env vars only when you are intentionally exercising an integration sea
 - `TPP_TRANSPORT_CONNECT_TIMEOUT_SECONDS`, `TPP_TRANSPORT_READ_TIMEOUT_SECONDS`, `TPP_TRANSPORT_MAX_ATTEMPTS`, `TPP_TRANSPORT_BACKOFF_INITIAL_SECONDS`, `TPP_TRANSPORT_BACKOFF_MAX_SECONDS`, `TPP_TRANSPORT_BREAKER_FAILURE_THRESHOLD`, `TPP_TRANSPORT_BREAKER_RESET_SECONDS`: optional live TPP transport policy overrides. Defaults are 5s connect timeout, 15s read timeout, 3 attempts, 0.5s jittered initial backoff capped at 4s, 5 failures before the per-host breaker opens, and a 30s breaker reset window. `TPP_TIMEOUT_SECONDS` remains accepted as a legacy read-timeout fallback when the newer read-timeout override is unset.
 - `TPP_REPO_PATH`: optional sibling checkout path used by `make full-product-check` when it needs to start a local Travel-Plan-Permission service instead of using `TPP_BASE_URL`.
 
+When live TPP transport is enabled, HTTP calls share the same typed error
+taxonomy across proposal submission, evaluation fetch, and workspace policy
+sync: `timeout`, `connection_error`, `server_error`, `breaker_open`,
+`unauthorized`, `invalid_response`, and `unknown`. Workspace policy sync keeps
+the last stored-policy posture visible when a live request returns `timeout` or
+`breaker_open`, and includes the typed transport error in the response summary.
+The circuit breaker is keyed by TPP service host so consecutive failures against
+one service do not suppress a different host.
+
 That distinction matters for docs and verification messaging:
 
 - missing local prerequisites such as `.venv` or `frontend/node_modules` are setup failures

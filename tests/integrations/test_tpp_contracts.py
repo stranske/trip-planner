@@ -1,6 +1,7 @@
 import json
 import io
 import socket
+import threading
 from http.client import HTTPMessage
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -183,6 +184,7 @@ def _http_client(
     policy: TPPTransportPolicy | None = None,
     clock=lambda: 0.0,
     breaker_registry=None,
+    breaker_registry_lock=None,
 ) -> HTTPTPPIntegrationClient:
     return HTTPTPPIntegrationClient(
         TPPRuntimeSettings(
@@ -195,6 +197,7 @@ def _http_client(
         clock=clock,
         jitter=lambda _start, _end: 0.0,
         breaker_registry=breaker_registry if breaker_registry is not None else {},
+        breaker_registry_lock=breaker_registry_lock,
     )
 
 
@@ -715,6 +718,7 @@ def test_http_transport_breaker_is_isolated_per_host(monkeypatch: pytest.MonkeyP
         ],
     )
     shared_registry: dict[tuple[str, str, int], tpp_client_module._CircuitBreaker] = {}
+    shared_lock = threading.Lock()
     failing_client = _http_client(
         policy=TPPTransportPolicy(
             max_attempts=1,
@@ -722,6 +726,7 @@ def test_http_transport_breaker_is_isolated_per_host(monkeypatch: pytest.MonkeyP
             breaker_reset_seconds=60.0,
         ),
         breaker_registry=shared_registry,
+        breaker_registry_lock=shared_lock,
     )
     healthy_client = HTTPTPPIntegrationClient(
         TPPRuntimeSettings(
@@ -740,6 +745,7 @@ def test_http_transport_breaker_is_isolated_per_host(monkeypatch: pytest.MonkeyP
         clock=lambda: 0.0,
         jitter=lambda _start, _end: 0.0,
         breaker_registry=shared_registry,
+        breaker_registry_lock=shared_lock,
     )
 
     with pytest.raises(TPPTransportError) as first:
@@ -753,12 +759,20 @@ def test_http_transport_breaker_is_isolated_per_host(monkeypatch: pytest.MonkeyP
 
 def test_http_transport_shared_breaker_registry_uses_shared_lock() -> None:
     shared_registry: dict[tuple[str, str, int], tpp_client_module._CircuitBreaker] = {}
-    first_client = _http_client(breaker_registry=shared_registry)
-    second_client = _http_client(breaker_registry=shared_registry)
+    shared_lock = threading.Lock()
+    first_client = _http_client(
+        breaker_registry=shared_registry,
+        breaker_registry_lock=shared_lock,
+    )
+    second_client = _http_client(
+        breaker_registry=shared_registry,
+        breaker_registry_lock=shared_lock,
+    )
 
     assert first_client._breaker_registry is shared_registry
     assert second_client._breaker_registry is shared_registry
-    assert first_client._breaker_registry_lock is second_client._breaker_registry_lock
+    assert first_client._breaker_registry_lock is shared_lock
+    assert second_client._breaker_registry_lock is shared_lock
 
 
 def test_http_transport_integration_against_stub_http_server_reports_server_error() -> None:

@@ -395,8 +395,6 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
 
     _breakers: ClassVar[dict[tuple[str, str, int], _CircuitBreaker]] = {}
     _default_breaker_registry_lock: ClassVar[threading.Lock] = threading.Lock()
-    _injected_breaker_registry_locks: ClassVar[dict[int, threading.Lock]] = {}
-    _injected_breaker_registry_locks_guard: ClassVar[threading.Lock] = threading.Lock()
 
     def __init__(
         self,
@@ -407,6 +405,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         clock: Callable[[], float] | None = None,
         jitter: Callable[[float, float], float] | None = None,
         breaker_registry: dict[tuple[str, str, int], _CircuitBreaker] | None = None,
+        breaker_registry_lock: threading.Lock | None = None,
     ) -> None:
         self.settings = settings or TPPRuntimeSettings.from_env()
         self.policy = policy or TPPTransportPolicy.from_env()
@@ -417,22 +416,10 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             breaker_registry if breaker_registry is not None else self._breakers
         )
         self._breaker_registry_lock = (
-            self._lock_for_injected_breaker_registry(breaker_registry)
+            breaker_registry_lock or threading.Lock()
             if breaker_registry is not None
             else self._default_breaker_registry_lock
         )
-
-    @classmethod
-    def _lock_for_injected_breaker_registry(
-        cls,
-        breaker_registry: dict[tuple[str, str, int], _CircuitBreaker],
-    ) -> threading.Lock:
-        registry_id = id(breaker_registry)
-        with cls._injected_breaker_registry_locks_guard:
-            return cls._injected_breaker_registry_locks.setdefault(
-                registry_id,
-                threading.Lock(),
-            )
 
     def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         if request.operation == "fetch_policy_constraints":
