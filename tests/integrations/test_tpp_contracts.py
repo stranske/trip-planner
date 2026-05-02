@@ -674,8 +674,11 @@ def test_http_transport_half_open_untyped_failure_releases_trial(
         client._request_json(method="POST", path="/api/down", json_payload={})
 
     current_time = 11.0
-    with pytest.raises(RuntimeError, match="unexpected parser failure"):
+    with pytest.raises(TPPTransportError) as half_open_failure:
         client._request_json(method="POST", path="/api/down", json_payload={})
+    assert half_open_failure.value.error_code == "unknown"
+    assert isinstance(half_open_failure.value.__cause__, RuntimeError)
+    assert "unexpected parser failure" in str(half_open_failure.value.__cause__)
 
     current_time = 22.0
     assert client._request_json(method="POST", path="/api/down", json_payload={}) == {"ok": True}

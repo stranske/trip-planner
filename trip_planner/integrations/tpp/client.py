@@ -522,9 +522,16 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 if delay > 0:
                     self._sleep(delay)
                 continue
-            except Exception:
+            except Exception as exc:
+                transport_error = TPPTransportError(
+                    f"TPP request to {path} failed unexpectedly: {exc}.",
+                    error_code="unknown",
+                    status_code=502,
+                    retryable=False,
+                )
+                last_error = transport_error
                 breaker.record_failure(policy=self.policy, now=self._clock())
-                raise
+                raise transport_error from exc
             breaker.record_success()
             return payload
 
