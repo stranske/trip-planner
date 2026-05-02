@@ -308,6 +308,35 @@ def test_http_client_constructor_policy_overrides_env(monkeypatch: pytest.Monkey
     assert client.policy == explicit_policy
 
 
+def test_http_client_constructor_loads_policy_from_env_when_not_explicit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_TRANSPORT_CONNECT_TIMEOUT_SECONDS", "2.5")
+    monkeypatch.setenv("TPP_TRANSPORT_READ_TIMEOUT_SECONDS", "12.5")
+    monkeypatch.setenv("TPP_TRANSPORT_MAX_ATTEMPTS", "6")
+    monkeypatch.setenv("TPP_TRANSPORT_BACKOFF_INITIAL_SECONDS", "0.25")
+    monkeypatch.setenv("TPP_TRANSPORT_BACKOFF_MAX_SECONDS", "2.25")
+    monkeypatch.setenv("TPP_TRANSPORT_BREAKER_FAILURE_THRESHOLD", "8")
+    monkeypatch.setenv("TPP_TRANSPORT_BREAKER_RESET_SECONDS", "45")
+
+    client = HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url="https://tpp.example.test",
+            access_token="token-123",
+            oidc_provider="okta",
+        ),
+        breaker_registry={},
+    )
+
+    assert client.policy.connect_timeout_seconds == 2.5
+    assert client.policy.read_timeout_seconds == 12.5
+    assert client.policy.max_attempts == 6
+    assert client.policy.backoff_initial_seconds == 0.25
+    assert client.policy.backoff_max_seconds == 2.25
+    assert client.policy.breaker_failure_threshold == 8
+    assert client.policy.breaker_reset_seconds == 45.0
+
+
 def test_transport_policy_rejects_non_finite_float_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
