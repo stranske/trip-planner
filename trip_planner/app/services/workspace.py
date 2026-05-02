@@ -1718,6 +1718,44 @@ def _build_planner_panel_state(
                 "target_section": "approval",
             },
         )
+    policy_summary = (
+        dict(policy_context.get("summary") or {}) if isinstance(policy_context, dict) else {}
+    )
+    policy_transport_error = (
+        dict(policy_summary.get("transport_error") or {})
+        if isinstance(policy_summary.get("transport_error"), dict)
+        else {}
+    )
+    policy_error_code = policy_transport_error.get("error_code")
+    if policy_summary.get("status") == "stored_policy_fallback" and policy_error_code in {
+        "breaker_open",
+        "timeout",
+    }:
+        if policy_error_code == "breaker_open":
+            notice_title = "Live TPP breaker is open"
+            notice_body = (
+                "Live policy sync transport is temporarily unavailable. The workspace is using "
+                "stored-policy posture until the breaker reset window elapses."
+            )
+        else:
+            notice_title = "Live TPP request timed out"
+            notice_body = (
+                "Live policy sync transport timed out. The workspace is using stored-policy "
+                "posture while live transport recovers."
+            )
+        outputs.append(
+            {
+                "output_id": f"output:{trip['trip_id']}:policy-transport-fallback",
+                "title": notice_title,
+                "body": notice_body,
+                "tags": ["policy", "transport", "stored-policy", trip["mode"]],
+                "status": "caution",
+                "highlights": [
+                    f"error_code={policy_error_code}",
+                    str(policy_transport_error.get("message") or ""),
+                ],
+            }
+        )
     if proposal_state is not None:
         summary = dict(proposal_state.get("summary") or {})
         follow_up = dict(proposal_state.get("follow_up") or {})
