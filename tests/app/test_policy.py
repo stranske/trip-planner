@@ -341,3 +341,135 @@ def test_workspace_policy_import_surfaces_live_tpp_unavailable_errors(
 
     assert response.status_code == 503
     assert "failed" in response.json()["detail"]
+
+
+def test_workspace_policy_import_uses_stored_policy_fallback_on_live_timeout(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    monkeypatch.setenv("TPP_TRANSPORT_MAX_ATTEMPTS", "1")
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Fallback policy sync",
+            "summary": "Render stored policy posture if live TPP times out.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = _load_fixture("standard_policy_sync.json")
+    fixture["request"]["trip_id"] = trip_id
+
+    seeded = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={
+            "request": fixture["request"],
+            "response": fixture["response"],
+            "source_kind": "tpp_sync",
+            "tags": ["stored-policy"],
+            "notes": ["Seed stored policy posture before live retry."],
+        },
+    )
+    assert seeded.status_code == 200
+
+    _install_fake_http(monkeypatch, [TimeoutError("read timed out")])
+
+    fallback = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={
+            "request": fixture["request"],
+            "source_kind": "tpp_sync",
+            "tags": ["live-retry"],
+            "notes": ["Retry live TPP transport."],
+        },
+    )
+
+    assert fallback.status_code == 200
+    payload = fallback.json()
+    assert payload["policy_state"]["policy_id"] == "policy-standard-2026-02"
+    assert payload["summary"]["status"] == "stored_policy_fallback"
+    assert payload["summary"]["transport_error"]["error_code"] == "timeout"
+    assert payload["summary"]["transport_error"]["source"] == "workspace_policy_sync"
+    assert "stored-policy posture" in payload["summary"]["fallback_reason"]
+
+
+def test_workspace_policy_import_uses_stored_policy_fallback_on_breaker_open(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    monkeypatch.setenv("TPP_TRANSPORT_MAX_ATTEMPTS", "1")
+    monkeypatch.setenv("TPP_TRANSPORT_BREAKER_FAILURE_THRESHOLD", "1")
+    monkeypatch.setenv("TPP_TRANSPORT_BREAKER_RESET_SECONDS", "60")
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Breaker fallback policy sync",
+            "summary": "Render stored policy posture if live TPP breaker is open.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = _load_fixture("standard_policy_sync.json")
+    fixture["request"]["trip_id"] = trip_id
+
+    seeded = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={
+            "request": fixture["request"],
+            "response": fixture["response"],
+            "source_kind": "tpp_sync",
+            "tags": ["stored-policy"],
+            "notes": ["Seed stored policy posture before live retry."],
+        },
+    )
+    assert seeded.status_code == 200
+
+    _install_fake_http(monkeypatch, [urllib_error.URLError(ConnectionRefusedError("down"))])
+    failed = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={
+            "request": fixture["request"],
+            "source_kind": "tpp_sync",
+            "tags": ["live-retry"],
+            "notes": ["Open the breaker with a live TPP transport failure."],
+        },
+    )
+    assert failed.status_code == 503
+
+    fallback = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={
+            "request": fixture["request"],
+            "source_kind": "tpp_sync",
+            "tags": ["live-retry"],
+            "notes": ["Retry after the breaker opens."],
+        },
+    )
+
+    assert fallback.status_code == 200
+    payload = fallback.json()
+    assert payload["policy_state"]["policy_id"] == "policy-standard-2026-02"
+    assert payload["summary"]["status"] == "stored_policy_fallback"
+    assert payload["summary"]["transport_error"]["error_code"] == "breaker_open"
+    assert payload["summary"]["transport_error"]["source"] == "workspace_policy_sync"
+    assert "stored-policy posture" in payload["summary"]["fallback_reason"]

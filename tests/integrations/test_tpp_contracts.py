@@ -1,5 +1,7 @@
 import json
+import io
 import socket
+from http.client import HTTPMessage
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
@@ -261,6 +263,17 @@ def test_transport_policy_defaults_and_env_overrides(monkeypatch: pytest.MonkeyP
     assert policy.breaker_reset_seconds == 11.0
 
 
+def test_transport_policy_read_timeout_falls_back_to_tpp_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_TIMEOUT_SECONDS", "8.5")
+    monkeypatch.delenv("TPP_TRANSPORT_READ_TIMEOUT_SECONDS", raising=False)
+
+    policy = TPPTransportPolicy.from_env()
+
+    assert policy.read_timeout_seconds == 8.5
+
+
 def test_http_client_constructor_policy_overrides_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TPP_TRANSPORT_CONNECT_TIMEOUT_SECONDS", "1")
     monkeypatch.setenv("TPP_TRANSPORT_READ_TIMEOUT_SECONDS", "2")
@@ -408,6 +421,78 @@ def test_transport_error_rejects_unknown_error_code() -> None:
         TPPTransportError("bad code", error_code="not_a_real_code")  # type: ignore[arg-type]
 
 
+def test_transport_error_helper_maps_http_429_to_unknown() -> None:
+    error = urllib_error.HTTPError(
+        url="https://example.test/api/rate-limited",
+        code=429,
+        msg="Too Many Requests",
+        hdrs=HTTPMessage(),
+        fp=io.BytesIO(b'{"detail":"slow down"}'),
+    )
+
+    mapped = tpp_client_module.tpp_transport_error_from_exception(
+        error,
+        operation="submit_proposal",
+    )
+
+    assert mapped is not None
+    assert mapped.error_code == "unknown"
+    assert mapped.retryable is False
+
+
+def test_transport_error_helper_returns_none_for_non_transport_error() -> None:
+    mapped = tpp_client_module.tpp_transport_error_from_exception(
+        ValueError("not transport related"),
+        operation="submit_proposal",
+    )
+
+    assert mapped is None
+
+
+def test_circuit_breaker_state_machine_transitions() -> None:
+    breaker = tpp_client_module._CircuitBreaker()
+    policy = TPPTransportPolicy(breaker_failure_threshold=2, breaker_reset_seconds=10.0)
+    host = "https://example.test:443"
+
+    assert breaker.state == "closed"
+    breaker.before_request(policy=policy, now=0.0, host=host)
+    breaker.record_failure(policy=policy, now=1.0)
+    assert breaker.state == "closed"
+
+    breaker.record_failure(policy=policy, now=2.0)
+    assert breaker.state == "open"
+
+    with pytest.raises(TPPTransportError, match="open"):
+        breaker.before_request(policy=policy, now=5.0, host=host)
+
+    breaker.before_request(policy=policy, now=12.0, host=host)
+    assert breaker.state == "half-open"
+
+    with pytest.raises(TPPTransportError, match="trial already in flight"):
+        breaker.before_request(policy=policy, now=12.1, host=host)
+
+    breaker.record_success()
+    assert breaker.state == "closed"
+
+
+def test_circuit_breaker_half_open_failure_reopens() -> None:
+    breaker = tpp_client_module._CircuitBreaker()
+    policy = TPPTransportPolicy(breaker_failure_threshold=1, breaker_reset_seconds=10.0)
+    host = "https://example.test:443"
+
+    breaker.record_failure(policy=policy, now=0.0)
+    assert breaker.state == "open"
+
+    breaker.before_request(policy=policy, now=11.0, host=host)
+    assert breaker.state == "half-open"
+
+    breaker.record_failure(policy=policy, now=11.1)
+    assert breaker.state == "open"
+
+    with pytest.raises(TPPTransportError, match="open"):
+        breaker.before_request(policy=policy, now=11.2, host=host)
+
+
 def test_http_transport_opens_breaker_after_consecutive_failures(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -476,6 +561,42 @@ def test_http_transport_half_open_success_closes_breaker(
     with pytest.raises(TPPTransportError) as after_close:
         client._request_json(method="POST", path="/api/down", json_payload={})
     assert after_close.value.error_code == "connection_error"
+
+
+def test_http_transport_reset_window_transitions_to_half_open_then_closes_on_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current_time = 0.0
+
+    def _clock() -> float:
+        return current_time
+
+    _install_urlopen(
+        monkeypatch,
+        [
+            urllib_error.URLError(ConnectionRefusedError("refused")),
+            _FakeHTTPResponse(200, {"ok": True}),
+        ],
+    )
+    client = _http_client(
+        policy=TPPTransportPolicy(
+            max_attempts=1,
+            breaker_failure_threshold=1,
+            breaker_reset_seconds=10.0,
+        ),
+        clock=_clock,
+        breaker_registry={},
+    )
+
+    with pytest.raises(TPPTransportError) as first_failure:
+        client._request_json(method="POST", path="/api/down", json_payload={})
+    assert first_failure.value.error_code == "connection_error"
+
+    current_time = 10.0
+    assert client._request_json(method="POST", path="/api/down", json_payload={}) == {"ok": True}
+
+    breaker = next(iter(client._breaker_registry.values()))
+    assert breaker.state == "closed"
 
 
 def test_http_transport_half_open_allows_single_trial_request(
@@ -550,9 +671,8 @@ def test_http_transport_half_open_untyped_failure_releases_trial(
         client._request_json(method="POST", path="/api/down", json_payload={})
 
     current_time = 11.0
-    with pytest.raises(TPPTransportError) as half_open_failure:
+    with pytest.raises(RuntimeError, match="unexpected parser failure"):
         client._request_json(method="POST", path="/api/down", json_payload={})
-    assert half_open_failure.value.error_code == "unknown"
 
     current_time = 22.0
     assert client._request_json(method="POST", path="/api/down", json_payload={}) == {"ok": True}
@@ -629,6 +749,16 @@ def test_http_transport_breaker_is_isolated_per_host(monkeypatch: pytest.MonkeyP
     assert healthy_client._request_json(method="POST", path="/api/ok", json_payload={}) == {
         "ok": True
     }
+
+
+def test_http_transport_shared_breaker_registry_uses_shared_lock() -> None:
+    shared_registry: dict[tuple[str, str, int], tpp_client_module._CircuitBreaker] = {}
+    first_client = _http_client(breaker_registry=shared_registry)
+    second_client = _http_client(breaker_registry=shared_registry)
+
+    assert first_client._breaker_registry is shared_registry
+    assert second_client._breaker_registry is shared_registry
+    assert first_client._breaker_registry_lock is second_client._breaker_registry_lock
 
 
 def test_http_transport_integration_against_stub_http_server_reports_server_error() -> None:

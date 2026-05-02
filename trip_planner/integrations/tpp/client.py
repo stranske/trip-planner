@@ -394,7 +394,9 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
     """Executes TPP operations over the planner-facing HTTP seam."""
 
     _breakers: ClassVar[dict[tuple[str, str, int], _CircuitBreaker]] = {}
-    _breaker_registry_lock: ClassVar[threading.Lock] = threading.Lock()
+    _default_breaker_registry_lock: ClassVar[threading.Lock] = threading.Lock()
+    _injected_breaker_registry_locks: ClassVar[dict[int, threading.Lock]] = {}
+    _injected_breaker_registry_locks_guard: ClassVar[threading.Lock] = threading.Lock()
 
     def __init__(
         self,
@@ -414,6 +416,23 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         self._breaker_registry = (
             breaker_registry if breaker_registry is not None else self._breakers
         )
+        self._breaker_registry_lock = (
+            self._lock_for_injected_breaker_registry(breaker_registry)
+            if breaker_registry is not None
+            else self._default_breaker_registry_lock
+        )
+
+    @classmethod
+    def _lock_for_injected_breaker_registry(
+        cls,
+        breaker_registry: dict[tuple[str, str, int], _CircuitBreaker],
+    ) -> threading.Lock:
+        registry_id = id(breaker_registry)
+        with cls._injected_breaker_registry_locks_guard:
+            return cls._injected_breaker_registry_locks.setdefault(
+                registry_id,
+                threading.Lock(),
+            )
 
     def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         if request.operation == "fetch_policy_constraints":
@@ -474,32 +493,51 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                     url=url,
                     json_payload=json_payload,
                 )
-            except Exception as exc:
-                transport_error = tpp_transport_error_from_exception(
-                    exc,
-                    operation=method,
-                    path=path,
-                ) or TPPTransportError(
-                    f"TPP request to {path} failed: {exc}.",
-                    error_code="unknown",
-                    status_code=502,
-                    retryable=False,
-                )
-                last_error = transport_error
-                if transport_error.error_code != "breaker_open":
+            except TPPTransportError as exc:
+                last_error = exc
+                if exc.error_code != "breaker_open":
                     breaker.record_failure(policy=self.policy, now=self._clock())
                 if (
-                    transport_error.error_code == "breaker_open"
-                    or not transport_error.retryable
+                    exc.error_code == "breaker_open"
+                    or not exc.retryable
                     or attempt >= self.policy.max_attempts
                 ):
-                    if transport_error is exc:
-                        raise
+                    raise
+                delay = self._retry_delay(attempt)
+                if delay > 0:
+                    self._sleep(delay)
+                continue
+            except (
+                urllib_error.URLError,
+                TimeoutError,
+                socket.timeout,
+                ConnectionError,
+                OSError,
+            ) as exc:
+                transport_error = (
+                    tpp_transport_error_from_exception(
+                        exc,
+                        operation=method,
+                        path=path,
+                    )
+                    or TPPTransportError(
+                        f"TPP request to {path} failed: {exc}.",
+                        error_code="unknown",
+                        status_code=502,
+                        retryable=False,
+                    )
+                )
+                last_error = transport_error
+                breaker.record_failure(policy=self.policy, now=self._clock())
+                if not transport_error.retryable or attempt >= self.policy.max_attempts:
                     raise transport_error from exc
                 delay = self._retry_delay(attempt)
                 if delay > 0:
                     self._sleep(delay)
                 continue
+            except Exception:
+                breaker.record_failure(policy=self.policy, now=self._clock())
+                raise
             breaker.record_success()
             return payload
 
@@ -534,7 +572,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             ) as response:
                 self._apply_read_timeout(response)
                 status_code = response.status
-                raw_body = response.read().decode("utf-8", errors="replace")
+                raw_body = response.read().decode("utf-8")
         except urllib_error.HTTPError as exc:
             try:
                 raw_body = exc.read().decode("utf-8", errors="replace")
@@ -558,6 +596,10 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             if transport_error is None:
                 raise
             raise transport_error from exc
+        except UnicodeDecodeError as exc:
+            raise TPPContractError(
+                f"TPP request to {path} returned a response body that is not valid UTF-8."
+            ) from exc
 
         if status_code >= 400:
             raise _http_status_error(

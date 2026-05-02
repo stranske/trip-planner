@@ -107,6 +107,18 @@ def test_httpserver_surfaces_invalid_response(httpserver: HTTPServer) -> None:
     assert exc_info.value.error_code == "invalid_response"
 
 
+def test_httpserver_surfaces_invalid_utf8_as_invalid_response(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/invalid-utf8", method="POST").respond_with_data(
+        b"\xff\xfe\xfa", status=200, content_type="application/json"
+    )
+    client = _client(httpserver.url_for(""))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/invalid-utf8", json_payload={})
+
+    assert exc_info.value.error_code == "invalid_response"
+
+
 def test_httpserver_surfaces_unknown_for_non_retryable_http_status(httpserver: HTTPServer) -> None:
     httpserver.expect_request("/unknown", method="POST").respond_with_json(
         {"detail": "teapot"}, status=418
@@ -207,3 +219,46 @@ def test_httpserver_breaker_opens_after_consecutive_failures(httpserver: HTTPSer
     with pytest.raises(TPPTransportError) as third:
         client._request_json(method="POST", path="/down", json_payload={})
     assert third.value.error_code == "breaker_open"
+
+
+def test_httpserver_breaker_half_open_trial_success_closes_breaker(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/down", method="POST").respond_with_json(
+        {"detail": "service down"}, status=503
+    )
+    httpserver.expect_request("/recovered", method="POST").respond_with_json(
+        {"ok": True}, status=200
+    )
+    httpserver.expect_request("/recovered", method="POST").respond_with_json(
+        {"ok": True}, status=200
+    )
+    now = [0.0]
+    client = _client(
+        httpserver.url_for(""),
+        policy=TPPTransportPolicy(
+            max_attempts=1,
+            backoff_initial_seconds=0.0,
+            backoff_max_seconds=0.0,
+            breaker_failure_threshold=1,
+            breaker_reset_seconds=10.0,
+        ),
+    )
+    client._clock = lambda: now[0]
+
+    with pytest.raises(TPPTransportError) as first:
+        client._request_json(method="POST", path="/down", json_payload={})
+    assert first.value.error_code == "server_error"
+    assert len(httpserver.log) == 1
+
+    with pytest.raises(TPPTransportError) as second:
+        client._request_json(method="POST", path="/recovered", json_payload={})
+    assert second.value.error_code == "breaker_open"
+    assert len(httpserver.log) == 1
+
+    now[0] = 11.0
+    payload = client._request_json(method="POST", path="/recovered", json_payload={})
+    assert payload == {"ok": True}
+    assert len(httpserver.log) == 2
+
+    payload = client._request_json(method="POST", path="/recovered", json_payload={})
+    assert payload == {"ok": True}
+    assert len(httpserver.log) == 3
