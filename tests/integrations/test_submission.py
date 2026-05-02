@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from urllib import error as urllib_error
 
 import pytest
 
@@ -235,4 +236,23 @@ def test_submission_converts_raw_transport_exception_with_cause() -> None:
         )
 
     assert exc_info.value.error_code == "timeout"
+    assert exc_info.value.__cause__ is error
+
+
+def test_submission_converts_raw_url_error_to_connection_error_with_cause() -> None:
+    fixture = _load_fixture("proposal_submit_deferred.json")
+    proposal = _proposal_fixture()
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    error = urllib_error.URLError(ConnectionRefusedError("connection refused"))
+    service = TPPProposalSubmissionService(RaisingTPPSubmissionClient(error))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        service.submit_proposal(
+            request,
+            proposal,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+    assert exc_info.value.error_code == "connection_error"
     assert exc_info.value.__cause__ is error

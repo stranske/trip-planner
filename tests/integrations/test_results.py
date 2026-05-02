@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from urllib import error as urllib_error
 
 import pytest
 
@@ -244,4 +245,21 @@ def test_result_ingestion_converts_raw_transport_exception_with_cause() -> None:
         )
 
     assert exc_info.value.error_code == "timeout"
+    assert exc_info.value.__cause__ is error
+
+
+def test_result_ingestion_converts_raw_url_error_to_connection_error_with_cause() -> None:
+    fixture = _load_fixture("approved_evaluation.json")
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    error = urllib_error.URLError(ConnectionRefusedError("connection refused"))
+    service = TPPEvaluationResultIngestionService(RaisingTPPResultClient(error))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        service.fetch_evaluation_result(
+            request,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+    assert exc_info.value.error_code == "connection_error"
     assert exc_info.value.__cause__ is error
