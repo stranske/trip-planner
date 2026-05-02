@@ -10,6 +10,13 @@ FORBIDDEN_METHODS = {
     "poll_execution_status",
 }
 
+CANONICAL_CLIENT_METHODS = {
+    "fetch_policy_constraints",
+    "submit_proposal",
+    "fetch_evaluation_result",
+    "poll_execution_status",
+}
+
 
 def _base_name(base: ast.expr) -> str | None:
     if isinstance(base, ast.Name):
@@ -97,3 +104,35 @@ def test_policy_passive_client_inherits_base_and_overrides_only_execute() -> Non
 
     method_names = {node.name for node in passive_client.body if isinstance(node, ast.FunctionDef)}
     assert method_names <= {"__init__", "execute"}
+
+
+def test_tpp_client_interface_surface_remains_canonical() -> None:
+    source = Path("trip_planner/integrations/tpp/client.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    protocol_node = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef) and node.name == "TPPIntegrationClient"
+    )
+    base_node = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef) and node.name == "BaseTPPIntegrationClient"
+    )
+
+    protocol_methods = {
+        node.name
+        for node in protocol_node.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and not node.name.startswith("_")
+    }
+    base_methods = {
+        node.name
+        for node in base_node.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and not node.name.startswith("_")
+    }
+
+    assert protocol_methods == CANONICAL_CLIENT_METHODS
+    assert base_methods == CANONICAL_CLIENT_METHODS | {"execute"}
