@@ -452,6 +452,25 @@ def test_transport_error_helper_returns_none_for_non_transport_error() -> None:
     assert mapped is None
 
 
+def test_http_dispatch_normalizes_uncaught_transport_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = _load_fixture("policy_fetch_success.json")
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    client = _http_client()
+
+    def _raise_url_error(_request):
+        raise urllib_error.URLError(ConnectionRefusedError("connection refused"))
+
+    monkeypatch.setattr(client, "execute", _raise_url_error)
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client.fetch_policy_constraints(request)
+
+    assert exc_info.value.error_code == "connection_error"
+    assert isinstance(exc_info.value.__cause__, urllib_error.URLError)
+
+
 def test_circuit_breaker_state_machine_transitions() -> None:
     breaker = tpp_client_module._CircuitBreaker()
     policy = TPPTransportPolicy(breaker_failure_threshold=2, breaker_reset_seconds=10.0)

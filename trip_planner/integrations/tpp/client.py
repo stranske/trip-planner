@@ -174,9 +174,7 @@ class TPPTransportPolicy:
         ):
             value = float(getattr(self, field_name))
             if not math.isfinite(value) or value <= 0:
-                raise TPPConfigurationError(
-                    f"{field_name} must be a finite value greater than 0."
-                )
+                raise TPPConfigurationError(f"{field_name} must be a finite value greater than 0.")
             setattr(self, field_name, value)
         for field_name in ("backoff_initial_seconds", "backoff_max_seconds"):
             value = float(getattr(self, field_name))
@@ -432,6 +430,22 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             return self._poll_execution_status(request)
         raise TPPContractError(f"Unsupported TPP operation {request.operation!r}.")
 
+    def _dispatch(
+        self, expected_operation: str, request: TPPRequestEnvelope
+    ) -> TPPResponseEnvelope:
+        try:
+            return super()._dispatch(expected_operation, request)
+        except TPPTransportError:
+            raise
+        except Exception as exc:
+            transport_error = tpp_transport_error_from_exception(
+                exc,
+                operation=expected_operation,
+            )
+            if transport_error is None:
+                raise
+            raise transport_error from exc
+
     def _headers(self) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {self.settings.access_token}",
@@ -501,18 +515,15 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 ConnectionError,
                 OSError,
             ) as exc:
-                transport_error = (
-                    tpp_transport_error_from_exception(
-                        exc,
-                        operation=method,
-                        path=path,
-                    )
-                    or TPPTransportError(
-                        f"TPP request to {path} failed: {exc}.",
-                        error_code="unknown",
-                        status_code=502,
-                        retryable=False,
-                    )
+                transport_error = tpp_transport_error_from_exception(
+                    exc,
+                    operation=method,
+                    path=path,
+                ) or TPPTransportError(
+                    f"TPP request to {path} failed: {exc}.",
+                    error_code="unknown",
+                    status_code=502,
+                    retryable=False,
                 )
                 last_error = transport_error
                 breaker.record_failure(policy=self.policy, now=self._clock())
