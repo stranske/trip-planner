@@ -188,6 +188,10 @@ class TPPTransportPolicy:
             if value <= 0:
                 raise TPPConfigurationError(f"{field_name} must be greater than 0.")
             setattr(self, field_name, value)
+        if self.backoff_max_seconds < self.backoff_initial_seconds:
+            raise TPPConfigurationError(
+                "backoff_max_seconds must be greater than or equal to backoff_initial_seconds."
+            )
 
     @classmethod
     def from_env(cls) -> "TPPTransportPolicy":

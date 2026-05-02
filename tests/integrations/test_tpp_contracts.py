@@ -351,6 +351,11 @@ def test_transport_policy_rejects_non_finite_direct_values() -> None:
         TPPTransportPolicy(connect_timeout_seconds=float("inf"))
 
 
+def test_transport_policy_rejects_backoff_max_less_than_initial() -> None:
+    with pytest.raises(TPPTransportError, match="greater than or equal"):
+        TPPTransportPolicy(backoff_initial_seconds=0.75, backoff_max_seconds=0.5)
+
+
 def test_http_transport_retries_server_errors_then_surfaces_typed_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
