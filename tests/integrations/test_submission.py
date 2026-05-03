@@ -258,6 +258,31 @@ def test_submission_converts_raw_url_error_to_connection_error_with_cause() -> N
     assert exc_info.value.__cause__ is error
 
 
+def test_submission_converts_http_error_to_server_error_with_cause() -> None:
+    fixture = _load_fixture("proposal_submit_deferred.json")
+    proposal = _proposal_fixture()
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    error = urllib_error.HTTPError(
+        url="https://tpp.example.test/api/proposals",
+        code=503,
+        msg="Service Unavailable",
+        hdrs=None,
+        fp=None,
+    )
+    service = TPPProposalSubmissionService(RaisingTPPSubmissionClient(error))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        service.submit_proposal(
+            request,
+            proposal,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+    assert exc_info.value.error_code == "server_error"
+    assert exc_info.value.__cause__ is error
+
+
 def test_submission_converts_unclassified_exception_to_unknown_transport_error() -> None:
     fixture = _load_fixture("proposal_submit_deferred.json")
     proposal = _proposal_fixture()

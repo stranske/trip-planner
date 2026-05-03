@@ -265,6 +265,29 @@ def test_result_ingestion_converts_raw_url_error_to_connection_error_with_cause(
     assert exc_info.value.__cause__ is error
 
 
+def test_result_ingestion_converts_http_error_to_server_error_with_cause() -> None:
+    fixture = _load_fixture("approved_evaluation.json")
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    error = urllib_error.HTTPError(
+        url="https://tpp.example.test/api/results",
+        code=503,
+        msg="Service Unavailable",
+        hdrs=None,
+        fp=None,
+    )
+    service = TPPEvaluationResultIngestionService(RaisingTPPResultClient(error))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        service.fetch_evaluation_result(
+            request,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+    assert exc_info.value.error_code == "server_error"
+    assert exc_info.value.__cause__ is error
+
+
 def test_result_ingestion_converts_unclassified_exception_to_unknown_transport_error() -> None:
     fixture = _load_fixture("approved_evaluation.json")
     request = TPPRequestEnvelope.from_dict(fixture["request"])
