@@ -101,65 +101,54 @@ You should assume you're running in `agent-standard` unless explicitly told othe
 
 ## Task Prompt
 
-# Fix CI Failures
+## Keepalive Next Task
 
-The CI pipeline is failing. Your **only objective** is to fix the failing checks so they pass.
+Your objective is to satisfy the **Acceptance Criteria** by completing each **Task** within the defined **Scope**.
 
-## Rules
+**This round you MUST:**
+1. Implement actual code or test changes that advance at least one incomplete task toward acceptance.
+2. Commit meaningful source code (.py, .yml, .js, etc.)—not just status/docs updates.
+3. Mark a task checkbox complete ONLY after verifying the implementation works.
+4. Focus on the FIRST unchecked task unless blocked, then move to the next.
 
-**DO NOT:**
-- Work on new features or tasks from the checklist
-- Refactor unrelated code
-- Update documentation or comments
-- Make stylistic changes beyond what's needed to fix the failure
-
-**DO:**
-1. Identify which checks are failing (test, mypy, lint, type-check)
-2. Read the error output carefully to understand the root cause
-3. Make minimal, targeted fixes that address the specific failures
-4. Verify your changes don't break other tests
-5. Commit with message: `fix: resolve CI failures`
+**Guidelines:**
+- Keep edits scoped to the current task rather than reshaping the entire PR.
+- Use repository instructions, conventions, and tests to validate work.
+- Prefer small, reviewable commits; leave clear notes when follow-up is required.
+- Do NOT work on unrelated improvements until all PR tasks are complete.
 
 ## Pre-Commit Formatting Gate (Black)
 
-If CI is failing due to Black formatting (e.g., "would reformat"), you MUST:
+Before you commit or push any Python (`.py`) changes, you MUST:
 1. Run Black to format the relevant files (line length 100).
-2. Verify formatting passes by running:
+2. Verify formatting passes CI by running:
    `black --check --line-length 100 --exclude '(\.workflows-lib|node_modules)' .`
-3. Do NOT commit/push until the check passes.
+3. If the check fails, do NOT commit/push; format again until it passes.
 
-## Failure Types
+**COVERAGE TASKS - SPECIAL RULES:**
+If a task mentions "coverage" or a percentage target (e.g., "≥95%", "to 95%"), you MUST:
+1. After adding tests, run TARGETED coverage verification to avoid timeouts:
+   - For a specific script like `scripts/foo.py`, run:
+     `pytest tests/scripts/test_foo.py --cov=scripts/foo --cov-report=term-missing -m "not slow"`
+   - If no matching test file exists, run:
+     `pytest tests/ --cov=scripts/foo --cov-report=term-missing -m "not slow" -x`
+2. Find the specific script in the coverage output table
+3. Verify the `Cover` column shows the target percentage or higher
+4. Only mark the task complete if the actual coverage meets the target
+5. If coverage is below target, add more tests until it meets the target
 
-### Test Failures
-- Read the test name and assertion error
-- Check if the test expectation is correct or if the implementation is wrong
-- Fix the implementation if the test is correct
-- Only modify tests if they have genuine bugs
+IMPORTANT: Always use `-m "not slow"` to skip slow integration tests that may timeout.
+IMPORTANT: Use targeted `--cov=scripts/specific_module` instead of `--cov=scripts` for faster feedback.
 
-### Mypy / Type Errors
-- Read the exact error message and line number
-- Add type annotations where missing
-- Fix type mismatches (wrong return type, incompatible arguments)
-- Use `# type: ignore` sparingly and only when truly necessary
+A coverage task is NOT complete just because you added tests. It is complete ONLY when the coverage command output confirms the target is met.
 
-### Lint Errors
-- These are usually handled by autofix, but if you see them:
-- Follow the linter's suggestion
-- Don't over-engineer the fix
-
-## Exit Criteria
-
-Once all CI checks pass, the keepalive loop will automatically resume normal task work using the standard prompt.
-
----
-
-**Focus solely on making CI green. Do not advance other work until checks pass.**
+**The Tasks and Acceptance Criteria are provided in the appendix below.** Work through them in order.
 
 ## Run context
 ---
 ## PR Tasks and Acceptance Criteria
 
-**Progress:** 11/17 tasks complete, 6 remaining
+**Progress:** 15/17 tasks complete, 2 remaining
 
 ### ⚠️ IMPORTANT: Task Reconciliation Required
 
@@ -212,18 +201,15 @@ The PR is complete when ALL of these are satisfied:
 - [x] On three consecutive 503s a single call surfaces `TPPTransportError(error_code="server_error")` after the third attempt.
 - [x] On five consecutive failures the breaker opens and subsequent calls immediately return `TPPTransportError(error_code="breaker_open")` until the reset window elapses.
 - [x] The planner workspace renders stored-policy posture (with a typed error notice) when the client surfaces `breaker_open` or `timeout`, not an unhandled exception.
-- [ ] Unit and integration tests covering all listed error codes pass in CI.
+- [x] Unit and integration tests covering all listed error codes pass in CI.
 - [ ] `make full-product-check` continues to pass with `TPP_BASE_URL` unset (no live transport configured).
-- [ ] No new public method is added to the TPP client interface that pre-empts the canonical-method-name decision still pending in #1031; the policy is applied at the existing `_dispatch` layer rather than at the per-method surface.
+- [x] No new public method is added to the TPP client interface that pre-empts the canonical-method-name decision still pending in #1031; the policy is applied at the existing `_dispatch` layer rather than at the per-method surface.
 
 ### Recently Attempted Tasks
 Avoid repeating these unless a task needs explicit follow-up:
 
-- Add unit tests covering: 503 → retried up to `max_attempts` then surfaces `server_error`; connection refused → `connection_error`; consecutive failures → breaker opens; breaker reset window → half-open trial; successful response in half-open → breaker closes.
-- Add an integration test against a stub HTTP server using `pytest-httpserver` simulating each error class.
 - Add `TPPTransportPolicy` (dataclass) with fields: `connect_timeout_seconds`, `read_timeout_seconds`, `max_attempts`, `backoff_initial_seconds`, `backoff_max_seconds`, `breaker_failure_threshold`, `breaker_reset_seconds`.
-
-### Suggested Next Task
-- Add `TPPTransportPolicy` (dataclass) with fields: `connect_timeout_seconds`, `read_timeout_seconds`, `max_attempts`, `backoff_initial_seconds`, `backoff_max_seconds`, `breaker_failure_threshold`, `breaker_reset_seconds`.
+- checkbox-progress
+- no-focus
 
 ---

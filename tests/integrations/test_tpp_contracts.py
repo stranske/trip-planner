@@ -458,27 +458,53 @@ def test_transport_error_rejects_unknown_error_code() -> None:
         TPPTransportError("bad code", error_code="not_a_real_code")  # type: ignore[arg-type]
 
 
-def test_transport_error_codes_have_explicit_classification_coverage() -> None:
-    expected_codes = {
-        "timeout",
-        "connection_error",
-        "server_error",
-        "breaker_open",
-        "unauthorized",
-        "invalid_response",
-        "unknown",
-    }
-    covered_codes = {
-        "connection_error",  # test_http_transport_classifies_connection_timeout_unauthorized...
-        "timeout",  # test_http_transport_classifies_connection_timeout_unauthorized...
-        "unauthorized",  # test_http_transport_classifies_connection_timeout_unauthorized...
-        "invalid_response",  # test_http_transport_classifies_connection_timeout_unauthorized...
-        "server_error",  # test_http_transport_retries_server_errors_then_surfaces_typed_error
-        "breaker_open",  # test_http_transport_opens_breaker_after_consecutive_failures
-        "unknown",  # test_transport_error_helper_maps_http_429_to_unknown
-    }
+@pytest.mark.parametrize(
+    ("exc", "expected_code"),
+    [
+        (urllib_error.URLError(socket.timeout("timed out")), "timeout"),
+        (urllib_error.URLError(ConnectionRefusedError("connection refused")), "connection_error"),
+        (
+            urllib_error.HTTPError(
+                url="https://example.test/api/server",
+                code=503,
+                msg="Service Unavailable",
+                hdrs=HTTPMessage(),
+                fp=io.BytesIO(b'{"detail":"try later"}'),
+            ),
+            "server_error",
+        ),
+        (
+            urllib_error.HTTPError(
+                url="https://example.test/api/auth",
+                code=401,
+                msg="Unauthorized",
+                hdrs=HTTPMessage(),
+                fp=io.BytesIO(b"{}"),
+            ),
+            "unauthorized",
+        ),
+        (
+            urllib_error.HTTPError(
+                url="https://example.test/api/rate-limited",
+                code=429,
+                msg="Too Many Requests",
+                hdrs=HTTPMessage(),
+                fp=io.BytesIO(b'{"detail":"slow down"}'),
+            ),
+            "unknown",
+        ),
+    ],
+)
+def test_transport_error_helper_maps_core_error_codes(
+    exc: BaseException, expected_code: str
+) -> None:
+    mapped = tpp_client_module.tpp_transport_error_from_exception(
+        exc,
+        operation="submit_proposal",
+    )
 
-    assert covered_codes == expected_codes
+    assert mapped is not None
+    assert mapped.error_code == expected_code
 
 
 def test_transport_error_helper_maps_http_429_to_unknown() -> None:
