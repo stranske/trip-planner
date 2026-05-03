@@ -1182,23 +1182,46 @@ def test_http_transport_integration_connection_error_mapping() -> None:
     not _SOCKETS_AVAILABLE,
     reason="Local socket bind is not permitted in this execution environment.",
 )
-def test_http_transport_integration_timeout_mapping(httpserver: HTTPServer) -> None:
-    def _slow_response(_request):
-        time.sleep(0.15)
-        return '{"ok": true}', 200, {"Content-Type": "application/json"}
+def test_http_transport_integration_timeout_mapping() -> None:
+    class SlowBodyHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "12")
+            self.end_headers()
+            time.sleep(0.25)
+            try:
+                self.wfile.write(b'{"ok": true}')
+            except BrokenPipeError:
+                pass
 
-    httpserver.expect_request("/timeout", method="POST").respond_with_handler(_slow_response)
-    client = _httpserver_client(
-        httpserver,
+        def log_message(self, _format: str, *args: object) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), SlowBodyHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    client = HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url=f"http://127.0.0.1:{server.server_port}",
+            access_token="token-123",
+            oidc_provider="okta",
+        ),
         policy=TPPTransportPolicy(
             connect_timeout_seconds=1.0,
             read_timeout_seconds=0.05,
             max_attempts=1,
         ),
+        breaker_registry={},
     )
 
-    with pytest.raises(TPPTransportError) as exc_info:
-        client._request_json(method="POST", path="/timeout", json_payload={})
+    try:
+        with pytest.raises(TPPTransportError) as exc_info:
+            client._request_json(method="POST", path="/timeout", json_payload={})
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1.0)
 
     assert exc_info.value.error_code == "timeout"
 
