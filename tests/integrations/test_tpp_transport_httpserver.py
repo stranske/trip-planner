@@ -259,6 +259,10 @@ def test_httpserver_breaker_half_open_trial_success_closes_breaker(httpserver: H
     assert payload == {"ok": True}
     assert len(httpserver.log) == 2
 
+    payload = client._request_json(method="POST", path="/recovered", json_payload={})
+    assert payload == {"ok": True}
+    assert len(httpserver.log) == 3
+
 
 def test_httpserver_breaker_half_open_trial_failure_reopens_breaker(httpserver: HTTPServer) -> None:
     httpserver.expect_request("/down", method="POST").respond_with_json(

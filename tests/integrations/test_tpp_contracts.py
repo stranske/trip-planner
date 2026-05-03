@@ -15,6 +15,7 @@ from trip_planner.integrations.tpp import client as tpp_client_module
 from trip_planner.integrations.tpp import (
     BaseTPPIntegrationClient,
     HTTPTPPIntegrationClient,
+    TPPConfigurationError,
     TPPContractError,
     TPPRequestEnvelope,
     TPPResponseEnvelope,
@@ -352,7 +353,7 @@ def test_transport_policy_rejects_non_finite_direct_values() -> None:
 
 
 def test_transport_policy_rejects_backoff_max_less_than_initial() -> None:
-    with pytest.raises(TPPTransportError, match="greater than or equal"):
+    with pytest.raises(TPPConfigurationError, match="greater than or equal"):
         TPPTransportPolicy(backoff_initial_seconds=0.75, backoff_max_seconds=0.5)
 
 
@@ -907,6 +908,16 @@ def test_http_transport_shared_breaker_registry_uses_shared_lock() -> None:
     assert second_client._breaker_registry is shared_registry
     assert first_client._breaker_registry_lock is shared_lock
     assert second_client._breaker_registry_lock is shared_lock
+
+
+def test_http_transport_injected_breaker_registry_gets_implicit_shared_lock() -> None:
+    shared_registry: dict[tuple[str, str, int], tpp_client_module._CircuitBreaker] = {}
+    first_client = _http_client(breaker_registry=shared_registry)
+    second_client = _http_client(breaker_registry=shared_registry)
+
+    assert first_client._breaker_registry is shared_registry
+    assert second_client._breaker_registry is shared_registry
+    assert first_client._breaker_registry_lock is second_client._breaker_registry_lock
 
 
 def test_http_transport_integration_against_stub_http_server_reports_server_error() -> None:
