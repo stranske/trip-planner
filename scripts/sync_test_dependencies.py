@@ -50,6 +50,7 @@ STDLIB_MODULES = {
     "csv",
     "datetime",
     "decimal",
+    "email",
     "fractions",
     "functools",
     "gc",

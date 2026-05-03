@@ -24,6 +24,7 @@ from trip_planner.integrations.tpp import (
     TPPResponseEnvelope,
     TPPRetryMetadata,
     TPPTransportError,
+    tpp_transport_error_from_exception,
 )
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
@@ -370,7 +371,23 @@ def _resolve_evaluation_response(
         existing=existing,
         proposal_version=proposal_version,
     )
-    return HTTPTPPIntegrationClient().fetch_evaluation_result(live_request)
+    try:
+        return HTTPTPPIntegrationClient().fetch_evaluation_result(live_request)
+    except TPPTransportError:
+        raise
+    except Exception as exc:
+        transport_error = tpp_transport_error_from_exception(
+            exc,
+            operation="fetch_evaluation_result",
+        )
+        if transport_error is None:
+            transport_error = TPPTransportError(
+                f"TPP fetch_evaluation_result transport failed unexpectedly: {exc}.",
+                error_code="unknown",
+                status_code=502,
+                retryable=False,
+            )
+        raise transport_error from exc
 
 
 def _now_iso() -> str:
@@ -441,7 +458,9 @@ def _derive_follow_up_state(
             "path": "pending",
             "title": "Awaiting policy verdict",
             "summary": (
-                dict(submission_record or {}).get("execution_status", {}).get("summary")
+                dict(evaluation_record.get("execution_status") or {}).get("summary")
+                or dict(evaluation_record.get("retry") or {}).get("reason")
+                or dict(submission_record or {}).get("execution_status", {}).get("summary")
                 or "Proposal transport is stored. Wait for the policy result before choosing a follow-up path."
             ),
             "recommended_action": "monitor_submission",
