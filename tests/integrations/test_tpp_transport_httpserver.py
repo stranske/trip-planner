@@ -267,6 +267,9 @@ def test_httpserver_breaker_half_open_trial_failure_reopens_breaker(httpserver: 
     httpserver.expect_request("/recovered", method="POST").respond_with_json(
         {"detail": "still down"}, status=503
     )
+    httpserver.expect_request("/recovered-again", method="POST").respond_with_json(
+        {"ok": True}, status=200
+    )
     now = [0.0]
     client = _client(
         httpserver.url_for(""),
@@ -297,6 +300,7 @@ def test_httpserver_breaker_half_open_trial_failure_reopens_breaker(httpserver: 
     assert reopened.value.error_code == "breaker_open"
     assert len(httpserver.log) == 2
 
-    payload = client._request_json(method="POST", path="/recovered", json_payload={})
+    now[0] = 23.0
+    payload = client._request_json(method="POST", path="/recovered-again", json_payload={})
     assert payload == {"ok": True}
     assert len(httpserver.log) == 3
