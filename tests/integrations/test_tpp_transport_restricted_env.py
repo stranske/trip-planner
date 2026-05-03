@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import socket
+from email.message import Message
 from urllib import error as urllib_error
 
 import pytest
@@ -56,7 +57,7 @@ def _client(*, policy: TPPTransportPolicy | None = None) -> HTTPTPPIntegrationCl
                 url="http://tpp.example.test/transport",
                 code=401,
                 msg="Unauthorized",
-                hdrs=None,
+                hdrs=Message(),
                 fp=io.BytesIO(b'{"detail": "bad token"}'),
             ),
             "unauthorized",
@@ -66,7 +67,7 @@ def _client(*, policy: TPPTransportPolicy | None = None) -> HTTPTPPIntegrationCl
                 url="http://tpp.example.test/transport",
                 code=503,
                 msg="Service Unavailable",
-                hdrs=None,
+                hdrs=Message(),
                 fp=io.BytesIO(b'{"detail": "down"}'),
             ),
             "server_error",
@@ -76,7 +77,7 @@ def _client(*, policy: TPPTransportPolicy | None = None) -> HTTPTPPIntegrationCl
                 url="http://tpp.example.test/transport",
                 code=418,
                 msg="Teapot",
-                hdrs=None,
+                hdrs=Message(),
                 fp=io.BytesIO(b'{"detail": "teapot"}'),
             ),
             "unknown",
