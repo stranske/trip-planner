@@ -100,6 +100,7 @@ STDLIB_MODULES = {
     "zlib",
     "__future__",
     "dataclasses",
+    "email",
     "enum",
     "types",
     "traceback",
