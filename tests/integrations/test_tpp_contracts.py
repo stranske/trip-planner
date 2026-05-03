@@ -1211,6 +1211,8 @@ def test_http_transport_integration_timeout_mapping() -> None:
             connect_timeout_seconds=1.0,
             read_timeout_seconds=0.05,
             max_attempts=1,
+            backoff_initial_seconds=0.0,
+            backoff_max_seconds=0.0,
         ),
         breaker_registry={},
     )

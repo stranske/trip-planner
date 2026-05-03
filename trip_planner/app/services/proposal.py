@@ -453,12 +453,13 @@ def _derive_follow_up_state(
             ),
         }
     else:
+        evaluation_transport = dict(evaluation_record.get("execution_status") or {})
         follow_up = {
             "status": "awaiting_evaluation",
             "path": "pending",
             "title": "Awaiting policy verdict",
             "summary": (
-                dict(evaluation_record.get("execution_status") or {}).get("summary")
+                evaluation_transport.get("summary")
                 or dict(evaluation_record.get("retry") or {}).get("reason")
                 or dict(submission_record or {}).get("execution_status", {}).get("summary")
                 or "Proposal transport is stored. Wait for the policy result before choosing a follow-up path."
