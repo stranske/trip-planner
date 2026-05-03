@@ -92,7 +92,10 @@ def run_frontend_runtime_smoke() -> CheckResult:
         details["stderr_tail"] = completed.stderr.strip()[-1200:]
     if completed.returncode != 0:
         stderr = completed.stderr
-        if "Missing frontend test dependencies" in stderr or "Missing backend test dependencies" in stderr:
+        if (
+            "Missing frontend test dependencies" in stderr
+            or "Missing backend test dependencies" in stderr
+        ):
             details["reason"] = "runtime smoke prerequisites missing"
             return CheckResult("frontend-runtime-smoke", "SKIPPED", details)
         raise VerificationFailure("frontend/runtime smoke failed", **details)
@@ -592,10 +595,35 @@ def _temporary_database_url(database_url: str) -> Iterator[None]:
             os.environ["TRIP_PLANNER_DATABASE_URL"] = previous_database_url
 
 
+@contextmanager
+def _force_planner_fallback_runtime() -> Iterator[None]:
+    """Keep full-product verification independent of live planner model transport."""
+
+    managed_keys = (
+        "TRIP_PLANNER_PLANNER_PROVIDER",
+        "TRIP_PLANNER_PLANNER_MODEL_PROVIDER",
+        "TRIP_PLANNER_PLANNER_MODEL",
+        "OPENAI_API_KEY",
+    )
+    previous = {key: os.environ.get(key) for key in managed_keys}
+    for key in managed_keys:
+        os.environ.pop(key, None)
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
-    with tempfile.TemporaryDirectory(
-        prefix="trip-planner-full-product."
-    ) as tmpdir, _temporary_database_url(f"sqlite:///{Path(tmpdir) / 'full_product.db'}"):
+    with (
+        tempfile.TemporaryDirectory(prefix="trip-planner-full-product.") as tmpdir,
+        _temporary_database_url(f"sqlite:///{Path(tmpdir) / 'full_product.db'}"),
+        _force_planner_fallback_runtime(),
+    ):
         reset_database_state()
         ensure_database_ready()
         app = create_app()
