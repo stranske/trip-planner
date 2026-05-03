@@ -221,6 +221,23 @@ def test_frontend_runtime_smoke_reports_timeout_with_context(monkeypatch) -> Non
     assert "stderr context" in message
 
 
+def test_frontend_runtime_smoke_skips_when_prerequisites_are_missing(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(
+            args=args[0],
+            returncode=1,
+            stdout="",
+            stderr="Missing frontend test dependencies (`vitest` is unavailable under frontend/node_modules).",
+        )
+
+    monkeypatch.setattr(verifier.subprocess, "run", fake_run)
+
+    check = run_frontend_runtime_smoke()
+
+    assert check.status == "SKIPPED"
+    assert check.details["reason"] == "runtime smoke prerequisites missing"
+
+
 def test_main_succeeds_when_tpp_base_url_unset_in_auto_mode(monkeypatch) -> None:
     monkeypatch.delenv("TPP_BASE_URL", raising=False)
     monkeypatch.delenv("TPP_REPO_PATH", raising=False)

@@ -91,6 +91,10 @@ def run_frontend_runtime_smoke() -> CheckResult:
     if completed.stderr.strip():
         details["stderr_tail"] = completed.stderr.strip()[-1200:]
     if completed.returncode != 0:
+        stderr = completed.stderr
+        if "Missing frontend test dependencies" in stderr or "Missing backend test dependencies" in stderr:
+            details["reason"] = "runtime smoke prerequisites missing"
+            return CheckResult("frontend-runtime-smoke", "SKIPPED", details)
         raise VerificationFailure("frontend/runtime smoke failed", **details)
     return CheckResult("frontend-runtime-smoke", "PASS", details)
 
