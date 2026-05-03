@@ -645,6 +645,57 @@ def test_http_transport_opens_breaker_after_consecutive_failures(
     assert exc_info.value.error_code == "breaker_open"
 
 
+def test_http_transport_breaker_threshold_and_reset_window_recovery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current_time = 0.0
+
+    def _clock() -> float:
+        return current_time
+
+    call_counter = [0]
+    _install_urlopen(
+        monkeypatch,
+        [
+            urllib_error.URLError(ConnectionRefusedError("refused-1")),
+            urllib_error.URLError(ConnectionRefusedError("refused-2")),
+            urllib_error.URLError(ConnectionRefusedError("refused-3")),
+            urllib_error.URLError(ConnectionRefusedError("refused-4")),
+            urllib_error.URLError(ConnectionRefusedError("refused-5")),
+            _FakeHTTPResponse(200, {"ok": True}),
+        ],
+        call_counter=call_counter,
+    )
+    client = _http_client(
+        policy=TPPTransportPolicy(
+            max_attempts=1,
+            breaker_failure_threshold=5,
+            breaker_reset_seconds=10.0,
+        ),
+        clock=_clock,
+        breaker_registry={},
+    )
+
+    for _ in range(5):
+        with pytest.raises(TPPTransportError) as failure:
+            client._request_json(method="POST", path="/api/down", json_payload={})
+        assert failure.value.error_code == "connection_error"
+
+    assert call_counter[0] == 5
+
+    with pytest.raises(TPPTransportError) as open_breaker:
+        client._request_json(method="POST", path="/api/down", json_payload={})
+    assert open_breaker.value.error_code == "breaker_open"
+    assert call_counter[0] == 5
+
+    current_time = 11.0
+    assert client._request_json(method="POST", path="/api/down", json_payload={}) == {"ok": True}
+    assert call_counter[0] == 6
+
+    breaker = next(iter(client._breaker_registry.values()))
+    assert breaker.state == "closed"
+
+
 def test_http_transport_open_breaker_fails_fast_without_new_network_attempt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
