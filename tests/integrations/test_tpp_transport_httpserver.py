@@ -174,7 +174,9 @@ def test_httpserver_surfaces_timeout() -> None:
 
 
 def test_httpserver_surfaces_connection_error() -> None:
-    unreachable_port = 9
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        unreachable_port = probe.getsockname()[1]
     client = _client(
         f"http://127.0.0.1:{unreachable_port}",
         policy=TPPTransportPolicy(
