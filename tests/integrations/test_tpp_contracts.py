@@ -347,6 +347,15 @@ def test_transport_policy_rejects_non_finite_float_env(
         TPPTransportPolicy.from_env()
 
 
+def test_transport_policy_rejects_non_integer_max_attempts_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_TRANSPORT_MAX_ATTEMPTS", "3.5")
+
+    with pytest.raises(TPPTransportError, match="must be an integer value"):
+        TPPTransportPolicy.from_env()
+
+
 def test_transport_policy_rejects_non_finite_direct_values() -> None:
     with pytest.raises(TPPTransportError, match="greater than 0"):
         TPPTransportPolicy(connect_timeout_seconds=float("inf"))
