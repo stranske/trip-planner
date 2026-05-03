@@ -1003,6 +1003,46 @@ def test_http_transport_injected_breaker_registry_gets_implicit_shared_lock() ->
     assert first_client._breaker_registry_lock is second_client._breaker_registry_lock
 
 
+def test_http_transport_explicit_breaker_registry_lock_takes_precedence() -> None:
+    explicit_lock = threading.Lock()
+    client = HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url="https://tpp.example.test",
+            access_token="token-123",
+            oidc_provider="okta",
+        ),
+        policy=TPPTransportPolicy(backoff_initial_seconds=0.0, backoff_max_seconds=0.0),
+        sleep=lambda _delay: None,
+        clock=lambda: 0.0,
+        jitter=lambda _start, _end: 0.0,
+        breaker_registry_lock=explicit_lock,
+    )
+
+    assert client._breaker_registry_lock is explicit_lock
+
+
+def test_http_transport_prunes_stale_injected_breaker_registry_locks() -> None:
+    live_registry: dict[tuple[str, str, int], tpp_client_module._CircuitBreaker] = {}
+    live_lock = tpp_client_module.HTTPTPPIntegrationClient._lock_for_injected_breaker_registry(
+        live_registry
+    )
+    stale_registry_id = 1
+    while stale_registry_id == id(live_registry):
+        stale_registry_id += 1
+    stale_lock = threading.Lock()
+    tpp_client_module.HTTPTPPIntegrationClient._injected_breaker_registry_locks[
+        stale_registry_id
+    ] = stale_lock
+
+    tpp_client_module.HTTPTPPIntegrationClient._prune_injected_breaker_registry_locks(
+        active_registry_id=id(live_registry)
+    )
+
+    locks = tpp_client_module.HTTPTPPIntegrationClient._injected_breaker_registry_locks
+    assert locks[id(live_registry)] is live_lock
+    assert stale_registry_id not in locks
+
+
 def test_http_transport_integration_against_stub_http_server_reports_server_error() -> None:
     class _Handler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:

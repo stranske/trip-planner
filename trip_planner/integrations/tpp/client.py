@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import gc
+import json
 import math
 import os
 import random
@@ -11,7 +13,6 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, ClassVar, Callable, Literal, Protocol
-import json
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
@@ -431,6 +432,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
     _default_breaker_registry_lock: ClassVar[threading.Lock] = threading.Lock()
     _injected_breaker_registry_locks: ClassVar[dict[int, threading.Lock]] = {}
     _injected_breaker_registry_locks_guard: ClassVar[threading.Lock] = threading.Lock()
+    _injected_breaker_registry_lock_cleanup_threshold: ClassVar[int] = 128
 
     def __init__(
         self,
@@ -451,11 +453,23 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         self._breaker_registry = (
             breaker_registry if breaker_registry is not None else self._breakers
         )
-        self._breaker_registry_lock = (
-            breaker_registry_lock or self._lock_for_injected_breaker_registry(breaker_registry)
-            if breaker_registry is not None
-            else self._default_breaker_registry_lock
+        self._breaker_registry_lock = self._resolve_breaker_registry_lock(
+            breaker_registry=breaker_registry,
+            breaker_registry_lock=breaker_registry_lock,
         )
+
+    @classmethod
+    def _resolve_breaker_registry_lock(
+        cls,
+        *,
+        breaker_registry: dict[tuple[str, str, int], _CircuitBreaker] | None,
+        breaker_registry_lock: threading.Lock | None,
+    ) -> threading.Lock:
+        if breaker_registry_lock is not None:
+            return breaker_registry_lock
+        if breaker_registry is None:
+            return cls._default_breaker_registry_lock
+        return cls._lock_for_injected_breaker_registry(breaker_registry)
 
     @classmethod
     def _lock_for_injected_breaker_registry(
@@ -464,10 +478,26 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
     ) -> threading.Lock:
         registry_id = id(breaker_registry)
         with cls._injected_breaker_registry_locks_guard:
+            if (
+                len(cls._injected_breaker_registry_locks)
+                >= cls._injected_breaker_registry_lock_cleanup_threshold
+            ):
+                cls._prune_injected_breaker_registry_locks(active_registry_id=registry_id)
             return cls._injected_breaker_registry_locks.setdefault(
                 registry_id,
                 threading.Lock(),
             )
+
+    @classmethod
+    def _prune_injected_breaker_registry_locks(cls, *, active_registry_id: int) -> None:
+        live_registry_ids = {id(obj) for obj in gc.get_objects() if isinstance(obj, dict)}
+        stale_registry_ids = [
+            registry_id
+            for registry_id in cls._injected_breaker_registry_locks
+            if registry_id != active_registry_id and registry_id not in live_registry_ids
+        ]
+        for registry_id in stale_registry_ids:
+            cls._injected_breaker_registry_locks.pop(registry_id, None)
 
     def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         if request.operation == "fetch_policy_constraints":
