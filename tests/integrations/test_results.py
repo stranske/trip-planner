@@ -306,3 +306,21 @@ def test_result_ingestion_converts_unclassified_exception_to_unknown_transport_e
     assert exc_info.value.status_code == 502
     assert exc_info.value.retryable is False
     assert exc_info.value.__cause__ is error
+
+
+@pytest.mark.parametrize("error_code", ["breaker_open", "unauthorized", "invalid_response"])
+def test_result_ingestion_preserves_typed_transport_error(error_code: str) -> None:
+    fixture = _load_fixture("approved_evaluation.json")
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    typed_error = TPPTransportError(f"typed error: {error_code}", error_code=error_code)
+    service = TPPEvaluationResultIngestionService(RaisingTPPResultClient(typed_error))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        service.fetch_evaluation_result(
+            request,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+    assert exc_info.value is typed_error
+    assert exc_info.value.error_code == error_code

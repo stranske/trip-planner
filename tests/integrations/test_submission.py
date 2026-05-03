@@ -303,3 +303,23 @@ def test_submission_converts_unclassified_exception_to_unknown_transport_error()
     assert exc_info.value.status_code == 502
     assert exc_info.value.retryable is False
     assert exc_info.value.__cause__ is error
+
+
+@pytest.mark.parametrize("error_code", ["breaker_open", "unauthorized", "invalid_response"])
+def test_submission_preserves_typed_transport_error(error_code: str) -> None:
+    fixture = _load_fixture("proposal_submit_deferred.json")
+    proposal = _proposal_fixture()
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    typed_error = TPPTransportError(f"typed error: {error_code}", error_code=error_code)
+    service = TPPProposalSubmissionService(RaisingTPPSubmissionClient(typed_error))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        service.submit_proposal(
+            request,
+            proposal,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+    assert exc_info.value is typed_error
+    assert exc_info.value.error_code == error_code
