@@ -1,4 +1,5 @@
 import json
+from http.client import HTTPMessage
 from pathlib import Path
 from urllib import error as urllib_error
 
@@ -272,7 +273,7 @@ def test_result_ingestion_converts_http_error_to_server_error_with_cause() -> No
         url="https://tpp.example.test/api/results",
         code=503,
         msg="Service Unavailable",
-        hdrs=None,
+        hdrs=HTTPMessage(),
         fp=None,
     )
     service = TPPEvaluationResultIngestionService(RaisingTPPResultClient(error))

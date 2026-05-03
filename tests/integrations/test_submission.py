@@ -1,4 +1,5 @@
 import json
+from http.client import HTTPMessage
 from pathlib import Path
 from urllib import error as urllib_error
 
@@ -266,7 +267,7 @@ def test_submission_converts_http_error_to_server_error_with_cause() -> None:
         url="https://tpp.example.test/api/proposals",
         code=503,
         msg="Service Unavailable",
-        hdrs=None,
+        hdrs=HTTPMessage(),
         fp=None,
     )
     service = TPPProposalSubmissionService(RaisingTPPSubmissionClient(error))
