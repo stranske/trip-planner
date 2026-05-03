@@ -24,6 +24,7 @@ from trip_planner.integrations.tpp import (
     TPPResponseEnvelope,
     TPPRetryMetadata,
     TPPTransportError,
+    tpp_transport_error_from_exception,
 )
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
@@ -270,6 +271,59 @@ def _fallback_submission_response(
     )
 
 
+def _fallback_evaluation_record(
+    *,
+    request: TPPRequestEnvelope,
+    error: TPPTransportError,
+    existing: PersistedProposalState,
+) -> dict[str, Any]:
+    if error.error_code == "breaker_open":
+        summary = (
+            "Live TPP transport circuit breaker is open; the workspace is using stored-policy "
+            "posture until the next retry window."
+        )
+    else:
+        summary = (
+            "Live TPP transport timed out; the workspace is using stored-policy posture until "
+            "the next retry."
+        )
+    return {
+        "linkage": {
+            "trip_id": existing.trip_id,
+            "proposal_id": existing.proposal_id,
+            "proposal_version": existing.proposal_version,
+            "scenario_id": existing.scenario_id,
+            "execution_id": existing.execution_id,
+            "organization_id": existing.organization_id,
+        },
+        "request_id": request.request_id,
+        "correlation_id": request.correlation_id.value,
+        "transport_pattern": "deferred",
+        "execution_status": TPPExecutionStatus(
+            state="retry_scheduled",
+            terminal=False,
+            summary=summary,
+            updated_at=_now_iso(),
+        ).to_dict(),
+        "request_payload": dict(request.payload),
+        "response_payload": {},
+        "retry": TPPRetryMetadata(
+            attempt=1,
+            max_attempts=5,
+            retryable=True,
+            reason=summary,
+        ).to_dict(),
+        "error": TPPErrorRecord(
+            code=error.error_code,
+            message=str(error) or summary,
+            category="transport",
+            retryable=True,
+            details=_transport_error_details(error, source="workspace_proposal_evaluation"),
+        ).to_dict(),
+        "received_at": _now_iso(),
+    }
+
+
 def _normalize_evaluation_request(
     request: TPPRequestEnvelope,
     *,
@@ -317,7 +371,23 @@ def _resolve_evaluation_response(
         existing=existing,
         proposal_version=proposal_version,
     )
-    return HTTPTPPIntegrationClient().fetch_evaluation_result(live_request)
+    try:
+        return HTTPTPPIntegrationClient().fetch_evaluation_result(live_request)
+    except TPPTransportError:
+        raise
+    except Exception as exc:
+        transport_error = tpp_transport_error_from_exception(
+            exc,
+            operation="fetch_evaluation_result",
+        )
+        if transport_error is None:
+            transport_error = TPPTransportError(
+                f"TPP fetch_evaluation_result transport failed unexpectedly: {exc}.",
+                error_code="unknown",
+                status_code=502,
+                retryable=False,
+            )
+        raise transport_error from exc
 
 
 def _now_iso() -> str:
@@ -383,12 +453,15 @@ def _derive_follow_up_state(
             ),
         }
     else:
+        evaluation_transport = dict(evaluation_record.get("execution_status") or {})
         follow_up = {
             "status": "awaiting_evaluation",
             "path": "pending",
             "title": "Awaiting policy verdict",
             "summary": (
-                dict(submission_record or {}).get("execution_status", {}).get("summary")
+                evaluation_transport.get("summary")
+                or dict(evaluation_record.get("retry") or {}).get("reason")
+                or dict(submission_record or {}).get("execution_status", {}).get("summary")
                 or "Proposal transport is stored. Wait for the policy result before choosing a follow-up path."
             ),
             "recommended_action": "monitor_submission",
@@ -867,19 +940,42 @@ def save_workspace_proposal_evaluation(
         existing=existing,
         proposal_version=proposal_version,
     )
-    response = _resolve_evaluation_response(
-        request,
-        response_payload,
-        existing=existing,
-        proposal_version=proposal_version,
-    )
-    evaluation = TPPEvaluationResultIngestionService(
-        _PassiveTPPClient(response)
-    ).fetch_evaluation_result(
-        request,
-        proposal_version=proposal_version,
-        scenario_id=scenario_id,
-    )
+    try:
+        response = _resolve_evaluation_response(
+            request,
+            response_payload,
+            existing=existing,
+            proposal_version=proposal_version,
+        )
+        evaluation = TPPEvaluationResultIngestionService(
+            _PassiveTPPClient(response)
+        ).fetch_evaluation_result(
+            request,
+            proposal_version=proposal_version,
+            scenario_id=scenario_id,
+        )
+    except TPPTransportError as error:
+        if not _should_persist_stored_policy_fallback(error):
+            raise
+        existing.evaluation_status = "retry_scheduled"
+        existing.evaluation_record = _fallback_evaluation_record(
+            request=request,
+            error=error,
+            existing=existing,
+        )
+        existing.summary = _build_summary(
+            submission_record=dict(existing.submission_record),
+            evaluation_record=existing.evaluation_record,
+            proposal_payload=dict(existing.proposal_payload),
+            persisted_follow_up=dict(existing.summary.get("follow_up") or {}),
+        )
+        trip_record.updated_at = datetime.now(UTC)
+        db_session.commit()
+        db_session.refresh(existing)
+        return {
+            "proposal_state": _serialize_proposal_state(existing),
+            "summary": dict(existing.summary),
+        }
     if request.trip_id is not None and request.trip_id != trip_id:
         raise ValueError("evaluation request.trip_id must match the workspace trip.")
     if evaluation.linkage.trip_id != trip_id:

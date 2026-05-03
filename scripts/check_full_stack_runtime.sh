@@ -51,11 +51,11 @@ require_backend_prereqs() {
 }
 
 require_frontend_prereqs() {
-  if ! npm --prefix frontend exec -- vitest --version >/dev/null 2>&1; then
+  if ! npm --prefix frontend exec --no -- vitest --version >/dev/null 2>&1; then
     echo "Missing frontend test dependencies (`vitest` is unavailable under frontend/node_modules)." >&2
     prereq_failure
   fi
-  if ! npm --prefix frontend exec -- vite --version >/dev/null 2>&1; then
+  if ! npm --prefix frontend exec --no -- vite --version >/dev/null 2>&1; then
     echo "Missing frontend build dependencies (`vite` is unavailable under frontend/node_modules)." >&2
     prereq_failure
   fi

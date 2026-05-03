@@ -195,8 +195,20 @@ Use these env vars only when you are intentionally exercising an integration sea
 - `VITE_GOOGLE_MAPS_EMBED_API_KEY`: legacy key name still accepted as a compatibility fallback when `VITE_GOOGLE_MAPS_BROWSER_API_KEY` is not set.
 - `VITE_GOOGLE_MAPS_PROVIDER_STATE`: optional local/test override for the map adapter load state (`ready`, `loading`, or `error`).
 - `TPP_BASE_URL`, `TPP_ACCESS_TOKEN`, `TPP_OIDC_PROVIDER`: enable the live `Travel-Plan-Permission` transport client. If they are unset, the repo should continue to present stored-policy and passive/local TPP seams rather than implying a real remote policy round-trip.
-- `TPP_TRANSPORT_CONNECT_TIMEOUT_SECONDS`, `TPP_TRANSPORT_READ_TIMEOUT_SECONDS`, `TPP_TRANSPORT_MAX_ATTEMPTS`, `TPP_TRANSPORT_BACKOFF_INITIAL_SECONDS`, `TPP_TRANSPORT_BACKOFF_MAX_SECONDS`, `TPP_TRANSPORT_BREAKER_FAILURE_THRESHOLD`, `TPP_TRANSPORT_BREAKER_RESET_SECONDS`: optional live TPP transport policy overrides. Defaults are 5s connect timeout, 15s read timeout, 3 attempts, 0.5s jittered initial backoff capped at 4s, 5 failures before the per-host breaker opens, and a 30s breaker reset window. `TPP_TIMEOUT_SECONDS` remains accepted as a legacy read-timeout fallback when the newer read-timeout override is unset.
 - `TPP_REPO_PATH`: optional sibling checkout path used by `make full-product-check` when it needs to start a local Travel-Plan-Permission service instead of using `TPP_BASE_URL`.
+
+TPP transport policy env overrides (used only when live TPP transport is enabled):
+
+- `TPP_TRANSPORT_CONNECT_TIMEOUT_SECONDS` (default: `5.0`)
+- `TPP_TRANSPORT_READ_TIMEOUT_SECONDS` (default: `15.0`)
+- `TPP_TRANSPORT_MAX_ATTEMPTS` (default: `3`)
+- `TPP_TRANSPORT_BACKOFF_INITIAL_SECONDS` (default: `0.5`)
+- `TPP_TRANSPORT_BACKOFF_MAX_SECONDS` (default: `4.0`)
+- `TPP_TRANSPORT_BREAKER_FAILURE_THRESHOLD` (default: `5`)
+- `TPP_TRANSPORT_BREAKER_RESET_SECONDS` (default: `30.0`)
+
+`TPP_TIMEOUT_SECONDS` remains accepted as a legacy read-timeout fallback only when
+`TPP_TRANSPORT_READ_TIMEOUT_SECONDS` is unset.
 
 When live TPP transport is enabled, HTTP calls share the same typed error
 taxonomy across proposal submission, evaluation fetch, and workspace policy

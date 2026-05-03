@@ -14,16 +14,16 @@ from trip_planner.integrations.tpp import (
 )
 
 _SOCKET_BIND_AVAILABLE = True
+_socket_probe: socket.socket | None = None
 try:
     _socket_probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     _socket_probe.bind(("127.0.0.1", 0))
-except PermissionError:
+except OSError:
+    # Some CI runners disallow loopback binds entirely; skip these tests there.
     _SOCKET_BIND_AVAILABLE = False
 finally:
-    try:
+    if _socket_probe is not None:
         _socket_probe.close()
-    except Exception:
-        pass
 
 pytestmark = pytest.mark.skipif(
     not _SOCKET_BIND_AVAILABLE,
@@ -174,7 +174,9 @@ def test_httpserver_surfaces_timeout() -> None:
 
 
 def test_httpserver_surfaces_connection_error() -> None:
-    unreachable_port = 9
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        unreachable_port = probe.getsockname()[1]
     client = _client(
         f"http://127.0.0.1:{unreachable_port}",
         policy=TPPTransportPolicy(
@@ -258,6 +260,10 @@ def test_httpserver_breaker_half_open_trial_success_closes_breaker(httpserver: H
     payload = client._request_json(method="POST", path="/recovered", json_payload={})
     assert payload == {"ok": True}
     assert len(httpserver.log) == 2
+
+    payload = client._request_json(method="POST", path="/recovered", json_payload={})
+    assert payload == {"ok": True}
+    assert len(httpserver.log) == 3
 
 
 def test_httpserver_breaker_half_open_trial_failure_reopens_breaker(httpserver: HTTPServer) -> None:

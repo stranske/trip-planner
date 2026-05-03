@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import gc
+import json
 import math
 import os
 import random
@@ -11,7 +13,6 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, ClassVar, Callable, Literal, Protocol
-import json
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
@@ -212,32 +213,64 @@ class TPPTransportPolicy:
 class _CircuitBreaker:
     def __init__(self) -> None:
         self.failures = 0
-        self.opened_at: float | None = None
-        self.half_open = False
+        self._opened_at: float | None = None
+        self._state = "closed"
         self._half_open_trial_in_flight = False
         self._lock = threading.RLock()
 
     @property
     def state(self) -> str:
         with self._lock:
-            if self.opened_at is None:
-                return "closed"
-            if self.half_open:
-                return "half-open"
-            return "open"
+            return self._state
+
+    @property
+    def opened_at(self) -> float | None:
+        with self._lock:
+            return self._opened_at
+
+    @opened_at.setter
+    def opened_at(self, value: float | None) -> None:
+        with self._lock:
+            self._opened_at = value
+            if value is None:
+                self._state = "closed"
+                self._half_open_trial_in_flight = False
+            elif self._state == "closed":
+                self._state = "open"
+
+    @property
+    def half_open(self) -> bool:
+        with self._lock:
+            return self._state == "half-open"
+
+    @half_open.setter
+    def half_open(self, value: bool) -> None:
+        with self._lock:
+            if value:
+                self._state = "half-open"
+            elif self._state == "half-open":
+                self._state = "open" if self._opened_at is not None else "closed"
 
     def before_request(self, *, policy: TPPTransportPolicy, now: float, host: str) -> None:
         with self._lock:
-            if self.opened_at is None:
+            if self._state == "closed":
                 return
-            if now - self.opened_at < policy.breaker_reset_seconds:
+            if self._state == "open" and self._opened_at is not None:
+                if now - self._opened_at < policy.breaker_reset_seconds:
+                    raise TPPTransportError(
+                        f"TPP circuit breaker is open for {host}; retry after the reset window.",
+                        error_code="breaker_open",
+                        status_code=503,
+                        retryable=True,
+                    )
+                self._state = "half-open"
+            if self._state != "half-open":
                 raise TPPTransportError(
-                    f"TPP circuit breaker is open for {host}; retry after the reset window.",
+                    f"TPP circuit breaker is in an invalid state for {host}: {self._state!r}.",
                     error_code="breaker_open",
                     status_code=503,
-                    retryable=True,
+                    retryable=False,
                 )
-            self.half_open = True
             if self._half_open_trial_in_flight:
                 raise TPPTransportError(
                     f"TPP circuit breaker is half-open for {host}; trial already in flight.",
@@ -250,21 +283,21 @@ class _CircuitBreaker:
     def record_success(self) -> None:
         with self._lock:
             self.failures = 0
-            self.opened_at = None
-            self.half_open = False
+            self._opened_at = None
+            self._state = "closed"
             self._half_open_trial_in_flight = False
 
     def record_failure(self, *, policy: TPPTransportPolicy, now: float) -> None:
         with self._lock:
-            if self.half_open:
-                self.opened_at = now
-                self.half_open = False
+            if self._state == "half-open":
+                self._opened_at = now
+                self._state = "open"
                 self._half_open_trial_in_flight = False
                 return
             self.failures += 1
             if self.failures >= policy.breaker_failure_threshold:
-                self.opened_at = now
-                self.half_open = False
+                self._opened_at = now
+                self._state = "open"
                 self._half_open_trial_in_flight = False
 
 
@@ -397,6 +430,9 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
 
     _breakers: ClassVar[dict[tuple[str, str, int], _CircuitBreaker]] = {}
     _default_breaker_registry_lock: ClassVar[threading.Lock] = threading.Lock()
+    _injected_breaker_registry_locks: ClassVar[dict[int, threading.Lock]] = {}
+    _injected_breaker_registry_locks_guard: ClassVar[threading.Lock] = threading.Lock()
+    _injected_breaker_registry_lock_cleanup_threshold: ClassVar[int] = 128
 
     def __init__(
         self,
@@ -417,11 +453,51 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         self._breaker_registry = (
             breaker_registry if breaker_registry is not None else self._breakers
         )
-        self._breaker_registry_lock = (
-            breaker_registry_lock or threading.Lock()
-            if breaker_registry is not None
-            else self._default_breaker_registry_lock
+        self._breaker_registry_lock = self._resolve_breaker_registry_lock(
+            breaker_registry=breaker_registry,
+            breaker_registry_lock=breaker_registry_lock,
         )
+
+    @classmethod
+    def _resolve_breaker_registry_lock(
+        cls,
+        *,
+        breaker_registry: dict[tuple[str, str, int], _CircuitBreaker] | None,
+        breaker_registry_lock: threading.Lock | None,
+    ) -> threading.Lock:
+        if breaker_registry_lock is not None:
+            return breaker_registry_lock
+        if breaker_registry is None:
+            return cls._default_breaker_registry_lock
+        return cls._lock_for_injected_breaker_registry(breaker_registry)
+
+    @classmethod
+    def _lock_for_injected_breaker_registry(
+        cls,
+        breaker_registry: dict[tuple[str, str, int], _CircuitBreaker],
+    ) -> threading.Lock:
+        registry_id = id(breaker_registry)
+        with cls._injected_breaker_registry_locks_guard:
+            if (
+                len(cls._injected_breaker_registry_locks)
+                >= cls._injected_breaker_registry_lock_cleanup_threshold
+            ):
+                cls._prune_injected_breaker_registry_locks(active_registry_id=registry_id)
+            return cls._injected_breaker_registry_locks.setdefault(
+                registry_id,
+                threading.Lock(),
+            )
+
+    @classmethod
+    def _prune_injected_breaker_registry_locks(cls, *, active_registry_id: int) -> None:
+        live_registry_ids = {id(obj) for obj in gc.get_objects() if isinstance(obj, dict)}
+        stale_registry_ids = [
+            registry_id
+            for registry_id in cls._injected_breaker_registry_locks
+            if registry_id != active_registry_id and registry_id not in live_registry_ids
+        ]
+        for registry_id in stale_registry_ids:
+            cls._injected_breaker_registry_locks.pop(registry_id, None)
 
     def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         if request.operation == "fetch_policy_constraints":

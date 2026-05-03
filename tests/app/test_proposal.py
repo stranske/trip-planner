@@ -1355,6 +1355,79 @@ def test_workspace_proposal_submission_persists_stored_policy_when_breaker_is_op
     assert "stored-policy posture" in payload["summary"]["submission_summary"]
 
 
+def test_workspace_proposal_evaluation_persists_stored_policy_when_live_tpp_times_out(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Evaluation timeout fallback workspace",
+            "summary": "Persist stored-policy posture when live evaluation fetch times out.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+
+    submitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert submitted.status_code == 200
+
+    def _raise_timeout(self, request):
+        del self, request
+        raise socket.timeout("evaluation read timeout")
+
+    monkeypatch.setattr(
+        tpp_client_module.HTTPTPPIntegrationClient,
+        "fetch_evaluation_result",
+        _raise_timeout,
+    )
+
+    evaluation_fixture = _load_fixture("results", "approved_evaluation.json")
+    evaluation_fixture["request"]["trip_id"] = trip_id
+    evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+
+    evaluated = client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation_fixture["request"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+
+    assert evaluated.status_code == 200
+    payload = evaluated.json()["proposal_state"]
+    assert payload["evaluation_status"] == "retry_scheduled"
+    assert payload["summary"]["evaluation_error"]["code"] == "timeout"
+    assert payload["summary"]["evaluation_error"]["details"]["error_code"] == "timeout"
+    assert payload["summary"]["evaluation_error"]["details"]["status_code"] == "504"
+    assert "timed out" in payload["summary"]["evaluation_error"]["message"]
+    assert "stored-policy posture" in payload["summary"]["follow_up_summary"]
+
+
 def test_workspace_proposal_refresh_polls_live_status_and_persists_evaluation(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

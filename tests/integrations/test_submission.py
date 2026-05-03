@@ -1,5 +1,7 @@
 import json
+from http.client import HTTPMessage
 from pathlib import Path
+from typing import Literal
 from urllib import error as urllib_error
 
 import pytest
@@ -13,6 +15,9 @@ from trip_planner.integrations.tpp import (
     TPPResponseEnvelope,
     TPPTransportError,
 )
+
+
+PreservedTransportErrorCode = Literal["breaker_open", "unauthorized", "invalid_response"]
 
 
 def _fixture_path(name: str) -> Path:
@@ -256,3 +261,71 @@ def test_submission_converts_raw_url_error_to_connection_error_with_cause() -> N
 
     assert exc_info.value.error_code == "connection_error"
     assert exc_info.value.__cause__ is error
+
+
+def test_submission_converts_http_error_to_server_error_with_cause() -> None:
+    fixture = _load_fixture("proposal_submit_deferred.json")
+    proposal = _proposal_fixture()
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    error = urllib_error.HTTPError(
+        url="https://tpp.example.test/api/proposals",
+        code=503,
+        msg="Service Unavailable",
+        hdrs=HTTPMessage(),
+        fp=None,
+    )
+    service = TPPProposalSubmissionService(RaisingTPPSubmissionClient(error))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        service.submit_proposal(
+            request,
+            proposal,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+    assert exc_info.value.error_code == "server_error"
+    assert exc_info.value.__cause__ is error
+
+
+def test_submission_converts_unclassified_exception_to_unknown_transport_error() -> None:
+    fixture = _load_fixture("proposal_submit_deferred.json")
+    proposal = _proposal_fixture()
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    error = RuntimeError("unexpected transport crash")
+    service = TPPProposalSubmissionService(RaisingTPPSubmissionClient(error))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        service.submit_proposal(
+            request,
+            proposal,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+    assert exc_info.value.error_code == "unknown"
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.retryable is False
+    assert exc_info.value.__cause__ is error
+
+
+@pytest.mark.parametrize("error_code", ["breaker_open", "unauthorized", "invalid_response"])
+def test_submission_preserves_typed_transport_error(
+    error_code: PreservedTransportErrorCode,
+) -> None:
+    fixture = _load_fixture("proposal_submit_deferred.json")
+    proposal = _proposal_fixture()
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    typed_error = TPPTransportError(f"typed error: {error_code}", error_code=error_code)
+    service = TPPProposalSubmissionService(RaisingTPPSubmissionClient(typed_error))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        service.submit_proposal(
+            request,
+            proposal,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+    assert exc_info.value is typed_error
+    assert exc_info.value.error_code == error_code

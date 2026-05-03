@@ -2,6 +2,7 @@ import json
 import io
 import socket
 import threading
+import time
 from http.client import HTTPMessage
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -10,11 +11,13 @@ from typing import Literal
 from urllib import error as urllib_error
 
 import pytest
+from pytest_httpserver import HTTPServer
 
 from trip_planner.integrations.tpp import client as tpp_client_module
 from trip_planner.integrations.tpp import (
     BaseTPPIntegrationClient,
     HTTPTPPIntegrationClient,
+    TPPConfigurationError,
     TPPContractError,
     TPPRequestEnvelope,
     TPPResponseEnvelope,
@@ -22,6 +25,18 @@ from trip_planner.integrations.tpp import (
     TPPTransportError,
     TPPTransportPolicy,
 )
+
+
+def _local_socket_supported() -> bool:
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    except PermissionError:
+        return False
+    sock.close()
+    return True
+
+
+_SOCKETS_AVAILABLE = _local_socket_supported()
 
 
 def _fixture_path(name: str) -> Path:
@@ -346,14 +361,46 @@ def test_transport_policy_rejects_non_finite_float_env(
         TPPTransportPolicy.from_env()
 
 
+def test_transport_policy_rejects_non_integer_max_attempts_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_TRANSPORT_MAX_ATTEMPTS", "3.5")
+
+    with pytest.raises(TPPTransportError, match="must be an integer value"):
+        TPPTransportPolicy.from_env()
+
+
 def test_transport_policy_rejects_non_finite_direct_values() -> None:
     with pytest.raises(TPPTransportError, match="greater than 0"):
         TPPTransportPolicy(connect_timeout_seconds=float("inf"))
 
 
 def test_transport_policy_rejects_backoff_max_less_than_initial() -> None:
-    with pytest.raises(TPPTransportError, match="greater than or equal"):
+    with pytest.raises(TPPConfigurationError, match="greater than or equal"):
         TPPTransportPolicy(backoff_initial_seconds=0.75, backoff_max_seconds=0.5)
+
+
+def test_transport_policy_rejects_non_positive_integer_fields() -> None:
+    with pytest.raises(TPPConfigurationError, match="max_attempts must be greater than 0"):
+        TPPTransportPolicy(max_attempts=0)
+
+    with pytest.raises(
+        TPPConfigurationError,
+        match="breaker_failure_threshold must be greater than 0",
+    ):
+        TPPTransportPolicy(breaker_failure_threshold=0)
+
+
+def test_transport_policy_exposes_required_dataclass_fields() -> None:
+    policy = TPPTransportPolicy()
+
+    assert policy.connect_timeout_seconds == 5.0
+    assert policy.read_timeout_seconds == 15.0
+    assert policy.max_attempts == 3
+    assert policy.backoff_initial_seconds == 0.5
+    assert policy.backoff_max_seconds == 4.0
+    assert policy.breaker_failure_threshold == 5
+    assert policy.breaker_reset_seconds == 30.0
 
 
 def test_http_transport_retries_server_errors_then_surfaces_typed_error(
@@ -619,6 +666,57 @@ def test_http_transport_opens_breaker_after_consecutive_failures(
         client._request_json(method="POST", path="/api/down", json_payload={})
 
     assert exc_info.value.error_code == "breaker_open"
+
+
+def test_http_transport_breaker_threshold_and_reset_window_recovery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current_time = 0.0
+
+    def _clock() -> float:
+        return current_time
+
+    call_counter = [0]
+    _install_urlopen(
+        monkeypatch,
+        [
+            urllib_error.URLError(ConnectionRefusedError("refused-1")),
+            urllib_error.URLError(ConnectionRefusedError("refused-2")),
+            urllib_error.URLError(ConnectionRefusedError("refused-3")),
+            urllib_error.URLError(ConnectionRefusedError("refused-4")),
+            urllib_error.URLError(ConnectionRefusedError("refused-5")),
+            _FakeHTTPResponse(200, {"ok": True}),
+        ],
+        call_counter=call_counter,
+    )
+    client = _http_client(
+        policy=TPPTransportPolicy(
+            max_attempts=1,
+            breaker_failure_threshold=5,
+            breaker_reset_seconds=10.0,
+        ),
+        clock=_clock,
+        breaker_registry={},
+    )
+
+    for _ in range(5):
+        with pytest.raises(TPPTransportError) as failure:
+            client._request_json(method="POST", path="/api/down", json_payload={})
+        assert failure.value.error_code == "connection_error"
+
+    assert call_counter[0] == 5
+
+    with pytest.raises(TPPTransportError) as open_breaker:
+        client._request_json(method="POST", path="/api/down", json_payload={})
+    assert open_breaker.value.error_code == "breaker_open"
+    assert call_counter[0] == 5
+
+    current_time = 11.0
+    assert client._request_json(method="POST", path="/api/down", json_payload={}) == {"ok": True}
+    assert call_counter[0] == 6
+
+    breaker = next(iter(client._breaker_registry.values()))
+    assert breaker.state == "closed"
 
 
 def test_http_transport_open_breaker_fails_fast_without_new_network_attempt(
@@ -909,6 +1007,56 @@ def test_http_transport_shared_breaker_registry_uses_shared_lock() -> None:
     assert second_client._breaker_registry_lock is shared_lock
 
 
+def test_http_transport_injected_breaker_registry_gets_implicit_shared_lock() -> None:
+    shared_registry: dict[tuple[str, str, int], tpp_client_module._CircuitBreaker] = {}
+    first_client = _http_client(breaker_registry=shared_registry)
+    second_client = _http_client(breaker_registry=shared_registry)
+
+    assert first_client._breaker_registry is shared_registry
+    assert second_client._breaker_registry is shared_registry
+    assert first_client._breaker_registry_lock is second_client._breaker_registry_lock
+
+
+def test_http_transport_explicit_breaker_registry_lock_takes_precedence() -> None:
+    explicit_lock = threading.Lock()
+    client = HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url="https://tpp.example.test",
+            access_token="token-123",
+            oidc_provider="okta",
+        ),
+        policy=TPPTransportPolicy(backoff_initial_seconds=0.0, backoff_max_seconds=0.0),
+        sleep=lambda _delay: None,
+        clock=lambda: 0.0,
+        jitter=lambda _start, _end: 0.0,
+        breaker_registry_lock=explicit_lock,
+    )
+
+    assert client._breaker_registry_lock is explicit_lock
+
+
+def test_http_transport_prunes_stale_injected_breaker_registry_locks() -> None:
+    live_registry: dict[tuple[str, str, int], tpp_client_module._CircuitBreaker] = {}
+    live_lock = tpp_client_module.HTTPTPPIntegrationClient._lock_for_injected_breaker_registry(
+        live_registry
+    )
+    stale_registry_id = 1
+    while stale_registry_id == id(live_registry):
+        stale_registry_id += 1
+    stale_lock = threading.Lock()
+    tpp_client_module.HTTPTPPIntegrationClient._injected_breaker_registry_locks[
+        stale_registry_id
+    ] = stale_lock
+
+    tpp_client_module.HTTPTPPIntegrationClient._prune_injected_breaker_registry_locks(
+        active_registry_id=id(live_registry)
+    )
+
+    locks = tpp_client_module.HTTPTPPIntegrationClient._injected_breaker_registry_locks
+    assert locks[id(live_registry)] is live_lock
+    assert stale_registry_id not in locks
+
+
 def test_http_transport_integration_against_stub_http_server_reports_server_error() -> None:
     class _Handler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
@@ -945,3 +1093,163 @@ def test_http_transport_integration_against_stub_http_server_reports_server_erro
         thread.join(timeout=1)
 
     assert exc_info.value.error_code == "server_error"
+
+
+def _httpserver_client(
+    httpserver: HTTPServer, *, policy: TPPTransportPolicy
+) -> HTTPTPPIntegrationClient:
+    return HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url=httpserver.url_for(""),
+            access_token="token-123",
+            oidc_provider="okta",
+        ),
+        policy=policy,
+        breaker_registry={},
+    )
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "error_code"),
+    [
+        (503, {"detail": "temporarily unavailable"}, "server_error"),
+        (403, {"detail": "forbidden"}, "unauthorized"),
+        (429, {"detail": "rate limited"}, "unknown"),
+    ],
+)
+@pytest.mark.skipif(
+    not _SOCKETS_AVAILABLE,
+    reason="Local socket bind is not permitted in this execution environment.",
+)
+def test_http_transport_integration_http_status_mappings(
+    httpserver: HTTPServer,
+    status: int,
+    body: dict[str, str],
+    error_code: str,
+) -> None:
+    httpserver.expect_request("/status", method="POST").respond_with_json(body, status=status)
+    client = _httpserver_client(httpserver, policy=TPPTransportPolicy(max_attempts=1))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/status", json_payload={})
+
+    assert exc_info.value.error_code == error_code
+
+
+@pytest.mark.skipif(
+    not _SOCKETS_AVAILABLE,
+    reason="Local socket bind is not permitted in this execution environment.",
+)
+def test_http_transport_integration_invalid_response_mapping(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/invalid", method="POST").respond_with_data(
+        "not-json",
+        status=200,
+        content_type="application/json",
+    )
+    client = _httpserver_client(httpserver, policy=TPPTransportPolicy(max_attempts=1))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/invalid", json_payload={})
+
+    assert exc_info.value.error_code == "invalid_response"
+
+
+@pytest.mark.skipif(
+    not _SOCKETS_AVAILABLE,
+    reason="Local socket bind is not permitted in this execution environment.",
+)
+def test_http_transport_integration_connection_error_mapping() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as bound:
+        bound.bind(("127.0.0.1", 0))
+        unused_port = bound.getsockname()[1]
+    client = HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url=f"http://127.0.0.1:{unused_port}",
+            access_token="token-123",
+            oidc_provider="okta",
+        ),
+        policy=TPPTransportPolicy(max_attempts=1),
+        breaker_registry={},
+    )
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/conn", json_payload={})
+
+    assert exc_info.value.error_code == "connection_error"
+
+
+@pytest.mark.skipif(
+    not _SOCKETS_AVAILABLE,
+    reason="Local socket bind is not permitted in this execution environment.",
+)
+def test_http_transport_integration_timeout_mapping() -> None:
+    class SlowBodyHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "12")
+            self.end_headers()
+            time.sleep(0.25)
+            try:
+                self.wfile.write(b'{"ok": true}')
+            except BrokenPipeError:
+                pass
+
+        def log_message(self, _format: str, *args: object) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), SlowBodyHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    client = HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url=f"http://127.0.0.1:{server.server_port}",
+            access_token="token-123",
+            oidc_provider="okta",
+        ),
+        policy=TPPTransportPolicy(
+            connect_timeout_seconds=1.0,
+            read_timeout_seconds=0.05,
+            max_attempts=1,
+            backoff_initial_seconds=0.0,
+            backoff_max_seconds=0.0,
+        ),
+        breaker_registry={},
+    )
+
+    try:
+        with pytest.raises(TPPTransportError) as exc_info:
+            client._request_json(method="POST", path="/timeout", json_payload={})
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1.0)
+
+    assert exc_info.value.error_code == "timeout"
+
+
+@pytest.mark.skipif(
+    not _SOCKETS_AVAILABLE,
+    reason="Local socket bind is not permitted in this execution environment.",
+)
+def test_http_transport_integration_breaker_open_mapping(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/breaker", method="POST").respond_with_json(
+        {"detail": "temporarily unavailable"},
+        status=503,
+    )
+    client = _httpserver_client(
+        httpserver,
+        policy=TPPTransportPolicy(
+            max_attempts=1,
+            breaker_failure_threshold=1,
+            breaker_reset_seconds=30.0,
+        ),
+    )
+
+    with pytest.raises(TPPTransportError) as first_failure:
+        client._request_json(method="POST", path="/breaker", json_payload={})
+    assert first_failure.value.error_code == "server_error"
+
+    with pytest.raises(TPPTransportError) as open_breaker:
+        client._request_json(method="POST", path="/breaker", json_payload={})
+    assert open_breaker.value.error_code == "breaker_open"

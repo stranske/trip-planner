@@ -153,7 +153,12 @@ class TPPProposalSubmissionService:
                 operation="submit_proposal",
             )
             if transport_error is None:
-                raise
+                transport_error = TPPTransportError(
+                    f"TPP submit_proposal transport failed unexpectedly: {exc}.",
+                    error_code="unknown",
+                    status_code=502,
+                    retryable=False,
+                )
             raise transport_error from exc
         return self.normalize_response(
             request,

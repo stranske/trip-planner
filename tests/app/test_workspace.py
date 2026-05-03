@@ -13,10 +13,12 @@ from trip_planner.app.services.feasibility import (
     build_feasibility_planner_outputs,
     build_feasibility_summary_payload,
 )
+from trip_planner.app.services import proposal as proposal_service
 from trip_planner.app.services.scenarios import _runtime_business_profile
 from trip_planner.app.services.trips import create_trip
 from trip_planner.app.services import workspace as workspace_service
 from trip_planner.app.services.workspace import get_workspace_payload
+from trip_planner.integrations.tpp import TPPTransportError
 from trip_planner.options import InventoryBundle
 from trip_planner.persistence.db import (
     ensure_database_ready,
@@ -1627,6 +1629,142 @@ def test_workspace_endpoint_surfaces_exception_follow_up_for_live_policy_results
     assert payload["planner_panel_state"]["outputs"][-1]["status"] == "caution"
 
 
+@pytest.mark.parametrize(
+    ("error_code", "expected_title"),
+    [
+        ("timeout", "Live TPP request timed out"),
+        ("breaker_open", "Live TPP breaker is open"),
+    ],
+)
+def test_workspace_endpoint_persists_transport_fallback_notice_for_live_submission_errors(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    error_code: str,
+    expected_title: str,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Live transport fallback workspace",
+            "summary": "Proposal submission should preserve stored-policy posture on transport failures.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    submission_fixture = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "fixtures"
+            / "integrations"
+            / "tpp"
+            / "proposal_submit_deferred.json"
+        ).read_text(encoding="utf-8")
+    )
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+    proposal_payload = {
+        "proposal_id": f"proposal:{trip_id}",
+        "trip_id": trip_id,
+        "mode": "business",
+        "traveler_context": {
+            "employee_type": "employee",
+            "traveler_experience": "frequent",
+            "home_airport": "ORD",
+            "loyalty_programs": ["United"],
+            "mobility_or_access_needs": [],
+        },
+        "selected_options": [
+            {
+                "category": "airfare",
+                "option_id": "flight-1",
+                "label": "United 123",
+                "vendor": "United",
+                "booking_channel": "Navan",
+                "estimated_cost": {
+                    "currency": "USD",
+                    "typical_amount": 620.0,
+                    "min_amount": 620.0,
+                    "max_amount": 620.0,
+                },
+                "justification_refs": ["fare-policy"],
+            }
+        ],
+        "cost_summary": {
+            "currency": "USD",
+            "total_estimated_cost": 620.0,
+            "category_estimates": {"airfare": 620.0},
+            "notes": ["Costs include taxes."],
+        },
+        "comparables": [],
+        "approval_notes": ["Manager review required before booking."],
+        "constraint_set_id": "policy-standard-2026-02",
+    }
+
+    def _raise_live_transport_error(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise TPPTransportError(
+            f"Simulated live transport failure: {error_code}",
+            error_code=error_code,  # type: ignore[arg-type]
+            status_code=503,
+            retryable=True,
+        )
+
+    monkeypatch.setattr(
+        proposal_service,
+        "_resolve_submission_response",
+        _raise_live_transport_error,
+    )
+
+    submitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": proposal_payload,
+            "request": submission_fixture["request"],
+            "response": None,
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert submitted.status_code == 200
+    submission_body = submitted.json()
+    assert submission_body["proposal_state"]["summary"]["submission_error"]["code"] == error_code
+
+    panel_state = workspace_service._build_planner_panel_state(
+        trip={
+            "trip_id": trip_id,
+            "title": "Live transport fallback workspace",
+            "mode": "business",
+            "trip_frame": {"primary_regions": ["Chicago"]},
+        },
+        scenario_search={"scenarios": [], "explanation": [], "source_refs": []},
+        session={"pending_decisions": [], "interaction_state": {}},
+        saved_scenarios=[],
+        activity_log=[],
+        feasibility_summary={"assessment_count": 0, "assessments": []},
+        policy_context=None,
+        proposal_context={"proposal_state": submission_body["proposal_state"]},
+    )
+    panel_outputs = panel_state["outputs"]
+    fallback_output = next(
+        (
+            output
+            for output in panel_outputs
+            if output["output_id"].endswith(":proposal-transport-fallback")
+        ),
+        None,
+    )
+    assert fallback_output is not None
+    assert fallback_output["title"] == expected_title
+    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["highlights"][0] == f"error_code={error_code}"
+
+
 def test_workspace_planner_decision_answer_persists_across_reload(client: TestClient) -> None:
     created = client.post(
         "/api/trips",
@@ -1946,6 +2084,92 @@ def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_timeout(
                     "submission_error": {
                         "code": "timeout",
                         "message": "Live TPP request exceeded transport timeout.",
+                    }
+                },
+            }
+        },
+    )
+
+    fallback_output = next(
+        (
+            item
+            for item in panel_state["outputs"]
+            if item["output_id"].endswith(":proposal-transport-fallback")
+        ),
+        None,
+    )
+    assert fallback_output is not None
+    assert fallback_output["title"] == "Live TPP request timed out"
+    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["status"] == "caution"
+    assert fallback_output["highlights"][0] == "error_code=timeout"
+
+
+def test_planner_panel_state_uses_submission_error_details_code_for_timeout_fallback() -> None:
+    panel_state = workspace_service._build_planner_panel_state(
+        trip={
+            "trip_id": "trip-timeout-details-fallback",
+            "title": "Timeout details fallback trip",
+            "mode": "business",
+            "trip_frame": {"primary_regions": ["Chicago"]},
+        },
+        scenario_search={"scenarios": [], "explanation": [], "source_refs": []},
+        session={"pending_decisions": [], "interaction_state": {}},
+        saved_scenarios=[],
+        activity_log=[],
+        feasibility_summary={"assessment_count": 0, "assessments": []},
+        policy_context=None,
+        proposal_context={
+            "proposal_state": {
+                "proposal": {"proposal_id": "proposal:trip-timeout-details-fallback"},
+                "summary": {
+                    "submission_error": {
+                        "message": "Live TPP request exceeded transport timeout.",
+                        "details": {"error_code": "timeout"},
+                    }
+                },
+            }
+        },
+    )
+
+    fallback_output = next(
+        (
+            item
+            for item in panel_state["outputs"]
+            if item["output_id"].endswith(":proposal-transport-fallback")
+        ),
+        None,
+    )
+    assert fallback_output is not None
+    assert fallback_output["title"] == "Live TPP request timed out"
+    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["status"] == "caution"
+    assert fallback_output["highlights"][0] == "error_code=timeout"
+
+
+def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_evaluation_timeout() -> (
+    None
+):
+    panel_state = workspace_service._build_planner_panel_state(
+        trip={
+            "trip_id": "trip-evaluation-timeout-fallback",
+            "title": "Evaluation timeout fallback trip",
+            "mode": "business",
+            "trip_frame": {"primary_regions": ["Chicago"]},
+        },
+        scenario_search={"scenarios": [], "explanation": [], "source_refs": []},
+        session={"pending_decisions": [], "interaction_state": {}},
+        saved_scenarios=[],
+        activity_log=[],
+        feasibility_summary={"assessment_count": 0, "assessments": []},
+        policy_context=None,
+        proposal_context={
+            "proposal_state": {
+                "proposal": {"proposal_id": "proposal:trip-evaluation-timeout-fallback"},
+                "summary": {
+                    "evaluation_error": {
+                        "code": "timeout",
+                        "message": "Live TPP evaluation transport timed out.",
                     }
                 },
             }
