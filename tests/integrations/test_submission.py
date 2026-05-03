@@ -1,6 +1,7 @@
 import json
 from http.client import HTTPMessage
 from pathlib import Path
+from typing import Literal
 from urllib import error as urllib_error
 
 import pytest
@@ -14,6 +15,9 @@ from trip_planner.integrations.tpp import (
     TPPResponseEnvelope,
     TPPTransportError,
 )
+
+
+PreservedTransportErrorCode = Literal["breaker_open", "unauthorized", "invalid_response"]
 
 
 def _fixture_path(name: str) -> Path:
@@ -306,7 +310,9 @@ def test_submission_converts_unclassified_exception_to_unknown_transport_error()
 
 
 @pytest.mark.parametrize("error_code", ["breaker_open", "unauthorized", "invalid_response"])
-def test_submission_preserves_typed_transport_error(error_code: str) -> None:
+def test_submission_preserves_typed_transport_error(
+    error_code: PreservedTransportErrorCode,
+) -> None:
     fixture = _load_fixture("proposal_submit_deferred.json")
     proposal = _proposal_fixture()
     request = TPPRequestEnvelope.from_dict(fixture["request"])
