@@ -219,3 +219,25 @@ def test_frontend_runtime_smoke_reports_timeout_with_context(monkeypatch) -> Non
     assert "frontend/runtime smoke timed out" in message
     assert "stdout context" in message
     assert "stderr context" in message
+
+
+def test_main_succeeds_when_tpp_base_url_unset_in_auto_mode(monkeypatch) -> None:
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    monkeypatch.delenv("TPP_REPO_PATH", raising=False)
+    monkeypatch.delenv("TPP_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("TPP_OIDC_PROVIDER", raising=False)
+
+    monkeypatch.setattr(
+        verifier,
+        "run_frontend_runtime_smoke",
+        lambda: CheckResult("frontend-runtime-smoke", "PASS", {"source": "stub"}),
+    )
+    monkeypatch.setattr(
+        verifier,
+        "run_product_journeys",
+        lambda *, live_tpp: [CheckResult("live-tpp", "SKIPPED", {"mode": live_tpp})],
+    )
+
+    exit_code = verifier.main(["--live-tpp", "auto"])
+
+    assert exit_code == 0

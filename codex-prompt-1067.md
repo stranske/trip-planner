@@ -148,11 +148,11 @@ A coverage task is NOT complete just because you added tests. It is complete ONL
 ---
 ## PR Tasks and Acceptance Criteria
 
-**Progress:** 15/17 tasks complete, 2 remaining
+**Progress:** 16/17 tasks complete, 1 remaining
 
 ### ⚠️ IMPORTANT: Task Reconciliation Required
 
-The previous iteration changed **6 file(s)** but did not update task checkboxes.
+The previous iteration changed **7 file(s)** but did not update task checkboxes.
 
 **Before continuing, you MUST:**
 1. Review the recent commits to understand what was changed
@@ -202,7 +202,7 @@ The PR is complete when ALL of these are satisfied:
 - [x] On five consecutive failures the breaker opens and subsequent calls immediately return `TPPTransportError(error_code="breaker_open")` until the reset window elapses.
 - [x] The planner workspace renders stored-policy posture (with a typed error notice) when the client surfaces `breaker_open` or `timeout`, not an unhandled exception.
 - [x] Unit and integration tests covering all listed error codes pass in CI.
-- [ ] `make full-product-check` continues to pass with `TPP_BASE_URL` unset (no live transport configured).
+- [x] `make full-product-check` continues to pass with `TPP_BASE_URL` unset (no live transport configured).
 - [x] No new public method is added to the TPP client interface that pre-empts the canonical-method-name decision still pending in #1031; the policy is applied at the existing `_dispatch` layer rather than at the per-method surface.
 
 ### Recently Attempted Tasks
