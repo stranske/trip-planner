@@ -2,6 +2,7 @@ import json
 import io
 import socket
 import threading
+import time
 from http.client import HTTPMessage
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import Literal
 from urllib import error as urllib_error
 
 import pytest
+from pytest_httpserver import HTTPServer
 
 from trip_planner.integrations.tpp import client as tpp_client_module
 from trip_planner.integrations.tpp import (
@@ -23,6 +25,18 @@ from trip_planner.integrations.tpp import (
     TPPTransportError,
     TPPTransportPolicy,
 )
+
+
+def _local_socket_supported() -> bool:
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    except PermissionError:
+        return False
+    sock.close()
+    return True
+
+
+_SOCKETS_AVAILABLE = _local_socket_supported()
 
 
 def _fixture_path(name: str) -> Path:
@@ -1079,3 +1093,138 @@ def test_http_transport_integration_against_stub_http_server_reports_server_erro
         thread.join(timeout=1)
 
     assert exc_info.value.error_code == "server_error"
+
+
+def _httpserver_client(
+    httpserver: HTTPServer, *, policy: TPPTransportPolicy
+) -> HTTPTPPIntegrationClient:
+    return HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url=httpserver.url_for(""),
+            access_token="token-123",
+            oidc_provider="okta",
+        ),
+        policy=policy,
+        breaker_registry={},
+    )
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "error_code"),
+    [
+        (503, {"detail": "temporarily unavailable"}, "server_error"),
+        (403, {"detail": "forbidden"}, "unauthorized"),
+        (429, {"detail": "rate limited"}, "unknown"),
+    ],
+)
+@pytest.mark.skipif(
+    not _SOCKETS_AVAILABLE,
+    reason="Local socket bind is not permitted in this execution environment.",
+)
+def test_http_transport_integration_http_status_mappings(
+    httpserver: HTTPServer,
+    status: int,
+    body: dict[str, str],
+    error_code: str,
+) -> None:
+    httpserver.expect_request("/status", method="POST").respond_with_json(body, status=status)
+    client = _httpserver_client(httpserver, policy=TPPTransportPolicy(max_attempts=1))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/status", json_payload={})
+
+    assert exc_info.value.error_code == error_code
+
+
+@pytest.mark.skipif(
+    not _SOCKETS_AVAILABLE,
+    reason="Local socket bind is not permitted in this execution environment.",
+)
+def test_http_transport_integration_invalid_response_mapping(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/invalid", method="POST").respond_with_data(
+        "not-json",
+        status=200,
+        content_type="application/json",
+    )
+    client = _httpserver_client(httpserver, policy=TPPTransportPolicy(max_attempts=1))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/invalid", json_payload={})
+
+    assert exc_info.value.error_code == "invalid_response"
+
+
+@pytest.mark.skipif(
+    not _SOCKETS_AVAILABLE,
+    reason="Local socket bind is not permitted in this execution environment.",
+)
+def test_http_transport_integration_connection_error_mapping() -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as bound:
+        bound.bind(("127.0.0.1", 0))
+        unused_port = bound.getsockname()[1]
+    client = HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url=f"http://127.0.0.1:{unused_port}",
+            access_token="token-123",
+            oidc_provider="okta",
+        ),
+        policy=TPPTransportPolicy(max_attempts=1),
+        breaker_registry={},
+    )
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/conn", json_payload={})
+
+    assert exc_info.value.error_code == "connection_error"
+
+
+@pytest.mark.skipif(
+    not _SOCKETS_AVAILABLE,
+    reason="Local socket bind is not permitted in this execution environment.",
+)
+def test_http_transport_integration_timeout_mapping(httpserver: HTTPServer) -> None:
+    def _slow_response(_request):
+        time.sleep(0.15)
+        return '{"ok": true}', 200, {"Content-Type": "application/json"}
+
+    httpserver.expect_request("/timeout", method="POST").respond_with_handler(_slow_response)
+    client = _httpserver_client(
+        httpserver,
+        policy=TPPTransportPolicy(
+            connect_timeout_seconds=1.0,
+            read_timeout_seconds=0.05,
+            max_attempts=1,
+        ),
+    )
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        client._request_json(method="POST", path="/timeout", json_payload={})
+
+    assert exc_info.value.error_code == "timeout"
+
+
+@pytest.mark.skipif(
+    not _SOCKETS_AVAILABLE,
+    reason="Local socket bind is not permitted in this execution environment.",
+)
+def test_http_transport_integration_breaker_open_mapping(httpserver: HTTPServer) -> None:
+    httpserver.expect_request("/breaker", method="POST").respond_with_json(
+        {"detail": "temporarily unavailable"},
+        status=503,
+    )
+    client = _httpserver_client(
+        httpserver,
+        policy=TPPTransportPolicy(
+            max_attempts=1,
+            breaker_failure_threshold=1,
+            breaker_reset_seconds=30.0,
+        ),
+    )
+
+    with pytest.raises(TPPTransportError) as first_failure:
+        client._request_json(method="POST", path="/breaker", json_payload={})
+    assert first_failure.value.error_code == "server_error"
+
+    with pytest.raises(TPPTransportError) as open_breaker:
+        client._request_json(method="POST", path="/breaker", json_payload={})
+    assert open_breaker.value.error_code == "breaker_open"
