@@ -107,6 +107,26 @@ def test_live_tpp_auto_reports_ready_with_base_url_and_auth_config() -> None:
     assert check.details["TPP_BASE_URL"] == "https://tpp.example.test"
 
 
+def test_live_tpp_auto_skips_when_auth_exists_without_transport_target(tmp_path) -> None:
+    check = tpp_prerequisite_status(
+        live_tpp="auto",
+        default_repo_path=tmp_path / "missing",
+        env={
+            "TPP_ACCESS_TOKEN": "token",
+            "TPP_OIDC_PROVIDER": "google",
+        },
+    )
+
+    assert check == CheckResult(
+        "live-tpp",
+        "SKIPPED",
+        {
+            "missing_env": "TPP_BASE_URL or TPP_REPO_PATH",
+            "default_repo_path": str(tmp_path / "missing"),
+        },
+    )
+
+
 def test_live_tpp_auto_reports_invalid_repo_path_as_blocked(tmp_path) -> None:
     missing_repo = tmp_path / "missing-tpp"
 

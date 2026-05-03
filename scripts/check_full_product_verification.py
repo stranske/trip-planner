@@ -353,10 +353,20 @@ def tpp_prerequisite_status(
         "TPP_OIDC_PROVIDER": env_map.get("TPP_OIDC_PROVIDER", "").strip(),
         "TPP_REPO_PATH": env_map.get("TPP_REPO_PATH", "").strip(),
     }
+    has_transport_target = bool(configured["TPP_BASE_URL"] or configured["TPP_REPO_PATH"])
     explicit = any(configured.values())
     if live_tpp == "off":
         return CheckResult("live-tpp", "SKIPPED", {"mode": "off"})
     if live_tpp == "auto" and not explicit:
+        return CheckResult(
+            "live-tpp",
+            "SKIPPED",
+            {
+                "missing_env": "TPP_BASE_URL or TPP_REPO_PATH",
+                "default_repo_path": str(default_repo_path),
+            },
+        )
+    if live_tpp == "auto" and not has_transport_target:
         return CheckResult(
             "live-tpp",
             "SKIPPED",
