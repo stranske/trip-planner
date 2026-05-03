@@ -107,6 +107,26 @@ def test_live_tpp_auto_reports_ready_with_base_url_and_auth_config() -> None:
     assert check.details["TPP_BASE_URL"] == "https://tpp.example.test"
 
 
+def test_live_tpp_auto_skips_when_auth_exists_without_transport_target(tmp_path) -> None:
+    check = tpp_prerequisite_status(
+        live_tpp="auto",
+        default_repo_path=tmp_path / "missing",
+        env={
+            "TPP_ACCESS_TOKEN": "token",
+            "TPP_OIDC_PROVIDER": "google",
+        },
+    )
+
+    assert check == CheckResult(
+        "live-tpp",
+        "SKIPPED",
+        {
+            "missing_env": "TPP_BASE_URL or TPP_REPO_PATH",
+            "default_repo_path": str(tmp_path / "missing"),
+        },
+    )
+
+
 def test_live_tpp_auto_reports_invalid_repo_path_as_blocked(tmp_path) -> None:
     missing_repo = tmp_path / "missing-tpp"
 
@@ -199,3 +219,25 @@ def test_frontend_runtime_smoke_reports_timeout_with_context(monkeypatch) -> Non
     assert "frontend/runtime smoke timed out" in message
     assert "stdout context" in message
     assert "stderr context" in message
+
+
+def test_main_succeeds_when_tpp_base_url_unset_in_auto_mode(monkeypatch) -> None:
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    monkeypatch.delenv("TPP_REPO_PATH", raising=False)
+    monkeypatch.delenv("TPP_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("TPP_OIDC_PROVIDER", raising=False)
+
+    monkeypatch.setattr(
+        verifier,
+        "run_frontend_runtime_smoke",
+        lambda: CheckResult("frontend-runtime-smoke", "PASS", {"source": "stub"}),
+    )
+    monkeypatch.setattr(
+        verifier,
+        "run_product_journeys",
+        lambda *, live_tpp: [CheckResult("live-tpp", "SKIPPED", {"mode": live_tpp})],
+    )
+
+    exit_code = verifier.main(["--live-tpp", "auto"])
+
+    assert exit_code == 0

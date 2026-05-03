@@ -174,9 +174,7 @@ class TPPTransportPolicy:
         ):
             value = float(getattr(self, field_name))
             if not math.isfinite(value) or value <= 0:
-                raise TPPConfigurationError(
-                    f"{field_name} must be a finite value greater than 0."
-                )
+                raise TPPConfigurationError(f"{field_name} must be a finite value greater than 0.")
             setattr(self, field_name, value)
         for field_name in ("backoff_initial_seconds", "backoff_max_seconds"):
             value = float(getattr(self, field_name))
@@ -190,6 +188,10 @@ class TPPTransportPolicy:
             if value <= 0:
                 raise TPPConfigurationError(f"{field_name} must be greater than 0.")
             setattr(self, field_name, value)
+        if self.backoff_max_seconds < self.backoff_initial_seconds:
+            raise TPPConfigurationError(
+                "backoff_max_seconds must be greater than or equal to backoff_initial_seconds."
+            )
 
     @classmethod
     def from_env(cls) -> "TPPTransportPolicy":
@@ -395,8 +397,6 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
 
     _breakers: ClassVar[dict[tuple[str, str, int], _CircuitBreaker]] = {}
     _default_breaker_registry_lock: ClassVar[threading.Lock] = threading.Lock()
-    _injected_breaker_registry_locks: ClassVar[dict[int, threading.Lock]] = {}
-    _injected_breaker_registry_locks_guard: ClassVar[threading.Lock] = threading.Lock()
 
     def __init__(
         self,
@@ -407,6 +407,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         clock: Callable[[], float] | None = None,
         jitter: Callable[[float, float], float] | None = None,
         breaker_registry: dict[tuple[str, str, int], _CircuitBreaker] | None = None,
+        breaker_registry_lock: threading.Lock | None = None,
     ) -> None:
         self.settings = settings or TPPRuntimeSettings.from_env()
         self.policy = policy or TPPTransportPolicy.from_env()
@@ -417,22 +418,10 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             breaker_registry if breaker_registry is not None else self._breakers
         )
         self._breaker_registry_lock = (
-            self._lock_for_injected_breaker_registry(breaker_registry)
+            breaker_registry_lock or threading.Lock()
             if breaker_registry is not None
             else self._default_breaker_registry_lock
         )
-
-    @classmethod
-    def _lock_for_injected_breaker_registry(
-        cls,
-        breaker_registry: dict[tuple[str, str, int], _CircuitBreaker],
-    ) -> threading.Lock:
-        registry_id = id(breaker_registry)
-        with cls._injected_breaker_registry_locks_guard:
-            return cls._injected_breaker_registry_locks.setdefault(
-                registry_id,
-                threading.Lock(),
-            )
 
     def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         if request.operation == "fetch_policy_constraints":
@@ -444,6 +433,22 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
         if request.operation == "poll_execution_status":
             return self._poll_execution_status(request)
         raise TPPContractError(f"Unsupported TPP operation {request.operation!r}.")
+
+    def _dispatch(
+        self, expected_operation: str, request: TPPRequestEnvelope
+    ) -> TPPResponseEnvelope:
+        try:
+            return super()._dispatch(expected_operation, request)
+        except TPPTransportError:
+            raise
+        except Exception as exc:
+            transport_error = tpp_transport_error_from_exception(
+                exc,
+                operation=expected_operation,
+            )
+            if transport_error is None:
+                raise
+            raise transport_error from exc
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -514,18 +519,15 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 ConnectionError,
                 OSError,
             ) as exc:
-                transport_error = (
-                    tpp_transport_error_from_exception(
-                        exc,
-                        operation=method,
-                        path=path,
-                    )
-                    or TPPTransportError(
-                        f"TPP request to {path} failed: {exc}.",
-                        error_code="unknown",
-                        status_code=502,
-                        retryable=False,
-                    )
+                transport_error = tpp_transport_error_from_exception(
+                    exc,
+                    operation=method,
+                    path=path,
+                ) or TPPTransportError(
+                    f"TPP request to {path} failed: {exc}.",
+                    error_code="unknown",
+                    status_code=502,
+                    retryable=False,
                 )
                 last_error = transport_error
                 breaker.record_failure(policy=self.policy, now=self._clock())
@@ -535,9 +537,16 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 if delay > 0:
                     self._sleep(delay)
                 continue
-            except Exception:
+            except Exception as exc:
+                transport_error = TPPTransportError(
+                    f"TPP request to {path} failed unexpectedly: {exc}.",
+                    error_code="unknown",
+                    status_code=502,
+                    retryable=False,
+                )
+                last_error = transport_error
                 breaker.record_failure(policy=self.policy, now=self._clock())
-                raise
+                raise transport_error from exc
             breaker.record_success()
             return payload
 

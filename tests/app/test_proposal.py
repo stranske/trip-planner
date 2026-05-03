@@ -1287,6 +1287,8 @@ def test_workspace_proposal_submission_persists_stored_policy_when_live_tpp_time
     assert payload["submission_status"] == "retry_scheduled"
     assert payload["summary"]["submission_error"]["code"] == "timeout"
     assert payload["summary"]["submission_error"]["details"]["error_code"] == "timeout"
+    assert payload["summary"]["submission_error"]["details"]["status_code"] == "504"
+    assert "timed out" in payload["summary"]["submission_error"]["message"]
     assert "stored-policy posture" in payload["summary"]["submission_summary"]
     assert payload["summary"]["submission_retry"]["retryable"] is True
 
@@ -1348,6 +1350,8 @@ def test_workspace_proposal_submission_persists_stored_policy_when_breaker_is_op
     assert payload["submission_status"] == "retry_scheduled"
     assert payload["summary"]["submission_error"]["code"] == "breaker_open"
     assert payload["summary"]["submission_error"]["details"]["error_code"] == "breaker_open"
+    assert payload["summary"]["submission_error"]["details"]["status_code"] == "503"
+    assert "circuit breaker is open" in payload["summary"]["submission_error"]["message"]
     assert "stored-policy posture" in payload["summary"]["submission_summary"]
 
 
