@@ -263,3 +263,22 @@ def test_result_ingestion_converts_raw_url_error_to_connection_error_with_cause(
 
     assert exc_info.value.error_code == "connection_error"
     assert exc_info.value.__cause__ is error
+
+
+def test_result_ingestion_converts_unclassified_exception_to_unknown_transport_error() -> None:
+    fixture = _load_fixture("approved_evaluation.json")
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    error = RuntimeError("unexpected transport crash")
+    service = TPPEvaluationResultIngestionService(RaisingTPPResultClient(error))
+
+    with pytest.raises(TPPTransportError) as exc_info:
+        service.fetch_evaluation_result(
+            request,
+            proposal_version="proposal-v3",
+            scenario_id="scenario-a",
+        )
+
+    assert exc_info.value.error_code == "unknown"
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.retryable is False
+    assert exc_info.value.__cause__ is error
