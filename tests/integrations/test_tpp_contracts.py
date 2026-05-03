@@ -357,6 +357,29 @@ def test_transport_policy_rejects_backoff_max_less_than_initial() -> None:
         TPPTransportPolicy(backoff_initial_seconds=0.75, backoff_max_seconds=0.5)
 
 
+def test_transport_policy_rejects_non_positive_integer_fields() -> None:
+    with pytest.raises(TPPConfigurationError, match="max_attempts must be greater than 0"):
+        TPPTransportPolicy(max_attempts=0)
+
+    with pytest.raises(
+        TPPConfigurationError,
+        match="breaker_failure_threshold must be greater than 0",
+    ):
+        TPPTransportPolicy(breaker_failure_threshold=0)
+
+
+def test_transport_policy_exposes_required_dataclass_fields() -> None:
+    policy = TPPTransportPolicy()
+
+    assert policy.connect_timeout_seconds == 5.0
+    assert policy.read_timeout_seconds == 15.0
+    assert policy.max_attempts == 3
+    assert policy.backoff_initial_seconds == 0.5
+    assert policy.backoff_max_seconds == 4.0
+    assert policy.breaker_failure_threshold == 5
+    assert policy.breaker_reset_seconds == 30.0
+
+
 def test_http_transport_retries_server_errors_then_surfaces_typed_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
