@@ -1443,11 +1443,11 @@ def _sync_workspace_session_record(
     return updated
 
 
-def _submission_transport_error_code(submission_error: dict[str, Any]) -> str | None:
-    code = submission_error.get("code")
+def _transport_error_code(error_record: dict[str, Any]) -> str | None:
+    code = error_record.get("code")
     if isinstance(code, str) and code:
         return code
-    details = submission_error.get("details")
+    details = error_record.get("details")
     if isinstance(details, dict):
         details_code = details.get("error_code")
         if isinstance(details_code, str) and details_code:
@@ -1786,8 +1786,14 @@ def _build_planner_panel_state(
             }
         )
         submission_error = summary.get("submission_error")
-        if isinstance(submission_error, dict):
-            error_code = _submission_transport_error_code(submission_error)
+        evaluation_error = summary.get("evaluation_error")
+        transport_error = (
+            submission_error
+            if isinstance(submission_error, dict)
+            else evaluation_error if isinstance(evaluation_error, dict) else None
+        )
+        if isinstance(transport_error, dict):
+            error_code = _transport_error_code(transport_error)
             if error_code in {"breaker_open", "timeout"}:
                 if error_code == "breaker_open":
                     notice_title = "Live TPP breaker is open"
@@ -1810,7 +1816,7 @@ def _build_planner_panel_state(
                         "status": "caution",
                         "highlights": [
                             f"error_code={error_code}",
-                            str(submission_error.get("message") or ""),
+                            str(transport_error.get("message") or ""),
                         ],
                     }
                 )

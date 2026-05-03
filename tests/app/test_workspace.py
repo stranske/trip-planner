@@ -2147,6 +2147,50 @@ def test_planner_panel_state_uses_submission_error_details_code_for_timeout_fall
     assert fallback_output["highlights"][0] == "error_code=timeout"
 
 
+def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_evaluation_timeout() -> (
+    None
+):
+    panel_state = workspace_service._build_planner_panel_state(
+        trip={
+            "trip_id": "trip-evaluation-timeout-fallback",
+            "title": "Evaluation timeout fallback trip",
+            "mode": "business",
+            "trip_frame": {"primary_regions": ["Chicago"]},
+        },
+        scenario_search={"scenarios": [], "explanation": [], "source_refs": []},
+        session={"pending_decisions": [], "interaction_state": {}},
+        saved_scenarios=[],
+        activity_log=[],
+        feasibility_summary={"assessment_count": 0, "assessments": []},
+        policy_context=None,
+        proposal_context={
+            "proposal_state": {
+                "proposal": {"proposal_id": "proposal:trip-evaluation-timeout-fallback"},
+                "summary": {
+                    "evaluation_error": {
+                        "code": "timeout",
+                        "message": "Live TPP evaluation transport timed out.",
+                    }
+                },
+            }
+        },
+    )
+
+    fallback_output = next(
+        (
+            item
+            for item in panel_state["outputs"]
+            if item["output_id"].endswith(":proposal-transport-fallback")
+        ),
+        None,
+    )
+    assert fallback_output is not None
+    assert fallback_output["title"] == "Live TPP request timed out"
+    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["status"] == "caution"
+    assert fallback_output["highlights"][0] == "error_code=timeout"
+
+
 def test_planner_panel_state_surfaces_policy_sync_fallback_notice_for_timeout() -> None:
     panel_state = workspace_service._build_planner_panel_state(
         trip={
