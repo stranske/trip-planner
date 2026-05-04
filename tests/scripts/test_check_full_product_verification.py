@@ -191,6 +191,89 @@ def test_started_tpp_service_readiness_failure_includes_captured_stderr(
     assert "stderr-9" not in message
 
 
+def test_started_tpp_service_launch_failure_cleans_temp_files(monkeypatch, tmp_path: Path) -> None:
+    repo_path, _ = _make_repo_with_venv(tmp_path)
+    created_paths: list[Path] = []
+    real_named_temporary_file = verifier.tempfile.NamedTemporaryFile
+
+    def tracked_named_temporary_file(*args, **kwargs):
+        temp_file = real_named_temporary_file(*args, **kwargs)
+        created_paths.append(Path(temp_file.name))
+        return temp_file
+
+    def fail_popen(*_args, **_kwargs):
+        raise OSError("cannot start")
+
+    monkeypatch.setattr(verifier.tempfile, "NamedTemporaryFile", tracked_named_temporary_file)
+    monkeypatch.setattr(verifier.subprocess, "Popen", fail_popen)
+    monkeypatch.setattr(verifier, "_free_local_port", lambda _preferred: 43125)
+
+    with pytest.raises(OSError, match="cannot start"):
+        with verifier._started_tpp_service(
+            {
+                "TPP_REPO_PATH": str(repo_path),
+                "TPP_ACCESS_TOKEN": "token",
+                "TPP_OIDC_PROVIDER": "google",
+            }
+        ):
+            pass
+
+    assert len(created_paths) == 2
+    assert all(not path.exists() for path in created_paths)
+
+
+def test_tail_file_limits_bytes_before_splitting_lines(tmp_path: Path) -> None:
+    output_path = tmp_path / "service.log"
+    output_path.write_text("prefix\n" + ("x" * 70000) + "\nlast\n", encoding="utf-8")
+
+    tail = verifier._tail_file(output_path, line_count=2, max_bytes=32)
+
+    assert "prefix" not in tail
+    assert "last" in tail
+    assert len(tail) < 40
+
+
+def test_started_tpp_service_readiness_failure_quotes_command(
+    monkeypatch, tmp_path: Path
+) -> None:
+    repo_path = tmp_path / "Travel Plan Permission"
+    venv_python = repo_path / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("#!/usr/bin/env python\n", encoding="utf-8")
+
+    class FakeProcess:
+        def __init__(self, _command, **_kwargs):
+            pass
+
+        def poll(self):
+            return 1
+
+        def terminate(self):  # pragma: no cover - process has already exited
+            raise AssertionError("process already exited")
+
+    monkeypatch.setattr(verifier.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(
+        verifier,
+        "_wait_for_http",
+        lambda _url: (_ for _ in ()).throw(verifier.VerificationFailure("not ready")),
+    )
+    monkeypatch.setattr(verifier, "_free_local_port", lambda _preferred: 43126)
+
+    with pytest.raises(verifier.VerificationFailure) as exc_info:
+        with verifier._started_tpp_service(
+            {
+                "TPP_REPO_PATH": str(repo_path),
+                "TPP_ACCESS_TOKEN": "token",
+                "TPP_OIDC_PROVIDER": "google",
+            }
+        ):
+            pass
+
+    message = str(exc_info.value)
+    assert f"'{venv_python}'" in message
+    assert f"'{venv_python}' -m travel_plan_permission.http_service" in message
+
+
 def test_started_tpp_service_missing_deps_failure_includes_stderr(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -198,7 +281,7 @@ def test_started_tpp_service_missing_deps_failure_includes_stderr(
     monkeypatch.setattr(verifier, "_free_local_port", lambda _preferred: 43124)
 
     def fail_readiness_after_process_boot(_url: str) -> None:
-        time.sleep(0.2)
+        time.sleep(1.0)
         raise verifier.VerificationFailure("not ready")
 
     monkeypatch.setattr(verifier, "_wait_for_http", fail_readiness_after_process_boot)
