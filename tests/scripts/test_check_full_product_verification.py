@@ -233,9 +233,7 @@ def test_tail_file_limits_bytes_before_splitting_lines(tmp_path: Path) -> None:
     assert len(tail) < 40
 
 
-def test_started_tpp_service_readiness_failure_quotes_command(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_started_tpp_service_readiness_failure_quotes_command(monkeypatch, tmp_path: Path) -> None:
     repo_path = tmp_path / "Travel Plan Permission"
     venv_python = repo_path / ".venv" / "bin" / "python"
     venv_python.parent.mkdir(parents=True)
@@ -301,3 +299,32 @@ def test_started_tpp_service_missing_deps_failure_includes_stderr(
     assert "ModuleNotFoundError" in message
     assert "definitely_missing_dependency" in message
     assert "stderr_tail" in message
+
+
+def test_resolve_tpp_interpreter_prefers_repo_venv(tmp_path: Path) -> None:
+    repo_path, venv_python = _make_repo_with_venv(tmp_path)
+    (repo_path / "uv.lock").write_text("", encoding="utf-8")
+    resolved = verifier._resolve_tpp_interpreter(repo_path)
+    assert resolved == [str(venv_python)]
+
+
+def test_resolve_tpp_interpreter_uses_uv_when_lock_present(monkeypatch, tmp_path: Path) -> None:
+    repo_path = tmp_path / "Travel-Plan-Permission"
+    repo_path.mkdir(parents=True)
+    (repo_path / "uv.lock").write_text("", encoding="utf-8")
+    monkeypatch.setattr(
+        verifier.shutil, "which", lambda command: "/usr/bin/uv" if command == "uv" else None
+    )
+    resolved = verifier._resolve_tpp_interpreter(repo_path)
+    assert resolved == ["uv", "run", "--directory", str(repo_path), "python"]
+
+
+def test_resolve_tpp_interpreter_fails_fast_when_no_venv_or_uv(monkeypatch, tmp_path: Path) -> None:
+    repo_path = tmp_path / "Travel-Plan-Permission"
+    repo_path.mkdir(parents=True)
+    monkeypatch.setattr(verifier.shutil, "which", lambda _command: None)
+    with pytest.raises(verifier.VerificationFailure) as exc_info:
+        verifier._resolve_tpp_interpreter(repo_path)
+    message = str(exc_info.value)
+    assert str(repo_path / ".venv" / "bin" / "python") in message
+    assert f"uv run --directory {repo_path} python" in message

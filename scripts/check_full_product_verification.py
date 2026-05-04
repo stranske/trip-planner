@@ -447,7 +447,11 @@ def _resolve_tpp_interpreter(repo_path: Path) -> list[str]:
     if (repo_path / "uv.lock").exists() and shutil.which("uv"):
         return ["uv", "run", "--directory", str(repo_path), "python"]
     raise VerificationFailure(
-        "Cannot auto-start TPP: no usable TPP Python environment",
+        (
+            "Cannot auto-start TPP: expected either "
+            f"{venv_python} or `uv run --directory {repo_path} python` "
+            "(with uv.lock present and uv installed)."
+        ),
         venv_python=str(venv_python),
         uv_lock=str(repo_path / "uv.lock"),
         remediation=(
