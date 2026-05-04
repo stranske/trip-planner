@@ -139,6 +139,30 @@ def test_started_tpp_service_starts_known_good_repo_and_tears_down(
     assert process.poll() is not None
 
 
+def test_started_tpp_service_base_url_skips_auto_start(monkeypatch, tmp_path: Path) -> None:
+    repo_path, _venv_python = _make_repo_with_venv(tmp_path)
+
+    def fail_resolve(_repo_path: Path) -> list[str]:
+        raise AssertionError("TPP_BASE_URL should bypass interpreter resolution")
+
+    def fail_popen(*_args, **_kwargs):
+        raise AssertionError("TPP_BASE_URL should not launch a local TPP process")
+
+    monkeypatch.setattr(verifier, "_resolve_tpp_interpreter", fail_resolve)
+    monkeypatch.setattr(verifier.subprocess, "Popen", fail_popen)
+
+    with verifier._started_tpp_service(
+        {
+            "TPP_BASE_URL": "http://tpp.example.test/",
+            "TPP_REPO_PATH": str(repo_path),
+            "TPP_ACCESS_TOKEN": "token",
+            "TPP_OIDC_PROVIDER": "google",
+        }
+    ) as (base_url, process):
+        assert base_url == "http://tpp.example.test"
+        assert process is None
+
+
 def test_started_tpp_service_readiness_failure_includes_captured_stderr(
     monkeypatch, tmp_path: Path
 ) -> None:
