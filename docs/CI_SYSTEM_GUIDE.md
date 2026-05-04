@@ -115,7 +115,9 @@ contract with `stranske/Travel-Plan-Permission`. On every PR and on push to
 1. Checks out trip-planner (PR head) into `trip-planner/`.
 2. Checks out `stranske/Travel-Plan-Permission` at a pinned ref into
    `Travel-Plan-Permission/` beside the trip-planner checkout.
-3. Installs both repos' dev extras and the trip-planner frontend deps.
+3. Installs both repos' dev extras and the trip-planner frontend deps. The
+   TPP `.venv` is created with the workflow's Python 3.12 runtime, matching
+   TPP's `requires-python >=3.12` contract.
 4. Runs `make full-product-check` with
    `TPP_REPO_PATH=../Travel-Plan-Permission`, matching the local sibling
    checkout contract. The Makefile target invokes
