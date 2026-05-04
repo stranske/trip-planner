@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import socket
 import subprocess
 import sys
@@ -446,7 +447,11 @@ def _resolve_tpp_interpreter(repo_path: Path) -> list[str]:
     if (repo_path / "uv.lock").exists() and shutil.which("uv"):
         return ["uv", "run", "--directory", str(repo_path), "python"]
     raise VerificationFailure(
-        "Cannot auto-start TPP: no usable TPP Python environment",
+        (
+            "Cannot auto-start TPP: expected either "
+            f"{venv_python} or `uv run --directory {repo_path} python` "
+            "(with uv.lock present and uv installed)."
+        ),
         venv_python=str(venv_python),
         uv_lock=str(repo_path / "uv.lock"),
         remediation=(
@@ -456,10 +461,21 @@ def _resolve_tpp_interpreter(repo_path: Path) -> list[str]:
     )
 
 
-def _tail_file(path: Path, *, line_count: int = 50) -> str:
+def _tail_file(path: Path, *, line_count: int = 50, max_bytes: int = 64 * 1024) -> str:
     if not path.exists():
         return ""
-    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    with path.open("rb") as handle:
+        handle.seek(0, os.SEEK_END)
+        size = handle.tell()
+        start = max(size - max_bytes - 1, 0)
+        handle.seek(start)
+        text = handle.read(max_bytes + 1).decode("utf-8", errors="replace")
+    if start > 0:
+        first_newline = text.find("\n")
+        if first_newline == -1:
+            return ""
+        text = text[first_newline + 1 :]
+    lines = text.splitlines()
     return "\n".join(lines[-line_count:])
 
 
@@ -508,15 +524,23 @@ def _started_tpp_service(
         "--port",
         str(port),
     ]
-    process = subprocess.Popen(
-        command,
-        cwd=repo_root,
-        env=service_env,
-        stdout=stdout_file,
-        stderr=stderr_file,
-    )
-    stdout_file.close()
-    stderr_file.close()
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=repo_root,
+            env=service_env,
+            stdout=stdout_file,
+            stderr=stderr_file,
+        )
+    except Exception:
+        stdout_file.close()
+        stderr_file.close()
+        stdout_path.unlink(missing_ok=True)
+        stderr_path.unlink(missing_ok=True)
+        raise
+    else:
+        stdout_file.close()
+        stderr_file.close()
     try:
         try:
             _wait_for_http(f"{base_url}/readyz")
@@ -525,8 +549,8 @@ def _started_tpp_service(
             raise VerificationFailure(
                 "TPP service did not become ready",
                 ready_url=f"{base_url}/readyz",
-                interpreter=" ".join(interpreter),
-                command=" ".join(command),
+                interpreter=shlex.join(interpreter),
+                command=shlex.join(command),
                 cwd=str(repo_root),
                 returncode=process.poll(),
                 stdout_tail=_tail_file(stdout_path),
