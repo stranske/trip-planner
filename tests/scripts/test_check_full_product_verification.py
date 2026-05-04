@@ -233,6 +233,18 @@ def test_tail_file_limits_bytes_before_splitting_lines(tmp_path: Path) -> None:
     assert len(tail) < 40
 
 
+def test_tail_file_drops_partial_first_line(tmp_path: Path) -> None:
+    output_path = tmp_path / "service.log"
+    output_path.write_text(
+        "header\n" + ("x" * 80) + "\ncomplete-1\ncomplete-2\n",
+        encoding="utf-8",
+    )
+
+    tail = verifier._tail_file(output_path, line_count=2, max_bytes=24)
+
+    assert tail == "complete-1\ncomplete-2"
+
+
 def test_started_tpp_service_readiness_failure_quotes_command(monkeypatch, tmp_path: Path) -> None:
     repo_path = tmp_path / "Travel Plan Permission"
     venv_python = repo_path / ".venv" / "bin" / "python"

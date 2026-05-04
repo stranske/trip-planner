@@ -467,8 +467,15 @@ def _tail_file(path: Path, *, line_count: int = 50, max_bytes: int = 64 * 1024) 
     with path.open("rb") as handle:
         handle.seek(0, os.SEEK_END)
         size = handle.tell()
-        handle.seek(max(size - max_bytes, 0))
-        lines = handle.read(max_bytes).decode("utf-8", errors="replace").splitlines()
+        start = max(size - max_bytes - 1, 0)
+        handle.seek(start)
+        text = handle.read(max_bytes + 1).decode("utf-8", errors="replace")
+    if start > 0:
+        first_newline = text.find("\n")
+        if first_newline == -1:
+            return ""
+        text = text[first_newline + 1 :]
+    lines = text.splitlines()
     return "\n".join(lines[-line_count:])
 
 
