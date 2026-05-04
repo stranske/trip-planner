@@ -161,8 +161,7 @@ def test_enforce_guard_accepts_pr_rename_with_recorded_decision(monkeypatch) -> 
         guard,
         "_collect_rename_diff_output",
         lambda: (
-            "R100\ttrip_planner/app/models/tpp.py\t"
-            "trip_planner/integrations/tpp/models.py\n"
+            "R100\ttrip_planner/app/models/tpp.py\t" "trip_planner/integrations/tpp/models.py\n"
         ),
     )
 

@@ -11,6 +11,7 @@ from datetime import date, timedelta
 import json
 import os
 from pathlib import Path
+import shutil
 import socket
 import subprocess
 import sys
@@ -438,6 +439,40 @@ def _free_local_port(preferred: int) -> int:
         return int(sock.getsockname()[1])
 
 
+def _resolve_tpp_interpreter(repo_path: Path) -> list[str]:
+    venv_python = repo_path / ".venv" / "bin" / "python"
+    if venv_python.exists():
+        return [str(venv_python)]
+    if (repo_path / "uv.lock").exists() and shutil.which("uv"):
+        return ["uv", "run", "--directory", str(repo_path), "python"]
+    raise VerificationFailure(
+        "Cannot auto-start TPP: no usable TPP Python environment",
+        venv_python=str(venv_python),
+        uv_lock=str(repo_path / "uv.lock"),
+        remediation=(
+            f"Install TPP dependencies into {repo_path}/.venv, install uv for the repo's "
+            "uv.lock path, or set TPP_BASE_URL to skip auto-start."
+        ),
+    )
+
+
+def _tail_file(path: Path, *, line_count: int = 50) -> str:
+    if not path.exists():
+        return ""
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    return "\n".join(lines[-line_count:])
+
+
+def _stop_process(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:  # pragma: no cover - defensive cleanup
+            process.kill()
+            process.wait(timeout=5)
+
+
 @contextmanager
 def _started_tpp_service(
     env: dict[str, str],
@@ -450,39 +485,58 @@ def _started_tpp_service(
 
     port = _free_local_port(TPP_PORT)
     base_url = f"http://127.0.0.1:{port}"
+    repo_root = Path(repo_path)
+    interpreter = _resolve_tpp_interpreter(repo_root)
     service_env = {
         **os.environ,
-        "PYTHONPATH": str(Path(repo_path) / "src"),
+        "PYTHONPATH": str(repo_root / "src"),
         "TPP_BASE_URL": base_url,
         "TPP_AUTH_MODE": "static-token",
         "TPP_ACCESS_TOKEN": env["TPP_ACCESS_TOKEN"],
         "TPP_OIDC_PROVIDER": env["TPP_OIDC_PROVIDER"],
     }
+    stdout_file = tempfile.NamedTemporaryFile(prefix="tpp-service-", suffix=".stdout", delete=False)
+    stderr_file = tempfile.NamedTemporaryFile(prefix="tpp-service-", suffix=".stderr", delete=False)
+    stdout_path = Path(stdout_file.name)
+    stderr_path = Path(stderr_file.name)
+    command = [
+        *interpreter,
+        "-m",
+        "travel_plan_permission.http_service",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        str(port),
+    ]
     process = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "travel_plan_permission.http_service",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-        ],
-        cwd=repo_path,
+        command,
+        cwd=repo_root,
         env=service_env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=stdout_file,
+        stderr=stderr_file,
     )
+    stdout_file.close()
+    stderr_file.close()
     try:
-        _wait_for_http(f"{base_url}/readyz")
+        try:
+            _wait_for_http(f"{base_url}/readyz")
+        except VerificationFailure as exc:
+            _stop_process(process)
+            raise VerificationFailure(
+                "TPP service did not become ready",
+                ready_url=f"{base_url}/readyz",
+                interpreter=" ".join(interpreter),
+                command=" ".join(command),
+                cwd=str(repo_root),
+                returncode=process.poll(),
+                stdout_tail=_tail_file(stdout_path),
+                stderr_tail=_tail_file(stderr_path),
+            ) from exc
         yield base_url, process
     finally:
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:  # pragma: no cover - defensive cleanup
-            process.kill()
-            process.wait(timeout=5)
+        _stop_process(process)
+        stdout_path.unlink(missing_ok=True)
+        stderr_path.unlink(missing_ok=True)
 
 
 def _run_live_tpp_journey(client: TestClient, trip_id: str, env: dict[str, str]) -> dict[str, Any]:

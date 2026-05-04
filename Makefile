@@ -34,6 +34,7 @@ runtime-preview-smoke:
 LIVE_TPP ?= auto
 
 full-product-check:
+	@echo "Live TPP auto-start resolves Python as TPP .venv/bin/python, then uv run from uv.lock, then fails fast; set TPP_BASE_URL to skip auto-start."
 	python scripts/check_full_product_verification.py --live-tpp $(LIVE_TPP)
 
 runtime-full-product-check: full-product-check

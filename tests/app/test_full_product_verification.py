@@ -143,6 +143,90 @@ def test_live_tpp_auto_reports_invalid_repo_path_as_blocked(tmp_path) -> None:
     assert check.details["invalid_path"] == {"TPP_REPO_PATH": str(missing_repo)}
 
 
+def test_tpp_interpreter_resolution_prefers_repo_venv(tmp_path) -> None:
+    repo_path = tmp_path / "Travel-Plan-Permission"
+    venv_python = repo_path / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("#!/usr/bin/env python\n", encoding="utf-8")
+
+    assert verifier._resolve_tpp_interpreter(repo_path) == [str(venv_python)]
+
+
+def test_tpp_interpreter_resolution_uses_uv_lock_when_no_venv(monkeypatch, tmp_path) -> None:
+    repo_path = tmp_path / "Travel-Plan-Permission"
+    repo_path.mkdir()
+    (repo_path / "uv.lock").write_text("", encoding="utf-8")
+    monkeypatch.setattr(verifier.shutil, "which", lambda command: "/usr/local/bin/uv")
+
+    assert verifier._resolve_tpp_interpreter(repo_path) == [
+        "uv",
+        "run",
+        "--directory",
+        str(repo_path),
+        "python",
+    ]
+
+
+def test_tpp_interpreter_resolution_fails_with_actionable_message(monkeypatch, tmp_path) -> None:
+    repo_path = tmp_path / "Travel-Plan-Permission"
+    repo_path.mkdir()
+    monkeypatch.setattr(verifier.shutil, "which", lambda command: None)
+
+    try:
+        verifier._resolve_tpp_interpreter(repo_path)
+    except verifier.VerificationFailure as error:
+        message = str(error)
+    else:  # pragma: no cover - assertion guard
+        raise AssertionError("expected missing TPP interpreter to fail verification")
+
+    assert "Cannot auto-start TPP" in message
+    assert str(repo_path / ".venv" / "bin" / "python") in message
+    assert "TPP_BASE_URL" in message
+
+
+def test_started_tpp_service_captures_startup_stderr(monkeypatch, tmp_path) -> None:
+    repo_path = tmp_path / "Travel-Plan-Permission"
+    venv_python = repo_path / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("#!/usr/bin/env python\n", encoding="utf-8")
+
+    class FakeProcess:
+        def __init__(self, *args, **kwargs):
+            self.args = args[0]
+            kwargs["stderr"].write(b"ModuleNotFoundError: No module named 'jinja2'\n")
+            kwargs["stderr"].flush()
+
+        def poll(self):
+            return 1
+
+        def terminate(self):  # pragma: no cover - should not terminate exited process
+            raise AssertionError("process already exited")
+
+    def fail_ready(_url: str) -> None:
+        raise verifier.VerificationFailure("not ready")
+
+    monkeypatch.setattr(verifier.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(verifier, "_wait_for_http", fail_ready)
+
+    try:
+        with verifier._started_tpp_service(
+            {
+                "TPP_REPO_PATH": str(repo_path),
+                "TPP_ACCESS_TOKEN": "token",
+                "TPP_OIDC_PROVIDER": "google",
+            }
+        ):
+            raise AssertionError("service should not yield when readiness fails")
+    except verifier.VerificationFailure as error:
+        message = str(error)
+    else:  # pragma: no cover - assertion guard
+        raise AssertionError("expected readiness failure")
+
+    assert str(venv_python) in message
+    assert "ModuleNotFoundError: No module named 'jinja2'" in message
+    assert "stderr_tail" in message
+
+
 def test_required_live_tpp_accepts_ready_prerequisite_after_success(monkeypatch) -> None:
     for name in (
         "TPP_BASE_URL",
