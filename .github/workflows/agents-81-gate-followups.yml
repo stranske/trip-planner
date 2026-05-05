@@ -22,6 +22,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
   actions: write
   models: read
 
@@ -75,6 +76,7 @@ jobs:
       security_reason: ${{ steps.security_gate.outputs.reason }}
       fingerprint_should_run: ${{ steps.fingerprint.outputs.should_run || 'true' }}
       fingerprint_reason: ${{ steps.fingerprint.outputs.reason }}
+      fingerprint_current_hash: ${{ steps.fingerprint.outputs.current_hash }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -277,27 +279,6 @@ jobs:
             }
             // Task appendix needs special handling due to multiline content
             core.setOutput('task_appendix', result.taskAppendix || '');
-
-      - name: Persist state fingerprint
-        if: >-
-          steps.fingerprint.outputs.should_run == 'true' &&
-          steps.fingerprint.outputs.current_hash != '' &&
-          steps.evaluate.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: >-
-            ${{
-              github.event.workflow_run.pull_requests[0].number ||
-              github.event.pull_request.number ||
-              github.event.inputs.pr_number ||
-              ''
-            }}
-        run: |
-          python scripts/state_fingerprint.py store \
-            --workflow "${GITHUB_WORKFLOW}" \
-            --hash "${{ steps.fingerprint.outputs.current_hash }}" \
-            --storage pr-comment
 
   preflight:
     name: Verify secrets available
@@ -634,6 +615,7 @@ jobs:
             core.setOutput('commit_tasks_count', result.sources?.commit || 0);
 
       - name: Update summary comment
+        id: update-summary
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           AGENT_SUMMARY: >-
@@ -712,6 +694,34 @@ jobs:
               llm_analysis_run: llmAnalysisRun,
             };
             await updateKeepaliveLoopSummary({ github, context, core, inputs });
+
+      - name: Persist state fingerprint
+        if: >-
+          needs.evaluate.outputs.fingerprint_should_run == 'true' &&
+          needs.evaluate.outputs.fingerprint_current_hash != '' &&
+          needs.evaluate.outputs.pr_number != '' &&
+          steps.update-summary.outcome == 'success' &&
+          (
+            (
+              needs.evaluate.outputs.action != 'run' &&
+              needs.evaluate.outputs.action != 'fix' &&
+              needs.evaluate.outputs.action != 'conflict'
+            ) ||
+            (
+              needs.preflight.result == 'success' &&
+              (needs.run-codex.result == 'success' || needs.run-codex.result == 'skipped') &&
+              (needs.run-claude.result == 'success' || needs.run-claude.result == 'skipped')
+            )
+          )
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.evaluate.outputs.pr_number }}
+        run: |
+          python scripts/state_fingerprint.py store \
+            --workflow "${GITHUB_WORKFLOW}" \
+            --hash "${{ needs.evaluate.outputs.fingerprint_current_hash }}" \
+            --storage pr-comment
 
   prepare:
     name: Prepare autofix context
