@@ -2,7 +2,7 @@ name: Keepalive Loop Reporter
 
 on:
   workflow_run:
-    workflows: ["Agents Keepalive Loop"]
+    workflows: ["Agents Gate Followups"]
     types: [completed]
 
 permissions:
@@ -20,7 +20,7 @@ concurrency:
 jobs:
   report:
     name: Report keepalive completion
-    if: vars.USE_CONSOLIDATED_WORKFLOWS != 'true'
+    if: vars.USE_CONSOLIDATED_WORKFLOWS == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout keepalive scripts

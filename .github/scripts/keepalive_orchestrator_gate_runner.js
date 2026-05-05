@@ -68,8 +68,7 @@ function hasAutomationSignal(pr, labels) {
     labels.has('autofix') ||
     Array.from(labels).some((label) => isConcreteAgentLabel(label)) ||
     headRef.startsWith('codex/') ||
-    headRef.startsWith('claude/') ||
-    /^feat\/\d+/.test(headRef)
+    headRef.startsWith('claude/')
   );
 }
 
