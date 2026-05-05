@@ -68,6 +68,23 @@ function isAllowlistedRemoval({ status, current = '', previous = '', repository 
   return ALLOW_REMOVED_PATHS.has(normalizedPath) && isConsumerOnlyRemovalAllowed(normalizedPath, repository);
 }
 
+function isArchivePath(filePath) {
+  const normalized = normalizePattern(filePath || '').toLowerCase();
+  return normalized.startsWith('archives/') || normalized.startsWith('.github/workflows/archive/');
+}
+
+function isAllowlistedArchiveRename({ status, current = '', previous = '', repository = '' } = {}) {
+  if (status !== 'renamed' || !previous || !current || !isArchivePath(current)) {
+    return false;
+  }
+
+  const normalizedPrevious = normalizePattern(previous).toLowerCase();
+  return (
+    ALLOW_REMOVED_PATHS.has(normalizedPrevious) &&
+    isConsumerOnlyRemovalAllowed(normalizedPrevious, repository)
+  );
+}
+
 const PULL_REQUEST_TARGET_EVENT = 'pull_request_target';
 const HEAD_SHA_REF_REGEX = /\bref:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/i;
 const SECRETS_EXPRESSION_REGEX = /\$\{\{\s*secrets\.[^}]+\}\}/i;
@@ -429,6 +446,12 @@ function evaluateGuard({
       previous,
       repository,
     });
+    const archiveRenameAllowed = isAllowlistedArchiveRename({
+      status,
+      current,
+      previous,
+      repository,
+    });
 
     if (protectedPath) {
       touchedProtectedPaths.add(protectedPath);
@@ -441,6 +464,9 @@ function evaluateGuard({
       }
 
       if (status === 'renamed' && previous) {
+        if (archiveRenameAllowed) {
+          continue;
+        }
         fatalViolations.push(`• ${previous} was renamed to ${current}.`);
         continue;
       }

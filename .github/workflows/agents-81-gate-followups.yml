@@ -138,9 +138,18 @@ jobs:
               "head_sha": pr.get("head", {}).get("sha", ""),
               "gate_conclusion": os.environ.get("GATE_CONCLUSION", ""),
               "force_retry": os.environ.get("FORCE_RETRY", "").lower() == "true",
-              "autofix_label_state": [
+              "automation_label_state": [
                   name for name in label_names
-                  if name.startswith("autofix") or name == "agent:retry"
+                  if (
+                      name.startswith("autofix")
+                      or name.startswith("agent:")
+                      or name in {
+                          "agents:auto-pilot",
+                          "agents:keepalive",
+                          "agents:paused",
+                          "needs-human",
+                      }
+                  )
               ],
           }
           print(json.dumps(payload, sort_keys=True))
@@ -268,6 +277,27 @@ jobs:
             }
             // Task appendix needs special handling due to multiline content
             core.setOutput('task_appendix', result.taskAppendix || '');
+
+      - name: Persist state fingerprint
+        if: >-
+          steps.fingerprint.outputs.should_run == 'true' &&
+          steps.fingerprint.outputs.current_hash != '' &&
+          steps.evaluate.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: >-
+            ${{
+              github.event.workflow_run.pull_requests[0].number ||
+              github.event.pull_request.number ||
+              github.event.inputs.pr_number ||
+              ''
+            }}
+        run: |
+          python scripts/state_fingerprint.py store \
+            --workflow "${GITHUB_WORKFLOW}" \
+            --hash "${{ steps.fingerprint.outputs.current_hash }}" \
+            --storage pr-comment
 
   preflight:
     name: Verify secrets available

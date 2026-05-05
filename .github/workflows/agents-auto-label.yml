@@ -5,7 +5,7 @@ name: Auto-Label Issues
 
 on:
   issues:
-    types: [opened, reopened, labeled]
+    types: [opened, reopened, edited]
 
 permissions:
   contents: read
@@ -37,7 +37,7 @@ jobs:
         id: eligibility
         uses: stranske/Workflows/.github/actions/agent-event-eligibility@main
         with:
-          expected-actions: opened,reopened,labeled
+          expected-actions: opened,reopened,edited
           custom-predicate: >-
             sender.type != 'Bot' && !ends_with(sender.login, '[bot]')
 

@@ -374,15 +374,25 @@ def _compare_command(args: argparse.Namespace) -> int:
         should_run = True
         reason = f"warning-mode:{decision.reason}"
 
-    if decision.should_run or args.mode == "warning":
-        store_fingerprint(args.workflow, decision.current_hash, storage)
-
     outputs = {
         "should_run": "true" if should_run else "false",
         "reason": reason,
         "current_hash": decision.current_hash,
         "prior_hash": decision.prior_hash or "",
     }
+    _write_github_output(outputs)
+    print(json.dumps(outputs, sort_keys=True))
+    return 0
+
+
+def _store_command(args: argparse.Namespace) -> int:
+    if not re.fullmatch(r"[0-9a-f]{64}", args.hash):
+        print("--hash must be a 64-character hex SHA-256 fingerprint", file=sys.stderr)
+        return 2
+
+    storage = _storage_from_name(args.storage, args.workflow)
+    store_fingerprint(args.workflow, args.hash, storage)
+    outputs = {"stored": "true", "hash": args.hash}
     _write_github_output(outputs)
     print(json.dumps(outputs, sort_keys=True))
     return 0
@@ -398,6 +408,14 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--storage", choices=["pr-comment", "repo-variable"], default="pr-comment")
     compare.add_argument("--mode", choices=["enforce", "warning"], default="enforce")
     compare.set_defaults(func=_compare_command)
+
+    store = subparsers.add_parser(
+        "store", help="persist a fingerprint after workflow work completes"
+    )
+    store.add_argument("--workflow", required=True)
+    store.add_argument("--hash", required=True)
+    store.add_argument("--storage", choices=["pr-comment", "repo-variable"], default="pr-comment")
+    store.set_defaults(func=_store_command)
     return parser
 
 

@@ -1575,8 +1575,13 @@ def _generate_without_llm(
             task = f"Address: {task}"
         tasks.append(task)
 
-    # Use original unmet acceptance criteria
-    acceptance_criteria = original_issue.acceptance_criteria[:10]
+    # Use original unmet acceptance criteria, but avoid pulling workflow-sync
+    # rollout criteria into repo-local follow-ups when verifier concerns are
+    # focused on the consumer repository behavior.
+    acceptance_criteria = _select_followup_acceptance_criteria(
+        original_issue,
+        verification_data,
+    )
 
     # Build body
     body_parts = [
@@ -1763,12 +1768,74 @@ def _build_why_section(
     if verification_data.structural_issues:
         parts.append("The original issue had structural problems that may have hindered progress.")
 
+    if _has_mixed_repo_and_workflow_acceptance_criteria(original_issue):
+        parts.append(
+            "Workflow-sync acceptance criteria were de-emphasized so this follow-up stays "
+            "focused on the repo-local verifier concerns."
+        )
+
     if needs_human_reason:
         parts.append(needs_human_reason)
 
     parts.append("This follow-up addresses the remaining gaps with improved task structure.")
 
     return " ".join(parts)
+
+
+WORKFLOW_SYNC_ACCEPTANCE_MARKERS = (
+    ".github/",
+    "agent",
+    "autofix",
+    "consumer sync",
+    "gate workflow",
+    "maint-68",
+    "sync pr",
+    "sync-generated",
+    "template",
+    "workflow",
+)
+
+
+def _is_workflow_sync_acceptance_criterion(criterion: str) -> bool:
+    normalized = str(criterion or "").strip().lower()
+    return any(marker in normalized for marker in WORKFLOW_SYNC_ACCEPTANCE_MARKERS)
+
+
+def _has_mixed_repo_and_workflow_acceptance_criteria(original_issue: OriginalIssueData) -> bool:
+    criteria = [criterion for criterion in original_issue.acceptance_criteria if criterion]
+    if not criteria:
+        return False
+    has_workflow = any(_is_workflow_sync_acceptance_criterion(criterion) for criterion in criteria)
+    has_repo_local = any(
+        not _is_workflow_sync_acceptance_criterion(criterion) for criterion in criteria
+    )
+    return has_workflow and has_repo_local
+
+
+def _select_followup_acceptance_criteria(
+    original_issue: OriginalIssueData,
+    verification_data: VerificationData,  # noqa: ARG001 - retained for future signal-aware filtering
+    *,
+    limit: int = 10,
+) -> list[str]:
+    """Select acceptance criteria that keep fallback follow-ups scoped.
+
+    Mixed Workflows/consumer issues can carry rollout criteria about synced
+    workflows next to repo-local behavior checks. When verifier feedback is
+    being converted into a consumer follow-up, keep the repo-local criteria and
+    avoid restating workflow-sync rollout criteria as if they were local tasks.
+    """
+
+    criteria = [criterion for criterion in original_issue.acceptance_criteria if criterion]
+    if not criteria:
+        return []
+
+    filtered = [
+        criterion for criterion in criteria if not _is_workflow_sync_acceptance_criterion(criterion)
+    ]
+    if filtered:
+        return filtered[:limit]
+    return criteria[:limit]
 
 
 def main() -> int:
