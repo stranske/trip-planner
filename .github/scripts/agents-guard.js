@@ -70,7 +70,11 @@ function isAllowlistedRemoval({ status, current = '', previous = '', repository 
 
 function isArchivePath(filePath) {
   const normalized = normalizePattern(filePath || '').toLowerCase();
-  return normalized.startsWith('archives/') || normalized.startsWith('.github/workflows/archive/');
+  return (
+    normalized.startsWith('archives/') ||
+    normalized.startsWith('.github/workflows/archive/') ||
+    normalized.startsWith('.github/workflows-archive/')
+  );
 }
 
 function isAllowlistedArchiveRename({ status, current = '', previous = '', repository = '' } = {}) {
