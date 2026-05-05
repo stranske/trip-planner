@@ -10,32 +10,63 @@ const path = require('path');
 const DEFAULT_MARKER = '<!-- agents-guard-marker -->';
 
 const DEFAULT_PROTECTED_PATHS = ['.github/workflows/agents-*.yml'];
+const LEGACY_ALLOW_REMOVED_PATHS = [
+  // Keepalive consolidation retired the standalone keepalive sweeps.
+  '.github/workflows/agents-75-keepalive-on-gate.yml',
+  '.github/workflows/agents-keepalive-pr.yml',
+  // Issue intake now serves as the sole public entry point; the
+  // ChatGPT wrapper was intentionally removed.
+  '.github/workflows/agents-63-chatgpt-issue-sync.yml',
+  // Redundant issue intake workflow removed in favor of the primary entrypoint.
+  '.github/workflows/agents-63-issue-intake.yml',
+  // Clean up retired agent workflows from .github/workflows to reduce noise.
+  '.github/workflows/agents-64-pr-comment-commands.yml',
+  '.github/workflows/agents-74-pr-body-writer.yml',
+  // Legacy pr-meta workflows superseded by agents-pr-meta-v4.yml.
+  // v1 had corrupted workflow ID, v2/v3 were still running and failing.
+  // Archived to archives/github-actions/2025-12-02-pr-meta-legacy/
+  '.github/workflows/agents-pr-meta.yml',
+  '.github/workflows/agents-pr-meta-v2.yml',
+  '.github/workflows/agents-pr-meta-v3.yml',
+  // v1 verify-to-issue workflow deprecated; v2 is the active version.
+  // Archived to archives/deprecated-workflows/
+  '.github/workflows/agents-verify-to-issue.yml',
+];
+
+const CONSUMER_ONLY_ALLOW_REMOVED_PATHS = [
+  // Wave 0 cleanup removes deprecated consumer-template workflows past the
+  // 2026-02-15 deprecation deadline so sync PRs can delete stale copies.
+  '.github/workflows/agents-autofix-loop.yml',
+  '.github/workflows/agents-bot-comment-handler.yml',
+  '.github/workflows/agents-keepalive-loop.yml',
+  '.github/workflows/agents-verify-to-issue-v2.yml',
+  // The verify-to-new-pr autopilot bridge was collapsed into the main workflow.
+  '.github/workflows/agents-verify-to-new-pr-autopilot.yml',
+];
+
 const ALLOW_REMOVED_PATHS = new Set(
-  [
-    // Keepalive consolidation retired the standalone keepalive sweeps.
-    '.github/workflows/agents-75-keepalive-on-gate.yml',
-    '.github/workflows/agents-keepalive-pr.yml',
-    // Issue intake now serves as the sole public entry point; the
-    // ChatGPT wrapper was intentionally removed.
-    '.github/workflows/agents-63-chatgpt-issue-sync.yml',
-    // Redundant issue intake workflow removed in favor of the primary entrypoint.
-    '.github/workflows/agents-63-issue-intake.yml',
-    // Clean up retired agent workflows from .github/workflows to reduce noise.
-    '.github/workflows/agents-64-pr-comment-commands.yml',
-    '.github/workflows/agents-74-pr-body-writer.yml',
-    // Legacy pr-meta workflows superseded by agents-pr-meta-v4.yml.
-    // v1 had corrupted workflow ID, v2/v3 were still running and failing.
-    // Archived to archives/github-actions/2025-12-02-pr-meta-legacy/
-    '.github/workflows/agents-pr-meta.yml',
-    '.github/workflows/agents-pr-meta-v2.yml',
-    '.github/workflows/agents-pr-meta-v3.yml',
-    // v1 verify-to-issue workflow deprecated; v2 is the active version.
-    // Archived to archives/deprecated-workflows/
-    '.github/workflows/agents-verify-to-issue.yml',
-    // The verify-to-new-pr autopilot bridge was collapsed into the main workflow.
-    '.github/workflows/agents-verify-to-new-pr-autopilot.yml',
-  ].map((entry) => entry.toLowerCase()),
+  [...LEGACY_ALLOW_REMOVED_PATHS, ...CONSUMER_ONLY_ALLOW_REMOVED_PATHS]
+    .map((entry) => entry.toLowerCase()),
 );
+const CONSUMER_ONLY_REMOVED_PATHS = new Set(
+  CONSUMER_ONLY_ALLOW_REMOVED_PATHS.map((entry) => entry.toLowerCase()),
+);
+
+function isConsumerOnlyRemovalAllowed(normalizedPath, repository) {
+  if (!CONSUMER_ONLY_REMOVED_PATHS.has(normalizedPath)) {
+    return true;
+  }
+  return String(repository || '').toLowerCase() !== 'stranske/workflows';
+}
+
+function isAllowlistedRemoval({ status, current = '', previous = '', repository = '' } = {}) {
+  if (status !== 'removed') {
+    return false;
+  }
+
+  const normalizedPath = normalizePattern(current || previous).toLowerCase();
+  return ALLOW_REMOVED_PATHS.has(normalizedPath) && isConsumerOnlyRemovalAllowed(normalizedPath, repository);
+}
 
 const PULL_REQUEST_TARGET_EVENT = 'pull_request_target';
 const HEAD_SHA_REF_REGEX = /\bref:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/i;
@@ -337,6 +368,7 @@ function evaluateGuard({
   labelName = 'agents:allow-change',
   authorLogin = '',
   marker = DEFAULT_MARKER,
+  repository = process.env.GITHUB_REPOSITORY || '',
 } = {}) {
   const normalizedLabelName = String(labelName).toLowerCase();
 
@@ -391,11 +423,12 @@ function evaluateGuard({
 
     const protectedPath = matchProtectedPath(current) || (previous ? matchProtectedPath(previous) : null);
 
-    const normalizedCurrent = normalizePattern(current).toLowerCase();
-    const normalizedPrevious = normalizePattern(previous).toLowerCase();
-    const removalAllowed =
-      (normalizedCurrent && ALLOW_REMOVED_PATHS.has(normalizedCurrent)) ||
-      (normalizedPrevious && ALLOW_REMOVED_PATHS.has(normalizedPrevious));
+    const removalAllowed = isAllowlistedRemoval({
+      status,
+      current,
+      previous,
+      repository,
+    });
 
     if (protectedPath) {
       touchedProtectedPaths.add(protectedPath);
@@ -408,10 +441,6 @@ function evaluateGuard({
       }
 
       if (status === 'renamed' && previous) {
-        // Allow renames/moves of files in the ALLOW_REMOVED_PATHS list
-        if (removalAllowed) {
-          continue;
-        }
         fatalViolations.push(`• ${previous} was renamed to ${current}.`);
         continue;
       }
