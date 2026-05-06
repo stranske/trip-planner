@@ -1784,10 +1784,14 @@ def _build_why_section(
     return " ".join(parts)
 
 
+WORKFLOW_SYNC_PATH_MARKERS = (
+    ".github/actions",
+    ".github/scripts",
+    ".github/sync-manifest.yml",
+    ".github/workflows",
+)
+
 WORKFLOW_SYNC_ACCEPTANCE_MARKERS = (
-    "consumer sync",
-    "consumer-sync",
-    ".github/workflows/",
     "workflow file",
     "workflow files",
     "workflow-owned",
@@ -1795,6 +1799,9 @@ WORKFLOW_SYNC_ACCEPTANCE_MARKERS = (
     "workflows-owned scripts",
     "gate workflow",
     "maint-68",
+    "synced automation",
+    "synced script",
+    "synced scripts",
     "synced workflow",
     "sync pr",
     "sync-generated",
@@ -1802,6 +1809,42 @@ WORKFLOW_SYNC_ACCEPTANCE_MARKERS = (
     "template sync",
     "workflow template sync",
     "workflow-template",
+)
+
+EXPLICIT_WORKFLOW_SYNC_ACCEPTANCE_MARKERS = (
+    "workflow-owned",
+    "workflows-owned",
+    "maint-68",
+    "synced automation",
+    "synced script",
+    "synced scripts",
+    "synced workflow",
+    "sync pr",
+    "sync-generated",
+    "sync workflow templates",
+    "template sync",
+    "workflow template sync",
+    "workflow-template",
+)
+
+WORKFLOW_SYNC_CONTEXT_MARKERS = (
+    "consumer sync",
+    "consumer-sync",
+    "consumer",
+    "consumers",
+    "from the template",
+    "maint-68",
+    "synced",
+    "sync-generated",
+)
+
+WORKFLOW_SYNC_REPO_LOCAL_MARKERS = (
+    "repo-local",
+    "repository-local",
+    "local-only",
+    "project-specific",
+    "this repository",
+    "this repo",
 )
 
 
@@ -1817,7 +1860,21 @@ def _acceptance_criteria_from_original_issue(
 
 def _is_workflow_sync_acceptance_criterion(criterion: str) -> bool:
     normalized = str(criterion or "").strip().lower()
-    return any(marker in normalized for marker in WORKFLOW_SYNC_ACCEPTANCE_MARKERS)
+    has_repo_local_marker = any(marker in normalized for marker in WORKFLOW_SYNC_REPO_LOCAL_MARKERS)
+    if any(marker in normalized for marker in WORKFLOW_SYNC_PATH_MARKERS):
+        return not has_repo_local_marker
+    if any(marker in normalized for marker in WORKFLOW_SYNC_ACCEPTANCE_MARKERS):
+        return not has_repo_local_marker or any(
+            marker in normalized for marker in EXPLICIT_WORKFLOW_SYNC_ACCEPTANCE_MARKERS
+        )
+    return False
+
+
+def _mentions_workflow_sync_context(value: str) -> bool:
+    normalized = str(value or "").strip().lower()
+    return _is_workflow_sync_acceptance_criterion(normalized) or any(
+        marker in normalized for marker in WORKFLOW_SYNC_CONTEXT_MARKERS
+    )
 
 
 def _has_mixed_repo_and_workflow_acceptance_criteria(
@@ -1840,7 +1897,7 @@ def _verification_feedback_mentions_workflow_sync(verification_data: Verificatio
         *verification_data.non_pass_findings,
         *verification_data.structural_issues,
     ]
-    return any(_is_workflow_sync_acceptance_criterion(part) for part in parts)
+    return any(_mentions_workflow_sync_context(part) for part in parts)
 
 
 def _select_followup_acceptance_criteria(
