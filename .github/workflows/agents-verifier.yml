@@ -83,6 +83,7 @@ jobs:
       pr_number: ${{ steps.check.outputs.pr_number }}
       fingerprint_should_run: ${{ steps.fingerprint.outputs.should_run || 'true' }}
       fingerprint_reason: ${{ steps.fingerprint.outputs.reason }}
+      fingerprint_current_hash: ${{ steps.fingerprint.outputs.current_hash }}
     steps:
       - name: Checkout retry helpers
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -313,3 +314,33 @@ jobs:
       # Second model for compare mode (empty string uses default)
       model2: ${{ needs.check.outputs.model2 }}
     secrets: inherit
+
+  persist-fingerprint:
+    name: Persist verifier state fingerprint
+    needs:
+      - check
+      - verifier
+    if: >-
+      always() &&
+      needs.check.outputs.should_run == 'true' &&
+      needs.check.outputs.fingerprint_should_run == 'true' &&
+      needs.check.outputs.fingerprint_current_hash != '' &&
+      needs.verifier.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout state fingerprint helper
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          sparse-checkout: scripts/state_fingerprint.py
+          sparse-checkout-cone-mode: false
+
+      - name: Persist state fingerprint
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.check.outputs.pr_number }}
+        run: |
+          python scripts/state_fingerprint.py store \
+            --workflow "${GITHUB_WORKFLOW}" \
+            --hash "${{ needs.check.outputs.fingerprint_current_hash }}" \
+            --storage pr-comment

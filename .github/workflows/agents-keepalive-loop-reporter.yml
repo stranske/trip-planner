@@ -79,6 +79,7 @@ jobs:
         run: echo "Skipped - ${{ steps.fingerprint.outputs.reason }}"
 
       - name: Update summary for cancelled/failed runs
+        id: update-summary
         if: steps.fingerprint.outputs.should_run == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
@@ -129,3 +130,17 @@ jobs:
             };
 
             await updateKeepaliveLoopSummary({ github, context, core, inputs });
+
+      - name: Persist state fingerprint
+        if: >-
+          steps.fingerprint.outputs.should_run == 'true' &&
+          steps.fingerprint.outputs.current_hash != '' &&
+          steps.update-summary.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/state_fingerprint.py store \
+            --workflow "${GITHUB_WORKFLOW}" \
+            --hash "${{ steps.fingerprint.outputs.current_hash }}" \
+            --storage pr-comment
