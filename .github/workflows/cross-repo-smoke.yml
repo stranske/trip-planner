@@ -48,7 +48,7 @@ jobs:
           echo "TPP_RESOLVED_SHA=$(git rev-parse HEAD)"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
