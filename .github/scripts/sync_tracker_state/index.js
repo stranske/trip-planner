@@ -1,0 +1,464 @@
+'use strict';
+
+// API guard: callers pass createTokenAwareRetry / github-api-with-retry.js
+// `withRetry` wrappers into these helpers; tests use lightweight mock clients.
+const DURABLE_TRACKER_LABEL = 'tracker:durable';
+const AUTOMATED_LABEL = 'automated';
+const DEFAULT_STUCK_WINDOW_SCHEMA = 'sync-tracker-stuck-window/v1';
+const STUCK_WINDOW_MARKER_RE = /<!--\s*sync-tracker-stuck-window:v1\s+({[\s\S]*?})\s*-->/;
+const DURABLE_HEADER_RE = /^>\s*\*\*Durable tracker\*\*[\s\S]*?(?=\n(?!>)|\n*$)/im;
+
+function cleanString(value) {
+  return String(value || '').trim();
+}
+
+function cleanArray(value) {
+  return Array.isArray(value) ? value.filter(Boolean) : [];
+}
+
+function unique(values) {
+  return [...new Set(cleanArray(values).map(cleanString).filter(Boolean))];
+}
+
+function labelNames(issue = {}) {
+  return cleanArray(issue.labels).map((label) =>
+    typeof label === 'string' ? label : cleanString(label?.name)
+  );
+}
+
+function normaliseRepo(repoFullName, fallbackOwner = '') {
+  const value = cleanString(repoFullName);
+  if (!value) {
+    return null;
+  }
+  const parts = value.split('/').map(cleanString).filter(Boolean);
+  if (parts.length === 2) {
+    return { owner: parts[0], repo: parts[1], fullName: `${parts[0]}/${parts[1]}` };
+  }
+  if (parts.length === 1 && fallbackOwner) {
+    return { owner: fallbackOwner, repo: parts[0], fullName: `${fallbackOwner}/${parts[0]}` };
+  }
+  return null;
+}
+
+function patternMatches(value, pattern) {
+  const text = cleanString(value);
+  if (!pattern) {
+    return true;
+  }
+  if (pattern instanceof RegExp) {
+    return pattern.test(text);
+  }
+  const patternText = cleanString(pattern);
+  if (!patternText) {
+    return true;
+  }
+  if (patternText.startsWith('/') && patternText.lastIndexOf('/') > 0) {
+    const lastSlash = patternText.lastIndexOf('/');
+    const source = patternText.slice(1, lastSlash);
+    const flags = patternText.slice(lastSlash + 1);
+    return new RegExp(source, flags).test(text);
+  }
+  return text.includes(patternText);
+}
+
+async function callWithRetry(fn, label, { withRetry = null, core = console } = {}) {
+  if (typeof withRetry === 'function') {
+    return withRetry(fn, { maxRetries: 3, allowNonIdempotentRetries: true });
+  }
+  try {
+    return await fn();
+  } catch (error) {
+    if (core && typeof core.warning === 'function') {
+      core.warning(`${label} failed: ${error.status || error.message}`);
+    }
+    throw error;
+  }
+}
+
+async function paginateIssues({ github, owner, repo, labels = '', core, withRetry }) {
+  const params = { owner, repo, state: 'open', per_page: 100 };
+  if (labels) {
+    params.labels = labels;
+  }
+  const method = github.rest.issues.listForRepo;
+  if (typeof github.paginate === 'function') {
+    return cleanArray(await callWithRetry(
+      () => github.paginate(method, params),
+      `${owner}/${repo} open issues`,
+      { core, withRetry },
+    ));
+  }
+  const response = await callWithRetry(
+    () => method(params),
+    `${owner}/${repo} open issues`,
+    { core, withRetry },
+  );
+  return cleanArray(response?.data);
+}
+
+async function getIssue({ github, owner, repo, issueNumber, core, withRetry }) {
+  const response = await callWithRetry(
+    () => github.rest.issues.get({ owner, repo, issue_number: issueNumber }),
+    `${owner}/${repo}#${issueNumber}`,
+    { core, withRetry },
+  );
+  return response?.data || null;
+}
+
+function issueHasMarker(issue = {}, markerPattern = null) {
+  if (!markerPattern) {
+    return false;
+  }
+  return patternMatches(issue.body || '', markerPattern);
+}
+
+function issueMatchesTracker(issue = {}, { label, titlePattern, markerPattern } = {}) {
+  if (issue.pull_request) {
+    return false;
+  }
+  const names = labelNames(issue);
+  const requiredLabels = unique([label]).filter(Boolean);
+  const hasRequiredLabel = requiredLabels.length === 0 ||
+    requiredLabels.some((name) => names.includes(name));
+  const hasDurableLabel = names.includes(DURABLE_TRACKER_LABEL);
+  const hasTitle = patternMatches(issue.title || '', titlePattern);
+  const hasMarker = issueHasMarker(issue, markerPattern);
+  if (markerPattern && hasTitle && !cleanString(issue.body)) {
+    return true;
+  }
+  return (hasDurableLabel || hasRequiredLabel || hasMarker) && (hasTitle || hasMarker);
+}
+
+async function ensureLabels({
+  github,
+  owner,
+  repo,
+  issueNumber,
+  labels = [],
+  core,
+  withRetry,
+}) {
+  const names = unique(labels);
+  if (!names.length) {
+    return;
+  }
+  await callWithRetry(
+    () => github.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: names }),
+    `${owner}/${repo}#${issueNumber} add labels`,
+    { core, withRetry },
+  );
+}
+
+async function findTracker({ github, owner, repo, label, titlePattern, markerPattern, core, withRetry }) {
+  const labelQuery = unique([DURABLE_TRACKER_LABEL, label]).join(',');
+  const labeledIssues = await paginateIssues({
+    github,
+    owner,
+    repo,
+    labels: labelQuery,
+    core,
+    withRetry,
+  });
+  const openIssues = markerPattern || !labelQuery
+    ? await paginateIssues({ github, owner, repo, core, withRetry })
+    : [];
+  const byNumber = new Map();
+  for (const issue of [...labeledIssues, ...openIssues]) {
+    byNumber.set(issue.number, issue);
+  }
+  for (const issue of byNumber.values()) {
+    if (!issueMatchesTracker(issue, { label, titlePattern, markerPattern })) {
+      continue;
+    }
+    const fullIssue = await getIssue({ github, owner, repo, issueNumber: issue.number, core, withRetry });
+    if (issueMatchesTracker(fullIssue, { label, titlePattern, markerPattern })) {
+      return fullIssue;
+    }
+  }
+  return null;
+}
+
+async function findOrCreateTracker({
+  github,
+  context = null,
+  owner = context?.repo?.owner,
+  repo = context?.repo?.repo,
+  label = '',
+  titlePattern = '',
+  markerPattern = null,
+  title = '',
+  body = '',
+  markerComment = '',
+  labels = [],
+  createIfMissing = true,
+  core = console,
+  withRetry = null,
+} = {}) {
+  if (!github || !owner || !repo) {
+    throw new Error('findOrCreateTracker requires github, owner, and repo');
+  }
+  const tracker = await findTracker({ github, owner, repo, label, titlePattern, markerPattern, core, withRetry });
+  if (tracker) {
+    if (createIfMissing) {
+      await ensureLabels({
+        github,
+        owner,
+        repo,
+        issueNumber: tracker.number,
+        labels: [DURABLE_TRACKER_LABEL, AUTOMATED_LABEL, label, ...labels],
+        core,
+        withRetry,
+      });
+    }
+    tracker.sync_tracker_created = false;
+    return tracker;
+  }
+
+  if (!createIfMissing) {
+    return null;
+  }
+
+  const issueTitle = cleanString(title) || cleanString(titlePattern);
+  if (!issueTitle) {
+    throw new Error('findOrCreateTracker requires title when no tracker exists');
+  }
+  const createBody = markerComment
+    ? `${cleanString(body)}\n\n${cleanString(markerComment)}`.trim()
+    : cleanString(body);
+  const response = await callWithRetry(
+    () => github.rest.issues.create({
+      owner,
+      repo,
+      title: issueTitle,
+      body: createBody,
+      labels: unique([DURABLE_TRACKER_LABEL, AUTOMATED_LABEL, label, ...labels]),
+    }),
+    `${owner}/${repo} create durable tracker`,
+    { core, withRetry },
+  );
+  const created = response?.data || null;
+  if (created) {
+    created.sync_tracker_created = true;
+  }
+  return created;
+}
+
+function extractDurableTrackerHeader(body = '') {
+  const match = cleanString(body).match(DURABLE_HEADER_RE);
+  return match ? match[0].trim() : '';
+}
+
+function bodyHasDurableHeader(body = '') {
+  return Boolean(extractDurableTrackerHeader(body));
+}
+
+function preserveDurableTrackerHeader(existingBody = '', newBody = '') {
+  const nextBody = cleanString(newBody);
+  const existingHeader = extractDurableTrackerHeader(existingBody);
+  if (!existingHeader || bodyHasDurableHeader(nextBody)) {
+    return nextBody;
+  }
+
+  const lines = nextBody.split(/\r?\n/);
+  const headingIndex = lines.findIndex((line) => /^#{1,6}\s+\S/.test(line));
+  if (headingIndex === -1) {
+    return `${existingHeader}\n\n${nextBody}`.trim();
+  }
+  const insertAt = headingIndex + 1;
+  const before = lines.slice(0, insertAt);
+  const after = lines.slice(insertAt);
+  return [...before, '', existingHeader, '', ...after].join('\n').trim();
+}
+
+async function updateTrackerBody({
+  github,
+  context = null,
+  owner = context?.repo?.owner,
+  repo = context?.repo?.repo,
+  tracker,
+  newBody,
+  title = null,
+  core = console,
+  withRetry = null,
+} = {}) {
+  if (!github || !owner || !repo || !tracker?.number) {
+    throw new Error('updateTrackerBody requires github, owner, repo, and tracker.number');
+  }
+  const body = preserveDurableTrackerHeader(tracker.body || '', newBody);
+  const params = { owner, repo, issue_number: tracker.number, body };
+  if (title) {
+    params.title = title;
+  }
+  const response = await callWithRetry(
+    () => github.rest.issues.update(params),
+    `${owner}/${repo}#${tracker.number} update durable tracker`,
+    { core, withRetry },
+  );
+  return response?.data || null;
+}
+
+async function appendTrackerComment({
+  github,
+  context = null,
+  owner = context?.repo?.owner,
+  repo = context?.repo?.repo,
+  tracker,
+  comment,
+  core = console,
+  withRetry = null,
+} = {}) {
+  if (!github || !owner || !repo || !tracker?.number) {
+    throw new Error('appendTrackerComment requires github, owner, repo, and tracker.number');
+  }
+  const response = await callWithRetry(
+    () => github.rest.issues.createComment({
+      owner,
+      repo,
+      issue_number: tracker.number,
+      body: cleanString(comment),
+    }),
+    `${owner}/${repo}#${tracker.number} append tracker comment`,
+    { core, withRetry },
+  );
+  return response?.data || null;
+}
+
+async function isConsumerOpenPr({
+  github,
+  consumerRepo,
+  branchPattern,
+  state = 'open',
+  core = console,
+  withRetry = null,
+  defaultOwner = '',
+} = {}) {
+  const parsed = normaliseRepo(consumerRepo, defaultOwner);
+  if (!github || !parsed) {
+    throw new Error('isConsumerOpenPr requires github and consumerRepo');
+  }
+  const method = github.rest.pulls.list;
+  const params = { owner: parsed.owner, repo: parsed.repo, state, per_page: 100 };
+  const pulls = typeof github.paginate === 'function'
+    ? cleanArray(await callWithRetry(
+        () => github.paginate(method, params),
+        `${parsed.fullName} open pulls`,
+        { core, withRetry },
+      ))
+    : cleanArray((await callWithRetry(
+        () => method(params),
+        `${parsed.fullName} open pulls`,
+        { core, withRetry },
+      ))?.data);
+  return pulls.some((pull) => {
+    const headRef = cleanString(pull?.head?.ref || pull?.headRefName || pull?.head_ref);
+    return patternMatches(headRef, branchPattern);
+  });
+}
+
+function formatStuckWindowMarker(sinceTimestamp, options = {}) {
+  const payload = {
+    schema: DEFAULT_STUCK_WINDOW_SCHEMA,
+    since: cleanString(sinceTimestamp),
+    updated_at: cleanString(options.updatedAt) || new Date().toISOString(),
+  };
+  if (options.reason) {
+    payload.reason = cleanString(options.reason);
+  }
+  return `<!-- sync-tracker-stuck-window:v1 ${JSON.stringify(payload)} -->`;
+}
+
+function parseStuckWindow(body = '') {
+  const match = cleanString(body).match(STUCK_WINDOW_MARKER_RE);
+  if (!match) {
+    return null;
+  }
+  try {
+    const payload = JSON.parse(match[1]);
+    return payload && payload.schema === DEFAULT_STUCK_WINDOW_SCHEMA ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
+function markStuckWindowBody(body = '', sinceTimestamp, options = {}) {
+  const source = cleanString(body);
+  const marker = formatStuckWindowMarker(sinceTimestamp, options);
+  if (STUCK_WINDOW_MARKER_RE.test(source)) {
+    return source.replace(STUCK_WINDOW_MARKER_RE, marker);
+  }
+  return `${source.trimEnd()}\n\n${marker}`.trim();
+}
+
+function clearStuckWindowBody(body = '') {
+  return cleanString(body).replace(STUCK_WINDOW_MARKER_RE, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+async function markStuckWindow({
+  github,
+  context = null,
+  owner = context?.repo?.owner,
+  repo = context?.repo?.repo,
+  tracker,
+  sinceTimestamp,
+  core = console,
+  withRetry = null,
+  ...options
+} = {}) {
+  return updateTrackerBody({
+    github,
+    owner,
+    repo,
+    tracker,
+    newBody: markStuckWindowBody(tracker?.body || '', sinceTimestamp, options),
+    core,
+    withRetry,
+  });
+}
+
+async function clearStuckWindow({
+  github,
+  context = null,
+  owner = context?.repo?.owner,
+  repo = context?.repo?.repo,
+  tracker,
+  core = console,
+  withRetry = null,
+} = {}) {
+  return updateTrackerBody({
+    github,
+    owner,
+    repo,
+    tracker,
+    newBody: clearStuckWindowBody(tracker?.body || ''),
+    core,
+    withRetry,
+  });
+}
+
+module.exports = {
+  AUTOMATED_LABEL,
+  DEFAULT_STUCK_WINDOW_SCHEMA,
+  DURABLE_TRACKER_LABEL,
+  appendTrackerComment,
+  append_tracker_comment: appendTrackerComment,
+  bodyHasDurableHeader,
+  clearStuckWindow,
+  clearStuckWindowBody,
+  clear_stuck_window: clearStuckWindow,
+  extractDurableTrackerHeader,
+  findOrCreateTracker,
+  find_or_create_tracker: findOrCreateTracker,
+  formatStuckWindowMarker,
+  isConsumerOpenPr,
+  is_consumer_open_pr: isConsumerOpenPr,
+  issueMatchesTracker,
+  markStuckWindow,
+  markStuckWindowBody,
+  mark_stuck_window: markStuckWindow,
+  parseStuckWindow,
+  patternMatches,
+  preserveDurableTrackerHeader,
+  updateTrackerBody,
+  update_tracker_body: updateTrackerBody,
+};
