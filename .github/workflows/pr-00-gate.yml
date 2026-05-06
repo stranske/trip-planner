@@ -37,8 +37,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  detect:
+    name: classify changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      is_docs_only: ${{ steps.classify.outputs.is-docs-only || 'false' }}
+      is_python_code: ${{ steps.classify.outputs.is-python-code || 'true' }}
+      is_workflow_change: ${{ steps.classify.outputs.is-workflow-change || 'false' }}
+      is_security_relevant: ${{ steps.classify.outputs.is-security-relevant || 'true' }}
+      classification_rationale: ${{ steps.classify.outputs.classification-rationale || 'path classifier unavailable' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Classify changed paths
+        id: classify
+        uses: ./.github/actions/path-classifier
+        with:
+          force-full: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify:full') || github.event_name == 'schedule' }}
+
   python-ci:
     name: Python CI
+    needs: detect
+    if: >-
+      ${{
+        needs.detect.outputs.is_docs_only != 'true' &&
+        needs.detect.outputs.is_python_code == 'true'
+      }}
     uses: stranske/Workflows/.github/workflows/reusable-10-ci-python.yml@main
     with:
       python-versions: '["3.12", "3.13"]'
@@ -52,11 +77,15 @@ jobs:
 
   cross-repo-smoke:
     name: Cross-Repo Smoke
+    needs: detect
+    if: ${{ needs.detect.outputs.is_docs_only != 'true' }}
     uses: ./.github/workflows/cross-repo-smoke.yml
     secrets: inherit
 
   runtime-ci:
     name: Runtime CI
+    needs: detect
+    if: ${{ needs.detect.outputs.is_docs_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -84,7 +113,7 @@ jobs:
 
   summary:
     name: gate-summary
-    needs: [python-ci, runtime-ci, cross-repo-smoke]
+    needs: [detect, python-ci, runtime-ci, cross-repo-smoke]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -105,6 +134,7 @@ jobs:
       - name: Summarize results
         id: summarize
         env:
+          DETECT_RESULT: ${{ needs.detect.result || 'skipped' }}
           PYTHON_RESULT: ${{ needs.python-ci.result || 'skipped' }}
           RUNTIME_RESULT: ${{ needs.runtime-ci.result || 'skipped' }}
           CROSS_REPO_RESULT: ${{ needs.cross-repo-smoke.result || 'skipped' }}
@@ -144,6 +174,20 @@ jobs:
           else
             state="pending"
             description="Checks still running"
+          fi
+
+          detect_result="${DETECT_RESULT:-skipped}"
+          if [[ "${detect_result}" != "success" ]]; then
+            if [[ "${detect_result}" == "failure" ]]; then
+              state="failure"
+              description="Path classification failed"
+            elif [[ "${detect_result}" == "cancelled" ]]; then
+              state="error"
+              description="Path classification was cancelled"
+            else
+              state="pending"
+              description="Path classification status unknown"
+            fi
           fi
 
           echo "state=${state}" >> "$GITHUB_OUTPUT"
