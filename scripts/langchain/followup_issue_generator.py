@@ -1784,10 +1784,31 @@ def _build_why_section(
     return " ".join(parts)
 
 
-WORKFLOW_SYNC_ACCEPTANCE_MARKERS = (
+WORKFLOW_SYNC_CONTEXT_MARKERS = (
     "consumer sync",
     "consumer-sync",
-    ".github/workflows/",
+    "consumer",
+    "consumers",
+    "from the template",
+    "maint-68",
+    "synced",
+    "sync pr",
+    "sync-generated",
+    "template sync",
+    "workflow template sync",
+    "workflow-template",
+    "workflow-owned",
+    "workflows-owned",
+)
+
+WORKFLOW_SYNC_PATH_MARKERS = (
+    ".github/actions",
+    ".github/scripts",
+    ".github/sync-manifest.yml",
+    ".github/workflows",
+)
+
+WORKFLOW_SYNC_ACCEPTANCE_MARKERS = (
     "workflow file",
     "workflow files",
     "workflow-owned",
@@ -1795,6 +1816,9 @@ WORKFLOW_SYNC_ACCEPTANCE_MARKERS = (
     "workflows-owned scripts",
     "gate workflow",
     "maint-68",
+    "synced automation",
+    "synced script",
+    "synced scripts",
     "synced workflow",
     "sync pr",
     "sync-generated",
@@ -1802,6 +1826,15 @@ WORKFLOW_SYNC_ACCEPTANCE_MARKERS = (
     "template sync",
     "workflow template sync",
     "workflow-template",
+)
+
+WORKFLOW_SYNC_REPO_LOCAL_MARKERS = (
+    "repo-local",
+    "repository-local",
+    "local-only",
+    "project-specific",
+    "this repository",
+    "this repo",
 )
 
 
@@ -1817,7 +1850,11 @@ def _acceptance_criteria_from_original_issue(
 
 def _is_workflow_sync_acceptance_criterion(criterion: str) -> bool:
     normalized = str(criterion or "").strip().lower()
-    return any(marker in normalized for marker in WORKFLOW_SYNC_ACCEPTANCE_MARKERS)
+    if any(marker in normalized for marker in WORKFLOW_SYNC_ACCEPTANCE_MARKERS):
+        return True
+    if any(marker in normalized for marker in WORKFLOW_SYNC_PATH_MARKERS):
+        return not any(marker in normalized for marker in WORKFLOW_SYNC_REPO_LOCAL_MARKERS)
+    return False
 
 
 def _has_mixed_repo_and_workflow_acceptance_criteria(
