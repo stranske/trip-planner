@@ -58,6 +58,7 @@ from trip_planner.state import (
     ActivityLogEvent,
     OptionPresentationRecord,
     PendingDecision,
+    PLANNING_MODES,
     PersistedTripRecord,
     PersistedTripArtifactRefs,
     PlanningSessionState,
@@ -705,6 +706,7 @@ def _serialize_session_record(record: PersistedPlanningSessionState) -> dict[str
             "recent_option_presentations": list(record.recent_option_presentations),
             "pending_decisions": list(record.pending_decisions),
             "status": record.status,
+            "selected_planning_mode": record.selected_planning_mode,
             "current_checkpoint_id": record.current_checkpoint_id,
             "current_saved_scenario_id": record.current_saved_scenario_id,
             "active_budget_plan_id": record.active_budget_plan_id,
@@ -2156,6 +2158,7 @@ def _get_or_create_workspace_session_record(
         ],
         pending_decisions=[item.to_dict() for item in default_session.pending_decisions],
         status=default_session.status,
+        selected_planning_mode=default_session.selected_planning_mode,
         current_checkpoint_id=default_session.current_checkpoint_id,
         current_saved_scenario_id=default_session.current_saved_scenario_id,
         active_budget_plan_id=default_session.active_budget_plan_id,
@@ -2167,6 +2170,34 @@ def _get_or_create_workspace_session_record(
     db_session.add(persisted)
     db_session.flush()
     return persisted
+
+
+def update_workspace_planning_mode(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    planning_mode: str,
+) -> dict[str, Any]:
+    if planning_mode not in PLANNING_MODES:
+        raise ValueError(f"planning_mode must be one of {', '.join(PLANNING_MODES)}")
+    try:
+        record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    except ValueError as error:
+        raise WorkspaceTripNotFoundError(str(error)) from error
+
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    now = datetime.now(UTC)
+    timestamp = _isoformat(now)
+    session_record.selected_planning_mode = planning_mode
+    session_record.last_updated_at = timestamp
+    record.updated_at = now
+    db_session.commit()
+
+    payload = get_workspace_payload(db_session, user=user, trip_id=trip_id)
+    if payload is None:
+        raise WorkspaceTripNotFoundError(f"Trip '{trip_id}' was not found.")
+    return payload
 
 
 def _current_workspace_option_set(

@@ -118,6 +118,7 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
     assert response.status_code == 200
     payload = response.json()
     assert payload["trip_record"]["trip"]["trip_id"] == "trip-leisure-kyoto-draft"
+    assert payload["session"]["selected_planning_mode"] == "collaborative"
     _assert_runtime_ranking_and_route_comparison(payload)
     assert payload["session"]["current_saved_scenario_id"] == "saved-scenario:kyoto-baseline"
     assert payload["scenario_search"]["title"] == "Kyoto ranked scenario workspace"
@@ -159,6 +160,42 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
     assert payload["budget_state"]["summary"]["planned_total"] > 0
     assert payload["budget_state"]["summary"]["actual_total"] > 0
     assert payload["budget_state"]["summary"]["current_scenario_title"]
+
+
+def test_workspace_planning_mode_route_persists_mode(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Planning mode workshop",
+            "summary": "Persist the selected planner mode.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    updated = client.put(
+        f"/api/workspace/{trip_id}/planning-mode",
+        json={"planning_mode": "revealed-preference"},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["session"]["selected_planning_mode"] == "revealed-preference"
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    assert reloaded.status_code == 200
+    assert reloaded.json()["session"]["selected_planning_mode"] == "revealed-preference"
+
+    rejected = client.put(
+        f"/api/workspace/{trip_id}/planning-mode",
+        json={"planning_mode": "solo-auto"},
+    )
+    assert rejected.status_code == 400
 
 
 def test_workspace_endpoint_surfaces_business_ranked_scenarios(client: TestClient) -> None:

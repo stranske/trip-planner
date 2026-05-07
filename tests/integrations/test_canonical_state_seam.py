@@ -234,6 +234,12 @@ def test_canonical_state_seam_persists_planner_turn_and_proposal_lifecycle(
         f"Got {first_checkpoint_id!r}. Memory persistence is part of the "
         f"canonical seam."
     )
+    planning_mode_update = first_client.put(
+        f"/api/workspace/{trip_id}/planning-mode",
+        json={"planning_mode": "delegated"},
+    )
+    assert planning_mode_update.status_code == 200, planning_mode_update.text
+    assert planning_mode_update.json()["session"]["selected_planning_mode"] == "delegated"
 
     # ---- Phase 2: TPP proposal submission and evaluation ----
     submission_fixture = _load_fixture("proposal_submit_deferred.json")
@@ -287,6 +293,10 @@ def test_canonical_state_seam_persists_planner_turn_and_proposal_lifecycle(
         assert session_state is not None, (
             f"Canonical seam broken: no PersistedPlanningSessionState row for "
             f"trip {trip_id!r} after a planner turn."
+        )
+        assert session_state.selected_planning_mode == "delegated", (
+            "Canonical seam broken: selected_planning_mode was not persisted "
+            "on the planning session row."
         )
 
         planner_actions = db.scalars(
@@ -358,6 +368,7 @@ def test_canonical_state_seam_persists_planner_turn_and_proposal_lifecycle(
     assert session_reload.status_code == 200, session_reload.text
     session_payload = session_reload.json()
     assert session_payload["session_state_id"] == f"session:{trip_id}"
+    assert session_payload["session"]["selected_planning_mode"] == "delegated"
     assert session_payload["planner_memory"]["current_checkpoint_id"] == first_checkpoint_id, (
         f"Canonical seam broken on reload: planner-memory checkpoint id did "
         f"not survive create_app(). First instance had {first_checkpoint_id!r}, "

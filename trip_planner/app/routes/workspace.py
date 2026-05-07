@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from trip_planner.app.schemas.workspace import (
+    PlanningModeUpdateRequest,
     PlannerDecisionAnswerRequest,
     PlannerOptionFeedbackRequest,
     ScenarioComparisonSurfaceResponse,
@@ -14,6 +15,7 @@ from trip_planner.app.services.workspace import (
     get_workspace_scenario_comparison_payload,
     get_workspace_payload,
     submit_workspace_option_feedback,
+    update_workspace_planning_mode,
 )
 from trip_planner.persistence.db import get_db_session
 
@@ -49,6 +51,27 @@ def read_workspace_scenario_comparison(
             status_code=404, detail=f"Workspace for trip '{trip_id}' was not found."
         )
     return ScenarioComparisonSurfaceResponse.model_validate(payload)
+
+
+@router.put("/workspace/{trip_id}/planning-mode", response_model=WorkspaceResponse)
+def update_planning_mode(
+    trip_id: str,
+    payload: PlanningModeUpdateRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> WorkspaceResponse:
+    try:
+        result = update_workspace_planning_mode(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            planning_mode=payload.planning_mode,
+        )
+    except WorkspaceTripNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return WorkspaceResponse.model_validate(result)
 
 
 @router.post(

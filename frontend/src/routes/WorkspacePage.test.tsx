@@ -12,6 +12,7 @@ import {
   saveWorkspaceBudget,
   submitPlannerTurn,
   submitPlannerOptionFeedback,
+  updateWorkspacePlanningMode,
   type PlannerSessionResponse,
   type WorkspaceData,
 } from "../api/workspace";
@@ -27,6 +28,7 @@ vi.mock("../api/workspace", async () => {
     fetchPlannerSession: vi.fn(),
     submitPlannerOptionFeedback: vi.fn(),
     submitPlannerTurn: vi.fn(),
+    updateWorkspacePlanningMode: vi.fn(),
     saveWorkspaceBudget: vi.fn(),
     recordWorkspaceSpendEvent: vi.fn(),
     refreshWorkspaceProposalStatus: vi.fn(),
@@ -46,6 +48,7 @@ const mockedAnswerPlannerDecision = vi.mocked(answerPlannerDecision);
 const mockedFetchPlannerSession = vi.mocked(fetchPlannerSession);
 const mockedSubmitPlannerOptionFeedback = vi.mocked(submitPlannerOptionFeedback);
 const mockedSubmitPlannerTurn = vi.mocked(submitPlannerTurn);
+const mockedUpdateWorkspacePlanningMode = vi.mocked(updateWorkspacePlanningMode);
 const mockedSaveWorkspaceBudget = vi.mocked(saveWorkspaceBudget);
 const mockedRecordWorkspaceSpendEvent = vi.mocked(recordWorkspaceSpendEvent);
 const mockedRefreshWorkspaceProposalStatus = vi.mocked(refreshWorkspaceProposalStatus);
@@ -167,6 +170,7 @@ const workspacePayload = {
   session: {
     current_saved_scenario_id: "saved-scenario:kyoto-baseline",
     active_budget_plan_id: null,
+    selected_planning_mode: "collaborative",
     pending_decisions: [
       {
         decision_id: "decision:save-baseline",
@@ -783,6 +787,7 @@ describe("WorkspacePage", () => {
     mockedFetchPlannerSession.mockReset();
     mockedSubmitPlannerOptionFeedback.mockReset();
     mockedSubmitPlannerTurn.mockReset();
+    mockedUpdateWorkspacePlanningMode.mockReset();
     mockedSaveWorkspaceBudget.mockReset();
     mockedRecordWorkspaceSpendEvent.mockReset();
     mockedRefreshWorkspaceProposalStatus.mockReset();
@@ -808,6 +813,8 @@ describe("WorkspacePage", () => {
     expect(within(routeContextMap).getAllByText("Uji").length).toBeGreaterThan(0);
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
     expect(screen.getByText("Trip-scoped planner surface")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Planning mode" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Collaborative/ })).toBeChecked();
     await waitFor(() => {
       expect(mockedFetchPlannerSession).toHaveBeenCalledWith("trip-leisure-kyoto-draft");
     });
@@ -845,6 +852,36 @@ describe("WorkspacePage", () => {
         '[aria-label="Planner side panel"]'
       );
       expect(plannerPanel).toBeTruthy();
+    });
+  });
+
+  it("persists planning mode selections through the workspace API", async () => {
+    const user = userEvent.setup();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+    mockedUpdateWorkspacePlanningMode.mockResolvedValue({
+      ...workspacePayload,
+      session: {
+        ...workspacePayload.session,
+        selected_planning_mode: "delegated",
+      },
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Planning mode" })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("radio", { name: /Delegated/ }));
+
+    expect(mockedUpdateWorkspacePlanningMode).toHaveBeenCalledWith(
+      "trip-leisure-kyoto-draft",
+      "delegated"
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("radio", { name: /Delegated/ })).toBeChecked();
     });
   });
 

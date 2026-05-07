@@ -285,7 +285,7 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
             stored[-1].payload["tool_calls"][0]["summary"]
             == "Read the current planner panel workspace state."
         )
-        assert stored[-1].payload["selected_planning_mode"] == "leisure"
+        assert stored[-1].payload["selected_planning_mode"] == "collaborative"
         assert stored[-1].payload["runtime_mode"] == "model"
         checkpoint = db_session.get(
             PersistedPlannerCheckpoint,
@@ -293,7 +293,7 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
         )
         assert checkpoint is not None
         assert checkpoint.metadata_payload["tool_call_count"] == 6
-        assert checkpoint.metadata_payload["selected_planning_mode"] == "leisure"
+        assert checkpoint.metadata_payload["selected_planning_mode"] == "collaborative"
 
 
 def test_planner_turn_tool_reads_are_grounded_in_persisted_workspace_state(
