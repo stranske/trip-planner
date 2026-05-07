@@ -130,3 +130,7 @@ class PlannerOptionFeedbackRequest(BaseModel):
         "do_more_before_asking_again",
     ]
     decision_id: str | None = Field(default=None, max_length=96)
+
+
+class PlanningModeUpdateRequest(BaseModel):
+    planning_mode: str = Field(min_length=1, max_length=32)

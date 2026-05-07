@@ -171,6 +171,53 @@ a {
   color: #365063;
 }
 
+.planning-mode-selector {
+  margin-top: 1rem;
+}
+
+.planning-mode-selector-header h3 {
+  margin: 0;
+}
+
+.planning-mode-options {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-top: 0.8rem;
+}
+
+.planning-mode-option {
+  border: 1px solid rgba(54, 80, 99, 0.22);
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 0.25rem;
+  min-height: 96px;
+  padding: 0.8rem;
+}
+
+.planning-mode-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.planning-mode-option span {
+  color: #172a3a;
+  font-weight: 800;
+}
+
+.planning-mode-option small {
+  color: #577186;
+  line-height: 1.35;
+}
+
+.planning-mode-option-active {
+  background: #e8f2ef;
+  border-color: rgba(56, 117, 107, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(56, 117, 107, 0.18);
+}
+
 .workspace-hero {
   overflow: hidden;
   position: relative;

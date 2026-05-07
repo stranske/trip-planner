@@ -544,7 +544,7 @@ def submit_planner_turn(
             "content": normalized_message,
             "refs": session.session_state_id,
             "tool_calls": [],
-            "selected_planning_mode": session.mode,
+            "selected_planning_mode": session.selected_planning_mode,
         },
     )
 
@@ -650,7 +650,7 @@ def submit_planner_turn(
             "content": reply.content,
             "refs": ",".join(reply.refs),
             "tool_calls": reply.tool_calls,
-            "selected_planning_mode": session.mode,
+            "selected_planning_mode": session.selected_planning_mode,
             "planning_stage": (
                 workspace_payload["planner_panel_state"]
                 .get("planner_behavior", {})

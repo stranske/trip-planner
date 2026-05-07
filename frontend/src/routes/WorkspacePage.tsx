@@ -9,16 +9,19 @@ import {
   refreshWorkspaceProposalStatus,
   saveWorkspaceBudget,
   submitPlannerTurn,
+  updateWorkspacePlanningMode,
   type ActualSpendEventUpsertPayload,
   type BudgetPlanUpsertPayload,
   type BudgetWorkspaceState,
   type PlannerSessionResponse,
+  type PlanningMode,
   submitPlannerOptionFeedback,
   type SavedScenarioRecord,
   type WorkspaceData,
 } from "../api/workspace";
 import { WorkspaceBudgetPanel } from "../components/budget/WorkspaceBudgetPanel";
 import { TripMap } from "../components/maps/TripMap";
+import { PlanningModeSelector } from "../components/planner/PlanningModeSelector";
 import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
 import { TripComparison } from "../components/trips/TripComparison";
 import { ScenarioComparison } from "../components/workspace/ScenarioComparison";
@@ -498,6 +501,8 @@ function WorkspacePageContent({
   );
   const [plannerError, setPlannerError] = useState<string | null>(null);
   const [plannerBusyLabel, setPlannerBusyLabel] = useState<string | null>(null);
+  const [planningModeBusy, setPlanningModeBusy] = useState(false);
+  const [planningModeError, setPlanningModeError] = useState<string | null>(null);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
   const [proposalError, setProposalError] = useState<string | null>(null);
@@ -590,6 +595,23 @@ function WorkspacePageContent({
   const scenarioPolicyPosture = formatPolicyPosture(currentWorkspace);
   function handleScenarioSelection(scenarioId: string) {
     setSelectedScenarioId(scenarioId);
+  }
+
+  async function handlePlanningModeChange(mode: PlanningMode) {
+    if (mode === currentWorkspace.session.selected_planning_mode) {
+      return;
+    }
+    setPlanningModeError(null);
+    setPlanningModeBusy(true);
+    plannerSessionLoadVersion.current += 1;
+    try {
+      const nextWorkspace = await updateWorkspacePlanningMode(trip.trip_id, mode);
+      setCurrentWorkspace(nextWorkspace);
+    } catch (error) {
+      setPlanningModeError(error instanceof Error ? error.message : "Planning mode update failed.");
+    } finally {
+      setPlanningModeBusy(false);
+    }
   }
 
   async function handleDecisionAnswer(decisionId: string, choice: string) {
@@ -769,6 +791,12 @@ function WorkspacePageContent({
                 : "Fallback"}
             </span>
           </div>
+          <PlanningModeSelector
+            value={currentWorkspace.session.selected_planning_mode}
+            busy={planningModeBusy}
+            error={planningModeError}
+            onChange={handlePlanningModeChange}
+          />
           {plannerBusyLabel ? <p className="muted-copy">{plannerBusyLabel}</p> : null}
           {plannerError ? <p className="planner-inline-error">{plannerError}</p> : null}
           <PlannerSidePanelSurface

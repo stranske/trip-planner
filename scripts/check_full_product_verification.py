@@ -760,6 +760,9 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
                             "lead_scenario_id"
                         ],
                         "planner_runtime": planner_runtime,
+                        "planning_mode": leisure_payload["session"][
+                            "selected_planning_mode"
+                        ],
                         "route_contexts": len(
                             leisure_payload["runtime_scenario_comparison"]["scenarios"]
                         ),
@@ -908,6 +911,9 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
                         "proposal_id": proposal["proposal_id"],
                         "evaluation_status": evaluation_payload["summary"][
                             "evaluation_result_status"
+                        ],
+                        "planning_mode": reloaded_business_workspace.json()["session"][
+                            "selected_planning_mode"
                         ],
                         "follow_up_status": evaluation_payload["summary"]["follow_up_status"],
                         "status_poll": refresh_payload["summary"]["submission_status"],

@@ -21,6 +21,12 @@ PLANNING_SESSION_STATUSES: tuple[str, ...] = (
     "completed",
     "archived",
 )
+PLANNING_MODES: tuple[str, ...] = (
+    "delegated",
+    "collaborative",
+    "revealed-preference",
+    "in-trip",
+)
 INITIATIVE_LEVELS: tuple[str, ...] = (
     "user_led",
     "balanced",
@@ -246,6 +252,7 @@ class PlanningSessionState:
     recent_option_presentations: list[OptionPresentationRecord] = field(default_factory=list)
     pending_decisions: list[PendingDecision] = field(default_factory=list)
     status: str = "active"
+    selected_planning_mode: str = "collaborative"
     current_checkpoint_id: str | None = None
     current_saved_scenario_id: str | None = None
     active_budget_plan_id: str | None = None
@@ -265,6 +272,8 @@ class PlanningSessionState:
             raise ValueError(f"mode must be one of {TRIP_MODES}")
         if self.status not in PLANNING_SESSION_STATUSES:
             raise ValueError(f"status must be one of {PLANNING_SESSION_STATUSES}")
+        if self.selected_planning_mode not in PLANNING_MODES:
+            raise ValueError(f"selected_planning_mode must be one of {PLANNING_MODES}")
         if not isinstance(self.interaction_state, PlanningInteractionState):
             raise ValueError("interaction_state must be a PlanningInteractionState")
         if any(
@@ -321,6 +330,7 @@ class PlanningSessionState:
                 for item in _payload_list(payload, "pending_decisions", [])
             ],
             status=payload.get("status", "active"),
+            selected_planning_mode=payload.get("selected_planning_mode", "collaborative"),
             current_checkpoint_id=payload.get("current_checkpoint_id"),
             current_saved_scenario_id=payload.get("current_saved_scenario_id"),
             active_budget_plan_id=payload.get("active_budget_plan_id"),

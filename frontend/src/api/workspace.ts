@@ -25,9 +25,12 @@ export type TripRecord = {
   };
 };
 
+export type PlanningMode = "delegated" | "collaborative" | "revealed-preference" | "in-trip";
+
 export type SessionState = {
   current_saved_scenario_id: string | null;
   active_budget_plan_id: string | null;
+  selected_planning_mode: PlanningMode;
   pending_decisions: Array<{
     decision_id: string;
     title: string;
@@ -562,6 +565,21 @@ export async function answerPlannerDecision(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ choice }),
+  });
+}
+
+export async function updateWorkspacePlanningMode(
+  tripId: string,
+  planningMode: PlanningMode
+): Promise<WorkspaceData> {
+  return fetchJson<WorkspaceData>({
+    path: `/api/workspace/${tripId}/planning-mode`,
+    method: "PUT",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ planning_mode: planningMode }),
   });
 }
 
