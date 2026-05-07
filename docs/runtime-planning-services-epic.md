@@ -48,6 +48,17 @@ Every child issue in this epic should preserve these rules:
 | `#692` | Ranking and scenario-generation services | inventory services from `#690`, feasibility outputs from `#691`, ranking/result contracts from `#531`, workspace state seams from `#676` | workspace-visible ranked alternatives, scenario-generation outputs, explanation-ready service results |
 | `#693` | Route-search and scenario-comparison behavior | ranking/scenario outputs from `#692`, route and comparison vocabulary from `#531`, workspace route/render seams from `#676` | route-search orchestration, scenario comparison behavior, stable workspace comparison payloads |
 
+## Workspace Payload Keys
+
+As of issue `#1102`, the workspace payload exposes all four runtime-planning-service layers as top-level keys:
+
+- `inventory_summary` for inventory bundle assembly (`#690`)
+- `feasibility_summary` for feasibility and move-cost evaluation (`#691`)
+- `ranking` for scenario ranking rows and the lead scenario id (`#692`)
+- `route_comparison` for comparison-ready route rows (`#693`)
+
+`runtime_scenario_comparison` remains as a compatibility alias for older clients while frontend workspace code moves to `route_comparison` as the canonical surface.
+
 ## Contract Surface
 
 The first pass of this epic should stabilize the following surfaces before deeper orchestration and policy work expands:

@@ -11,6 +11,19 @@ when an xfail in `tests/planner/test_planner_turn_acceptance.py`,
 explicit signal: rewrite against the current contract, delete with a migration
 note here, or tighten to `strict=True` with a precise `reason=`.
 
+## 2026-05-07 — `test_planner_turn_surfaces_runtime_planning_services_outputs` (converted)
+
+- **Converted by:** issue [#1102](https://github.com/stranske/trip-planner/issues/1102).
+- **Original assertion:** strict xfail source inspection for missing top-level
+  `ranking` and `route_comparison` names in `get_workspace_payload`.
+- **Why converted:** the workspace payload now exposes `ranking` and canonical
+  `route_comparison` as runtime data for seeded and fresh workspaces, while
+  retaining `runtime_scenario_comparison` as a compatibility alias.
+- **Current coverage:** `tests/planner/test_planner_turn_acceptance.py` now
+  asserts runtime payload data instead of source text, and
+  `tests/app/test_workspace.py` covers seeded Kyoto, seeded business, and fresh
+  persisted workspace payloads.
+
 ## 2026-04-30 — `test_tpp_approval_flow_round_trip_from_planner_turn` (deleted)
 
 - **Removed by:** xfail audit for issue [#1046](https://github.com/stranske/trip-planner/issues/1046).

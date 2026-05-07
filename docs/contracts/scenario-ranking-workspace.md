@@ -18,7 +18,8 @@ This contract defines the handoff between runtime ranking inputs, scenario-gener
   - explicit route sequence
   - score and explanation records
   - unresolved tradeoffs carried forward from feasibility or policy posture
-- Workspace planner outputs summarize the ranked set and expose per-rank scenario cards for the side-panel UI.
+- The workspace payload exposes a top-level `ranking` object with `lead_scenario_id`, source refs, and per-rank `rows`.
+- Workspace planner outputs continue to summarize the ranked set and expose per-rank scenario cards for the side-panel UI.
 
 ## Comparison Boundary
 

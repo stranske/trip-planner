@@ -56,6 +56,21 @@ def _assert_payload_avoids_fixture_or_default_inventory_data(payload: dict[str, 
         assert seeded_trip_id not in serialized_payload
 
 
+def _assert_runtime_ranking_and_route_comparison(payload: dict[str, Any]) -> None:
+    assert payload["ranking"]["rows"]
+    assert payload["ranking"]["lead_scenario_id"] == payload["scenario_search"]["scenarios"][0][
+        "scenario_id"
+    ]
+    assert payload["ranking"]["rows"][0]["scenario_id"] == payload["ranking"]["lead_scenario_id"]
+    assert payload["ranking"]["source_refs"]
+    assert payload["route_comparison"] == payload["runtime_scenario_comparison"]
+    assert payload["route_comparison"]["lead_scenario_id"] == payload["scenario_search"][
+        "scenarios"
+    ][0]["scenario_id"]
+    assert payload["route_comparison"]["scenarios"]
+    assert payload["route_comparison"]["source_refs"]
+
+
 def test_runtime_business_profile_normalizes_punctuated_regions_to_home_airports() -> None:
     profile = _runtime_business_profile(
         trip_title="Kyoto kickoff",
@@ -103,6 +118,7 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
     assert response.status_code == 200
     payload = response.json()
     assert payload["trip_record"]["trip"]["trip_id"] == "trip-leisure-kyoto-draft"
+    _assert_runtime_ranking_and_route_comparison(payload)
     assert payload["session"]["current_saved_scenario_id"] == "saved-scenario:kyoto-baseline"
     assert payload["scenario_search"]["title"] == "Kyoto ranked scenario workspace"
     assert payload["scenario_search"]["scenarios"][0]["title"] == "Kyoto cultural anchor"
@@ -150,6 +166,7 @@ def test_workspace_endpoint_surfaces_business_ranked_scenarios(client: TestClien
 
     assert response.status_code == 200
     payload = response.json()
+    _assert_runtime_ranking_and_route_comparison(payload)
     assert payload["scenario_search"]["title"] == "Client summit ranked scenarios"
     assert payload["scenario_search"]["scenarios"][0]["title"] == "Airport arrival bundle"
     assert (
@@ -261,6 +278,7 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_busin
     assert len(payload["scenario_search"]["scenarios"]) > 0
     assert payload["scenario_search"]["scenarios"][0]["scenario_id"].startswith("scenario:")
     assert payload["scenario_search"]["source_refs"]
+    _assert_runtime_ranking_and_route_comparison(payload)
     assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("scenario:")
     assert len(payload["runtime_scenario_comparison"]["scenarios"]) > 0
     assert payload["runtime_scenario_comparison"]["source_refs"]
@@ -317,6 +335,7 @@ def test_workspace_endpoint_bootstraps_persisted_workspace_scaffolding_for_leisu
     assert payload["saved_scenarios"][0]["versions"][0]["title"].startswith("Lisbon")
     assert payload["inventory_summary"]["bundle_count"] > 0
     assert payload["scenario_search"]["scenarios"]
+    _assert_runtime_ranking_and_route_comparison(payload)
     assert payload["scenario_search"]["title"] == "Lisbon weekend runtime scenarios"
     assert payload["scenario_search"]["source_refs"]
     assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("scenario:")

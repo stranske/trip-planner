@@ -5,7 +5,8 @@ Issue `#693` extends the runtime workspace payload with comparison-ready scenari
 ## Runtime Source
 
 - `scenario_search` remains the canonical route-search output.
-- `runtime_scenario_comparison` is a derived view over that same result set.
+- `route_comparison` is the canonical derived view over that same result set.
+- `runtime_scenario_comparison` is retained as a compatibility alias for existing clients.
 - The comparison surface must not invent a separate scenario model or diverge from `scenario_search`.
 
 ## Comparison Surface
@@ -23,4 +24,4 @@ Issue `#693` extends the runtime workspace payload with comparison-ready scenari
 
 - The trip workspace should render runtime comparison rows before falling back to saved-scenario metadata.
 - Saved-scenario history remains valid for persistence and checkpoint history, but runtime comparison uses the live route-search payload.
-- Later map and visualization work can reuse `runtime_scenario_comparison.scenarios[*].route_sequence` and metrics without recomputing ranking output on the client.
+- Later map and visualization work can reuse `route_comparison.scenarios[*].route_sequence` and metrics without recomputing ranking output on the client.
