@@ -102,7 +102,8 @@ jobs:
   guard:
     name: coverage baseline monitor
     needs: rate-limit-check
-    if: needs.rate-limit-check.outputs.proceed == 'true'
+    if: >-
+      ${{ needs.rate-limit-check.outputs.proceed == 'true' }}
     runs-on: ubuntu-latest
     steps:
       # Mint GitHub App token early to use for API calls (avoids rate limits)
@@ -117,16 +118,6 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Checkout retry helpers
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-
-          token: ${{ steps.app_token.outputs.token || github.token }}
-          sparse-checkout: |
-            .github/scripts/github-api-with-retry.js
-            .github/scripts/token_load_balancer.js
-          sparse-checkout-cone-mode: false
 
       - name: Locate latest Gate workflow run
         id: discover
