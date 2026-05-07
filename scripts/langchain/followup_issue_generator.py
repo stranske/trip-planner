@@ -33,6 +33,8 @@ from pathlib import Path
 from typing import Any
 
 from scripts.langchain import verdict_policy
+from scripts.langchain.issue_pr_context import estimate_tokens
+from scripts.langchain.verifier_config import EVAL_FOLLOW_UP_BUDGET_TOKENS
 
 try:
     from scripts.langchain.injection_guard import check_prompt_injection
@@ -1387,6 +1389,41 @@ def generate_followup_issue(
         )
 
 
+def _budget_followup_tasks(tasks: list[str]) -> list[str]:
+    budget = max(1, min(1000, EVAL_FOLLOW_UP_BUDGET_TOKENS // 4))
+    used = 0
+    selected: list[str] = []
+    for task in tasks[:20]:
+        estimated = max(1, estimate_tokens(f"- [ ] {task}"))
+        if estimated > budget:
+            if not selected:
+                selected.append(_truncate_task_to_budget(task, budget))
+            break
+        if selected and used + estimated > budget:
+            break
+        selected.append(task)
+        used += estimated
+    return selected
+
+
+def _truncate_task_to_budget(task: str, budget: int) -> str:
+    suffix = "..."
+    if estimate_tokens(f"- [ ] {task}") <= budget:
+        return task
+    low = 0
+    high = max(0, len(task))
+    best = ""
+    while low <= high:
+        mid = (low + high) // 2
+        candidate = f"{task[:mid].rstrip()}{suffix}"
+        if estimate_tokens(f"- [ ] {candidate}") <= budget:
+            best = candidate
+            low = mid + 1
+        else:
+            high = mid - 1
+    return best or suffix.strip()
+
+
 def _generate_with_llm(
     verification_data: VerificationData,
     original_issue: OriginalIssueData,
@@ -1445,8 +1482,8 @@ def _generate_with_llm(
     tasks_prompt = GENERATE_TASKS_PROMPT.format(
         analysis_json=json.dumps(analysis, indent=2),
         original_tasks="\n".join(
-            f"- [ ] {t}" for t in original_issue.tasks[:20]
-        ),  # Limit for token budget
+            f"- [ ] {t}" for t in _budget_followup_tasks(original_issue.tasks)
+        ),
     )
 
     tasks_response, trace_id_2, trace_url_2 = _invoke_llm(
@@ -1784,10 +1821,14 @@ def _build_why_section(
     return " ".join(parts)
 
 
+WORKFLOW_SYNC_PATH_MARKERS = (
+    ".github/actions",
+    ".github/scripts",
+    ".github/sync-manifest.yml",
+    ".github/workflows",
+)
+
 WORKFLOW_SYNC_ACCEPTANCE_MARKERS = (
-    "consumer sync",
-    "consumer-sync",
-    ".github/workflows/",
     "workflow file",
     "workflow files",
     "workflow-owned",
@@ -1795,6 +1836,9 @@ WORKFLOW_SYNC_ACCEPTANCE_MARKERS = (
     "workflows-owned scripts",
     "gate workflow",
     "maint-68",
+    "synced automation",
+    "synced script",
+    "synced scripts",
     "synced workflow",
     "sync pr",
     "sync-generated",
@@ -1802,6 +1846,46 @@ WORKFLOW_SYNC_ACCEPTANCE_MARKERS = (
     "template sync",
     "workflow template sync",
     "workflow-template",
+)
+
+EXPLICIT_WORKFLOW_SYNC_ACCEPTANCE_MARKERS = (
+    "workflow-owned",
+    "workflows-owned",
+    "maint-68",
+    "synced automation",
+    "synced script",
+    "synced scripts",
+    "synced workflow",
+    "sync pr",
+    "sync-generated",
+    "sync workflow templates",
+    "template sync",
+    "workflow template sync",
+    "workflow-template",
+)
+
+WORKFLOW_SYNC_CONTEXT_MARKERS = (
+    *WORKFLOW_SYNC_ACCEPTANCE_MARKERS,
+    "consumer sync",
+    "consumer-sync",
+    "consumer",
+    "consumers",
+    "from the template",
+    "maint-68",
+    "synced",
+    "sync-generated",
+    "template syncing",
+    "workflow sync",
+    "workflows sync",
+)
+
+WORKFLOW_SYNC_REPO_LOCAL_MARKERS = (
+    "repo-local",
+    "repository-local",
+    "local-only",
+    "project-specific",
+    "this repository",
+    "this repo",
 )
 
 
@@ -1817,7 +1901,21 @@ def _acceptance_criteria_from_original_issue(
 
 def _is_workflow_sync_acceptance_criterion(criterion: str) -> bool:
     normalized = str(criterion or "").strip().lower()
-    return any(marker in normalized for marker in WORKFLOW_SYNC_ACCEPTANCE_MARKERS)
+    has_repo_local_marker = any(marker in normalized for marker in WORKFLOW_SYNC_REPO_LOCAL_MARKERS)
+    if any(marker in normalized for marker in WORKFLOW_SYNC_PATH_MARKERS):
+        return not has_repo_local_marker
+    if any(marker in normalized for marker in WORKFLOW_SYNC_ACCEPTANCE_MARKERS):
+        return not has_repo_local_marker or any(
+            marker in normalized for marker in EXPLICIT_WORKFLOW_SYNC_ACCEPTANCE_MARKERS
+        )
+    return False
+
+
+def _mentions_workflow_sync_context(value: str) -> bool:
+    normalized = str(value or "").strip().lower()
+    return _is_workflow_sync_acceptance_criterion(normalized) or any(
+        marker in normalized for marker in WORKFLOW_SYNC_CONTEXT_MARKERS
+    )
 
 
 def _has_mixed_repo_and_workflow_acceptance_criteria(
@@ -1840,7 +1938,7 @@ def _verification_feedback_mentions_workflow_sync(verification_data: Verificatio
         *verification_data.non_pass_findings,
         *verification_data.structural_issues,
     ]
-    return any(_is_workflow_sync_acceptance_criterion(part) for part in parts)
+    return any(_mentions_workflow_sync_context(part) for part in parts)
 
 
 def _select_followup_acceptance_criteria(
