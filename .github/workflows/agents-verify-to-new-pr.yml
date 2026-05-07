@@ -245,9 +245,107 @@ jobs:
             // Set outputs
             core.setOutput('has_original_issue', linkedIssueNumber ? 'true' : 'false');
 
+      - name: Validate terminal verifier artifact
+        id: terminal-artifact
+        if: steps.check-merged.outputs.merged == 'true'
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+
+          from scripts.langchain.verifier_config import (
+              artifact_from_verification_text,
+              is_terminal_artifact,
+          )
+
+          verification_path = Path("verification_data.txt")
+          raw = (
+              verification_path.read_text(encoding="utf-8")
+              if verification_path.exists()
+              else ""
+          )
+          artifact = artifact_from_verification_text(raw)
+          terminal = is_terminal_artifact(artifact)
+          verdict = str(artifact.get("verdict") or "")
+          reason = (
+              "terminal verifier output"
+              if terminal
+              else "verifier output is partial or missing a terminal verdict"
+          )
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+              handle.write(f"terminal={str(terminal).lower()}\n")
+              handle.write(f"verdict={verdict}\n")
+              handle.write(f"reason={reason}\n")
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write("## Terminal verifier artifact gate\n\n")
+              handle.write(f"- Terminal: `{str(terminal).lower()}`\n")
+              if verdict:
+                  handle.write(f"- Verdict: `{verdict}`\n")
+              handle.write(f"- Reason: {reason}\n")
+          PY
+
+      - name: Apply needs-human for non-terminal verifier output
+        if: >-
+          steps.check-merged.outputs.merged == 'true' &&
+          steps.terminal-artifact.outputs.terminal != 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          LINKED_ISSUE: ${{ steps.collect.outputs.original_issue_number }}
+          TERMINAL_REASON: ${{ steps.terminal-artifact.outputs.reason }}
+        with:
+          github-token: ${{ steps.select-token.outputs.token }}
+          script: |
+            const fs = require('fs');
+            const retryHelperPath =
+              './.github/scripts/github-api-with-retry.js';
+            const retryHelpers = fs.existsSync(retryHelperPath)
+              ? require(retryHelperPath)
+              : { withRetry: (fn) => fn() };
+            const { withRetry } = retryHelpers;
+
+            const prNumber = context.payload.pull_request.number;
+            const linkedIssue = process.env.LINKED_ISSUE;
+            const reason = process.env.TERMINAL_REASON ||
+              'Verifier output is partial or missing a terminal verdict.';
+            const body = [
+              '🛑 **Verifier follow-up paused: non-terminal verifier output**',
+              '',
+              reason,
+              '',
+              'The workflow did not create a follow-up issue because the verifier artifact ' +
+                'is not complete enough to drive automation safely.',
+            ].join('\n');
+
+            await withRetry(() => github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              labels: ['needs-human'],
+            }));
+            if (linkedIssue) {
+              await withRetry(() => github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: Number(linkedIssue),
+                labels: ['needs-human'],
+              }));
+            }
+            await withRetry(() => github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body,
+            }));
+
       - name: Check chain depth limit
         id: chain-check
-        if: steps.check-merged.outputs.merged == 'true'
+        if: >-
+          steps.check-merged.outputs.merged == 'true' &&
+          steps.terminal-artifact.outputs.terminal == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           CHAIN_DEPTH: ${{ steps.collect.outputs.chain_depth }}
@@ -373,6 +471,7 @@ jobs:
         id: extract-verdict
         if: >-
           steps.check-merged.outputs.merged == 'true' &&
+          steps.terminal-artifact.outputs.terminal == 'true' &&
           steps.chain-check.outputs.exceeded != 'true'
         continue-on-error: true
         env:
@@ -387,6 +486,7 @@ jobs:
         id: verdict-needs-human
         if: >-
           steps.check-merged.outputs.merged == 'true' &&
+          steps.terminal-artifact.outputs.terminal == 'true' &&
           steps.chain-check.outputs.exceeded != 'true' &&
           steps.extract-verdict.outputs.needs_human == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -457,6 +557,7 @@ jobs:
         id: generate
         if: >-
           steps.check-merged.outputs.merged == 'true' &&
+          steps.terminal-artifact.outputs.terminal == 'true' &&
           steps.chain-check.outputs.exceeded != 'true' &&
           steps.extract-verdict.outputs.needs_human != 'true'
         continue-on-error: true
@@ -503,6 +604,7 @@ jobs:
         if: >-
           steps.generate.outcome == 'failure' &&
           steps.check-merged.outputs.merged == 'true' &&
+          steps.terminal-artifact.outputs.terminal == 'true' &&
           steps.chain-check.outputs.exceeded != 'true' &&
           steps.extract-verdict.outputs.needs_human != 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -675,6 +777,7 @@ jobs:
         id: create-issue
         if: >-
           steps.check-merged.outputs.merged == 'true' &&
+          steps.terminal-artifact.outputs.terminal == 'true' &&
           steps.chain-check.outputs.exceeded != 'true' &&
           steps.extract-verdict.outputs.needs_human != 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -740,7 +843,8 @@ jobs:
             let _defaultAgent = 'codex';
             try {
               const { loadAgentRegistry } = require('./.github/scripts/agent_registry.js');
-              _defaultAgent = loadAgentRegistry('./.github/agents/registry.yml').default_agent || 'codex';
+              _defaultAgent =
+                loadAgentRegistry('./.github/agents/registry.yml').default_agent || 'codex';
             } catch (_) {}
             let agentKey = _defaultAgent;
             try {
@@ -752,11 +856,13 @@ jobs:
               });
             } catch (err) {
               core.warning(
-                `Failed to resolve agent from PR labels; defaulting to ${_defaultAgent}: ${err.message}`
+                `Failed to resolve agent from PR labels; defaulting to ${_defaultAgent}: ` +
+                  err.message
               );
               agentKey = _defaultAgent;
             }
-            const normalized = String(agentKey || _defaultAgent).trim().toLowerCase() || _defaultAgent;
+            const normalized =
+              String(agentKey || _defaultAgent).trim().toLowerCase() || _defaultAgent;
             const agentLabel = `agent:${normalized}`;
             const fromLabel = `from:${normalized}`;
 
@@ -765,7 +871,13 @@ jobs:
               repo: context.repo.repo,
               title: title,
               body: body,
-              labels: ['follow-up', agentLabel, fromLabel, `runner:${normalized}`, 'agents:auto-pilot']
+              labels: [
+                'follow-up',
+                agentLabel,
+                fromLabel,
+                `runner:${normalized}`,
+                'agents:auto-pilot',
+              ]
             }));
 
             core.info(`Created issue #${issue.data.number}`);
@@ -776,6 +888,7 @@ jobs:
         id: dispatch-autopilot
         if: >-
           steps.check-merged.outputs.merged == 'true' &&
+          steps.terminal-artifact.outputs.terminal == 'true' &&
           steps.chain-check.outputs.exceeded != 'true' &&
           steps.extract-verdict.outputs.needs_human != 'true' &&
           steps.create-issue.outputs.issue_number != ''
@@ -814,6 +927,7 @@ jobs:
       - name: Comment on original PR
         if: >-
           steps.check-merged.outputs.merged == 'true' &&
+          steps.terminal-artifact.outputs.terminal == 'true' &&
           steps.chain-check.outputs.exceeded != 'true' &&
           steps.extract-verdict.outputs.needs_human != 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -864,6 +978,8 @@ jobs:
           CHAIN_DEPTH: ${{ steps.collect.outputs.chain_depth }}
           MAX_CHAIN_DEPTH: '2'
           CHAIN_EXCEEDED: ${{ steps.chain-check.outputs.exceeded }}
+          TERMINAL_ARTIFACT: ${{ steps.terminal-artifact.outputs.terminal }}
+          TERMINAL_REASON: ${{ steps.terminal-artifact.outputs.reason }}
           NEEDS_HUMAN: ${{ steps.extract-verdict.outputs.needs_human }}
           NEEDS_HUMAN_REASON: ${{ steps.extract-verdict.outputs.needs_human_reason }}
           VERDICT: ${{ steps.extract-verdict.outputs.verdict }}
@@ -899,7 +1015,15 @@ jobs:
             let policyTrigger = 'verifier-concerns';
             let policyReason = 'Verifier concerns require another implementation pass.';
 
-            if (process.env.CHAIN_EXCEEDED === 'true') {
+            if (process.env.TERMINAL_ARTIFACT !== 'true') {
+              disposition = 'needs-human-non-terminal-verifier';
+              reason = process.env.TERMINAL_REASON ||
+                'Verifier output was partial or missing a terminal verdict.';
+              needsHuman = true;
+              policyAction = 'needs-human';
+              policyTrigger = 'non-terminal-verifier-output';
+              policyReason = reason;
+            } else if (process.env.CHAIN_EXCEEDED === 'true') {
               disposition = 'needs-human-depth-limit';
               reason = 'Follow-up chain depth limit was reached.';
               needsHuman = true;
@@ -923,13 +1047,17 @@ jobs:
               reason = 'Verification follow-up issue was created and auto-pilot was dispatched.';
               policyReason = reason;
             } else if (dispatchOutcome === 'failure' || dispatchOutcome === 'cancelled') {
-              reason = `Verification follow-up issue was created, but auto-pilot dispatch ${dispatchOutcome}.`;
+              reason =
+                'Verification follow-up issue was created, but auto-pilot dispatch ' +
+                `${dispatchOutcome}.`;
               policyReason = reason;
             } else if (dispatchOutcome === 'skipped') {
               reason = 'Verification follow-up issue was created; auto-pilot dispatch was skipped.';
               policyReason = reason;
             } else if (followupIssue) {
-              reason = 'Verification follow-up issue was created; auto-pilot dispatch status was not reported.';
+              reason =
+                'Verification follow-up issue was created; auto-pilot dispatch status was ' +
+                'not reported.';
               policyReason = reason;
             }
 
