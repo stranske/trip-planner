@@ -299,6 +299,70 @@ const workspacePayload = {
       },
     ],
   },
+  ranking: {
+    ranking_id: "ranking:trip-leisure-kyoto-draft:workspace",
+    trip_id: "trip-leisure-kyoto-draft",
+    title: "Kyoto leisure scenario comparison",
+    summary: "Two ranked scenarios are available for workspace review.",
+    lead_scenario_id: "scenario:trip-leisure-kyoto-draft:1",
+    source_result_set_id: "ranked-results:kyoto-spring",
+    source_refs: ["ranked-results:kyoto-spring"],
+    rows: [
+      {
+        scenario_id: "scenario:trip-leisure-kyoto-draft:1",
+        title: "Kyoto base with Uji day trip",
+        rank: 1,
+        score: 0.93,
+        status: "positive",
+        summary: "Balanced Kyoto culture baseline",
+        scenario_kind: "primary",
+        recommended_for_selection: true,
+        feasible: true,
+        route_sequence: ["kyoto", "uji", "kyoto"],
+        total_travel_minutes: 265,
+        total_transfer_count: 4,
+        estimated_total: {
+          currency: "JPY",
+          typical_amount: 3400,
+        },
+        source_result_id: "ranked-result:kyoto-spring:1",
+        supporting_option_ids: ["bundle-osaka-gateway"],
+        objective_refs: ["objective:kyoto-culture"],
+        unresolved_tradeoffs: [],
+      },
+      {
+        scenario_id: "scenario:trip-leisure-kyoto-draft:2",
+        title: "Kyoto plus Osaka fallback",
+        rank: 2,
+        score: 0.88,
+        status: "caution",
+        summary: "Higher-energy fallback with extra transfers",
+        scenario_kind: "alternative",
+        recommended_for_selection: false,
+        feasible: true,
+        route_sequence: ["kyoto", "osaka", "kyoto"],
+        total_travel_minutes: 360,
+        total_transfer_count: 7,
+        estimated_total: {
+          currency: "JPY",
+          typical_amount: 3250,
+        },
+        source_result_id: "ranked-result:kyoto-spring:2",
+        supporting_option_ids: ["bundle-kyoto-culture-day"],
+        objective_refs: ["objective:kyoto-breadth"],
+        unresolved_tradeoffs: [
+          {
+            tradeoff_id: "tradeoff:osaka-nightlife",
+            summary: "Higher transfer load to preserve nightlife breadth.",
+            severity: "info",
+          },
+        ],
+      },
+    ],
+  },
+  get route_comparison() {
+    return this.runtime_scenario_comparison;
+  },
   runtime_scenario_comparison: {
     title: "Kyoto leisure scenario comparison",
     summary: "Two runtime scenarios are available for map-backed comparison.",
@@ -1093,6 +1157,11 @@ describe("WorkspacePage", () => {
           ...workspacePayload.scenario_search,
           scenarios: [],
         },
+        route_comparison: {
+          ...workspacePayload.route_comparison,
+          lead_scenario_id: null,
+          scenarios: [],
+        },
         runtime_scenario_comparison: {
           ...workspacePayload.runtime_scenario_comparison,
           lead_scenario_id: null,
@@ -1205,6 +1274,18 @@ describe("WorkspacePage", () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
         ...workspacePayload,
+        route_comparison: {
+          ...workspacePayload.route_comparison,
+          scenarios: workspacePayload.route_comparison.scenarios.map((scenario) =>
+            scenario.scenario_id === "scenario:trip-leisure-kyoto-draft:1"
+              ? {
+                  ...scenario,
+                  route_sequence: ["kyoto"],
+                  route_summary: "kyoto",
+                }
+              : scenario
+          ),
+        },
         runtime_scenario_comparison: {
           ...workspacePayload.runtime_scenario_comparison,
           scenarios: workspacePayload.runtime_scenario_comparison.scenarios.map((scenario) =>
@@ -1236,6 +1317,11 @@ describe("WorkspacePage", () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
         ...workspacePayload,
+        route_comparison: {
+          ...workspacePayload.route_comparison,
+          lead_scenario_id: null,
+          scenarios: [],
+        },
         runtime_scenario_comparison: {
           ...workspacePayload.runtime_scenario_comparison,
           lead_scenario_id: null,

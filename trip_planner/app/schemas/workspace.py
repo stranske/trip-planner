@@ -60,8 +60,18 @@ class WorkspaceResponse(BaseModel):
     scenario_search: dict[str, Any] = Field(
         description="ScenarioSearchResult payload whose route_sequence drives the timeline UI.",
     )
+    ranking: dict[str, Any] = Field(
+        description="Top-level scenario-ranking payload derived from the current scenario search."
+    )
+    route_comparison: dict[str, Any] = Field(
+        description=(
+            "Canonical comparison-ready route payload derived from the current scenario search."
+        )
+    )
     runtime_scenario_comparison: dict[str, Any] = Field(
-        description="Comparison-ready runtime scenario payload derived from the current scenario search."
+        description=(
+            "Compatibility alias for route_comparison retained for existing workspace clients."
+        )
     )
     activity_log: list[dict[str, Any]] = Field(
         default_factory=list,

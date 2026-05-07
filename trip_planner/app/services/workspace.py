@@ -31,6 +31,7 @@ from trip_planner.app.services.policy import get_workspace_policy_payload
 from trip_planner.app.services.proposal import get_workspace_proposal_payload
 from trip_planner.app.services.planner_runtime_config import get_planner_runtime_config
 from trip_planner.app.services.scenarios import (
+    build_scenario_ranking_payload,
     build_scenario_ranking_outputs,
     build_workspace_scenario_search,
 )
@@ -1131,6 +1132,10 @@ def _build_persisted_trip_workspace(
         trip_title=trip_record["trip"]["title"],
         scenario_search=resolved_scenario_search,
     )
+    ranking = build_scenario_ranking_payload(
+        trip_id=record.trip_id,
+        scenario_search=resolved_scenario_search,
+    )
     runtime_state = _build_workspace_runtime_state(
         inventory_summary=resolved_inventory_summary,
         runtime_scenario_comparison=runtime_scenario_comparison,
@@ -1146,6 +1151,8 @@ def _build_persisted_trip_workspace(
             else None
         ),
         "scenario_search": resolved_scenario_search,
+        "ranking": ranking,
+        "route_comparison": runtime_scenario_comparison,
         "runtime_scenario_comparison": runtime_scenario_comparison,
         "activity_log": resolved_activity_log,
         "planner_memory": planner_memory
@@ -1931,6 +1938,10 @@ def get_workspace_payload(
             trip_title=trip_record.trip.title,
             scenario_search=scenario_search.to_dict(),
         )
+        ranking = build_scenario_ranking_payload(
+            trip_id=trip_id,
+            scenario_search=scenario_search.to_dict(),
+        )
         inventory_summary = build_inventory_summary_payload(
             inventory_bundles,
             assembly_input=inventory_assembly_input,
@@ -1942,6 +1953,8 @@ def get_workspace_payload(
             "saved_scenarios": [record.to_dict() for record in saved_scenarios],
             "scenario_comparison": scenario_comparison.to_dict() if scenario_comparison else None,
             "scenario_search": scenario_search.to_dict(),
+            "ranking": ranking,
+            "route_comparison": runtime_scenario_comparison,
             "runtime_scenario_comparison": runtime_scenario_comparison,
             "activity_log": [],
             "planner_memory": {

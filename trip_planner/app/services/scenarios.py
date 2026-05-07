@@ -518,3 +518,51 @@ def build_scenario_ranking_outputs(
         )
 
     return outputs
+
+
+def build_scenario_ranking_payload(
+    *,
+    trip_id: str,
+    scenario_search: dict[str, Any],
+) -> dict[str, Any]:
+    scenarios = list(scenario_search.get("scenarios", []))
+    lead = scenarios[0] if scenarios else None
+    rows = []
+    for scenario in scenarios:
+        summary = scenario["scenario_summary"]
+        rows.append(
+            {
+                "scenario_id": scenario["scenario_id"],
+                "title": scenario["title"],
+                "rank": scenario["rank"],
+                "score": scenario["score"],
+                "status": _scenario_output_status(scenario),
+                "summary": summary["headline"],
+                "scenario_kind": summary["scenario_kind"],
+                "recommended_for_selection": summary["recommended_for_selection"],
+                "feasible": summary["feasible"],
+                "route_sequence": list(summary.get("route_sequence") or []),
+                "total_travel_minutes": summary["total_travel_minutes"],
+                "total_transfer_count": summary["total_transfer_count"],
+                "estimated_total": summary.get("estimated_total"),
+                "source_result_id": scenario.get("source_result_id"),
+                "supporting_option_ids": list(scenario.get("supporting_option_ids") or []),
+                "objective_refs": list(scenario.get("objective_refs") or []),
+                "unresolved_tradeoffs": list(scenario.get("unresolved_tradeoffs") or []),
+            }
+        )
+
+    return {
+        "ranking_id": f"ranking:{trip_id}:workspace",
+        "trip_id": trip_id,
+        "title": scenario_search.get("title") or "Workspace scenario ranking",
+        "summary": (
+            f"{len(rows)} ranked scenario(s) are available for workspace review."
+            if rows
+            else "No ranked scenarios are available for this workspace yet."
+        ),
+        "lead_scenario_id": lead["scenario_id"] if lead else None,
+        "source_result_set_id": scenario_search.get("source_result_set_id"),
+        "source_refs": list(scenario_search.get("source_refs") or []),
+        "rows": rows,
+    }

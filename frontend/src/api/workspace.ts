@@ -173,6 +173,42 @@ export type ScenarioSearchResult = {
   }>;
 };
 
+export type ScenarioRanking = {
+  ranking_id: string;
+  trip_id: string;
+  title: string;
+  summary: string;
+  lead_scenario_id: string | null;
+  source_result_set_id?: string | null;
+  source_refs: string[];
+  rows: Array<{
+    scenario_id: string;
+    title: string;
+    rank: number;
+    score: number;
+    status: string;
+    summary: string;
+    scenario_kind: string;
+    recommended_for_selection: boolean;
+    feasible: boolean;
+    route_sequence: string[];
+    total_travel_minutes: number;
+    total_transfer_count: number;
+    estimated_total?: {
+      currency: string;
+      typical_amount: number;
+    } | null;
+    source_result_id?: string | null;
+    supporting_option_ids: string[];
+    objective_refs: string[];
+    unresolved_tradeoffs: Array<{
+      tradeoff_id: string;
+      summary: string;
+      severity: string;
+    }>;
+  }>;
+};
+
 export type RuntimeScenarioComparison = {
   title: string;
   summary: string;
@@ -314,6 +350,8 @@ export type WorkspaceData = {
     focus_areas: string[];
   } | null;
   scenario_search: ScenarioSearchResult;
+  ranking: ScenarioRanking;
+  route_comparison: RuntimeScenarioComparison;
   runtime_scenario_comparison: RuntimeScenarioComparison;
   activity_log: ActivityLogEntry[];
   planner_memory: PlannerMemoryState;

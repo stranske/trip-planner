@@ -97,12 +97,16 @@ function resolveActiveScenario(workspace: WorkspaceData) {
   };
 }
 
+function resolveRouteComparison(workspace: WorkspaceData) {
+  return workspace.route_comparison ?? workspace.runtime_scenario_comparison;
+}
+
 function resolveMapScenarioId(workspace: WorkspaceData): string | null {
   const activeScenario = resolveActiveScenario(workspace).scenario;
   if (activeScenario?.scenario_id) {
     return activeScenario.scenario_id;
   }
-  return workspace.runtime_scenario_comparison.lead_scenario_id;
+  return resolveRouteComparison(workspace).lead_scenario_id;
 }
 
 function buildTimelineStops(routeSequence: string[], tripDuration: number | null): TimelineStop[] {
@@ -214,7 +218,7 @@ function formatPolicyPosture(workspace: WorkspaceData): string {
 
 function buildScenarioReviewMetrics(
   workspace: WorkspaceData,
-  scenario: WorkspaceData["runtime_scenario_comparison"]["scenarios"][number]
+  scenario: WorkspaceData["route_comparison"]["scenarios"][number]
 ): ScenarioReviewMetric[] {
   return [
     {
@@ -560,11 +564,12 @@ function WorkspacePageContent({
 
   const { trip } = currentWorkspace.trip_record;
   const activeScenario = resolveActiveScenario(currentWorkspace);
+  const routeComparison = resolveRouteComparison(currentWorkspace);
   const selectedRuntimeScenario =
-    currentWorkspace.runtime_scenario_comparison.scenarios.find(
+    routeComparison.scenarios.find(
       (scenario) => scenario.scenario_id === (selectedScenarioId ?? activeScenario.scenario?.scenario_id)
     ) ??
-    currentWorkspace.runtime_scenario_comparison.scenarios[0] ??
+    routeComparison.scenarios[0] ??
     null;
   const timelineRouteSequence =
     selectedRuntimeScenario?.route_sequence ??
@@ -858,7 +863,7 @@ function WorkspacePageContent({
         />
 
         <TripMap
-          comparison={currentWorkspace.runtime_scenario_comparison}
+          comparison={routeComparison}
           scenarioComparisonSummary={currentWorkspace.scenario_comparison?.summary}
           scenarioFocusAreas={currentWorkspace.scenario_comparison?.focus_areas ?? []}
           activeScenarioId={selectedScenarioId}
@@ -871,7 +876,7 @@ function WorkspacePageContent({
         />
 
         <ScenarioComparison
-          comparison={currentWorkspace.runtime_scenario_comparison}
+          comparison={routeComparison}
           savedScenarios={currentWorkspace.saved_scenarios}
           selectedScenarioId={selectedScenarioId}
           onSelectScenario={handleScenarioSelection}
@@ -1092,9 +1097,9 @@ function WorkspacePageContent({
             Cost, route burden, feasibility, and policy posture stay scannable here without
             forcing the traveler into raw scenario notes.
           </p>
-          {currentWorkspace.runtime_scenario_comparison.scenarios.length > 0 ? (
+          {routeComparison.scenarios.length > 0 ? (
             <div className="scenario-review-grid" aria-label="Scenario review board">
-              {currentWorkspace.runtime_scenario_comparison.scenarios.map((scenario) => {
+              {routeComparison.scenarios.map((scenario) => {
                 const reviewMetrics = buildScenarioReviewMetrics(currentWorkspace, scenario);
                 const isSelected = scenario.scenario_id === selectedScenarioId;
 
