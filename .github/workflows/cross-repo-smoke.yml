@@ -29,12 +29,12 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout trip-planner (PR head)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: trip-planner
 
       - name: Checkout Travel-Plan-Permission at pinned ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: stranske/Travel-Plan-Permission
           ref: ${{ env.TPP_PINNED_REF }}
