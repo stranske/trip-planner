@@ -80,7 +80,7 @@ WORKSPACE_ACTIVITY_LOG_LIMIT = 50
 _BOOTSTRAP_SCENARIO_SCORE_BY_LABEL = {
     "baseline": 0.82,
     "fallback": 0.68,
-    }
+}
 
 
 class WorkspaceTripNotFoundError(ValueError):
@@ -1386,7 +1386,7 @@ def _build_workspace_view_model(
         "next_step": next_step,
         "business_summary": business_summary,
         "debug_state": {"sections": debug_sections},
-}
+    }
 
 
 def _build_workspace_runtime_state(
