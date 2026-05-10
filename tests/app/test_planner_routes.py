@@ -261,6 +261,9 @@ def test_planner_turn_summarizes_scattered_traveler_input(client: TestClient) ->
     assert any("Notes to remember:" in item for item in summary_block["items"])
     assert "Sweden" in summary_block["metadata"]["destinations"]
     assert "Norway" in summary_block["metadata"]["destinations"]
+    assert "Bergen" in summary_block["metadata"]["destinations"]
+    assert "Maybe Bergen" not in summary_block["metadata"]["destinations"]
+    assert "Not" not in summary_block["metadata"]["destinations"]
     assert "august" in summary_block["metadata"]["dates"]
 
 

@@ -178,6 +178,8 @@ _NON_DESTINATION_CAPITALIZED_TOKENS = {
     "can",
     "could",
     "help",
+    "maybe",
+    "not",
     "please",
 }
 
@@ -223,7 +225,9 @@ def _extract_destination_mentions(message: str) -> list[str]:
     mentions: list[str] = []
     for match in re.finditer(r"\b[A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*){0,3}\b", message):
         words = match.group(0).split()
-        if any(word.lower() in _NON_DESTINATION_CAPITALIZED_TOKENS for word in words):
+        while words and words[0].lower() in _NON_DESTINATION_CAPITALIZED_TOKENS:
+            words = words[1:]
+        if not words:
             continue
         if any(word.lower() in _DATE_MARKERS for word in words):
             continue
@@ -233,7 +237,7 @@ def _extract_destination_mentions(message: str) -> list[str]:
             for word in words
         ):
             continue
-        mentions.append(match.group(0))
+        mentions.append(" ".join(words))
     return _dedupe_preserve_order(mentions)
 
 
@@ -1264,7 +1268,7 @@ def submit_planner_turn(
         tool_calls=reply.tool_calls,
         requested_tool_calls=reply.requested_tool_calls,
         structured_blocks=_ensure_top_level_planner_blocks(
-            blocks=reply.structured_blocks,
+            blocks=reply.structured_blocks or [],
             metadata=reply.turn_metadata or {},
             tool_calls=reply.tool_calls,
         ),

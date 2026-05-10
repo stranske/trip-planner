@@ -543,8 +543,8 @@ function PlannerMessageDiagnostics({
         <details>
           <summary>Tool calls</summary>
           <ul className="planner-tool-call-list">
-            {message.tool_calls.map((toolCall) => (
-              <li key={`${message.message_id}-${toolCall.tool_name}`}>
+            {message.tool_calls.map((toolCall, toolCallIndex) => (
+              <li key={`${message.message_id}-${toolCall.tool_name}-${toolCallIndex}`}>
                 {toolCall.tool_name}: {toolCall.summary}
               </li>
             ))}
