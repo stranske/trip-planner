@@ -24,7 +24,7 @@ describe("PlanningModeSelector", () => {
     ).toBeGreaterThan(0);
     expect(screen.getByLabelText(/Delegated/).closest("label")).toHaveAttribute(
       "title",
-      expect.stringContaining("organize the options")
+      expect.stringContaining("organize options")
     );
 
     await user.click(screen.getByRole("radio", { name: /In-trip/ }));
