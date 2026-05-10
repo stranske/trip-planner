@@ -26,6 +26,14 @@ export type TripRecord = {
 };
 
 export type PlanningMode = "delegated" | "collaborative" | "revealed-preference" | "in-trip";
+export type RouteOptionState = "active" | "baseline" | "fallback" | "rejected" | "needs_research";
+export type RouteOptionActionType = "make_baseline" | "keep" | "reject" | "reopen" | "revise";
+
+export type RouteOptionAction = {
+  action_type: RouteOptionActionType;
+  label: string;
+  description: string;
+};
 
 export type SessionState = {
   current_saved_scenario_id: string | null;
@@ -226,6 +234,12 @@ export type RuntimeScenarioComparison = {
     title: string;
     rank: number;
     status: string;
+    state?: RouteOptionState;
+    route_option_id?: string;
+    purpose?: string;
+    confidence?: number;
+    unresolved_questions?: string[];
+    available_actions?: RouteOptionAction[];
     summary: string;
     comparison_note: string;
     option_count: number;
@@ -667,6 +681,24 @@ export async function submitPlannerOptionFeedback(
     body: JSON.stringify({
       action_type: actionType,
       decision_id: decisionId,
+    }),
+  });
+}
+
+export async function submitRouteOptionAction(
+  tripId: string,
+  optionId: string,
+  actionType: RouteOptionActionType
+): Promise<WorkspaceData> {
+  return fetchJson<WorkspaceData>({
+    path: `/api/workspace/${tripId}/route-options/${optionId}/action`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      action_type: actionType,
     }),
   });
 }

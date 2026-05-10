@@ -1955,6 +1955,111 @@ def test_workspace_option_feedback_reuses_recent_presentation_ids(client: TestCl
     )
 
 
+def test_workspace_route_option_actions_update_comparison_and_ledger(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Scandinavia route workbench",
+            "summary": "Keep multiple route options available for comparison.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-07-04",
+                "end_date": "2026-07-12",
+                "duration_days": 9,
+                "primary_regions": ["Stockholm", "Oslo", "Bergen"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    initial = client.get(f"/api/workspace/{trip_id}")
+    assert initial.status_code == 200
+    initial_payload = initial.json()
+    route_options = initial_payload["route_comparison"]["scenarios"]
+    assert route_options
+    assert len(route_options) >= 2
+    assert len(route_options) <= 4
+    assert route_options[0]["state"] == "baseline"
+    assert route_options[0]["purpose"]
+    assert isinstance(route_options[0]["confidence"], float)
+    assert isinstance(route_options[0]["unresolved_questions"], list)
+    assert route_options[0]["available_actions"]
+
+    candidate = route_options[min(1, len(route_options) - 1)]
+    candidate_id = candidate["route_option_id"]
+    baseline_response = client.post(
+        f"/api/workspace/{trip_id}/route-options/{candidate_id}/action",
+        json={"action_type": "make_baseline"},
+    )
+
+    assert baseline_response.status_code == 200, baseline_response.text
+    baseline_payload = baseline_response.json()
+    assert baseline_payload["route_comparison"]["lead_scenario_id"] == candidate_id
+    baseline_row = next(
+        item
+        for item in baseline_payload["route_comparison"]["scenarios"]
+        if item["route_option_id"] == candidate_id
+    )
+    assert baseline_row["state"] == "baseline"
+    assert baseline_payload["activity_log"][0]["event_kind"] == "decision_recorded"
+    assert "comparison baseline" in baseline_payload["activity_log"][0]["summary"]
+
+    rejected_id = route_options[0]["route_option_id"]
+    rejected_response = client.post(
+        f"/api/workspace/{trip_id}/route-options/{rejected_id}/action",
+        json={"action_type": "reject"},
+    )
+
+    assert rejected_response.status_code == 200, rejected_response.text
+    rejected_payload = rejected_response.json()
+    rejected_row = next(
+        item
+        for item in rejected_payload["route_comparison"]["scenarios"]
+        if item["route_option_id"] == rejected_id
+    )
+    assert rejected_row["state"] == "rejected"
+    assert [action["action_type"] for action in rejected_row["available_actions"]] == ["reopen"]
+    assert rejected_payload["activity_log"][0]["event_kind"] == "option_rejected"
+
+    reopened_response = client.post(
+        f"/api/workspace/{trip_id}/route-options/{rejected_id}/action",
+        json={"action_type": "reopen"},
+    )
+
+    assert reopened_response.status_code == 200, reopened_response.text
+    reopened_payload = reopened_response.json()
+    reopened_row = next(
+        item
+        for item in reopened_payload["route_comparison"]["scenarios"]
+        if item["route_option_id"] == rejected_id
+    )
+    assert reopened_row["state"] in {"active", "fallback"}
+    assert any(
+        action["action_type"] == "make_baseline"
+        for action in reopened_row["available_actions"]
+    )
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    assert reloaded.status_code == 200
+    assert reloaded.json()["route_comparison"]["lead_scenario_id"] == candidate_id
+
+    with get_session_factory()() as db_session:
+        actions = db_session.scalars(
+            select(PersistedPlannerAction)
+            .where(PersistedPlannerAction.trip_id == trip_id)
+            .order_by(PersistedPlannerAction.occurred_at.desc())
+        ).all()
+
+    assert actions[0].action_type == "route_option_reopen"
+    assert actions[1].action_type == "route_option_reject"
+    assert actions[2].action_type == "route_option_make_baseline"
+    assert actions[2].option_id == candidate_id
+    assert actions[2].payload["route_option_action"] == "make_baseline"
+
+
 def test_workspace_option_feedback_rejects_unknown_option_id(client: TestClient) -> None:
     created = client.post(
         "/api/trips",

@@ -9,6 +9,7 @@ import {
   refreshWorkspaceProposalStatus,
   saveWorkspaceBudget,
   submitPlannerTurn,
+  submitRouteOptionAction,
   updateWorkspacePlanningMode,
   type ActualSpendEventUpsertPayload,
   type BudgetPlanUpsertPayload,
@@ -17,6 +18,7 @@ import {
   type PlannerSessionResponse,
   type PlannerStructuredBlock,
   type PlanningMode,
+  type RouteOptionActionType,
   submitPlannerOptionFeedback,
   type SavedScenarioRecord,
   type WorkspaceData,
@@ -26,6 +28,7 @@ import { TripMap } from "../components/maps/TripMap";
 import { PlanningModeSelector } from "../components/planner/PlanningModeSelector";
 import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
 import { TripComparison } from "../components/trips/TripComparison";
+import { RouteOptionWorkbench } from "../components/workspace/RouteOptionWorkbench";
 import { ScenarioComparison } from "../components/workspace/ScenarioComparison";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
 
@@ -640,6 +643,8 @@ function WorkspacePageContent({
   const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
   const [proposalError, setProposalError] = useState<string | null>(null);
   const [proposalBusyLabel, setProposalBusyLabel] = useState<string | null>(null);
+  const [routeOptionError, setRouteOptionError] = useState<string | null>(null);
+  const [routeOptionBusyLabel, setRouteOptionBusyLabel] = useState<string | null>(null);
   const plannerSessionLoadVersion = useRef(0);
   const isCompactLayout = useCompactWorkspaceLayout();
   useEffect(() => {
@@ -787,6 +792,23 @@ function WorkspacePageContent({
       setPlannerError(error instanceof Error ? error.message : "Planner feedback update failed.");
     } finally {
       setPlannerBusyLabel(null);
+    }
+  }
+
+  async function handleRouteOptionAction(optionId: string, actionType: RouteOptionActionType) {
+    setRouteOptionError(null);
+    setRouteOptionBusyLabel("Saving route option...");
+    plannerSessionLoadVersion.current += 1;
+    try {
+      const nextWorkspace = await submitRouteOptionAction(trip.trip_id, optionId, actionType);
+      startTransition(() => {
+        setCurrentWorkspace(nextWorkspace);
+        setSelectedScenarioId(resolveMapScenarioId(nextWorkspace));
+      });
+    } catch (error) {
+      setRouteOptionError(error instanceof Error ? error.message : "Route option update failed.");
+    } finally {
+      setRouteOptionBusyLabel(null);
     }
   }
 
@@ -1096,6 +1118,15 @@ function WorkspacePageContent({
           savedScenarios={currentWorkspace.saved_scenarios}
           selectedScenarioId={selectedScenarioId}
           onSelectScenario={handleScenarioSelection}
+        />
+
+        <RouteOptionWorkbench
+          comparison={routeComparison}
+          selectedScenarioId={selectedScenarioId}
+          busyLabel={routeOptionBusyLabel}
+          errorMessage={routeOptionError}
+          onSelectScenario={handleScenarioSelection}
+          onRouteOptionAction={handleRouteOptionAction}
         />
 
         <TripComparison
