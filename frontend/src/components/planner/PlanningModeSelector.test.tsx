@@ -19,6 +19,13 @@ describe("PlanningModeSelector", () => {
     );
 
     expect(screen.getByRole("radio", { name: /Collaborative/ })).toBeChecked();
+    expect(
+      screen.getAllByText(/quick questions, visible tradeoffs, and frequent chances to steer/).length
+    ).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/Delegated/).closest("label")).toHaveAttribute(
+      "title",
+      expect.stringContaining("organize the options")
+    );
 
     await user.click(screen.getByRole("radio", { name: /In-trip/ }));
 
