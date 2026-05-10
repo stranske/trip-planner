@@ -47,6 +47,8 @@ export type MapMarker = {
 
 export type RouteSegment = {
   id: string;
+  fromStopId: string;
+  toStopId: string;
   fromLabel: string;
   toLabel: string;
   x1: number;
@@ -76,11 +78,43 @@ export type MapWorkspaceView = {
   };
 };
 
+export type MapScopePresentation = {
+  activeScope: MapViewScope;
+  label: string;
+  summary: string;
+  precisionLabel: string;
+};
+
+export const MAP_SCOPE_OPTIONS: Array<{
+  scope: MapViewScope;
+  label: string;
+  title: string;
+}> = [
+  {
+    scope: "global",
+    label: "Whole trip",
+    title: "Show the broad outline across all trip anchors.",
+  },
+  {
+    scope: "regional",
+    label: "Route",
+    title: "Show the selected route option and its main travel legs.",
+  },
+  {
+    scope: "local",
+    label: "Segment",
+    title: "Focus on one travel leg and nearby planning markers.",
+  },
+];
+
 export type TripMapSurfaceModel = {
   provider: MapSurfaceProvider;
   routeStops: RouteStop[];
   routeSegments: RouteSegment[];
   markers: MapMarker[];
+  visibleRouteStops: RouteStop[];
+  visibleRouteSegments: RouteSegment[];
+  visibleMarkers: MapMarker[];
   destinationAnchors: string[];
   destinationContext: string[];
   scenarioFocusAreas: string[];
@@ -90,6 +124,8 @@ export type TripMapSurfaceModel = {
   feasibilitySummary: string;
   routeState: "ready" | "sparse";
   routeWarning: string | null;
+  scope: MapScopePresentation;
+  scopeOptions: typeof MAP_SCOPE_OPTIONS;
   workspaceView: MapWorkspaceView;
 };
 
@@ -233,6 +269,8 @@ function buildRouteSegments(routeStops: RouteStop[], routeWarning: string | null
     const nextStop = routeStops[index + 1];
     return {
       id: `${stop.id}-${nextStop.id}`,
+      fromStopId: stop.id,
+      toStopId: nextStop.id,
       fromLabel: stop.label,
       toLabel: nextStop.label,
       x1: stop.x,
@@ -337,6 +375,86 @@ function buildScenarioAffordances({
   return affordances;
 }
 
+function scopePresentationFor({
+  activeScope,
+  selectedSegment,
+}: {
+  activeScope: MapViewScope;
+  selectedSegment: RouteSegment | null;
+}): MapScopePresentation {
+  if (activeScope === "global") {
+    return {
+      activeScope,
+      label: "Whole-trip outline",
+      summary: "Shows the broad shape of the trip so the main anchors stay visible.",
+      precisionLabel: "Approximate trip outline",
+    };
+  }
+
+  if (activeScope === "local") {
+    return {
+      activeScope,
+      label: selectedSegment
+        ? `${selectedSegment.fromLabel} to ${selectedSegment.toLabel}`
+        : "Local segment",
+      summary: selectedSegment
+        ? `Focuses on the ${selectedSegment.fromLabel} to ${selectedSegment.toLabel} travel leg and nearby planning markers.`
+        : "Add another route stop before the map can focus on a local segment.",
+      precisionLabel: selectedSegment ? "Segment-level planning view" : "Segment detail pending",
+    };
+  }
+
+  return {
+    activeScope,
+    label: "Selected route option",
+    summary: "Shows the route option currently selected in the comparison workbench.",
+    precisionLabel: "Approximate route shape",
+  };
+}
+
+function visibleMapContentFor({
+  activeScope,
+  routeStops,
+  routeSegments,
+  markers,
+  selectedSegmentId,
+}: {
+  activeScope: MapViewScope;
+  routeStops: RouteStop[];
+  routeSegments: RouteSegment[];
+  markers: MapMarker[];
+  selectedSegmentId: string | null | undefined;
+}): {
+  routeStops: RouteStop[];
+  routeSegments: RouteSegment[];
+  markers: MapMarker[];
+  selectedSegment: RouteSegment | null;
+} {
+  if (activeScope !== "local" || routeSegments.length === 0) {
+    return {
+      routeStops,
+      routeSegments,
+      markers,
+      selectedSegment: selectedSegmentId
+        ? routeSegments.find((segment) => segment.id === selectedSegmentId) ?? routeSegments[0] ?? null
+        : routeSegments[0] ?? null,
+    };
+  }
+
+  const selectedSegment =
+    routeSegments.find((segment) => segment.id === selectedSegmentId) ?? routeSegments[0];
+  const visibleStopIds = new Set([selectedSegment.fromStopId, selectedSegment.toStopId]);
+  const visibleStops = routeStops.filter((stop) => visibleStopIds.has(stop.id));
+  const visibleStopMarkerIds = new Set(visibleStops.map((stop) => `${stop.id}-marker`));
+
+  return {
+    routeStops: visibleStops.length > 0 ? visibleStops : routeStops,
+    routeSegments: [selectedSegment],
+    markers: markers.filter((marker) => marker.kind !== "stop" || visibleStopMarkerIds.has(marker.id)),
+    selectedSegment,
+  };
+}
+
 function deriveMapConfidence({
   routeState,
   provider,
@@ -347,18 +465,18 @@ function deriveMapConfidence({
   if (routeState === "sparse") {
     return {
       level: "low",
-      summary: "Low confidence: route geometry is incomplete and shown as a rough preview.",
+      summary: "Low confidence: the route needs more stops before the map can show its shape.",
     };
   }
   if (provider.kind === "fallback") {
     return {
       level: "medium",
-      summary: "Medium confidence: route geometry is approximate while the map provider is unavailable.",
+      summary: "Medium confidence: this is an approximate sketch from the current route stops.",
     };
   }
   return {
     level: "high",
-    summary: "High confidence: route geometry is backed by live provider rendering.",
+    summary: "High confidence: the route has enough map detail for close review.",
   };
 }
 
@@ -372,6 +490,8 @@ export function buildTripMapSurfaceModel({
   policyPosture = null,
   googleMapsApiKey,
   providerLoadState = "ready",
+  activeScope = "regional",
+  selectedSegmentId,
 }: {
   activeScenario: TripMapScenario;
   bundles: InventoryBundle[];
@@ -382,6 +502,8 @@ export function buildTripMapSurfaceModel({
   policyPosture?: string | null;
   googleMapsApiKey?: string | null;
   providerLoadState?: MapProviderLoadState;
+  activeScope?: MapViewScope;
+  selectedSegmentId?: string | null;
 }): TripMapSurfaceModel {
   const routeStops = activeScenario.route_sequence.map((stop, index) => {
     const coordinate = coordinateForRouteIndex(index, activeScenario.route_sequence.length);
@@ -467,12 +589,23 @@ export function buildTripMapSurfaceModel({
         "Google Maps JavaScript is the active presentation adapter; route, marker, and warning state still comes from workspace runtime data.",
     };
   }
+  const visibleMapContent = visibleMapContentFor({
+    activeScope,
+    routeStops,
+    routeSegments,
+    markers,
+    selectedSegmentId,
+  });
+  const scope = scopePresentationFor({
+    activeScope,
+    selectedSegment: visibleMapContent.selectedSegment,
+  });
   const workspaceView: MapWorkspaceView = {
-    activeScope: "regional",
+    activeScope,
     activeRouteOptionId: activeScenario.scenario_id,
-    selectedSegmentId: routeSegments[0]?.id ?? null,
-    placeMarkers: markers,
-    roughRouteGeometry: routeSegments,
+    selectedSegmentId: visibleMapContent.selectedSegment?.id ?? null,
+    placeMarkers: visibleMapContent.markers,
+    roughRouteGeometry: visibleMapContent.routeSegments,
     confidence: deriveMapConfidence({ routeState, provider }),
     diagnostics: {
       provider,
@@ -486,6 +619,9 @@ export function buildTripMapSurfaceModel({
     routeStops,
     routeSegments,
     markers,
+    visibleRouteStops: visibleMapContent.routeStops,
+    visibleRouteSegments: visibleMapContent.routeSegments,
+    visibleMarkers: visibleMapContent.markers,
     destinationAnchors,
     destinationContext,
     scenarioFocusAreas: scenarioFocusAreas?.filter(Boolean) ?? [],
@@ -497,6 +633,8 @@ export function buildTripMapSurfaceModel({
     feasibilitySummary: summarizeFeasibility(feasibilitySummary, destinationAnchors),
     routeState,
     routeWarning,
+    scope,
+    scopeOptions: MAP_SCOPE_OPTIONS,
     workspaceView,
   };
 }

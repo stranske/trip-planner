@@ -25,9 +25,18 @@ consolidation so subsequent map work has a single contract to extend.
 `RouteStop`, `RouteSegment`, `MapMarker`, `MapMarkerKind`,
 `MapProviderLoadState`).
 
-The first map target renders **route context for the active scenario** in the
-trip workspace. It does not render timeline structure, scenario comparison, or
-saved-trip overviews — those are separate surfaces in this epic
+The first map target renders **route context for the active route option** in
+the trip workspace. It supports three traveler-facing scopes without changing
+the selected route option:
+
+| Scope | User intent | Map behavior |
+|---|---|---|
+| `global` | Understand the whole trip outline. | Keeps the main anchors and complete rough route visible. Labels the shape as approximate. |
+| `regional` | Compare the selected route option. | Shows all legs for the active route option and remains synchronized with route-option selection. |
+| `local` | Focus on one travel leg. | Narrows the visible route to a selected segment and nearby planning markers. If a route has fewer than two stops, the UI explains that segment detail is pending. |
+
+It does not render timeline-only structure, saved-trip overviews, or multiple
+simultaneous geography overlays. Those are separate surfaces in this epic
 ([#698](https://github.com/stranske/trip-planner/issues/698) and
 [#700](https://github.com/stranske/trip-planner/issues/700) respectively) and
 are explicitly deferred from this contract.
@@ -44,12 +53,26 @@ contract below.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `scenario_id` | string | yes | Selects the active scenario. |
+| `route_option_id` | string | recommended | Stable route-option identifier when it differs from `scenario_id`. |
 | `route_sequence` | string[] | yes | Ordered destination/anchor identifiers driving stop generation. |
 | `route_summary` | string | yes | Single-line route description shown when the provider adapter is unavailable. |
-| `route_segments` | object[] | yes when adapter is live | Pre-shaped segments (origin, destination, geometry hints, warning text). |
+| `map_view` | object | yes | Traveler-facing map state. This is the normal UI source for scope, active route option, selected segment, markers, rough geometry, and confidence copy. |
+| `map_diagnostics` | object | yes | Provider/debug details. Normal traveler UI must not render this payload directly. |
 | `metrics.estimated_total` | object \| null | optional | Currency-typed total surfaced under route summary. |
 | `metrics.travel_burden_score` | number \| null | optional | Drives the burden warning highlight. |
 | `policy_posture` | string | yes | Mirrored as the policy-posture chip on the map. |
+
+### `map_view` fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `active_scope` | `global`\|`regional`\|`local` | yes | Initial scope for the route option. The frontend can change scope locally without changing `active_route_option_id`. |
+| `active_route_option_id` | string | yes | Route option currently driving the map. |
+| `selected_segment_id` | string \| null | yes | Segment focus for local mode. Null is valid when geometry is sparse. |
+| `place_markers` | object[] | yes | User-facing route anchors with label and normalized fallback coordinates. |
+| `rough_route_geometry` | object[] | yes | Approximate route segments. These are planning shapes, not turn-by-turn directions. |
+| `confidence.level` | `high`\|`medium`\|`low` | yes | Coarse confidence label for route precision. |
+| `confidence.summary` | string | yes | Traveler-facing copy explaining approximate versus more detailed map state. |
 
 ### From `feasibility_summary`
 
@@ -76,7 +99,10 @@ contract below.
 
 The map target supports two provider modes, selected by environment
 configuration in the frontend bundle. The contract treats both as legitimate
-runtime states; neither is permitted to blank the workspace.
+runtime states; neither is permitted to blank the workspace. Provider state
+belongs in `map_diagnostics` and the internal `MapSurfaceProvider`; the normal
+traveler UI should show route confidence and scope language instead of raw
+provider labels such as API adapter names, load errors, or key configuration.
 
 | Mode | Trigger | UI behavior |
 |---|---|---|
@@ -88,9 +114,9 @@ runtime states; neither is permitted to blank the workspace.
 | Field | Required | Notes |
 |---|---|---|
 | `kind` | yes | Literal `"fallback"`. |
-| `label` | yes | Human-readable name of the fallback surface. |
+| `label` | yes | Human-readable internal name of the fallback surface. Do not render this directly in normal traveler mode. |
 | `status` | yes | One of `"fallback"`, `"misconfigured"`, `"provider-error"`, `"loading"`, `"sparse-route"`. |
-| `summary` | yes | Single-line explanation of why fallback is active (used in the surface header). |
+| `summary` | yes | Single-line diagnostic explanation of why fallback is active. Use for debug/advanced surfaces, not the normal map header. |
 
 The contract requires fallback rendering to remain feature-equivalent for
 **route-context comprehension**: stop list, marker list, segment list, posture

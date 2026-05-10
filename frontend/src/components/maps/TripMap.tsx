@@ -5,6 +5,7 @@ import {
   formatEstimatedTotal,
   type MapMarker,
   type MapProviderLoadState,
+  type MapViewScope,
 } from "./mapSurface";
 
 type InventoryBundle = WorkspaceData["inventory_summary"]["bundles"][number];
@@ -94,6 +95,8 @@ function ActiveTripMap({
     import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY;
   const providerLoadState =
     (import.meta.env.VITE_GOOGLE_MAPS_PROVIDER_STATE as MapProviderLoadState | undefined) ?? "ready";
+  const [activeScope, setActiveScope] = useState<MapViewScope>("regional");
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const mapSurface = buildTripMapSurfaceModel({
     activeScenario,
     bundles,
@@ -104,36 +107,83 @@ function ActiveTripMap({
     policyPosture,
     googleMapsApiKey,
     providerLoadState,
+    activeScope,
+    selectedSegmentId,
   });
-  const initialMarkerId = mapSurface.markers[0]?.id ?? null;
+  const initialMarkerId = mapSurface.visibleMarkers[0]?.id ?? null;
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(initialMarkerId);
   const selectedMarker = useMemo(
     () =>
-      mapSurface.markers.find((marker) => marker.id === selectedMarkerId) ??
-      mapSurface.markers[0] ??
+      mapSurface.visibleMarkers.find((marker) => marker.id === selectedMarkerId) ??
+      mapSurface.visibleMarkers[0] ??
       null,
-    [mapSurface.markers, selectedMarkerId]
+    [mapSurface.visibleMarkers, selectedMarkerId]
   );
 
   useEffect(() => {
     setSelectedMarkerId(initialMarkerId);
   }, [activeScenario.scenario_id, initialMarkerId]);
 
+  useEffect(() => {
+    setSelectedSegmentId(null);
+  }, [activeScenario.scenario_id]);
+
+  function handleScopeChange(nextScope: MapViewScope) {
+    setActiveScope(nextScope);
+    if (nextScope === "local" && selectedSegmentId == null) {
+      setSelectedSegmentId(mapSurface.routeSegments[0]?.id ?? null);
+    }
+  }
+
   return (
     <section className="status-card map-card">
-      <p className="status-label">Map surface</p>
-      <h2>Map preview for {activeScenario.title}</h2>
+      <p className="status-label">Trip map</p>
+      <h2>Map for {activeScenario.title}</h2>
       <p>{activeScenario.summary}</p>
-      <div className="map-provider-banner" aria-label="Map provider status">
-        <span className={`map-provider-pill map-provider-pill-${mapSurface.provider.status}`}>
-          {mapSurface.provider.label}
+      <div className="map-provider-banner" aria-label="Map view confidence">
+        <span
+          className={`map-provider-pill map-confidence-pill-${mapSurface.workspaceView.confidence.level}`}
+        >
+          {mapSurface.scope.precisionLabel}
         </span>
-        <p className="muted-copy">
-          {compactLayout ? "Compact" : "Full"} review keeps the provider state and fallback path
-          visible before the traveler studies the route.
-        </p>
+        <p className="muted-copy">{mapSurface.scope.summary}</p>
       </div>
-      <p className="muted-copy">{mapSurface.provider.summary}</p>
+      <p className="muted-copy">{mapSurface.workspaceView.confidence.summary}</p>
+      <div className="map-scope-controls" aria-label="Map view scope">
+        {mapSurface.scopeOptions.map((option) => (
+          <button
+            key={option.scope}
+            type="button"
+            title={option.title}
+            className={`map-scope-button${
+              option.scope === mapSurface.scope.activeScope ? " map-scope-button-active" : ""
+            }`}
+            aria-pressed={option.scope === mapSurface.scope.activeScope}
+            onClick={() => handleScopeChange(option.scope)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {activeScope === "local" && mapSurface.routeSegments.length > 0 ? (
+        <div className="map-segment-selector" aria-label="Local segment selector">
+          {mapSurface.routeSegments.map((segment) => (
+            <button
+              key={segment.id}
+              type="button"
+              className={`map-segment-button${
+                segment.id === mapSurface.workspaceView.selectedSegmentId
+                  ? " map-segment-button-active"
+                  : ""
+              }`}
+              aria-pressed={segment.id === mapSurface.workspaceView.selectedSegmentId}
+              onClick={() => setSelectedSegmentId(segment.id)}
+            >
+              {segment.fromLabel} to {segment.toLabel}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="map-scenario-toggle" aria-label="Map scenario previews">
         {comparison.scenarios.map((scenario) => (
           <button
@@ -152,26 +202,26 @@ function ActiveTripMap({
       <div className="map-surface" aria-label="Route context map">
         <div
           className={`map-route map-route-${mapSurface.provider.kind}`}
-          aria-label={`${mapSurface.provider.label} route overlay`}
+          aria-label={`${mapSurface.scope.label} route drawing`}
         >
           <div className="map-provider-toolbar">
-            <span className="map-provider-name">{mapSurface.provider.label}</span>
-            <span>{mapSurface.routeSegments.length} segment(s)</span>
-            <span>{mapSurface.markers.length} marker(s)</span>
+            <span className="map-provider-name">{mapSurface.scope.label}</span>
+            <span>{mapSurface.visibleRouteSegments.length} shown segment(s)</span>
+            <span>{mapSurface.visibleMarkers.length} shown marker(s)</span>
           </div>
           {mapSurface.provider.kind === "google-maps-js" ? (
             <InteractiveProviderMap
               title={activeScenario.title}
-              markers={mapSurface.markers}
+              markers={mapSurface.visibleMarkers}
               selectedMarker={selectedMarker}
-              routeSegments={mapSurface.routeSegments}
+              routeSegments={mapSurface.visibleRouteSegments}
               onSelectMarker={setSelectedMarkerId}
             />
           ) : (
             <FallbackRouteSchematic
-              markers={mapSurface.markers}
+              markers={mapSurface.visibleMarkers}
               selectedMarker={selectedMarker}
-              routeStops={mapSurface.routeStops}
+              routeStops={mapSurface.visibleRouteStops}
               onSelectMarker={setSelectedMarkerId}
             />
           )}
@@ -183,8 +233,9 @@ function ActiveTripMap({
         </div>
         <div className="map-sidebar">
           <article className="decision-card">
-            <h3>{providerPathHeading(mapSurface.provider)}</h3>
-            <p>{mapSurface.provider.summary}</p>
+            <h3>Map view</h3>
+            <p>{mapSurface.scope.summary}</p>
+            <p className="muted-copy">{mapSurface.workspaceView.confidence.summary}</p>
           </article>
           {selectedMarker ? (
             <article className="decision-card map-marker-detail" aria-live="polite">
@@ -413,24 +464,5 @@ function markerLabel(kind: MapMarker["kind"]): string {
     case "stop":
     default:
       return "S";
-  }
-}
-
-function providerPathHeading(provider: ReturnType<typeof buildTripMapSurfaceModel>["provider"]): string {
-  if (provider.kind === "google-maps-js") {
-    return "Live provider path";
-  }
-
-  switch (provider.status) {
-    case "loading":
-      return "Provider loading fallback path";
-    case "provider-error":
-      return "Provider error fallback path";
-    case "sparse-route":
-      return "Sparse route fallback path";
-    case "misconfigured":
-      return "Textual fallback route path";
-    default:
-      return "Fallback route path";
   }
 }

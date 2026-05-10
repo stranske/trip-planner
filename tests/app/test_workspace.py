@@ -291,9 +291,10 @@ def test_route_option_actions_create_durable_ledger_history(client: TestClient) 
 
     reloaded = client.get(f"/api/workspace/{trip_id}")
     assert reloaded.status_code == 200
-    assert reloaded.json()["planning_ledger"]["summary"]["rejected_options"][0][
-        "related_option_id"
-    ] == scenario_id
+    assert (
+        reloaded.json()["planning_ledger"]["summary"]["rejected_options"][0]["related_option_id"]
+        == scenario_id
+    )
 
 
 def test_planner_turn_extracts_constraints_into_planning_ledger(
@@ -375,9 +376,16 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface(
     assert payload["scenarios"][0]["delta"]["transfers_delta"] == 0
     assert payload["lead_scenario_id"] == payload["scenarios"][0]["scenario_id"]
     assert payload["scenarios"][0]["map_view"]["active_scope"] == "regional"
-    assert payload["scenarios"][0]["map_view"]["active_route_option_id"] == payload["scenarios"][0][
-        "scenario_id"
-    ]
+    assert (
+        payload["scenarios"][0]["map_view"]["active_route_option_id"]
+        == payload["scenarios"][0]["scenario_id"]
+    )
+    assert payload["scenarios"][0]["map_view"]["place_markers"][0]["label"]
+    assert payload["scenarios"][0]["map_view"]["rough_route_geometry"][0]["from_label"]
+    assert (
+        payload["scenarios"][0]["map_view"]["selected_segment_id"]
+        == payload["scenarios"][0]["map_view"]["rough_route_geometry"][0]["id"]
+    )
     assert "provider" in payload["scenarios"][0]["map_diagnostics"]
     assert "provider" not in payload["scenarios"][0]["map_view"]
     assert "runtime scenario" in payload["summary"].lower()

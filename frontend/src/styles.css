@@ -846,6 +846,48 @@ a {
   color: #845623;
 }
 
+.map-confidence-pill-high {
+  background: rgba(56, 117, 107, 0.16);
+  color: #234f48;
+}
+
+.map-confidence-pill-medium {
+  background: rgba(132, 86, 35, 0.14);
+  color: #845623;
+}
+
+.map-confidence-pill-low {
+  background: rgba(155, 47, 47, 0.12);
+  color: #8a2f2f;
+}
+
+.map-scope-controls,
+.map-segment-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 1rem 0 0;
+}
+
+.map-scope-button,
+.map-segment-button {
+  border: 1px solid rgba(19, 33, 44, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #13212c;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0.7rem 0.9rem;
+}
+
+.map-scope-button-active,
+.map-segment-button-active {
+  border-color: rgba(56, 117, 107, 0.45);
+  background: #234f48;
+  color: #f7f1e5;
+}
+
 .map-scenario-toggle {
   display: flex;
   flex-wrap: wrap;
@@ -1184,7 +1226,9 @@ a {
     grid-template-columns: 1fr;
   }
 
-  .map-toggle-chip {
+  .map-toggle-chip,
+  .map-scope-button,
+  .map-segment-button {
     width: 100%;
     text-align: left;
   }

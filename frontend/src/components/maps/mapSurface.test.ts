@@ -96,6 +96,69 @@ describe("mapSurface", () => {
     ]);
   });
 
+  it("switches between whole-trip and local map scopes without losing the route option", () => {
+    const baseInput = {
+      activeScenario: {
+        scenario_id: "scenario:scope",
+        title: "Kyoto local detail",
+        rank: 1,
+        status: "lead",
+        summary: "Baseline",
+        comparison_note: "Lead route",
+        option_count: 2,
+        route_sequence: ["kyoto", "uji", "nara"],
+        route_summary: "kyoto -> uji -> nara",
+        recommended_for_selection: true,
+        feasible: true,
+        metrics: {
+          score: 0.91,
+          travel_minutes: 180,
+          transfers: 2,
+          estimated_total: null,
+        },
+        delta: {
+          score_delta: 0,
+          travel_minutes_delta: 0,
+          transfers_delta: 0,
+          estimated_total_delta: null,
+        },
+        highlights: ["Short regional route."],
+      },
+      bundles: [],
+      feasibilitySummary: {
+        assessment_count: 0,
+        recommended_bundle_count: 0,
+        blocking_bundle_count: 0,
+        attention_bundle_count: 0,
+        notes: [],
+        assessments: [],
+      },
+      googleMapsApiKey: "test-key",
+    };
+    const globalModel = buildTripMapSurfaceModel({
+      ...baseInput,
+      activeScope: "global",
+    });
+    const secondSegmentId = globalModel.routeSegments[1].id;
+    const localModel = buildTripMapSurfaceModel({
+      ...baseInput,
+      activeScope: "local",
+      selectedSegmentId: secondSegmentId,
+    });
+
+    expect(globalModel.workspaceView.activeScope).toBe("global");
+    expect(globalModel.workspaceView.activeRouteOptionId).toBe("scenario:scope");
+    expect(globalModel.visibleRouteSegments).toHaveLength(2);
+    expect(globalModel.scope.precisionLabel).toBe("Approximate trip outline");
+
+    expect(localModel.workspaceView.activeScope).toBe("local");
+    expect(localModel.workspaceView.activeRouteOptionId).toBe("scenario:scope");
+    expect(localModel.workspaceView.selectedSegmentId).toBe(secondSegmentId);
+    expect(localModel.visibleRouteSegments).toHaveLength(1);
+    expect(localModel.visibleRouteStops.map((stop) => stop.label)).toEqual(["Uji", "Nara"]);
+    expect(localModel.scope.precisionLabel).toBe("Segment-level planning view");
+  });
+
   it("falls back when Google Maps is not configured", () => {
     const model = buildTripMapSurfaceModel({
       activeScenario: {

@@ -33,6 +33,58 @@
         "policy_posture": "approval-ready",
         "route_sequence": ["dest-city-chicago", "dest-city-madison"],
         "route_summary": "ORD → MSN with direct rental and policy-aligned lodging.",
+        "map_view": {
+          "active_scope": "regional",
+          "active_route_option_id": "scenario-best-approval",
+          "selected_segment_id": "seg-1",
+          "place_markers": [
+            {
+              "id": "route-stop:1",
+              "source_id": "dest-city-chicago",
+              "label": "Chicago",
+              "route_index": 0,
+              "x": 0.18,
+              "y": 0.42
+            },
+            {
+              "id": "route-stop:2",
+              "source_id": "dest-city-madison",
+              "label": "Madison",
+              "route_index": 1,
+              "x": 0.62,
+              "y": 0.31
+            }
+          ],
+          "rough_route_geometry": [
+            {
+              "id": "seg-1",
+              "from_marker_id": "route-stop:1",
+              "to_marker_id": "route-stop:2",
+              "from_label": "Chicago",
+              "to_label": "Madison",
+              "x1": 0.18,
+              "y1": 0.42,
+              "x2": 0.62,
+              "y2": 0.31,
+              "warning": null
+            }
+          ],
+          "confidence": {
+            "level": "high",
+            "summary": "This route outline is drawn from ranked scenario data."
+          }
+        },
+        "map_diagnostics": {
+          "provider": {
+            "kind": "fallback",
+            "status": "fallback",
+            "details": "Fixture geometry is normalized for fallback rendering."
+          },
+          "route_state": "ready",
+          "route_warning": null,
+          "source_result_id": "fixture:scenario-best-approval",
+          "objective_refs": ["objective:fixture-map"]
+        },
         "route_segments": [
           {
             "id": "seg-1",
@@ -60,6 +112,58 @@
         "policy_posture": "approval-debt",
         "route_sequence": ["dest-city-chicago", "dest-city-madison"],
         "route_summary": "Premium fare with policy exception path.",
+        "map_view": {
+          "active_scope": "regional",
+          "active_route_option_id": "scenario-faster-with-debt",
+          "selected_segment_id": "seg-1b",
+          "place_markers": [
+            {
+              "id": "route-stop:1",
+              "source_id": "dest-city-chicago",
+              "label": "Chicago",
+              "route_index": 0,
+              "x": 0.18,
+              "y": 0.42
+            },
+            {
+              "id": "route-stop:2",
+              "source_id": "dest-city-madison",
+              "label": "Madison",
+              "route_index": 1,
+              "x": 0.62,
+              "y": 0.31
+            }
+          ],
+          "rough_route_geometry": [
+            {
+              "id": "seg-1b",
+              "from_marker_id": "route-stop:1",
+              "to_marker_id": "route-stop:2",
+              "from_label": "Chicago",
+              "to_label": "Madison",
+              "x1": 0.18,
+              "y1": 0.42,
+              "x2": 0.62,
+              "y2": 0.31,
+              "warning": "Requires exception approval before booking."
+            }
+          ],
+          "confidence": {
+            "level": "medium",
+            "summary": "This route outline is approximate while feasibility is still settling."
+          }
+        },
+        "map_diagnostics": {
+          "provider": {
+            "kind": "fallback",
+            "status": "fallback",
+            "details": "Fixture geometry is normalized for fallback rendering."
+          },
+          "route_state": "ready",
+          "route_warning": "Requires exception approval before booking.",
+          "source_result_id": "fixture:scenario-faster-with-debt",
+          "objective_refs": ["objective:fixture-map"]
+        },
         "route_segments": [
           {
             "id": "seg-1b",
