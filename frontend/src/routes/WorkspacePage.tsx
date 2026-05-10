@@ -13,7 +13,9 @@ import {
   type ActualSpendEventUpsertPayload,
   type BudgetPlanUpsertPayload,
   type BudgetWorkspaceState,
+  type PlannerMessage,
   type PlannerSessionResponse,
+  type PlannerStructuredBlock,
   type PlanningMode,
   submitPlannerOptionFeedback,
   type SavedScenarioRecord,
@@ -451,6 +453,136 @@ function mergePlannerSessionState(
   };
 }
 
+const hiddenPlannerBlockKinds = new Set(["debug", "tool_call", "tool_trace", "diagnostic"]);
+
+function legacyStructuredBlocks(message: PlannerMessage): PlannerStructuredBlock[] {
+  return (
+    message.turn_metadata?.visible_response_blocks.map((block) => ({
+      kind: block.kind,
+      title: block.title,
+      body: "",
+      items: block.items,
+      metadata: {},
+      hidden: false,
+    })) ?? []
+  );
+}
+
+function messageStructuredBlocks(message: PlannerMessage): PlannerStructuredBlock[] {
+  return (message.structured_blocks ?? []).length > 0
+    ? message.structured_blocks
+    : legacyStructuredBlocks(message);
+}
+
+function isPlannerDiagnosticBlock(block: PlannerStructuredBlock): boolean {
+  return block.hidden || hiddenPlannerBlockKinds.has(block.kind);
+}
+
+function plannerBlockKindLabel(kind: string): string {
+  return kind.replace(/_/g, " ");
+}
+
+function PlannerStructuredBlockList({ blocks }: { blocks: PlannerStructuredBlock[] }) {
+  if (blocks.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="planner-response-blocks">
+      {blocks.map((block, blockIndex) => (
+        <section
+          key={`${block.kind}-${block.title}-${blockIndex}`}
+          className={`planner-response-block planner-response-block-${block.kind}`}
+        >
+          <span className="planner-block-kind">{plannerBlockKindLabel(block.kind)}</span>
+          <h4>{block.title}</h4>
+          {block.body ? <p>{block.body}</p> : null}
+          {block.items.length > 0 ? (
+            <ul>
+              {block.items.map((item, itemIndex) => (
+                <li key={`${block.kind}-${block.title}-${itemIndex}`}>{item}</li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function PlannerMessageDiagnostics({
+  message,
+  blocks,
+}: {
+  message: PlannerMessage;
+  blocks: PlannerStructuredBlock[];
+}) {
+  if (blocks.length === 0 && message.tool_calls.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="planner-diagnostics">
+      {blocks.map((block, blockIndex) => (
+        <details key={`${message.message_id}-${block.kind}-${blockIndex}`}>
+          <summary>{block.title}</summary>
+          {block.body ? <p>{block.body}</p> : null}
+          {block.items.length > 0 ? (
+            <ul>
+              {block.items.map((item, itemIndex) => (
+                <li key={`${message.message_id}-${block.kind}-${itemIndex}`}>{item}</li>
+              ))}
+            </ul>
+          ) : null}
+          {Object.keys(block.metadata).length > 0 ? (
+            <pre>{JSON.stringify(block.metadata, null, 2)}</pre>
+          ) : null}
+        </details>
+      ))}
+      {message.tool_calls.length > 0 ? (
+        <details>
+          <summary>Tool calls</summary>
+          <ul className="planner-tool-call-list">
+            {message.tool_calls.map((toolCall, toolCallIndex) => (
+              <li key={`${message.message_id}-${toolCall.tool_name}-${toolCallIndex}`}>
+                {toolCall.tool_name}: {toolCall.summary}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function PlannerConversationMessage({
+  message,
+  showDiagnostics,
+}: {
+  message: PlannerMessage;
+  showDiagnostics: boolean;
+}) {
+  const blocks = messageStructuredBlocks(message);
+  const visibleBlocks = blocks.filter((block) => !isPlannerDiagnosticBlock(block));
+  const diagnosticBlocks = blocks.filter(isPlannerDiagnosticBlock);
+
+  return (
+    <article className={`planner-message planner-message-${message.role}`}>
+      <p className="scenario-kicker">{message.role === "user" ? "Traveler" : "Planner"}</p>
+      <p>{message.content}</p>
+      {message.turn_metadata?.plan_maturity ? (
+        <span className="planner-routing-pill">
+          {message.turn_metadata.plan_maturity.replace(/_/g, " ")}
+        </span>
+      ) : null}
+      <PlannerStructuredBlockList blocks={visibleBlocks} />
+      {showDiagnostics ? (
+        <PlannerMessageDiagnostics message={message} blocks={diagnosticBlocks} />
+      ) : null}
+    </article>
+  );
+}
+
 export function WorkspacePage() {
   const { workspace, trips } = useLoaderData() as LoaderData;
   const resolve = useMemo(
@@ -499,6 +631,7 @@ function WorkspacePageContent({
   const [plannerConversationBusyLabel, setPlannerConversationBusyLabel] = useState<string | null>(
     null
   );
+  const [showPlannerDiagnostics, setShowPlannerDiagnostics] = useState(false);
   const [plannerError, setPlannerError] = useState<string | null>(null);
   const [plannerBusyLabel, setPlannerBusyLabel] = useState<string | null>(null);
   const [planningModeBusy, setPlanningModeBusy] = useState(false);
@@ -873,10 +1006,20 @@ function WorkspacePageContent({
                   panel state, memory, and activity trail used by the workspace.
                 </p>
               </div>
-              <span className="planner-conversation-pill">
-                {plannerSession?.messages.length ?? 0} message
-                {(plannerSession?.messages.length ?? 0) === 1 ? "" : "s"}
-              </span>
+              <div className="planner-conversation-actions">
+                <span className="planner-conversation-pill">
+                  {plannerSession?.messages.length ?? 0} message
+                  {(plannerSession?.messages.length ?? 0) === 1 ? "" : "s"}
+                </span>
+                <button
+                  type="button"
+                  className="planner-diagnostics-toggle"
+                  aria-pressed={showPlannerDiagnostics}
+                  onClick={() => setShowPlannerDiagnostics((current) => !current)}
+                >
+                  Diagnostics
+                </button>
+              </div>
             </div>
             {plannerConversationBusyLabel ? (
               <p className="muted-copy">{plannerConversationBusyLabel}</p>
@@ -894,46 +1037,11 @@ function WorkspacePageContent({
                 </article>
               ) : (
                 plannerSession.messages.map((message) => (
-                  <article
+                  <PlannerConversationMessage
                     key={message.message_id}
-                    className={`planner-message planner-message-${message.role}`}
-                  >
-                    <p className="scenario-kicker">
-                      {message.role === "user" ? "Traveler" : "Planner"}
-                    </p>
-                    <p>{message.content}</p>
-                    {message.turn_metadata?.visible_response_blocks.length ? (
-                      <div className="planner-response-blocks">
-                        <span className="planner-routing-pill">
-                          {message.turn_metadata.plan_maturity.replace(/_/g, " ")}
-                        </span>
-                        {message.turn_metadata.visible_response_blocks.map((block) => (
-                          <section
-                            key={`${message.message_id}-${block.kind}-${block.title}`}
-                            className="planner-response-block"
-                          >
-                            <h4>{block.title}</h4>
-                            <ul>
-                              {block.items.map((item, itemIndex) => (
-                                <li key={`${message.message_id}-${block.kind}-${block.title}-${itemIndex}`}>
-                                  {item}
-                                </li>
-                              ))}
-                            </ul>
-                          </section>
-                        ))}
-                      </div>
-                    ) : null}
-                    {message.tool_calls.length > 0 ? (
-                      <ul className="planner-tool-call-list">
-                        {message.tool_calls.map((toolCall) => (
-                          <li key={`${message.message_id}-${toolCall.tool_name}`}>
-                            {toolCall.tool_name}: {toolCall.summary}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </article>
+                    message={message}
+                    showDiagnostics={showPlannerDiagnostics}
+                  />
                 ))
               )}
             </div>

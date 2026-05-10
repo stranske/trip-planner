@@ -724,6 +724,7 @@ const plannerSessionPayload = {
       created_at: "2026-04-12T06:09:00+00:00",
       refs: ["session:trip-leisure-kyoto-draft"],
       tool_calls: [],
+      structured_blocks: [],
     },
     {
       message_id: "planner-action:trip-leisure-kyoto-draft:planner-1",
@@ -732,6 +733,7 @@ const plannerSessionPayload = {
       created_at: "2026-04-12T06:10:00+00:00",
       refs: ["session:trip-leisure-kyoto-draft", "scenario:trip-leisure-kyoto-draft:1"],
       tool_calls: [],
+      structured_blocks: [],
     },
   ],
 } satisfies PlannerSessionResponse;
@@ -958,6 +960,18 @@ describe("WorkspacePage", () => {
           created_at: "2026-04-12T06:15:00+00:00",
           refs: ["session:trip-leisure-kyoto-draft"],
           tool_calls: [],
+          structured_blocks: [
+            {
+              kind: "traveler_input_summary",
+              title: "Traveler input summary",
+              body: "Key details pulled out of the traveler message.",
+              items: ["Preferences: Keep Uji, reduce transfer pressure"],
+              metadata: {
+                preferences: ["Keep Uji, but reduce transfer pressure"],
+              },
+              hidden: false,
+            },
+          ],
         },
         {
           message_id: "planner-action:trip-leisure-kyoto-draft:planner-2",
@@ -980,6 +994,74 @@ describe("WorkspacePage", () => {
               runtime_provider: null,
             },
           },
+          structured_blocks: [
+            {
+              kind: "summary",
+              title: "Planner summary",
+              body: "Keep the Uji day trip and reduce evening movement.",
+              items: ["Preserve the preferred Kyoto baseline."],
+              metadata: {},
+              hidden: false,
+            },
+            {
+              kind: "question",
+              title: "Questions to settle",
+              body: "",
+              items: ["How much evening variety should the route preserve?"],
+              metadata: {},
+              hidden: false,
+            },
+            {
+              kind: "decision",
+              title: "Open decisions",
+              body: "",
+              items: ["Should the current Kyoto route become the saved baseline?"],
+              metadata: {
+                decision_ids: ["decision:save-baseline"],
+              },
+              hidden: false,
+            },
+            {
+              kind: "route_option",
+              title: "Route options in view",
+              body: "",
+              items: ["Kyoto base with Uji day trip: Balanced Kyoto culture baseline"],
+              metadata: {
+                option_ids: ["scenario:trip-leisure-kyoto-draft:1"],
+              },
+              hidden: false,
+            },
+            {
+              kind: "comparison",
+              title: "Comparison frame",
+              body: "",
+              items: [
+                "Kyoto baseline has fewer transfers; Osaka fallback has more evening variety.",
+              ],
+              metadata: {},
+              hidden: false,
+            },
+            {
+              kind: "next_action",
+              title: "Next actions",
+              body: "",
+              items: ["Compare fewer evening moves.", "Preserve Uji as the baseline day trip."],
+              metadata: {},
+              hidden: false,
+            },
+            {
+              kind: "debug",
+              title: "Planner diagnostics",
+              body: "Routing details and tool traces are hidden from the normal traveler view.",
+              items: [],
+              metadata: {
+                routing: {
+                  runtime_mode: "fallback",
+                },
+              },
+              hidden: true,
+            },
+          ],
           tool_calls: [
             {
               tool_name: "read_workspace_state",
@@ -1019,8 +1101,18 @@ describe("WorkspacePage", () => {
       screen.getByText("Keep the Uji day trip and compare fewer evening moves before the next checkpoint.")
     ).toBeInTheDocument();
     expect(screen.getByText("coherent plan")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Next planning moves" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Planner summary" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Questions to settle" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Open decisions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Route options in view" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Comparison frame" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Next actions" })).toBeInTheDocument();
+    expect(screen.getByText("Traveler input summary")).toBeInTheDocument();
     expect(screen.getByText("Compare fewer evening moves.")).toBeInTheDocument();
+    expect(screen.queryByText("Planner diagnostics")).not.toBeInTheDocument();
+    expect(screen.queryByText("read_workspace_state: Read the current workspace state.")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Diagnostics" }));
+    expect(screen.getByText("Planner diagnostics")).toBeInTheDocument();
     expect(screen.getByText("read_workspace_state: Read the current workspace state.")).toBeInTheDocument();
     expect(screen.getByLabelText("Message")).toHaveValue("");
   });
@@ -1330,6 +1422,8 @@ describe("WorkspacePage", () => {
 
   it("renders the fallback map state and compact review copy on small screens", async () => {
     stubMatchMedia(true);
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "");
+    vi.stubEnv("VITE_GOOGLE_MAPS_PROVIDER_STATE", "missing");
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve(workspacePayload),
       trips: Promise.resolve(tripComparisonPayload),
@@ -1342,7 +1436,9 @@ describe("WorkspacePage", () => {
     });
 
     expect(screen.getByText("Compact review stack keeps map, timeline, and tradeoff calls visible on smaller screens.")).toBeInTheDocument();
-    expect(screen.getByText("Textual fallback route path")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Textual fallback route path")).toBeInTheDocument();
+    });
     expect(screen.getAllByText(/Google Maps JavaScript is not configured in this environment/).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Compact day-by-day review" })).toBeInTheDocument();
   });

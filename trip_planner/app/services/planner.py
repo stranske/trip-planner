@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -63,6 +64,7 @@ class PlannerConversationReply:
     refs: list[str]
     tool_calls: list[dict[str, Any]]
     requested_tool_calls: list[dict[str, Any]] | None = None
+    structured_blocks: list[dict[str, Any]] | None = None
     turn_metadata: dict[str, Any] | None = None
 
 
@@ -116,7 +118,54 @@ _CONSTRAINT_MARKERS = (
     "walking",
     "transfer",
 )
-_SYNTHESIS_MARKERS = ("compare", "option", "route", "itinerary", "plan", "summary", "decide")
+_SYNTHESIS_MARKERS = (
+    "compare",
+    "option",
+    "route",
+    "itinerary",
+    "plan",
+    "summary",
+    "decide",
+)
+_PREFERENCE_MARKERS = (
+    "prefer",
+    "want",
+    "like",
+    "love",
+    "avoid",
+    "interested",
+    "priority",
+    "important",
+    "pace",
+    "quiet",
+    "scenic",
+    "food",
+    "museum",
+    "nature",
+)
+_UNCERTAINTY_MARKERS = (
+    "maybe",
+    "not sure",
+    "unsure",
+    "could",
+    "might",
+    "probably",
+    "possibly",
+    "depends",
+    "?",
+)
+_NOTE_MARKERS = (
+    "also",
+    "note",
+    "remember",
+    "remind",
+    "later",
+    "future",
+    "unrelated",
+    "parking",
+    "passport",
+    "visa",
+)
 _NON_DESTINATION_CAPITALIZED_TOKENS = {
     "i",
     "i'd",
@@ -129,8 +178,29 @@ _NON_DESTINATION_CAPITALIZED_TOKENS = {
     "can",
     "could",
     "help",
+    "maybe",
+    "not",
     "please",
 }
+
+
+def _structured_block(
+    *,
+    kind: str,
+    title: str,
+    body: str = "",
+    items: list[str] | None = None,
+    metadata: dict[str, Any] | None = None,
+    hidden: bool = False,
+) -> dict[str, Any]:
+    return {
+        "kind": kind,
+        "title": title,
+        "body": body,
+        "items": list(items or []),
+        "metadata": dict(metadata or {}),
+        "hidden": hidden,
+    }
 
 
 def _looks_like_destination_token(token: str, index: int) -> bool:
@@ -140,6 +210,99 @@ def _looks_like_destination_token(token: str, index: int) -> bool:
     if lowered in _DATE_MARKERS:
         return False
     return index > 0 or lowered not in _NON_DESTINATION_CAPITALIZED_TOKENS
+
+
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    return [item for item in dict.fromkeys(item.strip() for item in items if item.strip()) if item]
+
+
+def _split_user_clauses(message: str) -> list[str]:
+    clauses = re.split(r"(?:\n+|[.;]|(?:\s+-\s+))", message)
+    return [clause.strip(" ,") for clause in clauses if clause.strip(" ,")]
+
+
+def _extract_destination_mentions(message: str) -> list[str]:
+    mentions: list[str] = []
+    for match in re.finditer(r"\b[A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*){0,3}\b", message):
+        words = match.group(0).split()
+        while words and words[0].lower() in _NON_DESTINATION_CAPITALIZED_TOKENS:
+            words = words[1:]
+        if not words:
+            continue
+        if any(word.lower() in _DATE_MARKERS for word in words):
+            continue
+        if any(
+            word.lower()
+            in _CONSTRAINT_MARKERS + _PREFERENCE_MARKERS + _UNCERTAINTY_MARKERS + _NOTE_MARKERS
+            for word in words
+        ):
+            continue
+        mentions.append(" ".join(words))
+    return _dedupe_preserve_order(mentions)
+
+
+def _extract_date_mentions(message: str) -> list[str]:
+    lowered = message.lower()
+    date_mentions = [
+        marker
+        for marker in _DATE_MARKERS
+        if re.search(rf"\b{re.escape(marker)}\b", lowered)
+        and marker not in {"days", "nights", "week"}
+    ]
+    date_mentions.extend(re.findall(r"\b\d{4}-\d{2}-\d{2}\b", message))
+    date_mentions.extend(re.findall(r"\b\d+\s+(?:days|nights|weeks)\b", lowered))
+    return _dedupe_preserve_order(date_mentions)
+
+
+def _matching_clauses(message: str, markers: tuple[str, ...]) -> list[str]:
+    matches: list[str] = []
+    for clause in _split_user_clauses(message):
+        lowered = clause.lower()
+        if any(marker in lowered for marker in markers):
+            matches.append(clause)
+    return _dedupe_preserve_order(matches)
+
+
+def _should_summarize_traveler_message(message: str, summary: dict[str, list[str]]) -> bool:
+    signal_count = sum(len(items) for items in summary.values())
+    return len(message.split()) >= 28 or "\n" in message or ";" in message or signal_count >= 4
+
+
+def _traveler_input_summary_blocks(message: str) -> list[dict[str, Any]]:
+    summary = {
+        "destinations": _extract_destination_mentions(message),
+        "dates": _extract_date_mentions(message),
+        "constraints": _matching_clauses(message, _CONSTRAINT_MARKERS),
+        "preferences": _matching_clauses(message, _PREFERENCE_MARKERS),
+        "uncertainties": _matching_clauses(message, _UNCERTAINTY_MARKERS),
+        "notebook_notes": _matching_clauses(message, _NOTE_MARKERS),
+    }
+    if not _should_summarize_traveler_message(message, summary):
+        return []
+
+    items: list[str] = []
+    labels = {
+        "destinations": "Destinations",
+        "dates": "Timing",
+        "constraints": "Constraints",
+        "preferences": "Preferences",
+        "uncertainties": "Open questions",
+        "notebook_notes": "Notes to remember",
+    }
+    for key, label in labels.items():
+        values = summary[key]
+        if values:
+            items.append(f"{label}: {', '.join(values[:3])}")
+
+    return [
+        _structured_block(
+            kind="traveler_input_summary",
+            title="Traveler input summary",
+            body="Key details pulled out of the message so the next planner turn can keep them in view.",
+            items=items,
+            metadata=summary,
+        )
+    ]
 
 
 def _planner_turn_metadata(
@@ -298,7 +461,207 @@ def _fallback_content_from_metadata(
     )
 
 
-def set_planner_chat_model_factory_for_tests(factory: PlannerChatModelFactory | None) -> None:
+def _first_sentence(content: str) -> str:
+    sentence = re.split(r"(?<=[.!?])\s+", content.strip(), maxsplit=1)[0].strip()
+    return sentence or content.strip()
+
+
+def _visible_block_items(
+    metadata: dict[str, Any],
+    *,
+    kinds: set[str],
+) -> list[str]:
+    items: list[str] = []
+    for block in list(metadata.get("visible_response_blocks") or []):
+        if str(block.get("kind") or "") in kinds:
+            items.extend(str(item) for item in list(block.get("items") or []))
+    return _dedupe_preserve_order(items)
+
+
+def _planner_response_structured_blocks(
+    *,
+    content: str,
+    metadata: dict[str, Any],
+    panel: dict[str, Any],
+    runtime_context: dict[str, Any],
+    tool_calls: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    blocks: list[dict[str, Any]] = []
+    decisions = list(panel.get("pending_decisions") or [])
+    options = list((panel.get("option_set") or {}).get("options") or [])
+    next_step_actions = list(panel.get("next_step_actions") or [])
+    runtime_comparison = runtime_context.get("runtime_scenario_comparison") or {}
+    scenarios = list(runtime_comparison.get("scenarios") or [])
+
+    summary_items = _visible_block_items(metadata, kinds={"summary", "guidance"})
+    blocks.append(
+        _structured_block(
+            kind="summary",
+            title="Planner summary",
+            body=_first_sentence(content),
+            items=summary_items[:3],
+        )
+    )
+
+    question_items = _visible_block_items(
+        metadata,
+        kinds={"clarifying_questions", "question", "questions"},
+    )
+    if decisions:
+        active_decision = decisions[0]
+        question_items.insert(
+            0, str(active_decision.get("prompt") or active_decision.get("title") or "")
+        )
+    if question_items:
+        blocks.append(
+            _structured_block(
+                kind="question",
+                title="Questions to settle",
+                items=_dedupe_preserve_order(question_items)[:4],
+            )
+        )
+
+    if decisions:
+        decision_items: list[str] = []
+        for decision in decisions[:3]:
+            prompt = str(decision.get("prompt") or decision.get("title") or "")
+            choices = ", ".join(str(choice) for choice in list(decision.get("choices") or []))
+            decision_items.append(f"{prompt} Choices: {choices}" if choices else prompt)
+        blocks.append(
+            _structured_block(
+                kind="decision",
+                title="Open decisions",
+                items=_dedupe_preserve_order(decision_items),
+                metadata={"decision_ids": [item.get("decision_id") for item in decisions[:3]]},
+            )
+        )
+
+    if options:
+        option_items = [
+            f"{option.get('label')}: {option.get('summary')}"
+            for option in options[:4]
+            if option.get("label") or option.get("summary")
+        ]
+        blocks.append(
+            _structured_block(
+                kind="route_option",
+                title="Route options in view",
+                items=_dedupe_preserve_order(option_items),
+                metadata={"option_ids": [item.get("option_id") for item in options[:4]]},
+            )
+        )
+
+    comparison_items: list[str] = []
+    if len(scenarios) > 1:
+        for scenario in scenarios[:4]:
+            metrics = scenario.get("metrics") or {}
+            route_summary = scenario.get("route_summary") or "route details pending"
+            comparison_items.append(
+                (
+                    f"{scenario.get('title')}: {route_summary}; "
+                    f"{metrics.get('travel_minutes', 'pending')} travel minutes; "
+                    f"{metrics.get('transfers', 'pending')} transfers."
+                )
+            )
+    elif len(options) > 1:
+        comparison_items = [
+            f"{option.get('label')}: {option.get('summary')}"
+            for option in options[:4]
+            if option.get("label") or option.get("summary")
+        ]
+    if comparison_items:
+        blocks.append(
+            _structured_block(
+                kind="comparison",
+                title="Comparison frame",
+                items=_dedupe_preserve_order(comparison_items),
+            )
+        )
+
+    assumption_items = [
+        f"Planning maturity: {str(metadata.get('plan_maturity') or '').replace('_', ' ')}",
+        f"Current work type: {str(metadata.get('task_class') or '').replace('_', ' ')}",
+    ]
+    context_readiness = runtime_context.get("context_readiness") or {}
+    missing_sections = list(context_readiness.get("missing_sections") or [])
+    if missing_sections:
+        assumption_items.append(f"Missing workspace context: {', '.join(missing_sections)}")
+    blocks.append(
+        _structured_block(
+            kind="assumption",
+            title="Working assumptions",
+            items=_dedupe_preserve_order([item for item in assumption_items if item.strip(": ")]),
+        )
+    )
+
+    next_action_items = _visible_block_items(metadata, kinds={"next_steps", "next_action"})
+    next_action_items.extend(
+        str(action.get("description") or action.get("label") or "")
+        for action in next_step_actions[:3]
+    )
+    if next_action_items:
+        blocks.append(
+            _structured_block(
+                kind="next_action",
+                title="Next actions",
+                items=_dedupe_preserve_order(next_action_items)[:4],
+            )
+        )
+
+    return blocks
+
+
+def _ensure_top_level_planner_blocks(
+    *,
+    blocks: list[dict[str, Any]],
+    metadata: dict[str, Any],
+    tool_calls: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    normalized_blocks = [
+        block
+        for block in blocks
+        if str(block.get("kind") or "") not in {"visible_sections", "diagnostic", "debug"}
+    ]
+    visible_blocks = [block for block in normalized_blocks if not bool(block.get("hidden"))]
+    hidden_blocks = [block for block in normalized_blocks if bool(block.get("hidden"))]
+
+    section_items: list[str] = []
+    for block in visible_blocks:
+        title = str(block.get("title") or block.get("kind") or "").strip()
+        body = str(block.get("body") or "").strip()
+        first_item = str((block.get("items") or [""])[0]).strip()
+        summary = body or first_item
+        section_items.append(f"{title}: {summary}" if summary else title)
+
+    section_block = _structured_block(
+        kind="visible_sections",
+        title="Planner response sections",
+        body="Traveler-visible planning sections for this reply.",
+        items=_dedupe_preserve_order(section_items)[:6],
+        metadata={
+            "section_kinds": [str(block.get("kind") or "") for block in visible_blocks],
+            "section_count": len(visible_blocks),
+        },
+    )
+
+    diagnostic_block = _structured_block(
+        kind="diagnostic",
+        title="Planner diagnostics",
+        body="Routing details and tool traces are hidden from the normal traveler view.",
+        metadata={
+            "routing": metadata.get("debug_routing_details") or {},
+            "tool_call_count": len(tool_calls),
+            "tool_names": [item.get("tool_name") for item in tool_calls],
+            "hidden_block_kinds": [str(block.get("kind") or "") for block in hidden_blocks],
+        },
+        hidden=True,
+    )
+    return [section_block, *visible_blocks, *hidden_blocks, diagnostic_block]
+
+
+def set_planner_chat_model_factory_for_tests(
+    factory: PlannerChatModelFactory | None,
+) -> None:
     global _PLANNER_CHAT_MODEL_FACTORY
     _PLANNER_CHAT_MODEL_FACTORY = factory
 
@@ -482,6 +845,7 @@ def _message_payload(
     created_at: str,
     refs: list[str] | None = None,
     tool_calls: list[dict[str, Any]] | None = None,
+    structured_blocks: list[dict[str, Any]] | None = None,
     turn_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
@@ -491,6 +855,7 @@ def _message_payload(
         "created_at": created_at,
         "refs": list(refs or []),
         "tool_calls": list(tool_calls or []),
+        "structured_blocks": list(structured_blocks or []),
         "turn_metadata": turn_metadata,
     }
 
@@ -517,6 +882,7 @@ def _conversation_messages(
         raw_refs = record.payload.get("refs", "")
         refs = [item for item in raw_refs.split(",") if item]
         tool_calls = list(record.payload.get("tool_calls") or [])
+        structured_blocks = list(record.payload.get("structured_blocks") or [])
         turn_metadata = record.payload.get("turn_metadata")
         if not isinstance(turn_metadata, dict):
             turn_metadata = None
@@ -528,6 +894,7 @@ def _conversation_messages(
                 created_at=record.occurred_at,
                 refs=refs,
                 tool_calls=tool_calls,
+                structured_blocks=structured_blocks,
                 turn_metadata=turn_metadata,
             )
         )
@@ -756,6 +1123,7 @@ def submit_planner_turn(
     session_record.last_updated_at = occurred_at
     session_record.notes = list(session.notes)
     record.updated_at = now
+    traveler_structured_blocks = _traveler_input_summary_blocks(normalized_message)
 
     user_activity_event_id = f"activity:{trip_id}:{secrets.token_hex(4)}"
     _append_activity_event(
@@ -766,7 +1134,10 @@ def submit_planner_turn(
         occurred_at=occurred_at,
         event_kind="planner_message",
         summary="Traveler submitted a planner conversation turn.",
-        metadata={"message_length": str(len(normalized_message))},
+        metadata={
+            "message_length": str(len(normalized_message)),
+            "structured_block_count": str(len(traveler_structured_blocks)),
+        },
     )
     _record_planner_action(
         db_session,
@@ -780,6 +1151,7 @@ def submit_planner_turn(
             "content": normalized_message,
             "refs": session.session_state_id,
             "tool_calls": [],
+            "structured_blocks": traveler_structured_blocks,
             "selected_planning_mode": session.selected_planning_mode,
         },
     )
@@ -834,6 +1206,7 @@ def submit_planner_turn(
             refs=reply.refs,
             tool_calls=reply.tool_calls,
             requested_tool_calls=reply.requested_tool_calls,
+            structured_blocks=reply.structured_blocks,
             turn_metadata=_planner_turn_metadata(
                 message=normalized_message,
                 runtime_config=runtime_config,
@@ -863,17 +1236,44 @@ def submit_planner_turn(
                 )
             )
     if executed_tool_calls:
-        tool_summary = " ".join(item["summary"] for item in executed_tool_calls)
         reply = PlannerConversationReply(
-            content=f"{reply.content} Tool results: {tool_summary}",
+            content=reply.content,
             refs=list(
                 dict.fromkeys(
                     reply.refs + [ref for item in executed_tool_calls for ref in item["refs"]]
                 )
             ),
             tool_calls=executed_tool_calls,
+            structured_blocks=reply.structured_blocks,
             turn_metadata=reply.turn_metadata,
         )
+    if not reply.structured_blocks:
+        reply = PlannerConversationReply(
+            content=reply.content,
+            refs=reply.refs,
+            tool_calls=reply.tool_calls,
+            requested_tool_calls=reply.requested_tool_calls,
+            structured_blocks=_planner_response_structured_blocks(
+                content=reply.content,
+                metadata=reply.turn_metadata or {},
+                panel=workspace_payload["planner_panel_state"],
+                runtime_context=runtime_context,
+                tool_calls=reply.tool_calls,
+            ),
+            turn_metadata=reply.turn_metadata,
+        )
+    reply = PlannerConversationReply(
+        content=reply.content,
+        refs=reply.refs,
+        tool_calls=reply.tool_calls,
+        requested_tool_calls=reply.requested_tool_calls,
+        structured_blocks=_ensure_top_level_planner_blocks(
+            blocks=reply.structured_blocks or [],
+            metadata=reply.turn_metadata or {},
+            tool_calls=reply.tool_calls,
+        ),
+        turn_metadata=reply.turn_metadata,
+    )
 
     planner_activity_event_id = f"activity:{trip_id}:{secrets.token_hex(4)}"
     _append_activity_event(
@@ -899,6 +1299,7 @@ def submit_planner_turn(
             "content": reply.content,
             "refs": ",".join(reply.refs),
             "tool_calls": reply.tool_calls,
+            "structured_blocks": reply.structured_blocks,
             "turn_metadata": reply.turn_metadata,
             "selected_planning_mode": session.selected_planning_mode,
             "planning_stage": (
