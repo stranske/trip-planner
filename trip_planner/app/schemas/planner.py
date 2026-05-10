@@ -52,6 +52,7 @@ class PlannerCheckpointResponse(BaseModel):
     message_count: int
     summary: str
     source_message_ids: list[str] = Field(default_factory=list)
+    metadata_payload: dict[str, Any] = Field(default_factory=dict)
     created_at: str
     updated_at: str
 

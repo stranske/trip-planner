@@ -188,6 +188,9 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
     assert payload["planner_memory"]["current_checkpoint_id"].startswith("planner-chk:")
     assert payload["planner_memory"]["artifacts"][0]["title"] == "Planner checkpoint 1"
+    checkpoint_payload = payload["planner_memory"]["checkpoints"][0]["metadata_payload"]
+    assert checkpoint_payload["plan_maturity"] == "partial_plan"
+    assert checkpoint_payload["task_class"] == "first_turn_triage"
 
     with get_session_factory()() as db_session:
         stored = db_session.scalars(
@@ -214,6 +217,8 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
         checkpoint = db_session.get(PersistedPlannerCheckpoint, checkpoint_id)
         assert checkpoint is not None
         assert len(checkpoint_id) <= 96
+        assert checkpoint.metadata_payload["plan_maturity"] == "partial_plan"
+        assert checkpoint.metadata_payload["task_class"] == "first_turn_triage"
         artifact = db_session.get(
             PersistedPlannerMemoryArtifact,
             payload["planner_memory"]["artifacts"][0]["memory_artifact_id"],
@@ -221,6 +226,8 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
         assert artifact is not None
         assert artifact.memory_artifact_id.startswith("planner-mem:")
         assert artifact.checkpoint_id == checkpoint.checkpoint_id
+        assert "partial_plan" not in artifact.detail
+        assert "first_turn_triage" not in artifact.detail
 
 
 @pytest.mark.parametrize(
