@@ -1626,7 +1626,7 @@ def _add_planning_ledger_entry(
         raise ValueError(f"status must be one of {', '.join(PLANNING_LEDGER_STATUSES)}")
     now = datetime.now(UTC)
     entry = PersistedPlanningLedgerEntry(
-        ledger_entry_id=f"ledger:{trip_id}:{secrets.token_hex(5)}",
+        ledger_entry_id=f"ledger:{secrets.token_hex(16)}",
         trip_id=trip_id,
         session_state_id=session_state_id,
         item_type=item_type,

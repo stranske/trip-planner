@@ -18,12 +18,12 @@ def _utcnow() -> datetime:
 class PersistedPlanningLedgerEntry(Base):
     __tablename__ = "persisted_planning_ledger_entries"
 
-    ledger_entry_id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    ledger_entry_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     trip_id: Mapped[str] = mapped_column(
         ForeignKey("persisted_trips.trip_id", ondelete="CASCADE"),
         index=True,
     )
-    session_state_id: Mapped[str] = mapped_column(String(96), index=True)
+    session_state_id: Mapped[str] = mapped_column(String(128), index=True)
     item_type: Mapped[str] = mapped_column(String(48), index=True)
     status: Mapped[str] = mapped_column(String(32), index=True, default="active")
     category: Mapped[str] = mapped_column(String(64), default="general")

@@ -19,14 +19,14 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "persisted_planning_ledger_entries",
-        sa.Column("ledger_entry_id", sa.String(length=96), primary_key=True),
+        sa.Column("ledger_entry_id", sa.String(length=64), primary_key=True),
         sa.Column(
             "trip_id",
             sa.String(length=96),
             sa.ForeignKey("persisted_trips.trip_id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("session_state_id", sa.String(length=96), nullable=False),
+        sa.Column("session_state_id", sa.String(length=128), nullable=False),
         sa.Column("item_type", sa.String(length=48), nullable=False),
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("category", sa.String(length=64), nullable=False),
@@ -65,9 +65,19 @@ def upgrade() -> None:
         ["status"],
         unique=False,
     )
+    op.create_index(
+        op.f("ix_persisted_planning_ledger_entries_trip_updated_at"),
+        "persisted_planning_ledger_entries",
+        ["trip_id", "updated_at"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:
+    op.drop_index(
+        op.f("ix_persisted_planning_ledger_entries_trip_updated_at"),
+        table_name="persisted_planning_ledger_entries",
+    )
     op.drop_index(
         op.f("ix_persisted_planning_ledger_entries_status"),
         table_name="persisted_planning_ledger_entries",

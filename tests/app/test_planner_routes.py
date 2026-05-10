@@ -409,6 +409,7 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
         == "balanced"
     )
     assert runtime_context["budget_state"]["summary"]["currency"] == "USD"
+    assert "planning_ledger" in runtime_context
     assert "policy_state" in runtime_context
     assert "proposal_state" in runtime_context
     assert "recent_activity" in runtime_context

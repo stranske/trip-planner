@@ -638,6 +638,7 @@ function PlanningLedgerPanel({
     { label: "Rejected options", entries: resolvedLedger.summary.rejected_options },
     { label: "Constraints", entries: resolvedLedger.summary.constraints },
     { label: "Assumptions", entries: resolvedLedger.summary.assumptions },
+    { label: "Sources", entries: resolvedLedger.summary.source_references },
   ].filter((group) => group.entries.length > 0);
 
   return (

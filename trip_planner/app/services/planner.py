@@ -561,6 +561,8 @@ def _planner_response_structured_blocks(
     next_step_actions = list(panel.get("next_step_actions") or [])
     runtime_comparison = runtime_context.get("runtime_scenario_comparison") or {}
     scenarios = list(runtime_comparison.get("scenarios") or [])
+    planning_ledger = runtime_context.get("planning_ledger") or {}
+    ledger_summary = planning_ledger.get("summary") or {}
 
     summary_items = _visible_block_items(metadata, kinds={"summary", "guidance"})
     blocks.append(
@@ -587,6 +589,37 @@ def _planner_response_structured_blocks(
                 kind="question",
                 title="Questions to settle",
                 items=_dedupe_preserve_order(question_items)[:4],
+            )
+        )
+
+    ledger_items: list[str] = []
+    ledger_entry_ids: list[str] = []
+    for label, key in (
+        ("Decision", "active_decisions"),
+        ("Open question", "open_questions"),
+        ("Option in view", "active_options"),
+        ("Rejected option", "rejected_options"),
+        ("Constraint", "constraints"),
+        ("Assumption", "assumptions"),
+        ("Source", "source_references"),
+    ):
+        for entry in list(ledger_summary.get(key) or [])[:2]:
+            summary = str(entry.get("summary") or "").strip()
+            if not summary:
+                continue
+            ledger_items.append(f"{label}: {summary}")
+            ledger_entry_ids.append(str(entry.get("ledger_entry_id") or ""))
+    if ledger_items:
+        blocks.append(
+            _structured_block(
+                kind="planning_ledger",
+                title="Planning memory",
+                items=_dedupe_preserve_order(ledger_items)[:6],
+                metadata={
+                    "ledger_entry_ids": [
+                        item for item in _dedupe_preserve_order(ledger_entry_ids) if item
+                    ][:6]
+                },
             )
         )
 
@@ -756,6 +789,9 @@ class DeterministicPlannerConversationRunnable:
         outputs = list(panel.get("outputs") or [])
         decisions = list(panel.get("pending_decisions") or [])
         options = list((panel.get("option_set") or {}).get("options") or [])
+        ledger_summary = (
+            (request.runtime_context.get("planning_ledger") or {}).get("summary") or {}
+        )
 
         lines = [
             _fallback_content_from_metadata(
@@ -786,6 +822,31 @@ class DeterministicPlannerConversationRunnable:
             latest_titles = ", ".join(output["title"] for output in outputs[:2])
             lines.append(f"Latest workspace signals: {latest_titles}.")
             refs.extend(output["output_id"] for output in outputs[:2])
+
+        ledger_focus: list[str] = []
+        for label, key in (
+            ("decision", "active_decisions"),
+            ("open question", "open_questions"),
+            ("option in view", "active_options"),
+            ("rejected option", "rejected_options"),
+            ("constraint", "constraints"),
+            ("assumption", "assumptions"),
+        ):
+            entries = list(ledger_summary.get(key) or [])
+            if not entries:
+                continue
+            first = entries[0]
+            summary = str(first.get("summary") or "").strip()
+            if not summary:
+                continue
+            ledger_focus.append(f"{label}: {summary}")
+            refs.append(str(first.get("ledger_entry_id") or ""))
+        if ledger_focus:
+            lines.append(
+                "Planning ledger remembers "
+                + "; ".join(_dedupe_preserve_order(ledger_focus)[:3])
+                + "."
+            )
 
         deduped_refs = list(dict.fromkeys(refs))
         return PlannerConversationReply(
@@ -999,12 +1060,14 @@ def _planner_runtime_context(
         "budget_state": workspace_payload.get("budget_state") or {},
         "planner_memory": planner_memory,
     }
+    planning_ledger = workspace_payload.get("planning_ledger") or {}
     missing_sections = [key for key, value in required_sections.items() if not value]
     return {
         "trip": panel["trip"],
         "pending_decisions": panel.get("pending_decisions") or [],
         "option_set": panel.get("option_set") or {},
         "outputs": panel.get("outputs") or [],
+        "planning_ledger": planning_ledger,
         **required_sections,
         "policy_state": workspace_payload.get("policy_state") or {},
         "proposal_state": workspace_payload.get("proposal_state") or {},
@@ -1048,6 +1111,7 @@ def _planner_session_payload(
         "runtime": get_planner_runtime_config().to_payload(),
         "session": session,
         "planner_panel_state": workspace_payload["planner_panel_state"],
+        "planning_ledger": workspace_payload.get("planning_ledger") or {},
         "planner_memory": planner_memory,
         "available_tools": list_planner_tools(),
         "activity_log": activity_log,

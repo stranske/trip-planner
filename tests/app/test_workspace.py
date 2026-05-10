@@ -230,6 +230,9 @@ def test_workspace_planning_ledger_api_persists_entries_across_reload(
     assert saved.status_code == 200, saved.text
     entry = saved.json()
     assert entry["status"] == "active"
+    assert entry["ledger_entry_id"].startswith("ledger:")
+    assert len(entry["ledger_entry_id"]) <= 64
+    assert trip_id not in entry["ledger_entry_id"]
 
     patched = client.patch(
         f"/api/workspace/{trip_id}/planning-ledger/{entry['ledger_entry_id']}",
@@ -321,6 +324,13 @@ def test_planner_turn_extracts_constraints_into_planning_ledger(
         },
     )
     assert turn.status_code == 200, turn.text
+    planner_payload = turn.json()
+    planner_ledger_summary = planner_payload["planning_ledger"]["summary"]
+    assert planner_ledger_summary["constraints"]
+    planner_reply = planner_payload["messages"][-1]
+    assert "Planning ledger remembers" in planner_reply["content"]
+    structured_kinds = {block["kind"] for block in planner_reply["structured_blocks"]}
+    assert "planning_ledger" in structured_kinds
 
     reloaded = client.get(f"/api/workspace/{trip_id}")
     assert reloaded.status_code == 200
