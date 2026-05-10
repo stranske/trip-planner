@@ -50,6 +50,9 @@ from trip_planner.persistence.models.activity import (
     PersistedPlannerAction,
 )
 from trip_planner.persistence.models.planning_ledger import PersistedPlanningLedgerEntry
+from trip_planner.persistence.models.planning_notebook import (
+    PersistedPlanningNotebookItem,
+)
 from trip_planner.persistence.models.scenario import (
     PersistedSavedScenario,
 )
@@ -96,6 +99,19 @@ PLANNING_LEDGER_STATUSES: tuple[str, ...] = (
     "superseded",
     "deferred",
 )
+PLANNING_NOTEBOOK_LIMIT = 200
+PLANNING_NOTEBOOK_CATEGORIES: tuple[str, ...] = (
+    "route",
+    "lodging",
+    "activities",
+    "budget",
+    "documents",
+    "policy",
+    "other",
+)
+PLANNING_NOTEBOOK_STATUSES: tuple[str, ...] = ("active", "completed", "archived")
+PLANNING_NOTEBOOK_PRIORITIES: tuple[str, ...] = ("low", "normal", "high")
+PLANNING_NOTEBOOK_SOURCES: tuple[str, ...] = ("user", "planner")
 ROUTE_OPTION_STATES: tuple[str, ...] = (
     "active",
     "baseline",
@@ -1543,6 +1559,60 @@ def _planning_ledger_state(entries: list[dict[str, Any]]) -> dict[str, Any]:
     return {"entries": entries, "summary": _planning_ledger_summary(entries)}
 
 
+def _serialize_notebook_item(record: PersistedPlanningNotebookItem) -> dict[str, Any]:
+    return {
+        "notebook_item_id": record.notebook_item_id,
+        "trip_id": record.trip_id,
+        "session_state_id": record.session_state_id,
+        "title": record.title,
+        "note": record.note or "",
+        "category": record.category,
+        "status": record.status,
+        "priority": record.priority,
+        "source": record.source,
+        "linked_ledger_entry_id": record.linked_ledger_entry_id,
+        "source_message_ids": list(record.source_message_ids or []),
+        "tags": list(record.tags or []),
+        "metadata": dict(record.metadata_payload or {}),
+        "completed_at": _isoformat(record.completed_at) if record.completed_at else None,
+        "created_at": _isoformat(record.created_at),
+        "updated_at": _isoformat(record.updated_at),
+    }
+
+
+def _planning_notebook_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
+    active = [item for item in items if item["status"] == "active"]
+    completed = [item for item in items if item["status"] == "completed"]
+    archived = [item for item in items if item["status"] == "archived"]
+    by_category: dict[str, list[dict[str, Any]]] = {
+        category: [] for category in PLANNING_NOTEBOOK_CATEGORIES
+    }
+    for item in active:
+        by_category.setdefault(item["category"], []).append(item)
+    return {
+        "active_items": active,
+        "completed_items": completed,
+        "archived_items": archived,
+        "by_category": by_category,
+    }
+
+
+def _planning_notebook_state(
+    items: list[dict[str, Any]],
+    *,
+    focus_category: str | None = None,
+    focus_item_id: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "items": items,
+        "summary": _planning_notebook_summary(items),
+        "focus": {
+            "category": focus_category,
+            "notebook_item_id": focus_item_id,
+        },
+    }
+
+
 def _ledger_category_for_type(item_type: str) -> str:
     if item_type in {"option_considered", "option_rejected"}:
         return "route_options"
@@ -1606,6 +1676,7 @@ def _build_persisted_trip_workspace(
     saved_scenarios: list[dict[str, Any]] | None = None,
     activity_log: list[dict[str, Any]] | None = None,
     planning_ledger: dict[str, Any] | None = None,
+    planning_notebook: dict[str, Any] | None = None,
     planner_memory: dict[str, Any] | None = None,
     budget_state: dict[str, Any] | None = None,
     policy_context: dict[str, Any] | None = None,
@@ -1707,6 +1778,7 @@ def _build_persisted_trip_workspace(
         "runtime_scenario_comparison": runtime_scenario_comparison,
         "activity_log": resolved_activity_log,
         "planning_ledger": planning_ledger or _planning_ledger_state([]),
+        "planning_notebook": planning_notebook or _planning_notebook_state([]),
         "planner_memory": planner_memory
         or {
             "current_checkpoint_id": resolved_session.get("current_checkpoint_id"),
@@ -2833,6 +2905,7 @@ def get_workspace_payload(
             "runtime_scenario_comparison": runtime_scenario_comparison,
             "activity_log": [],
             "planning_ledger": _planning_ledger_state([]),
+            "planning_notebook": _planning_notebook_state([]),
             "planner_memory": {
                 "current_checkpoint_id": session.current_checkpoint_id,
                 "checkpoints": [],
@@ -2945,6 +3018,12 @@ def get_workspace_payload(
         .order_by(PersistedPlanningLedgerEntry.updated_at.desc())
         .limit(PLANNING_LEDGER_LIMIT)
     ).all()
+    notebook_records = db_session.scalars(
+        select(PersistedPlanningNotebookItem)
+        .where(PersistedPlanningNotebookItem.trip_id == trip_id)
+        .order_by(PersistedPlanningNotebookItem.updated_at.desc())
+        .limit(PLANNING_NOTEBOOK_LIMIT)
+    ).all()
     feasibility_summary = build_feasibility_summary_payload(persisted_inventory_bundles)
     return _build_persisted_trip_workspace(
         record,
@@ -2964,6 +3043,11 @@ def get_workspace_payload(
         activity_log=[_serialize_activity_record(item) for item in activity_records],
         planning_ledger=_planning_ledger_state(
             [_serialize_ledger_entry(item) for item in ledger_records]
+        ),
+        planning_notebook=_planning_notebook_state(
+            [_serialize_notebook_item(item) for item in notebook_records],
+            focus_category=session_record.notebook_focus_category,
+            focus_item_id=session_record.notebook_focus_item_id,
         ),
         planner_memory=build_planner_memory_payload(
             db_session,
@@ -3166,6 +3250,163 @@ def update_planning_ledger_entry(
     db_session.commit()
     db_session.refresh(entry)
     return _serialize_ledger_entry(entry)
+
+
+def _validate_notebook_choice(field: str, value: str, allowed: tuple[str, ...]) -> str:
+    if value not in allowed:
+        raise ValueError(f"{field} must be one of {', '.join(allowed)}")
+    return value
+
+
+def create_planning_notebook_item(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    title: str,
+    note: str = "",
+    category: str = "other",
+    status: str = "active",
+    priority: str = "normal",
+    source: str = "user",
+    linked_ledger_entry_id: str | None = None,
+    source_message_ids: list[str] | None = None,
+    tags: list[str] | None = None,
+) -> dict[str, Any]:
+    _validate_notebook_choice("category", category, PLANNING_NOTEBOOK_CATEGORIES)
+    _validate_notebook_choice("status", status, PLANNING_NOTEBOOK_STATUSES)
+    _validate_notebook_choice("priority", priority, PLANNING_NOTEBOOK_PRIORITIES)
+    _validate_notebook_choice("source", source, PLANNING_NOTEBOOK_SOURCES)
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    now = datetime.now(UTC)
+    item = PersistedPlanningNotebookItem(
+        notebook_item_id=f"notebook:{secrets.token_hex(16)}",
+        trip_id=trip_id,
+        session_state_id=session_record.session_state_id,
+        title=title[:240],
+        note=note,
+        category=category,
+        status=status,
+        priority=priority,
+        source=source,
+        linked_ledger_entry_id=linked_ledger_entry_id,
+        source_message_ids=list(source_message_ids or []),
+        tags=list(tags or []),
+        metadata_payload={"created_by": "workspace_api"},
+        completed_at=now if status == "completed" else None,
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(item)
+    record.updated_at = now
+    db_session.commit()
+    db_session.refresh(item)
+    return _serialize_notebook_item(item)
+
+
+def update_planning_notebook_item(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    notebook_item_id: str,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    item = db_session.scalar(
+        select(PersistedPlanningNotebookItem)
+        .where(PersistedPlanningNotebookItem.trip_id == trip_id)
+        .where(PersistedPlanningNotebookItem.notebook_item_id == notebook_item_id)
+    )
+    if item is None:
+        raise WorkspaceTripNotFoundError(
+            f"Notebook item '{notebook_item_id}' was not found."
+        )
+    if updates.get("category") is not None:
+        item.category = _validate_notebook_choice(
+            "category", str(updates["category"]), PLANNING_NOTEBOOK_CATEGORIES
+        )
+    if updates.get("priority") is not None:
+        item.priority = _validate_notebook_choice(
+            "priority", str(updates["priority"]), PLANNING_NOTEBOOK_PRIORITIES
+        )
+    if updates.get("status") is not None:
+        new_status = _validate_notebook_choice(
+            "status", str(updates["status"]), PLANNING_NOTEBOOK_STATUSES
+        )
+        if new_status == "completed" and item.status != "completed":
+            item.completed_at = datetime.now(UTC)
+        elif new_status != "completed":
+            item.completed_at = None
+        item.status = new_status
+    for field in ("title", "note", "linked_ledger_entry_id"):
+        if updates.get(field) is not None:
+            setattr(item, field, updates[field])
+    if updates.get("source_message_ids") is not None:
+        item.source_message_ids = list(updates["source_message_ids"])
+    if updates.get("tags") is not None:
+        item.tags = list(updates["tags"])
+    item.updated_at = datetime.now(UTC)
+    db_session.commit()
+    db_session.refresh(item)
+    return _serialize_notebook_item(item)
+
+
+def delete_planning_notebook_item(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    notebook_item_id: str,
+) -> None:
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    item = db_session.scalar(
+        select(PersistedPlanningNotebookItem)
+        .where(PersistedPlanningNotebookItem.trip_id == trip_id)
+        .where(PersistedPlanningNotebookItem.notebook_item_id == notebook_item_id)
+    )
+    if item is None:
+        raise WorkspaceTripNotFoundError(
+            f"Notebook item '{notebook_item_id}' was not found."
+        )
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    if session_record.notebook_focus_item_id == notebook_item_id:
+        session_record.notebook_focus_item_id = None
+    db_session.delete(item)
+    record.updated_at = datetime.now(UTC)
+    db_session.commit()
+
+
+def set_planning_notebook_focus(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    category: str | None,
+    notebook_item_id: str | None,
+) -> dict[str, Any]:
+    if category is not None:
+        _validate_notebook_choice("category", category, PLANNING_NOTEBOOK_CATEGORIES)
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    if notebook_item_id is not None:
+        item = db_session.scalar(
+            select(PersistedPlanningNotebookItem)
+            .where(PersistedPlanningNotebookItem.trip_id == trip_id)
+            .where(PersistedPlanningNotebookItem.notebook_item_id == notebook_item_id)
+        )
+        if item is None:
+            raise WorkspaceTripNotFoundError(
+                f"Notebook item '{notebook_item_id}' was not found."
+            )
+        if category is None:
+            category = item.category
+    session_record.notebook_focus_category = category
+    session_record.notebook_focus_item_id = notebook_item_id
+    record.updated_at = datetime.now(UTC)
+    db_session.commit()
+    return {"category": category, "notebook_item_id": notebook_item_id}
 
 
 def _current_workspace_option_set(

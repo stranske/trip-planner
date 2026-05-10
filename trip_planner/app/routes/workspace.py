@@ -6,10 +6,15 @@ from trip_planner.app.schemas.workspace import (
     PlanningLedgerEntry,
     PlanningLedgerEntryCreateRequest,
     PlanningLedgerEntryUpdateRequest,
+    PlanningNotebookCreateRequest,
+    PlanningNotebookFocus,
+    PlanningNotebookFocusRequest,
+    PlanningNotebookItem,
     PlannerDecisionAnswerRequest,
     PlannerOptionFeedbackRequest,
     RouteOptionActionRequest,
     ScenarioComparisonSurfaceResponse,
+    PlanningNotebookUpdateRequest,
     WorkspaceResponse,
 )
 from trip_planner.app.services.auth import AuthenticatedUser, require_authenticated_user
@@ -17,11 +22,15 @@ from trip_planner.app.services.workspace import (
     WorkspaceTripNotFoundError,
     answer_workspace_planner_decision,
     create_planning_ledger_entry,
+    create_planning_notebook_item,
+    delete_planning_notebook_item,
     get_workspace_scenario_comparison_payload,
     get_workspace_payload,
+    set_planning_notebook_focus,
     submit_workspace_route_option_action,
     submit_workspace_option_feedback,
     update_planning_ledger_entry,
+    update_planning_notebook_item,
     update_workspace_planning_mode,
 )
 from trip_planner.persistence.db import get_db_session
@@ -139,6 +148,110 @@ def patch_workspace_planning_ledger_entry(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return PlanningLedgerEntry.model_validate(result)
+
+
+@router.post(
+    "/workspace/{trip_id}/planning-notebook",
+    response_model=PlanningNotebookItem,
+)
+def create_workspace_planning_notebook_item(
+    trip_id: str,
+    payload: PlanningNotebookCreateRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> PlanningNotebookItem:
+    try:
+        result = create_planning_notebook_item(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            title=payload.title,
+            note=payload.note,
+            category=payload.category,
+            status=payload.status,
+            priority=payload.priority,
+            source=payload.source,
+            linked_ledger_entry_id=payload.linked_ledger_entry_id,
+            source_message_ids=payload.source_message_ids,
+            tags=payload.tags,
+        )
+    except WorkspaceTripNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return PlanningNotebookItem.model_validate(result)
+
+
+@router.patch(
+    "/workspace/{trip_id}/planning-notebook/{notebook_item_id}",
+    response_model=PlanningNotebookItem,
+)
+def patch_workspace_planning_notebook_item(
+    trip_id: str,
+    notebook_item_id: str,
+    payload: PlanningNotebookUpdateRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> PlanningNotebookItem:
+    try:
+        result = update_planning_notebook_item(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            notebook_item_id=notebook_item_id,
+            updates=payload.model_dump(exclude_unset=True),
+        )
+    except WorkspaceTripNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return PlanningNotebookItem.model_validate(result)
+
+
+@router.delete(
+    "/workspace/{trip_id}/planning-notebook/{notebook_item_id}",
+    status_code=204,
+)
+def delete_workspace_planning_notebook_item(
+    trip_id: str,
+    notebook_item_id: str,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> None:
+    try:
+        delete_planning_notebook_item(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            notebook_item_id=notebook_item_id,
+        )
+    except WorkspaceTripNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@router.put(
+    "/workspace/{trip_id}/planning-notebook/focus",
+    response_model=PlanningNotebookFocus,
+)
+def update_workspace_planning_notebook_focus(
+    trip_id: str,
+    payload: PlanningNotebookFocusRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> PlanningNotebookFocus:
+    try:
+        result = set_planning_notebook_focus(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            category=payload.category,
+            notebook_item_id=payload.notebook_item_id,
+        )
+    except WorkspaceTripNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return PlanningNotebookFocus.model_validate(result)
 
 
 @router.post(
