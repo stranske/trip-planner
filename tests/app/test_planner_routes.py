@@ -232,6 +232,11 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
             "planning_synthesis",
         ),
         (
+            "We have June dates and a hotel budget but no destination yet.",
+            "partial_plan",
+            "first_turn_triage",
+        ),
+        (
             "Maybe Japan with good food",
             "partial_plan",
             "first_turn_triage",
@@ -271,6 +276,23 @@ def test_planner_turn_records_adaptive_triage_metadata(
     visible_content = planner_reply["content"].lower()
     assert "model routing" not in visible_content
     assert "provider" not in visible_content
+    assert "fallback" not in visible_content
+
+
+def test_planner_turn_partial_reply_does_not_echo_internal_user_terms(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Could the provider model fallback explain a trip idea?"},
+    )
+
+    assert response.status_code == 200
+    planner_reply = response.json()["messages"][-1]
+    visible_content = planner_reply["content"].lower()
+    assert planner_reply["turn_metadata"]["plan_maturity"] == "partial_plan"
+    assert "provider" not in visible_content
+    assert "model" not in visible_content
     assert "fallback" not in visible_content
 
 

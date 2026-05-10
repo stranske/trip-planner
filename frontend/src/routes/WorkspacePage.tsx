@@ -914,8 +914,10 @@ function WorkspacePageContent({
                           >
                             <h4>{block.title}</h4>
                             <ul>
-                              {block.items.map((item) => (
-                                <li key={item}>{item}</li>
+                              {block.items.map((item, itemIndex) => (
+                                <li key={`${message.message_id}-${block.kind}-${block.title}-${itemIndex}`}>
+                                  {item}
+                                </li>
                               ))}
                             </ul>
                           </section>

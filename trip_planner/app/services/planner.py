@@ -117,6 +117,29 @@ _CONSTRAINT_MARKERS = (
     "transfer",
 )
 _SYNTHESIS_MARKERS = ("compare", "option", "route", "itinerary", "plan", "summary", "decide")
+_NON_DESTINATION_CAPITALIZED_TOKENS = {
+    "i",
+    "i'd",
+    "i'll",
+    "i'm",
+    "we",
+    "we'd",
+    "we'll",
+    "we're",
+    "can",
+    "could",
+    "help",
+    "please",
+}
+
+
+def _looks_like_destination_token(token: str, index: int) -> bool:
+    if not token[:1].isupper():
+        return False
+    lowered = token.lower()
+    if lowered in _DATE_MARKERS:
+        return False
+    return index > 0 or lowered not in _NON_DESTINATION_CAPITALIZED_TOKENS
 
 
 def _planner_turn_metadata(
@@ -128,7 +151,9 @@ def _planner_turn_metadata(
     lowered = message.lower()
     raw_tokens = [token.strip(".,!?;:()[]{}\"'") for token in message.split()]
     tokens = [token.lower() for token in raw_tokens]
-    destination_hits = sum(1 for token in raw_tokens if token[:1].isupper())
+    destination_hits = sum(
+        1 for index, token in enumerate(raw_tokens) if _looks_like_destination_token(token, index)
+    )
     date_hits = sum(1 for marker in _DATE_MARKERS if marker in tokens)
     constraint_hits = sum(1 for marker in _CONSTRAINT_MARKERS if marker in lowered)
     synthesis_hits = sum(1 for marker in _SYNTHESIS_MARKERS if marker in lowered)
@@ -269,7 +294,7 @@ def _fallback_content_from_metadata(
         )
     return (
         f"{trip_title} has a useful starting point. I would close the biggest missing decision "
-        f"from your note, then move into targeted planning. You said: {message.strip()}"
+        "from your note, then move into targeted planning."
     )
 
 
