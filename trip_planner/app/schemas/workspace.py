@@ -110,7 +110,7 @@ class WorkspaceDebugSection(BaseModel):
     """A named debug-only payload section that mirrors raw runtime state."""
 
     title: str = Field(description="Debug section title shown in the advanced surface.")
-    payload: dict[str, Any] = Field(
+    payload: Any = Field(
         default_factory=dict,
         description="Raw payload attached to this debug section.",
     )

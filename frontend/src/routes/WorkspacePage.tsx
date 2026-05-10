@@ -749,8 +749,8 @@ function WorkspacePageContent({
               <article className="decision-card">
                 <p className="scenario-kicker">Decided</p>
                 <ul>
-                  {productView.user_summary.decided.map((item) => (
-                    <li key={item}>{item}</li>
+                  {productView.user_summary.decided.map((item, index) => (
+                    <li key={`${index}-${item}`}>{item}</li>
                   ))}
                 </ul>
               </article>
@@ -759,8 +759,8 @@ function WorkspacePageContent({
               <article className="decision-card">
                 <p className="scenario-kicker">Still open</p>
                 <ul>
-                  {productView.user_summary.uncertain.map((item) => (
-                    <li key={item}>{item}</li>
+                  {productView.user_summary.uncertain.map((item, index) => (
+                    <li key={`${index}-${item}`}>{item}</li>
                   ))}
                 </ul>
               </article>
@@ -779,8 +779,8 @@ function WorkspacePageContent({
                 <h3>{productView.business_summary.headline}</h3>
                 {productView.business_summary.blockers.length > 0 ? (
                   <ul>
-                    {productView.business_summary.blockers.map((blocker) => (
-                      <li key={blocker}>{blocker}</li>
+                    {productView.business_summary.blockers.map((blocker, index) => (
+                      <li key={`${index}-${blocker}`}>{blocker}</li>
                     ))}
                   </ul>
                 ) : null}

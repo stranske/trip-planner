@@ -374,7 +374,7 @@ export type WorkspaceBusinessSummary = {
 
 export type WorkspaceDebugSection = {
   title: string;
-  payload: Record<string, unknown>;
+  payload: unknown;
 };
 
 export type WorkspaceDebugState = {

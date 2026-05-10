@@ -80,7 +80,7 @@ WORKSPACE_ACTIVITY_LOG_LIMIT = 50
 _BOOTSTRAP_SCENARIO_SCORE_BY_LABEL = {
     "baseline": 0.82,
     "fallback": 0.68,
-}
+    }
 
 
 class WorkspaceTripNotFoundError(ValueError):
@@ -1378,7 +1378,7 @@ def _build_workspace_view_model(
             continue
         debug_sections[key] = {
             "title": key.replace("_", " ").title(),
-            "payload": _coerce_debug_payload(raw_value),
+            "payload": raw_value,
         }
 
     return {
@@ -1386,17 +1386,7 @@ def _build_workspace_view_model(
         "next_step": next_step,
         "business_summary": business_summary,
         "debug_state": {"sections": debug_sections},
-    }
-
-
-def _coerce_debug_payload(value: Any) -> dict[str, Any]:
-    """Wrap a raw debug payload into a dict shape suitable for the schema."""
-
-    if isinstance(value, dict):
-        return value
-    if isinstance(value, list):
-        return {"items": value}
-    return {"value": value}
+}
 
 
 def _build_workspace_runtime_state(

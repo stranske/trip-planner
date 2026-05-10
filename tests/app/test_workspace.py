@@ -2443,3 +2443,24 @@ def test_workspace_view_model_builder_handles_empty_runtime_state() -> None:
     assert view_model["next_step"]["blocked"] is True
     assert view_model["business_summary"] is None
     assert view_model["debug_state"]["sections"]["runtime_state"]["payload"]["status"] == "empty"
+
+
+def test_workspace_view_model_debug_sections_preserve_raw_payload_shapes() -> None:
+    saved_scenarios = [{"saved_scenario_id": "scenario-1"}]
+    activity_log = [{"activity_event_id": "activity-1"}]
+    payload = {
+        "trip_record": {
+            "trip": {"title": "Raw debug workspace", "mode": "leisure"},
+        },
+        "runtime_state": {"status": "ready", "title": "Ready", "summary": "Ready"},
+        "saved_scenarios": saved_scenarios,
+        "inventory_summary": {"bundle_count": 1},
+        "feasibility_summary": {"attention_bundle_count": 0},
+        "activity_log": activity_log,
+    }
+
+    view_model = workspace_service._build_workspace_view_model(payload)
+    debug_sections = view_model["debug_state"]["sections"]
+
+    assert debug_sections["saved_scenarios"]["payload"] == saved_scenarios
+    assert debug_sections["activity_log"]["payload"] == activity_log
