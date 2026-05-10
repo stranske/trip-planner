@@ -71,7 +71,7 @@ type ProposalLifecycleState =
 
 type ProposalLifecyclePresentation = {
   state: ProposalLifecycleState;
-  label: string;
+  readinessLabel: string;
   title: string;
   summary: string;
 };
@@ -405,7 +405,7 @@ function deriveProposalLifecyclePresentation(
   if (summary.approval_ready || followUpStatus === "resolved") {
     return {
       state: "approval-ready",
-      label: "approval-ready",
+      readinessLabel: "Ready for approval",
       title: "Approval packet is ready",
       summary:
         summary.follow_up_summary ??
@@ -417,7 +417,7 @@ function deriveProposalLifecyclePresentation(
   if (isFailedLifecycleStatus(submissionStatus) || isFailedLifecycleStatus(evaluationTransportStatus)) {
     return {
       state: "failed",
-      label: "failed",
+      readinessLabel: "Needs policy retry",
       title: "Live policy execution needs attention",
       summary:
         summary.submission_summary ??
@@ -429,9 +429,14 @@ function deriveProposalLifecyclePresentation(
     summary.evaluation_result_status != null ||
     (followUpStatus != null && followUpStatus !== "awaiting_evaluation")
   ) {
+    const needsException =
+      followUpStatus === "exception_required" ||
+      followUpStatus === "exception_requested" ||
+      followUpStatus === "reoptimization_required" ||
+      summary.evaluation_result_status === "non_compliant";
     return {
       state: "completed-with-follow-up",
-      label: "completed with follow-up",
+      readinessLabel: needsException ? "Needs exception" : "Needs follow-up",
       title: "Policy review finished with follow-up",
       summary:
         summary.follow_up_summary ??
@@ -442,7 +447,7 @@ function deriveProposalLifecyclePresentation(
   if (submissionStatus === "deferred" || evaluationTransportStatus === "deferred") {
     return {
       state: "deferred",
-      label: "deferred",
+      readinessLabel: "Waiting for policy review",
       title: "Policy review is deferred",
       summary:
         summary.submission_summary ??
@@ -458,7 +463,7 @@ function deriveProposalLifecyclePresentation(
   ) {
     return {
       state: "running",
-      label: "running",
+      readinessLabel: "Waiting for policy review",
       title: awaitingEvaluation ? "Awaiting policy evaluation result" : "Policy review is running",
       summary:
         summary.follow_up_summary ??
@@ -469,7 +474,7 @@ function deriveProposalLifecyclePresentation(
 
   return {
     state: "pending",
-    label: "pending",
+    readinessLabel: "Waiting for policy review",
     title: "Proposal submission is pending",
     summary: "Build and submit the approval packet to start live policy execution for this workspace.",
   };
@@ -1254,7 +1259,7 @@ function WorkspacePageContent({
               <dl className="workspace-meta">
                 <div>
                   <dt>Workspace state</dt>
-                  <dd>{proposalLifecycle?.label ?? "pending"}</dd>
+                  <dd>{proposalLifecycle?.readinessLabel ?? "Waiting for policy review"}</dd>
                 </div>
                 <div>
                   <dt>Submission</dt>
