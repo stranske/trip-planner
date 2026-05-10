@@ -63,6 +63,7 @@ class PlannerConversationReply:
     refs: list[str]
     tool_calls: list[dict[str, Any]]
     requested_tool_calls: list[dict[str, Any]] | None = None
+    turn_metadata: dict[str, Any] | None = None
 
 
 class PlannerChatModel(Protocol):
@@ -81,6 +82,220 @@ _GROUNDING_TOOL_NAMES: tuple[str, ...] = (
     "read_policy_state",
     "read_proposal_state",
 )
+
+_DATE_MARKERS = (
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+    "weekend",
+    "week",
+    "days",
+    "nights",
+)
+_CONSTRAINT_MARKERS = (
+    "budget",
+    "hotel",
+    "flight",
+    "train",
+    "museum",
+    "food",
+    "kids",
+    "family",
+    "business",
+    "approval",
+    "accessible",
+    "walking",
+    "transfer",
+)
+_SYNTHESIS_MARKERS = ("compare", "option", "route", "itinerary", "plan", "summary", "decide")
+_NON_DESTINATION_CAPITALIZED_TOKENS = {
+    "i",
+    "i'd",
+    "i'll",
+    "i'm",
+    "we",
+    "we'd",
+    "we'll",
+    "we're",
+    "can",
+    "could",
+    "help",
+    "please",
+}
+
+
+def _looks_like_destination_token(token: str, index: int) -> bool:
+    if not token[:1].isupper():
+        return False
+    lowered = token.lower()
+    if lowered in _DATE_MARKERS:
+        return False
+    return index > 0 or lowered not in _NON_DESTINATION_CAPITALIZED_TOKENS
+
+
+def _planner_turn_metadata(
+    *,
+    message: str,
+    runtime_config: PlannerRuntimeConfig,
+    turn_index: int,
+) -> dict[str, Any]:
+    lowered = message.lower()
+    raw_tokens = [token.strip(".,!?;:()[]{}\"'") for token in message.split()]
+    tokens = [token.lower() for token in raw_tokens]
+    destination_hits = sum(
+        1 for index, token in enumerate(raw_tokens) if _looks_like_destination_token(token, index)
+    )
+    date_hits = sum(1 for marker in _DATE_MARKERS if marker in tokens)
+    constraint_hits = sum(1 for marker in _CONSTRAINT_MARKERS if marker in lowered)
+    synthesis_hits = sum(1 for marker in _SYNTHESIS_MARKERS if marker in lowered)
+    question_hits = lowered.count("?")
+
+    if lowered in {"help", "plan a trip", "vacation ideas"}:
+        plan_maturity = "open_ended"
+        task_class = "first_turn_triage"
+        blocks = [
+            {
+                "kind": "guidance",
+                "title": "Start with a direction",
+                "items": [
+                    "Choose a destination or region.",
+                    "Add timing, trip length, and traveler constraints.",
+                    "Name one priority such as food, pace, budget, or business approval.",
+                ],
+            },
+            {
+                "kind": "clarifying_questions",
+                "title": "Quick questions",
+                "items": [
+                    "Where are you considering going?",
+                    "When would you like to travel?",
+                    "What would make this trip feel successful?",
+                ],
+            },
+        ]
+    elif constraint_hits >= 5 or question_hits >= 3 or len(tokens) >= 45:
+        plan_maturity = "overloaded_constraints"
+        task_class = "planning_synthesis"
+        blocks = [
+            {
+                "kind": "summary",
+                "title": "Organize the constraints",
+                "items": [
+                    "Group timing, budget, traveler needs, and approval constraints before generating routes.",
+                    "Separate firm requirements from preferences so tradeoffs are visible.",
+                ],
+            },
+            {
+                "kind": "next_steps",
+                "title": "Next planning moves",
+                "items": [
+                    "Confirm must-haves.",
+                    "Rank the top tradeoff areas.",
+                    "Generate fewer, clearer options after the constraints are sorted.",
+                ],
+            },
+        ]
+    elif destination_hits >= 1 and date_hits >= 1 and constraint_hits >= 1:
+        plan_maturity = "coherent_plan"
+        task_class = "route_comparison" if synthesis_hits else "planning_synthesis"
+        blocks = [
+            {
+                "kind": "summary",
+                "title": "Understood plan",
+                "items": [
+                    "You have enough destination, timing, and constraint detail to start shaping options.",
+                    "The next turn can compare routes, pace, stays, or approval needs instead of restarting intake.",
+                ],
+            },
+            {
+                "kind": "next_steps",
+                "title": "Next planning moves",
+                "items": [
+                    "Confirm the most important tradeoff.",
+                    "Compare a small set of route or stay options.",
+                    "Preserve open decisions for the workspace checklist.",
+                ],
+            },
+        ]
+    else:
+        plan_maturity = "partial_plan"
+        task_class = "first_turn_triage"
+        blocks = [
+            {
+                "kind": "summary",
+                "title": "Partial plan",
+                "items": [
+                    "There is enough context to continue, but a few planning decisions are still missing.",
+                    "Targeted questions should close the largest gaps before deeper synthesis.",
+                ],
+            },
+            {
+                "kind": "clarifying_questions",
+                "title": "Targeted questions",
+                "items": [
+                    "What dates or trip length should the planner assume?",
+                    "Which tradeoff matters most: budget, pace, lodging, route, or approvals?",
+                ],
+            },
+        ]
+
+    return {
+        "plan_maturity": plan_maturity,
+        "task_class": task_class,
+        "visible_response_blocks": blocks,
+        "debug_routing_details": {
+            "runtime_mode": runtime_config.mode,
+            "runtime_provider": runtime_config.provider,
+            "runtime_model": runtime_config.model,
+            "turn_index": turn_index,
+            "signals": {
+                "token_count": len(tokens),
+                "date_hits": date_hits,
+                "constraint_hits": constraint_hits,
+                "synthesis_hits": synthesis_hits,
+                "question_hits": question_hits,
+            },
+        },
+    }
+
+
+def _fallback_content_from_metadata(
+    *,
+    trip_title: str,
+    message: str,
+    metadata: dict[str, Any],
+) -> str:
+    maturity = metadata["plan_maturity"]
+    if maturity == "coherent_plan":
+        return (
+            f"I can use the details you gave for {trip_title} to move into option shaping. "
+            "The next useful step is to compare a small set of routes, stays, or pacing tradeoffs "
+            "instead of asking broad intake questions again."
+        )
+    if maturity == "open_ended":
+        return (
+            f"Let's narrow {trip_title} before building options. Share a destination or region, "
+            "rough timing, and one priority, and I will turn it into a focused planning path."
+        )
+    if maturity == "overloaded_constraints":
+        return (
+            f"I will organize the constraints for {trip_title} before generating options. "
+            "First I would separate firm requirements from preferences, then compare only the "
+            "routes or stays that satisfy the must-haves."
+        )
+    return (
+        f"{trip_title} has a useful starting point. I would close the biggest missing decision "
+        "from your note, then move into targeted planning."
+    )
 
 
 def set_planner_chat_model_factory_for_tests(factory: PlannerChatModelFactory | None) -> None:
@@ -101,13 +316,21 @@ class DeterministicPlannerConversationRunnable:
     def invoke(self, request: PlannerConversationRequest) -> PlannerConversationReply:
         panel = request.planner_panel_state
         trip = panel["trip"]
+        metadata = _planner_turn_metadata(
+            message=request.message,
+            runtime_config=get_planner_runtime_config(),
+            turn_index=len(request.runtime_context.get("recent_activity") or []),
+        )
         outputs = list(panel.get("outputs") or [])
         decisions = list(panel.get("pending_decisions") or [])
         options = list((panel.get("option_set") or {}).get("options") or [])
 
         lines = [
-            f"{trip['title']} is using a trip-scoped planner session for this request.",
-            f"You said: {request.message.strip()}",
+            _fallback_content_from_metadata(
+                trip_title=trip["title"],
+                message=request.message,
+                metadata=metadata,
+            )
         ]
         refs = [request.session.session_state_id]
 
@@ -132,11 +355,13 @@ class DeterministicPlannerConversationRunnable:
             lines.append(f"Latest workspace signals: {latest_titles}.")
             refs.extend(output["output_id"] for output in outputs[:2])
 
-        lines.append(
-            "Deterministic planner fallback is active; configure a planner model for tool-grounded orchestration."
-        )
         deduped_refs = list(dict.fromkeys(refs))
-        return PlannerConversationReply(content=" ".join(lines), refs=deduped_refs, tool_calls=[])
+        return PlannerConversationReply(
+            content=" ".join(lines),
+            refs=deduped_refs,
+            tool_calls=[],
+            turn_metadata=metadata,
+        )
 
 
 class _OpenAIPlannerChatModel:
@@ -228,6 +453,11 @@ class ModelBackedPlannerConversationRunnable:
             refs=[request.session.session_state_id],
             tool_calls=[],
             requested_tool_calls=requested_tool_calls,
+            turn_metadata=_planner_turn_metadata(
+                message=request.message,
+                runtime_config=self._config,
+                turn_index=len(request.runtime_context.get("recent_activity") or []),
+            ),
         )
 
 
@@ -252,6 +482,7 @@ def _message_payload(
     created_at: str,
     refs: list[str] | None = None,
     tool_calls: list[dict[str, Any]] | None = None,
+    turn_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "message_id": message_id,
@@ -260,6 +491,7 @@ def _message_payload(
         "created_at": created_at,
         "refs": list(refs or []),
         "tool_calls": list(tool_calls or []),
+        "turn_metadata": turn_metadata,
     }
 
 
@@ -285,6 +517,9 @@ def _conversation_messages(
         raw_refs = record.payload.get("refs", "")
         refs = [item for item in raw_refs.split(",") if item]
         tool_calls = list(record.payload.get("tool_calls") or [])
+        turn_metadata = record.payload.get("turn_metadata")
+        if not isinstance(turn_metadata, dict):
+            turn_metadata = None
         messages.append(
             _message_payload(
                 message_id=record.planner_action_id,
@@ -293,6 +528,7 @@ def _conversation_messages(
                 created_at=record.occurred_at,
                 refs=refs,
                 tool_calls=tool_calls,
+                turn_metadata=turn_metadata,
             )
         )
     return messages
@@ -592,6 +828,18 @@ def submit_planner_turn(
             session_state_id=session.session_state_id,
             error=error,
         )
+    if reply.turn_metadata is None:
+        reply = PlannerConversationReply(
+            content=reply.content,
+            refs=reply.refs,
+            tool_calls=reply.tool_calls,
+            requested_tool_calls=reply.requested_tool_calls,
+            turn_metadata=_planner_turn_metadata(
+                message=normalized_message,
+                runtime_config=runtime_config,
+                turn_index=len(activity_log),
+            ),
+        )
     model_tool_calls = _execute_model_tool_calls(
         db_session,
         user=user,
@@ -624,6 +872,7 @@ def submit_planner_turn(
                 )
             ),
             tool_calls=executed_tool_calls,
+            turn_metadata=reply.turn_metadata,
         )
 
     planner_activity_event_id = f"activity:{trip_id}:{secrets.token_hex(4)}"
@@ -650,6 +899,7 @@ def submit_planner_turn(
             "content": reply.content,
             "refs": ",".join(reply.refs),
             "tool_calls": reply.tool_calls,
+            "turn_metadata": reply.turn_metadata,
             "selected_planning_mode": session.selected_planning_mode,
             "planning_stage": (
                 workspace_payload["planner_panel_state"]

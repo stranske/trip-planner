@@ -902,6 +902,28 @@ function WorkspacePageContent({
                       {message.role === "user" ? "Traveler" : "Planner"}
                     </p>
                     <p>{message.content}</p>
+                    {message.turn_metadata?.visible_response_blocks.length ? (
+                      <div className="planner-response-blocks">
+                        <span className="planner-routing-pill">
+                          {message.turn_metadata.plan_maturity.replace(/_/g, " ")}
+                        </span>
+                        {message.turn_metadata.visible_response_blocks.map((block) => (
+                          <section
+                            key={`${message.message_id}-${block.kind}-${block.title}`}
+                            className="planner-response-block"
+                          >
+                            <h4>{block.title}</h4>
+                            <ul>
+                              {block.items.map((item, itemIndex) => (
+                                <li key={`${message.message_id}-${block.kind}-${block.title}-${itemIndex}`}>
+                                  {item}
+                                </li>
+                              ))}
+                            </ul>
+                          </section>
+                        ))}
+                      </div>
+                    ) : null}
                     {message.tool_calls.length > 0 ? (
                       <ul className="planner-tool-call-list">
                         {message.tool_calls.map((toolCall) => (

@@ -316,6 +316,17 @@ export type PlannerToolCallResponse = {
   output: Record<string, unknown>;
 };
 
+export type PlannerTurnMetadata = {
+  plan_maturity: string;
+  task_class: string;
+  visible_response_blocks: Array<{
+    kind: string;
+    title: string;
+    items: string[];
+  }>;
+  debug_routing_details: Record<string, unknown>;
+};
+
 export type PlannerMessage = {
   message_id: string;
   role: "user" | "planner" | string;
@@ -323,6 +334,7 @@ export type PlannerMessage = {
   created_at: string;
   refs: string[];
   tool_calls: PlannerToolCallResponse[];
+  turn_metadata?: PlannerTurnMetadata | null;
 };
 
 export type PlannerSessionResponse = {
