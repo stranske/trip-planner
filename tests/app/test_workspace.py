@@ -374,6 +374,12 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface(
     assert payload["comparison_axes"][-1]["key"] == "estimated_total"
     assert payload["scenarios"][0]["delta"]["transfers_delta"] == 0
     assert payload["lead_scenario_id"] == payload["scenarios"][0]["scenario_id"]
+    assert payload["scenarios"][0]["map_view"]["active_scope"] == "regional"
+    assert payload["scenarios"][0]["map_view"]["active_route_option_id"] == payload["scenarios"][0][
+        "scenario_id"
+    ]
+    assert "provider" in payload["scenarios"][0]["map_diagnostics"]
+    assert "provider" not in payload["scenarios"][0]["map_view"]
     assert "runtime scenario" in payload["summary"].lower()
 
 

@@ -849,6 +849,62 @@ def _route_option_available_actions(state: str) -> list[dict[str, str]]:
     return actions
 
 
+def _humanize_route_stop(stop: str) -> str:
+    return (
+        stop.replace("dest-city-", "")
+        .replace("dest-", "")
+        .replace("city-", "")
+        .replace("_", " ")
+        .replace("-", " ")
+        .strip()
+        .title()
+    )
+
+
+def _build_runtime_map_view_payload(
+    *,
+    scenario: dict[str, Any],
+    summary: dict[str, Any],
+    route_sequence: list[str],
+) -> dict[str, Any]:
+    confidence_level = "high" if summary.get("feasible", False) else "medium"
+    return {
+        "active_scope": "regional",
+        "active_route_option_id": scenario["scenario_id"],
+        "selected_segment_id": None,
+        "place_markers": [_humanize_route_stop(stop) for stop in route_sequence],
+        "rough_route_geometry": [],
+        "confidence": {
+            "level": confidence_level,
+            "summary": (
+                "Route geometry is aligned with ranked scenario data."
+                if confidence_level == "high"
+                else "Route geometry is approximate while scenario feasibility is still settling."
+            ),
+        },
+    }
+
+
+def _build_runtime_map_diagnostics_payload(
+    *,
+    scenario: dict[str, Any],
+    summary: dict[str, Any],
+    route_sequence: list[str],
+) -> dict[str, Any]:
+    has_route = len(route_sequence) > 1
+    return {
+        "provider": {
+            "kind": "fallback",
+            "status": "sparse-route" if not has_route else "fallback",
+            "details": "Route geometry is synthesized from scenario route_sequence.",
+        },
+        "route_state": "ready" if has_route else "sparse",
+        "route_warning": None if summary.get("feasible", False) else "scenario_not_feasible",
+        "source_result_id": scenario["source_result_id"],
+        "objective_refs": list(scenario.get("objective_refs") or []),
+    }
+
+
 def _build_runtime_scenario_comparison(
     *,
     trip_id: str,
@@ -981,6 +1037,16 @@ def _build_runtime_scenario_comparison(
                 "highlights": _comparison_highlights(scenario=scenario, lead=lead),
                 "source_result_id": scenario["source_result_id"],
                 "objective_refs": list(scenario.get("objective_refs") or []),
+                "map_view": _build_runtime_map_view_payload(
+                    scenario=scenario,
+                    summary=summary,
+                    route_sequence=list(summary.get("route_sequence") or []),
+                ),
+                "map_diagnostics": _build_runtime_map_diagnostics_payload(
+                    scenario=scenario,
+                    summary=summary,
+                    route_sequence=list(summary.get("route_sequence") or []),
+                ),
             }
         )
 
