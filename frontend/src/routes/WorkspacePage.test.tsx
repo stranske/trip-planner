@@ -894,7 +894,7 @@ describe("WorkspacePage", () => {
     const routeContextMap = screen.getByLabelText("Route context map");
 
     expect(screen.getAllByRole("heading", { name: "Kyoto base with Uji day trip" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Map for Kyoto base with Uji day trip" })).toBeInTheDocument();
     expect(within(routeContextMap).getAllByText("Kyoto").length).toBeGreaterThan(0);
     expect(within(routeContextMap).getAllByText("Uji").length).toBeGreaterThan(0);
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
@@ -1285,7 +1285,7 @@ describe("WorkspacePage", () => {
     });
 
     expect(
-      screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })
+      screen.getByRole("heading", { name: "Map for Kyoto base with Uji day trip" })
     ).toBeInTheDocument();
     expect(screen.getAllByText("kyoto -> uji -> kyoto").length).toBeGreaterThan(0);
     expect(screen.getByText("93 / 100 planner score")).toBeInTheDocument();
@@ -1293,7 +1293,7 @@ describe("WorkspacePage", () => {
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 
     expect(
-      screen.getByRole("heading", { name: "Map preview for Kyoto plus Osaka fallback" })
+      screen.getByRole("heading", { name: "Map for Kyoto plus Osaka fallback" })
     ).toBeInTheDocument();
     expect(screen.getAllByText("kyoto -> osaka -> kyoto").length).toBeGreaterThan(0);
     expect(screen.getByText("88 / 100 planner score")).toBeInTheDocument();
@@ -1321,12 +1321,17 @@ describe("WorkspacePage", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText("Google Maps JavaScript adapter").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Route geometry overlay for Kyoto base with Uji day trip")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /stop marker:/ }).length).toBeGreaterThan(0);
     expect(container.querySelector("iframe")).toBeNull();
     expect(screen.queryByTitle(/google maps/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Fallback option markers")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
+    expect(
+      screen.getAllByText("High confidence: the route has enough map detail for close review.")
+        .length
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("Google Maps JavaScript adapter")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /lodging marker: Osaka arrival buffer/ }));
     expect(screen.getAllByRole("heading", { name: "Osaka arrival buffer" }).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /activity marker: Kyoto cultural anchor/ }));
@@ -1334,7 +1339,6 @@ describe("WorkspacePage", () => {
     await user.click(screen.getByRole("button", { name: /policy marker: Route burden warning/ }));
     expect(screen.getByRole("heading", { name: "Route burden warning" })).toBeInTheDocument();
     expect(screen.getAllByText("Approval or feasibility warning active").length).toBeGreaterThan(0);
-    expect(screen.getByText("Live provider path")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 
@@ -1357,8 +1361,8 @@ describe("WorkspacePage", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText("Google Maps JavaScript adapter").length).toBeGreaterThan(0);
-    expect(screen.getByText("Live provider path")).toBeInTheDocument();
+    expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
+    expect(screen.queryByText("Google Maps JavaScript adapter")).not.toBeInTheDocument();
   });
 
   it("updates the dedicated comparison surfaces when scenario and trip selections change", async () => {
@@ -1377,7 +1381,7 @@ describe("WorkspacePage", () => {
     expect(screen.getAllByText("Moderate travel friction with a clear cultural center of gravity.").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" }));
     expect(
-      screen.getByRole("heading", { name: "Map preview for Kyoto plus Osaka fallback" })
+      screen.getByRole("heading", { name: "Map for Kyoto plus Osaka fallback" })
     ).toBeInTheDocument();
     expect(screen.getAllByText("Osaka rainy-day fallback").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Higher transfer load to preserve nightlife breadth.").length).toBeGreaterThan(0);
@@ -1502,9 +1506,13 @@ describe("WorkspacePage", () => {
 
     expect(screen.getByText("Compact review keeps route, day plan, and next choices close together.")).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByText("Textual fallback route path")).toBeInTheDocument();
+      expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
     });
-    expect(screen.getAllByText(/Google Maps JavaScript is not configured in this environment/).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("Medium confidence: this is an approximate sketch from the current route stops.")
+        .length
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText(/Google Maps JavaScript is not configured in this environment/)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Compact day-by-day review" })).toBeInTheDocument();
   });
 
@@ -1519,10 +1527,10 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByText("Provider loading fallback path")).toBeInTheDocument();
+      expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
     });
 
-    expect(screen.getAllByText(/Google Maps JavaScript is loading/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Google Maps JavaScript is loading/)).not.toBeInTheDocument();
     expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
   });
 
@@ -1537,10 +1545,10 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByText("Provider error fallback path")).toBeInTheDocument();
+      expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
     });
 
-    expect(screen.getAllByText(/failed to load/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/failed to load/)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Fallback option markers")).toBeInTheDocument();
     expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
   });
@@ -1581,11 +1589,14 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByText("Sparse route fallback path")).toBeInTheDocument();
+      expect(
+        screen.getAllByText("Low confidence: the route needs more stops before the map can show its shape.")
+          .length
+      ).toBeGreaterThan(0);
     });
 
-    expect(screen.getAllByText(/needs at least an origin and destination/).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })).toBeInTheDocument();
+    expect(screen.queryByText(/needs at least an origin and destination/)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Map for Kyoto base with Uji day trip" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
   });
 
