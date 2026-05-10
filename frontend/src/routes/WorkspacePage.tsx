@@ -49,6 +49,11 @@ type ScenarioReviewMetric = {
   value: string;
 };
 
+type PlannerPromptSuggestion = {
+  label: string;
+  draft: string;
+};
+
 type ProposalLifecycleState =
   | "pending"
   | "deferred"
@@ -63,6 +68,29 @@ type ProposalLifecyclePresentation = {
   title: string;
   summary: string;
 };
+
+const PLANNER_PROMPT_SUGGESTIONS: PlannerPromptSuggestion[] = [
+  {
+    label: "Compare routes",
+    draft: "Compare the strongest route options and tell me the main tradeoffs.",
+  },
+  {
+    label: "Remember a note",
+    draft: "Please remember this for later: ",
+  },
+  {
+    label: "Revisit lodging",
+    draft: "Revisit lodging options with budget, location, and transfer friction in mind.",
+  },
+  {
+    label: "Summarize decisions",
+    draft: "Summarize what we have decided, what is still open, and what you recommend next.",
+  },
+  {
+    label: "Show rejected ideas",
+    draft: "Show route or lodging ideas we considered and rejected, with the reason for each.",
+  },
+];
 
 function formatDateRange(startDate: string | null, endDate: string | null): string {
   if (!startDate && !endDate) {
@@ -598,13 +626,13 @@ export function WorkspacePage() {
       resolve={resolve}
       loading={{
         label: "Workspace",
-        title: "Loading persisted trip state",
-        message: "Hydrating trip, session, and saved-scenario records for the timeline surface.",
+        title: "Opening your trip workspace",
+        message: "Loading the latest route ideas, notes, budget, and planning state.",
       }}
       error={{
         label: "Workspace",
-        title: "Workspace request failed",
-        message: "The shared API client could not load the workspace payload.",
+        title: "Trip workspace could not load",
+        message: "Refresh the page or try again after the latest trip data is available.",
       }}
     >
       {([resolvedWorkspace, resolvedTrips]) => (
@@ -839,6 +867,11 @@ function WorkspacePageContent({
     }
   }
 
+  function handlePlannerPromptSuggestion(draft: string) {
+    setPlannerConversationDraft(draft);
+    setPlannerConversationError(null);
+  }
+
   async function handleBudgetSave(payload: BudgetPlanUpsertPayload) {
     setBudgetError(null);
     setBudgetBusyLabel("Saving workspace budget...");
@@ -894,7 +927,7 @@ function WorkspacePageContent({
     >
       <div className="workspace-hero status-card">
         <p className="status-label">
-          {productView?.user_summary.mode_label ?? "Workspace timeline"}
+          {productView?.user_summary.mode_label ?? "Trip workspace"}
         </p>
         <h2>{productView?.user_summary.trip_title ?? trip.title}</h2>
         <p>{productView?.user_summary.headline ?? trip.summary}</p>
@@ -967,16 +1000,33 @@ function WorkspacePageContent({
         </dl>
         <p className="workspace-hero-emphasis">
           {isCompactLayout
-            ? "Compact review stack keeps map, timeline, and tradeoff calls visible on smaller screens."
-            : "Review-ready workspace keeps route context, daily pacing, and tradeoffs visible at once."}
+            ? "Compact review keeps route, day plan, and next choices close together."
+            : "Use this trip workspace to compare options, capture traveler notes, and move toward one clear next step."}
         </p>
+        <details className="workspace-help-disclosure">
+          <summary>How to use this trip workspace</summary>
+          <div className="workspace-help-grid">
+            <article>
+              <h3>Check the next decision</h3>
+              <p>Start with trip status and open choices, then ask your planner for the next action to take.</p>
+            </article>
+            <article>
+              <h3>Compare options</h3>
+              <p>Use the map, route tradeoffs, day plan, and saved ideas to compare what fits this traveler goal.</p>
+            </article>
+            <article>
+              <h3>Capture reminders</h3>
+              <p>Send reminders to your planner so they stay with this trip and can be pulled into the next revision.</p>
+            </article>
+          </div>
+        </details>
         {productView && Object.keys(productView.debug_state.sections).length > 0 ? (
           <details className="workspace-debug-disclosure">
             <summary>Advanced diagnostics</summary>
             <p className="muted-copy">
               {Object.keys(productView.debug_state.sections).length} debug section
-              {Object.keys(productView.debug_state.sections).length === 1 ? "" : "s"} available in the
-              workspace payload.
+              {Object.keys(productView.debug_state.sections).length === 1 ? "" : "s"} available for
+              troubleshooting.
             </p>
           </details>
         ) : null}
@@ -984,24 +1034,25 @@ function WorkspacePageContent({
 
       <div className="workspace-grid">
         <section className="status-card planner-panel-card">
-          <p className="status-label">Planner panel</p>
-          <h2>Trip-scoped planner surface</h2>
+          <p className="status-label">Planner</p>
+          <h2>Traveler planning workspace</h2>
           <p className="muted-copy">
-            {currentWorkspace.planner_panel_state.planner_behavior.runtime_summary ??
-              "The existing planner side panel now mounts inside the workspace route and reads trip-scoped API data."}
+            Use your planner to compare options, keep context, and decide the next best trip step.
           </p>
-          <div className="planner-runtime-row" aria-label="Planner runtime state">
+          <div className="planner-runtime-row" aria-label="Planner availability">
             <span
               className={`planner-runtime-pill planner-runtime-pill--${
                 currentWorkspace.planner_panel_state.planner_behavior.runtime_status ?? "fallback"
               }`}
             >
-              {currentWorkspace.planner_panel_state.planner_behavior.runtime_label ?? "Deterministic fallback planner"}
+              {currentWorkspace.planner_panel_state.planner_behavior.runtime_mode === "model"
+                ? "AI-assisted planner"
+                : "Guided planner"}
             </span>
             <span className="planner-runtime-mode">
               {currentWorkspace.planner_panel_state.planner_behavior.runtime_mode === "model"
-                ? "Model-backed"
-                : "Fallback"}
+                ? "Live assistance"
+                : "Planning guide"}
             </span>
           </div>
           <PlanningModeSelector
@@ -1021,11 +1072,11 @@ function WorkspacePageContent({
           <section className="planner-conversation-card" aria-label="Planner conversation">
             <div className="planner-conversation-header">
               <div>
-                <p className="scenario-kicker">Conversation runtime</p>
-                <h3>Message the trip planner</h3>
+                <p className="scenario-kicker">Conversation</p>
+                <h3>Message your planner</h3>
                 <p>
-                  Turns are persisted through the trip-scoped planner API and refresh the same
-                  panel state, memory, and activity trail used by the workspace.
+                  Ask for comparisons, summaries, reminders, or a specific next step. The answer
+                  stays with this trip.
                 </p>
               </div>
               <div className="planner-conversation-actions">
@@ -1053,8 +1104,7 @@ function WorkspacePageContent({
               {plannerSession == null || plannerSession.messages.length === 0 ? (
                 <article className="planner-message planner-message-empty">
                   <p>
-                    No conversation turns have been persisted yet. Send a message to start the
-                    runtime-backed planner thread for this trip.
+                    No planner conversation yet. Send a message to start shaping this trip.
                   </p>
                 </article>
               ) : (
@@ -1067,25 +1117,29 @@ function WorkspacePageContent({
                 ))
               )}
             </div>
-            {plannerSession?.available_tools.length ? (
-              <div className="planner-tool-strip" aria-label="Planner tools available">
-                {plannerSession.available_tools.slice(0, 4).map((tool) => (
-                  <span key={tool.tool_name}>{tool.tool_name.replace(/_/g, " ")}</span>
-                ))}
-              </div>
-            ) : null}
+            <div className="planner-prompt-suggestions" aria-label="Planner prompt suggestions">
+              {PLANNER_PROMPT_SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion.label}
+                  type="button"
+                  onClick={() => handlePlannerPromptSuggestion(suggestion.draft)}
+                >
+                  {suggestion.label}
+                </button>
+              ))}
+            </div>
             <form className="planner-conversation-form" onSubmit={handlePlannerTurnSubmit}>
               <label>
-                Message
+                Message the planner
                 <textarea
                   value={plannerConversationDraft}
                   onChange={(event) => setPlannerConversationDraft(event.target.value)}
-                  placeholder="Ask the planner what to compare, revise, or inspect next."
+                  placeholder="Ask what to compare, what to remember, or what decision comes next."
                   rows={3}
                 />
               </label>
               <button type="submit" disabled={Boolean(plannerConversationBusyLabel)}>
-                Send planner turn
+                Send message
               </button>
             </form>
           </section>
@@ -1233,15 +1287,23 @@ function WorkspacePageContent({
         </section>
 
         <section className="status-card">
-          <p className="status-label">Inventory bundles</p>
-          <h2>{workspace.inventory_summary.runtime_state.title}</h2>
-          <p>{workspace.inventory_summary.runtime_state.summary}</p>
+          <p className="status-label">Things to consider</p>
+          <h2>
+            {workspace.inventory_summary.bundle_count > 0
+              ? "Places and options to review"
+              : "Options need more trip detail"}
+          </h2>
+          <p>
+            {workspace.inventory_summary.bundle_count > 0
+              ? "Grouped lodging, transport, and activity ideas are ready to inspect."
+              : "Add dates, trip length, or route direction so the planner can group useful options."}
+          </p>
           <p className="muted-copy">{workspace.inventory_summary.notes[0]}</p>
           {workspace.inventory_summary.bundle_count === 0 ? (
             <p className="muted-copy">
               {workspace.inventory_summary.runtime_state.status === "partial"
-                ? "Runtime bundle assembly is waiting on the rest of the trip frame."
-                : "Bundle assembly has not started yet for this trip."}
+                ? "The planner needs a little more trip detail before it can group options."
+                : "No option groups have been created for this trip yet."}
             </p>
           ) : (
             <div className="scenario-stack">
@@ -1261,20 +1323,20 @@ function WorkspacePageContent({
         </section>
 
         <section className="status-card">
-          <p className="status-label">Timeline</p>
+          <p className="status-label">Day plan</p>
           {timelineStops.length === 0 || activeScenario.scenario === null ? (
             <>
-              <h2>Timeline data is not ready</h2>
+              <h2>Day plan is not ready yet</h2>
               <p>
-                The workspace needs a scenario route sequence before it can render day-by-day pacing.
+                Choose or build a route idea before reviewing day-by-day pacing.
               </p>
               <p className="muted-copy">
-                Trip context is ready now, so the next planning pass can attach saved scenarios and timeline stops.
+                Ask the planner to compare routes or draft a first sequence of stops.
               </p>
             </>
           ) : (
             <>
-              <h2>{isCompactLayout ? "Compact day-by-day review" : "Trip rhythm and day sequencing"}</h2>
+              <h2>{isCompactLayout ? "Compact day-by-day review" : "Trip rhythm and day sequence"}</h2>
               <p>{selectedRuntimeScenario?.summary ?? activeScenario.scenario.scenario_summary.headline}</p>
               <div className="timeline-summary-grid" aria-label="Timeline summary">
                 <article className="timeline-summary-card">
@@ -1312,7 +1374,7 @@ function WorkspacePageContent({
                   </h3>
                   <p>
                     {selectedRuntimeScenario?.comparison_note ??
-                      "Option-level details update when scenario comparison data is available."}
+                      "Details update as route ideas become clearer."}
                   </p>
                 </article>
               </div>
@@ -1327,7 +1389,7 @@ function WorkspacePageContent({
                       <h3>{stop.label}</h3>
                       <p>
                         Days {stop.startDay}-{stop.endDay} keep this stop visible in the selected
-                        scenario review path.
+                        route review path.
                       </p>
                     </div>
                   </li>
@@ -1338,11 +1400,11 @@ function WorkspacePageContent({
         </section>
 
         <section className="status-card">
-          <p className="status-label">Scenario review board</p>
-          <h2>{isCompactLayout ? "Compact scenario tradeoffs" : "Review-ready scenario tradeoffs"}</h2>
+          <p className="status-label">Route tradeoffs</p>
+          <h2>{isCompactLayout ? "Compact route tradeoffs" : "Review route tradeoffs"}</h2>
           <p>
             Cost, route burden, feasibility, and policy posture stay scannable here without
-            forcing the traveler into raw scenario notes.
+            forcing you into raw planning notes.
           </p>
           {routeComparison.scenarios.length > 0 ? (
             <div className="scenario-review-grid" aria-label="Scenario review board">
@@ -1384,14 +1446,14 @@ function WorkspacePageContent({
           ) : (
             <p className="muted-copy">
               {currentWorkspace.runtime_state.status === "partial"
-                ? "Runtime comparison is waiting on richer trip inputs before scenario review can start."
-                : "No runtime scenarios are available yet, so there is nothing to review in the scenario board."}
+                ? "Add a little more trip detail before route comparison can start."
+                : "No route ideas are available yet, so there is nothing to compare."}
             </p>
           )}
         </section>
 
         <section className="status-card">
-          <p className="status-label">Scenario context</p>
+          <p className="status-label">Saved ideas</p>
           <h2>{currentWorkspace.scenario_search.title}</h2>
           <div className="scenario-stack">
             {currentWorkspace.saved_scenarios.map((savedScenario) => {
@@ -1412,8 +1474,8 @@ function WorkspacePageContent({
             })}
             {currentWorkspace.saved_scenarios.length === 0 ? (
               <p className="muted-copy">
-                No saved scenarios exist yet. The mounted planner panel carries the bootstrap context until planner
-                history is persisted.
+                No saved route ideas exist yet. Ask the planner to compare routes or save a
+                promising direction.
               </p>
             ) : null}
           </div>
@@ -1422,8 +1484,8 @@ function WorkspacePageContent({
 
       <div className="workspace-grid">
         <section className="status-card">
-          <p className="status-label">Session state</p>
-          <h2>Current planning posture</h2>
+          <p className="status-label">Planning settings</p>
+          <h2>Current collaboration style</h2>
           <dl className="workspace-meta">
             <div>
               <dt>Interaction</dt>
@@ -1440,7 +1502,7 @@ function WorkspacePageContent({
           </dl>
           <div className="decision-stack">
             {currentWorkspace.session.pending_decisions.length === 0 ? (
-              <p className="muted-copy">No blocking decisions are currently waiting on the traveler.</p>
+              <p className="muted-copy">No blocking decisions are waiting for you right now.</p>
             ) : (
               currentWorkspace.session.pending_decisions.map((decision) => (
                 <article key={decision.decision_id} className="decision-card">
@@ -1453,7 +1515,7 @@ function WorkspacePageContent({
         </section>
 
         <section className="status-card">
-          <p className="status-label">Comparison</p>
+          <p className="status-label">Saved comparison</p>
           <h2>{currentWorkspace.scenario_comparison?.summary ?? "No comparison saved yet"}</h2>
           {currentWorkspace.scenario_comparison ? (
             <>
@@ -1465,7 +1527,7 @@ function WorkspacePageContent({
               </ul>
             </>
           ) : (
-            <p className="muted-copy">The workspace will surface durable scenario tradeoff comparisons here.</p>
+            <p className="muted-copy">Saved route tradeoff comparisons will appear here.</p>
           )}
         </section>
 
@@ -1544,16 +1606,16 @@ function WorkspacePageContent({
         </section>
 
         <section className="status-card">
-          <p className="status-label">Planner memory</p>
+          <p className="status-label">Planning notes</p>
           <h2>
             {currentWorkspace.planner_memory.artifacts.length > 0
-              ? "User-visible planner checkpoints"
-              : "Planner memory has not been summarized yet"}
+              ? "Planner notes to keep"
+              : "No planner notes have been saved yet"}
           </h2>
           {currentWorkspace.planner_memory.artifacts.length === 0 ? (
             <p className="muted-copy">
-              The workspace will surface durable planner summaries here after the first persisted
-              planner conversation turn.
+              Important summaries and remembered decisions will appear here after the first planner
+              conversation.
             </p>
           ) : (
             <div className="decision-stack">
@@ -1569,11 +1631,11 @@ function WorkspacePageContent({
         </section>
 
         <section className="status-card">
-          <p className="status-label">Activity trail</p>
-          <h2>Persisted planner actions</h2>
+          <p className="status-label">Recent activity</p>
+          <h2>Latest trip planning actions</h2>
           <div className="decision-stack">
             {currentWorkspace.activity_log.length === 0 ? (
-              <p className="muted-copy">Planner actions will appear here after the first persisted decision or feedback event.</p>
+              <p className="muted-copy">Planner actions will appear here after the first decision or feedback event.</p>
             ) : (
               currentWorkspace.activity_log.slice(0, 4).map((entry) => (
                 <article key={entry.activity_event_id} className="decision-card">
