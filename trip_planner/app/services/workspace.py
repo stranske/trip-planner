@@ -3148,7 +3148,14 @@ def update_planning_ledger_entry(
         if status not in PLANNING_LEDGER_STATUSES:
             raise ValueError(f"status must be one of {', '.join(PLANNING_LEDGER_STATUSES)}")
         entry.status = status
-    for field in ("category", "summary", "detail", "supersedes_entry_id"):
+    for field in (
+        "category",
+        "summary",
+        "detail",
+        "related_option_id",
+        "related_decision_id",
+        "supersedes_entry_id",
+    ):
         if updates.get(field) is not None:
             setattr(entry, field, updates[field])
     if updates.get("source_message_ids") is not None:

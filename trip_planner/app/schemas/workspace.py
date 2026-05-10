@@ -322,4 +322,6 @@ class PlanningLedgerEntryUpdateRequest(BaseModel):
     detail: str | None = Field(default=None, max_length=4000)
     source_message_ids: list[str] | None = None
     source_refs: list[str] | None = None
+    related_option_id: str | None = Field(default=None, max_length=128)
+    related_decision_id: str | None = Field(default=None, max_length=96)
     supersedes_entry_id: str | None = Field(default=None, max_length=96)

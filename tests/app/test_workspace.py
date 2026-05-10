@@ -233,16 +233,24 @@ def test_workspace_planning_ledger_api_persists_entries_across_reload(
 
     patched = client.patch(
         f"/api/workspace/{trip_id}/planning-ledger/{entry['ledger_entry_id']}",
-        json={"status": "completed"},
+        json={
+            "status": "completed",
+            "related_option_id": "option:lisbon-central",
+            "related_decision_id": "decision:lodging-area",
+        },
     )
     assert patched.status_code == 200, patched.text
     assert patched.json()["status"] == "completed"
+    assert patched.json()["related_option_id"] == "option:lisbon-central"
+    assert patched.json()["related_decision_id"] == "decision:lodging-area"
 
     reloaded = client.get(f"/api/workspace/{trip_id}")
     assert reloaded.status_code == 200
     ledger_entries = reloaded.json()["planning_ledger"]["entries"]
     assert ledger_entries[0]["summary"] == "Should the apartment be near Baixa or Alfama?"
     assert ledger_entries[0]["status"] == "completed"
+    assert ledger_entries[0]["related_option_id"] == "option:lisbon-central"
+    assert ledger_entries[0]["related_decision_id"] == "decision:lodging-area"
 
 
 def test_route_option_actions_create_durable_ledger_history(client: TestClient) -> None:
