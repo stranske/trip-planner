@@ -55,7 +55,9 @@ class WorkspaceUserSummary(BaseModel):
     trip_mode: Literal["leisure", "business"] = Field(
         description="Workspace product mode used to gate user-facing copy."
     )
-    mode_label: str = Field(description="User-friendly mode label (e.g. 'Leisure trip').")
+    mode_label: str = Field(
+        description="User-friendly mode label (e.g. 'Leisure trip')."
+    )
     status: Literal["ready", "partial", "empty"] = Field(
         description="High-level workspace status used for top-level framing."
     )
@@ -237,6 +239,10 @@ class PlannerOptionFeedbackRequest(BaseModel):
         "do_more_before_asking_again",
     ]
     decision_id: str | None = Field(default=None, max_length=96)
+
+
+class RouteOptionActionRequest(BaseModel):
+    action_type: Literal["make_baseline", "keep", "reject", "reopen", "revise"]
 
 
 class PlanningModeUpdateRequest(BaseModel):

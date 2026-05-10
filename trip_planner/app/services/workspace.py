@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -77,6 +78,20 @@ class WorkspaceFixture:
 
 
 WORKSPACE_ACTIVITY_LOG_LIMIT = 50
+ROUTE_OPTION_STATES: tuple[str, ...] = (
+    "active",
+    "baseline",
+    "fallback",
+    "rejected",
+    "needs_research",
+)
+ROUTE_OPTION_ACTIONS: tuple[str, ...] = (
+    "make_baseline",
+    "keep",
+    "reject",
+    "reopen",
+    "revise",
+)
 _BOOTSTRAP_SCENARIO_SCORE_BY_LABEL = {
     "baseline": 0.82,
     "fallback": 0.68,
@@ -119,11 +134,15 @@ def _load_trip_record(name: str) -> PersistedTripRecord:
     return PersistedTripRecord.from_dict(_load_json(_state_fixture_dir("trips") / name))
 
 
-def _load_saved_scenarios(name: str) -> tuple[list[SavedScenarioRecord], ScenarioComparison | None]:
+def _load_saved_scenarios(
+    name: str,
+) -> tuple[list[SavedScenarioRecord], ScenarioComparison | None]:
     payload = _load_json(_state_fixture_dir("scenarios") / name)
     records = [SavedScenarioRecord.from_dict(item) for item in payload["records"]]
     comparison = payload.get("comparison")
-    return records, ScenarioComparison.from_dict(comparison) if comparison is not None else None
+    return records, (
+        ScenarioComparison.from_dict(comparison) if comparison is not None else None
+    )
 
 
 def _load_session(name: str) -> PlanningSessionState:
@@ -145,7 +164,8 @@ def _canonicalize_saved_scenario_ids(
         matches = [
             record.saved_scenario_id
             for record in saved_scenarios
-            if set(record.saved_scenario_id.split(":")[-1].split("-")) == candidate_tokens
+            if set(record.saved_scenario_id.split(":")[-1].split("-"))
+            == candidate_tokens
         ]
         if len(matches) == 1:
             return matches[0]
@@ -153,7 +173,9 @@ def _canonicalize_saved_scenario_ids(
 
     session.current_saved_scenario_id = normalize(session.current_saved_scenario_id)
     for decision in session.pending_decisions:
-        decision.related_saved_scenario_id = normalize(decision.related_saved_scenario_id)
+        decision.related_saved_scenario_id = normalize(
+            decision.related_saved_scenario_id
+        )
 
 
 def _leisure_search_result(trip_id: str) -> ScenarioSearchResult:
@@ -239,7 +261,9 @@ def _leisure_search_result(trip_id: str) -> ScenarioSearchResult:
                         summary="The fallback opens more nightlife at the cost of extra transfers.",
                         factor_keys=["breadth", "transfer_cost"],
                         machine_context={"planner_mode": "leisure"},
-                        human_summary=["Broader exploration, slightly more travel fatigue."],
+                        human_summary=[
+                            "Broader exploration, slightly more travel fatigue."
+                        ],
                         source_refs=["ranked-results:kyoto-spring"],
                     )
                 ],
@@ -279,7 +303,10 @@ def _business_search_result(trip_id: str) -> ScenarioSearchResult:
                     route_sequence=["home", "client-site", "conference-hotel"],
                     notes=["compliant-first"],
                 ),
-                supporting_option_ids=["option:approved-rail", "option:conference-hotel"],
+                supporting_option_ids=[
+                    "option:approved-rail",
+                    "option:conference-hotel",
+                ],
                 objective_refs=["objective:client-summit"],
                 explanation_records=[
                     ExplanationRecord(
@@ -368,6 +395,181 @@ def _build_scenario_search(
     )
 
 
+def _generated_route_sequence(route_sequence: list[str], *, variant: str) -> list[str]:
+    clean_sequence = [stop for stop in route_sequence if stop]
+    if not clean_sequence:
+        clean_sequence = ["first-base", "comparison-stop"]
+    if variant == "reverse":
+        return (
+            list(reversed(clean_sequence))
+            if len(clean_sequence) > 1
+            else [
+                clean_sequence[0],
+                "nearby-base",
+            ]
+        )
+    if len(clean_sequence) == 1:
+        return [clean_sequence[0], "nearby-base", clean_sequence[0]]
+    return [*clean_sequence, clean_sequence[0]]
+
+
+def _adjust_estimated_total(
+    estimated_total: dict[str, Any] | None,
+    *,
+    delta: float,
+) -> dict[str, Any] | None:
+    if not isinstance(estimated_total, dict):
+        return estimated_total
+    typical_amount = estimated_total.get("typical_amount")
+    if typical_amount is None:
+        return estimated_total
+    adjusted = dict(estimated_total)
+    adjusted["typical_amount"] = round(max(0.0, float(typical_amount) + delta), 2)
+    return adjusted
+
+
+def _route_option_variant(
+    *,
+    base_scenario: dict[str, Any],
+    trip_id: str,
+    variant: str,
+    rank: int,
+    title: str,
+    headline: str,
+    tradeoff_summary: str,
+    score_delta: float,
+    travel_minutes_delta: int,
+    transfer_delta: int,
+    estimated_total_delta: float,
+    scenario_kind: str,
+) -> dict[str, Any]:
+    generated = deepcopy(base_scenario)
+    base_summary = dict(base_scenario.get("scenario_summary") or {})
+    base_route = list(base_summary.get("route_sequence") or [])
+    generated_id = f"scenario:{trip_id}:route-option:{variant}"
+    generated["scenario_id"] = generated_id
+    generated["title"] = title
+    generated["rank"] = rank
+    generated["source_result_id"] = (
+        f"{base_scenario.get('source_result_id', generated_id)}:{variant}"
+    )
+    generated["score"] = round(
+        max(0.05, min(0.98, float(base_scenario.get("score", 0.5)) + score_delta)), 2
+    )
+    generated["scenario_summary"] = {
+        **base_summary,
+        "headline": headline,
+        "scenario_kind": scenario_kind,
+        "recommended_for_selection": False,
+        "estimated_total": _adjust_estimated_total(
+            base_summary.get("estimated_total"),
+            delta=estimated_total_delta,
+        ),
+        "total_travel_minutes": max(
+            0,
+            int(base_summary.get("total_travel_minutes") or 0) + travel_minutes_delta,
+        ),
+        "total_transfer_count": max(
+            0,
+            int(base_summary.get("total_transfer_count") or 0) + transfer_delta,
+        ),
+        "route_sequence": _generated_route_sequence(base_route, variant=variant),
+        "notes": [
+            *list(base_summary.get("notes") or []),
+            "generated_route_option",
+        ],
+    }
+    generated["unresolved_tradeoffs"] = [
+        *list(base_scenario.get("unresolved_tradeoffs") or []),
+        {
+            "tradeoff_id": f"tradeoff:{trip_id}:route-option:{variant}",
+            "code": f"generated_{variant}_route",
+            "summary": tradeoff_summary,
+            "severity": "warning",
+            "blocking": False,
+            "related_ids": [str(base_scenario.get("scenario_id") or "")],
+            "notes": [
+                "Generated as a rough comparison route until deeper planner research runs."
+            ],
+        },
+    ]
+    generated["notes"] = [
+        *list(base_scenario.get("notes") or []),
+        "Generated as a rough route option from the current workspace route shape.",
+    ]
+    return generated
+
+
+def _ensure_route_option_search_depth(
+    record: PersistedTrip,
+    scenario_search: dict[str, Any],
+) -> dict[str, Any]:
+    scenarios = list(scenario_search.get("scenarios") or [])
+    if len(scenarios) >= 3 or not scenarios:
+        return scenario_search
+
+    expanded = dict(scenario_search)
+    expanded_scenarios = [deepcopy(scenario) for scenario in scenarios]
+    base_scenario = scenarios[0]
+    next_rank = len(expanded_scenarios) + 1
+    if len(expanded_scenarios) < 3:
+        expanded_scenarios.append(
+            _route_option_variant(
+                base_scenario=base_scenario,
+                trip_id=record.trip_id,
+                variant="reverse",
+                rank=next_rank,
+                title="Reverse-order route option",
+                headline="Same anchors in a different order to test pacing and arrival flow.",
+                tradeoff_summary=(
+                    "Reversing the order may improve arrival rhythm, but the planner still "
+                    "needs to validate local transfer timing."
+                ),
+                score_delta=-0.08,
+                travel_minutes_delta=45,
+                transfer_delta=1,
+                estimated_total_delta=120.0,
+                scenario_kind="alternative",
+            )
+        )
+        next_rank += 1
+    if len(expanded_scenarios) < 3:
+        expanded_scenarios.append(
+            _route_option_variant(
+                base_scenario=base_scenario,
+                trip_id=record.trip_id,
+                variant="loop",
+                rank=next_rank,
+                title="Loop route option",
+                headline="Return through the starting anchor to preserve a fallback exit path.",
+                tradeoff_summary=(
+                    "The loop keeps a recovery path open but adds movement that may not be "
+                    "worth it for the final plan."
+                ),
+                score_delta=-0.14,
+                travel_minutes_delta=90,
+                transfer_delta=2,
+                estimated_total_delta=240.0,
+                scenario_kind="fallback",
+            )
+        )
+
+    expanded["scenarios"] = expanded_scenarios[:4]
+    expanded["explanation"] = [
+        *list(expanded.get("explanation") or []),
+        "Route option workbench generated rough alternatives so the traveler can compare more than one path.",
+    ]
+    expanded["source_refs"] = list(
+        dict.fromkeys(
+            [
+                *list(expanded.get("source_refs") or []),
+                f"route-options:{record.trip_id}",
+            ]
+        )
+    )
+    return expanded
+
+
 def _build_runtime_scenario_search_for_trip(
     *,
     record: PersistedTrip,
@@ -384,15 +586,18 @@ def _build_runtime_scenario_search_for_trip(
         return _empty_workspace_scenario_search()
 
     if inventory_bundles:
-        return _build_scenario_search(
-            trip_id=record.trip_id,
-            trip_mode=record.mode,
-            bundles=inventory_bundles,
-            trip_title=record.title,
-            primary_regions=tuple(record.primary_regions),
-            duration_days=record.duration_days,
-            traveler_party_kind=record.traveler_party_kind,
-        ).to_dict()
+        return _ensure_route_option_search_depth(
+            record,
+            _build_scenario_search(
+                trip_id=record.trip_id,
+                trip_mode=record.mode,
+                bundles=inventory_bundles,
+                trip_title=record.title,
+                primary_regions=tuple(record.primary_regions),
+                duration_days=record.duration_days,
+                traveler_party_kind=record.traveler_party_kind,
+            ).to_dict(),
+        )
 
     if saved_scenarios:
         return _build_saved_scenario_runtime_search(
@@ -438,7 +643,9 @@ def _comparison_highlights(
     lead: dict[str, Any],
 ) -> list[str]:
     summary = scenario["scenario_summary"]
-    route_sequence = " -> ".join(summary.get("route_sequence") or []) or "route sequence pending"
+    route_sequence = (
+        " -> ".join(summary.get("route_sequence") or []) or "route sequence pending"
+    )
     highlights = [
         f"Route: {route_sequence}.",
         f"Travel {summary['total_travel_minutes']} minutes with {summary['total_transfer_count']} transfer(s).",
@@ -448,10 +655,12 @@ def _comparison_highlights(
     else:
         score_delta = round(float(scenario["score"]) - float(lead["score"]), 2)
         travel_delta = (
-            summary["total_travel_minutes"] - lead["scenario_summary"]["total_travel_minutes"]
+            summary["total_travel_minutes"]
+            - lead["scenario_summary"]["total_travel_minutes"]
         )
         transfers_delta = (
-            summary["total_transfer_count"] - lead["scenario_summary"]["total_transfer_count"]
+            summary["total_transfer_count"]
+            - lead["scenario_summary"]["total_transfer_count"]
         )
         delta_parts = [f"Score {score_delta:+.2f} versus the lead scenario."]
         if travel_delta:
@@ -460,7 +669,9 @@ def _comparison_highlights(
             delta_parts.append(f"Transfers {transfers_delta:+d} versus lead.")
         estimated_total_delta = _estimated_total_delta(scenario, lead)
         if estimated_total_delta is not None:
-            delta_parts.append(f"Estimated total {estimated_total_delta:+.2f} versus lead.")
+            delta_parts.append(
+                f"Estimated total {estimated_total_delta:+.2f} versus lead."
+            )
         highlights.append(" ".join(delta_parts))
     highlights.extend(
         tradeoff["summary"] for tradeoff in scenario.get("unresolved_tradeoffs", [])[:2]
@@ -468,18 +679,212 @@ def _comparison_highlights(
     return highlights
 
 
+def _latest_presentation_for_option_set(
+    session: dict[str, Any] | None,
+    option_set_id: str,
+) -> dict[str, Any] | None:
+    if session is None:
+        return None
+    presentations = session.get("recent_option_presentations", [])
+    if not isinstance(presentations, list):
+        return None
+    for presentation in reversed(presentations):
+        if (
+            isinstance(presentation, dict)
+            and presentation.get("option_set_id") == option_set_id
+        ):
+            return presentation
+    return None
+
+
+def _note_option_ids(notes: list[Any], prefix: str) -> set[str]:
+    marker = f"{prefix}:"
+    return {
+        note.split(":", 1)[1]
+        for note in notes
+        if isinstance(note, str) and note.startswith(marker) and note.split(":", 1)[1]
+    }
+
+
+def _session_route_option_state(
+    session: dict[str, Any] | None,
+    option_set_id: str,
+) -> tuple[set[str], str | None, set[str], set[str]]:
+    presentation = _latest_presentation_for_option_set(session, option_set_id)
+    if presentation is None:
+        return set(), None, set(), set()
+
+    rejected_option_ids = {
+        item
+        for item in presentation.get("rejected_option_ids", [])
+        if isinstance(item, str)
+    }
+    selected_option_id = presentation.get("selected_option_id")
+    if not isinstance(selected_option_id, str) or selected_option_id == "":
+        selected_option_id = None
+    notes = list(presentation.get("notes") or [])
+    return (
+        rejected_option_ids,
+        selected_option_id,
+        _note_option_ids(notes, "fallback"),
+        _note_option_ids(notes, "needs_research"),
+    )
+
+
+def _route_option_state(
+    *,
+    scenario_id: str,
+    status: str,
+    lead_scenario_id: str,
+    rejected_option_ids: set[str],
+    selected_option_id: str | None,
+    fallback_option_ids: set[str],
+    needs_research_option_ids: set[str],
+) -> str:
+    if scenario_id in rejected_option_ids:
+        return "rejected"
+    if status == "blocked":
+        return "needs_research"
+    if scenario_id == selected_option_id or (
+        selected_option_id is None and scenario_id == lead_scenario_id
+    ):
+        return "baseline"
+    if scenario_id in needs_research_option_ids:
+        return "needs_research"
+    if scenario_id in fallback_option_ids or status == "fallback":
+        return "fallback"
+    return "active"
+
+
+def _route_option_purpose(*, state: str, status: str, scenario: dict[str, Any]) -> str:
+    title = scenario.get("title") or "This route"
+    if state == "baseline":
+        return f"Use {title} as the route everything else is compared against."
+    if state == "fallback":
+        return f"Keep {title} available as a backup or later comparison lane."
+    if state == "rejected":
+        return f"Keep {title} in history so the reason for rejecting it is not lost."
+    if state == "needs_research":
+        return (
+            f"Send {title} back for a focused revision before treating it as settled."
+        )
+    if status == "recommended":
+        return f"Compare {title} as a strong candidate before making it the baseline."
+    return f"Compare {title} as an active alternative while the route is still taking shape."
+
+
+def _route_option_confidence(*, scenario: dict[str, Any], state: str) -> float:
+    try:
+        confidence = float(scenario.get("score", 0.5))
+    except (TypeError, ValueError):
+        confidence = 0.5
+    summary = scenario.get("scenario_summary") or {}
+    if not summary.get("feasible", True):
+        confidence = min(confidence, 0.35)
+    if state == "needs_research":
+        confidence = min(confidence, 0.55)
+    if state == "rejected":
+        confidence = min(confidence, 0.4)
+    for tradeoff in scenario.get("unresolved_tradeoffs", []):
+        if tradeoff.get("severity") == "critical" or tradeoff.get("blocking"):
+            confidence = min(confidence, 0.58)
+    return round(max(0.05, min(confidence, 0.98)), 2)
+
+
+def _route_option_unresolved_questions(
+    *, scenario: dict[str, Any], state: str
+) -> list[str]:
+    summary = scenario.get("scenario_summary") or {}
+    questions: list[str] = []
+    if not summary.get("route_sequence"):
+        questions.append("Which stops should anchor this route?")
+    if summary.get("estimated_total") is None:
+        questions.append("What rough cost range should this route assume?")
+    for tradeoff in scenario.get("unresolved_tradeoffs", [])[:2]:
+        tradeoff_summary = tradeoff.get("summary")
+        if isinstance(tradeoff_summary, str) and tradeoff_summary:
+            questions.append(f"Can this tradeoff work for the trip: {tradeoff_summary}")
+    if state == "needs_research":
+        questions.append(
+            "What should the planner change before comparing this route again?"
+        )
+    return questions[:3]
+
+
+def _route_option_available_actions(state: str) -> list[dict[str, str]]:
+    if state not in ROUTE_OPTION_STATES:
+        raise ValueError(f"state must be one of {', '.join(ROUTE_OPTION_STATES)}")
+    if state == "rejected":
+        return [
+            {
+                "action_type": "reopen",
+                "label": "Reopen",
+                "description": "Move this route back into the active comparison set.",
+            }
+        ]
+
+    actions: list[dict[str, str]] = []
+    if state not in {"baseline", "needs_research"}:
+        actions.append(
+            {
+                "action_type": "make_baseline",
+                "label": "Make baseline",
+                "description": "Use this route as the main plan while keeping alternatives visible.",
+            }
+        )
+    if state != "fallback":
+        actions.append(
+            {
+                "action_type": "keep",
+                "label": "Keep for later",
+                "description": "Preserve this route as a backup option without making it the main plan.",
+            }
+        )
+    actions.extend(
+        [
+            {
+                "action_type": "reject",
+                "label": "Reject",
+                "description": "Move this route to history so it stops competing with active options.",
+            },
+            {
+                "action_type": "revise",
+                "label": "Revise",
+                "description": "Ask the planner to improve this route before the next checkpoint.",
+            },
+        ]
+    )
+    return actions
+
+
 def _build_runtime_scenario_comparison(
     *,
     trip_id: str,
     trip_title: str,
     scenario_search: dict[str, Any],
+    session: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     scenarios = list(scenario_search.get("scenarios", []))
+    option_set_id = _bootstrap_option_set_id(trip_id)
+    (
+        rejected_option_ids,
+        selected_option_id,
+        fallback_option_ids,
+        needs_research_option_ids,
+    ) = _session_route_option_state(session, option_set_id)
     comparison_axes = [
         {"key": "score", "label": "Planner score", "direction": "higher_better"},
-        {"key": "travel_minutes", "label": "Travel minutes", "direction": "lower_better"},
+        {
+            "key": "travel_minutes",
+            "label": "Travel minutes",
+            "direction": "lower_better",
+        },
         {"key": "transfers", "label": "Transfers", "direction": "lower_better"},
-        {"key": "estimated_total", "label": "Estimated total", "direction": "lower_better"},
+        {
+            "key": "estimated_total",
+            "label": "Estimated total",
+            "direction": "lower_better",
+        },
     ]
     if not scenarios:
         return {
@@ -495,17 +900,61 @@ def _build_runtime_scenario_comparison(
             "source_refs": list(scenario_search.get("source_refs") or []),
         }
 
-    lead = scenarios[0]
+    scenario_ids = {scenario["scenario_id"] for scenario in scenarios}
+    if (
+        selected_option_id not in scenario_ids
+        or selected_option_id in rejected_option_ids
+    ):
+        selected_option_id = None
+    lead = (
+        next(
+            (
+                scenario
+                for scenario in scenarios
+                if selected_option_id is not None
+                and scenario["scenario_id"] == selected_option_id
+            ),
+            None,
+        )
+        or scenarios[0]
+    )
     rows = []
     for scenario in scenarios:
         summary = scenario["scenario_summary"]
         estimated_total = summary.get("estimated_total")
+        status = _comparison_status_label(scenario)
+        state = _route_option_state(
+            scenario_id=scenario["scenario_id"],
+            status=status,
+            lead_scenario_id=lead["scenario_id"],
+            rejected_option_ids=rejected_option_ids,
+            selected_option_id=selected_option_id,
+            fallback_option_ids=fallback_option_ids,
+            needs_research_option_ids=needs_research_option_ids,
+        )
+        unresolved_questions = _route_option_unresolved_questions(
+            scenario=scenario,
+            state=state,
+        )
+        available_actions = _route_option_available_actions(state)
         rows.append(
             {
                 "scenario_id": scenario["scenario_id"],
+                "route_option_id": scenario["scenario_id"],
                 "title": scenario["title"],
                 "rank": scenario["rank"],
-                "status": _comparison_status_label(scenario),
+                "status": status,
+                "state": state,
+                "purpose": _route_option_purpose(
+                    state=state,
+                    status=status,
+                    scenario=scenario,
+                ),
+                "confidence": _route_option_confidence(scenario=scenario, state=state),
+                "unresolved_questions": unresolved_questions,
+                "available_actions": available_actions,
+                "open_question": unresolved_questions[0] if unresolved_questions else None,
+                "available_action": available_actions[0] if available_actions else None,
                 "summary": summary["headline"],
                 "comparison_note": (
                     "Lead route for the current workspace comparison set."
@@ -530,7 +979,9 @@ def _build_runtime_scenario_comparison(
                     "estimated_total": estimated_total,
                 },
                 "delta": {
-                    "score_delta": round(float(scenario["score"]) - float(lead["score"]), 2),
+                    "score_delta": round(
+                        float(scenario["score"]) - float(lead["score"]), 2
+                    ),
                     "travel_minutes_delta": (
                         summary["total_travel_minutes"]
                         - lead["scenario_summary"]["total_travel_minutes"]
@@ -653,12 +1104,16 @@ def _default_workspace_decisions(trip_id: str) -> list[PendingDecision]:
             ],
             blocking=True,
             related_option_set_id=f"option-set:{trip_id}:workspace-bootstrap",
-            notes=["Workspace bootstrap decision seeded for persisted planner interaction."],
+            notes=[
+                "Workspace bootstrap decision seeded for persisted planner interaction."
+            ],
         )
     ]
 
 
-def _default_workspace_presentation(trip_id: str, shown_at: str) -> OptionPresentationRecord:
+def _default_workspace_presentation(
+    trip_id: str, shown_at: str
+) -> OptionPresentationRecord:
     return OptionPresentationRecord(
         presentation_id=f"presentation:{trip_id}:workspace-bootstrap",
         option_set_id=f"option-set:{trip_id}:workspace-bootstrap",
@@ -684,7 +1139,9 @@ def _default_workspace_session(record: PersistedTrip) -> PlanningSessionState:
         mode=record.mode,
         started_at=_isoformat(record.created_at),
         updated_at=timestamp,
-        recent_option_presentations=[_default_workspace_presentation(record.trip_id, timestamp)],
+        recent_option_presentations=[
+            _default_workspace_presentation(record.trip_id, timestamp)
+        ],
         pending_decisions=_default_workspace_decisions(record.trip_id),
         activity_log_id=f"activity-log:{record.trip_id}",
         active_budget_plan_id=record.budget_state_id,
@@ -825,11 +1282,15 @@ def _bootstrap_saved_scenario_records(
                         "keeps a broader comparison lane available."
                     ),
                     "focus_areas": ["scope", "comparison-readiness"],
-                    "notes": ["Bootstrap comparison scaffold for persisted workspace rendering."],
+                    "notes": [
+                        "Bootstrap comparison scaffold for persisted workspace rendering."
+                    ],
                 }
             ],
             "tags": ["workspace-bootstrap", "preferred"],
-            "notes": ["Created automatically during the first persisted workspace bootstrap."],
+            "notes": [
+                "Created automatically during the first persisted workspace bootstrap."
+            ],
         }
     )
     fallback = SavedScenarioRecord.from_dict(
@@ -855,7 +1316,9 @@ def _bootstrap_saved_scenario_records(
             ],
             "comparisons": [],
             "tags": ["workspace-bootstrap", "fallback"],
-            "notes": ["Created automatically during the first persisted workspace bootstrap."],
+            "notes": [
+                "Created automatically during the first persisted workspace bootstrap."
+            ],
         }
     )
     return baseline, fallback
@@ -875,7 +1338,9 @@ def _saved_scenario_priority(saved_scenario: dict[str, Any]) -> tuple[int, str]:
     return priority, version.get("title", saved_scenario["saved_scenario_id"])
 
 
-def _ordered_saved_scenarios(saved_scenarios: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _ordered_saved_scenarios(
+    saved_scenarios: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     return sorted(saved_scenarios, key=_saved_scenario_priority)
 
 
@@ -956,9 +1421,13 @@ def _build_saved_scenario_runtime_search(
                     "route_sequence": route_sequence,
                     "notes": list(version.get("notes") or []),
                 },
-                "supporting_option_ids": list(version["snapshot_refs"].get("option_set_ids") or []),
+                "supporting_option_ids": list(
+                    version["snapshot_refs"].get("option_set_ids") or []
+                ),
                 "objective_refs": [
-                    ref for ref in [version["snapshot_refs"].get("objective_id")] if ref is not None
+                    ref
+                    for ref in [version["snapshot_refs"].get("objective_id")]
+                    if ref is not None
                 ],
                 "unresolved_tradeoffs": (
                     [
@@ -1126,13 +1595,15 @@ def _build_persisted_trip_workspace(
             inventory_status=inventory_status,
         )
     )
-    resolved_feasibility_summary = feasibility_summary or build_feasibility_summary_payload(
-        resolved_inventory_bundles
+    resolved_feasibility_summary = (
+        feasibility_summary
+        or build_feasibility_summary_payload(resolved_inventory_bundles)
     )
     runtime_scenario_comparison = _build_runtime_scenario_comparison(
         trip_id=record.trip_id,
         trip_title=trip_record["trip"]["title"],
         scenario_search=resolved_scenario_search,
+        session=resolved_session,
     )
     ranking = build_scenario_ranking_payload(
         trip_id=record.trip_id,
@@ -1328,11 +1799,11 @@ def _build_workspace_view_model(
     business_summary: dict[str, Any] | None = None
     if resolved_mode == "business":
         proposal_state = payload.get("proposal_state") or {}
-        proposal_state = (
-            proposal_state if isinstance(proposal_state, dict) else {}
-        )
+        proposal_state = proposal_state if isinstance(proposal_state, dict) else {}
         proposal_summary = proposal_state.get("summary") or {}
-        proposal_summary = proposal_summary if isinstance(proposal_summary, dict) else {}
+        proposal_summary = (
+            proposal_summary if isinstance(proposal_summary, dict) else {}
+        )
         approval_ready = bool(proposal_summary.get("approval_ready"))
         evaluation_status = str(
             proposal_summary.get("evaluation_result_status")
@@ -1432,7 +1903,9 @@ def _build_workspace_runtime_state(
         }
     return {
         "status": str(inventory_runtime_state.get("status") or "empty"),
-        "title": str(inventory_runtime_state.get("title") or "Workspace runtime is still empty"),
+        "title": str(
+            inventory_runtime_state.get("title") or "Workspace runtime is still empty"
+        ),
         "summary": str(
             inventory_runtime_state.get("summary")
             or "Trip context is not complete enough for runtime workspace assembly yet."
@@ -1457,6 +1930,7 @@ def _build_runtime_scenario_comparison_payload(
             fixture = None
     if fixture is not None:
         trip_record = _load_trip_record(fixture.trip_fixture)
+        session = _load_session(fixture.session_fixture)
         inventory_bundles = assemble_inventory_bundles_for_trip(
             trip_id=trip_id,
             trip_mode=trip_record.trip.mode,
@@ -1474,6 +1948,7 @@ def _build_runtime_scenario_comparison_payload(
             trip_id=trip_id,
             trip_title=trip_record.trip.title,
             scenario_search=scenario_search.to_dict(),
+            session=session.to_dict(),
         )
 
     try:
@@ -1481,6 +1956,7 @@ def _build_runtime_scenario_comparison_payload(
     except WorkspaceTripNotFoundError:
         return None
 
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
     persisted_saved_scenarios_records = list(
         db_session.scalars(
             select(PersistedSavedScenario)
@@ -1489,7 +1965,6 @@ def _build_runtime_scenario_comparison_payload(
         ).all()
     )
     if not persisted_saved_scenarios_records:
-        session_record = _get_or_create_workspace_session_record(db_session, record=record)
         persisted_saved_scenarios_records = _create_bootstrap_saved_scenarios(
             db_session,
             record=record,
@@ -1508,8 +1983,12 @@ def _build_runtime_scenario_comparison_payload(
         }
         for scenario in persisted_saved_scenarios_records
     ]
-    persisted_inventory_bundles, inventory_summary = _build_workspace_inventory_inputs(record)
-    inventory_status = str((inventory_summary.get("runtime_state") or {}).get("status") or "empty")
+    persisted_inventory_bundles, inventory_summary = _build_workspace_inventory_inputs(
+        record
+    )
+    inventory_status = str(
+        (inventory_summary.get("runtime_state") or {}).get("status") or "empty"
+    )
     return _build_runtime_scenario_comparison(
         trip_id=trip_id,
         trip_title=record.title,
@@ -1519,6 +1998,7 @@ def _build_runtime_scenario_comparison_payload(
             saved_scenarios=persisted_saved_scenarios,
             inventory_status=inventory_status,
         ),
+        session=_serialize_session_record(session_record),
     )
 
 
@@ -1635,7 +2115,10 @@ def _sync_workspace_session_record(
         ):
             decision["related_saved_scenario_id"] = ordered_ids[0]
             decision["related_option_set_id"] = option_set_id
-            session_record.pending_decisions = [decision, *session_record.pending_decisions[1:]]
+            session_record.pending_decisions = [
+                decision,
+                *session_record.pending_decisions[1:],
+            ]
             updated = True
 
     if updated:
@@ -1672,7 +2155,9 @@ def _build_planner_panel_state(
 ) -> dict[str, Any]:
     scenarios = list(scenario_search.get("scenarios", []))
     primary_regions = list(trip["trip_frame"].get("primary_regions") or [])
-    region_summary = ", ".join(primary_regions[:2]) if primary_regions else "the current trip frame"
+    region_summary = (
+        ", ".join(primary_regions[:2]) if primary_regions else "the current trip frame"
+    )
 
     if scenarios:
         option_set = {
@@ -1682,8 +2167,16 @@ def _build_planner_panel_state(
             "scope": "scenario_selection",
             "title": scenario_search.get("title") or "Workspace planner scenarios",
             "comparison_axes": [
-                {"key": "score", "label": "Planner score", "direction": "higher_better"},
-                {"key": "travel_minutes", "label": "Travel minutes", "direction": "lower_better"},
+                {
+                    "key": "score",
+                    "label": "Planner score",
+                    "direction": "higher_better",
+                },
+                {
+                    "key": "travel_minutes",
+                    "label": "Travel minutes",
+                    "direction": "lower_better",
+                },
                 {"key": "transfers", "label": "Transfers", "direction": "lower_better"},
             ],
             "explanation": list(scenario_search.get("explanation") or [])
@@ -1697,9 +2190,12 @@ def _build_planner_panel_state(
                     "label": scenario["title"],
                     "summary": scenario["scenario_summary"]["headline"],
                     "drawbacks": [
-                        tradeoff["summary"] for tradeoff in scenario.get("unresolved_tradeoffs", [])
+                        tradeoff["summary"]
+                        for tradeoff in scenario.get("unresolved_tradeoffs", [])
                     ]
-                    or ["No explicit unresolved tradeoffs were recorded for this scenario yet."],
+                    or [
+                        "No explicit unresolved tradeoffs were recorded for this scenario yet."
+                    ],
                     "explanation": [
                         f"Rank #{scenario['rank']} with score {scenario['score']:.2f}.",
                         f"Route sequence: {' -> '.join(scenario['scenario_summary'].get('route_sequence', [])) or 'not surfaced yet'}.",
@@ -1730,8 +2226,16 @@ def _build_planner_panel_state(
             "scope": "trip_setup",
             "title": "Planner workspace bootstrap",
             "comparison_axes": [
-                {"key": "scope", "label": "Planning scope", "direction": "higher_better"},
-                {"key": "specificity", "label": "Trip specificity", "direction": "higher_better"},
+                {
+                    "key": "scope",
+                    "label": "Planning scope",
+                    "direction": "higher_better",
+                },
+                {
+                    "key": "specificity",
+                    "label": "Trip specificity",
+                    "direction": "higher_better",
+                },
             ],
             "explanation": [
                 "This starter panel is seeded from the persisted trip record until ranked planner scenarios exist.",
@@ -1755,7 +2259,9 @@ def _build_planner_panel_state(
                     "kind": "trip_setup",
                     "label": "Broaden the first planner pass",
                     "summary": "Expand regions, dates, or traveler notes before the first ranked scenario run.",
-                    "drawbacks": ["A broader scope can delay the first saved scenario comparison."],
+                    "drawbacks": [
+                        "A broader scope can delay the first saved scenario comparison."
+                    ],
                     "explanation": [
                         "Best when the trip shell is real but still intentionally under-specified.",
                     ],
@@ -1788,9 +2294,11 @@ def _build_planner_panel_state(
             },
         ]
 
-    rejected_option_ids, selected_option_id, fallback_option_ids = _session_feedback_state(
-        session,
-        option_set["option_set_id"],
+    rejected_option_ids, selected_option_id, fallback_option_ids = (
+        _session_feedback_state(
+            session,
+            option_set["option_set_id"],
+        )
     )
     option_set["options"] = [
         {
@@ -1805,10 +2313,13 @@ def _build_planner_panel_state(
                 )
             ),
             "explanation": (
-                ["You already chose this direction in the workspace."] + option["explanation"]
+                ["You already chose this direction in the workspace."]
+                + option["explanation"]
                 if option["option_id"] == selected_option_id
                 else (
-                    ["This option was kept as an explicit fallback for later comparison."]
+                    [
+                        "This option was kept as an explicit fallback for later comparison."
+                    ]
                     + option["explanation"]
                     if option["option_id"] in fallback_option_ids
                     else option["explanation"]
@@ -1826,7 +2337,8 @@ def _build_planner_panel_state(
             "prompt": decision["prompt"],
             "choices": (
                 list(decision["choices"])
-                if isinstance(decision.get("choices"), (list, tuple)) and decision["choices"]
+                if isinstance(decision.get("choices"), (list, tuple))
+                and decision["choices"]
                 else [
                     "Keep the current direction.",
                     "Compare another planner-backed option first.",
@@ -1882,7 +2394,8 @@ def _build_planner_panel_state(
 
     proposal_state = (
         dict(proposal_context["proposal_state"])
-        if proposal_context is not None and proposal_context.get("proposal_state") is not None
+        if proposal_context is not None
+        and proposal_context.get("proposal_state") is not None
         else None
     )
     if proposal_state is not None:
@@ -1893,12 +2406,15 @@ def _build_planner_panel_state(
             else None
         )
         proposal = (
-            dict(proposal_state["proposal"]) if proposal_state.get("proposal") is not None else None
+            dict(proposal_state["proposal"])
+            if proposal_state.get("proposal") is not None
+            else None
         )
     else:
         policy_evaluation = (
             dict(policy_context["policy_evaluation"])
-            if policy_context is not None and policy_context.get("policy_evaluation") is not None
+            if policy_context is not None
+            and policy_context.get("policy_evaluation") is not None
             else None
         )
         proposal = (
@@ -1917,7 +2433,9 @@ def _build_planner_panel_state(
                     "positive"
                     if policy_evaluation["status"] == "compliant"
                     else (
-                        "critical" if policy_evaluation["status"] == "non_compliant" else "caution"
+                        "critical"
+                        if policy_evaluation["status"] == "non_compliant"
+                        else "caution"
                     )
                 ),
                 "highlights": list(policy_evaluation.get("notes") or [])[:3],
@@ -1935,7 +2453,9 @@ def _build_planner_panel_state(
             },
         )
     policy_summary = (
-        dict(policy_context.get("summary") or {}) if isinstance(policy_context, dict) else {}
+        dict(policy_context.get("summary") or {})
+        if isinstance(policy_context, dict)
+        else {}
     )
     policy_transport_error = (
         dict(policy_summary.get("transport_error") or {})
@@ -1943,7 +2463,9 @@ def _build_planner_panel_state(
         else {}
     )
     policy_error_code = policy_transport_error.get("error_code")
-    if policy_summary.get("status") == "stored_policy_fallback" and policy_error_code in {
+    if policy_summary.get(
+        "status"
+    ) == "stored_policy_fallback" and policy_error_code in {
         "breaker_open",
         "timeout",
     }:
@@ -1984,7 +2506,11 @@ def _build_planner_panel_state(
                 "status": (
                     "positive"
                     if summary.get("approval_ready")
-                    else ("caution" if summary.get("evaluation_transport_status") else "neutral")
+                    else (
+                        "caution"
+                        if summary.get("evaluation_transport_status")
+                        else "neutral"
+                    )
                 ),
                 "highlights": list(summary.get("highlights") or [])[:3],
             }
@@ -2016,7 +2542,12 @@ def _build_planner_panel_state(
                         "output_id": f"output:{trip['trip_id']}:proposal-transport-fallback",
                         "title": notice_title,
                         "body": notice_body,
-                        "tags": ["proposal", "transport", "stored-policy", trip["mode"]],
+                        "tags": [
+                            "proposal",
+                            "transport",
+                            "stored-policy",
+                            trip["mode"],
+                        ],
                         "status": "caution",
                         "highlights": [
                             f"error_code={error_code}",
@@ -2048,8 +2579,10 @@ def _build_planner_panel_state(
                 0,
                 {
                     "action_id": f"action:{trip['trip_id']}:proposal-follow-up",
-                    "action_kind": follow_up.get("recommended_action") or "review_follow_up",
-                    "label": follow_up.get("recommended_label") or "Review proposal follow-up",
+                    "action_kind": follow_up.get("recommended_action")
+                    or "review_follow_up",
+                    "label": follow_up.get("recommended_label")
+                    or "Review proposal follow-up",
                     "description": follow_up.get("summary")
                     or "Inspect the persisted follow-up lane for the latest policy result.",
                     "emphasis": "primary",
@@ -2079,7 +2612,9 @@ def _build_planner_panel_state(
                 1,
                 session["interaction_state"].get("auto_advance_research_passes", 1) + 1,
             ),
-            "target_options_before_checkpoint": max(2, min(3, len(option_set["options"]))),
+            "target_options_before_checkpoint": max(
+                2, min(3, len(option_set["options"]))
+            ),
             "surface_options_early": session["interaction_state"].get(
                 "option_preview_timing",
                 "balanced",
@@ -2108,7 +2643,9 @@ def get_workspace_payload(
             fixture = None
     if fixture is not None:
         trip_record = _load_trip_record(fixture.trip_fixture)
-        saved_scenarios, scenario_comparison = _load_saved_scenarios(fixture.scenarios_fixture)
+        saved_scenarios, scenario_comparison = _load_saved_scenarios(
+            fixture.scenarios_fixture
+        )
         session = _load_session(fixture.session_fixture)
         _canonicalize_saved_scenario_ids(session, saved_scenarios)
         inventory_assembly_input = _build_inventory_assembly_input(
@@ -2134,6 +2671,7 @@ def get_workspace_payload(
             trip_id=trip_id,
             trip_title=trip_record.trip.title,
             scenario_search=scenario_search.to_dict(),
+            session=session.to_dict(),
         )
         ranking = build_scenario_ranking_payload(
             trip_id=trip_id,
@@ -2148,7 +2686,9 @@ def get_workspace_payload(
             "trip_record": trip_record.to_dict(),
             "session": session.to_dict(),
             "saved_scenarios": [record.to_dict() for record in saved_scenarios],
-            "scenario_comparison": scenario_comparison.to_dict() if scenario_comparison else None,
+            "scenario_comparison": (
+                scenario_comparison.to_dict() if scenario_comparison else None
+            ),
             "scenario_search": scenario_search.to_dict(),
             "ranking": ranking,
             "route_comparison": runtime_scenario_comparison,
@@ -2210,8 +2750,12 @@ def get_workspace_payload(
             session_record=session_record,
         )
         bootstrap_updated = True
-    persisted_inventory_bundles, inventory_summary = _build_workspace_inventory_inputs(record)
-    inventory_status = str((inventory_summary.get("runtime_state") or {}).get("status") or "empty")
+    persisted_inventory_bundles, inventory_summary = _build_workspace_inventory_inputs(
+        record
+    )
+    inventory_status = str(
+        (inventory_summary.get("runtime_state") or {}).get("status") or "empty"
+    )
     runtime_search = _build_runtime_scenario_search_for_trip(
         record=record,
         inventory_bundles=persisted_inventory_bundles,
@@ -2263,7 +2807,11 @@ def get_workspace_payload(
     feasibility_summary = build_feasibility_summary_payload(persisted_inventory_bundles)
     return _build_persisted_trip_workspace(
         record,
-        session=(_serialize_session_record(session_record) if session_record is not None else None),
+        session=(
+            _serialize_session_record(session_record)
+            if session_record is not None
+            else None
+        ),
         saved_scenarios=[
             {
                 "saved_scenario_id": scenario.saved_scenario_id,
@@ -2355,7 +2903,9 @@ def _get_or_create_workspace_session_record(
         recent_option_presentations=[
             item.to_dict() for item in default_session.recent_option_presentations
         ],
-        pending_decisions=[item.to_dict() for item in default_session.pending_decisions],
+        pending_decisions=[
+            item.to_dict() for item in default_session.pending_decisions
+        ],
         status=default_session.status,
         selected_planning_mode=default_session.selected_planning_mode,
         current_checkpoint_id=default_session.current_checkpoint_id,
@@ -2409,8 +2959,12 @@ def _current_workspace_option_set(
         if session.recent_option_presentations
         else _default_workspace_presentation(trip_id, session.updated_at)
     )
-    option_set_id = presentation.option_set_id or f"option-set:{trip_id}:workspace-bootstrap"
-    option_ids = [option_id for option_id in presentation.surfaced_option_ids if option_id]
+    option_set_id = (
+        presentation.option_set_id or f"option-set:{trip_id}:workspace-bootstrap"
+    )
+    option_ids = [
+        option_id for option_id in presentation.surfaced_option_ids if option_id
+    ]
     return option_set_id, option_ids
 
 
@@ -2489,20 +3043,32 @@ def answer_workspace_planner_decision(
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
     matching = next(
-        (decision for decision in session.pending_decisions if decision.decision_id == decision_id),
+        (
+            decision
+            for decision in session.pending_decisions
+            if decision.decision_id == decision_id
+        ),
         None,
     )
     if matching is None:
-        raise ValueError(f"Decision '{decision_id}' was not found in the workspace session.")
+        raise ValueError(
+            f"Decision '{decision_id}' was not found in the workspace session."
+        )
     if choice not in matching.choices:
-        raise ValueError(f"Choice '{choice}' is not valid for decision '{decision_id}'.")
+        raise ValueError(
+            f"Choice '{choice}' is not valid for decision '{decision_id}'."
+        )
 
     session.pending_decisions = [
-        decision for decision in session.pending_decisions if decision.decision_id != decision_id
+        decision
+        for decision in session.pending_decisions
+        if decision.decision_id != decision_id
     ]
     session.updated_at = _isoformat(datetime.now(UTC))
     session.notes.append(f"decision:{decision_id}:{choice}")
-    session_record.pending_decisions = [item.to_dict() for item in session.pending_decisions]
+    session_record.pending_decisions = [
+        item.to_dict() for item in session.pending_decisions
+    ]
     session_record.notes = list(session.notes)
     session_record.last_updated_at = session.updated_at
     record.updated_at = datetime.now(UTC)
@@ -2548,7 +3114,9 @@ def submit_workspace_option_feedback(
     record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
-    option_set_id, valid_option_ids = _current_workspace_option_set(session, trip_id=trip_id)
+    option_set_id, valid_option_ids = _current_workspace_option_set(
+        session, trip_id=trip_id
+    )
     if option_id not in valid_option_ids:
         raise ValueError(
             f"Option '{option_id}' is not available in the current workspace option set."
@@ -2574,23 +3142,25 @@ def submit_workspace_option_feedback(
             item for item in presentation.rejected_option_ids if item != option_id
         ]
         event_kind = "decision_recorded"
-        summary = f"Traveler accepted option '{option_id}' from the workspace planner panel."
+        summary = (
+            f"Traveler accepted option '{option_id}' from the workspace planner panel."
+        )
     elif action_type == "reject":
         if option_id not in presentation.rejected_option_ids:
             presentation.rejected_option_ids.append(option_id)
         if presentation.selected_option_id == option_id:
             presentation.selected_option_id = None
         event_kind = "option_rejected"
-        summary = f"Traveler rejected option '{option_id}' from the workspace planner panel."
+        summary = (
+            f"Traveler rejected option '{option_id}' from the workspace planner panel."
+        )
     elif action_type == "save_as_fallback":
         presentation.notes = [
             note for note in presentation.notes if not note.startswith("fallback:")
         ]
         presentation.notes.append(f"fallback:{option_id}")
         event_kind = "decision_recorded"
-        summary = (
-            f"Traveler saved option '{option_id}' as a fallback in the workspace planner panel."
-        )
+        summary = f"Traveler saved option '{option_id}' as a fallback in the workspace planner panel."
     else:
         session.interaction_state.auto_advance_research_passes += 1
         event_kind = "rerank_requested"
@@ -2600,7 +3170,10 @@ def submit_workspace_option_feedback(
     session.recent_option_presentations = [presentation]
     session.updated_at = _isoformat(datetime.now(UTC))
     session.notes.append(f"feedback:{action_type}:{option_id}")
-    if action_type in {"revise", "do_more_before_asking_again"} and not session.pending_decisions:
+    if (
+        action_type in {"revise", "do_more_before_asking_again"}
+        and not session.pending_decisions
+    ):
         session.pending_decisions = [
             PendingDecision(
                 decision_id=f"decision:{trip_id}:follow-up",
@@ -2619,7 +3192,9 @@ def submit_workspace_option_feedback(
     session_record.recent_option_presentations = [
         item.to_dict() for item in session.recent_option_presentations
     ]
-    session_record.pending_decisions = [item.to_dict() for item in session.pending_decisions]
+    session_record.pending_decisions = [
+        item.to_dict() for item in session.pending_decisions
+    ]
     session_record.interaction_state = session.interaction_state.to_dict()
     session_record.notes = list(session.notes)
     session_record.last_updated_at = session.updated_at
@@ -2649,6 +3224,153 @@ def submit_workspace_option_feedback(
         option_set_id=option_set_id,
         option_id=option_id,
         payload={"summary": summary},
+    )
+    db_session.commit()
+    return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
+
+
+def _without_route_option_notes(notes: list[str], option_id: str) -> list[str]:
+    managed_prefixes = ("fallback:", "needs_research:")
+    managed_tokens = {f"{prefix}{option_id}" for prefix in managed_prefixes}
+    return [note for note in notes if note not in managed_tokens]
+
+
+def submit_workspace_route_option_action(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    option_id: str,
+    action_type: str,
+) -> dict[str, Any]:
+    if action_type not in ROUTE_OPTION_ACTIONS:
+        raise ValueError(
+            f"action_type must be one of {', '.join(ROUTE_OPTION_ACTIONS)}"
+        )
+
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
+    option_set_id, valid_option_ids = _current_workspace_option_set(
+        session, trip_id=trip_id
+    )
+    if option_id not in valid_option_ids:
+        raise ValueError(
+            f"Route option '{option_id}' is not available in the current workspace comparison."
+        )
+
+    presentation = (
+        session.recent_option_presentations[0]
+        if session.recent_option_presentations
+        else _default_workspace_presentation(trip_id, session.updated_at)
+    )
+    presentation.surfaced_option_ids = valid_option_ids
+    presentation.option_set_id = option_set_id
+    if presentation.highlighted_option_id not in valid_option_ids:
+        presentation.highlighted_option_id = valid_option_ids[0]
+    if presentation.selected_option_id not in valid_option_ids:
+        presentation.selected_option_id = None
+    presentation.rejected_option_ids = [
+        item for item in presentation.rejected_option_ids if item in valid_option_ids
+    ]
+    presentation.notes = _without_route_option_notes(
+        list(presentation.notes), option_id
+    )
+
+    if action_type == "make_baseline":
+        presentation.selected_option_id = option_id
+        presentation.rejected_option_ids = [
+            item for item in presentation.rejected_option_ids if item != option_id
+        ]
+        event_kind = "decision_recorded"
+        summary = f"Traveler made route option '{option_id}' the comparison baseline."
+    elif action_type == "keep":
+        presentation.rejected_option_ids = [
+            item for item in presentation.rejected_option_ids if item != option_id
+        ]
+        if presentation.selected_option_id == option_id:
+            presentation.selected_option_id = None
+        presentation.notes.append(f"fallback:{option_id}")
+        event_kind = "decision_recorded"
+        summary = f"Traveler kept route option '{option_id}' for later comparison."
+    elif action_type == "reject":
+        if option_id not in presentation.rejected_option_ids:
+            presentation.rejected_option_ids.append(option_id)
+        if presentation.selected_option_id == option_id:
+            presentation.selected_option_id = None
+        event_kind = "option_rejected"
+        summary = f"Traveler rejected route option '{option_id}'."
+    elif action_type == "reopen":
+        presentation.rejected_option_ids = [
+            item for item in presentation.rejected_option_ids if item != option_id
+        ]
+        event_kind = "decision_recorded"
+        summary = f"Traveler reopened route option '{option_id}' for comparison."
+    else:
+        presentation.rejected_option_ids = [
+            item for item in presentation.rejected_option_ids if item != option_id
+        ]
+        presentation.notes.append(f"needs_research:{option_id}")
+        session.interaction_state.auto_advance_research_passes += 1
+        event_kind = "rerank_requested"
+        summary = f"Traveler asked the planner to revise route option '{option_id}'."
+
+    presentation.summary = summary
+    session.recent_option_presentations = [presentation]
+    session.updated_at = _isoformat(datetime.now(UTC))
+    session.notes.append(f"route-option:{action_type}:{option_id}")
+    if action_type == "revise" and not session.pending_decisions:
+        session.pending_decisions = [
+            PendingDecision(
+                decision_id=f"decision:{trip_id}:route-option-revision",
+                title="Confirm route revision focus",
+                prompt="Should the planner revise this route before comparing options again?",
+                created_at=session.updated_at,
+                choices=[
+                    "Revise this route option.",
+                    "Keep comparing the current options.",
+                ],
+                related_option_set_id=option_set_id,
+                notes=["Generated after a route-option revision request."],
+            )
+        ]
+
+    session_record.recent_option_presentations = [
+        item.to_dict() for item in session.recent_option_presentations
+    ]
+    session_record.pending_decisions = [
+        item.to_dict() for item in session.pending_decisions
+    ]
+    session_record.interaction_state = session.interaction_state.to_dict()
+    session_record.notes = list(session.notes)
+    session_record.last_updated_at = session.updated_at
+    record.updated_at = datetime.now(UTC)
+    activity_event_id = f"activity:{trip_id}:{secrets.token_hex(4)}"
+    occurred_at = _isoformat(datetime.now(UTC))
+    _append_activity_event(
+        db_session,
+        activity_event_id=activity_event_id,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        occurred_at=occurred_at,
+        event_kind=event_kind,
+        summary=summary,
+        related_option_set_id=option_set_id,
+        metadata={"action_type": action_type, "option_id": option_id},
+    )
+    _record_planner_action(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        activity_event_id=activity_event_id,
+        occurred_at=occurred_at,
+        action_type=f"route_option_{action_type}",
+        option_set_id=option_set_id,
+        option_id=option_id,
+        payload={
+            "summary": summary,
+            "route_option_action": action_type,
+        },
     )
     db_session.commit()
     return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}

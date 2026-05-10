@@ -125,6 +125,10 @@ a {
   grid-column: 1 / -1;
 }
 
+.route-workbench-card {
+  grid-column: 1 / -1;
+}
+
 .planner-panel-host {
   margin-top: 1.25rem;
 }
@@ -385,6 +389,86 @@ a {
 
 .scenario-highlight-list {
   margin-top: 1rem;
+}
+
+.route-workbench-header,
+.route-option-card-header {
+  align-items: start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.route-option-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-top: 1.25rem;
+}
+
+.route-option-card {
+  background: rgba(19, 33, 44, 0.04);
+  border: 1px solid rgba(19, 33, 44, 0.08);
+  border-radius: 20px;
+  display: grid;
+  gap: 0.9rem;
+  min-height: 100%;
+  padding: 1rem;
+}
+
+.route-option-card-selected,
+.route-option-card--baseline {
+  background: rgba(56, 117, 107, 0.08);
+  border-color: rgba(56, 117, 107, 0.35);
+}
+
+.route-option-card--fallback {
+  background: rgba(132, 86, 35, 0.08);
+}
+
+.route-option-card--rejected {
+  opacity: 0.78;
+}
+
+.route-option-card--needs_research {
+  border-color: rgba(132, 86, 35, 0.3);
+}
+
+.route-option-metrics {
+  margin-top: 0;
+}
+
+.route-option-questions ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.route-option-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.route-option-actions button {
+  border: 1px solid rgba(19, 33, 44, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #13212c;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.55rem 0.75rem;
+}
+
+.route-option-actions button:hover {
+  border-color: rgba(56, 117, 107, 0.55);
+}
+
+.route-option-actions button:focus-visible {
+  border-color: rgba(56, 117, 107, 0.7);
+  outline: 3px solid rgba(56, 117, 107, 0.32);
+  outline-offset: 2px;
 }
 
 .scenario-kicker {
@@ -1049,6 +1133,11 @@ a {
 }
 
 @media (max-width: 640px) {
+  .route-workbench-header,
+  .route-option-card-header {
+    display: grid;
+  }
+
   .map-scenario-toggle {
     display: grid;
     grid-template-columns: 1fr;

@@ -12,6 +12,7 @@ import {
   saveWorkspaceBudget,
   submitPlannerTurn,
   submitPlannerOptionFeedback,
+  submitRouteOptionAction,
   updateWorkspacePlanningMode,
   type PlannerSessionResponse,
   type WorkspaceData,
@@ -27,6 +28,7 @@ vi.mock("../api/workspace", async () => {
     answerPlannerDecision: vi.fn(),
     fetchPlannerSession: vi.fn(),
     submitPlannerOptionFeedback: vi.fn(),
+    submitRouteOptionAction: vi.fn(),
     submitPlannerTurn: vi.fn(),
     updateWorkspacePlanningMode: vi.fn(),
     saveWorkspaceBudget: vi.fn(),
@@ -47,6 +49,7 @@ const mockedUseLoaderData = vi.mocked(useLoaderData);
 const mockedAnswerPlannerDecision = vi.mocked(answerPlannerDecision);
 const mockedFetchPlannerSession = vi.mocked(fetchPlannerSession);
 const mockedSubmitPlannerOptionFeedback = vi.mocked(submitPlannerOptionFeedback);
+const mockedSubmitRouteOptionAction = vi.mocked(submitRouteOptionAction);
 const mockedSubmitPlannerTurn = vi.mocked(submitPlannerTurn);
 const mockedUpdateWorkspacePlanningMode = vi.mocked(updateWorkspacePlanningMode);
 const mockedSaveWorkspaceBudget = vi.mocked(saveWorkspaceBudget);
@@ -775,6 +778,7 @@ describe("WorkspacePage", () => {
   beforeEach(() => {
     mockedFetchPlannerSession.mockResolvedValue(plannerSessionPayload);
     mockedSubmitPlannerTurn.mockResolvedValue(plannerSessionPayload);
+    mockedSubmitRouteOptionAction.mockResolvedValue(workspacePayload);
   });
 
   afterEach(() => {
@@ -789,6 +793,7 @@ describe("WorkspacePage", () => {
     mockedAnswerPlannerDecision.mockReset();
     mockedFetchPlannerSession.mockReset();
     mockedSubmitPlannerOptionFeedback.mockReset();
+    mockedSubmitRouteOptionAction.mockReset();
     mockedSubmitPlannerTurn.mockReset();
     mockedUpdateWorkspacePlanningMode.mockReset();
     mockedSaveWorkspaceBudget.mockReset();
@@ -1448,6 +1453,7 @@ describe("WorkspacePage", () => {
   it("renders the fallback map state and compact review copy on small screens", async () => {
     stubMatchMedia(true);
     vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "");
+    vi.stubEnv("VITE_GOOGLE_MAPS_EMBED_API_KEY", "");
     vi.stubEnv("VITE_GOOGLE_MAPS_PROVIDER_STATE", "missing");
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve(workspacePayload),
