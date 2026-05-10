@@ -96,6 +96,7 @@ class PlannerSessionResponse(BaseModel):
     runtime: dict[str, Any] = Field(default_factory=dict)
     session: dict[str, Any]
     planner_panel_state: dict[str, Any]
+    planning_ledger: dict[str, Any] = Field(default_factory=dict)
     planner_memory: PlannerMemoryResponse
     available_tools: list[dict[str, Any]] = Field(default_factory=list)
     activity_log: list[dict[str, Any]] = Field(default_factory=list)

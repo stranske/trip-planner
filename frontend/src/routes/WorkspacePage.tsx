@@ -614,6 +614,62 @@ function PlannerConversationMessage({
   );
 }
 
+function PlanningLedgerPanel({
+  ledger,
+}: {
+  ledger: WorkspaceData["planning_ledger"] | undefined;
+}) {
+  const resolvedLedger = ledger ?? {
+    entries: [],
+    summary: {
+      active_decisions: [],
+      open_questions: [],
+      active_options: [],
+      rejected_options: [],
+      constraints: [],
+      assumptions: [],
+      source_references: [],
+    },
+  };
+  const summaryGroups = [
+    { label: "Decisions", entries: resolvedLedger.summary.active_decisions },
+    { label: "Open questions", entries: resolvedLedger.summary.open_questions },
+    { label: "Active options", entries: resolvedLedger.summary.active_options },
+    { label: "Rejected options", entries: resolvedLedger.summary.rejected_options },
+    { label: "Constraints", entries: resolvedLedger.summary.constraints },
+    { label: "Assumptions", entries: resolvedLedger.summary.assumptions },
+    { label: "Sources", entries: resolvedLedger.summary.source_references },
+  ].filter((group) => group.entries.length > 0);
+
+  return (
+    <section className="status-card planning-ledger-card" aria-label="Planning ledger">
+      <p className="status-label">Ledger</p>
+      <h2>Planning ledger</h2>
+      {resolvedLedger.entries.length === 0 ? (
+        <p className="muted-copy">
+          Decisions, questions, constraints, and route option history will appear here.
+        </p>
+      ) : (
+        <div className="planning-ledger-grid">
+          {summaryGroups.map((group) => (
+            <section key={group.label} className="planning-ledger-group">
+              <h3>{group.label}</h3>
+              <ul>
+                {group.entries.slice(0, 4).map((entry) => (
+                  <li key={entry.ledger_entry_id}>
+                    <span>{entry.summary}</span>
+                    <small>{entry.status.replace("_", " ")}</small>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function WorkspacePage() {
   const { workspace, trips } = useLoaderData() as LoaderData;
   const resolve = useMemo(
@@ -1182,6 +1238,8 @@ function WorkspacePageContent({
           onSelectScenario={handleScenarioSelection}
           onRouteOptionAction={handleRouteOptionAction}
         />
+
+        <PlanningLedgerPanel ledger={currentWorkspace.planning_ledger} />
 
         <TripComparison
           currentTrip={currentWorkspace.trip_record.trip}

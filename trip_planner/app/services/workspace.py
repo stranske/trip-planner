@@ -49,6 +49,7 @@ from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
     PersistedPlannerAction,
 )
+from trip_planner.persistence.models.planning_ledger import PersistedPlanningLedgerEntry
 from trip_planner.persistence.models.scenario import (
     PersistedSavedScenario,
 )
@@ -78,6 +79,23 @@ class WorkspaceFixture:
 
 
 WORKSPACE_ACTIVITY_LOG_LIMIT = 50
+PLANNING_LEDGER_LIMIT = 100
+PLANNING_LEDGER_ITEM_TYPES: tuple[str, ...] = (
+    "option_considered",
+    "option_rejected",
+    "decision",
+    "assumption",
+    "open_question",
+    "constraint",
+    "source_reference",
+)
+PLANNING_LEDGER_STATUSES: tuple[str, ...] = (
+    "active",
+    "completed",
+    "rejected",
+    "superseded",
+    "deferred",
+)
 ROUTE_OPTION_STATES: tuple[str, ...] = (
     "active",
     "baseline",
@@ -1521,12 +1539,121 @@ def _workspace_activity_outputs(
     return outputs
 
 
+def _serialize_ledger_entry(record: PersistedPlanningLedgerEntry) -> dict[str, Any]:
+    return {
+        "ledger_entry_id": record.ledger_entry_id,
+        "trip_id": record.trip_id,
+        "session_state_id": record.session_state_id,
+        "item_type": record.item_type,
+        "status": record.status,
+        "category": record.category,
+        "summary": record.summary,
+        "detail": record.detail,
+        "source_message_ids": list(record.source_message_ids or []),
+        "source_refs": list(record.source_refs or []),
+        "related_option_id": record.related_option_id,
+        "related_decision_id": record.related_decision_id,
+        "supersedes_entry_id": record.supersedes_entry_id,
+        "metadata": dict(record.metadata_payload or {}),
+        "created_at": _isoformat(record.created_at),
+        "updated_at": _isoformat(record.updated_at),
+    }
+
+
+def _planning_ledger_summary(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    active = [entry for entry in entries if entry["status"] == "active"]
+    return {
+        "active_decisions": [
+            entry for entry in active if entry["item_type"] == "decision"
+        ],
+        "open_questions": [
+            entry for entry in active if entry["item_type"] == "open_question"
+        ],
+        "active_options": [
+            entry for entry in active if entry["item_type"] == "option_considered"
+        ],
+        "rejected_options": [
+            entry for entry in entries if entry["item_type"] == "option_rejected"
+        ],
+        "constraints": [
+            entry for entry in active if entry["item_type"] == "constraint"
+        ],
+        "assumptions": [
+            entry for entry in active if entry["item_type"] == "assumption"
+        ],
+        "source_references": [
+            entry for entry in active if entry["item_type"] == "source_reference"
+        ],
+    }
+
+
+def _planning_ledger_state(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"entries": entries, "summary": _planning_ledger_summary(entries)}
+
+
+def _ledger_category_for_type(item_type: str) -> str:
+    if item_type in {"option_considered", "option_rejected"}:
+        return "route_options"
+    if item_type == "open_question":
+        return "questions"
+    if item_type == "source_reference":
+        return "sources"
+    return item_type
+
+
+def _add_planning_ledger_entry(
+    db_session: Session,
+    *,
+    trip_id: str,
+    session_state_id: str,
+    item_type: str,
+    summary: str,
+    status: str = "active",
+    category: str | None = None,
+    detail: str = "",
+    source_message_ids: list[str] | None = None,
+    source_refs: list[str] | None = None,
+    related_option_id: str | None = None,
+    related_decision_id: str | None = None,
+    supersedes_entry_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> PersistedPlanningLedgerEntry:
+    if item_type not in PLANNING_LEDGER_ITEM_TYPES:
+        raise ValueError(
+            f"item_type must be one of {', '.join(PLANNING_LEDGER_ITEM_TYPES)}"
+        )
+    if status not in PLANNING_LEDGER_STATUSES:
+        raise ValueError(f"status must be one of {', '.join(PLANNING_LEDGER_STATUSES)}")
+    now = datetime.now(UTC)
+    entry = PersistedPlanningLedgerEntry(
+        ledger_entry_id=f"ledger:{secrets.token_hex(16)}",
+        trip_id=trip_id,
+        session_state_id=session_state_id,
+        item_type=item_type,
+        status=status,
+        category=category or _ledger_category_for_type(item_type),
+        summary=summary[:280],
+        detail=detail,
+        source_message_ids=list(source_message_ids or []),
+        source_refs=list(source_refs or []),
+        related_option_id=related_option_id,
+        related_decision_id=related_decision_id,
+        supersedes_entry_id=supersedes_entry_id,
+        metadata_payload=dict(metadata or {}),
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(entry)
+    return entry
+
+
 def _build_persisted_trip_workspace(
     record: PersistedTrip,
     *,
     session: dict[str, Any] | None = None,
     saved_scenarios: list[dict[str, Any]] | None = None,
     activity_log: list[dict[str, Any]] | None = None,
+    planning_ledger: dict[str, Any] | None = None,
     planner_memory: dict[str, Any] | None = None,
     budget_state: dict[str, Any] | None = None,
     policy_context: dict[str, Any] | None = None,
@@ -1628,6 +1755,7 @@ def _build_persisted_trip_workspace(
         "route_comparison": runtime_scenario_comparison,
         "runtime_scenario_comparison": runtime_scenario_comparison,
         "activity_log": resolved_activity_log,
+        "planning_ledger": planning_ledger or _planning_ledger_state([]),
         "planner_memory": planner_memory
         or {
             "current_checkpoint_id": resolved_session.get("current_checkpoint_id"),
@@ -2694,6 +2822,7 @@ def get_workspace_payload(
             "route_comparison": runtime_scenario_comparison,
             "runtime_scenario_comparison": runtime_scenario_comparison,
             "activity_log": [],
+            "planning_ledger": _planning_ledger_state([]),
             "planner_memory": {
                 "current_checkpoint_id": session.current_checkpoint_id,
                 "checkpoints": [],
@@ -2804,6 +2933,12 @@ def get_workspace_payload(
         .order_by(PersistedActivityLogEvent.occurred_at.desc())
         .limit(WORKSPACE_ACTIVITY_LOG_LIMIT)
     ).all()
+    ledger_records = db_session.scalars(
+        select(PersistedPlanningLedgerEntry)
+        .where(PersistedPlanningLedgerEntry.trip_id == trip_id)
+        .order_by(PersistedPlanningLedgerEntry.updated_at.desc())
+        .limit(PLANNING_LEDGER_LIMIT)
+    ).all()
     feasibility_summary = build_feasibility_summary_payload(persisted_inventory_bundles)
     return _build_persisted_trip_workspace(
         record,
@@ -2825,6 +2960,9 @@ def get_workspace_payload(
             for scenario in persisted_saved_scenarios
         ],
         activity_log=[_serialize_activity_record(item) for item in activity_records],
+        planning_ledger=_planning_ledger_state(
+            [_serialize_ledger_entry(item) for item in ledger_records]
+        ),
         planner_memory=build_planner_memory_payload(
             db_session,
             trip_id=trip_id,
@@ -2947,6 +3085,87 @@ def update_workspace_planning_mode(
     if payload is None:
         raise WorkspaceTripNotFoundError(f"Trip '{trip_id}' was not found.")
     return payload
+
+
+def create_planning_ledger_entry(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    item_type: str,
+    summary: str,
+    status: str = "active",
+    category: str = "general",
+    detail: str = "",
+    source_message_ids: list[str] | None = None,
+    source_refs: list[str] | None = None,
+    related_option_id: str | None = None,
+    related_decision_id: str | None = None,
+) -> dict[str, Any]:
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    entry = _add_planning_ledger_entry(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session_record.session_state_id,
+        item_type=item_type,
+        status=status,
+        category=category,
+        summary=summary,
+        detail=detail,
+        source_message_ids=source_message_ids,
+        source_refs=source_refs,
+        related_option_id=related_option_id,
+        related_decision_id=related_decision_id,
+        metadata={"created_by": "workspace_api"},
+    )
+    record.updated_at = datetime.now(UTC)
+    db_session.commit()
+    db_session.refresh(entry)
+    return _serialize_ledger_entry(entry)
+
+
+def update_planning_ledger_entry(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    ledger_entry_id: str,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    entry = db_session.scalar(
+        select(PersistedPlanningLedgerEntry)
+        .where(PersistedPlanningLedgerEntry.trip_id == trip_id)
+        .where(PersistedPlanningLedgerEntry.ledger_entry_id == ledger_entry_id)
+    )
+    if entry is None:
+        raise WorkspaceTripNotFoundError(
+            f"Ledger entry '{ledger_entry_id}' was not found."
+        )
+    if updates.get("status") is not None:
+        status = str(updates["status"])
+        if status not in PLANNING_LEDGER_STATUSES:
+            raise ValueError(f"status must be one of {', '.join(PLANNING_LEDGER_STATUSES)}")
+        entry.status = status
+    for field in (
+        "category",
+        "summary",
+        "detail",
+        "related_option_id",
+        "related_decision_id",
+        "supersedes_entry_id",
+    ):
+        if updates.get(field) is not None:
+            setattr(entry, field, updates[field])
+    if updates.get("source_message_ids") is not None:
+        entry.source_message_ids = list(updates["source_message_ids"])
+    if updates.get("source_refs") is not None:
+        entry.source_refs = list(updates["source_refs"])
+    entry.updated_at = datetime.now(UTC)
+    db_session.commit()
+    db_session.refresh(entry)
+    return _serialize_ledger_entry(entry)
 
 
 def _current_workspace_option_set(
@@ -3098,6 +3317,19 @@ def answer_workspace_planner_decision(
         choice=choice,
         payload={"decision_title": matching.title},
     )
+    _add_planning_ledger_entry(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        item_type="decision",
+        status="completed",
+        category="decisions",
+        summary=f"{matching.title}: {choice}",
+        detail=matching.prompt,
+        source_refs=[activity_event_id],
+        related_decision_id=decision_id,
+        metadata={"choice": choice},
+    )
     db_session.commit()
     return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
 
@@ -3224,6 +3456,29 @@ def submit_workspace_option_feedback(
         option_set_id=option_set_id,
         option_id=option_id,
         payload={"summary": summary},
+    )
+    ledger_type = "option_rejected" if action_type == "reject" else "option_considered"
+    ledger_status = (
+        "rejected"
+        if action_type == "reject"
+        else "completed"
+        if action_type == "accept"
+        else "deferred"
+        if action_type == "save_as_fallback"
+        else "active"
+    )
+    _add_planning_ledger_entry(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        item_type=ledger_type,
+        status=ledger_status,
+        summary=summary,
+        detail=f"Planner panel feedback action: {action_type}",
+        source_refs=[activity_event_id],
+        related_option_id=option_id,
+        related_decision_id=decision_id,
+        metadata={"action_type": action_type, "option_set_id": option_set_id},
     )
     db_session.commit()
     return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
@@ -3371,6 +3626,28 @@ def submit_workspace_route_option_action(
             "summary": summary,
             "route_option_action": action_type,
         },
+    )
+    ledger_type = "option_rejected" if action_type == "reject" else "option_considered"
+    ledger_status = (
+        "rejected"
+        if action_type == "reject"
+        else "completed"
+        if action_type == "make_baseline"
+        else "deferred"
+        if action_type == "keep"
+        else "active"
+    )
+    _add_planning_ledger_entry(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        item_type=ledger_type,
+        status=ledger_status,
+        summary=summary,
+        detail=f"Route option action: {action_type}",
+        source_refs=[activity_event_id],
+        related_option_id=option_id,
+        metadata={"action_type": action_type, "option_set_id": option_set_id},
     )
     db_session.commit()
     return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}

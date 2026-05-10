@@ -129,6 +129,47 @@ a {
   grid-column: 1 / -1;
 }
 
+.planning-ledger-card {
+  grid-column: 1 / -1;
+}
+
+.planning-ledger-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.planning-ledger-group {
+  background: rgba(19, 33, 44, 0.04);
+  border: 1px solid rgba(19, 33, 44, 0.08);
+  border-radius: 16px;
+  padding: 1rem;
+}
+
+.planning-ledger-group h3 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.planning-ledger-group ul {
+  display: grid;
+  gap: 0.65rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.planning-ledger-group li {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.planning-ledger-group small {
+  color: #5e6a72;
+  font-size: 0.78rem;
+  text-transform: capitalize;
+}
+
 .planner-panel-host {
   margin-top: 1.25rem;
 }

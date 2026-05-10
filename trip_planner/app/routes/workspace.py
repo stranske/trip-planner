@@ -3,6 +3,9 @@ from sqlalchemy.orm import Session
 
 from trip_planner.app.schemas.workspace import (
     PlanningModeUpdateRequest,
+    PlanningLedgerEntry,
+    PlanningLedgerEntryCreateRequest,
+    PlanningLedgerEntryUpdateRequest,
     PlannerDecisionAnswerRequest,
     PlannerOptionFeedbackRequest,
     RouteOptionActionRequest,
@@ -13,10 +16,12 @@ from trip_planner.app.services.auth import AuthenticatedUser, require_authentica
 from trip_planner.app.services.workspace import (
     WorkspaceTripNotFoundError,
     answer_workspace_planner_decision,
+    create_planning_ledger_entry,
     get_workspace_scenario_comparison_payload,
     get_workspace_payload,
     submit_workspace_route_option_action,
     submit_workspace_option_feedback,
+    update_planning_ledger_entry,
     update_workspace_planning_mode,
 )
 from trip_planner.persistence.db import get_db_session
@@ -76,6 +81,64 @@ def update_planning_mode(
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return WorkspaceResponse.model_validate(result)
+
+
+@router.post(
+    "/workspace/{trip_id}/planning-ledger",
+    response_model=PlanningLedgerEntry,
+)
+def create_workspace_planning_ledger_entry(
+    trip_id: str,
+    payload: PlanningLedgerEntryCreateRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> PlanningLedgerEntry:
+    try:
+        result = create_planning_ledger_entry(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            item_type=payload.item_type,
+            status=payload.status,
+            category=payload.category,
+            summary=payload.summary,
+            detail=payload.detail,
+            source_message_ids=payload.source_message_ids,
+            source_refs=payload.source_refs,
+            related_option_id=payload.related_option_id,
+            related_decision_id=payload.related_decision_id,
+        )
+    except WorkspaceTripNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return PlanningLedgerEntry.model_validate(result)
+
+
+@router.patch(
+    "/workspace/{trip_id}/planning-ledger/{ledger_entry_id}",
+    response_model=PlanningLedgerEntry,
+)
+def patch_workspace_planning_ledger_entry(
+    trip_id: str,
+    ledger_entry_id: str,
+    payload: PlanningLedgerEntryUpdateRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> PlanningLedgerEntry:
+    try:
+        result = update_planning_ledger_entry(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            ledger_entry_id=ledger_entry_id,
+            updates=payload.model_dump(exclude_unset=True),
+        )
+    except WorkspaceTripNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return PlanningLedgerEntry.model_validate(result)
 
 
 @router.post(

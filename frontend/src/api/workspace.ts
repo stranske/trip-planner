@@ -316,6 +316,54 @@ export type PlannerMemoryState = {
   artifacts: PlannerMemoryArtifact[];
 };
 
+export type PlanningLedgerEntryType =
+  | "option_considered"
+  | "option_rejected"
+  | "decision"
+  | "assumption"
+  | "open_question"
+  | "constraint"
+  | "source_reference";
+
+export type PlanningLedgerEntryStatus =
+  | "active"
+  | "completed"
+  | "rejected"
+  | "superseded"
+  | "deferred";
+
+export type PlanningLedgerEntry = {
+  ledger_entry_id: string;
+  trip_id: string;
+  session_state_id: string;
+  item_type: PlanningLedgerEntryType;
+  status: PlanningLedgerEntryStatus;
+  category: string;
+  summary: string;
+  detail: string;
+  source_message_ids: string[];
+  source_refs: string[];
+  related_option_id: string | null;
+  related_decision_id: string | null;
+  supersedes_entry_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlanningLedgerState = {
+  entries: PlanningLedgerEntry[];
+  summary: {
+    active_decisions: PlanningLedgerEntry[];
+    open_questions: PlanningLedgerEntry[];
+    active_options: PlanningLedgerEntry[];
+    rejected_options: PlanningLedgerEntry[];
+    constraints: PlanningLedgerEntry[];
+    assumptions: PlanningLedgerEntry[];
+    source_references: PlanningLedgerEntry[];
+  };
+};
+
 export type ActivityLogEntry = {
   activity_event_id: string;
   occurred_at: string;
@@ -441,6 +489,7 @@ export type WorkspaceData = {
   runtime_scenario_comparison: RuntimeScenarioComparison;
   activity_log: ActivityLogEntry[];
   planner_memory: PlannerMemoryState;
+  planning_ledger?: PlanningLedgerState;
   planner_panel_state: PlannerPanelState;
   runtime_state: {
     status: "ready" | "partial" | "empty";
@@ -664,6 +713,50 @@ export async function updateWorkspacePlanningMode(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ planning_mode: planningMode }),
+  });
+}
+
+export async function createPlanningLedgerEntry(
+  tripId: string,
+  payload: {
+    item_type: PlanningLedgerEntryType;
+    status?: PlanningLedgerEntryStatus;
+    category?: string;
+    summary: string;
+    detail?: string;
+    source_message_ids?: string[];
+    source_refs?: string[];
+    related_option_id?: string | null;
+    related_decision_id?: string | null;
+  }
+): Promise<PlanningLedgerEntry> {
+  return fetchJson<PlanningLedgerEntry>({
+    path: `/api/workspace/${tripId}/planning-ledger`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updatePlanningLedgerEntry(
+  tripId: string,
+  ledgerEntryId: string,
+  payload: Partial<Pick<
+    PlanningLedgerEntry,
+    "status" | "category" | "summary" | "detail" | "source_message_ids" | "source_refs" | "supersedes_entry_id"
+  >>
+): Promise<PlanningLedgerEntry> {
+  return fetchJson<PlanningLedgerEntry>({
+    path: `/api/workspace/${tripId}/planning-ledger/${ledgerEntryId}`,
+    method: "PATCH",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
   });
 }
 
