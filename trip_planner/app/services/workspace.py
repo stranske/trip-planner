@@ -928,6 +928,11 @@ def _build_runtime_scenario_comparison(
             fallback_option_ids=fallback_option_ids,
             needs_research_option_ids=needs_research_option_ids,
         )
+        unresolved_questions = _route_option_unresolved_questions(
+            scenario=scenario,
+            state=state,
+        )
+        available_actions = _route_option_available_actions(state)
         rows.append(
             {
                 "scenario_id": scenario["scenario_id"],
@@ -942,11 +947,10 @@ def _build_runtime_scenario_comparison(
                     scenario=scenario,
                 ),
                 "confidence": _route_option_confidence(scenario=scenario, state=state),
-                "unresolved_questions": _route_option_unresolved_questions(
-                    scenario=scenario,
-                    state=state,
-                ),
-                "available_actions": _route_option_available_actions(state),
+                "unresolved_questions": unresolved_questions,
+                "available_actions": available_actions,
+                "open_question": unresolved_questions[0] if unresolved_questions else None,
+                "available_action": available_actions[0] if available_actions else None,
                 "summary": summary["headline"],
                 "comparison_note": (
                     "Lead route for the current workspace comparison set."

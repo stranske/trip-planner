@@ -239,7 +239,9 @@ export type RuntimeScenarioComparison = {
     purpose?: string;
     confidence?: number;
     unresolved_questions?: string[];
+    open_question?: string | null;
     available_actions?: RouteOptionAction[];
+    available_action?: RouteOptionAction | null;
     summary: string;
     comparison_note: string;
     option_count: number;

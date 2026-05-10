@@ -1986,7 +1986,14 @@ def test_workspace_route_option_actions_update_comparison_and_ledger(
     assert route_options[0]["purpose"]
     assert isinstance(route_options[0]["confidence"], float)
     assert isinstance(route_options[0]["unresolved_questions"], list)
+    assert "open_question" in route_options[0]
     assert route_options[0]["available_actions"]
+    assert "available_action" in route_options[0]
+    if route_options[0]["unresolved_questions"]:
+        assert route_options[0]["open_question"] == route_options[0]["unresolved_questions"][0]
+    else:
+        assert route_options[0]["open_question"] is None
+    assert route_options[0]["available_action"] == route_options[0]["available_actions"][0]
 
     candidate = route_options[min(1, len(route_options) - 1)]
     candidate_id = candidate["route_option_id"]
