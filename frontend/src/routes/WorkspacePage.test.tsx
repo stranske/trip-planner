@@ -822,6 +822,19 @@ describe("WorkspacePage", () => {
           action_target: "scenario-comparison",
           blocked: false,
         },
+        panel_visibility: {
+          show_budget_panel: true,
+          show_policy_posture: false,
+          show_proposal_panel: false,
+          show_approval_readiness_panel: false,
+        },
+        policy_presentation: {
+          active_policy_state: false,
+          posture_label: "Not applicable",
+          approval_status_label: "Not applicable",
+          next_step_label: "No policy action needed",
+          summary: "Policy approval is not part of this workspace yet.",
+        },
         business_summary: null,
         debug_state: { sections: {} },
       },
@@ -905,14 +918,14 @@ describe("WorkspacePage", () => {
     expect(screen.getByLabelText("Timeline summary")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Review route tradeoffs" })).toBeInTheDocument();
     expect(screen.getByLabelText("Scenario review board")).toBeInTheDocument();
-    expect(screen.getAllByText("Policy posture").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Approval posture").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Places and options to review" })).toBeInTheDocument();
     expect(screen.getAllByText("Osaka arrival buffer").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Kyoto cultural anchor").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Approval packet is ready" })).toBeInTheDocument();
     expect(screen.getByText("Ready for approval")).toBeInTheDocument();
     expect(screen.getAllByText("Advance to approval").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Comparables and readiness signals" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Options and readiness signals" })).toBeInTheDocument();
     expect(screen.getByText("Conference Hotel")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Planner notes to keep" })).toBeInTheDocument();
     expect(screen.getByText("Planner checkpoint 1")).toBeInTheDocument();
@@ -943,7 +956,9 @@ describe("WorkspacePage", () => {
     });
 
     expect(screen.queryByText("Approval packet")).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Comparables and readiness signals" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Options and readiness signals" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Approval posture")).not.toBeInTheDocument();
+    expect(screen.queryByText("Policy posture")).not.toBeInTheDocument();
   });
 
   it("persists planning mode selections through the workspace API", async () => {
@@ -1318,7 +1333,7 @@ describe("WorkspacePage", () => {
     expect(screen.getAllByRole("heading", { name: "Kyoto cultural anchor" }).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /policy marker: Route burden warning/ }));
     expect(screen.getByRole("heading", { name: "Route burden warning" })).toBeInTheDocument();
-    expect(screen.getAllByText("Policy or feasibility warning active").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Approval or feasibility warning active").length).toBeGreaterThan(0);
     expect(screen.getByText("Live provider path")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
@@ -1398,7 +1413,7 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Comparables and readiness signals" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Options and readiness signals" })).toBeInTheDocument();
     });
 
     expect(screen.getByText(/Marriott via Navan · 245/)).toBeInTheDocument();

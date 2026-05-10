@@ -140,9 +140,7 @@ def _load_saved_scenarios(
     payload = _load_json(_state_fixture_dir("scenarios") / name)
     records = [SavedScenarioRecord.from_dict(item) for item in payload["records"]]
     comparison = payload.get("comparison")
-    return records, (
-        ScenarioComparison.from_dict(comparison) if comparison is not None else None
-    )
+    return records, (ScenarioComparison.from_dict(comparison) if comparison is not None else None)
 
 
 def _load_session(name: str) -> PlanningSessionState:
@@ -164,8 +162,7 @@ def _canonicalize_saved_scenario_ids(
         matches = [
             record.saved_scenario_id
             for record in saved_scenarios
-            if set(record.saved_scenario_id.split(":")[-1].split("-"))
-            == candidate_tokens
+            if set(record.saved_scenario_id.split(":")[-1].split("-")) == candidate_tokens
         ]
         if len(matches) == 1:
             return matches[0]
@@ -173,9 +170,7 @@ def _canonicalize_saved_scenario_ids(
 
     session.current_saved_scenario_id = normalize(session.current_saved_scenario_id)
     for decision in session.pending_decisions:
-        decision.related_saved_scenario_id = normalize(
-            decision.related_saved_scenario_id
-        )
+        decision.related_saved_scenario_id = normalize(decision.related_saved_scenario_id)
 
 
 def _leisure_search_result(trip_id: str) -> ScenarioSearchResult:
@@ -261,9 +256,7 @@ def _leisure_search_result(trip_id: str) -> ScenarioSearchResult:
                         summary="The fallback opens more nightlife at the cost of extra transfers.",
                         factor_keys=["breadth", "transfer_cost"],
                         machine_context={"planner_mode": "leisure"},
-                        human_summary=[
-                            "Broader exploration, slightly more travel fatigue."
-                        ],
+                        human_summary=["Broader exploration, slightly more travel fatigue."],
                         source_refs=["ranked-results:kyoto-spring"],
                     )
                 ],
@@ -368,7 +361,7 @@ def _business_search_result(trip_id: str) -> ScenarioSearchResult:
             ),
         ],
         explanation=[
-            "Business timeline still derives from route order; policy posture is communicated via scenario tradeoffs."
+            "Business timeline still derives from route order; approval posture is communicated via scenario tradeoffs."
         ],
         source_refs=["ranked-results:client-summit", "objective:client-summit"],
     )
@@ -488,9 +481,7 @@ def _route_option_variant(
             "severity": "warning",
             "blocking": False,
             "related_ids": [str(base_scenario.get("scenario_id") or "")],
-            "notes": [
-                "Generated as a rough comparison route until deeper planner research runs."
-            ],
+            "notes": ["Generated as a rough comparison route until deeper planner research runs."],
         },
     ]
     generated["notes"] = [
@@ -643,9 +634,7 @@ def _comparison_highlights(
     lead: dict[str, Any],
 ) -> list[str]:
     summary = scenario["scenario_summary"]
-    route_sequence = (
-        " -> ".join(summary.get("route_sequence") or []) or "route sequence pending"
-    )
+    route_sequence = " -> ".join(summary.get("route_sequence") or []) or "route sequence pending"
     highlights = [
         f"Route: {route_sequence}.",
         f"Travel {summary['total_travel_minutes']} minutes with {summary['total_transfer_count']} transfer(s).",
@@ -655,12 +644,10 @@ def _comparison_highlights(
     else:
         score_delta = round(float(scenario["score"]) - float(lead["score"]), 2)
         travel_delta = (
-            summary["total_travel_minutes"]
-            - lead["scenario_summary"]["total_travel_minutes"]
+            summary["total_travel_minutes"] - lead["scenario_summary"]["total_travel_minutes"]
         )
         transfers_delta = (
-            summary["total_transfer_count"]
-            - lead["scenario_summary"]["total_transfer_count"]
+            summary["total_transfer_count"] - lead["scenario_summary"]["total_transfer_count"]
         )
         delta_parts = [f"Score {score_delta:+.2f} versus the lead scenario."]
         if travel_delta:
@@ -669,9 +656,7 @@ def _comparison_highlights(
             delta_parts.append(f"Transfers {transfers_delta:+d} versus lead.")
         estimated_total_delta = _estimated_total_delta(scenario, lead)
         if estimated_total_delta is not None:
-            delta_parts.append(
-                f"Estimated total {estimated_total_delta:+.2f} versus lead."
-            )
+            delta_parts.append(f"Estimated total {estimated_total_delta:+.2f} versus lead.")
         highlights.append(" ".join(delta_parts))
     highlights.extend(
         tradeoff["summary"] for tradeoff in scenario.get("unresolved_tradeoffs", [])[:2]
@@ -689,10 +674,7 @@ def _latest_presentation_for_option_set(
     if not isinstance(presentations, list):
         return None
     for presentation in reversed(presentations):
-        if (
-            isinstance(presentation, dict)
-            and presentation.get("option_set_id") == option_set_id
-        ):
+        if isinstance(presentation, dict) and presentation.get("option_set_id") == option_set_id:
             return presentation
     return None
 
@@ -715,9 +697,7 @@ def _session_route_option_state(
         return set(), None, set(), set()
 
     rejected_option_ids = {
-        item
-        for item in presentation.get("rejected_option_ids", [])
-        if isinstance(item, str)
+        item for item in presentation.get("rejected_option_ids", []) if isinstance(item, str)
     }
     selected_option_id = presentation.get("selected_option_id")
     if not isinstance(selected_option_id, str) or selected_option_id == "":
@@ -765,9 +745,7 @@ def _route_option_purpose(*, state: str, status: str, scenario: dict[str, Any]) 
     if state == "rejected":
         return f"Keep {title} in history so the reason for rejecting it is not lost."
     if state == "needs_research":
-        return (
-            f"Send {title} back for a focused revision before treating it as settled."
-        )
+        return f"Send {title} back for a focused revision before treating it as settled."
     if status == "recommended":
         return f"Compare {title} as a strong candidate before making it the baseline."
     return f"Compare {title} as an active alternative while the route is still taking shape."
@@ -791,9 +769,7 @@ def _route_option_confidence(*, scenario: dict[str, Any], state: str) -> float:
     return round(max(0.05, min(confidence, 0.98)), 2)
 
 
-def _route_option_unresolved_questions(
-    *, scenario: dict[str, Any], state: str
-) -> list[str]:
+def _route_option_unresolved_questions(*, scenario: dict[str, Any], state: str) -> list[str]:
     summary = scenario.get("scenario_summary") or {}
     questions: list[str] = []
     if not summary.get("route_sequence"):
@@ -805,9 +781,7 @@ def _route_option_unresolved_questions(
         if isinstance(tradeoff_summary, str) and tradeoff_summary:
             questions.append(f"Can this tradeoff work for the trip: {tradeoff_summary}")
     if state == "needs_research":
-        questions.append(
-            "What should the planner change before comparing this route again?"
-        )
+        questions.append("What should the planner change before comparing this route again?")
     return questions[:3]
 
 
@@ -901,18 +875,14 @@ def _build_runtime_scenario_comparison(
         }
 
     scenario_ids = {scenario["scenario_id"] for scenario in scenarios}
-    if (
-        selected_option_id not in scenario_ids
-        or selected_option_id in rejected_option_ids
-    ):
+    if selected_option_id not in scenario_ids or selected_option_id in rejected_option_ids:
         selected_option_id = None
     lead = (
         next(
             (
                 scenario
                 for scenario in scenarios
-                if selected_option_id is not None
-                and scenario["scenario_id"] == selected_option_id
+                if selected_option_id is not None and scenario["scenario_id"] == selected_option_id
             ),
             None,
         )
@@ -979,9 +949,7 @@ def _build_runtime_scenario_comparison(
                     "estimated_total": estimated_total,
                 },
                 "delta": {
-                    "score_delta": round(
-                        float(scenario["score"]) - float(lead["score"]), 2
-                    ),
+                    "score_delta": round(float(scenario["score"]) - float(lead["score"]), 2),
                     "travel_minutes_delta": (
                         summary["total_travel_minutes"]
                         - lead["scenario_summary"]["total_travel_minutes"]
@@ -1104,16 +1072,12 @@ def _default_workspace_decisions(trip_id: str) -> list[PendingDecision]:
             ],
             blocking=True,
             related_option_set_id=f"option-set:{trip_id}:workspace-bootstrap",
-            notes=[
-                "Workspace bootstrap decision seeded for persisted planner interaction."
-            ],
+            notes=["Workspace bootstrap decision seeded for persisted planner interaction."],
         )
     ]
 
 
-def _default_workspace_presentation(
-    trip_id: str, shown_at: str
-) -> OptionPresentationRecord:
+def _default_workspace_presentation(trip_id: str, shown_at: str) -> OptionPresentationRecord:
     return OptionPresentationRecord(
         presentation_id=f"presentation:{trip_id}:workspace-bootstrap",
         option_set_id=f"option-set:{trip_id}:workspace-bootstrap",
@@ -1139,9 +1103,7 @@ def _default_workspace_session(record: PersistedTrip) -> PlanningSessionState:
         mode=record.mode,
         started_at=_isoformat(record.created_at),
         updated_at=timestamp,
-        recent_option_presentations=[
-            _default_workspace_presentation(record.trip_id, timestamp)
-        ],
+        recent_option_presentations=[_default_workspace_presentation(record.trip_id, timestamp)],
         pending_decisions=_default_workspace_decisions(record.trip_id),
         activity_log_id=f"activity-log:{record.trip_id}",
         active_budget_plan_id=record.budget_state_id,
@@ -1282,15 +1244,11 @@ def _bootstrap_saved_scenario_records(
                         "keeps a broader comparison lane available."
                     ),
                     "focus_areas": ["scope", "comparison-readiness"],
-                    "notes": [
-                        "Bootstrap comparison scaffold for persisted workspace rendering."
-                    ],
+                    "notes": ["Bootstrap comparison scaffold for persisted workspace rendering."],
                 }
             ],
             "tags": ["workspace-bootstrap", "preferred"],
-            "notes": [
-                "Created automatically during the first persisted workspace bootstrap."
-            ],
+            "notes": ["Created automatically during the first persisted workspace bootstrap."],
         }
     )
     fallback = SavedScenarioRecord.from_dict(
@@ -1316,9 +1274,7 @@ def _bootstrap_saved_scenario_records(
             ],
             "comparisons": [],
             "tags": ["workspace-bootstrap", "fallback"],
-            "notes": [
-                "Created automatically during the first persisted workspace bootstrap."
-            ],
+            "notes": ["Created automatically during the first persisted workspace bootstrap."],
         }
     )
     return baseline, fallback
@@ -1421,13 +1377,9 @@ def _build_saved_scenario_runtime_search(
                     "route_sequence": route_sequence,
                     "notes": list(version.get("notes") or []),
                 },
-                "supporting_option_ids": list(
-                    version["snapshot_refs"].get("option_set_ids") or []
-                ),
+                "supporting_option_ids": list(version["snapshot_refs"].get("option_set_ids") or []),
                 "objective_refs": [
-                    ref
-                    for ref in [version["snapshot_refs"].get("objective_id")]
-                    if ref is not None
+                    ref for ref in [version["snapshot_refs"].get("objective_id")] if ref is not None
                 ],
                 "unresolved_tradeoffs": (
                     [
@@ -1595,9 +1547,8 @@ def _build_persisted_trip_workspace(
             inventory_status=inventory_status,
         )
     )
-    resolved_feasibility_summary = (
-        feasibility_summary
-        or build_feasibility_summary_payload(resolved_inventory_bundles)
+    resolved_feasibility_summary = feasibility_summary or build_feasibility_summary_payload(
+        resolved_inventory_bundles
     )
     runtime_scenario_comparison = _build_runtime_scenario_comparison(
         trip_id=record.trip_id,
@@ -1694,6 +1645,126 @@ _DEBUG_PAYLOAD_KEYS: tuple[str, ...] = (
 )
 
 
+def _workspace_policy_state_is_active(
+    *,
+    policy_state: Any,
+    proposal_state: Any,
+) -> bool:
+    if isinstance(policy_state, dict) and policy_state:
+        return True
+    if not isinstance(proposal_state, dict) or not proposal_state:
+        return False
+
+    summary = proposal_state.get("summary") or {}
+    summary = summary if isinstance(summary, dict) else {}
+    if proposal_state.get("execution_id"):
+        return True
+    if summary.get("approval_ready"):
+        return True
+    if summary.get("evaluation_result_status") or summary.get("follow_up_status"):
+        return True
+    submission_status = str(
+        summary.get("submission_status") or proposal_state.get("submission_status") or ""
+    ).lower()
+    evaluation_status = str(
+        summary.get("evaluation_transport_status") or proposal_state.get("evaluation_status") or ""
+    ).lower()
+    return submission_status not in {"", "pending"} or evaluation_status not in {
+        "",
+        "pending",
+    }
+
+
+def _workspace_approval_status(
+    proposal_state: dict[str, Any],
+) -> tuple[str, str, list[str]]:
+    proposal_summary = proposal_state.get("summary") or {}
+    proposal_summary = proposal_summary if isinstance(proposal_summary, dict) else {}
+    approval_ready = bool(proposal_summary.get("approval_ready"))
+    follow_up_status = str(proposal_summary.get("follow_up_status") or "").lower()
+    evaluation_status = str(
+        proposal_summary.get("evaluation_result_status")
+        or proposal_summary.get("submission_status")
+        or ""
+    ).lower()
+
+    if approval_ready:
+        return "approved", "Your trip is ready for approval.", []
+    if evaluation_status in {"in_review", "pending", "submitted"}:
+        return "in_review", "Your trip approval is in review.", []
+    if evaluation_status in {"failed", "rejected", "needs_attention"} or follow_up_status in {
+        "exception_required",
+        "reoptimization_required",
+        "remediation_required",
+    }:
+        blockers = [
+            str(item)
+            for item in (proposal_summary.get("highlights") or [])
+            if isinstance(item, str)
+        ]
+        return "needs_attention", "Approval needs your attention.", blockers
+    if proposal_state:
+        return "not_ready", "Approval is not ready yet.", []
+    return "not_applicable", "Approval is not required yet.", []
+
+
+def _policy_presentation_for_workspace(
+    *,
+    active_policy_state: bool,
+    proposal_state: Any,
+) -> dict[str, Any]:
+    if not active_policy_state:
+        return {
+            "active_policy_state": False,
+            "posture_label": "Not applicable",
+            "approval_status_label": "Not applicable",
+            "next_step_label": "No policy action needed",
+            "summary": "Policy approval is not part of this workspace yet.",
+        }
+
+    proposal_state = proposal_state if isinstance(proposal_state, dict) else {}
+    if not proposal_state:
+        return {
+            "active_policy_state": True,
+            "posture_label": "Approval not started",
+            "approval_status_label": "Approval not started",
+            "next_step_label": "Build approval packet",
+            "summary": "No approval packet has been submitted yet.",
+        }
+
+    approval_status, headline, blockers = _workspace_approval_status(proposal_state)
+    summary = proposal_state.get("summary") or {}
+    summary = summary if isinstance(summary, dict) else {}
+    follow_up_status = str(summary.get("follow_up_status") or "").lower()
+
+    if approval_status == "approved":
+        posture_label = "Ready for approval"
+        next_step_label = "Prepare approval packet"
+    elif follow_up_status == "exception_required":
+        posture_label = "Needs exception"
+        next_step_label = "Review exception request"
+    elif approval_status == "needs_attention":
+        posture_label = "Needs follow-up"
+        next_step_label = "Resolve policy follow-up"
+    elif approval_status == "in_review":
+        posture_label = "Waiting for policy review"
+        next_step_label = "Wait for policy review"
+    elif approval_status == "not_ready":
+        posture_label = "Not ready for approval"
+        next_step_label = "Complete approval packet"
+    else:
+        posture_label = "Policy state available"
+        next_step_label = "Review policy details"
+
+    return {
+        "active_policy_state": True,
+        "posture_label": posture_label,
+        "approval_status_label": posture_label,
+        "next_step_label": next_step_label,
+        "summary": " ".join([headline, *blockers[:1]]).strip(),
+    }
+
+
 def _build_workspace_view_model(
     payload: dict[str, Any],
     *,
@@ -1727,9 +1798,7 @@ def _build_workspace_view_model(
     saved_scenarios = payload.get("saved_scenarios") or []
     saved_scenarios = saved_scenarios if isinstance(saved_scenarios, list) else []
     feasibility_summary = payload.get("feasibility_summary") or {}
-    feasibility_summary = (
-        feasibility_summary if isinstance(feasibility_summary, dict) else {}
-    )
+    feasibility_summary = feasibility_summary if isinstance(feasibility_summary, dict) else {}
 
     decided: list[str] = []
     if saved_scenarios:
@@ -1752,9 +1821,7 @@ def _build_workspace_view_model(
     if status == "ready":
         headline = "Your trip plan is ready to review."
         next_step_title = "Review and pick a scenario"
-        next_step_summary = (
-            "Compare the saved scenarios and choose one to keep planning around."
-        )
+        next_step_summary = "Compare the saved scenarios and choose one to keep planning around."
         next_step_action = "Open scenario comparison"
         next_step_target = "scenario-comparison"
         blocked = False
@@ -1771,9 +1838,7 @@ def _build_workspace_view_model(
     else:
         headline = "Trip planning hasn't started yet."
         next_step_title = "Start planning"
-        next_step_summary = (
-            "Add the missing trip context to start assembling scenarios."
-        )
+        next_step_summary = "Add the missing trip context to start assembling scenarios."
         next_step_action = "Open trip setup"
         next_step_target = "trip-setup"
         blocked = True
@@ -1796,45 +1861,29 @@ def _build_workspace_view_model(
         "blocked": blocked,
     }
 
+    policy_state = payload.get("policy_state")
+    proposal_state_value = payload.get("proposal_state")
+    active_policy_state = _workspace_policy_state_is_active(
+        policy_state=policy_state,
+        proposal_state=proposal_state_value,
+    )
+    show_policy_panels = resolved_mode == "business" or active_policy_state
+    panel_visibility = {
+        "show_budget_panel": True,
+        "show_policy_posture": show_policy_panels,
+        "show_proposal_panel": show_policy_panels,
+        "show_approval_readiness_panel": show_policy_panels,
+    }
+    policy_presentation = _policy_presentation_for_workspace(
+        active_policy_state=show_policy_panels,
+        proposal_state=proposal_state_value,
+    )
+
     business_summary: dict[str, Any] | None = None
     if resolved_mode == "business":
         proposal_state = payload.get("proposal_state") or {}
         proposal_state = proposal_state if isinstance(proposal_state, dict) else {}
-        proposal_summary = proposal_state.get("summary") or {}
-        proposal_summary = (
-            proposal_summary if isinstance(proposal_summary, dict) else {}
-        )
-        approval_ready = bool(proposal_summary.get("approval_ready"))
-        evaluation_status = str(
-            proposal_summary.get("evaluation_result_status")
-            or proposal_summary.get("submission_status")
-            or ""
-        ).lower()
-
-        if approval_ready:
-            approval_status = "approved"
-            approval_headline = "Your trip is ready for approval."
-            blockers: list[str] = []
-        elif evaluation_status in {"in_review", "pending", "submitted"}:
-            approval_status = "in_review"
-            approval_headline = "Your trip approval is in review."
-            blockers = []
-        elif evaluation_status in {"failed", "rejected", "needs_attention"}:
-            approval_status = "needs_attention"
-            approval_headline = "Approval needs your attention."
-            blockers = [
-                str(item)
-                for item in (proposal_summary.get("highlights") or [])
-                if isinstance(item, str)
-            ]
-        elif proposal_state:
-            approval_status = "not_ready"
-            approval_headline = "Approval is not ready yet."
-            blockers = []
-        else:
-            approval_status = "not_applicable"
-            approval_headline = "Approval is not required yet."
-            blockers = []
+        approval_status, approval_headline, blockers = _workspace_approval_status(proposal_state)
 
         business_summary = {
             "approval_status": approval_status,
@@ -1855,6 +1904,8 @@ def _build_workspace_view_model(
     return {
         "user_summary": user_summary,
         "next_step": next_step,
+        "panel_visibility": panel_visibility,
+        "policy_presentation": policy_presentation,
         "business_summary": business_summary,
         "debug_state": {"sections": debug_sections},
     }
@@ -1903,9 +1954,7 @@ def _build_workspace_runtime_state(
         }
     return {
         "status": str(inventory_runtime_state.get("status") or "empty"),
-        "title": str(
-            inventory_runtime_state.get("title") or "Workspace runtime is still empty"
-        ),
+        "title": str(inventory_runtime_state.get("title") or "Workspace runtime is still empty"),
         "summary": str(
             inventory_runtime_state.get("summary")
             or "Trip context is not complete enough for runtime workspace assembly yet."
@@ -1983,12 +2032,8 @@ def _build_runtime_scenario_comparison_payload(
         }
         for scenario in persisted_saved_scenarios_records
     ]
-    persisted_inventory_bundles, inventory_summary = _build_workspace_inventory_inputs(
-        record
-    )
-    inventory_status = str(
-        (inventory_summary.get("runtime_state") or {}).get("status") or "empty"
-    )
+    persisted_inventory_bundles, inventory_summary = _build_workspace_inventory_inputs(record)
+    inventory_status = str((inventory_summary.get("runtime_state") or {}).get("status") or "empty")
     return _build_runtime_scenario_comparison(
         trip_id=trip_id,
         trip_title=record.title,
@@ -2155,9 +2200,7 @@ def _build_planner_panel_state(
 ) -> dict[str, Any]:
     scenarios = list(scenario_search.get("scenarios", []))
     primary_regions = list(trip["trip_frame"].get("primary_regions") or [])
-    region_summary = (
-        ", ".join(primary_regions[:2]) if primary_regions else "the current trip frame"
-    )
+    region_summary = ", ".join(primary_regions[:2]) if primary_regions else "the current trip frame"
 
     if scenarios:
         option_set = {
@@ -2190,12 +2233,9 @@ def _build_planner_panel_state(
                     "label": scenario["title"],
                     "summary": scenario["scenario_summary"]["headline"],
                     "drawbacks": [
-                        tradeoff["summary"]
-                        for tradeoff in scenario.get("unresolved_tradeoffs", [])
+                        tradeoff["summary"] for tradeoff in scenario.get("unresolved_tradeoffs", [])
                     ]
-                    or [
-                        "No explicit unresolved tradeoffs were recorded for this scenario yet."
-                    ],
+                    or ["No explicit unresolved tradeoffs were recorded for this scenario yet."],
                     "explanation": [
                         f"Rank #{scenario['rank']} with score {scenario['score']:.2f}.",
                         f"Route sequence: {' -> '.join(scenario['scenario_summary'].get('route_sequence', [])) or 'not surfaced yet'}.",
@@ -2259,9 +2299,7 @@ def _build_planner_panel_state(
                     "kind": "trip_setup",
                     "label": "Broaden the first planner pass",
                     "summary": "Expand regions, dates, or traveler notes before the first ranked scenario run.",
-                    "drawbacks": [
-                        "A broader scope can delay the first saved scenario comparison."
-                    ],
+                    "drawbacks": ["A broader scope can delay the first saved scenario comparison."],
                     "explanation": [
                         "Best when the trip shell is real but still intentionally under-specified.",
                     ],
@@ -2294,11 +2332,9 @@ def _build_planner_panel_state(
             },
         ]
 
-    rejected_option_ids, selected_option_id, fallback_option_ids = (
-        _session_feedback_state(
-            session,
-            option_set["option_set_id"],
-        )
+    rejected_option_ids, selected_option_id, fallback_option_ids = _session_feedback_state(
+        session,
+        option_set["option_set_id"],
     )
     option_set["options"] = [
         {
@@ -2313,13 +2349,10 @@ def _build_planner_panel_state(
                 )
             ),
             "explanation": (
-                ["You already chose this direction in the workspace."]
-                + option["explanation"]
+                ["You already chose this direction in the workspace."] + option["explanation"]
                 if option["option_id"] == selected_option_id
                 else (
-                    [
-                        "This option was kept as an explicit fallback for later comparison."
-                    ]
+                    ["This option was kept as an explicit fallback for later comparison."]
                     + option["explanation"]
                     if option["option_id"] in fallback_option_ids
                     else option["explanation"]
@@ -2337,8 +2370,7 @@ def _build_planner_panel_state(
             "prompt": decision["prompt"],
             "choices": (
                 list(decision["choices"])
-                if isinstance(decision.get("choices"), (list, tuple))
-                and decision["choices"]
+                if isinstance(decision.get("choices"), (list, tuple)) and decision["choices"]
                 else [
                     "Keep the current direction.",
                     "Compare another planner-backed option first.",
@@ -2394,8 +2426,7 @@ def _build_planner_panel_state(
 
     proposal_state = (
         dict(proposal_context["proposal_state"])
-        if proposal_context is not None
-        and proposal_context.get("proposal_state") is not None
+        if proposal_context is not None and proposal_context.get("proposal_state") is not None
         else None
     )
     if proposal_state is not None:
@@ -2406,15 +2437,12 @@ def _build_planner_panel_state(
             else None
         )
         proposal = (
-            dict(proposal_state["proposal"])
-            if proposal_state.get("proposal") is not None
-            else None
+            dict(proposal_state["proposal"]) if proposal_state.get("proposal") is not None else None
         )
     else:
         policy_evaluation = (
             dict(policy_context["policy_evaluation"])
-            if policy_context is not None
-            and policy_context.get("policy_evaluation") is not None
+            if policy_context is not None and policy_context.get("policy_evaluation") is not None
             else None
         )
         proposal = (
@@ -2426,16 +2454,14 @@ def _build_planner_panel_state(
         outputs.append(
             {
                 "output_id": f"output:{trip['trip_id']}:policy-ready",
-                "title": "Policy posture loaded",
-                "body": "The workspace is using persisted policy inputs instead of mock approval-readiness state.",
+                "title": "Approval readiness loaded",
+                "body": "The workspace is using saved approval inputs instead of placeholder readiness state.",
                 "tags": ["policy", "workspace", trip["mode"]],
                 "status": (
                     "positive"
                     if policy_evaluation["status"] == "compliant"
                     else (
-                        "critical"
-                        if policy_evaluation["status"] == "non_compliant"
-                        else "caution"
+                        "critical" if policy_evaluation["status"] == "non_compliant" else "caution"
                     )
                 ),
                 "highlights": list(policy_evaluation.get("notes") or [])[:3],
@@ -2446,16 +2472,14 @@ def _build_planner_panel_state(
             {
                 "action_id": f"action:{trip['trip_id']}:review-policy",
                 "action_kind": "prepare_approval",
-                "label": "Review policy posture",
-                "description": "Inspect imported policy constraints and approval-readiness before moving to submission work.",
+                "label": "Review approval readiness",
+                "description": "Inspect saved approval constraints and readiness before moving to submission work.",
                 "emphasis": "primary",
                 "target_section": "approval",
             },
         )
     policy_summary = (
-        dict(policy_context.get("summary") or {})
-        if isinstance(policy_context, dict)
-        else {}
+        dict(policy_context.get("summary") or {}) if isinstance(policy_context, dict) else {}
     )
     policy_transport_error = (
         dict(policy_summary.get("transport_error") or {})
@@ -2463,23 +2487,21 @@ def _build_planner_panel_state(
         else {}
     )
     policy_error_code = policy_transport_error.get("error_code")
-    if policy_summary.get(
-        "status"
-    ) == "stored_policy_fallback" and policy_error_code in {
+    if policy_summary.get("status") == "stored_policy_fallback" and policy_error_code in {
         "breaker_open",
         "timeout",
     }:
         if policy_error_code == "breaker_open":
-            notice_title = "Live TPP breaker is open"
+            notice_title = "Approval service is temporarily unavailable"
             notice_body = (
-                "Live policy sync transport is temporarily unavailable. The workspace is using "
-                "stored-policy posture until the breaker reset window elapses."
+                "The workspace is using the latest saved approval information while the live "
+                "service recovers."
             )
         else:
-            notice_title = "Live TPP request timed out"
+            notice_title = "Approval service request timed out"
             notice_body = (
-                "Live policy sync transport timed out. The workspace is using stored-policy "
-                "posture while live transport recovers."
+                "The workspace is using the latest saved approval information while the live "
+                "service recovers."
             )
         outputs.append(
             {
@@ -2489,8 +2511,8 @@ def _build_planner_panel_state(
                 "tags": ["policy", "transport", "stored-policy", trip["mode"]],
                 "status": "caution",
                 "highlights": [
-                    f"error_code={policy_error_code}",
-                    str(policy_transport_error.get("message") or ""),
+                    "Saved approval information is still available.",
+                    "Retry the live approval refresh later.",
                 ],
             }
         )
@@ -2500,17 +2522,13 @@ def _build_planner_panel_state(
         outputs.append(
             {
                 "output_id": f"output:{trip['trip_id']}:proposal-lifecycle",
-                "title": "Proposal lifecycle loaded",
-                "body": "The workspace now carries persisted proposal submission and evaluation state.",
+                "title": "Approval packet loaded",
+                "body": "The workspace now carries saved approval packet and review state.",
                 "tags": ["proposal", "approval", trip["mode"]],
                 "status": (
                     "positive"
                     if summary.get("approval_ready")
-                    else (
-                        "caution"
-                        if summary.get("evaluation_transport_status")
-                        else "neutral"
-                    )
+                    else ("caution" if summary.get("evaluation_transport_status") else "neutral")
                 ),
                 "highlights": list(summary.get("highlights") or [])[:3],
             }
@@ -2526,16 +2544,16 @@ def _build_planner_panel_state(
             error_code = _transport_error_code(transport_error)
             if error_code in {"breaker_open", "timeout"}:
                 if error_code == "breaker_open":
-                    notice_title = "Live TPP breaker is open"
+                    notice_title = "Approval service is temporarily unavailable"
                     notice_body = (
-                        "Live policy transport is temporarily unavailable. The workspace is using "
-                        "stored-policy posture until the breaker reset window elapses."
+                        "The workspace is using the latest saved approval information while the "
+                        "live service recovers."
                     )
                 else:
-                    notice_title = "Live TPP request timed out"
+                    notice_title = "Approval service request timed out"
                     notice_body = (
-                        "Live policy transport timed out. The workspace is using stored-policy "
-                        "posture while live transport recovers."
+                        "The workspace is using the latest saved approval information while the "
+                        "live service recovers."
                     )
                 outputs.append(
                     {
@@ -2550,8 +2568,8 @@ def _build_planner_panel_state(
                         ],
                         "status": "caution",
                         "highlights": [
-                            f"error_code={error_code}",
-                            str(transport_error.get("message") or ""),
+                            "Saved approval information is still available.",
+                            "Retry the live approval refresh later.",
                         ],
                     }
                 )
@@ -2579,10 +2597,8 @@ def _build_planner_panel_state(
                 0,
                 {
                     "action_id": f"action:{trip['trip_id']}:proposal-follow-up",
-                    "action_kind": follow_up.get("recommended_action")
-                    or "review_follow_up",
-                    "label": follow_up.get("recommended_label")
-                    or "Review proposal follow-up",
+                    "action_kind": follow_up.get("recommended_action") or "review_follow_up",
+                    "label": follow_up.get("recommended_label") or "Review proposal follow-up",
                     "description": follow_up.get("summary")
                     or "Inspect the persisted follow-up lane for the latest policy result.",
                     "emphasis": "primary",
@@ -2612,9 +2628,7 @@ def _build_planner_panel_state(
                 1,
                 session["interaction_state"].get("auto_advance_research_passes", 1) + 1,
             ),
-            "target_options_before_checkpoint": max(
-                2, min(3, len(option_set["options"]))
-            ),
+            "target_options_before_checkpoint": max(2, min(3, len(option_set["options"]))),
             "surface_options_early": session["interaction_state"].get(
                 "option_preview_timing",
                 "balanced",
@@ -2643,9 +2657,7 @@ def get_workspace_payload(
             fixture = None
     if fixture is not None:
         trip_record = _load_trip_record(fixture.trip_fixture)
-        saved_scenarios, scenario_comparison = _load_saved_scenarios(
-            fixture.scenarios_fixture
-        )
+        saved_scenarios, scenario_comparison = _load_saved_scenarios(fixture.scenarios_fixture)
         session = _load_session(fixture.session_fixture)
         _canonicalize_saved_scenario_ids(session, saved_scenarios)
         inventory_assembly_input = _build_inventory_assembly_input(
@@ -2686,9 +2698,7 @@ def get_workspace_payload(
             "trip_record": trip_record.to_dict(),
             "session": session.to_dict(),
             "saved_scenarios": [record.to_dict() for record in saved_scenarios],
-            "scenario_comparison": (
-                scenario_comparison.to_dict() if scenario_comparison else None
-            ),
+            "scenario_comparison": (scenario_comparison.to_dict() if scenario_comparison else None),
             "scenario_search": scenario_search.to_dict(),
             "ranking": ranking,
             "route_comparison": runtime_scenario_comparison,
@@ -2750,12 +2760,8 @@ def get_workspace_payload(
             session_record=session_record,
         )
         bootstrap_updated = True
-    persisted_inventory_bundles, inventory_summary = _build_workspace_inventory_inputs(
-        record
-    )
-    inventory_status = str(
-        (inventory_summary.get("runtime_state") or {}).get("status") or "empty"
-    )
+    persisted_inventory_bundles, inventory_summary = _build_workspace_inventory_inputs(record)
+    inventory_status = str((inventory_summary.get("runtime_state") or {}).get("status") or "empty")
     runtime_search = _build_runtime_scenario_search_for_trip(
         record=record,
         inventory_bundles=persisted_inventory_bundles,
@@ -2807,11 +2813,7 @@ def get_workspace_payload(
     feasibility_summary = build_feasibility_summary_payload(persisted_inventory_bundles)
     return _build_persisted_trip_workspace(
         record,
-        session=(
-            _serialize_session_record(session_record)
-            if session_record is not None
-            else None
-        ),
+        session=(_serialize_session_record(session_record) if session_record is not None else None),
         saved_scenarios=[
             {
                 "saved_scenario_id": scenario.saved_scenario_id,
@@ -2903,9 +2905,7 @@ def _get_or_create_workspace_session_record(
         recent_option_presentations=[
             item.to_dict() for item in default_session.recent_option_presentations
         ],
-        pending_decisions=[
-            item.to_dict() for item in default_session.pending_decisions
-        ],
+        pending_decisions=[item.to_dict() for item in default_session.pending_decisions],
         status=default_session.status,
         selected_planning_mode=default_session.selected_planning_mode,
         current_checkpoint_id=default_session.current_checkpoint_id,
@@ -2959,12 +2959,8 @@ def _current_workspace_option_set(
         if session.recent_option_presentations
         else _default_workspace_presentation(trip_id, session.updated_at)
     )
-    option_set_id = (
-        presentation.option_set_id or f"option-set:{trip_id}:workspace-bootstrap"
-    )
-    option_ids = [
-        option_id for option_id in presentation.surfaced_option_ids if option_id
-    ]
+    option_set_id = presentation.option_set_id or f"option-set:{trip_id}:workspace-bootstrap"
+    option_ids = [option_id for option_id in presentation.surfaced_option_ids if option_id]
     return option_set_id, option_ids
 
 
@@ -3043,32 +3039,20 @@ def answer_workspace_planner_decision(
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
     matching = next(
-        (
-            decision
-            for decision in session.pending_decisions
-            if decision.decision_id == decision_id
-        ),
+        (decision for decision in session.pending_decisions if decision.decision_id == decision_id),
         None,
     )
     if matching is None:
-        raise ValueError(
-            f"Decision '{decision_id}' was not found in the workspace session."
-        )
+        raise ValueError(f"Decision '{decision_id}' was not found in the workspace session.")
     if choice not in matching.choices:
-        raise ValueError(
-            f"Choice '{choice}' is not valid for decision '{decision_id}'."
-        )
+        raise ValueError(f"Choice '{choice}' is not valid for decision '{decision_id}'.")
 
     session.pending_decisions = [
-        decision
-        for decision in session.pending_decisions
-        if decision.decision_id != decision_id
+        decision for decision in session.pending_decisions if decision.decision_id != decision_id
     ]
     session.updated_at = _isoformat(datetime.now(UTC))
     session.notes.append(f"decision:{decision_id}:{choice}")
-    session_record.pending_decisions = [
-        item.to_dict() for item in session.pending_decisions
-    ]
+    session_record.pending_decisions = [item.to_dict() for item in session.pending_decisions]
     session_record.notes = list(session.notes)
     session_record.last_updated_at = session.updated_at
     record.updated_at = datetime.now(UTC)
@@ -3114,9 +3098,7 @@ def submit_workspace_option_feedback(
     record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
-    option_set_id, valid_option_ids = _current_workspace_option_set(
-        session, trip_id=trip_id
-    )
+    option_set_id, valid_option_ids = _current_workspace_option_set(session, trip_id=trip_id)
     if option_id not in valid_option_ids:
         raise ValueError(
             f"Option '{option_id}' is not available in the current workspace option set."
@@ -3142,25 +3124,23 @@ def submit_workspace_option_feedback(
             item for item in presentation.rejected_option_ids if item != option_id
         ]
         event_kind = "decision_recorded"
-        summary = (
-            f"Traveler accepted option '{option_id}' from the workspace planner panel."
-        )
+        summary = f"Traveler accepted option '{option_id}' from the workspace planner panel."
     elif action_type == "reject":
         if option_id not in presentation.rejected_option_ids:
             presentation.rejected_option_ids.append(option_id)
         if presentation.selected_option_id == option_id:
             presentation.selected_option_id = None
         event_kind = "option_rejected"
-        summary = (
-            f"Traveler rejected option '{option_id}' from the workspace planner panel."
-        )
+        summary = f"Traveler rejected option '{option_id}' from the workspace planner panel."
     elif action_type == "save_as_fallback":
         presentation.notes = [
             note for note in presentation.notes if not note.startswith("fallback:")
         ]
         presentation.notes.append(f"fallback:{option_id}")
         event_kind = "decision_recorded"
-        summary = f"Traveler saved option '{option_id}' as a fallback in the workspace planner panel."
+        summary = (
+            f"Traveler saved option '{option_id}' as a fallback in the workspace planner panel."
+        )
     else:
         session.interaction_state.auto_advance_research_passes += 1
         event_kind = "rerank_requested"
@@ -3170,10 +3150,7 @@ def submit_workspace_option_feedback(
     session.recent_option_presentations = [presentation]
     session.updated_at = _isoformat(datetime.now(UTC))
     session.notes.append(f"feedback:{action_type}:{option_id}")
-    if (
-        action_type in {"revise", "do_more_before_asking_again"}
-        and not session.pending_decisions
-    ):
+    if action_type in {"revise", "do_more_before_asking_again"} and not session.pending_decisions:
         session.pending_decisions = [
             PendingDecision(
                 decision_id=f"decision:{trip_id}:follow-up",
@@ -3192,9 +3169,7 @@ def submit_workspace_option_feedback(
     session_record.recent_option_presentations = [
         item.to_dict() for item in session.recent_option_presentations
     ]
-    session_record.pending_decisions = [
-        item.to_dict() for item in session.pending_decisions
-    ]
+    session_record.pending_decisions = [item.to_dict() for item in session.pending_decisions]
     session_record.interaction_state = session.interaction_state.to_dict()
     session_record.notes = list(session.notes)
     session_record.last_updated_at = session.updated_at
@@ -3244,16 +3219,12 @@ def submit_workspace_route_option_action(
     action_type: str,
 ) -> dict[str, Any]:
     if action_type not in ROUTE_OPTION_ACTIONS:
-        raise ValueError(
-            f"action_type must be one of {', '.join(ROUTE_OPTION_ACTIONS)}"
-        )
+        raise ValueError(f"action_type must be one of {', '.join(ROUTE_OPTION_ACTIONS)}")
 
     record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
-    option_set_id, valid_option_ids = _current_workspace_option_set(
-        session, trip_id=trip_id
-    )
+    option_set_id, valid_option_ids = _current_workspace_option_set(session, trip_id=trip_id)
     if option_id not in valid_option_ids:
         raise ValueError(
             f"Route option '{option_id}' is not available in the current workspace comparison."
@@ -3273,9 +3244,7 @@ def submit_workspace_route_option_action(
     presentation.rejected_option_ids = [
         item for item in presentation.rejected_option_ids if item in valid_option_ids
     ]
-    presentation.notes = _without_route_option_notes(
-        list(presentation.notes), option_id
-    )
+    presentation.notes = _without_route_option_notes(list(presentation.notes), option_id)
 
     if action_type == "make_baseline":
         presentation.selected_option_id = option_id
@@ -3338,9 +3307,7 @@ def submit_workspace_route_option_action(
     session_record.recent_option_presentations = [
         item.to_dict() for item in session.recent_option_presentations
     ]
-    session_record.pending_decisions = [
-        item.to_dict() for item in session.pending_decisions
-    ]
+    session_record.pending_decisions = [item.to_dict() for item in session.pending_decisions]
     session_record.interaction_state = session.interaction_state.to_dict()
     session_record.notes = list(session.notes)
     session_record.last_updated_at = session.updated_at

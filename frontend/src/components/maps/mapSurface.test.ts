@@ -75,7 +75,7 @@ describe("mapSurface", () => {
       "2 mapped option marker(s)",
       "3 route stop(s)",
       "4 transfer checkpoint(s)",
-      "Policy or feasibility warning active",
+      "Approval or feasibility warning active",
     ]);
     expect(model.routeStops.map((stop) => stop.label)).toEqual(["Kyoto", "Uji", "Kyoto"]);
     expect(model.routeSegments).toHaveLength(2);

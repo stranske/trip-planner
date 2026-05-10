@@ -58,15 +58,17 @@ def _assert_payload_avoids_fixture_or_default_inventory_data(payload: dict[str, 
 
 def _assert_runtime_ranking_and_route_comparison(payload: dict[str, Any]) -> None:
     assert payload["ranking"]["rows"]
-    assert payload["ranking"]["lead_scenario_id"] == payload["scenario_search"]["scenarios"][0][
-        "scenario_id"
-    ]
+    assert (
+        payload["ranking"]["lead_scenario_id"]
+        == payload["scenario_search"]["scenarios"][0]["scenario_id"]
+    )
     assert payload["ranking"]["rows"][0]["scenario_id"] == payload["ranking"]["lead_scenario_id"]
     assert payload["ranking"]["source_refs"]
     assert payload["route_comparison"] == payload["runtime_scenario_comparison"]
-    assert payload["route_comparison"]["lead_scenario_id"] == payload["scenario_search"][
-        "scenarios"
-    ][0]["scenario_id"]
+    assert (
+        payload["route_comparison"]["lead_scenario_id"]
+        == payload["scenario_search"]["scenarios"][0]["scenario_id"]
+    )
     assert payload["route_comparison"]["scenarios"]
     assert payload["route_comparison"]["source_refs"]
 
@@ -1002,7 +1004,7 @@ def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_tri
     assert (
         payload["planner_panel_state"]["proposal"]["constraint_set_id"] == "policy-standard-2026-02"
     )
-    assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Policy posture loaded"
+    assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Approval readiness loaded"
     assert payload["planner_panel_state"]["next_step_actions"][0]["target_section"] == "approval"
     assert "Navan" in payload["planner_panel_state"]["policy_evaluation"]["notes"][-2]
 
@@ -1245,7 +1247,7 @@ def test_workspace_endpoint_prefers_persisted_proposal_lifecycle_for_business_tr
         payload["planner_panel_state"]["policy_evaluation"]["evaluation_id"] == "eval-approved-001"
     )
     titles = [item["title"] for item in payload["planner_panel_state"]["outputs"]]
-    assert "Proposal lifecycle loaded" in titles
+    assert "Approval packet loaded" in titles
     assert "Approval-ready proposal" in titles
     assert payload["proposal_state"]["follow_up"]["status"] == "resolved"
 
@@ -1357,7 +1359,7 @@ def test_workspace_endpoint_does_not_mix_policy_preview_with_pending_proposal_st
     payload = response.json()
     assert payload["planner_panel_state"]["proposal"]["proposal_id"] == f"proposal:{trip_id}"
     assert payload["planner_panel_state"]["policy_evaluation"] is None
-    assert "Policy posture loaded" not in [
+    assert "Approval readiness loaded" not in [
         item["title"] for item in payload["planner_panel_state"]["outputs"]
     ]
 
@@ -1688,8 +1690,8 @@ def test_workspace_endpoint_surfaces_exception_follow_up_for_live_policy_results
 @pytest.mark.parametrize(
     ("error_code", "expected_title"),
     [
-        ("timeout", "Live TPP request timed out"),
-        ("breaker_open", "Live TPP breaker is open"),
+        ("timeout", "Approval service request timed out"),
+        ("breaker_open", "Approval service is temporarily unavailable"),
     ],
 )
 def test_workspace_endpoint_persists_transport_fallback_notice_for_live_submission_errors(
@@ -1817,8 +1819,8 @@ def test_workspace_endpoint_persists_transport_fallback_notice_for_live_submissi
     )
     assert fallback_output is not None
     assert fallback_output["title"] == expected_title
-    assert "stored-policy posture" in fallback_output["body"]
-    assert fallback_output["highlights"][0] == f"error_code={error_code}"
+    assert "latest saved approval information" in fallback_output["body"]
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def test_workspace_planner_decision_answer_persists_across_reload(client: TestClient) -> None:
@@ -1995,9 +1997,7 @@ def test_runtime_route_options_hold_blocked_scenarios_for_research() -> None:
                 _route_option_scenario(
                     "scenario:blocked", feasible=False, recommended=True, rank=1
                 ),
-                _route_option_scenario(
-                    "scenario:open", feasible=True, recommended=False, rank=2
-                ),
+                _route_option_scenario("scenario:open", feasible=True, recommended=False, rank=2),
             ],
         },
         session=None,
@@ -2006,9 +2006,7 @@ def test_runtime_route_options_hold_blocked_scenarios_for_research() -> None:
     blocked = comparison["scenarios"][0]
     assert blocked["status"] == "blocked"
     assert blocked["state"] == "needs_research"
-    assert "make_baseline" not in [
-        action["action_type"] for action in blocked["available_actions"]
-    ]
+    assert "make_baseline" not in [action["action_type"] for action in blocked["available_actions"]]
 
 
 def test_workspace_route_option_actions_update_comparison_and_ledger(
@@ -2101,8 +2099,7 @@ def test_workspace_route_option_actions_update_comparison_and_ledger(
     )
     assert reopened_row["state"] in {"active", "fallback"}
     assert any(
-        action["action_type"] == "make_baseline"
-        for action in reopened_row["available_actions"]
+        action["action_type"] == "make_baseline" for action in reopened_row["available_actions"]
     )
     assert f"reopened:{rejected_id}" not in json.dumps(reopened_payload)
 
@@ -2240,10 +2237,10 @@ def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_breaker_
         None,
     )
     assert fallback_output is not None
-    assert fallback_output["title"] == "Live TPP breaker is open"
-    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["title"] == "Approval service is temporarily unavailable"
+    assert "latest saved approval information" in fallback_output["body"]
     assert fallback_output["status"] == "caution"
-    assert fallback_output["highlights"][0] == "error_code=breaker_open"
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def test_planner_panel_state_surfaces_policy_sync_fallback_notice_for_breaker_open() -> None:
@@ -2282,10 +2279,10 @@ def test_planner_panel_state_surfaces_policy_sync_fallback_notice_for_breaker_op
         None,
     )
     assert fallback_output is not None
-    assert fallback_output["title"] == "Live TPP breaker is open"
-    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["title"] == "Approval service is temporarily unavailable"
+    assert "latest saved approval information" in fallback_output["body"]
     assert fallback_output["status"] == "caution"
-    assert fallback_output["highlights"][0] == "error_code=breaker_open"
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_timeout() -> None:
@@ -2324,10 +2321,10 @@ def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_timeout(
         None,
     )
     assert fallback_output is not None
-    assert fallback_output["title"] == "Live TPP request timed out"
-    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["title"] == "Approval service request timed out"
+    assert "latest saved approval information" in fallback_output["body"]
     assert fallback_output["status"] == "caution"
-    assert fallback_output["highlights"][0] == "error_code=timeout"
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def test_planner_panel_state_uses_submission_error_details_code_for_timeout_fallback() -> None:
@@ -2366,10 +2363,10 @@ def test_planner_panel_state_uses_submission_error_details_code_for_timeout_fall
         None,
     )
     assert fallback_output is not None
-    assert fallback_output["title"] == "Live TPP request timed out"
-    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["title"] == "Approval service request timed out"
+    assert "latest saved approval information" in fallback_output["body"]
     assert fallback_output["status"] == "caution"
-    assert fallback_output["highlights"][0] == "error_code=timeout"
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_evaluation_timeout() -> (
@@ -2410,10 +2407,10 @@ def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_evaluati
         None,
     )
     assert fallback_output is not None
-    assert fallback_output["title"] == "Live TPP request timed out"
-    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["title"] == "Approval service request timed out"
+    assert "latest saved approval information" in fallback_output["body"]
     assert fallback_output["status"] == "caution"
-    assert fallback_output["highlights"][0] == "error_code=timeout"
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def test_planner_panel_state_surfaces_policy_sync_fallback_notice_for_timeout() -> None:
@@ -2452,10 +2449,10 @@ def test_planner_panel_state_surfaces_policy_sync_fallback_notice_for_timeout() 
         None,
     )
     assert fallback_output is not None
-    assert fallback_output["title"] == "Live TPP request timed out"
-    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["title"] == "Approval service request timed out"
+    assert "latest saved approval information" in fallback_output["body"]
     assert fallback_output["status"] == "caution"
-    assert fallback_output["highlights"][0] == "error_code=timeout"
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def _load_feasibility_fixture(name: str) -> InventoryBundle:
@@ -2526,9 +2523,9 @@ def _assert_user_summary_avoids_raw_runtime_language(view_model: dict[str, Any])
     for value in user_facing_strings:
         lowered = value.lower()
         for token in _RAW_DEBUG_TOKENS_FORBIDDEN_IN_USER_COPY:
-            assert token not in lowered, (
-                f"User-facing view-model copy must not leak '{token}': {value!r}"
-            )
+            assert (
+                token not in lowered
+            ), f"User-facing view-model copy must not leak '{token}': {value!r}"
 
 
 def test_workspace_endpoint_includes_typed_view_model_for_leisure_trip(
@@ -2552,6 +2549,14 @@ def test_workspace_endpoint_includes_typed_view_model_for_leisure_trip(
     assert next_step["summary"]
 
     assert view_model["business_summary"] is None
+    assert view_model["panel_visibility"] == {
+        "show_budget_panel": True,
+        "show_policy_posture": False,
+        "show_proposal_panel": False,
+        "show_approval_readiness_panel": False,
+    }
+    assert view_model["policy_presentation"]["active_policy_state"] is False
+    assert view_model["policy_presentation"]["posture_label"] == "Not applicable"
 
     debug_state = view_model["debug_state"]
     assert "runtime_state" in debug_state["sections"]
@@ -2588,6 +2593,18 @@ def test_workspace_endpoint_includes_typed_view_model_for_business_trip(
         "needs_attention",
     }
     assert business_summary["headline"]
+    assert view_model["panel_visibility"]["show_policy_posture"] is True
+    assert view_model["panel_visibility"]["show_proposal_panel"] is True
+    assert view_model["panel_visibility"]["show_approval_readiness_panel"] is True
+    assert view_model["policy_presentation"]["posture_label"] in {
+        "Approval not started",
+        "Ready for approval",
+        "Waiting for policy review",
+        "Needs exception",
+        "Needs follow-up",
+        "Not ready for approval",
+        "Policy state available",
+    }
 
     debug_state = view_model["debug_state"]
     assert "runtime_state" in debug_state["sections"]
@@ -2612,6 +2629,38 @@ def test_workspace_view_model_builder_handles_empty_runtime_state() -> None:
     assert view_model["next_step"]["blocked"] is True
     assert view_model["business_summary"] is None
     assert view_model["debug_state"]["sections"]["runtime_state"]["payload"]["status"] == "empty"
+
+
+def test_workspace_view_model_keeps_active_leisure_policy_state_visible() -> None:
+    payload = {
+        "trip_record": {
+            "trip": {"title": "Leisure exception workspace", "mode": "leisure"},
+        },
+        "runtime_state": {"status": "ready", "title": "Ready", "summary": "Ready"},
+        "saved_scenarios": [{"saved_scenario_id": "scenario-1"}],
+        "inventory_summary": {"bundle_count": 1},
+        "feasibility_summary": {"attention_bundle_count": 0},
+        "proposal_state": {
+            "execution_id": "exec-active-leisure",
+            "submission_status": "submitted",
+            "evaluation_status": "completed",
+            "summary": {
+                "submission_status": "submitted",
+                "evaluation_result_status": "failed",
+                "follow_up_status": "exception_required",
+                "approval_ready": False,
+                "highlights": ["A lodging exception needs review."],
+            },
+        },
+    }
+
+    view_model = workspace_service._build_workspace_view_model(payload)
+
+    assert view_model["business_summary"] is None
+    assert view_model["panel_visibility"]["show_policy_posture"] is True
+    assert view_model["panel_visibility"]["show_proposal_panel"] is True
+    assert view_model["policy_presentation"]["posture_label"] == "Needs exception"
+    assert "proposal_state" in view_model["debug_state"]["sections"]
 
 
 def test_workspace_view_model_debug_sections_preserve_raw_payload_shapes() -> None:

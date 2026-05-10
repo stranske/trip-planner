@@ -419,9 +419,26 @@ export type WorkspaceDebugState = {
   sections: Record<string, WorkspaceDebugSection>;
 };
 
+export type WorkspacePanelVisibility = {
+  show_budget_panel: boolean;
+  show_policy_posture: boolean;
+  show_proposal_panel: boolean;
+  show_approval_readiness_panel: boolean;
+};
+
+export type WorkspacePolicyPresentation = {
+  active_policy_state: boolean;
+  posture_label: string;
+  approval_status_label: string;
+  next_step_label: string;
+  summary: string;
+};
+
 export type WorkspaceViewModel = {
   user_summary: WorkspaceUserSummary;
   next_step: WorkspaceNextStep;
+  panel_visibility: WorkspacePanelVisibility;
+  policy_presentation: WorkspacePolicyPresentation;
   business_summary: WorkspaceBusinessSummary | null;
   debug_state: WorkspaceDebugState;
 };
