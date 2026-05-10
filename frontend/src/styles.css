@@ -216,18 +216,6 @@ a {
   line-height: 1.35;
 }
 
-.planning-mode-detail {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 160ms ease;
-}
-
-.planning-mode-option:hover .planning-mode-detail,
-.planning-mode-option:focus-within .planning-mode-detail,
-.planning-mode-option-active .planning-mode-detail {
-  max-height: 8rem;
-}
-
 .planning-mode-option-active {
   background: #e8f2ef;
   border-color: rgba(56, 117, 107, 0.55);
@@ -633,10 +621,14 @@ a {
   padding: 0.5rem 0.75rem;
 }
 
-.planner-prompt-suggestions button:hover,
-.planner-prompt-suggestions button:focus-visible {
+.planner-prompt-suggestions button:hover {
   border-color: rgba(56, 117, 107, 0.55);
-  outline: none;
+}
+
+.planner-prompt-suggestions button:focus-visible {
+  border-color: rgba(56, 117, 107, 0.7);
+  outline: 3px solid rgba(56, 117, 107, 0.32);
+  outline-offset: 2px;
 }
 
 .planner-conversation-form {

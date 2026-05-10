@@ -73,14 +73,11 @@ export function PlanningModeSelector({
               value={option.value}
               checked={option.value === value}
               disabled={busy}
-              aria-describedby={`planning-mode-${option.value}-summary planning-mode-${option.value}-help`}
+              aria-describedby={`planning-mode-${option.value}-summary`}
               onChange={() => onChange(option.value)}
             />
             <span>{option.label}</span>
             <small id={`planning-mode-${option.value}-summary`}>{option.summary}</small>
-            <small id={`planning-mode-${option.value}-help`} className="planning-mode-detail">
-              {option.help}
-            </small>
           </label>
         ))}
       </div>
