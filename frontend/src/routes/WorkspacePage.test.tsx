@@ -692,6 +692,7 @@ const workspacePayload = {
       },
     ],
   },
+  view_model: null,
 } satisfies WorkspaceData;
 
 const plannerSessionPayload = {
@@ -791,6 +792,65 @@ describe("WorkspacePage", () => {
     mockedSaveWorkspaceBudget.mockReset();
     mockedRecordWorkspaceSpendEvent.mockReset();
     mockedRefreshWorkspaceProposalStatus.mockReset();
+  });
+
+  it("does not render raw runtime/provider/debug labels for default leisure workspaces", async () => {
+    const leisureWorkspaceWithViewModel: WorkspaceData = {
+      ...workspacePayload,
+      view_model: {
+        user_summary: {
+          trip_title: workspacePayload.trip_record.trip.title,
+          trip_mode: "leisure",
+          mode_label: "Leisure trip",
+          status: "ready",
+          headline: "Your trip plan is ready to review.",
+          decided: ["2 saved scenario draft(s)"],
+          uncertain: [],
+        },
+        next_step: {
+          title: "Review and pick a scenario",
+          summary:
+            "Compare the saved scenarios and choose one to keep planning around.",
+          action_label: "Open scenario comparison",
+          action_target: "scenario-comparison",
+          blocked: false,
+        },
+        business_summary: null,
+        debug_state: { sections: {} },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(leisureWorkspaceWithViewModel),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length
+      ).toBeGreaterThan(0);
+    });
+    expect(screen.getByText("Leisure trip")).toBeInTheDocument();
+    expect(screen.getByText("Your trip plan is ready to review.")).toBeInTheDocument();
+    expect(screen.getByText("2 saved scenario draft(s)")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review and pick a scenario" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Compare the saved scenarios and choose one to keep planning around.")
+    ).toBeInTheDocument();
+
+    const renderedText = document.body.textContent ?? "";
+    const forbiddenRawLabels = [
+      "runtime provider",
+      "fallback mode",
+      "policy_state_id",
+      "proposal_state_id",
+      "session_state_id",
+      "scenario_search_id",
+    ];
+    for (const label of forbiddenRawLabels) {
+      expect(renderedText.toLowerCase()).not.toContain(label.toLowerCase());
+    }
   });
 
   it("renders timeline structure from persisted trip and scenario state", async () => {

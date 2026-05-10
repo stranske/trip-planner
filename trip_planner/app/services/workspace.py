@@ -1143,7 +1143,7 @@ def _build_persisted_trip_workspace(
         runtime_scenario_comparison=runtime_scenario_comparison,
     )
 
-    return {
+    payload: dict[str, Any] = {
         "trip_record": trip_record,
         "session": resolved_session,
         "saved_scenarios": ordered_saved_scenarios,
@@ -1180,6 +1180,8 @@ def _build_persisted_trip_workspace(
         "policy_state": (policy_context or {}).get("policy_state"),
         "proposal_state": (proposal_context or {}).get("proposal_state"),
     }
+    payload["view_model"] = _build_workspace_view_model(payload, trip_mode=record.mode)
+    return payload
 
 
 def _empty_workspace_scenario_search() -> dict[str, Any]:
@@ -1191,6 +1193,199 @@ def _empty_workspace_scenario_search() -> dict[str, Any]:
             "Scenario search and comparisons will appear after planning begins.",
         ],
         "source_refs": [],
+    }
+
+
+_TRIP_MODE_LABELS: dict[str, str] = {
+    "leisure": "Leisure trip",
+    "business": "Business trip",
+}
+
+# Raw workspace payload keys that must NEVER appear in user-facing view-model
+# copy. They are mirrored under WorkspaceDebugState.sections so an explicit
+# debug/advanced affordance can still surface them.
+_DEBUG_PAYLOAD_KEYS: tuple[str, ...] = (
+    "runtime_state",
+    "inventory_summary",
+    "scenario_search",
+    "ranking",
+    "route_comparison",
+    "runtime_scenario_comparison",
+    "feasibility_summary",
+    "planner_panel_state",
+    "policy_state",
+    "proposal_state",
+    "trip_record",
+    "session",
+    "saved_scenarios",
+    "activity_log",
+    "planner_memory",
+)
+
+
+def _build_workspace_view_model(
+    payload: dict[str, Any],
+    *,
+    trip_mode: str | None = None,
+) -> dict[str, Any]:
+    """Map a workspace payload dict into the typed product view model.
+
+    The mapper deliberately keeps user-facing strings free of raw runtime,
+    provider, fallback, policy/proposal id, and trip-scoped object id
+    language. Raw payloads are mirrored under ``debug_state.sections`` so the
+    frontend can render them only behind an explicit debug affordance.
+    """
+
+    trip_record = payload.get("trip_record") or {}
+    trip_block = trip_record.get("trip") if isinstance(trip_record, dict) else {}
+    trip_block = trip_block if isinstance(trip_block, dict) else {}
+
+    resolved_mode = str(trip_mode or trip_block.get("mode") or "leisure")
+    if resolved_mode not in _TRIP_MODE_LABELS:
+        resolved_mode = "leisure"
+    mode_label = _TRIP_MODE_LABELS[resolved_mode]
+
+    runtime_state = payload.get("runtime_state") or {}
+    runtime_state = runtime_state if isinstance(runtime_state, dict) else {}
+    status = str(runtime_state.get("status") or "empty")
+    if status not in {"ready", "partial", "empty"}:
+        status = "empty"
+
+    trip_title = str(trip_block.get("title") or "Trip workspace")
+
+    saved_scenarios = payload.get("saved_scenarios") or []
+    saved_scenarios = saved_scenarios if isinstance(saved_scenarios, list) else []
+    feasibility_summary = payload.get("feasibility_summary") or {}
+    feasibility_summary = (
+        feasibility_summary if isinstance(feasibility_summary, dict) else {}
+    )
+
+    decided: list[str] = []
+    if saved_scenarios:
+        decided.append(f"{len(saved_scenarios)} saved scenario draft(s)")
+    inventory_summary = payload.get("inventory_summary") or {}
+    inventory_summary = inventory_summary if isinstance(inventory_summary, dict) else {}
+    bundle_count = int(inventory_summary.get("bundle_count") or 0)
+    if bundle_count:
+        decided.append(f"{bundle_count} inventory bundle(s) assembled")
+
+    uncertain: list[str] = []
+    attention_count = int(feasibility_summary.get("attention_bundle_count") or 0)
+    if attention_count:
+        uncertain.append(f"{attention_count} bundle(s) need attention")
+    if status == "empty":
+        uncertain.append("Trip context is not complete yet.")
+    elif status == "partial":
+        uncertain.append("Scenario comparison is not yet ready.")
+
+    if status == "ready":
+        headline = "Your trip plan is ready to review."
+        next_step_title = "Review and pick a scenario"
+        next_step_summary = (
+            "Compare the saved scenarios and choose one to keep planning around."
+        )
+        next_step_action = "Open scenario comparison"
+        next_step_target = "scenario-comparison"
+        blocked = False
+    elif status == "partial":
+        headline = "Your trip plan is partially assembled."
+        next_step_title = "Continue planning"
+        next_step_summary = (
+            "Inventory is in place; resolve the open uncertainties to unlock"
+            " scenario comparison."
+        )
+        next_step_action = "Continue planning"
+        next_step_target = "planner"
+        blocked = False
+    else:
+        headline = "Trip planning hasn't started yet."
+        next_step_title = "Start planning"
+        next_step_summary = (
+            "Add the missing trip context to start assembling scenarios."
+        )
+        next_step_action = "Open trip setup"
+        next_step_target = "trip-setup"
+        blocked = True
+
+    user_summary = {
+        "trip_title": trip_title,
+        "trip_mode": resolved_mode,
+        "mode_label": mode_label,
+        "status": status,
+        "headline": headline,
+        "decided": decided,
+        "uncertain": uncertain,
+    }
+
+    next_step = {
+        "title": next_step_title,
+        "summary": next_step_summary,
+        "action_label": next_step_action,
+        "action_target": next_step_target,
+        "blocked": blocked,
+    }
+
+    business_summary: dict[str, Any] | None = None
+    if resolved_mode == "business":
+        proposal_state = payload.get("proposal_state") or {}
+        proposal_state = (
+            proposal_state if isinstance(proposal_state, dict) else {}
+        )
+        proposal_summary = proposal_state.get("summary") or {}
+        proposal_summary = proposal_summary if isinstance(proposal_summary, dict) else {}
+        approval_ready = bool(proposal_summary.get("approval_ready"))
+        evaluation_status = str(
+            proposal_summary.get("evaluation_result_status")
+            or proposal_summary.get("submission_status")
+            or ""
+        ).lower()
+
+        if approval_ready:
+            approval_status = "approved"
+            approval_headline = "Your trip is ready for approval."
+            blockers: list[str] = []
+        elif evaluation_status in {"in_review", "pending", "submitted"}:
+            approval_status = "in_review"
+            approval_headline = "Your trip approval is in review."
+            blockers = []
+        elif evaluation_status in {"failed", "rejected", "needs_attention"}:
+            approval_status = "needs_attention"
+            approval_headline = "Approval needs your attention."
+            blockers = [
+                str(item)
+                for item in (proposal_summary.get("highlights") or [])
+                if isinstance(item, str)
+            ]
+        elif proposal_state:
+            approval_status = "not_ready"
+            approval_headline = "Approval is not ready yet."
+            blockers = []
+        else:
+            approval_status = "not_applicable"
+            approval_headline = "Approval is not required yet."
+            blockers = []
+
+        business_summary = {
+            "approval_status": approval_status,
+            "headline": approval_headline,
+            "blockers": blockers,
+        }
+
+    debug_sections: dict[str, dict[str, Any]] = {}
+    for key in _DEBUG_PAYLOAD_KEYS:
+        raw_value = payload.get(key)
+        if raw_value is None:
+            continue
+        debug_sections[key] = {
+            "title": key.replace("_", " ").title(),
+            "payload": raw_value,
+        }
+
+    return {
+        "user_summary": user_summary,
+        "next_step": next_step,
+        "business_summary": business_summary,
+        "debug_state": {"sections": debug_sections},
     }
 
 
@@ -1949,7 +2144,7 @@ def get_workspace_payload(
             assembly_input=inventory_assembly_input,
         )
 
-        return {
+        fixture_payload: dict[str, Any] = {
             "trip_record": trip_record.to_dict(),
             "session": session.to_dict(),
             "saved_scenarios": [record.to_dict() for record in saved_scenarios],
@@ -1987,6 +2182,10 @@ def get_workspace_payload(
             "policy_state": None,
             "proposal_state": None,
         }
+        fixture_payload["view_model"] = _build_workspace_view_model(
+            fixture_payload, trip_mode=trip_record.trip.mode
+        )
+        return fixture_payload
 
     record = db_session.scalar(
         select(PersistedTrip)

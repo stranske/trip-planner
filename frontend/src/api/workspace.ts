@@ -343,6 +343,51 @@ export type PlannerSessionResponse = {
   messages: PlannerMessage[];
 };
 
+export type WorkspaceUserSummary = {
+  trip_title: string;
+  trip_mode: "leisure" | "business";
+  mode_label: string;
+  status: "ready" | "partial" | "empty";
+  headline: string;
+  decided: string[];
+  uncertain: string[];
+};
+
+export type WorkspaceNextStep = {
+  title: string;
+  summary: string;
+  action_label: string | null;
+  action_target: string | null;
+  blocked: boolean;
+};
+
+export type WorkspaceBusinessSummary = {
+  approval_status:
+    | "not_applicable"
+    | "not_ready"
+    | "in_review"
+    | "approved"
+    | "needs_attention";
+  headline: string;
+  blockers: string[];
+};
+
+export type WorkspaceDebugSection = {
+  title: string;
+  payload: unknown;
+};
+
+export type WorkspaceDebugState = {
+  sections: Record<string, WorkspaceDebugSection>;
+};
+
+export type WorkspaceViewModel = {
+  user_summary: WorkspaceUserSummary;
+  next_step: WorkspaceNextStep;
+  business_summary: WorkspaceBusinessSummary | null;
+  debug_state: WorkspaceDebugState;
+};
+
 export type WorkspaceData = {
   trip_record: TripRecord;
   session: SessionState;
@@ -470,6 +515,7 @@ export type WorkspaceData = {
       follow_up_summary?: string;
     };
   } | null;
+  view_model: WorkspaceViewModel | null;
 };
 
 export type BudgetPlanUpsertPayload = {
