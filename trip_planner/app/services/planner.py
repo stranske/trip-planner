@@ -29,6 +29,7 @@ from trip_planner.app.services.planner_tools import (
 from trip_planner.preferences.autonomy import AutonomyGuardrails
 from trip_planner.app.services.workspace import (
     WORKSPACE_ACTIVITY_LOG_LIMIT,
+    _add_planning_ledger_entry,
     _append_activity_event,
     _get_or_create_workspace_session_record,
     _get_owned_trip_record,
@@ -303,6 +304,74 @@ def _traveler_input_summary_blocks(message: str) -> list[dict[str, Any]]:
             metadata=summary,
         )
     ]
+
+
+def _record_traveler_message_ledger_entries(
+    db_session: Session,
+    *,
+    trip_id: str,
+    session_state_id: str,
+    message: str,
+    activity_event_id: str,
+    structured_blocks: list[dict[str, Any]],
+) -> None:
+    lowered = message.lower()
+    metadata = (
+        structured_blocks[0].get("metadata", {})
+        if structured_blocks
+        and structured_blocks[0].get("kind") == "traveler_input_summary"
+        else {}
+    )
+    for constraint in list(metadata.get("constraints") or [])[:3]:
+        _add_planning_ledger_entry(
+            db_session,
+            trip_id=trip_id,
+            session_state_id=session_state_id,
+            item_type="constraint",
+            summary=str(constraint),
+            source_refs=[activity_event_id],
+            metadata={"source": "planner_turn"},
+        )
+    for question in list(metadata.get("uncertainties") or [])[:3]:
+        _add_planning_ledger_entry(
+            db_session,
+            trip_id=trip_id,
+            session_state_id=session_state_id,
+            item_type="open_question",
+            summary=str(question),
+            source_refs=[activity_event_id],
+            metadata={"source": "planner_turn"},
+        )
+    for note in list(metadata.get("notebook_notes") or [])[:3]:
+        _add_planning_ledger_entry(
+            db_session,
+            trip_id=trip_id,
+            session_state_id=session_state_id,
+            item_type="assumption",
+            summary=str(note),
+            source_refs=[activity_event_id],
+            metadata={"source": "planner_turn"},
+        )
+    if "decide" in lowered or "decision" in lowered:
+        _add_planning_ledger_entry(
+            db_session,
+            trip_id=trip_id,
+            session_state_id=session_state_id,
+            item_type="decision",
+            summary=_first_sentence(message)[:280],
+            source_refs=[activity_event_id],
+            metadata={"source": "planner_turn"},
+        )
+    if "source" in lowered or "link" in lowered or "reference" in lowered:
+        _add_planning_ledger_entry(
+            db_session,
+            trip_id=trip_id,
+            session_state_id=session_state_id,
+            item_type="source_reference",
+            summary=_first_sentence(message)[:280],
+            source_refs=[activity_event_id],
+            metadata={"source": "planner_turn"},
+        )
 
 
 def _planner_turn_metadata(
@@ -1154,6 +1223,14 @@ def submit_planner_turn(
             "structured_blocks": traveler_structured_blocks,
             "selected_planning_mode": session.selected_planning_mode,
         },
+    )
+    _record_traveler_message_ledger_entries(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        message=normalized_message,
+        activity_event_id=user_activity_event_id,
+        structured_blocks=traveler_structured_blocks,
     )
 
     executed_tool_calls: list[dict[str, Any]] = []

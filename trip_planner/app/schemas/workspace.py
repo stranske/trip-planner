@@ -145,6 +145,48 @@ class WorkspaceViewModel(BaseModel):
     debug_state: WorkspaceDebugState
 
 
+class PlanningLedgerEntry(BaseModel):
+    ledger_entry_id: str
+    trip_id: str
+    session_state_id: str
+    item_type: Literal[
+        "option_considered",
+        "option_rejected",
+        "decision",
+        "assumption",
+        "open_question",
+        "constraint",
+        "source_reference",
+    ]
+    status: Literal["active", "completed", "rejected", "superseded", "deferred"]
+    category: str
+    summary: str
+    detail: str = ""
+    source_message_ids: list[str] = Field(default_factory=list)
+    source_refs: list[str] = Field(default_factory=list)
+    related_option_id: str | None = None
+    related_decision_id: str | None = None
+    supersedes_entry_id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: str
+    updated_at: str
+
+
+class PlanningLedgerSummary(BaseModel):
+    active_decisions: list[PlanningLedgerEntry] = Field(default_factory=list)
+    open_questions: list[PlanningLedgerEntry] = Field(default_factory=list)
+    active_options: list[PlanningLedgerEntry] = Field(default_factory=list)
+    rejected_options: list[PlanningLedgerEntry] = Field(default_factory=list)
+    constraints: list[PlanningLedgerEntry] = Field(default_factory=list)
+    assumptions: list[PlanningLedgerEntry] = Field(default_factory=list)
+    source_references: list[PlanningLedgerEntry] = Field(default_factory=list)
+
+
+class PlanningLedgerState(BaseModel):
+    entries: list[PlanningLedgerEntry] = Field(default_factory=list)
+    summary: PlanningLedgerSummary = Field(default_factory=PlanningLedgerSummary)
+
+
 class WorkspaceResponse(BaseModel):
     trip_record: dict[str, Any] = Field(
         description="Persisted trip record payload for the workspace."
@@ -185,6 +227,10 @@ class WorkspaceResponse(BaseModel):
     )
     planner_panel_state: dict[str, Any] = Field(
         description="Workspace-scoped planner panel payload for the mounted side-panel UI.",
+    )
+    planning_ledger: PlanningLedgerState = Field(
+        default_factory=PlanningLedgerState,
+        description="Durable trip-scoped ledger of decisions, options, questions, assumptions, constraints, and sources.",
     )
     runtime_state: dict[str, Any] = Field(
         description="Top-level runtime readiness summary for the workspace surface.",
@@ -247,3 +293,33 @@ class RouteOptionActionRequest(BaseModel):
 
 class PlanningModeUpdateRequest(BaseModel):
     planning_mode: str = Field(min_length=1, max_length=32)
+
+
+class PlanningLedgerEntryCreateRequest(BaseModel):
+    item_type: Literal[
+        "option_considered",
+        "option_rejected",
+        "decision",
+        "assumption",
+        "open_question",
+        "constraint",
+        "source_reference",
+    ]
+    status: Literal["active", "completed", "rejected", "superseded", "deferred"] = "active"
+    category: str = Field(default="general", min_length=1, max_length=64)
+    summary: str = Field(min_length=1, max_length=280)
+    detail: str = Field(default="", max_length=4000)
+    source_message_ids: list[str] = Field(default_factory=list)
+    source_refs: list[str] = Field(default_factory=list)
+    related_option_id: str | None = Field(default=None, max_length=128)
+    related_decision_id: str | None = Field(default=None, max_length=96)
+
+
+class PlanningLedgerEntryUpdateRequest(BaseModel):
+    status: Literal["active", "completed", "rejected", "superseded", "deferred"] | None = None
+    category: str | None = Field(default=None, min_length=1, max_length=64)
+    summary: str | None = Field(default=None, min_length=1, max_length=280)
+    detail: str | None = Field(default=None, max_length=4000)
+    source_message_ids: list[str] | None = None
+    source_refs: list[str] | None = None
+    supersedes_entry_id: str | None = Field(default=None, max_length=96)

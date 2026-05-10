@@ -198,6 +198,129 @@ def test_workspace_planning_mode_route_persists_mode(client: TestClient) -> None
     assert rejected.status_code == 400
 
 
+def test_workspace_planning_ledger_api_persists_entries_across_reload(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Ledger workshop",
+            "summary": "Persist trip planning decisions and questions.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    saved = client.post(
+        f"/api/workspace/{trip_id}/planning-ledger",
+        json={
+            "item_type": "open_question",
+            "category": "lodging",
+            "summary": "Should the apartment be near Baixa or Alfama?",
+            "detail": "Traveler wants quieter evenings but quick transit.",
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    entry = saved.json()
+    assert entry["status"] == "active"
+
+    patched = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{entry['ledger_entry_id']}",
+        json={"status": "completed"},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["status"] == "completed"
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    assert reloaded.status_code == 200
+    ledger_entries = reloaded.json()["planning_ledger"]["entries"]
+    assert ledger_entries[0]["summary"] == "Should the apartment be near Baixa or Alfama?"
+    assert ledger_entries[0]["status"] == "completed"
+
+
+def test_route_option_actions_create_durable_ledger_history(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Ledger route trip",
+            "summary": "Track rejected route options.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+    response = client.get(f"/api/workspace/{trip_id}")
+    assert response.status_code == 200
+    scenario_id = response.json()["route_comparison"]["scenarios"][1]["scenario_id"]
+
+    updated = client.post(
+        f"/api/workspace/{trip_id}/route-options/{scenario_id}/action",
+        json={"action_type": "reject"},
+    )
+
+    assert updated.status_code == 200, updated.text
+    ledger = updated.json()["planning_ledger"]
+    assert ledger["summary"]["rejected_options"]
+    assert ledger["summary"]["rejected_options"][0]["related_option_id"] == scenario_id
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    assert reloaded.status_code == 200
+    assert reloaded.json()["planning_ledger"]["summary"]["rejected_options"][0][
+        "related_option_id"
+    ] == scenario_id
+
+
+def test_planner_turn_extracts_constraints_into_planning_ledger(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Planner ledger trip",
+            "summary": "Capture planner turn signals.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-07-01",
+                "end_date": "2026-07-06",
+                "duration_days": 6,
+                "primary_regions": ["Kyoto"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    turn = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": (
+                "Remember we need a hotel near transit; budget should stay under 3500. "
+                "Maybe add a quiet food-focused day?"
+            )
+        },
+    )
+    assert turn.status_code == 200, turn.text
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    assert reloaded.status_code == 200
+    ledger_summary = reloaded.json()["planning_ledger"]["summary"]
+    assert ledger_summary["constraints"]
+    assert ledger_summary["open_questions"]
+
+
 def test_workspace_endpoint_surfaces_business_ranked_scenarios(client: TestClient) -> None:
     response = client.get("/api/workspace/trip-business-client-summit")
 
