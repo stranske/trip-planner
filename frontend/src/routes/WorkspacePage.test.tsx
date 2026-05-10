@@ -822,6 +822,19 @@ describe("WorkspacePage", () => {
           action_target: "scenario-comparison",
           blocked: false,
         },
+        panel_visibility: {
+          show_budget_panel: true,
+          show_policy_posture: false,
+          show_proposal_panel: false,
+          show_approval_readiness_panel: false,
+        },
+        policy_presentation: {
+          active_policy_state: false,
+          posture_label: "Not applicable",
+          approval_status_label: "Not applicable",
+          next_step_label: "No policy action needed",
+          summary: "Policy approval is not part of this workspace yet.",
+        },
         business_summary: null,
         debug_state: { sections: {} },
       },
@@ -905,14 +918,14 @@ describe("WorkspacePage", () => {
     expect(screen.getByLabelText("Timeline summary")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Review route tradeoffs" })).toBeInTheDocument();
     expect(screen.getByLabelText("Scenario review board")).toBeInTheDocument();
-    expect(screen.getAllByText("Policy posture").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Approval posture").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Places and options to review" })).toBeInTheDocument();
     expect(screen.getAllByText("Osaka arrival buffer").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Kyoto cultural anchor").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Approval packet is ready" })).toBeInTheDocument();
-    expect(screen.getByText("approval-ready")).toBeInTheDocument();
+    expect(screen.getByText("Ready for approval")).toBeInTheDocument();
     expect(screen.getAllByText("Advance to approval").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Comparables and readiness signals" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Options and readiness signals" })).toBeInTheDocument();
     expect(screen.getByText("Conference Hotel")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Planner notes to keep" })).toBeInTheDocument();
     expect(screen.getByText("Planner checkpoint 1")).toBeInTheDocument();
@@ -925,6 +938,27 @@ describe("WorkspacePage", () => {
       );
       expect(plannerPanel).toBeTruthy();
     });
+  });
+
+  it("hides proposal and approval panels for leisure workspaces without active policy state", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: null,
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length).toBeGreaterThan(0);
+    });
+
+    expect(screen.queryByText("Approval packet")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Options and readiness signals" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Approval posture")).not.toBeInTheDocument();
+    expect(screen.queryByText("Policy posture")).not.toBeInTheDocument();
   });
 
   it("persists planning mode selections through the workspace API", async () => {
@@ -1299,7 +1333,7 @@ describe("WorkspacePage", () => {
     expect(screen.getAllByRole("heading", { name: "Kyoto cultural anchor" }).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /policy marker: Route burden warning/ }));
     expect(screen.getByRole("heading", { name: "Route burden warning" })).toBeInTheDocument();
-    expect(screen.getAllByText("Policy or feasibility warning active").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Approval or feasibility warning active").length).toBeGreaterThan(0);
     expect(screen.getByText("Live provider path")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
@@ -1379,7 +1413,7 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Comparables and readiness signals" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Options and readiness signals" })).toBeInTheDocument();
     });
 
     expect(screen.getByText(/Marriott via Navan · 245/)).toBeInTheDocument();
@@ -1753,7 +1787,7 @@ describe("WorkspacePage", () => {
         )
       ).toBeInTheDocument();
     });
-    expect(screen.getAllByText("pending").length).toBeGreaterThan(0);
+    expect(screen.getByText("Waiting for policy review")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Refresh live status" })).not.toBeInTheDocument();
   });
 
@@ -1787,7 +1821,7 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Policy review is deferred" })).toBeInTheDocument();
     });
-    expect(screen.getAllByText("deferred").length).toBeGreaterThan(0);
+    expect(screen.getByText("Waiting for policy review")).toBeInTheDocument();
     expect(screen.getByText("Proposal queued for evaluation")).toBeInTheDocument();
     expect(screen.getByText("Keep the workspace open for remote results")).toBeInTheDocument();
   });
@@ -1822,7 +1856,7 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Policy review is running" })).toBeInTheDocument();
     });
-    expect(screen.getAllByText("running").length).toBeGreaterThan(0);
+    expect(screen.getByText("Waiting for policy review")).toBeInTheDocument();
     expect(screen.getByText("Policy engine accepted the packet and is still evaluating it.")).toBeInTheDocument();
     expect(screen.getByText("Keep the workspace open for remote results")).toBeInTheDocument();
   });
@@ -2022,7 +2056,7 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Live policy execution needs attention" })).toBeInTheDocument();
     });
-    expect(screen.getAllByText("failed").length).toBeGreaterThan(0);
+    expect(screen.getByText("Needs policy retry")).toBeInTheDocument();
     expect(screen.getByText("TPP gateway returned a 502 response for the proposal submission.")).toBeInTheDocument();
     expect(screen.getByText("Review the live transport failure")).toBeInTheDocument();
   });
@@ -2092,7 +2126,7 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Policy review finished with follow-up" })).toBeInTheDocument();
     });
-    expect(screen.getByText("completed with follow-up")).toBeInTheDocument();
+    expect(screen.getByText("Needs exception")).toBeInTheDocument();
     expect(screen.getAllByText("Reoptimize plan").length).toBeGreaterThan(0);
     expect(screen.getByText("Use a compliant downtown property")).toBeInTheDocument();
     expect(screen.getByText("Nightly lodging exceeds the allowed cap.")).toBeInTheDocument();
@@ -2166,7 +2200,7 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Policy review finished with follow-up" })).toBeInTheDocument();
     });
-    expect(screen.getByText("completed with follow-up")).toBeInTheDocument();
+    expect(screen.getByText("Needs exception")).toBeInTheDocument();
     expect(screen.getAllByText("Prepare exception packet").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Attach the compliant comparable to the exception packet.")).toHaveLength(2);
     expect(

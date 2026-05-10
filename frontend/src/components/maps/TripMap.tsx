@@ -30,7 +30,7 @@ export function TripMap({
   bundles: InventoryBundle[];
   feasibilitySummary: FeasibilitySummary;
   tripPrimaryRegions: string[];
-  policyPosture: string;
+  policyPosture: string | null;
   compactLayout: boolean;
 }) {
   const activeScenario =
@@ -86,7 +86,7 @@ function ActiveTripMap({
   scenarioComparisonSummary?: string | null;
   scenarioFocusAreas?: string[];
   tripPrimaryRegions: string[];
-  policyPosture: string;
+  policyPosture: string | null;
   compactLayout: boolean;
 }) {
   const googleMapsApiKey =
@@ -238,7 +238,9 @@ function ActiveTripMap({
           </article>
           <article className="decision-card">
             <h3>Destination context</h3>
-            <p className="muted-copy">Policy posture: {mapSurface.policyPosture}</p>
+            {mapSurface.policyPosture ? (
+              <p className="muted-copy">Approval posture: {mapSurface.policyPosture}</p>
+            ) : null}
             <p>{mapSurface.feasibilitySummary}</p>
             <div className="map-anchor-list">
               {mapSurface.destinationContext.length === 0 ? (

@@ -66,7 +66,7 @@ export type TripMapSurfaceModel = {
   scenarioFocusAreas: string[];
   scenarioComparisonSummary: string;
   scenarioAffordances: string[];
-  policyPosture: string;
+  policyPosture: string | null;
   feasibilitySummary: string;
   routeState: "ready" | "sparse";
   routeWarning: string | null;
@@ -234,7 +234,7 @@ function buildMarkers({
   bundles: InventoryBundle[];
   routeStops: RouteStop[];
   routeWarning: string | null;
-  policyPosture: string;
+  policyPosture: string | null;
 }): MapMarker[] {
   const stopMarkers = routeStops.map((stop, index) => ({
     id: `${stop.id}-marker`,
@@ -270,7 +270,12 @@ function buildMarkers({
             kind: "policy" as const,
             label: "Route burden warning",
             summary: routeWarning,
-            detail: `${activeScenario.comparison_note} Policy posture: ${policyPosture}.`,
+            detail: [
+              activeScenario.comparison_note,
+              policyPosture ? `Approval posture: ${policyPosture}.` : "",
+            ]
+              .filter(Boolean)
+              .join(" "),
             x: 82,
             y: 18,
             emphasized: true,
@@ -284,10 +289,12 @@ function buildScenarioAffordances({
   activeScenario,
   routeState,
   routeWarning,
+  policyPosture,
 }: {
   activeScenario: TripMapScenario;
   routeState: "ready" | "sparse";
   routeWarning: string | null;
+  policyPosture: string | null;
 }): string[] {
   const affordances = [
     activeScenario.recommended_for_selection ? "Recommended scenario" : "Alternative scenario",
@@ -302,7 +309,9 @@ function buildScenarioAffordances({
     affordances.push("Sparse route fallback");
   }
   if (routeWarning) {
-    affordances.push("Policy or feasibility warning active");
+    affordances.push(
+      policyPosture ? "Approval or feasibility warning active" : "Feasibility warning active"
+    );
   }
   return affordances;
 }
@@ -314,7 +323,7 @@ export function buildTripMapSurfaceModel({
   scenarioComparisonSummary,
   scenarioFocusAreas,
   tripPrimaryRegions = [],
-  policyPosture = "review pending",
+  policyPosture = null,
   googleMapsApiKey,
   providerLoadState = "ready",
 }: {
@@ -324,7 +333,7 @@ export function buildTripMapSurfaceModel({
   scenarioComparisonSummary?: string | null;
   scenarioFocusAreas?: string[];
   tripPrimaryRegions?: string[];
-  policyPosture?: string;
+  policyPosture?: string | null;
   googleMapsApiKey?: string | null;
   providerLoadState?: MapProviderLoadState;
 }): TripMapSurfaceModel {
@@ -366,6 +375,7 @@ export function buildTripMapSurfaceModel({
     activeScenario,
     routeState,
     routeWarning,
+    policyPosture,
   });
   let provider: MapSurfaceProvider;
 

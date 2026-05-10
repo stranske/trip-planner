@@ -55,9 +55,7 @@ class WorkspaceUserSummary(BaseModel):
     trip_mode: Literal["leisure", "business"] = Field(
         description="Workspace product mode used to gate user-facing copy."
     )
-    mode_label: str = Field(
-        description="User-friendly mode label (e.g. 'Leisure trip')."
-    )
+    mode_label: str = Field(description="User-friendly mode label (e.g. 'Leisure trip').")
     status: Literal["ready", "partial", "empty"] = Field(
         description="High-level workspace status used for top-level framing."
     )
@@ -108,6 +106,25 @@ class WorkspaceBusinessSummary(BaseModel):
     )
 
 
+class WorkspacePanelVisibility(BaseModel):
+    """Mode-aware rules for normal workspace panels."""
+
+    show_budget_panel: bool = True
+    show_policy_posture: bool = False
+    show_proposal_panel: bool = False
+    show_approval_readiness_panel: bool = False
+
+
+class WorkspacePolicyPresentation(BaseModel):
+    """User-facing policy/proposal state labels for the normal workspace."""
+
+    active_policy_state: bool = False
+    posture_label: str = "Not applicable"
+    approval_status_label: str = "Not applicable"
+    next_step_label: str = "No policy action needed"
+    summary: str = "Policy approval is not part of this workspace yet."
+
+
 class WorkspaceDebugSection(BaseModel):
     """A named debug-only payload section that mirrors raw runtime state."""
 
@@ -141,6 +158,10 @@ class WorkspaceViewModel(BaseModel):
 
     user_summary: WorkspaceUserSummary
     next_step: WorkspaceNextStep
+    panel_visibility: WorkspacePanelVisibility = Field(default_factory=WorkspacePanelVisibility)
+    policy_presentation: WorkspacePolicyPresentation = Field(
+        default_factory=WorkspacePolicyPresentation
+    )
     business_summary: WorkspaceBusinessSummary | None = None
     debug_state: WorkspaceDebugState
 

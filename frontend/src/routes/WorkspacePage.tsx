@@ -49,6 +49,13 @@ type ScenarioReviewMetric = {
   value: string;
 };
 
+type WorkspacePanelVisibility = {
+  showBudgetPanel: boolean;
+  showPolicyPosture: boolean;
+  showProposalPanel: boolean;
+  showApprovalReadinessPanel: boolean;
+};
+
 type PlannerPromptSuggestion = {
   label: string;
   draft: string;
@@ -64,7 +71,7 @@ type ProposalLifecycleState =
 
 type ProposalLifecyclePresentation = {
   state: ProposalLifecycleState;
-  label: string;
+  readinessLabel: string;
   title: string;
   summary: string;
 };
@@ -236,6 +243,11 @@ function formatScenarioScore(score: number): string {
 }
 
 function formatPolicyPosture(workspace: WorkspaceData): string {
+  const presentation = workspace.view_model?.policy_presentation;
+  if (presentation?.active_policy_state && presentation.posture_label) {
+    return presentation.posture_label;
+  }
+
   const proposalState = workspace.proposal_state;
   if (proposalState == null) {
     return "No approval packet yet";
@@ -252,11 +264,55 @@ function formatPolicyPosture(workspace: WorkspaceData): string {
   return proposalState.summary.evaluation_result_status ?? "review pending";
 }
 
+function hasActivePolicyState(proposalState: WorkspaceData["proposal_state"]): boolean {
+  if (proposalState == null) {
+    return false;
+  }
+
+  if (proposalState.execution_id) {
+    return true;
+  }
+
+  if (proposalState.summary.approval_ready) {
+    return true;
+  }
+
+  if (proposalState.summary.evaluation_result_status || proposalState.summary.follow_up_status) {
+    return true;
+  }
+
+  return proposalState.submission_status !== "pending" || proposalState.evaluation_status != null;
+}
+
+function deriveWorkspacePanelVisibility(workspace: WorkspaceData): WorkspacePanelVisibility {
+  const viewModelVisibility = workspace.view_model?.panel_visibility;
+  if (viewModelVisibility) {
+    return {
+      showBudgetPanel: viewModelVisibility.show_budget_panel,
+      showPolicyPosture: viewModelVisibility.show_policy_posture,
+      showProposalPanel: viewModelVisibility.show_proposal_panel,
+      showApprovalReadinessPanel: viewModelVisibility.show_approval_readiness_panel,
+    };
+  }
+
+  const isBusinessTrip = workspace.trip_record.trip.mode === "business";
+  const activePolicyState = hasActivePolicyState(workspace.proposal_state);
+  const showPolicyPanels = isBusinessTrip || activePolicyState;
+
+  return {
+    showBudgetPanel: true,
+    showPolicyPosture: showPolicyPanels,
+    showProposalPanel: showPolicyPanels,
+    showApprovalReadinessPanel: showPolicyPanels,
+  };
+}
+
 function buildScenarioReviewMetrics(
   workspace: WorkspaceData,
-  scenario: WorkspaceData["route_comparison"]["scenarios"][number]
+  scenario: WorkspaceData["route_comparison"]["scenarios"][number],
+  panelVisibility: WorkspacePanelVisibility
 ): ScenarioReviewMetric[] {
-  return [
+  const metrics: ScenarioReviewMetric[] = [
     {
       label: "Estimated total",
       value:
@@ -279,11 +335,16 @@ function buildScenarioReviewMetrics(
       label: "Feasibility",
       value: scenario.feasible ? "Ready to review" : "Needs feasibility work",
     },
-    {
-      label: "Policy posture",
-      value: formatPolicyPosture(workspace),
-    },
   ];
+
+  if (panelVisibility.showPolicyPosture) {
+    metrics.push({
+      label: "Approval posture",
+      value: formatPolicyPosture(workspace),
+    });
+  }
+
+  return metrics;
 }
 
 function ScenarioSummaryCard({
@@ -359,7 +420,7 @@ function deriveProposalLifecyclePresentation(
   if (summary.approval_ready || followUpStatus === "resolved") {
     return {
       state: "approval-ready",
-      label: "approval-ready",
+      readinessLabel: "Ready for approval",
       title: "Approval packet is ready",
       summary:
         summary.follow_up_summary ??
@@ -371,7 +432,7 @@ function deriveProposalLifecyclePresentation(
   if (isFailedLifecycleStatus(submissionStatus) || isFailedLifecycleStatus(evaluationTransportStatus)) {
     return {
       state: "failed",
-      label: "failed",
+      readinessLabel: "Needs policy retry",
       title: "Live policy execution needs attention",
       summary:
         summary.submission_summary ??
@@ -383,9 +444,14 @@ function deriveProposalLifecyclePresentation(
     summary.evaluation_result_status != null ||
     (followUpStatus != null && followUpStatus !== "awaiting_evaluation")
   ) {
+    const needsException =
+      followUpStatus === "exception_required" ||
+      followUpStatus === "exception_requested" ||
+      followUpStatus === "reoptimization_required" ||
+      summary.evaluation_result_status === "non_compliant";
     return {
       state: "completed-with-follow-up",
-      label: "completed with follow-up",
+      readinessLabel: needsException ? "Needs exception" : "Needs follow-up",
       title: "Policy review finished with follow-up",
       summary:
         summary.follow_up_summary ??
@@ -396,7 +462,7 @@ function deriveProposalLifecyclePresentation(
   if (submissionStatus === "deferred" || evaluationTransportStatus === "deferred") {
     return {
       state: "deferred",
-      label: "deferred",
+      readinessLabel: "Waiting for policy review",
       title: "Policy review is deferred",
       summary:
         summary.submission_summary ??
@@ -412,7 +478,7 @@ function deriveProposalLifecyclePresentation(
   ) {
     return {
       state: "running",
-      label: "running",
+      readinessLabel: "Waiting for policy review",
       title: awaitingEvaluation ? "Awaiting policy evaluation result" : "Policy review is running",
       summary:
         summary.follow_up_summary ??
@@ -423,8 +489,8 @@ function deriveProposalLifecyclePresentation(
 
   return {
     state: "pending",
-    label: "pending",
-    title: "Proposal submission is pending",
+    readinessLabel: "Waiting for policy review",
+    title: "Approval packet is pending",
     summary: "Build and submit the approval packet to start live policy execution for this workspace.",
   };
 }
@@ -816,6 +882,7 @@ function WorkspacePageContent({
           renderableProposalFollowUp
         );
   const scenarioPolicyPosture = formatPolicyPosture(currentWorkspace);
+  const panelVisibility = deriveWorkspacePanelVisibility(currentWorkspace);
   function handleScenarioSelection(scenarioId: string) {
     setSelectedScenarioId(scenarioId);
   }
@@ -1201,14 +1268,16 @@ function WorkspacePageContent({
           </section>
         </section>
 
-        <WorkspaceBudgetPanel
-          budgetState={currentWorkspace.budget_state}
-          tripMode={trip.mode}
-          busyLabel={budgetBusyLabel}
-          errorMessage={budgetError}
-          onSaveBudget={handleBudgetSave}
-          onRecordSpend={handleSpendRecord}
-        />
+        {panelVisibility.showBudgetPanel ? (
+          <WorkspaceBudgetPanel
+            budgetState={currentWorkspace.budget_state}
+            tripMode={trip.mode}
+            busyLabel={budgetBusyLabel}
+            errorMessage={budgetError}
+            onSaveBudget={handleBudgetSave}
+            onRecordSpend={handleSpendRecord}
+          />
+        ) : null}
 
         <TripMap
           comparison={routeComparison}
@@ -1219,7 +1288,7 @@ function WorkspacePageContent({
           bundles={currentWorkspace.inventory_summary.bundles}
           feasibilitySummary={currentWorkspace.feasibility_summary}
           tripPrimaryRegions={trip.trip_frame.primary_regions}
-          policyPosture={scenarioPolicyPosture}
+          policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : null}
           compactLayout={isCompactLayout}
         />
 
@@ -1248,12 +1317,13 @@ function WorkspacePageContent({
           onSelectTrip={setSelectedTripComparisonId}
         />
 
-        <section className="status-card">
+        {panelVisibility.showApprovalReadinessPanel ? (
+          <section className="status-card">
           <p className="status-label">Approval packet</p>
           <h2>{proposalLifecycle?.title ?? "Proposal lifecycle in progress"}</h2>
           {currentWorkspace.proposal_state == null ? (
             <p className="muted-copy">
-              Proposal submission and evaluation records have not been persisted for this workspace yet.
+              Approval packet records have not been saved for this workspace yet.
             </p>
           ) : (
             <>
@@ -1261,40 +1331,29 @@ function WorkspacePageContent({
               {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
               <dl className="workspace-meta">
                 <div>
-                  <dt>Workspace state</dt>
-                  <dd>{proposalLifecycle?.label ?? "pending"}</dd>
-                </div>
-                <div>
-                  <dt>Submission</dt>
-                  <dd>{currentWorkspace.proposal_state.summary.submission_status ?? "unknown"}</dd>
-                </div>
-                <div>
-                  <dt>Transport</dt>
+                  <dt>Approval readiness</dt>
                   <dd>
-                    {currentWorkspace.proposal_state.summary.evaluation_transport_status ??
-                      currentWorkspace.proposal_state.evaluation_status ??
-                      "pending"}
+                    {currentWorkspace.view_model?.policy_presentation.approval_status_label ??
+                      proposalLifecycle?.readinessLabel ??
+                      "Waiting for policy review"}
                   </dd>
                 </div>
                 <div>
-                  <dt>Evaluation</dt>
-                  <dd>{currentWorkspace.proposal_state.summary.evaluation_result_status ?? "pending"}</dd>
+                  <dt>Packet status</dt>
+                  <dd>{currentWorkspace.proposal_state.summary.submission_status ?? "unknown"}</dd>
                 </div>
                 <div>
                   <dt>Comparables</dt>
                   <dd>{currentWorkspace.proposal_state.summary.comparable_count ?? 0}</dd>
                 </div>
                 <div>
-                  <dt>Proposal version</dt>
-                  <dd>{currentWorkspace.proposal_state.proposal_version}</dd>
-                </div>
-                <div>
                   <dt>Next step</dt>
                   <dd>
-                    {formatFollowUpStatus(
-                      renderableProposalFollowUp?.status ??
-                        currentWorkspace.proposal_state.summary.follow_up_status
-                    )}
+                    {currentWorkspace.view_model?.policy_presentation.next_step_label ??
+                      formatFollowUpStatus(
+                        renderableProposalFollowUp?.status ??
+                          currentWorkspace.proposal_state.summary.follow_up_status
+                      )}
                   </dd>
                 </div>
               </dl>
@@ -1342,7 +1401,8 @@ function WorkspacePageContent({
               </div>
             </>
           )}
-        </section>
+          </section>
+        ) : null}
 
         <section className="status-card">
           <p className="status-label">Things to consider</p>
@@ -1421,7 +1481,11 @@ function WorkspacePageContent({
                       ? "Planner score pending"
                       : `${formatScenarioScore(selectedRuntimeScenario.metrics.score)} planner score`}
                   </h3>
-                  <p>{scenarioPolicyPosture} packet posture for the current workspace.</p>
+                  <p>
+                    {panelVisibility.showPolicyPosture
+                      ? `${scenarioPolicyPosture} approval posture for the current workspace.`
+                      : "Pacing and route burden stay visible without approval details."}
+                  </p>
                 </article>
                 <article className="timeline-summary-card">
                   <p className="scenario-kicker">Options</p>
@@ -1461,13 +1525,18 @@ function WorkspacePageContent({
           <p className="status-label">Route tradeoffs</p>
           <h2>{isCompactLayout ? "Compact route tradeoffs" : "Review route tradeoffs"}</h2>
           <p>
-            Cost, route burden, feasibility, and policy posture stay scannable here without
-            forcing you into raw planning notes.
+            {panelVisibility.showPolicyPosture
+              ? "Cost, route burden, feasibility, and approval posture stay scannable here without forcing you into raw planning notes."
+              : "Cost, route burden, and feasibility stay scannable here without forcing you into raw planning notes."}
           </p>
           {routeComparison.scenarios.length > 0 ? (
             <div className="scenario-review-grid" aria-label="Scenario review board">
               {routeComparison.scenarios.map((scenario) => {
-                const reviewMetrics = buildScenarioReviewMetrics(currentWorkspace, scenario);
+                const reviewMetrics = buildScenarioReviewMetrics(
+                  currentWorkspace,
+                  scenario,
+                  panelVisibility
+                );
                 const isSelected = scenario.scenario_id === selectedScenarioId;
 
                 return (
@@ -1589,11 +1658,12 @@ function WorkspacePageContent({
           )}
         </section>
 
-        <section className="status-card">
-          <p className="status-label">Proposal details</p>
-          <h2>Comparables and readiness signals</h2>
+        {panelVisibility.showProposalPanel ? (
+          <section className="status-card">
+          <p className="status-label">Approval details</p>
+          <h2>Options and readiness signals</h2>
           {currentWorkspace.proposal_state == null ? (
-            <p className="muted-copy">Approval-packet details will render here once a proposal is submitted.</p>
+            <p className="muted-copy">Approval-packet details will render here once the packet is saved.</p>
           ) : (
             <div className="decision-stack">
               {renderableProposalFollowUp ? (
@@ -1661,7 +1731,8 @@ function WorkspacePageContent({
               )}
             </div>
           )}
-        </section>
+          </section>
+        ) : null}
 
         <section className="status-card">
           <p className="status-label">Planning notes</p>
