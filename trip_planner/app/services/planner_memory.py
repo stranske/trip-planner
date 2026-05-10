@@ -103,9 +103,6 @@ def _checkpoint_summary(
         detail_lines.append(f"Linked refs: {', '.join(refs[:4])}")
     if selected_planning_mode:
         detail_lines.append(f"Selected planning mode: {selected_planning_mode}.")
-    if plan_maturity or task_class:
-        routing_parts = [item for item in [plan_maturity, task_class] if item]
-        detail_lines.append(f"Planner routing: {' / '.join(routing_parts)}.")
     if tool_calls:
         detail_lines.append(f"Tool traces persisted: {len(tool_calls)}.")
     return {
@@ -258,6 +255,7 @@ def _serialize_checkpoint(record: PersistedPlannerCheckpoint) -> dict[str, Any]:
         "message_count": record.message_count,
         "summary": record.summary,
         "source_message_ids": list(record.source_message_ids),
+        "metadata_payload": dict(record.metadata_payload or {}),
         "created_at": record.created_at.astimezone(UTC).isoformat(),
         "updated_at": record.updated_at.astimezone(UTC).isoformat(),
     }
