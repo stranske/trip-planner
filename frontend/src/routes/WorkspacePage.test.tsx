@@ -840,11 +840,17 @@ describe("WorkspacePage", () => {
     expect(
       screen.getByText("Compare the saved scenarios and choose one to keep planning around.")
     ).toBeInTheDocument();
+    const helpDisclosure = screen.getByText("How to use this trip workspace").closest("details");
+    expect(helpDisclosure).not.toBeNull();
+    expect(helpDisclosure).not.toHaveAttribute("open");
 
     const renderedText = document.body.textContent ?? "";
     const forbiddenRawLabels = [
       "runtime provider",
       "fallback mode",
+      "trip-scoped",
+      "runtime-backed",
+      "api client",
       "policy_state_id",
       "proposal_state_id",
       "session_state_id",
@@ -874,29 +880,28 @@ describe("WorkspacePage", () => {
     expect(within(routeContextMap).getAllByText("Kyoto").length).toBeGreaterThan(0);
     expect(within(routeContextMap).getAllByText("Uji").length).toBeGreaterThan(0);
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
-    expect(screen.getByText("Trip-scoped planner surface")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Planning mode" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Traveler planning workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "How should the planner work?" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Collaborative/ })).toBeChecked();
     await waitFor(() => {
       expect(mockedFetchPlannerSession).toHaveBeenCalledWith("trip-leisure-kyoto-draft");
     });
-    expect(screen.getByRole("heading", { name: "Message the trip planner" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Message your planner" })).toBeInTheDocument();
     await waitFor(() => {
       expect(
         screen.getByText("Compare the Kyoto baseline against the Osaka fallback before locking the plan.")
       ).toBeInTheDocument();
     });
-    expect(screen.getByText("read workspace state")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Compare routes" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Planner tools available")).not.toBeInTheDocument();
     expect(routeContextMap).toBeInTheDocument();
     expect(screen.getByText("Destination context")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Trip rhythm and day sequencing" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Trip rhythm and day sequence" })).toBeInTheDocument();
     expect(screen.getByLabelText("Timeline summary")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Review-ready scenario tradeoffs" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review route tradeoffs" })).toBeInTheDocument();
     expect(screen.getByLabelText("Scenario review board")).toBeInTheDocument();
     expect(screen.getAllByText("Policy posture").length).toBeGreaterThan(0);
-    expect(
-      screen.getByRole("heading", { name: workspacePayload.inventory_summary.runtime_state.title })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Places and options to review" })).toBeInTheDocument();
     expect(screen.getAllByText("Osaka arrival buffer").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Kyoto cultural anchor").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Approval packet is ready" })).toBeInTheDocument();
@@ -904,7 +909,7 @@ describe("WorkspacePage", () => {
     expect(screen.getAllByText("Advance to approval").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Comparables and readiness signals" })).toBeInTheDocument();
     expect(screen.getByText("Conference Hotel")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "User-visible planner checkpoints" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Planner notes to keep" })).toBeInTheDocument();
     expect(screen.getByText("Planner checkpoint 1")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Compare this workspace with other saved trips" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" })).toBeInTheDocument();
@@ -934,7 +939,7 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Planning mode" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "How should the planner work?" })).toBeInTheDocument();
     });
     await user.click(screen.getByRole("radio", { name: /Delegated/ }));
 
@@ -1088,8 +1093,8 @@ describe("WorkspacePage", () => {
       expect(screen.getByText("Can you summarize what I should compare next?")).toBeInTheDocument();
     });
 
-    await user.type(screen.getByLabelText("Message"), "Keep Uji, but reduce transfer pressure.");
-    await user.click(screen.getByRole("button", { name: "Send planner turn" }));
+    await user.type(screen.getByLabelText("Message the planner"), "Keep Uji, but reduce transfer pressure.");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
 
     await waitFor(() => {
       expect(mockedSubmitPlannerTurn).toHaveBeenCalledWith(
@@ -1114,7 +1119,27 @@ describe("WorkspacePage", () => {
     await user.click(screen.getByRole("button", { name: "Diagnostics" }));
     expect(screen.getByText("Planner diagnostics")).toBeInTheDocument();
     expect(screen.getByText("read_workspace_state: Read the current workspace state.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Message")).toHaveValue("");
+    expect(screen.getByLabelText("Message the planner")).toHaveValue("");
+  });
+
+  it("fills traveler-friendly prompt suggestions into the planner message box", async () => {
+    const user = userEvent.setup();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Summarize decisions" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Summarize decisions" }));
+
+    expect(screen.getByLabelText("Message the planner")).toHaveValue(
+      "Summarize what we have decided, what is still open, and what you recommend next."
+    );
   });
 
   it("labels the planner panel as deterministic fallback when runtime metadata is absent", async () => {
@@ -1126,14 +1151,14 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Planner runtime state")).toBeInTheDocument();
+      expect(screen.getByLabelText("Planner availability")).toBeInTheDocument();
     });
 
-    const runtime = screen.getByLabelText("Planner runtime state");
-    expect(within(runtime).getByText("Deterministic fallback planner")).toHaveClass(
+    const runtime = screen.getByLabelText("Planner availability");
+    expect(within(runtime).getByText("Guided planner")).toHaveClass(
       "planner-runtime-pill--fallback"
     );
-    expect(within(runtime).getByText("Fallback")).toBeInTheDocument();
+    expect(within(runtime).getByText("Planning guide")).toBeInTheDocument();
   });
 
   it("merges fetched planner session state into the workspace surface", async () => {
@@ -1166,12 +1191,12 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Planner runtime state")).toBeInTheDocument();
+      expect(screen.getByLabelText("Planner availability")).toBeInTheDocument();
     });
 
-    const runtime = screen.getByLabelText("Planner runtime state");
+    const runtime = screen.getByLabelText("Planner availability");
     await waitFor(() => {
-      expect(within(runtime).getByText("Model-backed planner")).toHaveClass(
+      expect(within(runtime).getByText("AI-assisted planner")).toHaveClass(
         "planner-runtime-pill--ready"
       );
     });
@@ -1199,12 +1224,12 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Planner runtime state")).toBeInTheDocument();
+      expect(screen.getByLabelText("Planner availability")).toBeInTheDocument();
     });
 
-    const runtime = screen.getByLabelText("Planner runtime state");
-    expect(within(runtime).getByText("Model-backed planner")).toHaveClass("planner-runtime-pill--ready");
-    expect(within(runtime).getByText("Model-backed")).toBeInTheDocument();
+    const runtime = screen.getByLabelText("Planner availability");
+    expect(within(runtime).getByText("AI-assisted planner")).toHaveClass("planner-runtime-pill--ready");
+    expect(within(runtime).getByText("Live assistance")).toBeInTheDocument();
   });
 
   it("updates the map surface when a different scenario preview is selected", async () => {
@@ -1408,11 +1433,11 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByText("Timeline data is not ready")).toBeInTheDocument();
+      expect(screen.getByText("Day plan is not ready yet")).toBeInTheDocument();
     });
     expect(
       screen.getByText(
-        "Trip context is ready now, so the next planning pass can attach saved scenarios and timeline stops."
+        "Ask the planner to compare routes or draft a first sequence of stops."
       )
     ).toBeInTheDocument();
     await waitFor(() => {
@@ -1432,10 +1457,10 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Compact scenario tradeoffs" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Compact route tradeoffs" })).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Compact review stack keeps map, timeline, and tradeoff calls visible on smaller screens.")).toBeInTheDocument();
+    expect(screen.getByText("Compact review keeps route, day plan, and next choices close together.")).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByText("Textual fallback route path")).toBeInTheDocument();
     });
@@ -1545,13 +1570,13 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Review-ready scenario tradeoffs" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Review route tradeoffs" })).toBeInTheDocument();
     });
 
     expect(screen.queryByLabelText("Scenario review board")).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        "No runtime scenarios are available yet, so there is nothing to review in the scenario board."
+        "No route ideas are available yet, so there is nothing to compare."
       )
     ).toBeInTheDocument();
   });
@@ -1646,10 +1671,8 @@ describe("WorkspacePage", () => {
 
     expect(screen.getByText("Dates not set yet")).toBeInTheDocument();
     expect(screen.getByText("Duration not set yet")).toBeInTheDocument();
-    expect(screen.getByText("Runtime inventory is partially specified")).toBeInTheDocument();
-    expect(
-      screen.getByText("Runtime bundle assembly is waiting on the rest of the trip frame.")
-    ).toBeInTheDocument();
+    expect(screen.getByText("Options need more trip detail")).toBeInTheDocument();
+    expect(screen.getByText("The planner needs a little more trip detail before it can group options.")).toBeInTheDocument();
     await waitFor(() => {
       expect(getPlannerHost().shadowRoot?.querySelector('[aria-label="Planner side panel"]')).toBeTruthy();
     });
@@ -2558,7 +2581,7 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Workspace request failed" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Trip workspace could not load" })).toBeInTheDocument();
     });
 
     expect(screen.getByText("Backend warming up")).toBeInTheDocument();

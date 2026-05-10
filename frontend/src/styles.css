@@ -179,6 +179,10 @@ a {
   margin: 0;
 }
 
+.planning-mode-selector-header p {
+  margin-bottom: 0;
+}
+
 .planning-mode-options {
   display: grid;
   gap: 0.6rem;
@@ -192,7 +196,7 @@ a {
   cursor: pointer;
   display: grid;
   gap: 0.25rem;
-  min-height: 96px;
+  min-height: 112px;
   padding: 0.8rem;
 }
 
@@ -218,6 +222,12 @@ a {
   box-shadow: inset 0 0 0 1px rgba(56, 117, 107, 0.18);
 }
 
+.planning-mode-active-summary {
+  margin: 0.75rem 0 0;
+  color: #365063;
+  font-size: 0.92rem;
+}
+
 .workspace-hero {
   overflow: hidden;
   position: relative;
@@ -236,6 +246,40 @@ a {
   margin: 1rem 0 0;
   max-width: 42rem;
   color: #365063;
+}
+
+.workspace-help-disclosure {
+  margin-top: 1rem;
+  max-width: 56rem;
+}
+
+.workspace-help-disclosure summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.workspace-help-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-top: 0.9rem;
+}
+
+.workspace-help-grid article {
+  border: 1px solid rgba(19, 33, 44, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.58);
+  padding: 0.85rem;
+}
+
+.workspace-help-grid h3,
+.workspace-help-grid p {
+  margin: 0;
+}
+
+.workspace-help-grid h3 {
+  margin-bottom: 0.35rem;
+  font-size: 0.96rem;
 }
 
 .workspace-meta {
@@ -557,6 +601,34 @@ a {
   background: rgba(19, 33, 44, 0.08);
   font-size: 0.82rem;
   text-transform: capitalize;
+}
+
+.planner-prompt-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.planner-prompt-suggestions button {
+  border: 1px solid rgba(19, 33, 44, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #24394a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.5rem 0.75rem;
+}
+
+.planner-prompt-suggestions button:hover {
+  border-color: rgba(56, 117, 107, 0.55);
+}
+
+.planner-prompt-suggestions button:focus-visible {
+  border-color: rgba(56, 117, 107, 0.7);
+  outline: 3px solid rgba(56, 117, 107, 0.32);
+  outline-offset: 2px;
 }
 
 .planner-conversation-form {
