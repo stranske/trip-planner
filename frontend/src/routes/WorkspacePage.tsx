@@ -44,6 +44,13 @@ type ScenarioReviewMetric = {
   value: string;
 };
 
+type WorkspacePanelVisibility = {
+  showBudgetPanel: boolean;
+  showPolicyPosture: boolean;
+  showProposalPanel: boolean;
+  showApprovalReadinessPanel: boolean;
+};
+
 type ProposalLifecycleState =
   | "pending"
   | "deferred"
@@ -219,11 +226,45 @@ function formatPolicyPosture(workspace: WorkspaceData): string {
   return proposalState.summary.evaluation_result_status ?? "review pending";
 }
 
+function hasActivePolicyState(proposalState: WorkspaceData["proposal_state"]): boolean {
+  if (proposalState == null) {
+    return false;
+  }
+
+  if (proposalState.execution_id) {
+    return true;
+  }
+
+  if (proposalState.summary.approval_ready) {
+    return true;
+  }
+
+  if (proposalState.summary.evaluation_result_status || proposalState.summary.follow_up_status) {
+    return true;
+  }
+
+  return proposalState.submission_status !== "pending" || proposalState.evaluation_status != null;
+}
+
+function deriveWorkspacePanelVisibility(workspace: WorkspaceData): WorkspacePanelVisibility {
+  const isBusinessTrip = workspace.trip_record.trip.mode === "business";
+  const activePolicyState = hasActivePolicyState(workspace.proposal_state);
+  const showPolicyPanels = isBusinessTrip || activePolicyState;
+
+  return {
+    showBudgetPanel: true,
+    showPolicyPosture: showPolicyPanels,
+    showProposalPanel: showPolicyPanels,
+    showApprovalReadinessPanel: showPolicyPanels,
+  };
+}
+
 function buildScenarioReviewMetrics(
   workspace: WorkspaceData,
-  scenario: WorkspaceData["route_comparison"]["scenarios"][number]
+  scenario: WorkspaceData["route_comparison"]["scenarios"][number],
+  panelVisibility: WorkspacePanelVisibility
 ): ScenarioReviewMetric[] {
-  return [
+  const metrics: ScenarioReviewMetric[] = [
     {
       label: "Estimated total",
       value:
@@ -246,11 +287,16 @@ function buildScenarioReviewMetrics(
       label: "Feasibility",
       value: scenario.feasible ? "Ready to review" : "Needs feasibility work",
     },
-    {
+  ];
+
+  if (panelVisibility.showPolicyPosture) {
+    metrics.push({
       label: "Policy posture",
       value: formatPolicyPosture(workspace),
-    },
-  ];
+    });
+  }
+
+  return metrics;
 }
 
 function ScenarioSummaryCard({
@@ -593,6 +639,7 @@ function WorkspacePageContent({
           renderableProposalFollowUp
         );
   const scenarioPolicyPosture = formatPolicyPosture(currentWorkspace);
+  const panelVisibility = deriveWorkspacePanelVisibility(currentWorkspace);
   function handleScenarioSelection(scenarioId: string) {
     setSelectedScenarioId(scenarioId);
   }
@@ -881,14 +928,16 @@ function WorkspacePageContent({
           </section>
         </section>
 
-        <WorkspaceBudgetPanel
-          budgetState={currentWorkspace.budget_state}
-          tripMode={trip.mode}
-          busyLabel={budgetBusyLabel}
-          errorMessage={budgetError}
-          onSaveBudget={handleBudgetSave}
-          onRecordSpend={handleSpendRecord}
-        />
+        {panelVisibility.showBudgetPanel ? (
+          <WorkspaceBudgetPanel
+            budgetState={currentWorkspace.budget_state}
+            tripMode={trip.mode}
+            busyLabel={budgetBusyLabel}
+            errorMessage={budgetError}
+            onSaveBudget={handleBudgetSave}
+            onRecordSpend={handleSpendRecord}
+          />
+        ) : null}
 
         <TripMap
           comparison={routeComparison}
@@ -899,7 +948,7 @@ function WorkspacePageContent({
           bundles={currentWorkspace.inventory_summary.bundles}
           feasibilitySummary={currentWorkspace.feasibility_summary}
           tripPrimaryRegions={trip.trip_frame.primary_regions}
-          policyPosture={scenarioPolicyPosture}
+          policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : "Not applicable"}
           compactLayout={isCompactLayout}
         />
 
@@ -917,7 +966,8 @@ function WorkspacePageContent({
           onSelectTrip={setSelectedTripComparisonId}
         />
 
-        <section className="status-card">
+        {panelVisibility.showApprovalReadinessPanel ? (
+          <section className="status-card">
           <p className="status-label">Approval packet</p>
           <h2>{proposalLifecycle?.title ?? "Proposal lifecycle in progress"}</h2>
           {currentWorkspace.proposal_state == null ? (
@@ -1011,7 +1061,8 @@ function WorkspacePageContent({
               </div>
             </>
           )}
-        </section>
+          </section>
+        ) : null}
 
         <section className="status-card">
           <p className="status-label">Inventory bundles</p>
@@ -1128,7 +1179,11 @@ function WorkspacePageContent({
           {routeComparison.scenarios.length > 0 ? (
             <div className="scenario-review-grid" aria-label="Scenario review board">
               {routeComparison.scenarios.map((scenario) => {
-                const reviewMetrics = buildScenarioReviewMetrics(currentWorkspace, scenario);
+                const reviewMetrics = buildScenarioReviewMetrics(
+                  currentWorkspace,
+                  scenario,
+                  panelVisibility
+                );
                 const isSelected = scenario.scenario_id === selectedScenarioId;
 
                 return (
@@ -1250,7 +1305,8 @@ function WorkspacePageContent({
           )}
         </section>
 
-        <section className="status-card">
+        {panelVisibility.showProposalPanel ? (
+          <section className="status-card">
           <p className="status-label">Proposal details</p>
           <h2>Comparables and readiness signals</h2>
           {currentWorkspace.proposal_state == null ? (
@@ -1322,7 +1378,8 @@ function WorkspacePageContent({
               )}
             </div>
           )}
-        </section>
+          </section>
+        ) : null}
 
         <section className="status-card">
           <p className="status-label">Planner memory</p>

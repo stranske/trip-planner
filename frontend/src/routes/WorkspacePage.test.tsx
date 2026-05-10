@@ -855,6 +855,25 @@ describe("WorkspacePage", () => {
     });
   });
 
+  it("hides proposal and approval panels for leisure workspaces without active policy state", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: null,
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Spring Kyoto anniversary draft" })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Approval packet")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Comparables and readiness signals" })).not.toBeInTheDocument();
+  });
+
   it("persists planning mode selections through the workspace API", async () => {
     const user = userEvent.setup();
     mockedUseLoaderData.mockReturnValue({
