@@ -74,6 +74,15 @@ def _checkpoint_summary(
         if latest_reply_record is not None
         else ""
     )
+    turn_metadata = (
+        latest_reply_record.payload.get("turn_metadata")
+        if latest_reply_record is not None
+        else {}
+    )
+    if not isinstance(turn_metadata, dict):
+        turn_metadata = {}
+    plan_maturity = str(turn_metadata.get("plan_maturity") or "") or None
+    task_class = str(turn_metadata.get("task_class") or "") or None
     refs = list(
         dict.fromkeys(
             ref
@@ -94,6 +103,9 @@ def _checkpoint_summary(
         detail_lines.append(f"Linked refs: {', '.join(refs[:4])}")
     if selected_planning_mode:
         detail_lines.append(f"Selected planning mode: {selected_planning_mode}.")
+    if plan_maturity or task_class:
+        routing_parts = [item for item in [plan_maturity, task_class] if item]
+        detail_lines.append(f"Planner routing: {' / '.join(routing_parts)}.")
     if tool_calls:
         detail_lines.append(f"Tool traces persisted: {len(tool_calls)}.")
     return {
@@ -105,6 +117,8 @@ def _checkpoint_summary(
             "ref_count": len(refs[:8]),
             "tool_call_count": len(tool_calls),
             "selected_planning_mode": selected_planning_mode or None,
+            "plan_maturity": plan_maturity,
+            "task_class": task_class,
             "planning_stage": (
                 latest_reply_record.payload.get("planning_stage")
                 if latest_reply_record is not None
