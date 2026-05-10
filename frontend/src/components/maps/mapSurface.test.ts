@@ -79,6 +79,14 @@ describe("mapSurface", () => {
     ]);
     expect(model.routeStops.map((stop) => stop.label)).toEqual(["Kyoto", "Uji", "Kyoto"]);
     expect(model.routeSegments).toHaveLength(2);
+    expect(model.workspaceView.activeScope).toBe("regional");
+    expect(model.workspaceView.activeRouteOptionId).toBe("scenario:1");
+    expect(model.workspaceView.selectedSegmentId).toBe(model.routeSegments[0].id);
+    expect(model.workspaceView.placeMarkers).toEqual(model.markers);
+    expect(model.workspaceView.roughRouteGeometry).toEqual(model.routeSegments);
+    expect(model.workspaceView.confidence.level).toBe("high");
+    expect(model.workspaceView.diagnostics.provider).toEqual(model.provider);
+    expect(model.workspaceView.diagnostics.routeState).toBe("ready");
     expect(model.markers.map((marker) => marker.kind)).toEqual([
       "stop",
       "stop",
@@ -130,6 +138,7 @@ describe("mapSurface", () => {
     expect(model.provider.kind).toBe("fallback");
     expect(model.provider.summary).toContain("bounded textual route fallback");
     expect(model.provider.status).toBe("misconfigured");
+    expect(model.workspaceView.confidence.level).toBe("medium");
     expect(model.scenarioComparisonSummary).toBe(
       "Scenario comparison summary is still syncing to this workspace review surface."
     );
@@ -271,6 +280,7 @@ describe("mapSurface", () => {
     expect(model.routeState).toBe("sparse");
     expect(model.provider.kind).toBe("fallback");
     expect(model.provider.status).toBe("sparse-route");
+    expect(model.workspaceView.confidence.level).toBe("low");
     expect(model.routeSegments).toHaveLength(0);
     expect(model.markers).toHaveLength(1);
   });

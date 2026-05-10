@@ -56,6 +56,26 @@ export type RouteSegment = {
   warning: string | null;
 };
 
+export type MapViewScope = "global" | "regional" | "local";
+export type MapGeometryConfidence = "high" | "medium" | "low";
+
+export type MapWorkspaceView = {
+  activeScope: MapViewScope;
+  activeRouteOptionId: string;
+  selectedSegmentId: string | null;
+  placeMarkers: MapMarker[];
+  roughRouteGeometry: RouteSegment[];
+  confidence: {
+    level: MapGeometryConfidence;
+    summary: string;
+  };
+  diagnostics: {
+    provider: MapSurfaceProvider;
+    routeState: "ready" | "sparse";
+    routeWarning: string | null;
+  };
+};
+
 export type TripMapSurfaceModel = {
   provider: MapSurfaceProvider;
   routeStops: RouteStop[];
@@ -70,6 +90,7 @@ export type TripMapSurfaceModel = {
   feasibilitySummary: string;
   routeState: "ready" | "sparse";
   routeWarning: string | null;
+  workspaceView: MapWorkspaceView;
 };
 
 export function humanizeStop(stop: string): string {
@@ -316,6 +337,31 @@ function buildScenarioAffordances({
   return affordances;
 }
 
+function deriveMapConfidence({
+  routeState,
+  provider,
+}: {
+  routeState: "ready" | "sparse";
+  provider: MapSurfaceProvider;
+}): MapWorkspaceView["confidence"] {
+  if (routeState === "sparse") {
+    return {
+      level: "low",
+      summary: "Low confidence: route geometry is incomplete and shown as a rough preview.",
+    };
+  }
+  if (provider.kind === "fallback") {
+    return {
+      level: "medium",
+      summary: "Medium confidence: route geometry is approximate while the map provider is unavailable.",
+    };
+  }
+  return {
+    level: "high",
+    summary: "High confidence: route geometry is backed by live provider rendering.",
+  };
+}
+
 export function buildTripMapSurfaceModel({
   activeScenario,
   bundles,
@@ -421,6 +467,19 @@ export function buildTripMapSurfaceModel({
         "Google Maps JavaScript is the active presentation adapter; route, marker, and warning state still comes from workspace runtime data.",
     };
   }
+  const workspaceView: MapWorkspaceView = {
+    activeScope: "regional",
+    activeRouteOptionId: activeScenario.scenario_id,
+    selectedSegmentId: routeSegments[0]?.id ?? null,
+    placeMarkers: markers,
+    roughRouteGeometry: routeSegments,
+    confidence: deriveMapConfidence({ routeState, provider }),
+    diagnostics: {
+      provider,
+      routeState,
+      routeWarning,
+    },
+  };
 
   return {
     provider,
@@ -438,5 +497,6 @@ export function buildTripMapSurfaceModel({
     feasibilitySummary: summarizeFeasibility(feasibilitySummary, destinationAnchors),
     routeState,
     routeWarning,
+    workspaceView,
   };
 }
