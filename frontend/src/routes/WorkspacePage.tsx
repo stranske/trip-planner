@@ -979,22 +979,22 @@ function WorkspacePageContent({
         <p className="workspace-hero-emphasis">
           {isCompactLayout
             ? "Compact review keeps route, day plan, and next choices close together."
-            : "Use this workspace to compare options, keep notes, and move the trip toward a clear next decision."}
+            : "Use this trip workspace to compare options, capture traveler notes, and move toward one clear next step."}
         </p>
         <details className="workspace-help-disclosure">
           <summary>How to use this trip workspace</summary>
           <div className="workspace-help-grid">
             <article>
               <h3>Check the next decision</h3>
-              <p>Start with the trip status and open choices before asking for deeper planning.</p>
+              <p>Start with trip status and open choices, then ask your planner for the next action to take.</p>
             </article>
             <article>
               <h3>Compare options</h3>
-              <p>Use the map, route tradeoffs, day plan, and saved ideas to compare what is possible.</p>
+              <p>Use the map, route tradeoffs, day plan, and saved ideas to compare what fits this traveler goal.</p>
             </article>
             <article>
-              <h3>Keep side notes</h3>
-              <p>Send scattered reminders to the planner; they can be sorted into later planning work.</p>
+              <h3>Capture reminders</h3>
+              <p>Send reminders to your planner so they stay with this trip and can be pulled into the next revision.</p>
             </article>
           </div>
         </details>
@@ -1013,9 +1013,9 @@ function WorkspacePageContent({
       <div className="workspace-grid">
         <section className="status-card planner-panel-card">
           <p className="status-label">Planner</p>
-          <h2>Plan this trip</h2>
+          <h2>Traveler planning workspace</h2>
           <p className="muted-copy">
-            Use the planner to compare options, remember notes, and decide what should happen next.
+            Use your planner to compare options, keep context, and decide the next best trip step.
           </p>
           <div className="planner-runtime-row" aria-label="Planner availability">
             <span
@@ -1053,7 +1053,7 @@ function WorkspacePageContent({
                 <p className="scenario-kicker">Conversation</p>
                 <h3>Message your planner</h3>
                 <p>
-                  Ask for comparisons, summaries, reminders, or a focused next step. The answer
+                  Ask for comparisons, summaries, reminders, or a specific next step. The answer
                   stays with this trip.
                 </p>
               </div>

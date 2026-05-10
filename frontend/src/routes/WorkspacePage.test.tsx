@@ -880,7 +880,7 @@ describe("WorkspacePage", () => {
     expect(within(routeContextMap).getAllByText("Kyoto").length).toBeGreaterThan(0);
     expect(within(routeContextMap).getAllByText("Uji").length).toBeGreaterThan(0);
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Plan this trip" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Traveler planning workspace" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "How should the planner work?" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Collaborative/ })).toBeChecked();
     await waitFor(() => {
