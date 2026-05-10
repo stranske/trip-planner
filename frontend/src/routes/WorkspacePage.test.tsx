@@ -965,6 +965,21 @@ describe("WorkspacePage", () => {
           content: "Keep the Uji day trip and compare fewer evening moves before the next checkpoint.",
           created_at: "2026-04-12T06:16:00+00:00",
           refs: ["session:trip-leisure-kyoto-draft", "scenario:trip-leisure-kyoto-draft:1"],
+          turn_metadata: {
+            plan_maturity: "coherent_plan",
+            task_class: "route_comparison",
+            visible_response_blocks: [
+              {
+                kind: "next_steps",
+                title: "Next planning moves",
+                items: ["Compare fewer evening moves.", "Preserve Uji as the baseline day trip."],
+              },
+            ],
+            debug_routing_details: {
+              runtime_mode: "fallback",
+              runtime_provider: null,
+            },
+          },
           tool_calls: [
             {
               tool_name: "read_workspace_state",
@@ -1003,6 +1018,9 @@ describe("WorkspacePage", () => {
     expect(
       screen.getByText("Keep the Uji day trip and compare fewer evening moves before the next checkpoint.")
     ).toBeInTheDocument();
+    expect(screen.getByText("coherent plan")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Next planning moves" })).toBeInTheDocument();
+    expect(screen.getByText("Compare fewer evening moves.")).toBeInTheDocument();
     expect(screen.getByText("read_workspace_state: Read the current workspace state.")).toBeInTheDocument();
     expect(screen.getByLabelText("Message")).toHaveValue("");
   });

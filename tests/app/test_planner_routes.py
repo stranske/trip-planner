@@ -182,7 +182,8 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
     payload = response.json()
     assert [message["role"] for message in payload["messages"]] == ["user", "planner"]
     assert "Help me decide" in payload["messages"][0]["content"]
-    assert "Deterministic planner fallback is active" in payload["messages"][1]["content"]
+    assert "fallback" not in payload["messages"][1]["content"].lower()
+    assert payload["messages"][1]["turn_metadata"]["plan_maturity"] == "partial_plan"
     assert payload["messages"][1]["refs"]
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
     assert payload["planner_memory"]["current_checkpoint_id"].startswith("planner-chk:")
@@ -198,6 +199,7 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
             "planner_user_turn",
             "planner_response",
         ]
+        assert stored[-1].payload["turn_metadata"]["task_class"] == "first_turn_triage"
         activity_events = db_session.scalars(
             select(PersistedActivityLogEvent)
             .where(PersistedActivityLogEvent.trip_id == trip_id)
@@ -219,6 +221,57 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
         assert artifact is not None
         assert artifact.memory_artifact_id.startswith("planner-mem:")
         assert artifact.checkpoint_id == checkpoint.checkpoint_id
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_maturity", "expected_task"),
+    [
+        (
+            "We want five days in Kyoto in May with a moderate budget and low-transfer hotels.",
+            "coherent_plan",
+            "planning_synthesis",
+        ),
+        (
+            "Maybe Japan with good food",
+            "partial_plan",
+            "first_turn_triage",
+        ),
+        (
+            "Plan a trip",
+            "open_ended",
+            "first_turn_triage",
+        ),
+        (
+            (
+                "Compare options for a business trip with approval, budget, hotel, train, "
+                "walking, family, food, transfer, and accessibility constraints?"
+            ),
+            "overloaded_constraints",
+            "planning_synthesis",
+        ),
+    ],
+)
+def test_planner_turn_records_adaptive_triage_metadata(
+    client: TestClient,
+    message: str,
+    expected_maturity: str,
+    expected_task: str,
+) -> None:
+    trip_id = _create_trip(client)
+
+    response = client.post(f"/api/planner/{trip_id}/turns", json={"message": message})
+
+    assert response.status_code == 200
+    planner_reply = response.json()["messages"][-1]
+    metadata = planner_reply["turn_metadata"]
+    assert metadata["plan_maturity"] == expected_maturity
+    assert metadata["task_class"] == expected_task
+    assert metadata["visible_response_blocks"]
+    assert metadata["debug_routing_details"]["runtime_mode"] == "fallback"
+    visible_content = planner_reply["content"].lower()
+    assert "model routing" not in visible_content
+    assert "provider" not in visible_content
+    assert "fallback" not in visible_content
 
 
 def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
@@ -577,7 +630,8 @@ def test_planner_resume_returns_prior_conversation_history(client: TestClient) -
     payload = resumed.json()
     assert payload["resumed_at"] is not None
     assert [message["role"] for message in payload["messages"]] == ["user", "planner"]
-    assert payload["messages"][1]["content"].startswith("Planner API kickoff is using")
+    assert payload["messages"][1]["content"].startswith("Planner API kickoff has a useful starting point")
+    assert payload["messages"][1]["turn_metadata"]["task_class"] == "first_turn_triage"
     assert payload["planner_memory"]["artifacts"][0]["title"] == "Planner checkpoint 1"
 
 

@@ -22,6 +22,13 @@ class PlannerToolCallResponse(BaseModel):
     output: dict[str, Any] = Field(default_factory=dict)
 
 
+class PlannerTurnMetadata(BaseModel):
+    plan_maturity: str
+    task_class: str
+    visible_response_blocks: list[dict[str, Any]] = Field(default_factory=list)
+    debug_routing_details: dict[str, Any] = Field(default_factory=dict)
+
+
 class PlannerMessageResponse(BaseModel):
     message_id: str
     role: str
@@ -29,6 +36,7 @@ class PlannerMessageResponse(BaseModel):
     created_at: str
     refs: list[str] = Field(default_factory=list)
     tool_calls: list[PlannerToolCallResponse] = Field(default_factory=list)
+    turn_metadata: PlannerTurnMetadata | None = None
 
 
 class PlannerCheckpointResponse(BaseModel):
