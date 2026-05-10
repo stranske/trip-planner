@@ -2331,3 +2331,115 @@ def test_feasibility_planner_outputs_surface_blocking_transition_details() -> No
         or "cannot be reached inside its advertised start window" in highlight.lower()
         for highlight in outputs[1]["highlights"]
     )
+
+
+_RAW_DEBUG_TOKENS_FORBIDDEN_IN_USER_COPY = (
+    "runtime provider",
+    "runtime_state_id",
+    "fallback mode",
+    "policy_state_id",
+    "proposal_state_id",
+    "session_state_id",
+    "scenario_search_id",
+)
+
+
+def _assert_user_summary_avoids_raw_runtime_language(view_model: dict[str, Any]) -> None:
+    user_summary = view_model["user_summary"]
+    next_step = view_model["next_step"]
+    user_facing_strings = [user_summary["headline"], next_step["title"], next_step["summary"]]
+    user_facing_strings.extend(user_summary.get("decided", []))
+    user_facing_strings.extend(user_summary.get("uncertain", []))
+    business_summary = view_model.get("business_summary")
+    if business_summary is not None:
+        user_facing_strings.append(business_summary["headline"])
+        user_facing_strings.extend(business_summary.get("blockers", []))
+    for value in user_facing_strings:
+        lowered = value.lower()
+        for token in _RAW_DEBUG_TOKENS_FORBIDDEN_IN_USER_COPY:
+            assert token not in lowered, (
+                f"User-facing view-model copy must not leak '{token}': {value!r}"
+            )
+
+
+def test_workspace_endpoint_includes_typed_view_model_for_leisure_trip(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/workspace/trip-leisure-kyoto-draft")
+
+    assert response.status_code == 200
+    payload = response.json()
+    view_model = payload["view_model"]
+    assert view_model is not None
+    user_summary = view_model["user_summary"]
+    assert user_summary["trip_mode"] == "leisure"
+    assert user_summary["mode_label"] == "Leisure trip"
+    assert user_summary["status"] in {"ready", "partial", "empty"}
+    assert user_summary["trip_title"]
+    assert user_summary["headline"]
+
+    next_step = view_model["next_step"]
+    assert next_step["title"]
+    assert next_step["summary"]
+
+    assert view_model["business_summary"] is None
+
+    debug_state = view_model["debug_state"]
+    assert "runtime_state" in debug_state["sections"]
+    assert "policy_state" not in debug_state["sections"]
+    assert "proposal_state" not in debug_state["sections"]
+    assert (
+        debug_state["sections"]["runtime_state"]["payload"]["status"]
+        == payload["runtime_state"]["status"]
+    )
+
+    _assert_user_summary_avoids_raw_runtime_language(view_model)
+
+
+def test_workspace_endpoint_includes_typed_view_model_for_business_trip(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/workspace/trip-business-client-summit")
+
+    assert response.status_code == 200
+    payload = response.json()
+    view_model = payload["view_model"]
+    assert view_model is not None
+    user_summary = view_model["user_summary"]
+    assert user_summary["trip_mode"] == "business"
+    assert user_summary["mode_label"] == "Business trip"
+
+    business_summary = view_model["business_summary"]
+    assert business_summary is not None
+    assert business_summary["approval_status"] in {
+        "not_applicable",
+        "not_ready",
+        "in_review",
+        "approved",
+        "needs_attention",
+    }
+    assert business_summary["headline"]
+
+    debug_state = view_model["debug_state"]
+    assert "runtime_state" in debug_state["sections"]
+
+    _assert_user_summary_avoids_raw_runtime_language(view_model)
+
+
+def test_workspace_view_model_builder_handles_empty_runtime_state() -> None:
+    payload = {
+        "trip_record": {
+            "trip": {"title": "Bare workspace", "mode": "leisure"},
+        },
+        "runtime_state": {"status": "empty", "title": "", "summary": ""},
+        "saved_scenarios": [],
+        "inventory_summary": {"bundle_count": 0},
+        "feasibility_summary": {"attention_bundle_count": 0},
+    }
+
+    view_model = workspace_service._build_workspace_view_model(payload)
+
+    assert view_model["user_summary"]["status"] == "empty"
+    assert view_model["next_step"]["blocked"] is True
+    assert view_model["business_summary"] is None
+    assert view_model["debug_state"]["sections"]["runtime_state"]["payload"]["status"] == "empty"

@@ -568,6 +568,7 @@ function WorkspacePageContent({
   }, [workspace.trip_record.trip.trip_id]);
 
   const { trip } = currentWorkspace.trip_record;
+  const productView = currentWorkspace.view_model;
   const activeScenario = resolveActiveScenario(currentWorkspace);
   const routeComparison = resolveRouteComparison(currentWorkspace);
   const selectedRuntimeScenario =
@@ -737,9 +738,56 @@ function WorkspacePageContent({
       data-layout={isCompactLayout ? "compact" : "full"}
     >
       <div className="workspace-hero status-card">
-        <p className="status-label">Workspace timeline</p>
-        <h2>{trip.title}</h2>
-        <p>{trip.summary}</p>
+        <p className="status-label">
+          {productView?.user_summary.mode_label ?? "Workspace timeline"}
+        </p>
+        <h2>{productView?.user_summary.trip_title ?? trip.title}</h2>
+        <p>{productView?.user_summary.headline ?? trip.summary}</p>
+        {productView ? (
+          <div className="decision-stack" aria-label="Product workspace summary">
+            {productView.user_summary.decided.length > 0 ? (
+              <article className="decision-card">
+                <p className="scenario-kicker">Decided</p>
+                <ul>
+                  {productView.user_summary.decided.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+            ) : null}
+            {productView.user_summary.uncertain.length > 0 ? (
+              <article className="decision-card">
+                <p className="scenario-kicker">Still open</p>
+                <ul>
+                  {productView.user_summary.uncertain.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+            ) : null}
+            <article className="decision-card">
+              <p className="scenario-kicker">Next action</p>
+              <h3>{productView.next_step.title}</h3>
+              <p>{productView.next_step.summary}</p>
+              {productView.next_step.action_label ? (
+                <p className="muted-copy">{productView.next_step.action_label}</p>
+              ) : null}
+            </article>
+            {productView.business_summary ? (
+              <article className="decision-card">
+                <p className="scenario-kicker">Approval readiness</p>
+                <h3>{productView.business_summary.headline}</h3>
+                {productView.business_summary.blockers.length > 0 ? (
+                  <ul>
+                    {productView.business_summary.blockers.map((blocker) => (
+                      <li key={blocker}>{blocker}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </article>
+            ) : null}
+          </div>
+        ) : null}
         <dl className="workspace-meta">
           <div>
             <dt>Dates</dt>
@@ -767,6 +815,16 @@ function WorkspacePageContent({
             ? "Compact review stack keeps map, timeline, and tradeoff calls visible on smaller screens."
             : "Review-ready workspace keeps route context, daily pacing, and tradeoffs visible at once."}
         </p>
+        {productView && Object.keys(productView.debug_state.sections).length > 0 ? (
+          <details className="workspace-debug-disclosure">
+            <summary>Advanced diagnostics</summary>
+            <p className="muted-copy">
+              {Object.keys(productView.debug_state.sections).length} debug section
+              {Object.keys(productView.debug_state.sections).length === 1 ? "" : "s"} available in the
+              workspace payload.
+            </p>
+          </details>
+        ) : null}
       </div>
 
       <div className="workspace-grid">
