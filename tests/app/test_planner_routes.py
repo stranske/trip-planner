@@ -22,7 +22,9 @@ from trip_planner.persistence.models.session import PersistedPlanningSessionStat
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'planner.db'}")
+    monkeypatch.setenv(
+        "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'planner.db'}"
+    )
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -110,7 +112,9 @@ def _create_business_trip(client: TestClient) -> str:
     return response.json()["trip"]["trip_id"]
 
 
-def test_planner_session_endpoint_bootstraps_trip_scoped_session(client: TestClient) -> None:
+def test_planner_session_endpoint_bootstraps_trip_scoped_session(
+    client: TestClient,
+) -> None:
     trip_id = _create_trip(client)
 
     response = client.get(f"/api/planner/{trip_id}/session")
@@ -184,6 +188,13 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
     assert "Help me decide" in payload["messages"][0]["content"]
     assert "fallback" not in payload["messages"][1]["content"].lower()
     assert payload["messages"][1]["turn_metadata"]["plan_maturity"] == "partial_plan"
+    planner_blocks = payload["messages"][1]["structured_blocks"]
+    planner_block_kinds = {block["kind"] for block in planner_blocks}
+    assert {"summary", "question", "assumption", "debug"}.issubset(planner_block_kinds)
+    assert (
+        next(block for block in planner_blocks if block["kind"] == "debug")["hidden"]
+        is True
+    )
     assert payload["messages"][1]["refs"]
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
     assert payload["planner_memory"]["current_checkpoint_id"].startswith("planner-chk:")
@@ -221,6 +232,37 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
         assert artifact is not None
         assert artifact.memory_artifact_id.startswith("planner-mem:")
         assert artifact.checkpoint_id == checkpoint.checkpoint_id
+
+
+def test_planner_turn_summarizes_scattered_traveler_input(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": (
+                "We're considering Sweden and Norway in August for 12 days. "
+                "Budget matters and we prefer scenic trains, low transfer days, and food markets. "
+                "Maybe Bergen, but I'm not sure. "
+                "Also remind me to check passport renewal later."
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    user_message = response.json()["messages"][0]
+    summary_block = user_message["structured_blocks"][0]
+    assert summary_block["kind"] == "traveler_input_summary"
+    assert "Traveler input summary" == summary_block["title"]
+    assert any("Destinations:" in item for item in summary_block["items"])
+    assert any("Timing:" in item for item in summary_block["items"])
+    assert any("Constraints:" in item for item in summary_block["items"])
+    assert any("Preferences:" in item for item in summary_block["items"])
+    assert any("Open questions:" in item for item in summary_block["items"])
+    assert any("Notes to remember:" in item for item in summary_block["items"])
+    assert "Sweden" in summary_block["metadata"]["destinations"]
+    assert "Norway" in summary_block["metadata"]["destinations"]
+    assert "august" in summary_block["metadata"]["dates"]
 
 
 @pytest.mark.parametrize(
@@ -273,13 +315,26 @@ def test_planner_turn_records_adaptive_triage_metadata(
     assert metadata["task_class"] == expected_task
     assert metadata["visible_response_blocks"]
     assert metadata["debug_routing_details"]["runtime_mode"] == "fallback"
+    structured_kinds = {block["kind"] for block in planner_reply["structured_blocks"]}
+    assert "summary" in structured_kinds
+    assert "debug" in structured_kinds
+    assert (
+        next(
+            block
+            for block in planner_reply["structured_blocks"]
+            if block["kind"] == "debug"
+        )["hidden"]
+        is True
+    )
     visible_content = planner_reply["content"].lower()
     assert "model routing" not in visible_content
     assert "provider" not in visible_content
     assert "fallback" not in visible_content
 
 
-def test_planner_turn_partial_reply_does_not_echo_internal_user_terms(client: TestClient) -> None:
+def test_planner_turn_partial_reply_does_not_echo_internal_user_terms(
+    client: TestClient,
+) -> None:
     trip_id = _create_trip(client)
 
     response = client.post(
@@ -326,7 +381,9 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
     assert planner_reply["tool_calls"][0]["tool_name"] == "read_workspace_state"
     assert planner_reply["tool_calls"][0]["status"] == "completed"
     completed_tool_names = {
-        item["tool_name"] for item in planner_reply["tool_calls"] if item["status"] == "completed"
+        item["tool_name"]
+        for item in planner_reply["tool_calls"]
+        if item["status"] == "completed"
     }
     assert completed_tool_names == {
         "read_workspace_state",
@@ -336,7 +393,10 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
         "read_policy_state",
         "read_proposal_state",
     }
-    assert fake_model.requests[0]["available_tools"][0]["tool_name"] == "read_workspace_state"
+    assert (
+        fake_model.requests[0]["available_tools"][0]["tool_name"]
+        == "read_workspace_state"
+    )
     runtime_context = fake_model.requests[0]["runtime_context"]
     assert isinstance(runtime_context, dict)
     assert runtime_context["trip"]["trip_id"] == trip_id
@@ -416,14 +476,16 @@ def test_planner_turn_tool_reads_are_grounded_in_persisted_workspace_state(
 
     response = client.post(
         f"/api/planner/{trip_id}/turns",
-        json={"message": "Ground your recommendation in persisted workspace and approval state."},
+        json={
+            "message": "Ground your recommendation in persisted workspace and approval state."
+        },
     )
 
     assert response.status_code == 200
     payload = response.json()
     planner_reply = payload["messages"][-1]
     assert payload["runtime"]["mode"] == "model"
-    assert "Tool results:" in planner_reply["content"]
+    assert "Tool results:" not in planner_reply["content"]
     tool_outputs = {item["tool_name"]: item for item in planner_reply["tool_calls"]}
     assert set(tool_outputs) == {
         "read_workspace_state",
@@ -444,9 +506,9 @@ def test_planner_turn_tool_reads_are_grounded_in_persisted_workspace_state(
         tool_outputs["read_workspace_state"]["output"]["trip_title"]
         == workspace_payload["trip_record"]["trip"]["title"]
     )
-    assert tool_outputs["read_workspace_state"]["output"]["pending_decision_count"] == len(
-        workspace_payload["planner_panel_state"]["pending_decisions"]
-    )
+    assert tool_outputs["read_workspace_state"]["output"][
+        "pending_decision_count"
+    ] == len(workspace_payload["planner_panel_state"]["pending_decisions"])
     assert (
         tool_outputs["refresh_inventory"]["output"]["bundle_count"]
         == workspace_payload["inventory_summary"]["bundle_count"]
@@ -460,7 +522,8 @@ def test_planner_turn_tool_reads_are_grounded_in_persisted_workspace_state(
         == budget_payload["summary"]["planned_total"]
     )
     assert (
-        tool_outputs["read_policy_state"]["output"]["status"] == policy_payload["summary"]["status"]
+        tool_outputs["read_policy_state"]["output"]["status"]
+        == policy_payload["summary"]["status"]
     )
     assert (
         tool_outputs["read_proposal_state"]["output"]["status"]
@@ -509,7 +572,9 @@ def test_planner_turn_records_malformed_model_tool_arguments_as_visible_error(
         lambda _: FakePlannerChatModel(
             {
                 "content": "The budget tool received malformed arguments.",
-                "tool_calls": [{"tool_name": "update_budget_plan", "arguments": "not-a-dict"}],
+                "tool_calls": [
+                    {"tool_name": "update_budget_plan", "arguments": "not-a-dict"}
+                ],
             }
         )
     )
@@ -560,7 +625,10 @@ def test_planner_turn_executes_explicit_tool_calls(client: TestClient) -> None:
                 {"tool_name": "read_budget_state"},
                 {
                     "tool_name": "update_budget_plan",
-                    "arguments": {"total_amount": 1200, "title": "Planner first-pass budget"},
+                    "arguments": {
+                        "total_amount": 1200,
+                        "title": "Planner first-pass budget",
+                    },
                 },
             ],
         },
@@ -573,7 +641,7 @@ def test_planner_turn_executes_explicit_tool_calls(client: TestClient) -> None:
     assert planner_reply["tool_calls"][0]["tool_name"] == "read_budget_state"
     assert planner_reply["tool_calls"][1]["tool_name"] == "update_budget_plan"
     assert planner_reply["tool_calls"][1]["mutates_state"] is True
-    assert "Tool results:" in planner_reply["content"]
+    assert "Tool results:" not in planner_reply["content"]
 
     with get_session_factory()() as db_session:
         stored = db_session.scalars(
@@ -652,16 +720,22 @@ def test_planner_resume_returns_prior_conversation_history(client: TestClient) -
     payload = resumed.json()
     assert payload["resumed_at"] is not None
     assert [message["role"] for message in payload["messages"]] == ["user", "planner"]
-    assert payload["messages"][1]["content"].startswith("Planner API kickoff has a useful starting point")
+    assert payload["messages"][1]["content"].startswith(
+        "Planner API kickoff has a useful starting point"
+    )
     assert payload["messages"][1]["turn_metadata"]["task_class"] == "first_turn_triage"
     assert payload["planner_memory"]["artifacts"][0]["title"] == "Planner checkpoint 1"
 
 
-def test_planner_resume_regenerates_memory_from_raw_transcript(client: TestClient) -> None:
+def test_planner_resume_regenerates_memory_from_raw_transcript(
+    client: TestClient,
+) -> None:
     trip_id = _create_trip(client)
     first_turn = client.post(
         f"/api/planner/{trip_id}/turns",
-        json={"message": "Keep the baseline narrow and summarize the current direction."},
+        json={
+            "message": "Keep the baseline narrow and summarize the current direction."
+        },
     )
     assert first_turn.status_code == 200
 
@@ -672,7 +746,9 @@ def test_planner_resume_regenerates_memory_from_raw_transcript(client: TestClien
             )
         )
         db_session.execute(
-            delete(PersistedPlannerCheckpoint).where(PersistedPlannerCheckpoint.trip_id == trip_id)
+            delete(PersistedPlannerCheckpoint).where(
+                PersistedPlannerCheckpoint.trip_id == trip_id
+            )
         )
         session = db_session.get(PersistedPlanningSessionState, f"session:{trip_id}")
         assert session is not None
@@ -684,4 +760,6 @@ def test_planner_resume_regenerates_memory_from_raw_transcript(client: TestClien
     assert resumed.status_code == 200
     payload = resumed.json()
     assert payload["planner_memory"]["current_checkpoint_id"].startswith("planner-chk:")
-    assert payload["planner_memory"]["artifacts"][0]["summary"].startswith("Turn 1 checkpoint")
+    assert payload["planner_memory"]["artifacts"][0]["summary"].startswith(
+        "Turn 1 checkpoint"
+    )

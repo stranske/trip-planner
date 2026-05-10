@@ -413,6 +413,31 @@ a {
   font-weight: 700;
 }
 
+.planner-conversation-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.planner-diagnostics-toggle {
+  border: 1px solid rgba(19, 33, 44, 0.18);
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  background: rgba(255, 255, 255, 0.72);
+  color: #24394a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.planner-diagnostics-toggle[aria-pressed="true"] {
+  background: #24394a;
+  color: #f7f1e5;
+}
+
 .planner-message-list {
   display: grid;
   gap: 0.75rem;
@@ -450,6 +475,15 @@ a {
   padding-left: 0.75rem;
 }
 
+.planner-block-kind {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #577186;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
 .planner-response-block h4 {
   margin: 0 0 0.35rem;
   font-size: 0.92rem;
@@ -480,6 +514,35 @@ a {
   margin: 0.75rem 0 0;
   padding-left: 1.1rem;
   color: #365063;
+}
+
+.planner-diagnostics {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.planner-diagnostics details {
+  border: 1px solid rgba(19, 33, 44, 0.12);
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.planner-diagnostics summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.planner-diagnostics pre {
+  overflow: auto;
+  margin: 0.6rem 0 0;
+  border-radius: 10px;
+  padding: 0.7rem;
+  background: rgba(19, 33, 44, 0.08);
+  color: #24394a;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
 }
 
 .planner-tool-strip {

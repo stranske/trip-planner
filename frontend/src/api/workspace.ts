@@ -327,6 +327,15 @@ export type PlannerTurnMetadata = {
   debug_routing_details: Record<string, unknown>;
 };
 
+export type PlannerStructuredBlock = {
+  kind: string;
+  title: string;
+  body: string;
+  items: string[];
+  metadata: Record<string, unknown>;
+  hidden: boolean;
+};
+
 export type PlannerMessage = {
   message_id: string;
   role: "user" | "planner" | string;
@@ -334,6 +343,7 @@ export type PlannerMessage = {
   created_at: string;
   refs: string[];
   tool_calls: PlannerToolCallResponse[];
+  structured_blocks: PlannerStructuredBlock[];
   turn_metadata?: PlannerTurnMetadata | null;
 };
 

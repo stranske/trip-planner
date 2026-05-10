@@ -28,10 +28,21 @@ class PlannerVisibleResponseBlock(BaseModel):
     items: list[str] = Field(default_factory=list)
 
 
+class PlannerStructuredBlock(BaseModel):
+    kind: str = Field(min_length=1, max_length=80)
+    title: str = Field(min_length=1, max_length=160)
+    body: str = ""
+    items: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    hidden: bool = False
+
+
 class PlannerTurnMetadata(BaseModel):
     plan_maturity: str
     task_class: str
-    visible_response_blocks: list[PlannerVisibleResponseBlock] = Field(default_factory=list)
+    visible_response_blocks: list[PlannerVisibleResponseBlock] = Field(
+        default_factory=list
+    )
     debug_routing_details: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -42,6 +53,7 @@ class PlannerMessageResponse(BaseModel):
     created_at: str
     refs: list[str] = Field(default_factory=list)
     tool_calls: list[PlannerToolCallResponse] = Field(default_factory=list)
+    structured_blocks: list[PlannerStructuredBlock] = Field(default_factory=list)
     turn_metadata: PlannerTurnMetadata | None = None
 
 
