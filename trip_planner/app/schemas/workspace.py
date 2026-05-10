@@ -43,6 +43,108 @@ class InventorySummary(BaseModel):
     )
 
 
+class WorkspaceUserSummary(BaseModel):
+    """User-facing trip summary for the product workspace surface.
+
+    Field values must avoid raw runtime/provider/object-id language; that
+    detail belongs in :class:`WorkspaceDebugState` and is rendered behind an
+    explicit debug affordance.
+    """
+
+    trip_title: str = Field(description="Human-readable trip title.")
+    trip_mode: Literal["leisure", "business"] = Field(
+        description="Workspace product mode used to gate user-facing copy."
+    )
+    mode_label: str = Field(
+        description="User-friendly mode label (e.g. 'Leisure trip')."
+    )
+    status: Literal["ready", "partial", "empty"] = Field(
+        description="High-level workspace status used for top-level framing."
+    )
+    headline: str = Field(description="Short user-facing headline for the trip.")
+    decided: list[str] = Field(
+        default_factory=list,
+        description="User-facing 'what has been decided' bullet list.",
+    )
+    uncertain: list[str] = Field(
+        default_factory=list,
+        description="User-facing 'what is still uncertain' bullet list.",
+    )
+
+
+class WorkspaceNextStep(BaseModel):
+    """Recommended next user action for the trip workspace."""
+
+    title: str = Field(description="Short next-step title in user language.")
+    summary: str = Field(description="Longer next-step summary in user language.")
+    action_label: str | None = Field(
+        default=None,
+        description="Optional CTA label rendered alongside the next-step copy.",
+    )
+    action_target: str | None = Field(
+        default=None,
+        description="Optional anchor or route hint for the recommended action.",
+    )
+    blocked: bool = Field(
+        default=False,
+        description="True when the recommended action is blocked on a missing input.",
+    )
+
+
+class WorkspaceBusinessSummary(BaseModel):
+    """Optional business-mode approval readiness expressed in user language."""
+
+    approval_status: Literal[
+        "not_applicable",
+        "not_ready",
+        "in_review",
+        "approved",
+        "needs_attention",
+    ] = Field(description="Approval readiness in user-facing terms.")
+    headline: str = Field(description="Short user-facing approval headline.")
+    blockers: list[str] = Field(
+        default_factory=list,
+        description="User-facing list of open approval blockers.",
+    )
+
+
+class WorkspaceDebugSection(BaseModel):
+    """A named debug-only payload section that mirrors raw runtime state."""
+
+    title: str = Field(description="Debug section title shown in the advanced surface.")
+    payload: Any = Field(
+        default_factory=dict,
+        description="Raw payload attached to this debug section.",
+    )
+
+
+class WorkspaceDebugState(BaseModel):
+    """Hidden debug surface containing raw runtime/provider/object-id payloads.
+
+    The product workspace view should only render this state behind an
+    explicit debug/advanced affordance.
+    """
+
+    sections: dict[str, WorkspaceDebugSection] = Field(
+        default_factory=dict,
+        description="Named raw debug sections keyed by stable section id.",
+    )
+
+
+class WorkspaceViewModel(BaseModel):
+    """Typed product view model that translates :class:`WorkspaceResponse`.
+
+    The view model splits the workspace payload into traveler-facing,
+    business-facing, and debug-facing sections so the frontend can render a
+    stable user surface without leaking raw runtime detail.
+    """
+
+    user_summary: WorkspaceUserSummary
+    next_step: WorkspaceNextStep
+    business_summary: WorkspaceBusinessSummary | None = None
+    debug_state: WorkspaceDebugState
+
+
 class WorkspaceResponse(BaseModel):
     trip_record: dict[str, Any] = Field(
         description="Persisted trip record payload for the workspace."
@@ -105,6 +207,13 @@ class WorkspaceResponse(BaseModel):
         default=None,
         description="Persisted proposal submission and evaluation lifecycle state for business-workspace flows.",
     )
+    view_model: WorkspaceViewModel | None = Field(
+        default=None,
+        description=(
+            "Typed product workspace view model with user-facing summary, next-step,"
+            " optional business-summary, and hidden debug sections."
+        ),
+    )
 
 
 class ScenarioComparisonSurfaceResponse(BaseModel):
@@ -130,6 +239,10 @@ class PlannerOptionFeedbackRequest(BaseModel):
         "do_more_before_asking_again",
     ]
     decision_id: str | None = Field(default=None, max_length=96)
+
+
+class RouteOptionActionRequest(BaseModel):
+    action_type: Literal["make_baseline", "keep", "reject", "reopen", "revise"]
 
 
 class PlanningModeUpdateRequest(BaseModel):

@@ -26,6 +26,14 @@ export type TripRecord = {
 };
 
 export type PlanningMode = "delegated" | "collaborative" | "revealed-preference" | "in-trip";
+export type RouteOptionState = "active" | "baseline" | "fallback" | "rejected" | "needs_research";
+export type RouteOptionActionType = "make_baseline" | "keep" | "reject" | "reopen" | "revise";
+
+export type RouteOptionAction = {
+  action_type: RouteOptionActionType;
+  label: string;
+  description: string;
+};
 
 export type SessionState = {
   current_saved_scenario_id: string | null;
@@ -226,6 +234,14 @@ export type RuntimeScenarioComparison = {
     title: string;
     rank: number;
     status: string;
+    state?: RouteOptionState;
+    route_option_id?: string;
+    purpose?: string;
+    confidence?: number;
+    unresolved_questions?: string[];
+    open_question?: string | null;
+    available_actions?: RouteOptionAction[];
+    available_action?: RouteOptionAction | null;
     summary: string;
     comparison_note: string;
     option_count: number;
@@ -316,6 +332,26 @@ export type PlannerToolCallResponse = {
   output: Record<string, unknown>;
 };
 
+export type PlannerTurnMetadata = {
+  plan_maturity: string;
+  task_class: string;
+  visible_response_blocks: Array<{
+    kind: string;
+    title: string;
+    items: string[];
+  }>;
+  debug_routing_details: Record<string, unknown>;
+};
+
+export type PlannerStructuredBlock = {
+  kind: string;
+  title: string;
+  body: string;
+  items: string[];
+  metadata: Record<string, unknown>;
+  hidden: boolean;
+};
+
 export type PlannerMessage = {
   message_id: string;
   role: "user" | "planner" | string;
@@ -323,6 +359,8 @@ export type PlannerMessage = {
   created_at: string;
   refs: string[];
   tool_calls: PlannerToolCallResponse[];
+  structured_blocks: PlannerStructuredBlock[];
+  turn_metadata?: PlannerTurnMetadata | null;
 };
 
 export type PlannerSessionResponse = {
@@ -341,6 +379,51 @@ export type PlannerSessionResponse = {
   }>;
   activity_log: ActivityLogEntry[];
   messages: PlannerMessage[];
+};
+
+export type WorkspaceUserSummary = {
+  trip_title: string;
+  trip_mode: "leisure" | "business";
+  mode_label: string;
+  status: "ready" | "partial" | "empty";
+  headline: string;
+  decided: string[];
+  uncertain: string[];
+};
+
+export type WorkspaceNextStep = {
+  title: string;
+  summary: string;
+  action_label: string | null;
+  action_target: string | null;
+  blocked: boolean;
+};
+
+export type WorkspaceBusinessSummary = {
+  approval_status:
+    | "not_applicable"
+    | "not_ready"
+    | "in_review"
+    | "approved"
+    | "needs_attention";
+  headline: string;
+  blockers: string[];
+};
+
+export type WorkspaceDebugSection = {
+  title: string;
+  payload: unknown;
+};
+
+export type WorkspaceDebugState = {
+  sections: Record<string, WorkspaceDebugSection>;
+};
+
+export type WorkspaceViewModel = {
+  user_summary: WorkspaceUserSummary;
+  next_step: WorkspaceNextStep;
+  business_summary: WorkspaceBusinessSummary | null;
+  debug_state: WorkspaceDebugState;
 };
 
 export type WorkspaceData = {
@@ -470,6 +553,7 @@ export type WorkspaceData = {
       follow_up_summary?: string;
     };
   } | null;
+  view_model: WorkspaceViewModel | null;
 };
 
 export type BudgetPlanUpsertPayload = {
@@ -599,6 +683,24 @@ export async function submitPlannerOptionFeedback(
     body: JSON.stringify({
       action_type: actionType,
       decision_id: decisionId,
+    }),
+  });
+}
+
+export async function submitRouteOptionAction(
+  tripId: string,
+  optionId: string,
+  actionType: RouteOptionActionType
+): Promise<WorkspaceData> {
+  return fetchJson<WorkspaceData>({
+    path: `/api/workspace/${tripId}/route-options/${optionId}/action`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      action_type: actionType,
     }),
   });
 }

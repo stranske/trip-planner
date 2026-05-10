@@ -1955,6 +1955,175 @@ def test_workspace_option_feedback_reuses_recent_presentation_ids(client: TestCl
     )
 
 
+def _route_option_scenario(
+    scenario_id: str,
+    *,
+    feasible: bool,
+    recommended: bool,
+    rank: int,
+) -> dict[str, Any]:
+    return {
+        "scenario_id": scenario_id,
+        "source_result_id": f"source:{scenario_id}",
+        "title": f"Route {rank}",
+        "rank": rank,
+        "score": 0.9 - (rank / 10),
+        "supporting_option_ids": [f"option:{rank}"],
+        "objective_refs": [],
+        "unresolved_tradeoffs": [],
+        "scenario_summary": {
+            "headline": f"Route {rank} summary",
+            "scenario_kind": "alternative",
+            "recommended_for_selection": recommended,
+            "feasible": feasible,
+            "route_sequence": ["Stockholm", "Oslo"],
+            "total_travel_minutes": 120 + rank,
+            "total_transfer_count": rank,
+            "estimated_total": {"amount": 1000 + rank, "currency": "USD"},
+        },
+    }
+
+
+def test_runtime_route_options_hold_blocked_scenarios_for_research() -> None:
+    comparison = workspace_service._build_runtime_scenario_comparison(
+        trip_id="trip-route-blocked",
+        trip_title="Blocked route comparison",
+        scenario_search={
+            "title": "Route comparison",
+            "source_refs": ["test"],
+            "scenarios": [
+                _route_option_scenario(
+                    "scenario:blocked", feasible=False, recommended=True, rank=1
+                ),
+                _route_option_scenario(
+                    "scenario:open", feasible=True, recommended=False, rank=2
+                ),
+            ],
+        },
+        session=None,
+    )
+
+    blocked = comparison["scenarios"][0]
+    assert blocked["status"] == "blocked"
+    assert blocked["state"] == "needs_research"
+    assert "make_baseline" not in [
+        action["action_type"] for action in blocked["available_actions"]
+    ]
+
+
+def test_workspace_route_option_actions_update_comparison_and_ledger(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Scandinavia route workbench",
+            "summary": "Keep multiple route options available for comparison.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-07-04",
+                "end_date": "2026-07-12",
+                "duration_days": 9,
+                "primary_regions": ["Stockholm", "Oslo", "Bergen"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    initial = client.get(f"/api/workspace/{trip_id}")
+    assert initial.status_code == 200
+    initial_payload = initial.json()
+    route_options = initial_payload["route_comparison"]["scenarios"]
+    assert route_options
+    assert len(route_options) >= 2
+    assert len(route_options) <= 4
+    assert route_options[0]["state"] == "baseline"
+    assert route_options[0]["purpose"]
+    assert isinstance(route_options[0]["confidence"], float)
+    assert isinstance(route_options[0]["unresolved_questions"], list)
+    assert "open_question" in route_options[0]
+    assert route_options[0]["available_actions"]
+    assert "available_action" in route_options[0]
+    if route_options[0]["unresolved_questions"]:
+        assert route_options[0]["open_question"] == route_options[0]["unresolved_questions"][0]
+    else:
+        assert route_options[0]["open_question"] is None
+    assert route_options[0]["available_action"] == route_options[0]["available_actions"][0]
+
+    candidate = route_options[min(1, len(route_options) - 1)]
+    candidate_id = candidate["route_option_id"]
+    baseline_response = client.post(
+        f"/api/workspace/{trip_id}/route-options/{candidate_id}/action",
+        json={"action_type": "make_baseline"},
+    )
+
+    assert baseline_response.status_code == 200, baseline_response.text
+    baseline_payload = baseline_response.json()
+    assert baseline_payload["route_comparison"]["lead_scenario_id"] == candidate_id
+    baseline_row = next(
+        item
+        for item in baseline_payload["route_comparison"]["scenarios"]
+        if item["route_option_id"] == candidate_id
+    )
+    assert baseline_row["state"] == "baseline"
+    assert baseline_payload["activity_log"][0]["event_kind"] == "decision_recorded"
+    assert "comparison baseline" in baseline_payload["activity_log"][0]["summary"]
+
+    rejected_id = route_options[0]["route_option_id"]
+    rejected_response = client.post(
+        f"/api/workspace/{trip_id}/route-options/{rejected_id}/action",
+        json={"action_type": "reject"},
+    )
+
+    assert rejected_response.status_code == 200, rejected_response.text
+    rejected_payload = rejected_response.json()
+    rejected_row = next(
+        item
+        for item in rejected_payload["route_comparison"]["scenarios"]
+        if item["route_option_id"] == rejected_id
+    )
+    assert rejected_row["state"] == "rejected"
+    assert [action["action_type"] for action in rejected_row["available_actions"]] == ["reopen"]
+    assert rejected_payload["activity_log"][0]["event_kind"] == "option_rejected"
+
+    reopened_response = client.post(
+        f"/api/workspace/{trip_id}/route-options/{rejected_id}/action",
+        json={"action_type": "reopen"},
+    )
+
+    assert reopened_response.status_code == 200, reopened_response.text
+    reopened_payload = reopened_response.json()
+    reopened_row = next(
+        item
+        for item in reopened_payload["route_comparison"]["scenarios"]
+        if item["route_option_id"] == rejected_id
+    )
+    assert reopened_row["state"] in {"active", "fallback"}
+    assert any(
+        action["action_type"] == "make_baseline"
+        for action in reopened_row["available_actions"]
+    )
+    assert f"reopened:{rejected_id}" not in json.dumps(reopened_payload)
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    assert reloaded.status_code == 200
+    assert reloaded.json()["route_comparison"]["lead_scenario_id"] == candidate_id
+
+    with get_session_factory()() as db_session:
+        actions = db_session.scalars(
+            select(PersistedPlannerAction)
+            .where(PersistedPlannerAction.trip_id == trip_id)
+            .order_by(PersistedPlannerAction.occurred_at.desc())
+        ).all()
+
+    assert actions[0].action_type == "route_option_reopen"
+    assert actions[1].action_type == "route_option_reject"
+    assert actions[2].action_type == "route_option_make_baseline"
+    assert actions[2].option_id == candidate_id
+    assert actions[2].payload["route_option_action"] == "make_baseline"
+
+
 def test_workspace_option_feedback_rejects_unknown_option_id(client: TestClient) -> None:
     created = client.post(
         "/api/trips",
@@ -2331,3 +2500,136 @@ def test_feasibility_planner_outputs_surface_blocking_transition_details() -> No
         or "cannot be reached inside its advertised start window" in highlight.lower()
         for highlight in outputs[1]["highlights"]
     )
+
+
+_RAW_DEBUG_TOKENS_FORBIDDEN_IN_USER_COPY = (
+    "runtime provider",
+    "runtime_state_id",
+    "fallback mode",
+    "policy_state_id",
+    "proposal_state_id",
+    "session_state_id",
+    "scenario_search_id",
+)
+
+
+def _assert_user_summary_avoids_raw_runtime_language(view_model: dict[str, Any]) -> None:
+    user_summary = view_model["user_summary"]
+    next_step = view_model["next_step"]
+    user_facing_strings = [user_summary["headline"], next_step["title"], next_step["summary"]]
+    user_facing_strings.extend(user_summary.get("decided", []))
+    user_facing_strings.extend(user_summary.get("uncertain", []))
+    business_summary = view_model.get("business_summary")
+    if business_summary is not None:
+        user_facing_strings.append(business_summary["headline"])
+        user_facing_strings.extend(business_summary.get("blockers", []))
+    for value in user_facing_strings:
+        lowered = value.lower()
+        for token in _RAW_DEBUG_TOKENS_FORBIDDEN_IN_USER_COPY:
+            assert token not in lowered, (
+                f"User-facing view-model copy must not leak '{token}': {value!r}"
+            )
+
+
+def test_workspace_endpoint_includes_typed_view_model_for_leisure_trip(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/workspace/trip-leisure-kyoto-draft")
+
+    assert response.status_code == 200
+    payload = response.json()
+    view_model = payload["view_model"]
+    assert view_model is not None
+    user_summary = view_model["user_summary"]
+    assert user_summary["trip_mode"] == "leisure"
+    assert user_summary["mode_label"] == "Leisure trip"
+    assert user_summary["status"] in {"ready", "partial", "empty"}
+    assert user_summary["trip_title"]
+    assert user_summary["headline"]
+
+    next_step = view_model["next_step"]
+    assert next_step["title"]
+    assert next_step["summary"]
+
+    assert view_model["business_summary"] is None
+
+    debug_state = view_model["debug_state"]
+    assert "runtime_state" in debug_state["sections"]
+    assert "policy_state" not in debug_state["sections"]
+    assert "proposal_state" not in debug_state["sections"]
+    assert (
+        debug_state["sections"]["runtime_state"]["payload"]["status"]
+        == payload["runtime_state"]["status"]
+    )
+
+    _assert_user_summary_avoids_raw_runtime_language(view_model)
+
+
+def test_workspace_endpoint_includes_typed_view_model_for_business_trip(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/workspace/trip-business-client-summit")
+
+    assert response.status_code == 200
+    payload = response.json()
+    view_model = payload["view_model"]
+    assert view_model is not None
+    user_summary = view_model["user_summary"]
+    assert user_summary["trip_mode"] == "business"
+    assert user_summary["mode_label"] == "Business trip"
+
+    business_summary = view_model["business_summary"]
+    assert business_summary is not None
+    assert business_summary["approval_status"] in {
+        "not_applicable",
+        "not_ready",
+        "in_review",
+        "approved",
+        "needs_attention",
+    }
+    assert business_summary["headline"]
+
+    debug_state = view_model["debug_state"]
+    assert "runtime_state" in debug_state["sections"]
+
+    _assert_user_summary_avoids_raw_runtime_language(view_model)
+
+
+def test_workspace_view_model_builder_handles_empty_runtime_state() -> None:
+    payload = {
+        "trip_record": {
+            "trip": {"title": "Bare workspace", "mode": "leisure"},
+        },
+        "runtime_state": {"status": "empty", "title": "", "summary": ""},
+        "saved_scenarios": [],
+        "inventory_summary": {"bundle_count": 0},
+        "feasibility_summary": {"attention_bundle_count": 0},
+    }
+
+    view_model = workspace_service._build_workspace_view_model(payload)
+
+    assert view_model["user_summary"]["status"] == "empty"
+    assert view_model["next_step"]["blocked"] is True
+    assert view_model["business_summary"] is None
+    assert view_model["debug_state"]["sections"]["runtime_state"]["payload"]["status"] == "empty"
+
+
+def test_workspace_view_model_debug_sections_preserve_raw_payload_shapes() -> None:
+    saved_scenarios = [{"saved_scenario_id": "scenario-1"}]
+    activity_log = [{"activity_event_id": "activity-1"}]
+    payload = {
+        "trip_record": {
+            "trip": {"title": "Raw debug workspace", "mode": "leisure"},
+        },
+        "runtime_state": {"status": "ready", "title": "Ready", "summary": "Ready"},
+        "saved_scenarios": saved_scenarios,
+        "inventory_summary": {"bundle_count": 1},
+        "feasibility_summary": {"attention_bundle_count": 0},
+        "activity_log": activity_log,
+    }
+
+    view_model = workspace_service._build_workspace_view_model(payload)
+    debug_sections = view_model["debug_state"]["sections"]
+
+    assert debug_sections["saved_scenarios"]["payload"] == saved_scenarios
+    assert debug_sections["activity_log"]["payload"] == activity_log

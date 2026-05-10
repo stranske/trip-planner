@@ -125,6 +125,10 @@ a {
   grid-column: 1 / -1;
 }
 
+.route-workbench-card {
+  grid-column: 1 / -1;
+}
+
 .planner-panel-host {
   margin-top: 1.25rem;
 }
@@ -179,6 +183,10 @@ a {
   margin: 0;
 }
 
+.planning-mode-selector-header p {
+  margin-bottom: 0;
+}
+
 .planning-mode-options {
   display: grid;
   gap: 0.6rem;
@@ -192,7 +200,7 @@ a {
   cursor: pointer;
   display: grid;
   gap: 0.25rem;
-  min-height: 96px;
+  min-height: 112px;
   padding: 0.8rem;
 }
 
@@ -218,6 +226,12 @@ a {
   box-shadow: inset 0 0 0 1px rgba(56, 117, 107, 0.18);
 }
 
+.planning-mode-active-summary {
+  margin: 0.75rem 0 0;
+  color: #365063;
+  font-size: 0.92rem;
+}
+
 .workspace-hero {
   overflow: hidden;
   position: relative;
@@ -236,6 +250,40 @@ a {
   margin: 1rem 0 0;
   max-width: 42rem;
   color: #365063;
+}
+
+.workspace-help-disclosure {
+  margin-top: 1rem;
+  max-width: 56rem;
+}
+
+.workspace-help-disclosure summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.workspace-help-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-top: 0.9rem;
+}
+
+.workspace-help-grid article {
+  border: 1px solid rgba(19, 33, 44, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.58);
+  padding: 0.85rem;
+}
+
+.workspace-help-grid h3,
+.workspace-help-grid p {
+  margin: 0;
+}
+
+.workspace-help-grid h3 {
+  margin-bottom: 0.35rem;
+  font-size: 0.96rem;
 }
 
 .workspace-meta {
@@ -343,6 +391,86 @@ a {
   margin-top: 1rem;
 }
 
+.route-workbench-header,
+.route-option-card-header {
+  align-items: start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.route-option-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-top: 1.25rem;
+}
+
+.route-option-card {
+  background: rgba(19, 33, 44, 0.04);
+  border: 1px solid rgba(19, 33, 44, 0.08);
+  border-radius: 20px;
+  display: grid;
+  gap: 0.9rem;
+  min-height: 100%;
+  padding: 1rem;
+}
+
+.route-option-card-selected,
+.route-option-card--baseline {
+  background: rgba(56, 117, 107, 0.08);
+  border-color: rgba(56, 117, 107, 0.35);
+}
+
+.route-option-card--fallback {
+  background: rgba(132, 86, 35, 0.08);
+}
+
+.route-option-card--rejected {
+  opacity: 0.78;
+}
+
+.route-option-card--needs_research {
+  border-color: rgba(132, 86, 35, 0.3);
+}
+
+.route-option-metrics {
+  margin-top: 0;
+}
+
+.route-option-questions ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.route-option-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.route-option-actions button {
+  border: 1px solid rgba(19, 33, 44, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #13212c;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.55rem 0.75rem;
+}
+
+.route-option-actions button:hover {
+  border-color: rgba(56, 117, 107, 0.55);
+}
+
+.route-option-actions button:focus-visible {
+  border-color: rgba(56, 117, 107, 0.7);
+  outline: 3px solid rgba(56, 117, 107, 0.32);
+  outline-offset: 2px;
+}
+
 .scenario-kicker {
   margin: 0 0 0.35rem;
   text-transform: uppercase;
@@ -413,6 +541,31 @@ a {
   font-weight: 700;
 }
 
+.planner-conversation-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.planner-diagnostics-toggle {
+  border: 1px solid rgba(19, 33, 44, 0.18);
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  background: rgba(255, 255, 255, 0.72);
+  color: #24394a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.planner-diagnostics-toggle[aria-pressed="true"] {
+  background: #24394a;
+  color: #f7f1e5;
+}
+
 .planner-message-list {
   display: grid;
   gap: 0.75rem;
@@ -426,6 +579,49 @@ a {
 
 .planner-message p {
   margin: 0;
+}
+
+.planner-response-blocks {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.planner-routing-pill {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 0.3rem 0.55rem;
+  background: rgba(19, 33, 44, 0.1);
+  color: #24394a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.planner-response-block {
+  border-left: 3px solid rgba(56, 117, 107, 0.55);
+  padding-left: 0.75rem;
+}
+
+.planner-block-kind {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #577186;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.planner-response-block h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.92rem;
+}
+
+.planner-response-block ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding-left: 1.05rem;
 }
 
 .planner-message-planner {
@@ -448,6 +644,35 @@ a {
   color: #365063;
 }
 
+.planner-diagnostics {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.planner-diagnostics details {
+  border: 1px solid rgba(19, 33, 44, 0.12);
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.planner-diagnostics summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.planner-diagnostics pre {
+  overflow: auto;
+  margin: 0.6rem 0 0;
+  border-radius: 10px;
+  padding: 0.7rem;
+  background: rgba(19, 33, 44, 0.08);
+  color: #24394a;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+}
+
 .planner-tool-strip {
   display: flex;
   flex-wrap: wrap;
@@ -460,6 +685,34 @@ a {
   background: rgba(19, 33, 44, 0.08);
   font-size: 0.82rem;
   text-transform: capitalize;
+}
+
+.planner-prompt-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.planner-prompt-suggestions button {
+  border: 1px solid rgba(19, 33, 44, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #24394a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.5rem 0.75rem;
+}
+
+.planner-prompt-suggestions button:hover {
+  border-color: rgba(56, 117, 107, 0.55);
+}
+
+.planner-prompt-suggestions button:focus-visible {
+  border-color: rgba(56, 117, 107, 0.7);
+  outline: 3px solid rgba(56, 117, 107, 0.32);
+  outline-offset: 2px;
 }
 
 .planner-conversation-form {
@@ -880,6 +1133,11 @@ a {
 }
 
 @media (max-width: 640px) {
+  .route-workbench-header,
+  .route-option-card-header {
+    display: grid;
+  }
+
   .map-scenario-toggle {
     display: grid;
     grid-template-columns: 1fr;
