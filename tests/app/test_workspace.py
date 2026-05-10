@@ -1955,6 +1955,62 @@ def test_workspace_option_feedback_reuses_recent_presentation_ids(client: TestCl
     )
 
 
+def _route_option_scenario(
+    scenario_id: str,
+    *,
+    feasible: bool,
+    recommended: bool,
+    rank: int,
+) -> dict[str, Any]:
+    return {
+        "scenario_id": scenario_id,
+        "source_result_id": f"source:{scenario_id}",
+        "title": f"Route {rank}",
+        "rank": rank,
+        "score": 0.9 - (rank / 10),
+        "supporting_option_ids": [f"option:{rank}"],
+        "objective_refs": [],
+        "unresolved_tradeoffs": [],
+        "scenario_summary": {
+            "headline": f"Route {rank} summary",
+            "scenario_kind": "alternative",
+            "recommended_for_selection": recommended,
+            "feasible": feasible,
+            "route_sequence": ["Stockholm", "Oslo"],
+            "total_travel_minutes": 120 + rank,
+            "total_transfer_count": rank,
+            "estimated_total": {"amount": 1000 + rank, "currency": "USD"},
+        },
+    }
+
+
+def test_runtime_route_options_hold_blocked_scenarios_for_research() -> None:
+    comparison = workspace_service._build_runtime_scenario_comparison(
+        trip_id="trip-route-blocked",
+        trip_title="Blocked route comparison",
+        scenario_search={
+            "title": "Route comparison",
+            "source_refs": ["test"],
+            "scenarios": [
+                _route_option_scenario(
+                    "scenario:blocked", feasible=False, recommended=True, rank=1
+                ),
+                _route_option_scenario(
+                    "scenario:open", feasible=True, recommended=False, rank=2
+                ),
+            ],
+        },
+        session=None,
+    )
+
+    blocked = comparison["scenarios"][0]
+    assert blocked["status"] == "blocked"
+    assert blocked["state"] == "needs_research"
+    assert "make_baseline" not in [
+        action["action_type"] for action in blocked["available_actions"]
+    ]
+
+
 def test_workspace_route_option_actions_update_comparison_and_ledger(
     client: TestClient,
 ) -> None:
@@ -2048,6 +2104,7 @@ def test_workspace_route_option_actions_update_comparison_and_ledger(
         action["action_type"] == "make_baseline"
         for action in reopened_row["available_actions"]
     )
+    assert f"reopened:{rejected_id}" not in json.dumps(reopened_payload)
 
     reloaded = client.get(f"/api/workspace/{trip_id}")
     assert reloaded.status_code == 200

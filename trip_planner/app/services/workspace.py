@@ -743,6 +743,8 @@ def _route_option_state(
 ) -> str:
     if scenario_id in rejected_option_ids:
         return "rejected"
+    if status == "blocked":
+        return "needs_research"
     if scenario_id == selected_option_id or (
         selected_option_id is None and scenario_id == lead_scenario_id
     ):
@@ -810,6 +812,8 @@ def _route_option_unresolved_questions(
 
 
 def _route_option_available_actions(state: str) -> list[dict[str, str]]:
+    if state not in ROUTE_OPTION_STATES:
+        raise ValueError(f"state must be one of {', '.join(ROUTE_OPTION_STATES)}")
     if state == "rejected":
         return [
             {
@@ -820,7 +824,7 @@ def _route_option_available_actions(state: str) -> list[dict[str, str]]:
         ]
 
     actions: list[dict[str, str]] = []
-    if state != "baseline":
+    if state not in {"baseline", "needs_research"}:
         actions.append(
             {
                 "action_type": "make_baseline",
@@ -3226,7 +3230,7 @@ def submit_workspace_option_feedback(
 
 
 def _without_route_option_notes(notes: list[str], option_id: str) -> list[str]:
-    managed_prefixes = ("fallback:", "needs_research:", "reopened:")
+    managed_prefixes = ("fallback:", "needs_research:")
     managed_tokens = {f"{prefix}{option_id}" for prefix in managed_prefixes}
     return [note for note in notes if note not in managed_tokens]
 
@@ -3300,7 +3304,6 @@ def submit_workspace_route_option_action(
         presentation.rejected_option_ids = [
             item for item in presentation.rejected_option_ids if item != option_id
         ]
-        presentation.notes.append(f"reopened:{option_id}")
         event_kind = "decision_recorded"
         summary = f"Traveler reopened route option '{option_id}' for comparison."
     else:
