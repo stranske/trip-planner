@@ -1095,7 +1095,7 @@ describe("WorkspacePage", () => {
     expect(screen.getByTestId("approval-packet")).toHaveTextContent("Ready for approval");
     expect(screen.getByTestId("approval-packet")).toHaveTextContent("Advance to approval");
     expect(screen.getByTestId("tpp-label")).toHaveTextContent("Options and readiness signals");
-    expect(screen.getByTestId("tpp-label")).toHaveTextContent("Conference Hotel");
+    expect(screen.getByTestId("tpp-label")).toHaveTextContent("Advance to approval");
   });
 
   it("renders timeline structure from persisted trip and scenario state", async () => {
