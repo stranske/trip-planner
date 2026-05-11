@@ -7,10 +7,10 @@ tasks:
     title: Add frontend test in `WorkspacePage.test.tsx` for leisure-mode workspace
       asserting policy posture, proposal lifecycle, approval packet, and TPP label
       elements are not rendered when advanced/debug flag is disabled
-    status: doing
+    status: done
     started_at: '2026-05-11T00:00:44Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-05-11T00:01:00Z'
+    commit: 67a89a77306d7a8b4446ce1b89835350b7c027e8
     notes: []
   - id: task-02
     title: Add frontend test in `WorkspacePage.test.tsx` for leisure-mode workspace
