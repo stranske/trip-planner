@@ -1,0 +1,219 @@
+version: 1
+issue: 1152
+base: main
+branch: codex/issue-1152
+tasks:
+  - id: task-01
+    title: Add frontend test in `WorkspacePage.test.tsx` for leisure-mode workspace
+      asserting policy posture, proposal lifecycle, approval packet, and TPP label
+      elements are not rendered when advanced/debug flag is disabled
+    status: done
+    started_at: '2026-05-11T00:00:44Z'
+    finished_at: '2026-05-11T00:01:00Z'
+    commit: 67a89a77306d7a8b4446ce1b89835350b7c027e8
+    notes: []
+  - id: task-02
+    title: Add frontend test in `WorkspacePage.test.tsx` for leisure-mode workspace
+      asserting policy posture, proposal lifecycle, approval packet, and TPP label
+      elements are rendered when advanced/debug flag is enabled
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: Add frontend test in `WorkspacePage.test.tsx` for business-mode workspace
+      verifying approval readiness and required follow-up are displayed as human-readable
+      UI text
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: Add frontend test in `WorkspacePage.test.tsx` for business-mode workspace
+      verifying raw diagnostic fields including TPP identifiers and status fields
+      are not rendered in normal UI
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: Update `workspace.py` response builder to check advanced/debug mode flag
+      before including raw policy/proposal diagnostic fields
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: Implement filtering logic in `workspace.py` to exclude TPP identifiers
+      and status fields when advanced/debug mode is false
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: Implement filtering logic in `workspace.py` to exclude polling fields and
+      result payload fields when advanced/debug mode is false
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: Add backend test in `workspace.py` test module for leisure workspace response
+      asserting raw diagnostic fields are excluded when advanced/debug mode is false
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: Add backend test in `workspace.py` test module for leisure workspace response
+      asserting raw diagnostic fields are included when advanced/debug mode is true
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: Add backend test in `workspace.py` test module for business workspace response
+      asserting plain-language approval/readiness state is included while raw diagnostic
+      fields are excluded in normal mode
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: Update `mapSurface.ts` so route comparison metric composition drops all
+      policy posture fields for leisure trips before the metric payload is returned
+      or rendered
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: Add test in `mapSurface` test module verifying leisure trip route comparison
+      metrics omit all policy posture fields even when source input includes them
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: Add test in `mapSurface` test module verifying non-leisure or business
+      trip route comparison metrics retain expected policy-related metric fields
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: In `WorkspacePage.test.tsx`, a leisure-mode workspace fixture with no active
+      policy state verifies that the normal UI does not render DOM elements with test
+      IDs or aria-labels matching 'policy-posture', 'proposal-lifecycle', 'approval-packet',
+      or 'tpp-label' when the advanced/debug flag is disabled.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: In `WorkspacePage.test.tsx`, the same leisure-mode workspace fixture verifies
+      that policy posture, proposal lifecycle, approval packet, and TPP label elements
+      are rendered when the advanced/debug flag is enabled in test state.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-16
+    title: In `WorkspacePage.test.tsx`, a business-mode workspace fixture verifies
+      that DOM elements with test IDs 'approval-readiness' and 'required-follow-up'
+      contain non-empty text content that does not include raw field names like 'tpp_id',
+      'status_code', or 'polling_interval'.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-17
+    title: In `WorkspacePage.test.tsx`, the business-mode normal-UI test verifies
+      that raw diagnostic fields are not rendered, including raw policy/proposal diagnostic
+      labels or values such as TPP identifiers, low-level status fields, polling fields,
+      or result payload field names.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-18
+    title: In `workspace.py`, the workspace response builder excludes raw policy/proposal
+      diagnostic fields from the normal response when advanced/debug mode is false,
+      including TPP identifiers, status fields, polling fields, and result payload
+      fields.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-19
+    title: In `workspace.py`, when advanced/debug mode is true, the workspace response
+      includes the raw policy/proposal diagnostic fields that are hidden in normal
+      mode, including TPP identifiers, status fields, polling fields, and result payload
+      fields.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-20
+    title: Backend tests for `workspace.py` include a leisure workspace response case
+      asserting raw diagnostic fields are absent in normal mode and present in debug
+      mode for the same underlying workspace data.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-21
+    title: Backend tests for `workspace.py` include a business workspace response
+      case asserting normal-mode responses still contain plain-language approval/readiness
+      state data while excluding raw diagnostic fields.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-22
+    title: In `mapSurface.ts`, route comparison metric composition for leisure trips
+      removes all policy posture fields from the returned metric payload before it
+      is returned to downstream consumers.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-23
+    title: Tests for `mapSurface.ts` include a leisure-trip case asserting the composed
+      route comparison metrics omit policy posture data even when source input includes
+      policy posture fields.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-24
+    title: Tests for `mapSurface.ts` include a non-leisure or business case asserting
+      expected policy-related metric fields are retained in the composed route comparison
+      metrics.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []

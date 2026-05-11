@@ -40,9 +40,7 @@ class PlannerStructuredBlock(BaseModel):
 class PlannerTurnMetadata(BaseModel):
     plan_maturity: str
     task_class: str
-    visible_response_blocks: list[PlannerVisibleResponseBlock] = Field(
-        default_factory=list
-    )
+    visible_response_blocks: list[PlannerVisibleResponseBlock] = Field(default_factory=list)
     debug_routing_details: dict[str, Any] = Field(default_factory=dict)
 
 

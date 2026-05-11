@@ -29,18 +29,10 @@ def upgrade() -> None:
         sa.Column("session_state_id", sa.String(length=128), nullable=False),
         sa.Column("title", sa.String(length=240), nullable=False),
         sa.Column("note", sa.Text(), nullable=False, server_default=""),
-        sa.Column(
-            "category", sa.String(length=48), nullable=False, server_default="other"
-        ),
-        sa.Column(
-            "status", sa.String(length=32), nullable=False, server_default="active"
-        ),
-        sa.Column(
-            "priority", sa.String(length=16), nullable=False, server_default="normal"
-        ),
-        sa.Column(
-            "source", sa.String(length=32), nullable=False, server_default="user"
-        ),
+        sa.Column("category", sa.String(length=48), nullable=False, server_default="other"),
+        sa.Column("status", sa.String(length=32), nullable=False, server_default="active"),
+        sa.Column("priority", sa.String(length=16), nullable=False, server_default="normal"),
+        sa.Column("source", sa.String(length=32), nullable=False, server_default="user"),
         sa.Column("linked_ledger_entry_id", sa.String(length=96), nullable=True),
         sa.Column("source_message_ids", sa.JSON(), nullable=False),
         sa.Column("tags", sa.JSON(), nullable=False),

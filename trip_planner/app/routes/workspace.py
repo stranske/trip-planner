@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from trip_planner.app.schemas.workspace import (
@@ -41,10 +41,23 @@ router = APIRouter(tags=["workspace"])
 @router.get("/workspace/{trip_id}", response_model=WorkspaceResponse)
 def read_workspace(
     trip_id: str,
+    debug: bool = Query(
+        default=False,
+        description="Include raw policy/proposal diagnostic payloads for advanced debugging.",
+    ),
+    advanced: bool = Query(
+        default=False,
+        description="Alias for debug mode when inspecting advanced workspace diagnostics.",
+    ),
     user: AuthenticatedUser = Depends(require_authenticated_user),
     db_session: Session = Depends(get_db_session),
 ) -> WorkspaceResponse:
-    payload = get_workspace_payload(db_session, user=user, trip_id=trip_id)
+    payload = get_workspace_payload(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        include_debug=debug or advanced,
+    )
     if payload is None:
         raise HTTPException(
             status_code=404, detail=f"Workspace for trip '{trip_id}' was not found."
@@ -61,9 +74,7 @@ def read_workspace_scenario_comparison(
     user: AuthenticatedUser = Depends(require_authenticated_user),
     db_session: Session = Depends(get_db_session),
 ) -> ScenarioComparisonSurfaceResponse:
-    payload = get_workspace_scenario_comparison_payload(
-        db_session, user=user, trip_id=trip_id
-    )
+    payload = get_workspace_scenario_comparison_payload(db_session, user=user, trip_id=trip_id)
     if payload is None:
         raise HTTPException(
             status_code=404, detail=f"Workspace for trip '{trip_id}' was not found."
@@ -84,6 +95,7 @@ def update_planning_mode(
             user=user,
             trip_id=trip_id,
             planning_mode=payload.planning_mode,
+            include_debug=False,
         )
     except WorkspaceTripNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
@@ -272,6 +284,7 @@ def answer_planner_decision(
             trip_id=trip_id,
             decision_id=decision_id,
             choice=payload.choice,
+            include_debug=False,
         )
     except WorkspaceTripNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
@@ -299,6 +312,7 @@ def record_planner_option_feedback(
             option_id=option_id,
             action_type=payload.action_type,
             decision_id=payload.decision_id,
+            include_debug=False,
         )
     except WorkspaceTripNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
@@ -325,6 +339,7 @@ def record_route_option_action(
             trip_id=trip_id,
             option_id=option_id,
             action_type=payload.action_type,
+            include_debug=False,
         )
     except WorkspaceTripNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error

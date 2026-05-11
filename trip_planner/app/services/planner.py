@@ -326,8 +326,7 @@ def _record_traveler_message_ledger_entries(
     lowered = message.lower()
     metadata = (
         structured_blocks[0].get("metadata", {})
-        if structured_blocks
-        and structured_blocks[0].get("kind") == "traveler_input_summary"
+        if structured_blocks and structured_blocks[0].get("kind") == "traveler_input_summary"
         else {}
     )
     for constraint in list(metadata.get("constraints") or [])[:3]:
@@ -868,9 +867,7 @@ class DeterministicPlannerConversationRunnable:
         outputs = list(panel.get("outputs") or [])
         decisions = list(panel.get("pending_decisions") or [])
         options = list((panel.get("option_set") or {}).get("options") or [])
-        ledger_summary = (
-            (request.runtime_context.get("planning_ledger") or {}).get("summary") or {}
-        )
+        ledger_summary = (request.runtime_context.get("planning_ledger") or {}).get("summary") or {}
 
         lines = [
             _fallback_content_from_metadata(

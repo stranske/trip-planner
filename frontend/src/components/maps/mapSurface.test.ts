@@ -2,6 +2,55 @@ import { describe, expect, it } from "vitest";
 
 import { buildTripMapSurfaceModel, humanizeStop } from "./mapSurface";
 
+type MapSurfaceInput = Parameters<typeof buildTripMapSurfaceModel>[0];
+
+const kyotoBaselineScenario: MapSurfaceInput["activeScenario"] = {
+  scenario_id: "scenario:kyoto-baseline",
+  title: "Kyoto base",
+  rank: 1,
+  status: "lead",
+  summary: "Baseline",
+  comparison_note: "Lead route",
+  option_count: 2,
+  route_sequence: ["kyoto", "uji", "kyoto"],
+  route_summary: "kyoto -> uji -> kyoto",
+  recommended_for_selection: true,
+  feasible: true,
+  metrics: {
+    score: 0.93,
+    travel_minutes: 265,
+    transfers: 4,
+    estimated_total: { currency: "JPY", typical_amount: 3400 },
+  },
+  delta: {
+    score_delta: 0,
+    travel_minutes_delta: 0,
+    transfers_delta: 0,
+    estimated_total_delta: 0,
+  },
+  highlights: ["Low-friction baseline."],
+};
+
+const routeAttentionFeasibility: MapSurfaceInput["feasibilitySummary"] = {
+  assessment_count: 2,
+  recommended_bundle_count: 1,
+  blocking_bundle_count: 0,
+  attention_bundle_count: 1,
+  notes: [],
+  assessments: [],
+};
+
+const kyotoAnchorBundle: MapSurfaceInput["bundles"][number] = {
+  bundle_id: "bundle-1",
+  title: "Kyoto anchor",
+  bundle_context: "route_level",
+  summary: "Bundle summary",
+  destination_names: ["Kyoto", "Uji"],
+  option_count: 2,
+  strengths: [],
+  tradeoffs: [],
+};
+
 describe("mapSurface", () => {
   it("normalizes route stop labels for provider-independent map shaping", () => {
     expect(humanizeStop("dest-city-new-york")).toBe("New York");
@@ -59,6 +108,7 @@ describe("mapSurface", () => {
       scenarioComparisonSummary: "Kyoto baseline remains preferred with Osaka preserved for fallback.",
       scenarioFocusAreas: ["route_coherence", "weather_resilience"],
       tripPrimaryRegions: ["JP-26", "JP-27"],
+      tripMode: "business",
       policyPosture: "Approval-ready",
       googleMapsApiKey: "test-key",
     });
@@ -296,6 +346,38 @@ describe("mapSurface", () => {
         (marker) => marker.sourceId === "bundle-uji-tea" && marker.focusCues.length > 0
       )?.focusCues[0].summary
     ).toContain("Uji tea anchors");
+  });
+
+  it("omits policy posture from leisure trip route metrics even when the source includes it", () => {
+    const model = buildTripMapSurfaceModel({
+      activeScenario: kyotoBaselineScenario,
+      bundles: [kyotoAnchorBundle],
+      feasibilitySummary: routeAttentionFeasibility,
+      tripMode: "leisure",
+      policyPosture: "Needs exception",
+      googleMapsApiKey: "test-key",
+    });
+
+    expect(model.policyPosture).toBeNull();
+    expect(model.scenarioAffordances).toContain("Feasibility warning active");
+    expect(model.scenarioAffordances).not.toContain("Approval or feasibility warning active");
+    expect(JSON.stringify(model)).not.toContain("Needs exception");
+    expect(JSON.stringify(model)).not.toContain("Approval posture");
+  });
+
+  it("retains policy posture in non-leisure route metrics", () => {
+    const model = buildTripMapSurfaceModel({
+      activeScenario: kyotoBaselineScenario,
+      bundles: [kyotoAnchorBundle],
+      feasibilitySummary: routeAttentionFeasibility,
+      tripMode: "business",
+      policyPosture: "Ready for approval",
+      googleMapsApiKey: "test-key",
+    });
+
+    expect(model.policyPosture).toBe("Ready for approval");
+    expect(model.scenarioAffordances).toContain("Approval or feasibility warning active");
+    expect(model.markers.some((marker) => marker.detail.includes("Approval posture"))).toBe(true);
   });
 
   it("falls back when Google Maps is not configured", () => {

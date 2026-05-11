@@ -669,7 +669,9 @@ def test_planner_turn_handles_planning_notebook_commands(client: TestClient) -> 
     assert remembered.status_code == 200, remembered.text
     remembered_reply = remembered.json()["messages"][-1]
     capture_call = next(
-        item for item in remembered_reply["tool_calls"] if item["tool_name"] == "capture_notebook_item"
+        item
+        for item in remembered_reply["tool_calls"]
+        if item["tool_name"] == "capture_notebook_item"
     )
     assert capture_call["status"] == "completed"
     notebook_item_id = capture_call["output"]["notebook_item_id"]

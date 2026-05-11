@@ -171,6 +171,7 @@ function renderTripMap(
       bundles={bundles}
       feasibilitySummary={feasibilitySummary}
       tripPrimaryRegions={["Sweden", "Norway"]}
+      tripMode="business"
       policyPosture="No approval packet yet"
       planningLedger={ledger}
       compactLayout={false}

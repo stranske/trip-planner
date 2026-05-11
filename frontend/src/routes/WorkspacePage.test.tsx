@@ -975,6 +975,129 @@ describe("WorkspacePage", () => {
     ).toBeInTheDocument();
   });
 
+  it("does not render policy posture, proposal lifecycle, approval packet, or tpp label elements for leisure mode when advanced debug is disabled", async () => {
+    const leisureWorkspaceWithViewModel: WorkspaceData = {
+      ...workspacePayload,
+      view_model: {
+        user_summary: {
+          trip_title: workspacePayload.trip_record.trip.title,
+          trip_mode: "leisure",
+          mode_label: "Leisure trip",
+          status: "ready",
+          headline: "Your trip plan is ready to review.",
+          decided: ["2 saved scenario draft(s)"],
+          uncertain: [],
+        },
+        next_step: {
+          title: "Review and pick a scenario",
+          summary: "Compare the saved scenarios and choose one to keep planning around.",
+          action_label: "Open scenario comparison",
+          action_target: "scenario-comparison",
+          blocked: false,
+        },
+        panel_visibility: {
+          show_budget_panel: true,
+          show_policy_posture: false,
+          show_proposal_panel: false,
+          show_approval_readiness_panel: false,
+        },
+        policy_presentation: {
+          active_policy_state: false,
+          posture_label: "Not applicable",
+          approval_status_label: "Not applicable",
+          next_step_label: "No policy action needed",
+          summary: "Policy approval is not part of this workspace yet.",
+        },
+        business_summary: null,
+        debug_state: { sections: {} },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(leisureWorkspaceWithViewModel),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length
+      ).toBeGreaterThan(0);
+    });
+
+    const suppressedSelectors = [
+      "policy-posture",
+      "proposal-lifecycle",
+      "approval-packet",
+      "tpp-label",
+    ] as const;
+    for (const selector of suppressedSelectors) {
+      expect(screen.queryAllByTestId(selector)).toHaveLength(0);
+      expect(screen.queryAllByLabelText(selector)).toHaveLength(0);
+    }
+  });
+
+  it("renders policy posture, proposal lifecycle, approval packet, and tpp label elements for leisure mode when advanced debug is enabled", async () => {
+    const leisureWorkspaceWithAdvancedViewModel: WorkspaceData = {
+      ...workspacePayload,
+      view_model: {
+        user_summary: {
+          trip_title: workspacePayload.trip_record.trip.title,
+          trip_mode: "leisure",
+          mode_label: "Leisure trip",
+          status: "ready",
+          headline: "Your trip plan is ready to review.",
+          decided: ["2 saved scenario draft(s)"],
+          uncertain: [],
+        },
+        next_step: {
+          title: "Review and pick a scenario",
+          summary: "Compare the saved scenarios and choose one to keep planning around.",
+          action_label: "Open scenario comparison",
+          action_target: "scenario-comparison",
+          blocked: false,
+        },
+        panel_visibility: {
+          show_budget_panel: true,
+          show_policy_posture: true,
+          show_proposal_panel: true,
+          show_approval_readiness_panel: true,
+        },
+        policy_presentation: {
+          active_policy_state: true,
+          posture_label: "Approval-ready",
+          approval_status_label: "Ready for approval",
+          next_step_label: "Advance to approval",
+          summary: "Policy evaluation passed for the saved scenario.",
+        },
+        business_summary: null,
+        debug_state: { sections: {} },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(leisureWorkspaceWithAdvancedViewModel),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length
+      ).toBeGreaterThan(0);
+    });
+
+    expect(screen.getAllByTestId("policy-posture")[0]).toHaveTextContent("Approval-ready");
+    expect(screen.getByTestId("proposal-lifecycle")).toHaveTextContent(
+      "Approval packet is ready"
+    );
+    expect(screen.getByTestId("approval-packet")).toHaveTextContent("Approval readiness");
+    expect(screen.getByTestId("approval-packet")).toHaveTextContent("Ready for approval");
+    expect(screen.getByTestId("approval-packet")).toHaveTextContent("Advance to approval");
+    expect(screen.getByTestId("tpp-label")).toHaveTextContent("Options and readiness signals");
+    expect(screen.getByTestId("tpp-label")).toHaveTextContent("Advance to approval");
+  });
+
   it("renders timeline structure from persisted trip and scenario state", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve(workspacePayload),
@@ -1539,7 +1662,7 @@ describe("WorkspacePage", () => {
     expect(screen.getAllByRole("heading", { name: "Kyoto cultural anchor" }).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /policy marker: Route burden warning/ }));
     expect(screen.getByRole("heading", { name: "Route burden warning" })).toBeInTheDocument();
-    expect(screen.getAllByText("Approval or feasibility warning active").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Feasibility warning active").length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 

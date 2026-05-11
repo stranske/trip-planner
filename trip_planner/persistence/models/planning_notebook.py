@@ -34,9 +34,7 @@ class PersistedPlanningNotebookItem(Base):
     source_message_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     metadata_payload: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
