@@ -1157,9 +1157,11 @@ describe("WorkspacePage", () => {
         "Keep Uji, but reduce transfer pressure."
       );
     });
-    expect(
-      screen.getByText("Keep the Uji day trip and compare fewer evening moves before the next checkpoint.")
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByText("Keep the Uji day trip and compare fewer evening moves before the next checkpoint.")
+      ).toBeInTheDocument();
+    });
     expect(screen.getByText("coherent plan")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Planner summary" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Questions to settle" })).toBeInTheDocument();
