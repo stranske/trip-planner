@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from datetime import UTC, datetime
 import json
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,7 @@ from trip_planner.persistence.db import (
 )
 from trip_planner.persistence.models.activity import PersistedPlannerAction
 from trip_planner.persistence.models.policy import PersistedPolicyState
+from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
 
 _LEGACY_FIXTURE_BUNDLE_IDS = {
@@ -58,15 +60,17 @@ def _assert_payload_avoids_fixture_or_default_inventory_data(payload: dict[str, 
 
 def _assert_runtime_ranking_and_route_comparison(payload: dict[str, Any]) -> None:
     assert payload["ranking"]["rows"]
-    assert payload["ranking"]["lead_scenario_id"] == payload["scenario_search"]["scenarios"][0][
-        "scenario_id"
-    ]
+    assert (
+        payload["ranking"]["lead_scenario_id"]
+        == payload["scenario_search"]["scenarios"][0]["scenario_id"]
+    )
     assert payload["ranking"]["rows"][0]["scenario_id"] == payload["ranking"]["lead_scenario_id"]
     assert payload["ranking"]["source_refs"]
     assert payload["route_comparison"] == payload["runtime_scenario_comparison"]
-    assert payload["route_comparison"]["lead_scenario_id"] == payload["scenario_search"][
-        "scenarios"
-    ][0]["scenario_id"]
+    assert (
+        payload["route_comparison"]["lead_scenario_id"]
+        == payload["scenario_search"]["scenarios"][0]["scenario_id"]
+    )
     assert payload["route_comparison"]["scenarios"]
     assert payload["route_comparison"]["source_refs"]
 
@@ -198,6 +202,431 @@ def test_workspace_planning_mode_route_persists_mode(client: TestClient) -> None
     assert rejected.status_code == 400
 
 
+def test_workspace_planning_ledger_api_persists_entries_across_reload(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Ledger workshop",
+            "summary": "Persist trip planning decisions and questions.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    saved = client.post(
+        f"/api/workspace/{trip_id}/planning-ledger",
+        json={
+            "item_type": "open_question",
+            "category": "lodging",
+            "summary": "Should the apartment be near Baixa or Alfama?",
+            "detail": "Traveler wants quieter evenings but quick transit.",
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    entry = saved.json()
+    assert entry["status"] == "active"
+    assert entry["ledger_entry_id"].startswith("ledger:")
+    assert len(entry["ledger_entry_id"]) <= 64
+    assert trip_id not in entry["ledger_entry_id"]
+
+    patched = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{entry['ledger_entry_id']}",
+        json={
+            "status": "completed",
+            "related_option_id": "option:lisbon-central",
+            "related_decision_id": "decision:lodging-area",
+        },
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["status"] == "completed"
+    assert patched.json()["related_option_id"] == "option:lisbon-central"
+    assert patched.json()["related_decision_id"] == "decision:lodging-area"
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    assert reloaded.status_code == 200
+    ledger_entries = reloaded.json()["planning_ledger"]["entries"]
+    assert ledger_entries[0]["summary"] == "Should the apartment be near Baixa or Alfama?"
+    assert ledger_entries[0]["status"] == "completed"
+    assert ledger_entries[0]["related_option_id"] == "option:lisbon-central"
+    assert ledger_entries[0]["related_decision_id"] == "decision:lodging-area"
+
+
+def test_workspace_planning_notebook_api_persists_items_and_focus_across_reload(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Notebook workshop",
+            "summary": "Capture quick notes, switch focus, archive done.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    workspace_before = client.get(f"/api/workspace/{trip_id}")
+    assert workspace_before.status_code == 200
+    notebook_before = workspace_before.json()["planning_notebook"]
+    assert notebook_before["items"] == []
+    assert notebook_before["focus"] == {"category": None, "notebook_item_id": None}
+
+    lodging_capture = client.post(
+        f"/api/workspace/{trip_id}/planning-notebook",
+        json={
+            "title": "Check whether the Alfama apartment allows late check-in.",
+            "note": "Traveler arrives at 23:50 from Madrid.",
+            "category": "lodging",
+            "priority": "high",
+        },
+    )
+    assert lodging_capture.status_code == 200, lodging_capture.text
+    lodging_item = lodging_capture.json()
+    assert lodging_item["notebook_item_id"].startswith("notebook:")
+    assert len(lodging_item["notebook_item_id"]) <= 64
+    assert trip_id not in lodging_item["notebook_item_id"]
+    assert lodging_item["status"] == "active"
+    assert lodging_item["completed_at"] is None
+    assert lodging_item["source"] == "user"
+
+    route_capture = client.post(
+        f"/api/workspace/{trip_id}/planning-notebook",
+        json={
+            "title": "Compare overnight train vs. early morning flight to Porto.",
+            "category": "route",
+            "source": "planner",
+            "source_message_ids": ["msg:planner:turn-3"],
+            "tags": ["lisbon-porto"],
+        },
+    )
+    assert route_capture.status_code == 200, route_capture.text
+    route_item = route_capture.json()
+
+    with get_session_factory()() as db_session:
+        before_update = db_session.get(PersistedTrip, trip_id)
+        assert before_update is not None
+        trip_updated_at = before_update.updated_at
+
+    completed = client.patch(
+        f"/api/workspace/{trip_id}/planning-notebook/{lodging_item['notebook_item_id']}",
+        json={"status": "completed", "note": "Confirmed: late check-in is fine."},
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "completed"
+    assert completed.json()["completed_at"] is not None
+    assert completed.json()["note"] == "Confirmed: late check-in is fine."
+
+    with get_session_factory()() as db_session:
+        after_update = db_session.get(PersistedTrip, trip_id)
+        assert after_update is not None
+        assert after_update.updated_at > trip_updated_at
+
+    mismatched_focus = client.put(
+        f"/api/workspace/{trip_id}/planning-notebook/focus",
+        json={"category": "lodging", "notebook_item_id": route_item["notebook_item_id"]},
+    )
+    assert mismatched_focus.status_code == 400
+    assert "does not match notebook item category" in mismatched_focus.json()["detail"]
+
+    focus_to_route = client.put(
+        f"/api/workspace/{trip_id}/planning-notebook/focus",
+        json={"notebook_item_id": route_item["notebook_item_id"]},
+    )
+    assert focus_to_route.status_code == 200, focus_to_route.text
+    assert focus_to_route.json() == {
+        "category": "route",
+        "notebook_item_id": route_item["notebook_item_id"],
+    }
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    assert reloaded.status_code == 200
+    notebook = reloaded.json()["planning_notebook"]
+    assert {item["notebook_item_id"] for item in notebook["items"]} == {
+        lodging_item["notebook_item_id"],
+        route_item["notebook_item_id"],
+    }
+    summary = notebook["summary"]
+    assert [item["notebook_item_id"] for item in summary["active_items"]] == [
+        route_item["notebook_item_id"]
+    ]
+    assert [item["notebook_item_id"] for item in summary["completed_items"]] == [
+        lodging_item["notebook_item_id"]
+    ]
+    assert summary["by_category"]["route"][0]["notebook_item_id"] == route_item["notebook_item_id"]
+    assert summary["by_category"]["lodging"] == []
+    assert notebook["focus"] == {
+        "category": "route",
+        "notebook_item_id": route_item["notebook_item_id"],
+    }
+
+    focus_category_only = client.put(
+        f"/api/workspace/{trip_id}/planning-notebook/focus",
+        json={"category": "lodging"},
+    )
+    assert focus_category_only.status_code == 200
+    assert focus_category_only.json() == {
+        "category": "lodging",
+        "notebook_item_id": None,
+    }
+
+    deleted = client.delete(
+        f"/api/workspace/{trip_id}/planning-notebook/{route_item['notebook_item_id']}"
+    )
+    assert deleted.status_code == 204
+
+    after_delete = client.get(f"/api/workspace/{trip_id}")
+    assert after_delete.status_code == 200
+    notebook_after = after_delete.json()["planning_notebook"]
+    assert [item["notebook_item_id"] for item in notebook_after["items"]] == [
+        lodging_item["notebook_item_id"]
+    ]
+    assert notebook_after["focus"]["category"] == "lodging"
+    assert notebook_after["focus"]["notebook_item_id"] is None
+
+
+def test_workspace_planning_notebook_rejects_invalid_category(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Notebook validation",
+            "summary": "Reject unknown categories.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    rejected = client.post(
+        f"/api/workspace/{trip_id}/planning-notebook",
+        json={"title": "Something to remember", "category": "transport"},
+    )
+    assert rejected.status_code == 422
+
+
+def test_workspace_planning_ledger_rejects_supersedes_cycles(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Ledger supersedes trip",
+            "summary": "Prevent circular ledger history.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    first = client.post(
+        f"/api/workspace/{trip_id}/planning-ledger",
+        json={
+            "item_type": "decision",
+            "category": "lodging",
+            "summary": "Stay near Baixa.",
+        },
+    )
+    assert first.status_code == 200, first.text
+    first_id = first.json()["ledger_entry_id"]
+    second = client.post(
+        f"/api/workspace/{trip_id}/planning-ledger",
+        json={
+            "item_type": "decision",
+            "category": "lodging",
+            "summary": "Stay near Alfama instead.",
+        },
+    )
+    assert second.status_code == 200, second.text
+    second_id = second.json()["ledger_entry_id"]
+
+    valid_chain = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{second_id}",
+        json={"supersedes_entry_id": first_id},
+    )
+    assert valid_chain.status_code == 200, valid_chain.text
+    assert valid_chain.json()["supersedes_entry_id"] == first_id
+
+    self_cycle = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{first_id}",
+        json={"supersedes_entry_id": first_id},
+    )
+    assert self_cycle.status_code == 400
+    assert "same ledger entry" in self_cycle.json()["detail"]
+
+    indirect_cycle = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{first_id}",
+        json={"supersedes_entry_id": second_id},
+    )
+    assert indirect_cycle.status_code == 400
+    assert "cycle" in indirect_cycle.json()["detail"]
+
+    missing_target = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{first_id}",
+        json={"supersedes_entry_id": "ledger:does-not-exist"},
+    )
+    assert missing_target.status_code == 400
+    assert "existing ledger entry" in missing_target.json()["detail"]
+
+    other_trip = client.post(
+        "/api/trips",
+        json={
+            "title": "Other ledger trip",
+            "summary": "Keep supersedes chains scoped to one trip.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-08",
+                "end_date": "2026-06-10",
+                "duration_days": 3,
+                "primary_regions": ["Porto"],
+            },
+        },
+    )
+    assert other_trip.status_code == 201
+    other_trip_id = other_trip.json()["trip"]["trip_id"]
+    other_entry = client.post(
+        f"/api/workspace/{other_trip_id}/planning-ledger",
+        json={
+            "item_type": "decision",
+            "category": "lodging",
+            "summary": "Stay near Ribeira.",
+        },
+    )
+    assert other_entry.status_code == 200, other_entry.text
+
+    other_trip_target = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{first_id}",
+        json={"supersedes_entry_id": other_entry.json()["ledger_entry_id"]},
+    )
+    assert other_trip_target.status_code == 400
+    assert "existing ledger entry" in other_trip_target.json()["detail"]
+
+    blank_target = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{second_id}",
+        json={"supersedes_entry_id": "   "},
+    )
+    assert blank_target.status_code == 200, blank_target.text
+    assert blank_target.json()["supersedes_entry_id"] is None
+
+    with get_session_factory()() as db_session:
+        with pytest.raises(ValueError, match="existing ledger entry"):
+            workspace_service._validate_planning_ledger_supersedes_target(
+                db_session,
+                trip_id=trip_id,
+                ledger_entry_id=second_id,
+                supersedes_entry_id="   ",
+            )
+
+
+def test_route_option_actions_create_durable_ledger_history(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Ledger route trip",
+            "summary": "Track rejected route options.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+    response = client.get(f"/api/workspace/{trip_id}")
+    assert response.status_code == 200
+    scenario_id = response.json()["route_comparison"]["scenarios"][1]["scenario_id"]
+
+    updated = client.post(
+        f"/api/workspace/{trip_id}/route-options/{scenario_id}/action",
+        json={"action_type": "reject"},
+    )
+
+    assert updated.status_code == 200, updated.text
+    ledger = updated.json()["planning_ledger"]
+    assert ledger["summary"]["rejected_options"]
+    assert ledger["summary"]["rejected_options"][0]["related_option_id"] == scenario_id
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    assert reloaded.status_code == 200
+    assert (
+        reloaded.json()["planning_ledger"]["summary"]["rejected_options"][0]["related_option_id"]
+        == scenario_id
+    )
+
+
+def test_planner_turn_extracts_constraints_into_planning_ledger(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Planner ledger trip",
+            "summary": "Capture planner turn signals.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-07-01",
+                "end_date": "2026-07-06",
+                "duration_days": 6,
+                "primary_regions": ["Kyoto"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    turn = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": (
+                "Remember we need a hotel near transit; budget should stay under 3500. "
+                "Maybe add a quiet food-focused day?"
+            )
+        },
+    )
+    assert turn.status_code == 200, turn.text
+    planner_payload = turn.json()
+    planner_ledger_summary = planner_payload["planning_ledger"]["summary"]
+    assert planner_ledger_summary["constraints"]
+    planner_reply = planner_payload["messages"][-1]
+    assert "Planning ledger remembers" in planner_reply["content"]
+    structured_kinds = {block["kind"] for block in planner_reply["structured_blocks"]}
+    assert "planning_ledger" in structured_kinds
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    assert reloaded.status_code == 200
+    ledger_summary = reloaded.json()["planning_ledger"]["summary"]
+    assert ledger_summary["constraints"]
+    assert ledger_summary["open_questions"]
+
+
 def test_workspace_endpoint_surfaces_business_ranked_scenarios(client: TestClient) -> None:
     response = client.get("/api/workspace/trip-business-client-summit")
 
@@ -231,6 +660,19 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface(
     assert payload["comparison_axes"][-1]["key"] == "estimated_total"
     assert payload["scenarios"][0]["delta"]["transfers_delta"] == 0
     assert payload["lead_scenario_id"] == payload["scenarios"][0]["scenario_id"]
+    assert payload["scenarios"][0]["map_view"]["active_scope"] == "regional"
+    assert (
+        payload["scenarios"][0]["map_view"]["active_route_option_id"]
+        == payload["scenarios"][0]["scenario_id"]
+    )
+    assert payload["scenarios"][0]["map_view"]["place_markers"][0]["label"]
+    assert payload["scenarios"][0]["map_view"]["rough_route_geometry"][0]["from_label"]
+    assert (
+        payload["scenarios"][0]["map_view"]["selected_segment_id"]
+        == payload["scenarios"][0]["map_view"]["rough_route_geometry"][0]["id"]
+    )
+    assert "provider" in payload["scenarios"][0]["map_diagnostics"]
+    assert "provider" not in payload["scenarios"][0]["map_view"]
     assert "runtime scenario" in payload["summary"].lower()
 
 
@@ -997,14 +1439,26 @@ def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_tri
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["policy_state"]["policy_id"] == "policy-standard-2026-02"
-    assert payload["planner_panel_state"]["policy_evaluation"]["status"] == "compliant"
-    assert (
-        payload["planner_panel_state"]["proposal"]["constraint_set_id"] == "policy-standard-2026-02"
-    )
-    assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Policy posture loaded"
+    assert "policy_id" not in payload["policy_state"]
+    assert payload["policy_state"]["constraint_set"]["required_booking_channels"] == [
+        "Navan",
+        "Concur",
+    ]
+    assert payload["planner_panel_state"]["policy_evaluation"]["notes"]
+    assert "status" not in payload["planner_panel_state"]["policy_evaluation"]
+    assert payload["planner_panel_state"]["outputs"][-1]["title"] == "Approval readiness loaded"
     assert payload["planner_panel_state"]["next_step_actions"][0]["target_section"] == "approval"
     assert "Navan" in payload["planner_panel_state"]["policy_evaluation"]["notes"][-2]
+    assert payload["view_model"]["policy_presentation"]["active_policy_state"] is True
+
+    debug_response = client.get(f"/api/workspace/{trip_id}?debug=true")
+    assert debug_response.status_code == 200
+    debug_payload = debug_response.json()
+    assert debug_payload["policy_state"]["policy_id"] == "policy-standard-2026-02"
+    assert (
+        debug_payload["planner_panel_state"]["proposal"]["constraint_set_id"]
+        == "policy-standard-2026-02"
+    )
 
 
 def test_workspace_endpoint_handles_null_constraint_set_for_business_policy_state(
@@ -1240,14 +1694,22 @@ def test_workspace_endpoint_prefers_persisted_proposal_lifecycle_for_business_tr
     assert response.status_code == 200
     payload = response.json()
     assert payload["proposal_state"]["summary"]["approval_ready"] is True
-    assert payload["planner_panel_state"]["proposal"]["proposal_id"] == f"proposal:{trip_id}"
-    assert (
-        payload["planner_panel_state"]["policy_evaluation"]["evaluation_id"] == "eval-approved-001"
-    )
+    assert "proposal_id" not in payload["planner_panel_state"]["proposal"]
+    assert "evaluation_id" not in payload["planner_panel_state"]["policy_evaluation"]
+    assert payload["planner_panel_state"]["policy_evaluation"]["notes"]
     titles = [item["title"] for item in payload["planner_panel_state"]["outputs"]]
-    assert "Proposal lifecycle loaded" in titles
+    assert "Approval packet loaded" in titles
     assert "Approval-ready proposal" in titles
     assert payload["proposal_state"]["follow_up"]["status"] == "resolved"
+
+    debug_response = client.get(f"/api/workspace/{trip_id}?debug=true")
+    assert debug_response.status_code == 200
+    debug_payload = debug_response.json()
+    assert debug_payload["planner_panel_state"]["proposal"]["proposal_id"] == f"proposal:{trip_id}"
+    assert (
+        debug_payload["planner_panel_state"]["policy_evaluation"]["evaluation_id"]
+        == "eval-approved-001"
+    )
 
 
 def test_workspace_endpoint_does_not_mix_policy_preview_with_pending_proposal_state(
@@ -1355,9 +1817,10 @@ def test_workspace_endpoint_does_not_mix_policy_preview_with_pending_proposal_st
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["planner_panel_state"]["proposal"]["proposal_id"] == f"proposal:{trip_id}"
+    assert payload["planner_panel_state"]["proposal"] is not None
+    assert "proposal_id" not in payload["planner_panel_state"]["proposal"]
     assert payload["planner_panel_state"]["policy_evaluation"] is None
-    assert "Policy posture loaded" not in [
+    assert "Approval readiness loaded" not in [
         item["title"] for item in payload["planner_panel_state"]["outputs"]
     ]
 
@@ -1688,8 +2151,8 @@ def test_workspace_endpoint_surfaces_exception_follow_up_for_live_policy_results
 @pytest.mark.parametrize(
     ("error_code", "expected_title"),
     [
-        ("timeout", "Live TPP request timed out"),
-        ("breaker_open", "Live TPP breaker is open"),
+        ("timeout", "Approval service request timed out"),
+        ("breaker_open", "Approval service is temporarily unavailable"),
     ],
 )
 def test_workspace_endpoint_persists_transport_fallback_notice_for_live_submission_errors(
@@ -1817,8 +2280,8 @@ def test_workspace_endpoint_persists_transport_fallback_notice_for_live_submissi
     )
     assert fallback_output is not None
     assert fallback_output["title"] == expected_title
-    assert "stored-policy posture" in fallback_output["body"]
-    assert fallback_output["highlights"][0] == f"error_code={error_code}"
+    assert "latest saved approval information" in fallback_output["body"]
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def test_workspace_planner_decision_answer_persists_across_reload(client: TestClient) -> None:
@@ -1955,6 +2418,170 @@ def test_workspace_option_feedback_reuses_recent_presentation_ids(client: TestCl
     )
 
 
+def _route_option_scenario(
+    scenario_id: str,
+    *,
+    feasible: bool,
+    recommended: bool,
+    rank: int,
+) -> dict[str, Any]:
+    return {
+        "scenario_id": scenario_id,
+        "source_result_id": f"source:{scenario_id}",
+        "title": f"Route {rank}",
+        "rank": rank,
+        "score": 0.9 - (rank / 10),
+        "supporting_option_ids": [f"option:{rank}"],
+        "objective_refs": [],
+        "unresolved_tradeoffs": [],
+        "scenario_summary": {
+            "headline": f"Route {rank} summary",
+            "scenario_kind": "alternative",
+            "recommended_for_selection": recommended,
+            "feasible": feasible,
+            "route_sequence": ["Stockholm", "Oslo"],
+            "total_travel_minutes": 120 + rank,
+            "total_transfer_count": rank,
+            "estimated_total": {"amount": 1000 + rank, "currency": "USD"},
+        },
+    }
+
+
+def test_runtime_route_options_hold_blocked_scenarios_for_research() -> None:
+    comparison = workspace_service._build_runtime_scenario_comparison(
+        trip_id="trip-route-blocked",
+        trip_title="Blocked route comparison",
+        scenario_search={
+            "title": "Route comparison",
+            "source_refs": ["test"],
+            "scenarios": [
+                _route_option_scenario(
+                    "scenario:blocked", feasible=False, recommended=True, rank=1
+                ),
+                _route_option_scenario("scenario:open", feasible=True, recommended=False, rank=2),
+            ],
+        },
+        session=None,
+    )
+
+    blocked = comparison["scenarios"][0]
+    assert blocked["status"] == "blocked"
+    assert blocked["state"] == "needs_research"
+    assert "make_baseline" not in [action["action_type"] for action in blocked["available_actions"]]
+
+
+def test_workspace_route_option_actions_update_comparison_and_ledger(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Scandinavia route workbench",
+            "summary": "Keep multiple route options available for comparison.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-07-04",
+                "end_date": "2026-07-12",
+                "duration_days": 9,
+                "primary_regions": ["Stockholm", "Oslo", "Bergen"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    initial = client.get(f"/api/workspace/{trip_id}")
+    assert initial.status_code == 200
+    initial_payload = initial.json()
+    route_options = initial_payload["route_comparison"]["scenarios"]
+    assert route_options
+    assert len(route_options) >= 2
+    assert len(route_options) <= 4
+    assert route_options[0]["state"] == "baseline"
+    assert route_options[0]["purpose"]
+    assert isinstance(route_options[0]["confidence"], float)
+    assert isinstance(route_options[0]["unresolved_questions"], list)
+    assert "open_question" in route_options[0]
+    assert route_options[0]["available_actions"]
+    assert "available_action" in route_options[0]
+    if route_options[0]["unresolved_questions"]:
+        assert route_options[0]["open_question"] == route_options[0]["unresolved_questions"][0]
+    else:
+        assert route_options[0]["open_question"] is None
+    assert route_options[0]["available_action"] == route_options[0]["available_actions"][0]
+
+    candidate = route_options[min(1, len(route_options) - 1)]
+    candidate_id = candidate["route_option_id"]
+    baseline_response = client.post(
+        f"/api/workspace/{trip_id}/route-options/{candidate_id}/action",
+        json={"action_type": "make_baseline"},
+    )
+
+    assert baseline_response.status_code == 200, baseline_response.text
+    baseline_payload = baseline_response.json()
+    assert baseline_payload["route_comparison"]["lead_scenario_id"] == candidate_id
+    baseline_row = next(
+        item
+        for item in baseline_payload["route_comparison"]["scenarios"]
+        if item["route_option_id"] == candidate_id
+    )
+    assert baseline_row["state"] == "baseline"
+    assert baseline_payload["activity_log"][0]["event_kind"] == "decision_recorded"
+    assert "comparison baseline" in baseline_payload["activity_log"][0]["summary"]
+
+    rejected_id = route_options[0]["route_option_id"]
+    rejected_response = client.post(
+        f"/api/workspace/{trip_id}/route-options/{rejected_id}/action",
+        json={"action_type": "reject"},
+    )
+
+    assert rejected_response.status_code == 200, rejected_response.text
+    rejected_payload = rejected_response.json()
+    rejected_row = next(
+        item
+        for item in rejected_payload["route_comparison"]["scenarios"]
+        if item["route_option_id"] == rejected_id
+    )
+    assert rejected_row["state"] == "rejected"
+    assert [action["action_type"] for action in rejected_row["available_actions"]] == ["reopen"]
+    assert rejected_payload["activity_log"][0]["event_kind"] == "option_rejected"
+
+    reopened_response = client.post(
+        f"/api/workspace/{trip_id}/route-options/{rejected_id}/action",
+        json={"action_type": "reopen"},
+    )
+
+    assert reopened_response.status_code == 200, reopened_response.text
+    reopened_payload = reopened_response.json()
+    reopened_row = next(
+        item
+        for item in reopened_payload["route_comparison"]["scenarios"]
+        if item["route_option_id"] == rejected_id
+    )
+    assert reopened_row["state"] in {"active", "fallback"}
+    assert any(
+        action["action_type"] == "make_baseline" for action in reopened_row["available_actions"]
+    )
+    assert f"reopened:{rejected_id}" not in json.dumps(reopened_payload)
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    assert reloaded.status_code == 200
+    assert reloaded.json()["route_comparison"]["lead_scenario_id"] == candidate_id
+
+    with get_session_factory()() as db_session:
+        actions = db_session.scalars(
+            select(PersistedPlannerAction)
+            .where(PersistedPlannerAction.trip_id == trip_id)
+            .order_by(PersistedPlannerAction.occurred_at.desc())
+        ).all()
+
+    assert actions[0].action_type == "route_option_reopen"
+    assert actions[1].action_type == "route_option_reject"
+    assert actions[2].action_type == "route_option_make_baseline"
+    assert actions[2].option_id == candidate_id
+    assert actions[2].payload["route_option_action"] == "make_baseline"
+
+
 def test_workspace_option_feedback_rejects_unknown_option_id(client: TestClient) -> None:
     created = client.post(
         "/api/trips",
@@ -2071,10 +2698,10 @@ def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_breaker_
         None,
     )
     assert fallback_output is not None
-    assert fallback_output["title"] == "Live TPP breaker is open"
-    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["title"] == "Approval service is temporarily unavailable"
+    assert "latest saved approval information" in fallback_output["body"]
     assert fallback_output["status"] == "caution"
-    assert fallback_output["highlights"][0] == "error_code=breaker_open"
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def test_planner_panel_state_surfaces_policy_sync_fallback_notice_for_breaker_open() -> None:
@@ -2113,10 +2740,10 @@ def test_planner_panel_state_surfaces_policy_sync_fallback_notice_for_breaker_op
         None,
     )
     assert fallback_output is not None
-    assert fallback_output["title"] == "Live TPP breaker is open"
-    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["title"] == "Approval service is temporarily unavailable"
+    assert "latest saved approval information" in fallback_output["body"]
     assert fallback_output["status"] == "caution"
-    assert fallback_output["highlights"][0] == "error_code=breaker_open"
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_timeout() -> None:
@@ -2155,10 +2782,10 @@ def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_timeout(
         None,
     )
     assert fallback_output is not None
-    assert fallback_output["title"] == "Live TPP request timed out"
-    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["title"] == "Approval service request timed out"
+    assert "latest saved approval information" in fallback_output["body"]
     assert fallback_output["status"] == "caution"
-    assert fallback_output["highlights"][0] == "error_code=timeout"
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def test_planner_panel_state_uses_submission_error_details_code_for_timeout_fallback() -> None:
@@ -2197,10 +2824,10 @@ def test_planner_panel_state_uses_submission_error_details_code_for_timeout_fall
         None,
     )
     assert fallback_output is not None
-    assert fallback_output["title"] == "Live TPP request timed out"
-    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["title"] == "Approval service request timed out"
+    assert "latest saved approval information" in fallback_output["body"]
     assert fallback_output["status"] == "caution"
-    assert fallback_output["highlights"][0] == "error_code=timeout"
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_evaluation_timeout() -> (
@@ -2241,10 +2868,10 @@ def test_planner_panel_state_surfaces_stored_policy_fallback_notice_for_evaluati
         None,
     )
     assert fallback_output is not None
-    assert fallback_output["title"] == "Live TPP request timed out"
-    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["title"] == "Approval service request timed out"
+    assert "latest saved approval information" in fallback_output["body"]
     assert fallback_output["status"] == "caution"
-    assert fallback_output["highlights"][0] == "error_code=timeout"
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def test_planner_panel_state_surfaces_policy_sync_fallback_notice_for_timeout() -> None:
@@ -2283,10 +2910,10 @@ def test_planner_panel_state_surfaces_policy_sync_fallback_notice_for_timeout() 
         None,
     )
     assert fallback_output is not None
-    assert fallback_output["title"] == "Live TPP request timed out"
-    assert "stored-policy posture" in fallback_output["body"]
+    assert fallback_output["title"] == "Approval service request timed out"
+    assert "latest saved approval information" in fallback_output["body"]
     assert fallback_output["status"] == "caution"
-    assert fallback_output["highlights"][0] == "error_code=timeout"
+    assert fallback_output["highlights"][0] == "Saved approval information is still available."
 
 
 def _load_feasibility_fixture(name: str) -> InventoryBundle:
@@ -2331,3 +2958,563 @@ def test_feasibility_planner_outputs_surface_blocking_transition_details() -> No
         or "cannot be reached inside its advertised start window" in highlight.lower()
         for highlight in outputs[1]["highlights"]
     )
+
+
+_RAW_DEBUG_TOKENS_FORBIDDEN_IN_USER_COPY = (
+    "runtime provider",
+    "runtime_state_id",
+    "fallback mode",
+    "policy_state_id",
+    "proposal_state_id",
+    "session_state_id",
+    "scenario_search_id",
+)
+
+
+_RAW_POLICY_PROPOSAL_RESPONSE_TOKENS = (
+    "policy_state_id",
+    "proposal_state_id",
+    "source_request_id",
+    "source_correlation_id",
+    "policy-standard-2026-02",
+    "org-acme",
+    "sync_status",
+    "execution_id",
+    "exec-diagnostic-001",
+    "submission_status",
+    "evaluation_status",
+    "submission_requires_polling",
+    "polling_interval_seconds",
+    "result_payload",
+    "status_endpoint",
+    "eval-diagnostic-001",
+    "proposal:trip-diagnostic-workspace",
+)
+
+
+def _diagnostic_policy_state(trip_id: str) -> dict[str, Any]:
+    return {
+        "policy_state_id": f"policy-state:{trip_id}",
+        "trip_id": trip_id,
+        "owner_profile_id": f"profile:{trip_id}:business",
+        "source_kind": "tpp_sync",
+        "source_request_id": "policy-sync-req-diagnostic",
+        "source_correlation_id": "corr-policy-diagnostic",
+        "policy_id": "policy-standard-2026-02",
+        "organization_id": "org-acme",
+        "policy_version": "2026-02",
+        "sync_status": "current",
+        "imported_at": "2026-05-01T00:00:00Z",
+        "constraint_set": {
+            "policy_id": "policy-standard-2026-02",
+            "organization_id": "org-acme",
+            "policy_version": "2026-02",
+            "required_booking_channels": ["Navan"],
+            "approval_rules": ["international_travel"],
+            "documentation_rules": ["attach_comparables"],
+        },
+        "organization_context": {
+            "organization_id": "org-acme",
+            "approved_channels": ["Navan"],
+            "approval_triggers": ["international_travel"],
+        },
+        "freshness": {"status": "current", "last_synced_at": "2026-05-01T00:00:00Z"},
+        "raw_payload": {
+            "status_endpoint": "https://tpp.example.test/policies/policy-standard-2026-02",
+            "result_payload": {"policy_id": "policy-standard-2026-02"},
+        },
+        "tags": ["diagnostic"],
+        "notes": ["Use Navan for booking."],
+    }
+
+
+def _diagnostic_proposal_state(trip_id: str) -> dict[str, Any]:
+    proposal_id = f"proposal:{trip_id}"
+    follow_up = {
+        "status": "resolved",
+        "path": "approval",
+        "title": "Ready for approval",
+        "summary": "Approval packet can be sent.",
+        "recommended_label": "Prepare approval packet",
+        "guidance": ["Attach the saved comparable before sending."],
+    }
+    return {
+        "proposal_state_id": f"proposal-state:{trip_id}",
+        "trip_id": trip_id,
+        "owner_profile_id": f"profile:{trip_id}:business",
+        "proposal_id": proposal_id,
+        "proposal_version": "proposal-v1",
+        "scenario_id": "scenario-a",
+        "organization_id": "org-acme",
+        "execution_id": "exec-diagnostic-001",
+        "submission_status": "succeeded",
+        "evaluation_status": "succeeded",
+        "proposal": {
+            "proposal_id": proposal_id,
+            "trip_id": trip_id,
+            "constraint_set_id": "policy-standard-2026-02",
+            "approval_notes": ["Manager review required before booking."],
+            "comparables": [
+                {
+                    "category": "airfare",
+                    "label": "Flexible fare",
+                    "vendor": "United",
+                    "booking_channel": "Navan",
+                    "estimated_cost": {"currency": "USD", "typical_amount": 710.0},
+                    "notes": ["Refundable alternative."],
+                }
+            ],
+        },
+        "submission": {
+            "status_endpoint": "https://tpp.example.test/executions/exec-diagnostic-001",
+            "polling_interval_seconds": 30,
+            "execution_status": {"state": "succeeded", "terminal": True},
+        },
+        "evaluation": {
+            "status_endpoint": "https://tpp.example.test/executions/exec-diagnostic-001",
+            "result_payload": {
+                "execution_id": "exec-diagnostic-001",
+                "proposal_id": proposal_id,
+            },
+            "evaluation_result": {
+                "evaluation_id": "eval-diagnostic-001",
+                "proposal_id": proposal_id,
+                "status": "compliant",
+                "approval_requirements": [
+                    {
+                        "role": "manager",
+                        "reason": "Manager review required before booking.",
+                        "mandatory": True,
+                    }
+                ],
+                "failure_reasons": [],
+                "notes": ["Ready for approval."],
+                "compliance_score": 0.98,
+            },
+        },
+        "summary": {
+            "submission_status": "succeeded",
+            "submission_summary": "Packet submitted.",
+            "submission_requires_polling": True,
+            "evaluation_transport_status": "succeeded",
+            "evaluation_result_status": "compliant",
+            "approval_ready": True,
+            "comparable_count": 1,
+            "highlights": ["Manager review required before booking."],
+            "follow_up_status": "resolved",
+            "follow_up_title": follow_up["title"],
+            "follow_up_summary": follow_up["summary"],
+            "follow_up": follow_up,
+        },
+        "follow_up": follow_up,
+    }
+
+
+def _diagnostic_policy_context(trip_id: str) -> dict[str, Any]:
+    proposal_id = f"proposal:{trip_id}"
+    return {
+        "policy_state": _diagnostic_policy_state(trip_id),
+        "proposal": {
+            "proposal_id": proposal_id,
+            "trip_id": trip_id,
+            "constraint_set_id": "policy-standard-2026-02",
+            "approval_notes": ["Manager review required before booking."],
+            "selected_options": [
+                {
+                    "option_id": "flight-diagnostic",
+                    "label": "United 123",
+                    "justification_refs": ["fare-policy"],
+                }
+            ],
+        },
+        "policy_evaluation": {
+            "evaluation_id": "eval-diagnostic-001",
+            "proposal_id": proposal_id,
+            "status": "compliant",
+            "notes": ["Policy looks ready."],
+        },
+        "summary": {"status": "current"},
+    }
+
+
+def _diagnostic_proposal_context(trip_id: str) -> dict[str, Any]:
+    return {
+        "proposal_state": _diagnostic_proposal_state(trip_id),
+        "summary": {"status": "current"},
+    }
+
+
+def _diagnostic_trip_record(*, mode: str = "business") -> PersistedTrip:
+    trip_id = f"trip-diagnostic-workspace-{mode}"
+    timestamp = datetime(2026, 5, 1, tzinfo=UTC)
+    return PersistedTrip(
+        trip_id=trip_id,
+        user_id="user:test",
+        title="Diagnostic workspace",
+        summary="Workspace with policy and proposal diagnostics.",
+        mode=mode,
+        status="draft",
+        start_date="2026-05-04",
+        end_date="2026-05-06",
+        duration_days=3,
+        primary_regions=["Chicago"],
+        traveler_party_kind="team" if mode == "business" else "pair",
+        traveler_count=2,
+        traveler_notes="",
+        leisure_profile_id=f"profile:{trip_id}:leisure" if mode == "leisure" else None,
+        business_profile_id=f"profile:{trip_id}:business" if mode == "business" else None,
+        option_set_ids=[],
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
+
+
+def _build_diagnostic_workspace_payload(
+    *,
+    mode: str = "business",
+    include_debug: bool,
+) -> dict[str, Any]:
+    record = _diagnostic_trip_record(mode=mode)
+    return workspace_service._build_persisted_trip_workspace(
+        record,
+        policy_context=_diagnostic_policy_context(record.trip_id),
+        proposal_context=_diagnostic_proposal_context(record.trip_id),
+        inventory_bundles=[],
+        inventory_summary={
+            "bundle_count": 0,
+            "bundles": [],
+            "notes": [],
+            "runtime_state": {
+                "status": "empty",
+                "title": "No inventory yet",
+                "summary": "No inventory has been assembled yet.",
+            },
+        },
+        scenario_search={
+            "title": "Diagnostic scenarios",
+            "scenarios": [],
+            "explanation": [],
+            "source_refs": [],
+        },
+        feasibility_summary={
+            "assessment_count": 0,
+            "recommended_bundle_count": 0,
+            "blocking_bundle_count": 0,
+            "attention_bundle_count": 0,
+            "notes": [],
+            "assessments": [],
+        },
+        include_debug=include_debug,
+    )
+
+
+def _assert_raw_policy_proposal_tokens_absent(payload: dict[str, Any]) -> None:
+    serialized = json.dumps(payload, sort_keys=True)
+    for token in _RAW_POLICY_PROPOSAL_RESPONSE_TOKENS:
+        assert token not in serialized
+
+
+def _persist_diagnostic_policy_and_proposal(trip_id: str) -> None:
+    policy_state = _diagnostic_policy_state(trip_id)
+    proposal_state = _diagnostic_proposal_state(trip_id)
+    with get_session_factory()() as db_session:
+        trip_record = db_session.scalar(
+            select(PersistedTrip).where(PersistedTrip.trip_id == trip_id)
+        )
+        assert trip_record is not None
+        db_session.add(
+            PersistedPolicyState(
+                policy_state_id=policy_state["policy_state_id"],
+                trip_id=trip_id,
+                user_id=trip_record.user_id,
+                owner_profile_id=policy_state["owner_profile_id"],
+                source_kind=policy_state["source_kind"],
+                source_request_id=policy_state["source_request_id"],
+                source_correlation_id=policy_state["source_correlation_id"],
+                policy_id=policy_state["policy_id"],
+                organization_id=policy_state["organization_id"],
+                policy_version=policy_state["policy_version"],
+                sync_status=policy_state["sync_status"],
+                imported_at=policy_state["imported_at"],
+                constraint_set=policy_state["constraint_set"],
+                organization_context=policy_state["organization_context"],
+                freshness=policy_state["freshness"],
+                raw_payload=policy_state["raw_payload"],
+                tags=policy_state["tags"],
+                notes=policy_state["notes"],
+            )
+        )
+        db_session.add(
+            PersistedProposalState(
+                proposal_state_id=proposal_state["proposal_state_id"],
+                trip_id=trip_id,
+                user_id=trip_record.user_id,
+                owner_profile_id=proposal_state["owner_profile_id"],
+                proposal_id=proposal_state["proposal_id"],
+                proposal_version=proposal_state["proposal_version"],
+                scenario_id=proposal_state["scenario_id"],
+                organization_id=proposal_state["organization_id"],
+                execution_id=proposal_state["execution_id"],
+                submission_status=proposal_state["submission_status"],
+                evaluation_status=proposal_state["evaluation_status"],
+                proposal_payload=proposal_state["proposal"],
+                submission_record=proposal_state["submission"],
+                evaluation_record=proposal_state["evaluation"],
+                summary=proposal_state["summary"],
+            )
+        )
+        if trip_record.mode == "business":
+            trip_record.policy_state_id = policy_state["policy_state_id"]
+        db_session.commit()
+
+
+def test_workspace_response_filters_business_policy_proposal_diagnostics_by_default() -> None:
+    payload = _build_diagnostic_workspace_payload(include_debug=False)
+
+    _assert_raw_policy_proposal_tokens_absent(payload)
+    assert payload["policy_state"]["constraint_set"]["required_booking_channels"] == ["Navan"]
+    assert "policy_id" not in payload["policy_state"]["constraint_set"]
+    assert payload["proposal_state"]["summary"]["approval_ready"] is True
+    assert payload["proposal_state"]["follow_up"]["title"] == "Ready for approval"
+    assert payload["proposal_state"]["evaluation"]["evaluation_result"] is None
+    assert payload["planner_panel_state"]["policy_evaluation"]["notes"]
+    assert "evaluation_id" not in payload["planner_panel_state"]["policy_evaluation"]
+    assert "policy_state" not in payload["view_model"]["debug_state"]["sections"]
+    assert "proposal_state" not in payload["view_model"]["debug_state"]["sections"]
+
+
+def test_workspace_response_includes_policy_proposal_diagnostics_in_debug_mode() -> None:
+    payload = _build_diagnostic_workspace_payload(include_debug=True)
+    serialized = json.dumps(payload, sort_keys=True)
+
+    assert payload["policy_state"]["policy_state_id"] == (
+        "policy-state:trip-diagnostic-workspace-business"
+    )
+    assert payload["proposal_state"]["proposal_state_id"] == (
+        "proposal-state:trip-diagnostic-workspace-business"
+    )
+    assert payload["proposal_state"]["execution_id"] == "exec-diagnostic-001"
+    assert "result_payload" in serialized
+    assert "polling_interval_seconds" in serialized
+    assert "policy_state" in payload["view_model"]["debug_state"]["sections"]
+    assert "proposal_state" in payload["view_model"]["debug_state"]["sections"]
+
+
+def test_workspace_endpoint_gates_leisure_policy_proposal_diagnostics(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Leisure diagnostics workspace",
+            "summary": "Leisure workspace with persisted policy data should stay traveler-facing.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+    _persist_diagnostic_policy_and_proposal(trip_id)
+
+    response = client.get(f"/api/workspace/{trip_id}")
+
+    assert response.status_code == 200
+    normal_payload = response.json()
+    assert normal_payload["policy_state"] is None
+    assert normal_payload["proposal_state"] is None
+    assert "policy_state_id" not in normal_payload["trip_record"]["artifact_refs"]
+    assert "policy_state" not in normal_payload["view_model"]["debug_state"]["sections"]
+    assert "proposal_state" not in normal_payload["view_model"]["debug_state"]["sections"]
+    _assert_raw_policy_proposal_tokens_absent(normal_payload)
+
+    debug_response = client.get(f"/api/workspace/{trip_id}?debug=true")
+
+    assert debug_response.status_code == 200
+    debug_payload = debug_response.json()
+    assert debug_payload["policy_state"]["policy_state_id"] == f"policy-state:{trip_id}"
+    assert debug_payload["proposal_state"]["proposal_state_id"] == f"proposal-state:{trip_id}"
+    assert debug_payload["proposal_state"]["execution_id"] == "exec-diagnostic-001"
+    serialized_debug = json.dumps(debug_payload, sort_keys=True)
+    assert "result_payload" in serialized_debug
+    assert "polling_interval_seconds" in serialized_debug
+    assert "policy_state" in debug_payload["view_model"]["debug_state"]["sections"]
+    assert "proposal_state" in debug_payload["view_model"]["debug_state"]["sections"]
+
+
+def _assert_user_summary_avoids_raw_runtime_language(view_model: dict[str, Any]) -> None:
+    user_summary = view_model["user_summary"]
+    next_step = view_model["next_step"]
+    user_facing_strings = [user_summary["headline"], next_step["title"], next_step["summary"]]
+    user_facing_strings.extend(user_summary.get("decided", []))
+    user_facing_strings.extend(user_summary.get("uncertain", []))
+    business_summary = view_model.get("business_summary")
+    if business_summary is not None:
+        user_facing_strings.append(business_summary["headline"])
+        user_facing_strings.extend(business_summary.get("blockers", []))
+    for value in user_facing_strings:
+        lowered = value.lower()
+        for token in _RAW_DEBUG_TOKENS_FORBIDDEN_IN_USER_COPY:
+            assert (
+                token not in lowered
+            ), f"User-facing view-model copy must not leak '{token}': {value!r}"
+
+
+def test_workspace_endpoint_includes_typed_view_model_for_leisure_trip(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/workspace/trip-leisure-kyoto-draft")
+
+    assert response.status_code == 200
+    payload = response.json()
+    view_model = payload["view_model"]
+    assert view_model is not None
+    user_summary = view_model["user_summary"]
+    assert user_summary["trip_mode"] == "leisure"
+    assert user_summary["mode_label"] == "Leisure trip"
+    assert user_summary["status"] in {"ready", "partial", "empty"}
+    assert user_summary["trip_title"]
+    assert user_summary["headline"]
+
+    next_step = view_model["next_step"]
+    assert next_step["title"]
+    assert next_step["summary"]
+
+    assert view_model["business_summary"] is None
+    assert view_model["panel_visibility"] == {
+        "show_budget_panel": True,
+        "show_policy_posture": False,
+        "show_proposal_panel": False,
+        "show_approval_readiness_panel": False,
+    }
+    assert view_model["policy_presentation"]["active_policy_state"] is False
+    assert view_model["policy_presentation"]["posture_label"] == "Not applicable"
+
+    debug_state = view_model["debug_state"]
+    assert "runtime_state" in debug_state["sections"]
+    assert "policy_state" not in debug_state["sections"]
+    assert "proposal_state" not in debug_state["sections"]
+    assert (
+        debug_state["sections"]["runtime_state"]["payload"]["status"]
+        == payload["runtime_state"]["status"]
+    )
+
+    _assert_user_summary_avoids_raw_runtime_language(view_model)
+
+
+def test_workspace_endpoint_includes_typed_view_model_for_business_trip(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/workspace/trip-business-client-summit")
+
+    assert response.status_code == 200
+    payload = response.json()
+    view_model = payload["view_model"]
+    assert view_model is not None
+    user_summary = view_model["user_summary"]
+    assert user_summary["trip_mode"] == "business"
+    assert user_summary["mode_label"] == "Business trip"
+
+    business_summary = view_model["business_summary"]
+    assert business_summary is not None
+    assert business_summary["approval_status"] in {
+        "not_applicable",
+        "not_ready",
+        "in_review",
+        "approved",
+        "needs_attention",
+    }
+    assert business_summary["headline"]
+    assert view_model["panel_visibility"]["show_policy_posture"] is True
+    assert view_model["panel_visibility"]["show_proposal_panel"] is True
+    assert view_model["panel_visibility"]["show_approval_readiness_panel"] is True
+    assert view_model["policy_presentation"]["posture_label"] in {
+        "Approval not started",
+        "Ready for approval",
+        "Waiting for policy review",
+        "Needs exception",
+        "Needs follow-up",
+        "Not ready for approval",
+        "Policy state available",
+    }
+
+    debug_state = view_model["debug_state"]
+    assert "runtime_state" in debug_state["sections"]
+
+    _assert_user_summary_avoids_raw_runtime_language(view_model)
+
+
+def test_workspace_view_model_builder_handles_empty_runtime_state() -> None:
+    payload = {
+        "trip_record": {
+            "trip": {"title": "Bare workspace", "mode": "leisure"},
+        },
+        "runtime_state": {"status": "empty", "title": "", "summary": ""},
+        "saved_scenarios": [],
+        "inventory_summary": {"bundle_count": 0},
+        "feasibility_summary": {"attention_bundle_count": 0},
+    }
+
+    view_model = workspace_service._build_workspace_view_model(payload)
+
+    assert view_model["user_summary"]["status"] == "empty"
+    assert view_model["next_step"]["blocked"] is True
+    assert view_model["business_summary"] is None
+    assert view_model["debug_state"]["sections"]["runtime_state"]["payload"]["status"] == "empty"
+
+
+def test_workspace_view_model_keeps_active_leisure_policy_state_visible() -> None:
+    payload = {
+        "trip_record": {
+            "trip": {"title": "Leisure exception workspace", "mode": "leisure"},
+        },
+        "runtime_state": {"status": "ready", "title": "Ready", "summary": "Ready"},
+        "saved_scenarios": [{"saved_scenario_id": "scenario-1"}],
+        "inventory_summary": {"bundle_count": 1},
+        "feasibility_summary": {"attention_bundle_count": 0},
+        "proposal_state": {
+            "execution_id": "exec-active-leisure",
+            "submission_status": "submitted",
+            "evaluation_status": "completed",
+            "summary": {
+                "submission_status": "submitted",
+                "evaluation_result_status": "failed",
+                "follow_up_status": "exception_required",
+                "approval_ready": False,
+                "highlights": ["A lodging exception needs review."],
+            },
+        },
+    }
+
+    view_model = workspace_service._build_workspace_view_model(payload)
+
+    assert view_model["business_summary"] is None
+    assert view_model["panel_visibility"]["show_policy_posture"] is True
+    assert view_model["panel_visibility"]["show_proposal_panel"] is True
+    assert view_model["policy_presentation"]["posture_label"] == "Needs exception"
+    assert "proposal_state" in view_model["debug_state"]["sections"]
+
+
+def test_workspace_view_model_debug_sections_preserve_raw_payload_shapes() -> None:
+    saved_scenarios = [{"saved_scenario_id": "scenario-1"}]
+    activity_log = [{"activity_event_id": "activity-1"}]
+    payload = {
+        "trip_record": {
+            "trip": {"title": "Raw debug workspace", "mode": "leisure"},
+        },
+        "runtime_state": {"status": "ready", "title": "Ready", "summary": "Ready"},
+        "saved_scenarios": saved_scenarios,
+        "inventory_summary": {"bundle_count": 1},
+        "feasibility_summary": {"attention_bundle_count": 0},
+        "activity_log": activity_log,
+    }
+
+    view_model = workspace_service._build_workspace_view_model(payload)
+    debug_sections = view_model["debug_state"]["sections"]
+
+    assert debug_sections["saved_scenarios"]["payload"] == saved_scenarios
+    assert debug_sections["activity_log"]["payload"] == activity_log

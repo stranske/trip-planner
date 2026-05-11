@@ -15,7 +15,6 @@ from trip_planner.integrations.tpp import (
     TPPTransportError,
 )
 
-
 PreservedTransportErrorCode = Literal["breaker_open", "unauthorized", "invalid_response"]
 
 

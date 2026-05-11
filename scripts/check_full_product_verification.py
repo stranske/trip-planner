@@ -760,9 +760,7 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
                             "lead_scenario_id"
                         ],
                         "planner_runtime": planner_runtime,
-                        "planning_mode": leisure_payload["session"][
-                            "selected_planning_mode"
-                        ],
+                        "planning_mode": leisure_payload["session"]["selected_planning_mode"],
                         "route_contexts": len(
                             leisure_payload["runtime_scenario_comparison"]["scenarios"]
                         ),

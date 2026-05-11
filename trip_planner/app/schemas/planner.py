@@ -22,6 +22,28 @@ class PlannerToolCallResponse(BaseModel):
     output: dict[str, Any] = Field(default_factory=dict)
 
 
+class PlannerVisibleResponseBlock(BaseModel):
+    kind: str = Field(min_length=1, max_length=80)
+    title: str = Field(min_length=1, max_length=160)
+    items: list[str] = Field(default_factory=list)
+
+
+class PlannerStructuredBlock(BaseModel):
+    kind: str = Field(min_length=1, max_length=80)
+    title: str = Field(min_length=1, max_length=160)
+    body: str = ""
+    items: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    hidden: bool = False
+
+
+class PlannerTurnMetadata(BaseModel):
+    plan_maturity: str
+    task_class: str
+    visible_response_blocks: list[PlannerVisibleResponseBlock] = Field(default_factory=list)
+    debug_routing_details: dict[str, Any] = Field(default_factory=dict)
+
+
 class PlannerMessageResponse(BaseModel):
     message_id: str
     role: str
@@ -29,6 +51,8 @@ class PlannerMessageResponse(BaseModel):
     created_at: str
     refs: list[str] = Field(default_factory=list)
     tool_calls: list[PlannerToolCallResponse] = Field(default_factory=list)
+    structured_blocks: list[PlannerStructuredBlock] = Field(default_factory=list)
+    turn_metadata: PlannerTurnMetadata | None = None
 
 
 class PlannerCheckpointResponse(BaseModel):
@@ -38,6 +62,7 @@ class PlannerCheckpointResponse(BaseModel):
     message_count: int
     summary: str
     source_message_ids: list[str] = Field(default_factory=list)
+    metadata_payload: dict[str, Any] = Field(default_factory=dict)
     created_at: str
     updated_at: str
 
@@ -69,6 +94,7 @@ class PlannerSessionResponse(BaseModel):
     runtime: dict[str, Any] = Field(default_factory=dict)
     session: dict[str, Any]
     planner_panel_state: dict[str, Any]
+    planning_ledger: dict[str, Any] = Field(default_factory=dict)
     planner_memory: PlannerMemoryResponse
     available_tools: list[dict[str, Any]] = Field(default_factory=list)
     activity_log: list[dict[str, Any]] = Field(default_factory=list)

@@ -40,9 +40,7 @@ def _request() -> TPPRequestEnvelope:
 def _response(
     state: str, *, terminal: bool, result_payload: dict[str, object] | None = None
 ) -> TPPResponseEnvelope:
-    error = (
-        TPPErrorRecord(code="failed", message="failed") if state == "failed" else None
-    )
+    error = TPPErrorRecord(code="failed", message="failed") if state == "failed" else None
     return TPPResponseEnvelope(
         operation="poll_execution_status",
         request_id="request-1",
@@ -84,9 +82,7 @@ def test_poll_pending_then_success_records_expected_sleeps() -> None:
         sleeps.append(seconds)
         clock.sleep(seconds)
 
-    service = TPPPollingService(
-        provider, timeout_seconds=20.0, sleeper=sleeper, now=clock.now
-    )
+    service = TPPPollingService(provider, timeout_seconds=20.0, sleeper=sleeper, now=clock.now)
 
     response = service.poll(_request())
 
@@ -111,9 +107,7 @@ def test_poll_pending_then_failure_records_expected_sleeps() -> None:
         sleeps.append(seconds)
         clock.sleep(seconds)
 
-    service = TPPPollingService(
-        provider, timeout_seconds=20.0, sleeper=sleeper, now=clock.now
-    )
+    service = TPPPollingService(provider, timeout_seconds=20.0, sleeper=sleeper, now=clock.now)
 
     response = service.poll(_request())
 
@@ -135,9 +129,7 @@ def test_poll_pending_until_timeout_returns_timeout_envelope() -> None:
         sleeps.append(seconds)
         clock.sleep(seconds)
 
-    service = TPPPollingService(
-        provider, timeout_seconds=5.0, sleeper=sleeper, now=clock.now
-    )
+    service = TPPPollingService(provider, timeout_seconds=5.0, sleeper=sleeper, now=clock.now)
 
     response = service.poll(_request())
     payload = response.to_dict()
@@ -172,9 +164,7 @@ def test_poll_does_not_require_second_external_call_to_detect_timeout() -> None:
         call_count += 1
         return _response("running", terminal=False)
 
-    service = TPPPollingService(
-        provider, timeout_seconds=1.0, sleeper=clock.sleep, now=clock.now
-    )
+    service = TPPPollingService(provider, timeout_seconds=1.0, sleeper=clock.sleep, now=clock.now)
 
     response = service.poll(_request())
 
@@ -188,9 +178,7 @@ def test_poll_timeout_returns_empty_payload_and_evaluation_result_lookup() -> No
     def provider(_request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         return _response("running", terminal=False)
 
-    service = TPPPollingService(
-        provider, timeout_seconds=1.0, sleeper=clock.sleep, now=clock.now
-    )
+    service = TPPPollingService(provider, timeout_seconds=1.0, sleeper=clock.sleep, now=clock.now)
 
     response = service.poll(_request())
     payload = response.to_dict()
@@ -216,9 +204,7 @@ def test_poll_truncates_first_sleep_to_remaining_timeout() -> None:
         sleeps.append(seconds)
         clock.sleep(seconds)
 
-    service = TPPPollingService(
-        provider, timeout_seconds=0.5, sleeper=sleeper, now=clock.now
-    )
+    service = TPPPollingService(provider, timeout_seconds=0.5, sleeper=sleeper, now=clock.now)
 
     response = service.poll(_request())
 
@@ -229,9 +215,7 @@ def test_poll_truncates_first_sleep_to_remaining_timeout() -> None:
     assert call_count == 1
 
 
-def test_poll_uses_capped_cadence_and_truncates_final_sleep_to_timeout_remaining() -> (
-    None
-):
+def test_poll_uses_capped_cadence_and_truncates_final_sleep_to_timeout_remaining() -> None:
     clock = FakeClock()
     sleeps: list[float] = []
     calls = 0
@@ -245,9 +229,7 @@ def test_poll_uses_capped_cadence_and_truncates_final_sleep_to_timeout_remaining
         sleeps.append(seconds)
         clock.sleep(seconds)
 
-    service = TPPPollingService(
-        provider, timeout_seconds=95.0, sleeper=sleeper, now=clock.now
-    )
+    service = TPPPollingService(provider, timeout_seconds=95.0, sleeper=sleeper, now=clock.now)
 
     response = service.poll(_request())
 
@@ -263,9 +245,7 @@ def test_zero_timeout_polls_until_terminal_without_timeout_response() -> None:
         [
             _response("running", terminal=False),
             _response("running", terminal=False),
-            _response(
-                "succeeded", terminal=True, result_payload={"proposal_id": "p-1"}
-            ),
+            _response("succeeded", terminal=True, result_payload={"proposal_id": "p-1"}),
         ]
     )
 
@@ -276,9 +256,7 @@ def test_zero_timeout_polls_until_terminal_without_timeout_response() -> None:
         sleeps.append(seconds)
         clock.sleep(seconds)
 
-    service = TPPPollingService(
-        provider, timeout_seconds=0.0, sleeper=sleeper, now=clock.now
-    )
+    service = TPPPollingService(provider, timeout_seconds=0.0, sleeper=sleeper, now=clock.now)
 
     response = service.poll(_request())
 

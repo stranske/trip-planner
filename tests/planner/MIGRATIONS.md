@@ -61,7 +61,7 @@ note here, or tighten to `strict=True` with a precise `reason=`.
     test against `tests/fixtures/maps/route_context_map_target.json`.
   - `frontend/src/components/maps/mapSurface.ts` — canonical TypeScript types
     (`TripMapSurfaceModel`, `MapSurfaceProvider`, `RouteStop`, `RouteSegment`,
-    `MapMarker`, `MapMarkerKind`, `MapProviderLoadState`).
+    `MapMarker`, `MapMarkerKind`, `MapFocusCue`, `MapProviderLoadState`).
   Asserting a Python `trip_planner.contracts` export contradicts the shipped
   design and would prevent the documented surface from ever passing the test.
 - **Remaining gap:** the dedicated map surface UI (`#699`) and the timeline
