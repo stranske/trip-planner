@@ -258,6 +258,170 @@ def test_workspace_planning_ledger_api_persists_entries_across_reload(
     assert ledger_entries[0]["related_decision_id"] == "decision:lodging-area"
 
 
+def test_workspace_planning_notebook_api_persists_items_and_focus_across_reload(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Notebook workshop",
+            "summary": "Capture quick notes, switch focus, archive done.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    workspace_before = client.get(f"/api/workspace/{trip_id}")
+    assert workspace_before.status_code == 200
+    notebook_before = workspace_before.json()["planning_notebook"]
+    assert notebook_before["items"] == []
+    assert notebook_before["focus"] == {"category": None, "notebook_item_id": None}
+
+    lodging_capture = client.post(
+        f"/api/workspace/{trip_id}/planning-notebook",
+        json={
+            "title": "Check whether the Alfama apartment allows late check-in.",
+            "note": "Traveler arrives at 23:50 from Madrid.",
+            "category": "lodging",
+            "priority": "high",
+        },
+    )
+    assert lodging_capture.status_code == 200, lodging_capture.text
+    lodging_item = lodging_capture.json()
+    assert lodging_item["notebook_item_id"].startswith("notebook:")
+    assert len(lodging_item["notebook_item_id"]) <= 64
+    assert trip_id not in lodging_item["notebook_item_id"]
+    assert lodging_item["status"] == "active"
+    assert lodging_item["completed_at"] is None
+    assert lodging_item["source"] == "user"
+
+    route_capture = client.post(
+        f"/api/workspace/{trip_id}/planning-notebook",
+        json={
+            "title": "Compare overnight train vs. early morning flight to Porto.",
+            "category": "route",
+            "source": "planner",
+            "source_message_ids": ["msg:planner:turn-3"],
+            "tags": ["lisbon-porto"],
+        },
+    )
+    assert route_capture.status_code == 200, route_capture.text
+    route_item = route_capture.json()
+
+    with get_session_factory()() as db_session:
+        before_update = db_session.get(PersistedTrip, trip_id)
+        assert before_update is not None
+        trip_updated_at = before_update.updated_at
+
+    completed = client.patch(
+        f"/api/workspace/{trip_id}/planning-notebook/{lodging_item['notebook_item_id']}",
+        json={"status": "completed", "note": "Confirmed: late check-in is fine."},
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "completed"
+    assert completed.json()["completed_at"] is not None
+    assert completed.json()["note"] == "Confirmed: late check-in is fine."
+
+    with get_session_factory()() as db_session:
+        after_update = db_session.get(PersistedTrip, trip_id)
+        assert after_update is not None
+        assert after_update.updated_at > trip_updated_at
+
+    mismatched_focus = client.put(
+        f"/api/workspace/{trip_id}/planning-notebook/focus",
+        json={"category": "lodging", "notebook_item_id": route_item["notebook_item_id"]},
+    )
+    assert mismatched_focus.status_code == 400
+    assert "does not match notebook item category" in mismatched_focus.json()["detail"]
+
+    focus_to_route = client.put(
+        f"/api/workspace/{trip_id}/planning-notebook/focus",
+        json={"notebook_item_id": route_item["notebook_item_id"]},
+    )
+    assert focus_to_route.status_code == 200, focus_to_route.text
+    assert focus_to_route.json() == {
+        "category": "route",
+        "notebook_item_id": route_item["notebook_item_id"],
+    }
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    assert reloaded.status_code == 200
+    notebook = reloaded.json()["planning_notebook"]
+    assert {item["notebook_item_id"] for item in notebook["items"]} == {
+        lodging_item["notebook_item_id"],
+        route_item["notebook_item_id"],
+    }
+    summary = notebook["summary"]
+    assert [item["notebook_item_id"] for item in summary["active_items"]] == [
+        route_item["notebook_item_id"]
+    ]
+    assert [item["notebook_item_id"] for item in summary["completed_items"]] == [
+        lodging_item["notebook_item_id"]
+    ]
+    assert summary["by_category"]["route"][0]["notebook_item_id"] == route_item["notebook_item_id"]
+    assert summary["by_category"]["lodging"] == []
+    assert notebook["focus"] == {
+        "category": "route",
+        "notebook_item_id": route_item["notebook_item_id"],
+    }
+
+    focus_category_only = client.put(
+        f"/api/workspace/{trip_id}/planning-notebook/focus",
+        json={"category": "lodging"},
+    )
+    assert focus_category_only.status_code == 200
+    assert focus_category_only.json() == {
+        "category": "lodging",
+        "notebook_item_id": None,
+    }
+
+    deleted = client.delete(
+        f"/api/workspace/{trip_id}/planning-notebook/{route_item['notebook_item_id']}"
+    )
+    assert deleted.status_code == 204
+
+    after_delete = client.get(f"/api/workspace/{trip_id}")
+    assert after_delete.status_code == 200
+    notebook_after = after_delete.json()["planning_notebook"]
+    assert [item["notebook_item_id"] for item in notebook_after["items"]] == [
+        lodging_item["notebook_item_id"]
+    ]
+    assert notebook_after["focus"]["category"] == "lodging"
+    assert notebook_after["focus"]["notebook_item_id"] is None
+
+
+def test_workspace_planning_notebook_rejects_invalid_category(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Notebook validation",
+            "summary": "Reject unknown categories.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    rejected = client.post(
+        f"/api/workspace/{trip_id}/planning-notebook",
+        json={"title": "Something to remember", "category": "transport"},
+    )
+    assert rejected.status_code == 422
+
+
 def test_route_option_actions_create_durable_ledger_history(client: TestClient) -> None:
     created = client.post(
         "/api/trips",

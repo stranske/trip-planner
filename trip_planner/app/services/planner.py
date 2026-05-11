@@ -85,6 +85,14 @@ _GROUNDING_TOOL_NAMES: tuple[str, ...] = (
     "read_policy_state",
     "read_proposal_state",
 )
+_NOTEBOOK_COMMAND_CATEGORIES: tuple[str, ...] = (
+    "route",
+    "lodging",
+    "activities",
+    "budget",
+    "documents",
+    "policy",
+)
 
 _DATE_MARKERS = (
     "january",
@@ -498,6 +506,77 @@ def _planner_turn_metadata(
             },
         },
     }
+
+
+def _infer_notebook_category(message: str) -> str:
+    lowered = message.lower()
+    if any(marker in lowered for marker in ("hotel", "lodging", "stay", "apartment")):
+        return "lodging"
+    if any(marker in lowered for marker in ("route", "flight", "train", "transfer", "arrival")):
+        return "route"
+    if any(marker in lowered for marker in ("restaurant", "museum", "activity", "activities")):
+        return "activities"
+    if any(marker in lowered for marker in ("budget", "cost", "price", "fare")):
+        return "budget"
+    if any(marker in lowered for marker in ("passport", "visa", "document")):
+        return "documents"
+    if any(marker in lowered for marker in ("policy", "approval", "exception")):
+        return "policy"
+    return "other"
+
+
+def _extract_remember_note(message: str) -> str:
+    cleaned = message.strip()
+    match = re.search(
+        r"\b(?:remember this for later|remember that|save this|note this)\b[:\s-]*(?P<note>.+)",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        cleaned = match.group("note").strip()
+    return _first_sentence(cleaned)[:240]
+
+
+def _implicit_notebook_tool_calls(message: str) -> list[dict[str, Any]]:
+    lowered = message.lower()
+    calls: list[dict[str, Any]] = []
+    if any(
+        marker in lowered
+        for marker in ("remember this for later", "remember that", "save this", "note this")
+    ):
+        note = _extract_remember_note(message)
+        calls.append(
+            {
+                "tool_name": "capture_notebook_item",
+                "arguments": {
+                    "title": note,
+                    "note": note,
+                    "category": _infer_notebook_category(note),
+                    "priority": "normal",
+                    "tags": ["planner-command"],
+                },
+            }
+        )
+    focus_match = re.search(
+        r"\b(?:working on|focus(?:ing)? on|switch(?:ed)? to)\s+"
+        r"(?P<category>route|lodging|activities|budget|documents|policy)\b",
+        lowered,
+    )
+    if focus_match:
+        calls.append(
+            {
+                "tool_name": "set_notebook_focus",
+                "arguments": {"category": focus_match.group("category")},
+            }
+        )
+    if "completed" in lowered and any(marker in lowered for marker in ("tasks", "items", "notes")):
+        arguments: dict[str, Any] = {"status": "completed"}
+        for category in _NOTEBOOK_COMMAND_CATEGORIES:
+            if category in lowered:
+                arguments["category"] = category
+                break
+        calls.append({"tool_name": "read_planning_notebook", "arguments": arguments})
+    return calls
 
 
 def _fallback_content_from_metadata(
@@ -1298,7 +1377,7 @@ def submit_planner_turn(
     )
 
     executed_tool_calls: list[dict[str, Any]] = []
-    for tool_call in tool_calls or []:
+    for tool_call in [*(tool_calls or []), *_implicit_notebook_tool_calls(normalized_message)]:
         result = execute_planner_tool_call(
             db_session,
             user=user,

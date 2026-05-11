@@ -208,6 +208,85 @@ class PlanningLedgerState(BaseModel):
     summary: PlanningLedgerSummary = Field(default_factory=PlanningLedgerSummary)
 
 
+NotebookCategory = Literal[
+    "route",
+    "lodging",
+    "activities",
+    "budget",
+    "documents",
+    "policy",
+    "other",
+]
+NotebookStatus = Literal["active", "completed", "archived"]
+NotebookPriority = Literal["low", "normal", "high"]
+NotebookSource = Literal["user", "planner"]
+
+
+class PlanningNotebookItem(BaseModel):
+    notebook_item_id: str
+    trip_id: str
+    session_state_id: str
+    title: str
+    note: str = ""
+    category: NotebookCategory
+    status: NotebookStatus
+    priority: NotebookPriority = "normal"
+    source: NotebookSource = "user"
+    linked_ledger_entry_id: str | None = None
+    source_message_ids: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    completed_at: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class PlanningNotebookFocus(BaseModel):
+    category: NotebookCategory | None = None
+    notebook_item_id: str | None = None
+
+
+class PlanningNotebookSummary(BaseModel):
+    active_items: list[PlanningNotebookItem] = Field(default_factory=list)
+    completed_items: list[PlanningNotebookItem] = Field(default_factory=list)
+    archived_items: list[PlanningNotebookItem] = Field(default_factory=list)
+    by_category: dict[str, list[PlanningNotebookItem]] = Field(default_factory=dict)
+
+
+class PlanningNotebookState(BaseModel):
+    items: list[PlanningNotebookItem] = Field(default_factory=list)
+    summary: PlanningNotebookSummary = Field(default_factory=PlanningNotebookSummary)
+    focus: PlanningNotebookFocus = Field(default_factory=PlanningNotebookFocus)
+
+
+class PlanningNotebookCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=240)
+    note: str = Field(default="", max_length=4000)
+    category: NotebookCategory = "other"
+    status: NotebookStatus = "active"
+    priority: NotebookPriority = "normal"
+    source: NotebookSource = "user"
+    linked_ledger_entry_id: str | None = Field(default=None, max_length=96)
+    source_message_ids: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+
+class PlanningNotebookUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=240)
+    note: str | None = Field(default=None, max_length=4000)
+    category: NotebookCategory | None = None
+    status: NotebookStatus | None = None
+    priority: NotebookPriority | None = None
+    linked_ledger_entry_id: str | None = Field(default=None, max_length=96)
+    source_message_ids: list[str] | None = None
+    tags: list[str] | None = None
+
+
+class PlanningNotebookFocusRequest(BaseModel):
+    category: NotebookCategory | None = None
+    notebook_item_id: str | None = Field(default=None, max_length=96)
+
+
 class WorkspaceResponse(BaseModel):
     trip_record: dict[str, Any] = Field(
         description="Persisted trip record payload for the workspace."
@@ -252,6 +331,10 @@ class WorkspaceResponse(BaseModel):
     planning_ledger: PlanningLedgerState = Field(
         default_factory=PlanningLedgerState,
         description="Durable trip-scoped ledger of decisions, options, questions, assumptions, constraints, and sources.",
+    )
+    planning_notebook: PlanningNotebookState = Field(
+        default_factory=PlanningNotebookState,
+        description="Trip-scoped notebook items grouped by category with active focus and completed archives.",
     )
     runtime_state: dict[str, Any] = Field(
         description="Top-level runtime readiness summary for the workspace surface.",

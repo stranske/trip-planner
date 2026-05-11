@@ -15,6 +15,9 @@ from trip_planner.persistence.models.planner_memory import (
     PersistedPlannerMemoryArtifact,
 )
 from trip_planner.persistence.models.planning_ledger import PersistedPlanningLedgerEntry
+from trip_planner.persistence.models.planning_notebook import (
+    PersistedPlanningNotebookItem,
+)
 from trip_planner.persistence.models.policy import PersistedPolicyState
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.scenario import PersistedSavedScenario
@@ -34,6 +37,7 @@ __all__ = [
     "PersistedPlannerAction",
     "PersistedPlannerMemoryArtifact",
     "PersistedPlanningLedgerEntry",
+    "PersistedPlanningNotebookItem",
     "PersistedPlanningSessionState",
     "PersistedPolicyState",
     "PersistedProposalState",

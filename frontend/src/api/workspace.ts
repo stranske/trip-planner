@@ -364,6 +364,58 @@ export type PlanningLedgerState = {
   };
 };
 
+export type NotebookCategory =
+  | "route"
+  | "lodging"
+  | "activities"
+  | "budget"
+  | "documents"
+  | "policy"
+  | "other";
+
+export type NotebookStatus = "active" | "completed" | "archived";
+export type NotebookPriority = "low" | "normal" | "high";
+export type NotebookSource = "user" | "planner";
+
+export type PlanningNotebookItem = {
+  notebook_item_id: string;
+  trip_id: string;
+  session_state_id: string;
+  title: string;
+  note: string;
+  category: NotebookCategory;
+  status: NotebookStatus;
+  priority: NotebookPriority;
+  source: NotebookSource;
+  linked_ledger_entry_id: string | null;
+  source_message_ids: string[];
+  tags: string[];
+  metadata: Record<string, unknown>;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlanningNotebookSummary = {
+  total_count: number;
+  active_count: number;
+  completed_count: number;
+  active_items: PlanningNotebookItem[];
+  completed_items: PlanningNotebookItem[];
+  by_category: Record<string, PlanningNotebookItem[]>;
+};
+
+export type PlanningNotebookFocus = {
+  category: NotebookCategory | null;
+  notebook_item_id: string | null;
+};
+
+export type PlanningNotebookState = {
+  items: PlanningNotebookItem[];
+  summary: PlanningNotebookSummary;
+  focus: PlanningNotebookFocus;
+};
+
 export type ActivityLogEntry = {
   activity_event_id: string;
   occurred_at: string;
@@ -507,6 +559,7 @@ export type WorkspaceData = {
   activity_log: ActivityLogEntry[];
   planner_memory: PlannerMemoryState;
   planning_ledger?: PlanningLedgerState;
+  planning_notebook?: PlanningNotebookState;
   planner_panel_state: PlannerPanelState;
   runtime_state: {
     status: "ready" | "partial" | "empty";
@@ -841,6 +894,63 @@ export async function recordWorkspaceSpendEvent(
     headers: {
       "Content-Type": "application/json",
     },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createNotebookItem(
+  tripId: string,
+  payload: {
+    title: string;
+    category: NotebookCategory;
+    note?: string;
+    priority?: NotebookPriority;
+    linked_ledger_entry_id?: string | null;
+  }
+): Promise<PlanningNotebookItem> {
+  return fetchJson<PlanningNotebookItem>({
+    path: `/api/workspace/${tripId}/planning-notebook`,
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateNotebookItem(
+  tripId: string,
+  notebookItemId: string,
+  payload: Partial<Pick<PlanningNotebookItem, "title" | "note" | "category" | "status" | "priority">>
+): Promise<PlanningNotebookItem> {
+  return fetchJson<PlanningNotebookItem>({
+    path: `/api/workspace/${tripId}/planning-notebook/${notebookItemId}`,
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteNotebookItem(
+  tripId: string,
+  notebookItemId: string
+): Promise<void> {
+  await fetchJson<unknown>({
+    path: `/api/workspace/${tripId}/planning-notebook/${notebookItemId}`,
+    method: "DELETE",
+    credentials: "include",
+  });
+}
+
+export async function setNotebookFocus(
+  tripId: string,
+  payload: { category?: NotebookCategory | null; notebook_item_id?: string | null }
+): Promise<PlanningNotebookFocus> {
+  return fetchJson<PlanningNotebookFocus>({
+    path: `/api/workspace/${tripId}/planning-notebook/focus`,
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 }
