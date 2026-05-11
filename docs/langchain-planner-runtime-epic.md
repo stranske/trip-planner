@@ -41,6 +41,38 @@ When those values are present, the planner conversation service creates a LangCh
 
 CI should cover the model-backed path with fake chat models rather than live provider credentials. Live provider checks belong in explicit integration runs.
 
+## Runtime Model Routing
+
+Each planner turn is classified into a task class and a discrete model
+effort class so traveler-facing interactions feel responsive while planning
+synthesis turns receive deeper attention. The policy lives in
+`trip_planner/app/services/planner_routing.py` and is consumed by
+`_planner_turn_metadata` in `trip_planner/app/services/planner.py`.
+
+- Task classes include `quick_acknowledgement`, `note_capture`, `focus_switch`,
+  `clarifying_question`, `first_turn_triage`, `planning_synthesis`,
+  `route_comparison`, `major_revision`, `policy_preparation`,
+  `research_tool_pass`, and `final_summary`.
+- Effort classes are `fast`, `standard`, and `deep`. Fast-class and deep-class
+  task classes pin the effort regardless of planning mode.
+- The selected planning mode biases the `standard` band only: `delegated`
+  prefers deeper autonomous synthesis, `in-trip` prefers a quick response,
+  and `collaborative` keeps the standard band. The bias never overrides an
+  explicit fast or deep task class.
+- The deterministic fallback path records `provider_state=fallback` and the
+  existing `fallback_reason` separately from the chosen effort class so
+  diagnostics distinguish "no provider" from a routing decision.
+
+Routing metadata is persisted on the planner turn under
+`turn_metadata.{task_class, effort_class, base_effort_class,
+selected_planning_mode, provider_state, fallback_reason}` and the
+diagnostic `debug_routing_details.routing_reasoning` field. Traveler-facing
+planner copy and visible response blocks do not surface these values. The
+unit policy lives in `tests/app/test_planner_routing.py`; route-level
+integration is covered in `tests/app/test_planner_routes.py`. Verifying
+without live credentials uses the existing fallback runtime plus the
+`FakePlannerChatModel` test seam in `tests/app/test_planner_routes.py`.
+
 ## Dependency Chain
 
 This epic depends on the persisted trip, workspace, and runtime seams established by the current app stack on `main`, especially the workspace route/service surfaces that now assemble persisted trip state, scenario search state, and planner panel payloads.

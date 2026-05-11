@@ -230,10 +230,10 @@ Design ref: [`docs/langchain-planner-runtime-epic.md`](langchain-planner-runtime
 | App-tool registry and executor | `trip_planner/app/services/planner_tools.py`, `trip_planner/app/services/planner.py` (`_execute_model_tool_calls`) | `tests/app/test_planner_routes.py` | ✅ Implemented |
 | Memory and checkpoint persistence | `trip_planner/persistence/models/planner_memory.py`, `trip_planner/app/services/planner_memory.py` | `tests/app/test_planner_routes.py`, `tests/app/test_planner_turn_e2e.py` | 🟡 Partial (checkpoint and notebook memory; no semantic/vector recall) |
 | Planning mode selection (delegated / collaborative / revealed-preference / in-trip) | `frontend/src/components/planner/PlanningModeSelector.tsx`, `trip_planner/app/routes/workspace.py`, `trip_planner/app/services/workspace.py` | `frontend/src/components/planner/PlanningModeSelector.test.tsx`, `frontend/src/routes/WorkspacePage.test.tsx`, `tests/app/test_workspace.py` | ✅ Implemented |
-| Dynamic model routing by task complexity | — | — | ❌ Missing |
+| Dynamic model routing by task complexity | `trip_planner/app/services/planner_routing.py`, `trip_planner/app/services/planner.py` (`_planner_turn_metadata`) | `tests/app/test_planner_routing.py`, `tests/app/test_planner_routes.py` | ✅ Implemented |
 | Provider-rich planner tools (source retrieval, live routing/maps, source-quality scoring) | `trip_planner/app/services/planner_tools.py` (first-pass app tools only) | partial route/tool tests | 🟡 Partial |
 
-**Gap detail (follow-up issue candidate):** The runtime can execute explicit planner tools and persist their traces, but it still needs a model-routing policy that distinguishes fast conversational turns from deeper synthesis, richer source/map/provider-backed tools, and semantic planner memory that can reorient when a traveler says "I was working on lodging" or "put this in the Oslo file."
+**Gap detail (follow-up issue candidate):** The runtime executes explicit planner tools, persists their traces, and now routes each turn into a task class plus a fast/standard/deep model effort class biased by the selected planning mode. The remaining gaps are richer source/map/provider-backed tools and semantic planner memory that can reorient when a traveler says "I was working on lodging" or "put this in the Oslo file."
 
 ---
 
@@ -324,13 +324,12 @@ From [`docs/product-architecture-brief.md`](product-architecture-brief.md) and [
 
 These design commitments are still missing, partial, or not yet verified in a live provider environment. Each is a candidate for a follow-up issue:
 
-1. **Dynamic planner model routing** — `product-architecture-brief.md` §4 + `langchain-planner-runtime-epic.md`. Planning mode exists, but runtime model selection does not yet distinguish quick turns from deeper synthesis/planning turns. See §13 above.
-2. **Semantic planner memory and reorientation** — planner checkpoints and notebook state exist, but there is no semantic recall/reorientation layer for scattered traveler notes and "I was working on..." context shifts. See §13 above.
-3. **Provider-rich planner tools** — `planner_tools.py` exists for first-pass app state actions, but source retrieval, live routing/maps, and source-quality scoring are still not exposed as planner tools. See §13 above.
-4. **Live TPP transport verification** — `live-tpp-execution-reoptimization-epic.md`. All seams exist but no live HTTP round-trip is required by the default test matrix. See §15 above.
-5. **Source quality model implementation** — `source-quality-model.md` + `source-channel-strategy.md`. Design defined; no engine code.
-6. **Provider-rich timeline/map depth** — workspace timeline and map surfaces exist, but still need richer regional/local geometry, per-leg timing, and live provider readiness evidence. See §16 above.
-7. **Preference explanation generation tests** — `trip_planner/preferences/explanations.py` exists; no `tests/preferences/test_explanations.py`.
+1. **Semantic planner memory and reorientation** — planner checkpoints and notebook state exist, but there is no semantic recall/reorientation layer for scattered traveler notes and "I was working on..." context shifts. See §13 above.
+2. **Provider-rich planner tools** — `planner_tools.py` exists for first-pass app state actions, but source retrieval, live routing/maps, and source-quality scoring are still not exposed as planner tools. See §13 above.
+3. **Live TPP transport verification** — `live-tpp-execution-reoptimization-epic.md`. All seams exist but no live HTTP round-trip is required by the default test matrix. See §15 above.
+4. **Source quality model implementation** — `source-quality-model.md` + `source-channel-strategy.md`. Design defined; no engine code.
+5. **Provider-rich timeline/map depth** — workspace timeline and map surfaces exist, but still need richer regional/local geometry, per-leg timing, and live provider readiness evidence. See §16 above.
+6. **Preference explanation generation tests** — `trip_planner/preferences/explanations.py` exists; no `tests/preferences/test_explanations.py`.
 
 ---
 

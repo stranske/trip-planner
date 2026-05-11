@@ -18,6 +18,7 @@ from trip_planner.app.services.planner_memory import (
     ensure_planner_memory_persisted,
     refresh_planner_memory,
 )
+from trip_planner.app.services.planner_routing import route_planner_turn
 from trip_planner.app.services.planner_runtime_config import (
     PlannerRuntimeConfig,
     get_planner_runtime_config,
@@ -386,6 +387,7 @@ def _planner_turn_metadata(
     message: str,
     runtime_config: PlannerRuntimeConfig,
     turn_index: int,
+    planning_mode: str | None = None,
 ) -> dict[str, Any]:
     lowered = message.lower()
     raw_tokens = [token.strip(".,!?;:()[]{}\"'") for token in message.split()]
@@ -487,15 +489,31 @@ def _planner_turn_metadata(
             },
         ]
 
+    provider_state = "model" if runtime_config.mode == "model" else "fallback"
+    routing_decision = route_planner_turn(
+        message=message,
+        base_task_class=task_class,
+        planning_mode=planning_mode,
+        provider_state=provider_state,
+        fallback_reason=runtime_config.fallback_reason,
+    )
     return {
         "plan_maturity": plan_maturity,
-        "task_class": task_class,
+        "task_class": routing_decision.task_class,
+        "effort_class": routing_decision.effort_class,
+        "base_effort_class": routing_decision.base_effort_class,
+        "selected_planning_mode": planning_mode,
+        "provider_state": provider_state,
+        "fallback_reason": routing_decision.fallback_reason,
         "visible_response_blocks": blocks,
         "debug_routing_details": {
             "runtime_mode": runtime_config.mode,
             "runtime_provider": runtime_config.provider,
             "runtime_model": runtime_config.model,
             "turn_index": turn_index,
+            "routing_reasoning": routing_decision.reasoning,
+            "base_task_class": task_class,
+            "selected_planning_mode": planning_mode,
             "signals": {
                 "token_count": len(tokens),
                 "date_hits": date_hits,
@@ -863,6 +881,7 @@ class DeterministicPlannerConversationRunnable:
             message=request.message,
             runtime_config=get_planner_runtime_config(),
             turn_index=len(request.runtime_context.get("recent_activity") or []),
+            planning_mode=request.session.selected_planning_mode,
         )
         outputs = list(panel.get("outputs") or [])
         decisions = list(panel.get("pending_decisions") or [])
@@ -1026,6 +1045,7 @@ class ModelBackedPlannerConversationRunnable:
                 message=request.message,
                 runtime_config=self._config,
                 turn_index=len(request.runtime_context.get("recent_activity") or []),
+                planning_mode=request.session.selected_planning_mode,
             ),
         )
 
@@ -1428,6 +1448,7 @@ def submit_planner_turn(
                 message=normalized_message,
                 runtime_config=runtime_config,
                 turn_index=len(activity_log),
+                planning_mode=session.selected_planning_mode,
             ),
         )
     model_tool_calls = _execute_model_tool_calls(

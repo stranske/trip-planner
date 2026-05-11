@@ -475,6 +475,11 @@ export type PlannerToolCallResponse = {
 export type PlannerTurnMetadata = {
   plan_maturity: string;
   task_class: string;
+  effort_class?: string;
+  base_effort_class?: string;
+  selected_planning_mode?: string | null;
+  provider_state?: string;
+  fallback_reason?: string | null;
   visible_response_blocks: Array<{
     kind: string;
     title: string;
