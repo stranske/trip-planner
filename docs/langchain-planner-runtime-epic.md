@@ -17,14 +17,15 @@ It is complete when:
 
 ## Current Runtime Posture
 
-The repo already contains planner-facing design and UI contract surfaces, but it does not yet expose a first-class planner runtime:
+The first-pass planner runtime now exists and should be treated as the baseline rather than a deferred design:
 
-- `bundle/planner/mock-state.js`, `bundle/planner/side-panel.js`, and `bundle/planner/orchestration-contracts.d.ts` define the mounted planner panel shape and demo payloads
-- `docs/product-architecture-brief.md` and `docs/contracts/planning-autonomy.md` define the intended LangChain and autonomy behaviors
-- `trip_planner/preferences/autonomy.py` already converts autonomy preferences into concrete planner pacing metadata
-- `trip_planner/app/routes/workspace.py` and `trip_planner/app/services/workspace.py` expose workspace planner decision and option-feedback endpoints, but they do not yet provide a trip-scoped conversation API, planner tool runner, or persisted planner checkpoint trail
+- `trip_planner/app/routes/planner.py` exposes trip-scoped session, resume, and turn endpoints.
+- `trip_planner/app/services/planner.py` owns deterministic fallback replies, the model-backed runnable, model-request metadata, structured planner blocks, explicit tool-call execution, and persisted turn payloads.
+- `trip_planner/app/services/planner_tools.py` exposes the current application tool registry for workspace state, inventory and scenario refresh, budget state and updates, policy/proposal reads, pending decisions, option feedback, and planning-notebook actions.
+- `trip_planner/persistence/models/planner_memory.py` and `trip_planner/app/services/planner_memory.py` persist checkpoint and summary records that make planner sessions resumable.
+- `frontend/src/components/planner/PlanningModeSelector.tsx`, `trip_planner/app/routes/workspace.py`, and `trip_planner/app/services/workspace.py` persist the selected planning mode for delegated, collaborative, revealed-preference, and in-trip work.
 
-That means the repo can render planner state and accept bounded planner interactions, but it still lacks the runtime layer that owns conversational planning, explicit tool use, and long-lived planner memory for arbitrary persisted trips.
+The remaining runtime gap is depth rather than absence. The repo still needs dynamic model routing, richer source/map/provider-backed planner tools, semantic recall for scattered planning notes, and live-provider verification for release confidence.
 
 ## Runtime Configuration
 
@@ -44,13 +45,13 @@ CI should cover the model-backed path with fake chat models rather than live pro
 
 This epic depends on the persisted trip, workspace, and runtime seams established by the current app stack on `main`, especially the workspace route/service surfaces that now assemble persisted trip state, scenario search state, and planner panel payloads.
 
-Within the epic itself, the expected order is:
+Within the epic itself, the first-pass delivery order was:
 
 1. `#760` trip-scoped planner session and conversation API
 2. `#761` tool-backed planner actions for inventory, ranking, budget, and policy state
 3. `#762` persisted planner checkpoints, summaries, and user-visible memory
 
-Issue `#761` should build on the session and conversation seam from `#760` instead of introducing a separate planner entrypoint. Issue `#762` should build on the conversation and tool-action seams from `#760` and `#761` so persisted memory reflects real planner state transitions rather than UI-only snapshots.
+The implementation follows that ordering: `#761` builds on the session and conversation seam from `#760`, and `#762` builds on the conversation and tool-action seams from `#760` and `#761` so persisted memory reflects real planner state transitions rather than UI-only snapshots.
 
 ## Shared Design Rules
 
@@ -74,10 +75,10 @@ Every child issue in this epic should preserve these rules:
 
 ## Contract Surface
 
-The first pass of this epic should stabilize the following surfaces before broader multi-agent or provider-specific work expands:
+The first pass of this epic stabilized the following surfaces before broader multi-agent or provider-specific work expands:
 
-- `trip_planner/app/routes/workspace.py` and adjacent app routes for trip-scoped planner API entrypoints
-- `trip_planner/app/services/workspace.py` plus new planner-specific service seams for conversation orchestration and tool execution
+- `trip_planner/app/routes/workspace.py`, `trip_planner/app/routes/planner.py`, and adjacent app routes for trip-scoped planner API entrypoints
+- `trip_planner/app/services/workspace.py`, `trip_planner/app/services/planner.py`, and `trip_planner/app/services/planner_tools.py` for conversation orchestration and tool execution
 - persisted planner/session models alongside the existing trip and planning-session persistence surfaces
 - `trip_planner/preferences/autonomy.py` and `docs/contracts/planning-autonomy.md` as the planner pacing and checkpoint contract inputs
 - `bundle/planner/orchestration-contracts.d.ts` and `bundle/planner/side-panel.js` as consumers of runtime planner state rather than mock-only state

@@ -19,6 +19,12 @@ That baseline is still required, but it is not the whole production-readiness st
 Run `make install` once from a clean checkout to create `.venv` and install all deps, then run these commands from the repo root:
 
 ```bash
+.venv/bin/black --check .
+```
+
+Black's local config is centralized in `pyproject.toml` with `line-length = 100`, matching the remote automation. Older local commands that passed `--line-length 100` explicitly are equivalent, but the flag should no longer be needed from a correctly synced checkout and refreshed `.venv`.
+
+```bash
 make runtime-production-check
 ```
 

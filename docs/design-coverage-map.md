@@ -4,7 +4,7 @@ This document maps every major design commitment in `trip-planner` to source cod
 It distinguishes docs-only claims from tested implementations so weekly reviews can assess real delivery status
 without re-reading every design doc.
 
-**Last updated:** 2026-04-30  
+**Last updated:** 2026-05-11
 **Test suite baseline:** 524 passed, 1 xfailed (was 3; two resolved by issue #1046 audit — see `tests/planner/MIGRATIONS.md`)  
 **Source baseline:** 159 Python modules (~21.5 K LOC), 84 test modules (~18 K LOC), 38 TypeScript/React files
 
@@ -221,16 +221,19 @@ Issues: `#543` (epic), `#544`–`#548`
 
 Design ref: [`docs/langchain-planner-runtime-epic.md`](langchain-planner-runtime-epic.md)
 
-> **Partial / deferred.** The `ModelBackedPlannerConversationRunnable` exists and wires `langchain_openai.ChatOpenAI` behind a protocol seam. The seam is configurable and tested at the integration level, but no LangChain tool chain or memory chain is wired up. This is the main post-#676 deferred integration.
+> **Partial.** The planner runtime now has a trip-scoped conversation API, persisted session/checkpoint records, a model-backed runnable, and an explicit app-tool registry/executor. The remaining gap is no longer "no planner tools"; it is that the first-pass registry covers workspace, budget, policy, proposal, decision, feedback, and planning-notebook state, while richer source retrieval, route-provider queries, dynamic model routing, and semantic reorientation remain follow-on work.
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
 | Planner protocol seam (configurable model) | `trip_planner/app/services/planner.py` (`PlannerChatModel`, `ModelBackedPlannerConversationRunnable`) | `tests/app/test_planner_routes.py` | ✅ Implemented |
-| LangChain tool chain (source retrieval, scoring, budget, maps, policy) | — | — | ❌ Missing |
-| Memory chain across planner turns | `trip_planner/app/services/planner.py` (`_conversation_messages`) | partial | 🟡 Partial (message history; no vector memory) |
-| Planning mode selection (delegated / collaborative / revealed-preference / in-trip) | `docs/product-architecture-brief.md` §4 | — | 📄 Docs-only |
+| Trip-scoped planner session + conversation API | `trip_planner/app/routes/planner.py`, `trip_planner/app/services/planner.py` | `tests/app/test_planner_routes.py`, `tests/app/test_planner_turn_e2e.py` | ✅ Implemented |
+| App-tool registry and executor | `trip_planner/app/services/planner_tools.py`, `trip_planner/app/services/planner.py` (`_execute_model_tool_calls`) | `tests/app/test_planner_routes.py` | ✅ Implemented |
+| Memory and checkpoint persistence | `trip_planner/persistence/models/planner_memory.py`, `trip_planner/app/services/planner_memory.py` | `tests/app/test_planner_routes.py`, `tests/app/test_planner_turn_e2e.py` | 🟡 Partial (checkpoint and notebook memory; no semantic/vector recall) |
+| Planning mode selection (delegated / collaborative / revealed-preference / in-trip) | `frontend/src/components/planner/PlanningModeSelector.tsx`, `trip_planner/app/routes/workspace.py`, `trip_planner/app/services/workspace.py` | `frontend/src/components/planner/PlanningModeSelector.test.tsx`, `frontend/src/routes/WorkspacePage.test.tsx`, `tests/app/test_workspace.py` | ✅ Implemented |
+| Dynamic model routing by task complexity | — | — | ❌ Missing |
+| Provider-rich planner tools (source retrieval, live routing/maps, source-quality scoring) | `trip_planner/app/services/planner_tools.py` (first-pass app tools only) | partial route/tool tests | 🟡 Partial |
 
-**Gap detail (follow-up issue candidate):** The LangChain tool registry is not implemented. `planner.py` constructs a message payload and sends it to the model, but there are no explicit tools registered for source retrieval, itinerary scoring, budget calculation, map/routing queries, or policy requirement assembly. The runtime config lists tool capability flags (`source_retrieval_enabled`, `itinerary_scoring_enabled`, etc.) but they do not resolve to callable tools. This is a clearly scoped gap: implement `trip_planner/app/services/planner_tools.py` that exposes each domain service as a LangChain-compatible tool and registers it in `ModelBackedPlannerConversationRunnable`.
+**Gap detail (follow-up issue candidate):** The runtime can execute explicit planner tools and persist their traces, but it still needs a model-routing policy that distinguishes fast conversational turns from deeper synthesis, richer source/map/provider-backed tools, and semantic planner memory that can reorient when a traveler says "I was working on lodging" or "put this in the Oslo file."
 
 ---
 
@@ -272,18 +275,19 @@ Design ref: [`docs/live-tpp-execution-reoptimization-epic.md`](live-tpp-executio
 Design refs: [`docs/google-maps-platform-hardening-epic.md`](google-maps-platform-hardening-epic.md), [`docs/maps-timeline-comparison-epic.md`](maps-timeline-comparison-epic.md)  
 Issues: `#679` (epic), `#698`–`#700`
 
-> **Partial.** The map adapter boundary and fallback rendering are implemented. The route-context map contract shipped as a doc + fixture-validation contract (PR #1008) plus the `frontend/src/components/maps/mapSurface.ts` TypeScript surface; the original `test_map_target_uses_typed_route_context_contract` xfail (which incorrectly asserted on a Python type export from `trip_planner.contracts`) was deleted by the issue #1046 audit (2026-04-30) and recorded in `tests/planner/MIGRATIONS.md`. Timeline view (`#698`) and the dedicated map surface UI (`#699`) remain missing.
+> **Partial.** The map adapter boundary, bounded fallback rendering, Google Maps JavaScript provider path, global/local map-scope controls, workspace timeline rendering, and scenario comparison surfaces now exist. Remaining work is mostly product depth: live provider verification in configured environments, richer regional/local geometry, deeper option-marker detail, and a dedicated source-backed timeline contract beyond the current route-sequence adapter.
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
-| Google Maps JS adapter boundary + fallback rendering | `frontend/src/components/maps/TripMap.tsx`, `mapSurface.ts` | `frontend/src/components/maps/mapSurface.test.ts` | ✅ Implemented |
-| Route-context map contract (`docs/contracts/route-context-map-target.md`) | `docs/contracts/route-context-map-target.md`, `frontend/src/components/maps/mapSurface.ts` | `tests/contracts/test_route_context_map_target.py` | 🟡 Partial (contract tested; UI not wired) |
-| Timeline view for trip structure + day sequencing (`#698`) | — | — | ❌ Missing |
-| Dedicated map surface for route + option context (`#699`) | — | — | ❌ Missing |
-| Saved-scenario + trip comparison views (`#700`) | `frontend/src/components/workspace/ScenarioComparison.tsx`, `components/trips/TripComparison.tsx` | — | 🟡 Partial (components exist; no dedicated tests) |
-| Workspace timeline contract | `docs/workspace_timeline_contract.md` | — | 📄 Docs-only |
+| Google Maps JS adapter boundary + fallback rendering | `frontend/src/components/maps/TripMap.tsx`, `frontend/src/components/maps/mapSurface.ts` | `frontend/src/components/maps/mapSurface.test.ts`, `frontend/src/components/maps/TripMap.test.tsx`, `frontend/src/routes/WorkspacePage.test.tsx` | ✅ Implemented |
+| Route-context map contract (`docs/contracts/route-context-map-target.md`) | `docs/contracts/route-context-map-target.md`, `frontend/src/components/maps/mapSurface.ts`, `frontend/src/components/maps/TripMap.tsx` | `tests/contracts/test_route_context_map_target.py`, frontend map tests | ✅ Implemented |
+| Global/local map scope switching | `frontend/src/components/maps/mapSurface.ts`, `frontend/src/components/maps/TripMap.tsx` | `frontend/src/components/maps/mapSurface.test.ts`, `frontend/src/routes/WorkspacePage.test.tsx` | 🟡 Partial (global/local shipped; richer regional geometry pending) |
+| Timeline view for trip structure + day sequencing (`#698`) | `frontend/src/routes/WorkspacePage.tsx` (`buildTimelineStops`, timeline section) | `frontend/src/routes/WorkspacePage.test.tsx` | 🟡 Partial (route-sequence adapter; no provider-rich per-leg timing) |
+| Dedicated map surface for route + option context (`#699`) | `frontend/src/components/maps/TripMap.tsx`, `frontend/src/components/maps/mapSurface.ts` | frontend map/workspace tests | ✅ Implemented |
+| Saved-scenario + trip comparison views (`#700`) | `frontend/src/components/workspace/ScenarioComparison.tsx`, `components/trips/TripComparison.tsx`, `frontend/src/routes/WorkspacePage.tsx` | `frontend/src/routes/WorkspacePage.test.tsx` | 🟡 Partial (workspace-tested; targeted component tests still thin) |
+| Workspace timeline contract | `docs/workspace_timeline_contract.md`, `frontend/src/routes/WorkspacePage.tsx` | `frontend/src/routes/WorkspacePage.test.tsx` | 🟡 Partial |
 
-**Gap detail (follow-up issue candidate):** The itinerary timeline view (`#698`) has a contract document (`docs/workspace_timeline_contract.md`) but no implementation. A minimal deliverable would be a `TimelineView` React component consuming the `WorkspaceTimeline` contract shape already defined in the doc, plus a backend route or workspace payload extension that exposes per-day itinerary data. This is self-contained enough to be a single issue.
+**Gap detail (follow-up issue candidate):** The shipped timeline and map surfaces are good enough for workspace testing, but they still depend on route-sequence summaries and shaped scenario data rather than provider-rich timing, distance, and local-geometry outputs. The next issue should upgrade the route/timeline/map contract so a traveler can move cleanly between global trip outline, regional comparison, and precise segment review without losing context.
 
 ---
 
@@ -311,28 +315,28 @@ From [`docs/product-architecture-brief.md`](product-architecture-brief.md) and [
 | Audit trail (created_at, updated_at, version on mutable records) | `trip_planner/persistence/models/` | ✅ Implemented |
 | Append-only scenario history | `trip_planner/state/scenarios.py` | ✅ Implemented |
 | Trip references artifacts (no inlining) | `trip_planner/contracts/trip.py` (`TripArtifactRefs`) | ✅ Implemented |
-| Explicit deferred seams (TPP transport, Maps key, LangChain tools) | `tests/app/test_full_product_verification.py` (skip checks) | ✅ Implemented |
+| Explicit deferred seams (TPP transport, Maps key, provider-rich planner tools) | `tests/app/test_full_product_verification.py` (skip checks) | ✅ Implemented |
 | Five bounded modules (preferences, options, itinerary, budget, business_policy_export) | `trip_planner/` subdirectory layout | ✅ Implemented |
 
 ---
 
-## Summary: Docs-Only Claims (no source file)
+## Summary: Remaining Follow-Up Claims
 
-These design commitments have no corresponding source implementation. Each is a candidate for a follow-up issue:
+These design commitments are still missing, partial, or not yet verified in a live provider environment. Each is a candidate for a follow-up issue:
 
-1. **LangChain tool registry** — `product-architecture-brief.md` §4 + `langchain-planner-runtime-epic.md`. No `planner_tools.py`; tool capability flags are inert. See §13 above.
-2. **Timeline view** — `workspace_timeline_contract.md` + `maps-timeline-comparison-epic.md` `#698`. No frontend component. See §16 above.
-3. **Dedicated map route surface** — `maps-timeline-comparison-epic.md` `#699`. Map boundary exists but no typed-contract-backed route surface. See §16 above.
-4. **Live TPP transport** — `live-tpp-execution-reoptimization-epic.md`. All seams exist but no live HTTP call. See §15 above.
+1. **Dynamic planner model routing** — `product-architecture-brief.md` §4 + `langchain-planner-runtime-epic.md`. Planning mode exists, but runtime model selection does not yet distinguish quick turns from deeper synthesis/planning turns. See §13 above.
+2. **Semantic planner memory and reorientation** — planner checkpoints and notebook state exist, but there is no semantic recall/reorientation layer for scattered traveler notes and "I was working on..." context shifts. See §13 above.
+3. **Provider-rich planner tools** — `planner_tools.py` exists for first-pass app state actions, but source retrieval, live routing/maps, and source-quality scoring are still not exposed as planner tools. See §13 above.
+4. **Live TPP transport verification** — `live-tpp-execution-reoptimization-epic.md`. All seams exist but no live HTTP round-trip is required by the default test matrix. See §15 above.
 5. **Source quality model implementation** — `source-quality-model.md` + `source-channel-strategy.md`. Design defined; no engine code.
-6. **Planning mode selection UX** — `product-architecture-brief.md` §4 (delegated / collaborative / revealed-preference / in-trip modes). No frontend mode selector or backend routing.
+6. **Provider-rich timeline/map depth** — workspace timeline and map surfaces exist, but still need richer regional/local geometry, per-leg timing, and live provider readiness evidence. See §16 above.
 7. **Preference explanation generation tests** — `trip_planner/preferences/explanations.py` exists; no `tests/preferences/test_explanations.py`.
 
 ---
 
 ## How to Use This Map in Weekly Reviews
 
-1. Check the **xfailed tests** first: `pytest -q tests/planner/test_planner_turn_acceptance.py` shows the one remaining deferred area (ranking and route_comparison in the workspace payload — see §11).
+1. Check the **planner/runtime acceptance tests** first: `pytest -q tests/planner/test_planner_turn_acceptance.py tests/app/test_planner_routes.py tests/app/test_full_product_verification.py`.
 2. The **Docs-only** rows in each section identify items that are design commitments but not yet scheduled work.
 3. **Partial** rows identify items where code exists but is seeded/fixture-backed — these are the next implementation lane.
-4. The **Summary: Docs-Only Claims** section lists everything that would require a new issue before implementation can start.
+4. The **Summary: Remaining Follow-Up Claims** section lists the highest-priority gaps that should become new issues or verification tasks.
