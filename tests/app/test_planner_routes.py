@@ -654,6 +654,77 @@ def test_planner_turn_executes_explicit_tool_calls(client: TestClient) -> None:
         assert session.active_budget_plan_id is not None
 
 
+def test_planner_turn_handles_planning_notebook_commands(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+
+    remembered = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": (
+                "Remember this for later: Compare fewer evening moves before the next checkpoint."
+            )
+        },
+    )
+
+    assert remembered.status_code == 200, remembered.text
+    remembered_reply = remembered.json()["messages"][-1]
+    capture_call = next(
+        item for item in remembered_reply["tool_calls"] if item["tool_name"] == "capture_notebook_item"
+    )
+    assert capture_call["status"] == "completed"
+    notebook_item_id = capture_call["output"]["notebook_item_id"]
+
+    workspace = client.get(f"/api/workspace/{trip_id}")
+    assert workspace.status_code == 200
+    notebook_items = workspace.json()["planning_notebook"]["items"]
+    assert notebook_items[0]["notebook_item_id"] == notebook_item_id
+    assert notebook_items[0]["source"] == "planner"
+    assert notebook_items[0]["title"] == "Compare fewer evening moves before the next checkpoint."
+
+    focused = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "I was working on lodging."},
+    )
+
+    assert focused.status_code == 200, focused.text
+    focused_reply = focused.json()["messages"][-1]
+    focus_call = next(
+        item for item in focused_reply["tool_calls"] if item["tool_name"] == "set_notebook_focus"
+    )
+    assert focus_call["output"] == {"category": "lodging", "notebook_item_id": None}
+
+    completed_route = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": "Create a completed route notebook item.",
+            "tool_calls": [
+                {
+                    "tool_name": "capture_notebook_item",
+                    "arguments": {
+                        "title": "Compare airport train with taxi transfer.",
+                        "category": "route",
+                        "status": "completed",
+                    },
+                }
+            ],
+        },
+    )
+    assert completed_route.status_code == 200, completed_route.text
+
+    read_completed = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Show me completed route tasks."},
+    )
+
+    assert read_completed.status_code == 200, read_completed.text
+    read_reply = read_completed.json()["messages"][-1]
+    read_call = next(
+        item for item in read_reply["tool_calls"] if item["tool_name"] == "read_planning_notebook"
+    )
+    assert read_call["output"]["completed_count"] == 1
+    assert read_call["output"]["items"][0]["title"] == "Compare airport train with taxi transfer."
+
+
 def test_planner_turn_rejects_invalid_tool_calls(client: TestClient) -> None:
     trip_id = _create_trip(client)
 

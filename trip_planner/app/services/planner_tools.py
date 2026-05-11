@@ -14,7 +14,9 @@ from trip_planner.app.services.policy import get_workspace_policy_payload
 from trip_planner.app.services.proposal import get_workspace_proposal_payload
 from trip_planner.app.services.workspace import (
     answer_workspace_planner_decision,
+    create_planning_notebook_item,
     get_workspace_payload,
+    set_planning_notebook_focus,
     submit_workspace_option_feedback,
 )
 
@@ -88,6 +90,20 @@ _TOOL_DEFINITIONS: tuple[PlannerToolDefinition, ...] = (
         tool_name="record_option_feedback",
         description="Accept, reject, revise, or save a planner option through the workspace service.",
         mutates_state=True,
+    ),
+    PlannerToolDefinition(
+        tool_name="capture_notebook_item",
+        description="Save a trip-scoped planning notebook item for later planner turns.",
+        mutates_state=True,
+    ),
+    PlannerToolDefinition(
+        tool_name="set_notebook_focus",
+        description="Switch the active planning notebook focus by category or notebook item.",
+        mutates_state=True,
+    ),
+    PlannerToolDefinition(
+        tool_name="read_planning_notebook",
+        description="Read active or completed planning notebook items for the current trip.",
     ),
 )
 
@@ -474,6 +490,102 @@ def _record_option_feedback(
     )
 
 
+def _capture_notebook_item(
+    db_session: Session,
+    user: AuthenticatedUser,
+    trip_id: str,
+    arguments: dict[str, Any],
+) -> PlannerToolResult:
+    title = str(arguments.get("title") or "").strip()
+    if not title:
+        raise ValueError("capture_notebook_item requires title.")
+    result = create_planning_notebook_item(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        title=title,
+        note=str(arguments.get("note") or ""),
+        category=str(arguments.get("category") or "other").strip(),
+        status=str(arguments.get("status") or "active").strip(),
+        priority=str(arguments.get("priority") or "normal").strip(),
+        source="planner",
+        source_message_ids=[str(item) for item in list(arguments.get("source_message_ids") or [])],
+        tags=[str(item) for item in list(arguments.get("tags") or [])],
+    )
+    return PlannerToolResult(
+        tool_name="capture_notebook_item",
+        status="completed",
+        summary=f"Saved notebook item '{result['title']}' in {result['category']}.",
+        mutates_state=True,
+        refs=_ref_list(result["notebook_item_id"]),
+        output={
+            "notebook_item_id": result["notebook_item_id"],
+            "category": result["category"],
+            "status": result["status"],
+            "title": result["title"],
+        },
+    )
+
+
+def _set_notebook_focus(
+    db_session: Session,
+    user: AuthenticatedUser,
+    trip_id: str,
+    arguments: dict[str, Any],
+) -> PlannerToolResult:
+    category = arguments.get("category")
+    notebook_item_id = arguments.get("notebook_item_id")
+    result = set_planning_notebook_focus(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        category=str(category).strip() if category else None,
+        notebook_item_id=str(notebook_item_id).strip() if notebook_item_id else None,
+    )
+    focus_label = result["notebook_item_id"] or result["category"] or "no active focus"
+    return PlannerToolResult(
+        tool_name="set_notebook_focus",
+        status="completed",
+        summary=f"Set planning notebook focus to {focus_label}.",
+        mutates_state=True,
+        refs=_ref_list(result["notebook_item_id"], result["category"]),
+        output=result,
+    )
+
+
+def _read_planning_notebook(
+    db_session: Session,
+    user: AuthenticatedUser,
+    trip_id: str,
+    arguments: dict[str, Any],
+) -> PlannerToolResult:
+    payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
+    notebook = payload["planning_notebook"]
+    category = arguments.get("category")
+    status = arguments.get("status")
+    limit = max(1, min(int(arguments.get("limit") or 5), 20))
+    items = list(notebook.get("items") or [])
+    if category:
+        items = [item for item in items if item.get("category") == str(category)]
+    if status:
+        items = [item for item in items if item.get("status") == str(status)]
+    items = items[:limit]
+    summary = notebook.get("summary") or {}
+    return PlannerToolResult(
+        tool_name="read_planning_notebook",
+        status="completed",
+        summary=f"Read {len(items)} planning notebook item(s).",
+        mutates_state=False,
+        refs=_ref_list(*(str(item.get("notebook_item_id") or "") for item in items)),
+        output={
+            "items": items,
+            "focus": notebook.get("focus") or {},
+            "active_count": len(summary.get("active_items") or []),
+            "completed_count": len(summary.get("completed_items") or []),
+        },
+    )
+
+
 _TOOL_HANDLERS: dict[str, PlannerToolHandler] = {
     "read_workspace_state": _read_workspace_state,
     "refresh_inventory": _refresh_inventory,
@@ -484,6 +596,9 @@ _TOOL_HANDLERS: dict[str, PlannerToolHandler] = {
     "read_proposal_state": _read_proposal_state,
     "answer_pending_decision": _answer_pending_decision,
     "record_option_feedback": _record_option_feedback,
+    "capture_notebook_item": _capture_notebook_item,
+    "set_notebook_focus": _set_notebook_focus,
+    "read_planning_notebook": _read_planning_notebook,
 }
 
 

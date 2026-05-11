@@ -3335,8 +3335,9 @@ def update_planning_notebook_item(
         new_status = _validate_notebook_choice(
             "status", str(updates["status"]), PLANNING_NOTEBOOK_STATUSES
         )
+        now = datetime.now(UTC)
         if new_status == "completed" and item.status != "completed":
-            item.completed_at = datetime.now(UTC)
+            item.completed_at = now
         elif new_status != "completed":
             item.completed_at = None
         item.status = new_status
@@ -3406,7 +3407,7 @@ def set_planning_notebook_focus(
             category = item.category
         elif category != item.category:
             raise ValueError(
-                "Notebook focus category must match the selected notebook item category."
+                f"category '{category}' does not match notebook item category '{item.category}'."
             )
     session_record.notebook_focus_category = category
     session_record.notebook_focus_item_id = notebook_item_id
