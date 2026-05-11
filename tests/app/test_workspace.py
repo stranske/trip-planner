@@ -667,6 +667,12 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface(
     )
     assert payload["scenarios"][0]["map_view"]["place_markers"][0]["label"]
     assert payload["scenarios"][0]["map_view"]["rough_route_geometry"][0]["from_label"]
+    segment = payload["scenarios"][0]["map_view"]["rough_route_geometry"][0]
+    assert isinstance(segment["duration_minutes"], int)
+    assert segment["duration_minutes"] > 0
+    assert "distance_km" in segment
+    assert segment["confidence"] in {"high", "medium", "low"}
+    assert "unavailable_reason" in segment
     assert (
         payload["scenarios"][0]["map_view"]["selected_segment_id"]
         == payload["scenarios"][0]["map_view"]["rough_route_geometry"][0]["id"]

@@ -288,6 +288,10 @@ export type RuntimeScenarioComparison = {
         x2: number;
         y2: number;
         warning: string | null;
+        duration_minutes?: number | null;
+        distance_km?: number | null;
+        confidence?: "high" | "medium" | "low" | null;
+        unavailable_reason?: string | null;
       }>;
       confidence: {
         level: "high" | "medium" | "low";

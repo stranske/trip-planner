@@ -410,6 +410,11 @@ a {
   background: rgba(19, 33, 44, 0.04);
 }
 
+.timeline-stop-focused {
+  border: 1px solid rgba(56, 117, 107, 0.35);
+  background: rgba(56, 117, 107, 0.08);
+}
+
 .timeline-stop h3,
 .scenario-card h3,
 .decision-card h3 {
@@ -466,8 +471,29 @@ a {
   min-height: 100%;
 }
 
+.timeline-focus-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.timeline-focus-notes span {
+  border: 1px solid rgba(56, 117, 107, 0.22);
+  border-radius: 8px;
+  background: rgba(56, 117, 107, 0.08);
+  color: #234f48;
+  font-weight: 700;
+  padding: 0.55rem 0.7rem;
+}
+
 .scenario-review-metrics {
   margin-top: 1rem;
+}
+
+.scenario-card-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 0.85rem;
 }
 
 .scenario-highlight-list {
@@ -841,6 +867,27 @@ a {
 .planner-conversation-form button:disabled {
   cursor: progress;
   opacity: 0.72;
+}
+
+.planner-route-focus {
+  border: 1px solid rgba(56, 117, 107, 0.2);
+  border-radius: 8px;
+  background: rgba(56, 117, 107, 0.08);
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  padding: 0.9rem;
+}
+
+.planner-route-focus h3,
+.planner-route-focus p,
+.planner-route-focus ul {
+  margin: 0;
+}
+
+.planner-route-focus ul {
+  color: #365063;
+  padding-left: 1.1rem;
 }
 
 .budget-panel-card {

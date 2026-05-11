@@ -90,6 +90,8 @@ This note captures the remaining gaps after the recent readiness, planner-runtim
 
 **Why it matters:** The current map and timeline are usable and tested, but they still rely on shaped route summaries. Travelers need a rough whole-trip outline plus precise segment review for specific decisions.
 
+**Status (2026-05-11, issue #1162):** Implemented for the shared review-state and segment timing seam. Map scope now covers whole-trip, regional route, and segment-level review; selected route and segment state drive the map, day-plan timeline, scenario comparison, and planner route-focus panel. Runtime map geometry now carries duration/confidence/unavailable-state detail per segment. Remaining work is live provider distance/geometry verification and deeper source-backed marker detail.
+
 **Scope:**
 
 - Strengthen the map scope model from global/local into global, regional, and segment-level views.

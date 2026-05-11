@@ -99,11 +99,17 @@ export function ScenarioComparison({
     selectedScenario?.scenario_id === leadScenario?.scenario_id
       ? comparison.scenarios.find((scenario) => scenario.scenario_id !== leadScenario?.scenario_id) ?? null
       : selectedScenario;
-  const comparedScenarios = [leadScenario, secondaryScenario].filter(
+  const comparisonCandidates = [
+    leadScenario,
+    selectedScenario,
+    secondaryScenario,
+    ...comparison.scenarios,
+  ];
+  const comparedScenarios = comparisonCandidates.filter(
     (scenario, index, scenarios): scenario is ComparisonScenario =>
       scenario !== null &&
       scenarios.findIndex((candidate) => candidate?.scenario_id === scenario.scenario_id) === index
-  );
+  ).slice(0, 4);
 
   if (comparison.scenarios.length === 0) {
     return (
@@ -141,11 +147,34 @@ export function ScenarioComparison({
         {comparedScenarios.map((scenario) => {
           const savedScenarioDetails = findSavedScenarioDetails(savedScenarios, scenario.scenario_id);
           return (
-            <article key={scenario.scenario_id} className="scenario-card">
-              <p className="scenario-kicker">{savedScenarioDetails?.label ?? scenario.status}</p>
+            <article
+              key={scenario.scenario_id}
+              className={`scenario-card${
+                scenario.scenario_id === selectedScenario?.scenario_id ? " scenario-card-active" : ""
+              }`}
+            >
+              <p className="scenario-kicker">
+                {scenario.scenario_id === leadScenario?.scenario_id
+                  ? "baseline"
+                  : savedScenarioDetails?.label ?? scenario.status}
+              </p>
               <h3>{savedScenarioDetails?.title ?? scenario.title}</h3>
               <p>{savedScenarioDetails?.summary ?? scenario.summary}</p>
               <p className="muted-copy">{scenario.comparison_note}</p>
+              <dl className="workspace-meta scenario-card-metrics">
+                <div>
+                  <dt>Time</dt>
+                  <dd>{formatMetricValue("travel_minutes", scenario)}</dd>
+                </div>
+                <div>
+                  <dt>Transfers</dt>
+                  <dd>{formatMetricValue("transfers", scenario)}</dd>
+                </div>
+                <div>
+                  <dt>Cost</dt>
+                  <dd>{formatMetricValue("estimated_total", scenario)}</dd>
+                </div>
+              </dl>
             </article>
           );
         })}

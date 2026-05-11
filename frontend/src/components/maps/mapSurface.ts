@@ -73,6 +73,10 @@ export type RouteSegment = {
   x2: number;
   y2: number;
   warning: string | null;
+  durationMinutes: number | null;
+  distanceKm: number | null;
+  confidence: MapGeometryConfidence;
+  unavailableReason: string | null;
   focusCues: MapFocusCue[];
 };
 
@@ -285,9 +289,69 @@ function buildDestinationContext({
   return Array.from(new Set([...fromRoute, ...fromBundles, ...fromTripFrame]));
 }
 
-function buildRouteSegments(routeStops: RouteStop[], routeWarning: string | null): RouteSegment[] {
+function buildRouteStops(activeScenario: TripMapScenario): RouteStop[] {
+  const providerMarkers = activeScenario.map_view?.place_markers ?? [];
+  if (providerMarkers.length > 0) {
+    return providerMarkers.map((marker, index) => ({
+      id: marker.id,
+      sourceId: marker.source_id,
+      label: marker.label,
+      description: describeStop(index, providerMarkers.length),
+      x: marker.x * 100,
+      y: marker.y * 100,
+    }));
+  }
+
+  return activeScenario.route_sequence.map((stop, index) => {
+    const coordinate = coordinateForRouteIndex(index, activeScenario.route_sequence.length);
+    return {
+      id: `${activeScenario.scenario_id}-${stop}-${index}`,
+      sourceId: stop,
+      label: humanizeStop(stop),
+      description: describeStop(index, activeScenario.route_sequence.length),
+      x: coordinate.x,
+      y: coordinate.y,
+    };
+  });
+}
+
+function buildRouteSegments(
+  activeScenario: TripMapScenario,
+  routeStops: RouteStop[],
+  routeWarning: string | null
+): RouteSegment[] {
+  const providerSegments = activeScenario.map_view?.rough_route_geometry ?? [];
+  if (providerSegments.length > 0) {
+    const stopById = new Map(routeStops.map((stop) => [stop.id, stop]));
+    return providerSegments
+      .filter(
+        (segment) => stopById.has(segment.from_marker_id) && stopById.has(segment.to_marker_id)
+      )
+      .map((segment) => ({
+        id: segment.id,
+        fromStopId: segment.from_marker_id,
+        toStopId: segment.to_marker_id,
+        fromLabel: segment.from_label,
+        toLabel: segment.to_label,
+        x1: segment.x1 * 100,
+        y1: segment.y1 * 100,
+        x2: segment.x2 * 100,
+        y2: segment.y2 * 100,
+        warning: segment.warning ?? routeWarning,
+        durationMinutes: segment.duration_minutes ?? null,
+        distanceKm: segment.distance_km ?? null,
+        confidence: segment.confidence ?? activeScenario.map_view?.confidence.level ?? "medium",
+        unavailableReason: segment.unavailable_reason ?? null,
+        focusCues: [],
+      }));
+  }
+
   return routeStops.slice(0, -1).map((stop, index) => {
     const nextStop = routeStops[index + 1];
+    const fallbackMinutes =
+      routeStops.length > 1
+        ? Math.max(0, Math.round(activeScenario.metrics.travel_minutes / (routeStops.length - 1)))
+        : null;
     return {
       id: `${stop.id}-${nextStop.id}`,
       fromStopId: stop.id,
@@ -299,6 +363,11 @@ function buildRouteSegments(routeStops: RouteStop[], routeWarning: string | null
       x2: nextStop.x,
       y2: nextStop.y,
       warning: index === 0 ? routeWarning : null,
+      durationMinutes: fallbackMinutes,
+      distanceKm: null,
+      confidence: activeScenario.feasible ? "medium" : "low",
+      unavailableReason:
+        "Provider distance is not available; duration is estimated from ranked scenario timing.",
       focusCues: [],
     };
   });
@@ -426,7 +495,7 @@ function scopePresentationFor({
         ? `${selectedSegment.fromLabel} to ${selectedSegment.toLabel}`
         : "Local segment",
       summary: selectedSegment
-        ? `Focuses on the ${selectedSegment.fromLabel} to ${selectedSegment.toLabel} travel leg and nearby planning markers.`
+        ? `Focuses on the ${selectedSegment.fromLabel} to ${selectedSegment.toLabel} travel leg, timing estimate, and nearby planning markers.`
         : "Add another route stop before the map can focus on a local segment.",
       precisionLabel: selectedSegment ? "Segment-level planning view" : "Segment detail pending",
     };
@@ -435,8 +504,8 @@ function scopePresentationFor({
   return {
     activeScope,
     label: "Selected route option",
-    summary: "Shows the route option currently selected in the comparison workbench.",
-    precisionLabel: "Approximate route shape",
+    summary: "Shows the selected route option across its regional travel legs and comparison context.",
+    precisionLabel: "Regional route review",
   };
 }
 
@@ -772,17 +841,7 @@ export function buildTripMapSurfaceModel({
   selectedSegmentId?: string | null;
   planningLedger?: PlanningLedgerState | null;
 }): TripMapSurfaceModel {
-  const routeStops = activeScenario.route_sequence.map((stop, index) => {
-    const coordinate = coordinateForRouteIndex(index, activeScenario.route_sequence.length);
-    return {
-      id: `${activeScenario.scenario_id}-${stop}-${index}`,
-      sourceId: stop,
-      label: humanizeStop(stop),
-      description: describeStop(index, activeScenario.route_sequence.length),
-      x: coordinate.x,
-      y: coordinate.y,
-    };
-  });
+  const routeStops = buildRouteStops(activeScenario);
   const destinationContext = buildDestinationContext({
     bundles,
     routeStops,
@@ -799,7 +858,7 @@ export function buildTripMapSurfaceModel({
   const trimmedApiKey = googleMapsApiKey?.trim() ?? "";
   const routeWarning = deriveRouteWarning(activeScenario, feasibilitySummary);
   const resolvedPolicyPosture = tripMode === "leisure" ? null : policyPosture;
-  const routeSegments = buildRouteSegments(routeStops, routeWarning);
+  const routeSegments = buildRouteSegments(activeScenario, routeStops, routeWarning);
   const baseMarkers = buildMarkers({
     activeScenario,
     bundles,
@@ -889,7 +948,7 @@ export function buildTripMapSurfaceModel({
   });
   const workspaceView: MapWorkspaceView = {
     activeScope,
-    activeRouteOptionId: activeScenario.scenario_id,
+    activeRouteOptionId: activeScenario.route_option_id ?? activeScenario.scenario_id,
     selectedSegmentId: visibleMapContent.selectedSegment?.id ?? null,
     placeMarkers: visibleMapContent.markers,
     roughRouteGeometry: visibleMapContent.routeSegments,

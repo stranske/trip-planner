@@ -28,12 +28,14 @@ import {
   type PlanningNotebookItem,
   type PlanningNotebookState,
   type RouteOptionActionType,
+  type RuntimeScenarioComparison,
   submitPlannerOptionFeedback,
   type SavedScenarioRecord,
   type WorkspaceData,
 } from "../api/workspace";
 import { WorkspaceBudgetPanel } from "../components/budget/WorkspaceBudgetPanel";
 import { TripMap } from "../components/maps/TripMap";
+import type { MapViewScope } from "../components/maps/mapSurface";
 import { PlanningModeSelector } from "../components/planner/PlanningModeSelector";
 import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
 import { TripComparison } from "../components/trips/TripComparison";
@@ -50,8 +52,20 @@ type LoaderData = {
 type TimelineStop = {
   key: string;
   label: string;
+  routeIndex: number;
   startDay: number;
   endDay: number;
+};
+
+type RouteSegmentFocus = {
+  id: string;
+  fromLabel: string;
+  toLabel: string;
+  fromIndex: number;
+  toIndex: number;
+  durationMinutes: number | null;
+  confidence: "high" | "medium" | "low";
+  unavailableReason: string | null;
 };
 
 type ScenarioReviewMetric = {
@@ -182,10 +196,111 @@ function buildTimelineStops(routeSequence: string[], tripDuration: number | null
     return {
       key: `${stop}-${index}`,
       label: titleCaseStop(stop),
+      routeIndex: index,
       startDay,
       endDay,
     };
   });
+}
+
+function fallbackSegmentId(scenarioId: string, routeSequence: string[], index: number): string {
+  const fromStop = routeSequence[index];
+  const toStop = routeSequence[index + 1];
+  return `${scenarioId}-${fromStop}-${index}-${scenarioId}-${toStop}-${index + 1}`;
+}
+
+function routeSegmentFocusesFor(
+  scenario: RuntimeScenarioComparison["scenarios"][number] | null
+): RouteSegmentFocus[] {
+  if (scenario == null) {
+    return [];
+  }
+
+  const markers = scenario.map_view?.place_markers ?? [];
+  const markerById = new Map(markers.map((marker) => [marker.id, marker]));
+  const providerSegments = scenario.map_view?.rough_route_geometry ?? [];
+  if (providerSegments.length > 0) {
+    return providerSegments.flatMap((segment) => {
+      const fromMarker = markerById.get(segment.from_marker_id);
+      const toMarker = markerById.get(segment.to_marker_id);
+      if (fromMarker == null || toMarker == null) {
+        return [];
+      }
+      return [
+        {
+          id: segment.id,
+          fromLabel: segment.from_label,
+          toLabel: segment.to_label,
+          fromIndex: fromMarker.route_index,
+          toIndex: toMarker.route_index,
+          durationMinutes: segment.duration_minutes ?? null,
+          confidence: segment.confidence ?? scenario.map_view?.confidence.level ?? "medium",
+          unavailableReason: segment.unavailable_reason ?? null,
+        },
+      ];
+    });
+  }
+
+  return scenario.route_sequence.slice(0, -1).map((fromStop, index) => ({
+    id: fallbackSegmentId(scenario.scenario_id, scenario.route_sequence, index),
+    fromLabel: titleCaseStop(fromStop),
+    toLabel: titleCaseStop(scenario.route_sequence[index + 1]),
+    fromIndex: index,
+    toIndex: index + 1,
+    durationMinutes:
+      scenario.route_sequence.length > 1
+        ? Math.max(0, Math.round(scenario.metrics.travel_minutes / (scenario.route_sequence.length - 1)))
+        : null,
+    confidence: scenario.feasible ? "medium" : "low",
+    unavailableReason:
+      "Provider distance is not available; duration is estimated from ranked scenario timing.",
+  }));
+}
+
+function resolveRouteSegmentFocus(
+  scenario: RuntimeScenarioComparison["scenarios"][number] | null,
+  selectedSegmentId: string | null
+): RouteSegmentFocus | null {
+  const segments = routeSegmentFocusesFor(scenario);
+  if (segments.length === 0) {
+    return null;
+  }
+  return segments.find((segment) => segment.id === selectedSegmentId) ?? segments[0];
+}
+
+function timelineFocusNotes(
+  ledger: WorkspaceData["planning_ledger"] | undefined,
+  scenario: RuntimeScenarioComparison["scenarios"][number] | null,
+  segment: RouteSegmentFocus | null
+): string[] {
+  const entries = ledger?.entries ?? [];
+  if (entries.length === 0 || scenario == null) {
+    return [];
+  }
+  const routeIds = new Set(
+    [scenario.scenario_id, scenario.route_option_id, segment?.id].filter(
+      (value): value is string => Boolean(value)
+    )
+  );
+  return entries
+    .filter((entry) => entry.status !== "superseded")
+    .filter((entry) => {
+      const metadata = entry.metadata ?? {};
+      const refs = [
+        entry.related_option_id,
+        entry.related_decision_id,
+        ...entry.source_refs,
+        metadata["route_option_id"],
+        metadata["scenario_id"],
+        metadata["route_segment_id"],
+        metadata["map_segment_id"],
+        metadata["selected_segment_id"],
+      ];
+      return refs.some((ref) => typeof ref === "string" && routeIds.has(ref));
+    })
+    .map((entry) => entry.summary.trim())
+    .filter(Boolean)
+    .slice(0, 3);
 }
 
 function useCompactWorkspaceLayout(): boolean {
@@ -809,6 +924,8 @@ function WorkspacePageContent({
   const [selectedScenarioId, setSelectedScenarioId] = useState(() =>
     resolveMapScenarioId(workspace)
   );
+  const [selectedMapScope, setSelectedMapScope] = useState<MapViewScope>("regional");
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [selectedTripComparisonId, setSelectedTripComparisonId] = useState<string | null>(
     () => trips.find((trip) => trip.trip_id !== workspace.trip_record.trip.trip_id)?.trip_id ?? null
   );
@@ -837,6 +954,8 @@ function WorkspacePageContent({
   useEffect(() => {
     setCurrentWorkspace(workspace);
     setSelectedScenarioId(resolveMapScenarioId(workspace));
+    setSelectedMapScope("regional");
+    setSelectedSegmentId(null);
     setShowWorkspaceDebugDetails(false);
   }, [workspace]);
 
@@ -908,6 +1027,12 @@ function WorkspacePageContent({
     activeScenario.scenario?.scenario_summary.route_sequence ??
     [];
   const timelineStops = buildTimelineStops(timelineRouteSequence, trip.trip_frame.duration_days);
+  const selectedRouteSegment = resolveRouteSegmentFocus(selectedRuntimeScenario, selectedSegmentId);
+  const selectedTimelineNotes = timelineFocusNotes(
+    currentWorkspace.planning_ledger,
+    selectedRuntimeScenario,
+    selectedRouteSegment
+  );
   const proposalFollowUp = currentWorkspace.proposal_state?.follow_up ?? null;
   const renderableProposalFollowUp = hasRenderableFollowUp(proposalFollowUp)
     ? proposalFollowUp
@@ -938,6 +1063,7 @@ function WorkspacePageContent({
   ].join(":");
   function handleScenarioSelection(scenarioId: string) {
     setSelectedScenarioId(scenarioId);
+    setSelectedSegmentId(null);
   }
 
   async function handlePlanningModeChange(mode: PlanningMode) {
@@ -1372,6 +1498,24 @@ function WorkspacePageContent({
                 : "Planning guide"}
             </span>
           </div>
+          {selectedRuntimeScenario ? (
+            <article className="planner-route-focus" aria-label="Planner route focus">
+              <p className="scenario-kicker">Route focus</p>
+              <h3>{selectedRuntimeScenario.title}</h3>
+              <p>
+                {selectedRouteSegment
+                  ? `${selectedRouteSegment.fromLabel} to ${selectedRouteSegment.toLabel}`
+                  : selectedRuntimeScenario.route_summary}
+              </p>
+              {selectedTimelineNotes.length > 0 ? (
+                <ul>
+                  {selectedTimelineNotes.map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </article>
+          ) : null}
           <PlanningModeSelector
             value={currentWorkspace.session.selected_planning_mode}
             busy={planningModeBusy}
@@ -1485,6 +1629,10 @@ function WorkspacePageContent({
           tripMode={trip.mode}
           policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : null}
           planningLedger={currentWorkspace.planning_ledger}
+          activeScope={selectedMapScope}
+          selectedSegmentId={selectedRouteSegment?.id ?? null}
+          onScopeChange={setSelectedMapScope}
+          onSelectSegment={setSelectedSegmentId}
           compactLayout={isCompactLayout}
         />
 
@@ -1686,6 +1834,19 @@ function WorkspacePageContent({
                   </p>
                 </article>
                 <article className="timeline-summary-card">
+                  <p className="scenario-kicker">Segment focus</p>
+                  <h3>
+                    {selectedRouteSegment
+                      ? `${selectedRouteSegment.fromLabel} to ${selectedRouteSegment.toLabel}`
+                      : "No segment selected"}
+                  </h3>
+                  <p>
+                    {selectedRouteSegment?.durationMinutes != null
+                      ? `${selectedRouteSegment.durationMinutes} minutes in the selected route option.`
+                      : "Segment timing will appear when route geometry is available."}
+                  </p>
+                </article>
+                <article className="timeline-summary-card">
                   <p className="scenario-kicker">Pacing</p>
                   <h3>
                     {selectedRuntimeScenario == null
@@ -1711,9 +1872,24 @@ function WorkspacePageContent({
                   </p>
                 </article>
               </div>
+              {selectedTimelineNotes.length > 0 ? (
+                <div className="timeline-focus-notes" aria-label="Timeline linked planning notes">
+                  {selectedTimelineNotes.map((note) => (
+                    <span key={note}>{note}</span>
+                  ))}
+                </div>
+              ) : null}
               <ol className="timeline-list" aria-label="Trip timeline sequence">
-                {timelineStops.map((stop) => (
-                  <li key={stop.key} className="timeline-stop">
+                {timelineStops.map((stop) => {
+                  const isSegmentFocus =
+                    selectedRouteSegment != null &&
+                    (stop.routeIndex === selectedRouteSegment.fromIndex ||
+                      stop.routeIndex === selectedRouteSegment.toIndex);
+                  return (
+                  <li
+                    key={stop.key}
+                    className={`timeline-stop${isSegmentFocus ? " timeline-stop-focused" : ""}`}
+                  >
                     <div className="timeline-dayband">
                       <span>Day {stop.startDay}</span>
                       <span>Day {stop.endDay}</span>
@@ -1724,9 +1900,15 @@ function WorkspacePageContent({
                         Days {stop.startDay}-{stop.endDay} keep this stop visible in the selected
                         route review path.
                       </p>
+                      {isSegmentFocus ? (
+                        <p className="muted-copy">
+                          Highlighted for the selected segment-level review.
+                        </p>
+                      ) : null}
                     </div>
                   </li>
-                ))}
+                  );
+                })}
               </ol>
             </>
           )}

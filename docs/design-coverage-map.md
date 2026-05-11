@@ -275,19 +275,19 @@ Design ref: [`docs/live-tpp-execution-reoptimization-epic.md`](live-tpp-executio
 Design refs: [`docs/google-maps-platform-hardening-epic.md`](google-maps-platform-hardening-epic.md), [`docs/maps-timeline-comparison-epic.md`](maps-timeline-comparison-epic.md)  
 Issues: `#679` (epic), `#698`–`#700`
 
-> **Partial.** The map adapter boundary, bounded fallback rendering, Google Maps JavaScript provider path, global/local map-scope controls, workspace timeline rendering, and scenario comparison surfaces now exist. Remaining work is mostly product depth: live provider verification in configured environments, richer regional/local geometry, deeper option-marker detail, and a dedicated source-backed timeline contract beyond the current route-sequence adapter.
+> **Partial.** The map adapter boundary, bounded fallback rendering, Google Maps JavaScript provider path, global/regional/segment map-scope controls, workspace timeline rendering, shared route/segment focus, and scenario comparison surfaces now exist. Remaining work is mostly product depth: live provider verification in configured environments, deeper option-marker/source-quality detail, and real provider distance geometry beyond the current duration-first runtime segment payload.
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
 | Google Maps JS adapter boundary + fallback rendering | `frontend/src/components/maps/TripMap.tsx`, `frontend/src/components/maps/mapSurface.ts` | `frontend/src/components/maps/mapSurface.test.ts`, `frontend/src/components/maps/TripMap.test.tsx`, `frontend/src/routes/WorkspacePage.test.tsx` | ✅ Implemented |
 | Route-context map contract (`docs/contracts/route-context-map-target.md`) | `docs/contracts/route-context-map-target.md`, `frontend/src/components/maps/mapSurface.ts`, `frontend/src/components/maps/TripMap.tsx` | `tests/contracts/test_route_context_map_target.py`, frontend map tests | ✅ Implemented |
-| Global/local map scope switching | `frontend/src/components/maps/mapSurface.ts`, `frontend/src/components/maps/TripMap.tsx` | `frontend/src/components/maps/mapSurface.test.ts`, `frontend/src/routes/WorkspacePage.test.tsx` | 🟡 Partial (global/local shipped; richer regional geometry pending) |
-| Timeline view for trip structure + day sequencing (`#698`) | `frontend/src/routes/WorkspacePage.tsx` (`buildTimelineStops`, timeline section) | `frontend/src/routes/WorkspacePage.test.tsx` | 🟡 Partial (route-sequence adapter; no provider-rich per-leg timing) |
+| Global/regional/segment map scope switching | `frontend/src/components/maps/mapSurface.ts`, `frontend/src/components/maps/TripMap.tsx` | `frontend/src/components/maps/mapSurface.test.ts`, `frontend/src/components/maps/TripMap.test.tsx`, `frontend/src/routes/WorkspacePage.test.tsx` | ✅ Implemented |
+| Timeline view for trip structure + day sequencing (`#698`) | `frontend/src/routes/WorkspacePage.tsx` (`buildTimelineStops`, timeline section, segment focus notes) | `frontend/src/routes/WorkspacePage.test.tsx` | 🟡 Partial (segment timing/confidence shipped; source-backed per-stop timing still pending) |
 | Dedicated map surface for route + option context (`#699`) | `frontend/src/components/maps/TripMap.tsx`, `frontend/src/components/maps/mapSurface.ts` | frontend map/workspace tests | ✅ Implemented |
 | Saved-scenario + trip comparison views (`#700`) | `frontend/src/components/workspace/ScenarioComparison.tsx`, `components/trips/TripComparison.tsx`, `frontend/src/routes/WorkspacePage.tsx` | `frontend/src/routes/WorkspacePage.test.tsx` | 🟡 Partial (workspace-tested; targeted component tests still thin) |
 | Workspace timeline contract | `docs/workspace_timeline_contract.md`, `frontend/src/routes/WorkspacePage.tsx` | `frontend/src/routes/WorkspacePage.test.tsx` | 🟡 Partial |
 
-**Gap detail (follow-up issue candidate):** The shipped timeline and map surfaces are good enough for workspace testing, but they still depend on route-sequence summaries and shaped scenario data rather than provider-rich timing, distance, and local-geometry outputs. The next issue should upgrade the route/timeline/map contract so a traveler can move cleanly between global trip outline, regional comparison, and precise segment review without losing context.
+**Gap detail (follow-up issue candidate):** The shipped timeline and map surfaces now let a traveler move between whole-trip outline, regional comparison, and precise segment review without losing selected route context. The next gap is deeper provider richness: live distance/geometry verification, source-quality scoring on route evidence, and more inspectable option-marker detail.
 
 ---
 
@@ -328,7 +328,7 @@ These design commitments are still missing, partial, or not yet verified in a li
 2. **Executable source-quality scoring** — provider-rich planner tools now expose source summaries, route/map status, route geometry, route comparison refresh, and an explicit source-quality `not_available` seam. The scoring engine itself remains a separate design commitment. See §13 above.
 3. **Live TPP transport verification** — `live-tpp-execution-reoptimization-epic.md`. All seams exist but no live HTTP round-trip is required by the default test matrix. See §15 above.
 4. **Source quality model implementation** — `source-quality-model.md` + `source-channel-strategy.md`. Design defined; no engine code.
-5. **Provider-rich timeline/map depth** — workspace timeline and map surfaces exist, but still need richer regional/local geometry, per-leg timing, and live provider readiness evidence. See §16 above.
+5. **Provider-rich timeline/map depth** — workspace timeline and map surfaces now share route/segment focus and per-leg timing/confidence, but still need live provider distance/geometry verification and richer source-backed option details. See §16 above.
 6. **Preference explanation generation tests** — `trip_planner/preferences/explanations.py` exists; no `tests/preferences/test_explanations.py`.
 
 ---
