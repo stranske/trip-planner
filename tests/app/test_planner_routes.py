@@ -340,6 +340,121 @@ def test_planner_turn_records_adaptive_triage_metadata(
     assert "fallback" not in visible_content
 
 
+def test_planner_turn_records_effort_class_and_provider_state_on_fallback(
+    client: TestClient,
+) -> None:
+    trip_id = _create_trip(client)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "We want five days in Kyoto in May with a moderate budget."},
+    )
+
+    assert response.status_code == 200
+    planner_reply = response.json()["messages"][-1]
+    metadata = planner_reply["turn_metadata"]
+    # Task class is unchanged (planning_synthesis); effort class is added; provider
+    # state and fallback_reason are recorded alongside without leaking into traveler copy.
+    assert metadata["task_class"] == "planning_synthesis"
+    assert metadata["effort_class"] == "deep"
+    assert metadata["base_effort_class"] == "deep"
+    assert metadata["provider_state"] == "fallback"
+    assert metadata["fallback_reason"] == "planner_model_not_configured"
+    assert metadata["selected_planning_mode"] == "collaborative"
+    assert metadata["debug_routing_details"]["routing_reasoning"]
+    visible_content = planner_reply["content"].lower()
+    assert "effort" not in visible_content
+    assert "deep" not in visible_content
+    assert "fast" not in visible_content
+
+
+def test_quick_acknowledgement_routes_to_fast_path(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Thanks!"},
+    )
+
+    assert response.status_code == 200
+    metadata = response.json()["messages"][-1]["turn_metadata"]
+    assert metadata["task_class"] == "quick_acknowledgement"
+    assert metadata["effort_class"] == "fast"
+
+
+def test_note_capture_message_routes_to_fast_path(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Remember this for later: passport expiration is in March"},
+    )
+
+    assert response.status_code == 200
+    metadata = response.json()["messages"][-1]["turn_metadata"]
+    assert metadata["task_class"] == "note_capture"
+    assert metadata["effort_class"] == "fast"
+
+
+def test_focus_switch_message_routes_to_fast_path(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Let's switch to lodging for now"},
+    )
+
+    assert response.status_code == 200
+    metadata = response.json()["messages"][-1]["turn_metadata"]
+    assert metadata["task_class"] == "focus_switch"
+    assert metadata["effort_class"] == "fast"
+
+
+def test_delegated_planning_mode_biases_standard_band_to_deep(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+
+    mode_response = client.put(
+        f"/api/workspace/{trip_id}/planning-mode",
+        json={"planning_mode": "delegated"},
+    )
+    assert mode_response.status_code == 200, mode_response.text
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Maybe Japan with good food"},
+    )
+
+    assert response.status_code == 200
+    metadata = response.json()["messages"][-1]["turn_metadata"]
+    # Base task class is first_turn_triage (standard band); delegated mode bumps
+    # it to deep without changing the task class itself.
+    assert metadata["task_class"] == "first_turn_triage"
+    assert metadata["base_effort_class"] == "standard"
+    assert metadata["effort_class"] == "deep"
+    assert metadata["selected_planning_mode"] == "delegated"
+
+
+def test_delegated_planning_mode_does_not_override_fast_task(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+
+    mode_response = client.put(
+        f"/api/workspace/{trip_id}/planning-mode",
+        json={"planning_mode": "delegated"},
+    )
+    assert mode_response.status_code == 200, mode_response.text
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "thanks"},
+    )
+
+    assert response.status_code == 200
+    metadata = response.json()["messages"][-1]["turn_metadata"]
+    # Quick acknowledgement is a fast-pinned task; delegated mode must not override it.
+    assert metadata["task_class"] == "quick_acknowledgement"
+    assert metadata["effort_class"] == "fast"
+
+
 def test_planner_turn_partial_reply_does_not_echo_internal_user_terms(
     client: TestClient,
 ) -> None:
