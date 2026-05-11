@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from datetime import UTC, datetime
 import json
 from pathlib import Path
 from typing import Any
@@ -315,6 +316,16 @@ def test_workspace_planning_notebook_api_persists_items_and_focus_across_reload(
     assert route_capture.status_code == 200, route_capture.text
     route_item = route_capture.json()
 
+    stale_trip_updated_at = datetime(2000, 1, 1, tzinfo=UTC)
+    session_factory = get_session_factory()
+    with session_factory() as db_session:
+        trip_record = db_session.scalar(
+            select(PersistedTrip).where(PersistedTrip.trip_id == trip_id)
+        )
+        assert trip_record is not None
+        trip_record.updated_at = stale_trip_updated_at
+        db_session.commit()
+
     completed = client.patch(
         f"/api/workspace/{trip_id}/planning-notebook/{lodging_item['notebook_item_id']}",
         json={"status": "completed", "note": "Confirmed: late check-in is fine."},
@@ -323,6 +334,19 @@ def test_workspace_planning_notebook_api_persists_items_and_focus_across_reload(
     assert completed.json()["status"] == "completed"
     assert completed.json()["completed_at"] is not None
     assert completed.json()["note"] == "Confirmed: late check-in is fine."
+    with session_factory() as db_session:
+        trip_record = db_session.scalar(
+            select(PersistedTrip).where(PersistedTrip.trip_id == trip_id)
+        )
+        assert trip_record is not None
+        assert trip_record.updated_at.year > stale_trip_updated_at.year
+
+    rejected_mismatched_focus = client.put(
+        f"/api/workspace/{trip_id}/planning-notebook/focus",
+        json={"category": "lodging", "notebook_item_id": route_item["notebook_item_id"]},
+    )
+    assert rejected_mismatched_focus.status_code == 400
+    assert "must match" in rejected_mismatched_focus.json()["detail"]
 
     focus_to_route = client.put(
         f"/api/workspace/{trip_id}/planning-notebook/focus",

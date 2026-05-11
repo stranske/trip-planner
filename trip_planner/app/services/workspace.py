@@ -3313,7 +3313,7 @@ def update_planning_notebook_item(
     notebook_item_id: str,
     updates: dict[str, Any],
 ) -> dict[str, Any]:
-    _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     item = db_session.scalar(
         select(PersistedPlanningNotebookItem)
         .where(PersistedPlanningNotebookItem.trip_id == trip_id)
@@ -3347,7 +3347,9 @@ def update_planning_notebook_item(
         item.source_message_ids = list(updates["source_message_ids"])
     if updates.get("tags") is not None:
         item.tags = list(updates["tags"])
-    item.updated_at = datetime.now(UTC)
+    now = datetime.now(UTC)
+    item.updated_at = now
+    record.updated_at = now
     db_session.commit()
     db_session.refresh(item)
     return _serialize_notebook_item(item)
@@ -3402,6 +3404,10 @@ def set_planning_notebook_focus(
             )
         if category is None:
             category = item.category
+        elif category != item.category:
+            raise ValueError(
+                "Notebook focus category must match the selected notebook item category."
+            )
     session_record.notebook_focus_category = category
     session_record.notebook_focus_item_id = notebook_item_id
     record.updated_at = datetime.now(UTC)
