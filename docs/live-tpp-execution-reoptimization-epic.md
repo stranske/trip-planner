@@ -117,3 +117,18 @@ Use these documents together when implementing the child issues:
 ## Working Rule
 
 If a child issue tries to hide real transport, authoritative policy results, and planner-side follow-up inside one oversized integration helper or another passive local envelope path, the epic is being violated and the design should be corrected before the PR lands.
+
+## Local Verification Setup
+
+The `make full-product-check` lane is the live-verification surface for this epic. It supports two configured transport modes that are mutually exclusive per run:
+
+- **Sibling-checkout** via `TPP_REPO_PATH` — the verifier starts a local `Travel-Plan-Permission` service inside the sibling repo's own Python environment (`<TPP_REPO_PATH>/.venv/bin/python`, or `uv run --directory <TPP_REPO_PATH> python` when `uv.lock` is present and `uv` is installed), waits for `/readyz`, then drives the live round-trip against `http://127.0.0.1:<free-port>`. Startup failures embed the resolved command, working directory, and the last fifty lines of captured `stdout` / `stderr`.
+- **External-service** via `TPP_BASE_URL` — the verifier trusts an externally managed service and never resolves or launches a local sibling interpreter. A regression test pins that contract (`tests/app/test_full_product_verification.py::test_started_tpp_service_with_base_url_does_not_attempt_sibling_resolution`).
+
+Both modes also require `TPP_ACCESS_TOKEN` and `TPP_OIDC_PROVIDER`. Missing values are reported as `SKIPPED` or `BLOCKED` (depending on whether a transport target is configured), each with a `remediation` hint that names the next concrete env var or command.
+
+For the full result-state matrix, env-var matrix, and example invocations, see [`docs/local-testing-plan.md` → "Live TPP Verification Setup"](local-testing-plan.md#live-tpp-verification-setup). Keep that section as the operator-facing source of truth; this epic doc records the design intent behind the seam, not the runbook.
+
+### Default Local Behavior
+
+When no live transport is configured, `make full-product-check` still passes — the live-tpp check is reported as `SKIPPED`, never as a silent success. Default local development does not require Travel-Plan-Permission credentials, and CI should treat live verification as opt-in via the env vars above.

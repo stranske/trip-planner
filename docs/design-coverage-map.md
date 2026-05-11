@@ -255,7 +255,7 @@ Issues: `#678` (epic), `#694`–`#697`
 
 Design ref: [`docs/live-tpp-execution-reoptimization-epic.md`](live-tpp-execution-reoptimization-epic.md)
 
-> **Blocked on live TPP transport.** All contracts and seams exist. The planner-turn → TPP round-trip (permission request → approval evidence → confirmation) is exercisable via `HTTPTPPIntegrationClient.submit_proposal` / `fetch_evaluation_result` (used by `app/services/proposal.py`); the original `test_tpp_approval_flow_round_trip_from_planner_turn` xfail was deleted by the issue #1046 audit (2026-04-30) and recorded in `tests/planner/MIGRATIONS.md`. The CI smoke test (`test_full_product_verification.py`) still auto-skips when `LIVE_TPP` config is absent.
+> **Blocked on live TPP transport.** All contracts and seams exist. The planner-turn → TPP round-trip (permission request → approval evidence → confirmation) is exercisable via `HTTPTPPIntegrationClient.submit_proposal` / `fetch_evaluation_result` (used by `app/services/proposal.py`); the original `test_tpp_approval_flow_round_trip_from_planner_turn` xfail was deleted by the issue #1046 audit (2026-04-30) and recorded in `tests/planner/MIGRATIONS.md`. The CI smoke test (`test_full_product_verification.py`) still auto-skips when `LIVE_TPP` config is absent. Issue #1161 (2026-05-11) hardened the verifier diagnostics so non-PASS `live-tpp` results expose a `remediation` hint and an `invalid_path_detail.kind` discriminator, and pinned `TPP_BASE_URL` mode to never resolve a sibling interpreter; the live round-trip itself still depends on configured `TPP_BASE_URL`/`TPP_REPO_PATH` plus auth.
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|

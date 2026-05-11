@@ -29,6 +29,8 @@ def test_full_product_local_journeys_cover_runtime_identifiers(monkeypatch) -> N
     assert by_name["local-leisure-journey"].status == "PASS"
     assert by_name["local-business-journey"].status == "PASS"
     assert by_name["live-tpp"].status == "SKIPPED"
+    assert by_name["live-tpp"].details["mode"] == "off"
+    assert "remediation" in by_name["live-tpp"].details
     assert by_name["local-leisure-journey"].details["trip_id"].startswith("trip-")
     assert by_name["local-leisure-journey"].details["scenario_id"].startswith("scenario:")
     assert by_name["local-leisure-journey"].details["route_contexts"] > 0
@@ -83,14 +85,11 @@ def test_live_tpp_auto_reports_missing_config_as_skipped(monkeypatch, tmp_path) 
 
     check = tpp_prerequisite_status(live_tpp="auto", default_repo_path=tmp_path / "missing")
 
-    assert check == CheckResult(
-        "live-tpp",
-        "SKIPPED",
-        {
-            "missing_env": "TPP_BASE_URL or TPP_REPO_PATH",
-            "default_repo_path": str(tmp_path / "missing"),
-        },
-    )
+    assert check.status == "SKIPPED"
+    assert check.details["missing_env"] == "TPP_BASE_URL or TPP_REPO_PATH"
+    assert check.details["default_repo_path"] == str(tmp_path / "missing")
+    assert "TPP_BASE_URL" in check.details["remediation"]
+    assert "TPP_REPO_PATH" in check.details["remediation"]
 
 
 def test_live_tpp_auto_reports_ready_with_base_url_and_auth_config() -> None:
@@ -117,14 +116,10 @@ def test_live_tpp_auto_skips_when_auth_exists_without_transport_target(tmp_path)
         },
     )
 
-    assert check == CheckResult(
-        "live-tpp",
-        "SKIPPED",
-        {
-            "missing_env": "TPP_BASE_URL or TPP_REPO_PATH",
-            "default_repo_path": str(tmp_path / "missing"),
-        },
-    )
+    assert check.status == "SKIPPED"
+    assert check.details["missing_env"] == "TPP_BASE_URL or TPP_REPO_PATH"
+    assert check.details["default_repo_path"] == str(tmp_path / "missing")
+    assert "remediation" in check.details
 
 
 def test_live_tpp_auto_reports_invalid_repo_path_as_blocked(tmp_path) -> None:
@@ -141,6 +136,75 @@ def test_live_tpp_auto_reports_invalid_repo_path_as_blocked(tmp_path) -> None:
 
     assert check.status == "BLOCKED"
     assert check.details["invalid_path"] == {"TPP_REPO_PATH": str(missing_repo)}
+    assert check.details["invalid_path_detail"]["kind"] == "missing"
+    assert check.details["invalid_path_detail"]["path"] == str(missing_repo)
+    assert "TPP_REPO_PATH" in check.details["remediation"]
+
+
+def test_live_tpp_blocked_distinguishes_repo_path_that_is_a_file(tmp_path) -> None:
+    file_path = tmp_path / "not-a-checkout"
+    file_path.write_text("", encoding="utf-8")
+
+    check = tpp_prerequisite_status(
+        live_tpp="auto",
+        env={
+            "TPP_ACCESS_TOKEN": "token",
+            "TPP_OIDC_PROVIDER": "google",
+            "TPP_REPO_PATH": str(file_path),
+        },
+    )
+
+    assert check.status == "BLOCKED"
+    assert check.details["invalid_path_detail"]["kind"] == "not-a-directory"
+    assert check.details["invalid_path_detail"]["path"] == str(file_path)
+    assert "not a directory" in check.details["invalid_path_detail"]["message"]
+
+
+def test_live_tpp_blocked_reports_missing_auth_with_remediation(tmp_path) -> None:
+    check = tpp_prerequisite_status(
+        live_tpp="auto",
+        env={"TPP_BASE_URL": "https://tpp.example.test"},
+    )
+
+    assert check.status == "BLOCKED"
+    assert "TPP_ACCESS_TOKEN" in check.details["missing_env"]
+    assert "TPP_OIDC_PROVIDER" in check.details["missing_env"]
+    assert "TPP_ACCESS_TOKEN" in check.details["remediation"]
+
+
+def test_live_tpp_off_reports_actionable_remediation() -> None:
+    check = tpp_prerequisite_status(live_tpp="off")
+
+    assert check.status == "SKIPPED"
+    assert check.details["mode"] == "off"
+    assert "TPP_BASE_URL" in check.details["remediation"]
+    assert "TPP_REPO_PATH" in check.details["remediation"]
+
+
+def test_started_tpp_service_with_base_url_does_not_attempt_sibling_resolution(
+    monkeypatch,
+) -> None:
+    def fail_resolver(_repo_path):  # pragma: no cover - defensive guard
+        raise AssertionError(
+            "_resolve_tpp_interpreter must not be invoked when TPP_BASE_URL is configured"
+        )
+
+    monkeypatch.setattr(verifier, "_resolve_tpp_interpreter", fail_resolver)
+
+    def fail_popen(*_args, **_kwargs):  # pragma: no cover - defensive guard
+        raise AssertionError("subprocess.Popen must not be invoked when TPP_BASE_URL is configured")
+
+    monkeypatch.setattr(verifier.subprocess, "Popen", fail_popen)
+
+    with verifier._started_tpp_service(
+        {
+            "TPP_BASE_URL": "https://tpp.example.test/",
+            "TPP_ACCESS_TOKEN": "token",
+            "TPP_OIDC_PROVIDER": "google",
+        }
+    ) as (base_url, process):
+        assert base_url == "https://tpp.example.test"
+        assert process is None
 
 
 def test_tpp_interpreter_resolution_prefers_repo_venv(tmp_path) -> None:

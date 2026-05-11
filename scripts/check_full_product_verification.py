@@ -349,6 +349,33 @@ def classify_map_prerequisite(env: Mapping[str, str] | None = None) -> CheckResu
     )
 
 
+_REMEDIATION_OFF = (
+    "Re-run with `--live-tpp auto` (or `required`) after setting `TPP_BASE_URL` or "
+    "`TPP_REPO_PATH` to opt into live verification."
+)
+_REMEDIATION_MISSING_TRANSPORT = (
+    "Set TPP_BASE_URL (for an externally managed service) or TPP_REPO_PATH (for a "
+    "sibling Travel-Plan-Permission checkout)."
+)
+_REMEDIATION_MISSING_AUTH = (
+    "Set TPP_ACCESS_TOKEN and TPP_OIDC_PROVIDER for the configured transport target."
+)
+
+
+def _classify_invalid_repo_path(value: str) -> dict[str, str]:
+    path = Path(value)
+    if not path.exists():
+        kind = "missing"
+        message = f"TPP_REPO_PATH `{value}` does not exist."
+    elif not path.is_dir():
+        kind = "not-a-directory"
+        message = f"TPP_REPO_PATH `{value}` exists but is not a directory."
+    else:  # pragma: no cover - caller already validated reachability
+        kind = "unreadable"
+        message = f"TPP_REPO_PATH `{value}` is not a usable Travel-Plan-Permission checkout."
+    return {"path": value, "kind": kind, "message": message}
+
+
 def tpp_prerequisite_status(
     *,
     live_tpp: str,
@@ -365,27 +392,24 @@ def tpp_prerequisite_status(
     has_transport_target = bool(configured["TPP_BASE_URL"] or configured["TPP_REPO_PATH"])
     explicit = any(configured.values())
     if live_tpp == "off":
-        return CheckResult("live-tpp", "SKIPPED", {"mode": "off"})
-    if live_tpp == "auto" and not explicit:
         return CheckResult(
             "live-tpp",
             "SKIPPED",
-            {
-                "missing_env": "TPP_BASE_URL or TPP_REPO_PATH",
-                "default_repo_path": str(default_repo_path),
-            },
+            {"mode": "off", "remediation": _REMEDIATION_OFF},
         )
-    if live_tpp == "auto" and not has_transport_target:
+    if live_tpp == "auto" and (not explicit or not has_transport_target):
         return CheckResult(
             "live-tpp",
             "SKIPPED",
             {
                 "missing_env": "TPP_BASE_URL or TPP_REPO_PATH",
                 "default_repo_path": str(default_repo_path),
+                "remediation": _REMEDIATION_MISSING_TRANSPORT,
             },
         )
     missing = [name for name in ("TPP_ACCESS_TOKEN", "TPP_OIDC_PROVIDER") if not configured[name]]
     invalid_path: dict[str, str] = {}
+    invalid_path_detail: dict[str, str] = {}
     if not configured["TPP_BASE_URL"] and not configured["TPP_REPO_PATH"]:
         if live_tpp == "required" and default_repo_path.is_dir():
             configured["TPP_REPO_PATH"] = str(default_repo_path)
@@ -395,12 +419,25 @@ def tpp_prerequisite_status(
         repo_path = Path(configured["TPP_REPO_PATH"])
         if not repo_path.exists() or not repo_path.is_dir():
             invalid_path["TPP_REPO_PATH"] = configured["TPP_REPO_PATH"]
+            invalid_path_detail = _classify_invalid_repo_path(configured["TPP_REPO_PATH"])
     if missing or invalid_path:
         details: dict[str, Any] = {}
+        remediations: list[str] = []
         if missing:
             details["missing_env"] = sorted(set(missing))
+            if "TPP_BASE_URL or TPP_REPO_PATH" in missing:
+                remediations.append(_REMEDIATION_MISSING_TRANSPORT)
+            if any(name in missing for name in ("TPP_ACCESS_TOKEN", "TPP_OIDC_PROVIDER")):
+                remediations.append(_REMEDIATION_MISSING_AUTH)
         if invalid_path:
             details["invalid_path"] = invalid_path
+            details["invalid_path_detail"] = invalid_path_detail
+            remediations.append(
+                "Set TPP_REPO_PATH to a sibling Travel-Plan-Permission checkout directory, "
+                "or unset it and use TPP_BASE_URL for an externally managed service."
+            )
+        if remediations:
+            details["remediation"] = " ".join(remediations)
         return CheckResult("live-tpp", "BLOCKED", details)
     return CheckResult("live-tpp", "READY", configured)
 
@@ -943,7 +980,15 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
 def _print_results(results: list[CheckResult]) -> None:
     print("Full-product verification results")
     for result in results:
-        print(f"- {result.status} {result.name}: {json.dumps(result.details, sort_keys=True)}")
+        remediation = ""
+        if isinstance(result.details, Mapping):
+            hint = result.details.get("remediation")
+            if isinstance(hint, str) and hint:
+                remediation = f"\n    remediation: {hint}"
+        print(
+            f"- {result.status} {result.name}: "
+            f"{json.dumps(result.details, sort_keys=True)}{remediation}"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
