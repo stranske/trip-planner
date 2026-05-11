@@ -174,6 +174,23 @@ The verification path covers:
 These checks validate the local full-stack MVP that already exists in this repo. They exercise the map adapter and fallback seam with mocked provider state. They do not prove live Google Maps rendering or remote Travel-Plan-Permission transport.
 The production-focused testing plan in [docs/local-testing-plan.md](docs/local-testing-plan.md) adds the critical auth, trip, workspace, policy, proposal, and preview-verification journeys on top of that baseline.
 
+## Persistent Deployment
+
+The product deployment is split across two persistent services:
+
+- Netlify hosts the Vite frontend at `https://stranske-trip-planner.netlify.app`.
+- Render hosts the FastAPI backend and Postgres database.
+
+The Netlify deploy workflow builds `frontend/dist` from `main`, deploys that directory to Netlify production, and ships `frontend/public/_redirects` with the bundle. The redirect file proxies `/api/*` to the Render backend before falling back to `/index.html`, so the deployed frontend can call `/api/...` without requiring a hard-coded API origin in the browser bundle.
+
+`render.yaml` is the Render Blueprint source for the backend service and database. Render should track `main` for this file; stale topic branches will leave the live backend pinned to old commits even when GitHub `main` has advanced.
+
+Required deployment secrets:
+
+- GitHub Actions: `NETLIFY_SITE_ID` and either `NETLIFY_AUTH_TOKEN` or the legacy `NETLIFY_TOKEN`
+- GitHub Actions, optional live map adapter: `VITE_GOOGLE_MAPS_BROWSER_API_KEY`
+- Render service env vars: `TRIP_PLANNER_CORS_ORIGINS`, `TRIP_PLANNER_CORS_ORIGIN_REGEX`, and live TPP variables when remote policy execution is intentionally enabled
+
 ## Python Unit Tests
 
 After installing the backend dev extras (`python -m pip install -e ".[dev]"`), run the unit test suite from the repo root:

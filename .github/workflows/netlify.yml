@@ -3,6 +3,7 @@ name: CI + Netlify Deploy
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   test-and-deploy:
@@ -15,44 +16,37 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Cache pip
-        uses: actions/cache@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            
-      - name: Install deps
-        run: pip install -r requirements.txt
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Generate AI segments
-        continue-on-error: false   # skip or ignore failures while quota is exhausted
+      - name: Install backend dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Verify production readiness
+        run: make runtime-production-check
+
+      - name: Build frontend for deploy
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          pip install "openai<1.0.0"
-          python scripts/generate_segments.py
-
-      - name: Validate request
-        run: python scripts/validate_request.py
-
-      - name: Run unit tests
-        run: pytest tests
-
-      - name: Generate itineraries
-        run: python scripts/generate_itins.py
-
-      - name: Build HTML
-        run: python scripts/build_html.py
+          VITE_GOOGLE_MAPS_BROWSER_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_BROWSER_API_KEY }}
+          VITE_GOOGLE_MAPS_EMBED_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_EMBED_API_KEY }}
+          VITE_GOOGLE_MAPS_PROVIDER_STATE: ${{ vars.VITE_GOOGLE_MAPS_PROVIDER_STATE }}
+        run: npm --prefix frontend run build
 
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v3
         with:
-          publish-dir: ./bundle
+          publish-dir: ./frontend/dist
           production-branch: main
+          production-deploy: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
           deploy-message: "Automated deployment from GitHub Actions"
         env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN || secrets.NETLIFY_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}

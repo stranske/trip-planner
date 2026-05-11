@@ -14,6 +14,17 @@ __pycache__/
 .mypy_cache/
 .venv/
 
+# Local environment files can contain API keys and other secrets.
+.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# macOS filesystem metadata.
+.DS_Store
+
 # JavaScript dependencies — never track node_modules; use npm ci to install.
 node_modules/
 dist/

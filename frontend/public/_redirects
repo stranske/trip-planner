@@ -1,0 +1,2 @@
+/api/* https://trip-planner-api-s40u.onrender.com/api/:splat 200
+/* /index.html 200
