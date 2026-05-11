@@ -531,6 +531,15 @@ def test_workspace_planning_ledger_rejects_supersedes_cycles(
     assert blank_target.status_code == 200, blank_target.text
     assert blank_target.json()["supersedes_entry_id"] is None
 
+    with get_session_factory()() as db_session:
+        with pytest.raises(ValueError, match="existing ledger entry"):
+            workspace_service._validate_planning_ledger_supersedes_target(
+                db_session,
+                trip_id=trip_id,
+                ledger_entry_id=second_id,
+                supersedes_entry_id="   ",
+            )
+
 
 def test_route_option_actions_create_durable_ledger_history(client: TestClient) -> None:
     created = client.post(

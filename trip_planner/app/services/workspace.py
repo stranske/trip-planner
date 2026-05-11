@@ -1785,6 +1785,8 @@ def _validate_planning_ledger_supersedes_target(
     ledger_entry_id: str,
     supersedes_entry_id: str,
 ) -> None:
+    if not supersedes_entry_id.strip():
+        raise ValueError("supersedes_entry_id must reference an existing ledger entry.")
     if supersedes_entry_id == ledger_entry_id:
         raise ValueError("supersedes_entry_id cannot reference the same ledger entry.")
 
