@@ -712,6 +712,45 @@ def test_planner_turn_executes_provider_rich_read_only_tools(client: TestClient)
         assert checkpoint.metadata_payload["tool_call_count"] == 5
 
 
+def test_planner_turn_reuses_workspace_payload_for_provider_rich_read_only_tools(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trip_id = _create_trip(client)
+    from trip_planner.app.services import planner_tools
+
+    original_get_workspace_payload = planner_tools.get_workspace_payload
+    workspace_payload_call_count = 0
+
+    def counted_get_workspace_payload(*args: Any, **kwargs: Any) -> dict[str, Any] | None:
+        nonlocal workspace_payload_call_count
+        workspace_payload_call_count += 1
+        return original_get_workspace_payload(*args, **kwargs)
+
+    monkeypatch.setattr(
+        planner_tools,
+        "get_workspace_payload",
+        counted_get_workspace_payload,
+    )
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": "Inspect source and route state without rebuilding payloads.",
+            "tool_calls": [
+                {"tool_name": "read_source_summary"},
+                {"tool_name": "read_map_provider_status"},
+                {"tool_name": "read_route_geometry"},
+                {"tool_name": "refresh_route_comparison"},
+                {"tool_name": "read_source_quality_summary"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert workspace_payload_call_count == 1
+
+
 def test_planner_turn_reports_sparse_provider_tool_state(client: TestClient) -> None:
     trip_id = _create_trip(client)
 

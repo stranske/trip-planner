@@ -147,10 +147,35 @@ def _workspace_payload(
     user: AuthenticatedUser,
     trip_id: str,
 ) -> dict[str, Any]:
+    cache = db_session.info.setdefault("_planner_workspace_payload_cache", {})
+    cache_key = (user.user_id, trip_id)
+    if cache_key in cache:
+        return cache[cache_key]
     payload = get_workspace_payload(db_session, user=user, trip_id=trip_id)
     if payload is None:
         raise ValueError(f"Trip '{trip_id}' was not found.")
+    cache[cache_key] = payload
     return payload
+
+
+def get_cached_workspace_payload(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+) -> dict[str, Any]:
+    return _workspace_payload(db_session, user=user, trip_id=trip_id)
+
+
+def _clear_workspace_payload_cache(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+) -> None:
+    cache = db_session.info.get("_planner_workspace_payload_cache")
+    if isinstance(cache, dict):
+        cache.pop((user.user_id, trip_id), None)
 
 
 def _ref_list(*refs: str | None) -> list[str]:
@@ -924,4 +949,9 @@ def execute_planner_tool_call(
     handler = _TOOL_HANDLERS.get(tool_name)
     if definition is None or handler is None:
         raise ValueError(f"Planner tool '{tool_name}' is not supported.")
-    return handler(db_session, user, trip_id, dict(arguments or {}))
+    if definition.mutates_state:
+        _clear_workspace_payload_cache(db_session, user=user, trip_id=trip_id)
+    result = handler(db_session, user, trip_id, dict(arguments or {}))
+    if definition.mutates_state:
+        _clear_workspace_payload_cache(db_session, user=user, trip_id=trip_id)
+    return result

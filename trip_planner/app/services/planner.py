@@ -25,6 +25,7 @@ from trip_planner.app.services.planner_runtime_config import (
 )
 from trip_planner.app.services.planner_tools import (
     execute_planner_tool_call,
+    get_cached_workspace_payload,
     list_planner_tools,
 )
 from trip_planner.preferences.autonomy import AutonomyGuardrails
@@ -38,7 +39,6 @@ from trip_planner.app.services.workspace import (
     _record_planner_action,
     _serialize_activity_record,
     _serialize_session_record,
-    get_workspace_payload,
 )
 from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
@@ -1187,9 +1187,10 @@ def _planner_session_payload(
     trip_id: str,
     resumed_at: str | None = None,
 ) -> dict[str, Any]:
-    workspace_payload = get_workspace_payload(db_session, user=user, trip_id=trip_id)
-    if workspace_payload is None:
-        raise WorkspacePlannerTripNotFoundError(f"Trip '{trip_id}' was not found.")
+    try:
+        workspace_payload = get_cached_workspace_payload(db_session, user=user, trip_id=trip_id)
+    except ValueError as error:
+        raise WorkspacePlannerTripNotFoundError(str(error)) from error
 
     session = workspace_payload["session"]
     session_state_id = session["session_state_id"]
@@ -1404,9 +1405,10 @@ def submit_planner_turn(
         )
         executed_tool_calls.append(result.to_dict())
 
-    workspace_payload = get_workspace_payload(db_session, user=user, trip_id=trip_id)
-    if workspace_payload is None:
-        raise WorkspacePlannerTripNotFoundError(f"Trip '{trip_id}' was not found.")
+    try:
+        workspace_payload = get_cached_workspace_payload(db_session, user=user, trip_id=trip_id)
+    except ValueError as error:
+        raise WorkspacePlannerTripNotFoundError(str(error)) from error
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
     planner_memory = build_planner_memory_payload(
         db_session,
