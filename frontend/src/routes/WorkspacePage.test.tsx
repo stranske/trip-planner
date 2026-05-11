@@ -6,13 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiClientError } from "../lib/api/errors";
 import {
   answerPlannerDecision,
+  createNotebookItem,
+  deleteNotebookItem,
   fetchPlannerSession,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
   saveWorkspaceBudget,
+  setNotebookFocus,
   submitPlannerTurn,
   submitPlannerOptionFeedback,
   submitRouteOptionAction,
+  updateNotebookItem,
   updateWorkspacePlanningMode,
   type PlannerSessionResponse,
   type WorkspaceData,
@@ -34,6 +38,10 @@ vi.mock("../api/workspace", async () => {
     saveWorkspaceBudget: vi.fn(),
     recordWorkspaceSpendEvent: vi.fn(),
     refreshWorkspaceProposalStatus: vi.fn(),
+    createNotebookItem: vi.fn(),
+    updateNotebookItem: vi.fn(),
+    deleteNotebookItem: vi.fn(),
+    setNotebookFocus: vi.fn(),
   };
 });
 
@@ -55,6 +63,10 @@ const mockedUpdateWorkspacePlanningMode = vi.mocked(updateWorkspacePlanningMode)
 const mockedSaveWorkspaceBudget = vi.mocked(saveWorkspaceBudget);
 const mockedRecordWorkspaceSpendEvent = vi.mocked(recordWorkspaceSpendEvent);
 const mockedRefreshWorkspaceProposalStatus = vi.mocked(refreshWorkspaceProposalStatus);
+const mockedCreateNotebookItem = vi.mocked(createNotebookItem);
+const mockedUpdateNotebookItem = vi.mocked(updateNotebookItem);
+const mockedDeleteNotebookItem = vi.mocked(deleteNotebookItem);
+const mockedSetNotebookFocus = vi.mocked(setNotebookFocus);
 const tripComparisonPayload: TripRecord[] = [
   {
     trip_id: "trip-leisure-kyoto-draft",
@@ -799,6 +811,10 @@ describe("WorkspacePage", () => {
     mockedSaveWorkspaceBudget.mockReset();
     mockedRecordWorkspaceSpendEvent.mockReset();
     mockedRefreshWorkspaceProposalStatus.mockReset();
+    mockedCreateNotebookItem.mockReset();
+    mockedUpdateNotebookItem.mockReset();
+    mockedDeleteNotebookItem.mockReset();
+    mockedSetNotebookFocus.mockReset();
   });
 
   it("does not render raw runtime/provider/debug labels for default leisure workspaces", async () => {
@@ -2605,6 +2621,376 @@ describe("WorkspacePage", () => {
         "Kyoto base with Uji day trip (fallback)"
       );
     });
+  });
+
+  it("renders the planning notebook panel when planning_notebook is present in the workspace", async () => {
+    const notebookWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      planning_notebook: {
+        items: [
+          {
+            notebook_item_id: "nb-item:1",
+            trip_id: "trip-leisure-kyoto-draft",
+            session_state_id: "session-state:kyoto-spring",
+            title: "Check shinkansen pass options",
+            note: "Compare 7-day vs 14-day pass costs",
+            category: "route",
+            status: "active",
+            priority: "high",
+            source: "user",
+            linked_ledger_entry_id: null,
+            source_message_ids: [],
+            tags: [],
+            metadata: {},
+            completed_at: null,
+            created_at: "2026-04-12T06:00:00Z",
+            updated_at: "2026-04-12T06:00:00Z",
+          },
+          {
+            notebook_item_id: "nb-item:2",
+            trip_id: "trip-leisure-kyoto-draft",
+            session_state_id: "session-state:kyoto-spring",
+            title: "Confirm Nishiki Market visit",
+            note: "",
+            category: "activities",
+            status: "completed",
+            priority: "normal",
+            source: "user",
+            linked_ledger_entry_id: null,
+            source_message_ids: [],
+            tags: [],
+            metadata: {},
+            completed_at: "2026-04-12T07:00:00Z",
+            created_at: "2026-04-12T06:00:00Z",
+            updated_at: "2026-04-12T07:00:00Z",
+          },
+        ],
+        summary: {
+          total_count: 2,
+          active_count: 1,
+          completed_count: 1,
+          active_items: [
+            {
+              notebook_item_id: "nb-item:1",
+              trip_id: "trip-leisure-kyoto-draft",
+              session_state_id: "session-state:kyoto-spring",
+              title: "Check shinkansen pass options",
+              note: "Compare 7-day vs 14-day pass costs",
+              category: "route",
+              status: "active",
+              priority: "high",
+              source: "user",
+              linked_ledger_entry_id: null,
+              source_message_ids: [],
+              tags: [],
+              metadata: {},
+              completed_at: null,
+              created_at: "2026-04-12T06:00:00Z",
+              updated_at: "2026-04-12T06:00:00Z",
+            },
+          ],
+          completed_items: [
+            {
+              notebook_item_id: "nb-item:2",
+              trip_id: "trip-leisure-kyoto-draft",
+              session_state_id: "session-state:kyoto-spring",
+              title: "Confirm Nishiki Market visit",
+              note: "",
+              category: "activities",
+              status: "completed",
+              priority: "normal",
+              source: "user",
+              linked_ledger_entry_id: null,
+              source_message_ids: [],
+              tags: [],
+              metadata: {},
+              completed_at: "2026-04-12T07:00:00Z",
+              created_at: "2026-04-12T06:00:00Z",
+              updated_at: "2026-04-12T07:00:00Z",
+            },
+          ],
+          by_category: {
+            route: [],
+            activities: [],
+          },
+        },
+        focus: { category: null, notebook_item_id: null },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(notebookWorkspace) });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Planning notebook" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Check shinkansen pass options")).toBeInTheDocument();
+    expect(screen.getByText("Compare 7-day vs 14-day pass costs")).toBeInTheDocument();
+    expect(screen.getByLabelText("Notebook item title")).toBeInTheDocument();
+
+    const completedToggle = screen.getByText(/Completed \(1\)/);
+    expect(completedToggle).toBeInTheDocument();
+  });
+
+  it("captures a new notebook item and surfaces it in the active list", async () => {
+    const emptyNotebookWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      planning_notebook: {
+        items: [],
+        summary: {
+          total_count: 0,
+          active_count: 0,
+          completed_count: 0,
+          active_items: [],
+          completed_items: [],
+          by_category: {},
+        },
+        focus: { category: null, notebook_item_id: null },
+      },
+    };
+    const newItem = {
+      notebook_item_id: "nb-item:new",
+      trip_id: "trip-leisure-kyoto-draft",
+      session_state_id: "session-state:kyoto-spring",
+      title: "Book luggage storage at Kyoto Station",
+      note: "",
+      category: "route" as const,
+      status: "active" as const,
+      priority: "normal" as const,
+      source: "user" as const,
+      linked_ledger_entry_id: null,
+      source_message_ids: [],
+      tags: [],
+      metadata: {},
+      completed_at: null,
+      created_at: "2026-04-12T08:00:00Z",
+      updated_at: "2026-04-12T08:00:00Z",
+    };
+
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(emptyNotebookWorkspace) });
+    mockedCreateNotebookItem.mockResolvedValue(newItem);
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Planning notebook" })).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Notebook item title"), "Book luggage storage at Kyoto Station");
+    await user.click(screen.getByRole("button", { name: "Add to notebook" }));
+
+    await waitFor(() => {
+      expect(mockedCreateNotebookItem).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        expect.objectContaining({ title: "Book luggage storage at Kyoto Station", category: "other" })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Book luggage storage at Kyoto Station")).toBeInTheDocument();
+    });
+  });
+
+  it("completes an active notebook item and moves it to the completed section", async () => {
+    const activeItem = {
+      notebook_item_id: "nb-item:active",
+      trip_id: "trip-leisure-kyoto-draft",
+      session_state_id: "session-state:kyoto-spring",
+      title: "Research tea ceremony venues",
+      note: "",
+      category: "activities" as const,
+      status: "active" as const,
+      priority: "normal" as const,
+      source: "user" as const,
+      linked_ledger_entry_id: null,
+      source_message_ids: [],
+      tags: [],
+      metadata: {},
+      completed_at: null,
+      created_at: "2026-04-12T06:00:00Z",
+      updated_at: "2026-04-12T06:00:00Z",
+    };
+    const completedItem = { ...activeItem, status: "completed" as const, completed_at: "2026-04-12T09:00:00Z" };
+
+    const notebookWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      planning_notebook: {
+        items: [activeItem],
+        summary: {
+          total_count: 1,
+          active_count: 1,
+          completed_count: 0,
+          active_items: [activeItem],
+          completed_items: [],
+          by_category: { activities: [activeItem] },
+        },
+        focus: { category: null, notebook_item_id: null },
+      },
+    };
+
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(notebookWorkspace) });
+    mockedUpdateNotebookItem.mockResolvedValue(completedItem);
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Research tea ceremony venues")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.click(
+      within(screen.getByLabelText("Research tea ceremony venues")).getByRole("button", { name: "Complete" })
+    );
+
+    await waitFor(() => {
+      expect(mockedUpdateNotebookItem).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        "nb-item:active",
+        { status: "completed" }
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Completed \(1\)/)).toBeInTheDocument();
+    });
+  });
+
+  it("deletes a notebook item and removes it from the active list", async () => {
+    const itemToDelete = {
+      notebook_item_id: "nb-item:delete-me",
+      trip_id: "trip-leisure-kyoto-draft",
+      session_state_id: "session-state:kyoto-spring",
+      title: "Draft lodging short-list",
+      note: "",
+      category: "lodging" as const,
+      status: "active" as const,
+      priority: "normal" as const,
+      source: "user" as const,
+      linked_ledger_entry_id: null,
+      source_message_ids: [],
+      tags: [],
+      metadata: {},
+      completed_at: null,
+      created_at: "2026-04-12T06:00:00Z",
+      updated_at: "2026-04-12T06:00:00Z",
+    };
+
+    const notebookWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      planning_notebook: {
+        items: [itemToDelete],
+        summary: {
+          total_count: 1,
+          active_count: 1,
+          completed_count: 0,
+          active_items: [itemToDelete],
+          completed_items: [],
+          by_category: { lodging: [itemToDelete] },
+        },
+        focus: { category: null, notebook_item_id: null },
+      },
+    };
+
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(notebookWorkspace) });
+    mockedDeleteNotebookItem.mockResolvedValue(undefined);
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Draft lodging short-list")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.click(
+      within(screen.getByLabelText("Draft lodging short-list")).getByRole("button", { name: "Delete" })
+    );
+
+    await waitFor(() => {
+      expect(mockedDeleteNotebookItem).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        "nb-item:delete-me"
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Draft lodging short-list")).not.toBeInTheDocument();
+    });
+  });
+
+  it("sets the active focus on a notebook item when the user clicks Focus", async () => {
+    const item = {
+      notebook_item_id: "nb-item:focus-target",
+      trip_id: "trip-leisure-kyoto-draft",
+      session_state_id: "session-state:kyoto-spring",
+      title: "Map out Arashiyama day hike",
+      note: "",
+      category: "activities" as const,
+      status: "active" as const,
+      priority: "normal" as const,
+      source: "user" as const,
+      linked_ledger_entry_id: null,
+      source_message_ids: [],
+      tags: [],
+      metadata: {},
+      completed_at: null,
+      created_at: "2026-04-12T06:00:00Z",
+      updated_at: "2026-04-12T06:00:00Z",
+    };
+
+    const notebookWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      planning_notebook: {
+        items: [item],
+        summary: {
+          total_count: 1,
+          active_count: 1,
+          completed_count: 0,
+          active_items: [item],
+          completed_items: [],
+          by_category: { activities: [item] },
+        },
+        focus: { category: null, notebook_item_id: null },
+      },
+    };
+
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(notebookWorkspace) });
+    mockedSetNotebookFocus.mockResolvedValue({ category: null, notebook_item_id: "nb-item:focus-target" });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Map out Arashiyama day hike")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.click(
+      within(screen.getByLabelText("Map out Arashiyama day hike")).getByRole("button", { name: "Focus" })
+    );
+
+    await waitFor(() => {
+      expect(mockedSetNotebookFocus).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        expect.objectContaining({ notebook_item_id: "nb-item:focus-target" })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Active focus:")).toBeInTheDocument();
+    });
+  });
+
+  it("hides the planning notebook panel when planning_notebook is absent", async () => {
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Planning ledger" })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("heading", { name: "Planning notebook" })).not.toBeInTheDocument();
   });
 
   it("renders the shared route error card when the workspace loader rejects", async () => {

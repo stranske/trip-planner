@@ -4,20 +4,29 @@ import { useLoaderData } from "react-router-dom";
 import type { TripRecord } from "../api/trips";
 import {
   answerPlannerDecision,
+  createNotebookItem,
+  deleteNotebookItem,
   fetchPlannerSession,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
   saveWorkspaceBudget,
+  setNotebookFocus,
   submitPlannerTurn,
   submitRouteOptionAction,
+  updateNotebookItem,
   updateWorkspacePlanningMode,
   type ActualSpendEventUpsertPayload,
   type BudgetPlanUpsertPayload,
   type BudgetWorkspaceState,
+  type NotebookCategory,
+  type NotebookPriority,
   type PlannerMessage,
   type PlannerSessionResponse,
   type PlannerStructuredBlock,
   type PlanningMode,
+  type PlanningNotebookFocus,
+  type PlanningNotebookItem,
+  type PlanningNotebookState,
   type RouteOptionActionType,
   submitPlannerOptionFeedback,
   type SavedScenarioRecord,
@@ -28,6 +37,7 @@ import { TripMap } from "../components/maps/TripMap";
 import { PlanningModeSelector } from "../components/planner/PlanningModeSelector";
 import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
 import { TripComparison } from "../components/trips/TripComparison";
+import { PlanningNotebookPanel } from "../components/workspace/PlanningNotebookPanel";
 import { RouteOptionWorkbench } from "../components/workspace/RouteOptionWorkbench";
 import { ScenarioComparison } from "../components/workspace/ScenarioComparison";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
@@ -501,6 +511,30 @@ function hasRenderableFollowUp(
   return Boolean(followUp?.status && followUp?.title && followUp?.summary);
 }
 
+function rebuildNotebookState(
+  notebook: PlanningNotebookState,
+  items: PlanningNotebookItem[]
+): PlanningNotebookState {
+  const activeItems = items.filter((i) => i.status === "active");
+  const completedItems = items.filter((i) => i.status === "completed");
+  const byCategory: Record<string, PlanningNotebookItem[]> = {};
+  for (const item of activeItems) {
+    (byCategory[item.category] ??= []).push(item);
+  }
+  return {
+    ...notebook,
+    items,
+    summary: {
+      total_count: items.length,
+      active_count: activeItems.length,
+      completed_count: completedItems.length,
+      active_items: activeItems,
+      completed_items: completedItems,
+      by_category: byCategory,
+    },
+  };
+}
+
 function mergeWorkspaceBudgetState(
   workspace: WorkspaceData,
   budgetState: BudgetWorkspaceState
@@ -791,6 +825,8 @@ function WorkspacePageContent({
   const [planningModeError, setPlanningModeError] = useState<string | null>(null);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
+  const [notebookError, setNotebookError] = useState<string | null>(null);
+  const [notebookBusyLabel, setNotebookBusyLabel] = useState<string | null>(null);
   const [proposalError, setProposalError] = useState<string | null>(null);
   const [proposalBusyLabel, setProposalBusyLabel] = useState<string | null>(null);
   const [routeOptionError, setRouteOptionError] = useState<string | null>(null);
@@ -1022,6 +1058,132 @@ function WorkspacePageContent({
       setBudgetError(error instanceof Error ? error.message : "Spend entry failed.");
     } finally {
       setBudgetBusyLabel(null);
+    }
+  }
+
+  function mergeNotebookItem(
+    current: WorkspaceData,
+    updatedItem: PlanningNotebookItem
+  ): WorkspaceData {
+    const notebook = current.planning_notebook;
+    if (!notebook) {
+      return current;
+    }
+    const items = notebook.items.map((item) =>
+      item.notebook_item_id === updatedItem.notebook_item_id ? updatedItem : item
+    );
+    const existingIds = new Set(notebook.items.map((i) => i.notebook_item_id));
+    if (!existingIds.has(updatedItem.notebook_item_id)) {
+      items.push(updatedItem);
+    }
+    return { ...current, planning_notebook: rebuildNotebookState(notebook, items) };
+  }
+
+  function mergeNotebookItemDeleted(
+    current: WorkspaceData,
+    notebookItemId: string
+  ): WorkspaceData {
+    const notebook = current.planning_notebook;
+    if (!notebook) {
+      return current;
+    }
+    const items = notebook.items.filter((item) => item.notebook_item_id !== notebookItemId);
+    const nextFocus: PlanningNotebookFocus = {
+      category: notebook.focus.category,
+      notebook_item_id:
+        notebook.focus.notebook_item_id === notebookItemId
+          ? null
+          : notebook.focus.notebook_item_id,
+    };
+    return {
+      ...current,
+      planning_notebook: { ...rebuildNotebookState(notebook, items), focus: nextFocus },
+    };
+  }
+
+  function mergeNotebookFocus(
+    current: WorkspaceData,
+    nextFocus: PlanningNotebookFocus
+  ): WorkspaceData {
+    const notebook = current.planning_notebook;
+    if (!notebook) {
+      return current;
+    }
+    return { ...current, planning_notebook: { ...notebook, focus: nextFocus } };
+  }
+
+  async function handleNotebookCreate(payload: {
+    title: string;
+    category: NotebookCategory;
+    note?: string;
+    priority?: NotebookPriority;
+  }) {
+    setNotebookError(null);
+    setNotebookBusyLabel("Adding notebook item...");
+    try {
+      const newItem = await createNotebookItem(trip.trip_id, payload);
+      startTransition(() => {
+        setCurrentWorkspace((current) => mergeNotebookItem(current, newItem));
+      });
+    } catch (error) {
+      setNotebookError(error instanceof Error ? error.message : "Notebook item creation failed.");
+    } finally {
+      setNotebookBusyLabel(null);
+    }
+  }
+
+  async function handleNotebookComplete(notebookItemId: string) {
+    setNotebookError(null);
+    try {
+      const updatedItem = await updateNotebookItem(trip.trip_id, notebookItemId, {
+        status: "completed",
+      });
+      startTransition(() => {
+        setCurrentWorkspace((current) => mergeNotebookItem(current, updatedItem));
+      });
+    } catch (error) {
+      setNotebookError(error instanceof Error ? error.message : "Notebook item update failed.");
+    }
+  }
+
+  async function handleNotebookReopen(notebookItemId: string) {
+    setNotebookError(null);
+    try {
+      const updatedItem = await updateNotebookItem(trip.trip_id, notebookItemId, {
+        status: "active",
+      });
+      startTransition(() => {
+        setCurrentWorkspace((current) => mergeNotebookItem(current, updatedItem));
+      });
+    } catch (error) {
+      setNotebookError(error instanceof Error ? error.message : "Notebook item reopen failed.");
+    }
+  }
+
+  async function handleNotebookDelete(notebookItemId: string) {
+    setNotebookError(null);
+    try {
+      await deleteNotebookItem(trip.trip_id, notebookItemId);
+      startTransition(() => {
+        setCurrentWorkspace((current) => mergeNotebookItemDeleted(current, notebookItemId));
+      });
+    } catch (error) {
+      setNotebookError(error instanceof Error ? error.message : "Notebook item deletion failed.");
+    }
+  }
+
+  async function handleNotebookSetFocus(focus: {
+    category?: NotebookCategory | null;
+    notebook_item_id?: string | null;
+  }) {
+    setNotebookError(null);
+    try {
+      const nextFocus = await setNotebookFocus(trip.trip_id, focus);
+      startTransition(() => {
+        setCurrentWorkspace((current) => mergeNotebookFocus(current, nextFocus));
+      });
+    } catch (error) {
+      setNotebookError(error instanceof Error ? error.message : "Notebook focus update failed.");
     }
   }
 
@@ -1309,6 +1471,19 @@ function WorkspacePageContent({
         />
 
         <PlanningLedgerPanel ledger={currentWorkspace.planning_ledger} />
+
+        {currentWorkspace.planning_notebook ? (
+          <PlanningNotebookPanel
+            notebookState={currentWorkspace.planning_notebook}
+            busyLabel={notebookBusyLabel}
+            errorMessage={notebookError}
+            onCreateItem={handleNotebookCreate}
+            onCompleteItem={handleNotebookComplete}
+            onReopenItem={handleNotebookReopen}
+            onDeleteItem={handleNotebookDelete}
+            onSetFocus={handleNotebookSetFocus}
+          />
+        ) : null}
 
         <TripComparison
           currentTrip={currentWorkspace.trip_record.trip}
