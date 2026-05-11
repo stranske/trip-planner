@@ -231,3 +231,40 @@ Before heavy ingestion work begins, the repo should lock:
 5. business-approval and policy compatibility fields
 
 The current `source-channel-strategy.md` can remain the shortlist of seed channels. This document should be treated as the behavioral model for how those channels are used.
+
+## Implementation Status
+
+The deterministic scoring engine described above is implemented in
+[`trip_planner/sources/quality.py`](../trip_planner/sources/quality.py) and is
+covered by [`tests/sources/test_source_quality.py`](../tests/sources/test_source_quality.py).
+
+What landed:
+
+- `SourceQualityScorer.score_source` and `.score_provenance` produce a typed
+  `SourceQualityScore` (freshness, channel fit, provenance strength, traveler
+  relevance, confidence label, tags, traveler-facing explanation fragment) from
+  a `SourceRecord` or `ProvenanceReference`.
+- `SourceQualityScorer.summarize` (and the module-level `summarize_sources`
+  helper) fuses multiple contributions into a bounded `SourceConfidenceSummary`
+  with explicit conflict detection, freshness span, per-category counts, and
+  traveler-facing language. The summary is `mutates_state=False` so it is safe
+  for read-only planner tools to embed.
+- `build_source_confidence_explanation` in
+  [`trip_planner/ranking/explanations.py`](../trip_planner/ranking/explanations.py)
+  turns a `SourceConfidenceSummary` into an `ExplanationRecord` of type
+  `confidence`, so ranking and route-search outputs can attach source-confidence
+  language alongside the existing ranking-confidence record without disrupting
+  the existing engines.
+- Stale, conflicting, and sparse inputs are reflected in `confidence_label`,
+  `tags`, and `explanation_fragments`; useful-but-uncertain options remain
+  visible rather than being deleted.
+
+What still depends on later ingestion/scoring work:
+
+- The bundle-level planner tool `read_source_quality_summary` keeps its
+  bounded `not_available` shape until inventory carries fully resolved
+  `SourceRecord`/`ProvenanceReference` instances per option (see
+  [`docs/next-issue-set.md`](next-issue-set.md) item 6 for downstream work).
+- Live commerciality and review_consistency calibration across providers, and
+  the full live source-fusion pipeline described in §Fusion Logic, are not part
+  of this scoring engine; they remain ingestion-side commitments.

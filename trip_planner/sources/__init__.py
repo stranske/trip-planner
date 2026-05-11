@@ -4,6 +4,13 @@ from .adapters import SourceAdapter
 from .dedup import DeduplicationDecision
 from .models import QualityValueFitSummary, SourceRecord, SourceTrustSignals
 from .provenance import ProvenanceReference
+from .quality import (
+    CONFIDENCE_LABELS,
+    SourceConfidenceSummary,
+    SourceQualityScore,
+    SourceQualityScorer,
+    summarize_sources,
+)
 from .resolution import (
     AttributeConflict,
     EntityResolution,
@@ -21,6 +28,7 @@ from .snapshots import (
 __all__ = [
     "AdapterIssue",
     "AttributeConflict",
+    "CONFIDENCE_LABELS",
     "DeduplicationDecision",
     "EntityResolution",
     "MatchCandidate",
@@ -31,7 +39,11 @@ __all__ = [
     "RawSnapshot",
     "RawSourceRecord",
     "SourceAdapter",
+    "SourceConfidenceSummary",
+    "SourceQualityScore",
+    "SourceQualityScorer",
     "SourceRecord",
     "SourceQuery",
     "SourceTrustSignals",
+    "summarize_sources",
 ]
