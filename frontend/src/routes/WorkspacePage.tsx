@@ -885,6 +885,16 @@ function WorkspacePageContent({
         );
   const scenarioPolicyPosture = formatPolicyPosture(currentWorkspace);
   const panelVisibility = deriveWorkspacePanelVisibility(currentWorkspace);
+  const workspaceDebugSections = useMemo(() => {
+    const sections = { ...(productView?.debug_state.sections ?? {}) };
+    if (currentWorkspace.proposal_state != null) {
+      sections.proposal_state = {
+        title: "Proposal diagnostics",
+        payload: currentWorkspace.proposal_state,
+      };
+    }
+    return sections;
+  }, [productView?.debug_state.sections, currentWorkspace.proposal_state]);
   function handleScenarioSelection(scenarioId: string) {
     setSelectedScenarioId(scenarioId);
   }
@@ -1145,7 +1155,7 @@ function WorkspacePageContent({
             </article>
           </div>
         </details>
-        {productView && Object.keys(productView.debug_state.sections).length > 0 ? (
+        {Object.keys(workspaceDebugSections).length > 0 ? (
           <details
             className="workspace-debug-disclosure"
             open={showWorkspaceDebugDetails}
@@ -1153,13 +1163,13 @@ function WorkspacePageContent({
           >
             <summary>Advanced diagnostics</summary>
             <p className="muted-copy">
-              {Object.keys(productView.debug_state.sections).length} debug section
-              {Object.keys(productView.debug_state.sections).length === 1 ? "" : "s"} available for
+              {Object.keys(workspaceDebugSections).length} debug section
+              {Object.keys(workspaceDebugSections).length === 1 ? "" : "s"} available for
               troubleshooting.
             </p>
             {showWorkspaceDebugDetails ? (
               <div className="workspace-debug-section-list">
-                {Object.entries(productView.debug_state.sections).map(([sectionId, section]) => (
+                {Object.entries(workspaceDebugSections).map(([sectionId, section]) => (
                   <article key={sectionId} className="workspace-debug-section">
                     <h3>{section.title}</h3>
                     <pre>{JSON.stringify(section.payload, null, 2)}</pre>
@@ -1713,38 +1723,6 @@ function WorkspacePageContent({
                   <p>{alternative.rationale}</p>
                 </article>
               ))}
-              {(currentWorkspace.proposal_state.proposal.comparables ?? []).map((comparable) => (
-                <article
-                  key={`${comparable.category}-${comparable.label}`}
-                  className="decision-card"
-                >
-                  <h3>{comparable.label}</h3>
-                  <p>
-                    {comparable.vendor} via {comparable.booking_channel} ·{" "}
-                    {formatCurrency(
-                      comparable.estimated_cost.typical_amount,
-                      comparable.estimated_cost.currency
-                    )}
-                  </p>
-                  <p className="muted-copy">{comparable.notes.join(" ")}</p>
-                </article>
-              ))}
-              {(currentWorkspace.proposal_state.evaluation.evaluation_result?.approval_requirements ?? []).map(
-                (requirement) => (
-                  <article key={requirement.role} className="decision-card">
-                    <h3>{requirement.role}</h3>
-                    <p>{requirement.reason}</p>
-                  </article>
-                )
-              )}
-              {(currentWorkspace.proposal_state.evaluation.evaluation_result?.failure_reasons ?? []).map(
-                (failure) => (
-                  <article key={failure.code} className="decision-card">
-                    <h3>{failure.code.replace(/_/g, " ")}</h3>
-                    <p>{failure.message}</p>
-                  </article>
-                )
-              )}
             </div>
           )}
           </section>

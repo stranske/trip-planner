@@ -926,7 +926,8 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Ready for approval")).toBeInTheDocument();
     expect(screen.getAllByText("Advance to approval").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Options and readiness signals" })).toBeInTheDocument();
-    expect(screen.getByText("Conference Hotel")).toBeInTheDocument();
+    expect(screen.queryByText("Conference Hotel")).not.toBeInTheDocument();
+    expect(screen.queryByText("proposal-state:trip-leisure-kyoto-draft")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Planner notes to keep" })).toBeInTheDocument();
     expect(screen.getByText("Planner checkpoint 1")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Compare this workspace with other saved trips" })).toBeInTheDocument();
@@ -1492,26 +1493,48 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Seoul gallery weekend is stored as a leisure trip with 1 traveler(s).")).toBeInTheDocument();
   });
 
-  it("falls back to plain number formatting when comparable currency codes are invalid", async () => {
+  it("reveals raw proposal diagnostics only through advanced diagnostics", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
         ...workspacePayload,
-        proposal_state: {
-          ...workspacePayload.proposal_state,
-          proposal: {
-            ...workspacePayload.proposal_state.proposal,
-            comparables: [
-              {
-                ...workspacePayload.proposal_state.proposal.comparables[0],
-                estimated_cost: {
-                  ...workspacePayload.proposal_state.proposal.comparables[0].estimated_cost,
-                  currency: "INVALID",
-                },
-              },
-            ],
+        view_model: {
+          user_summary: {
+            trip_title: workspacePayload.trip_record.trip.title,
+            trip_mode: "leisure",
+            mode_label: "Leisure trip",
+            status: "ready",
+            headline: "Your trip plan is ready to review.",
+            decided: ["2 saved scenario draft(s)"],
+            uncertain: [],
+          },
+          next_step: {
+            title: "Review and pick a scenario",
+            summary:
+              "Compare the saved scenarios and choose one to keep planning around.",
+            action_label: "Open scenario comparison",
+            action_target: "scenario-comparison",
+            blocked: false,
+          },
+          panel_visibility: {
+            show_budget_panel: true,
+            show_policy_posture: true,
+            show_proposal_panel: true,
+            show_approval_readiness_panel: true,
+          },
+          policy_presentation: {
+            active_policy_state: true,
+            posture_label: "Ready for approval",
+            approval_status_label: "Ready for approval",
+            next_step_label: "Advance to approval",
+            summary: "Policy evaluation passed and the approval packet is ready.",
+          },
+          business_summary: null,
+          debug_state: {
+            sections: {},
           },
         },
       }),
+      trips: Promise.resolve(tripComparisonPayload),
     });
 
     renderWorkspacePage();
@@ -1519,8 +1542,16 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Options and readiness signals" })).toBeInTheDocument();
     });
+    expect(screen.getByText("Advanced diagnostics")).toBeInTheDocument();
+    expect(screen.queryByText("Proposal diagnostics")).not.toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain("proposal_state_id");
 
-    expect(screen.getByText(/Marriott via Navan · 245/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Proposal diagnostics" })).toBeInTheDocument();
+    });
+    expect(document.body.textContent ?? "").toContain("proposal_state_id");
   });
 
   it("shows an empty-state message when no route sequence is available", async () => {
