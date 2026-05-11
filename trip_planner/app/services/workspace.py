@@ -1822,6 +1822,7 @@ def _build_persisted_trip_workspace(
     inventory_summary: dict[str, Any] | None = None,
     scenario_search: dict[str, Any] | None = None,
     feasibility_summary: dict[str, Any] | None = None,
+    include_debug: bool = True,
 ) -> dict[str, Any]:
     resolved_session = session or _default_workspace_session(record).to_dict()
     trip_record = _serialize_persisted_trip_record(record)
@@ -1900,6 +1901,19 @@ def _build_persisted_trip_workspace(
         runtime_scenario_comparison=runtime_scenario_comparison,
     )
 
+    raw_policy_state = (policy_context or {}).get("policy_state")
+    raw_proposal_state = (proposal_context or {}).get("proposal_state")
+    planner_panel_state = _build_planner_panel_state(
+        trip=trip_record["trip"],
+        scenario_search=resolved_scenario_search,
+        session=resolved_session,
+        saved_scenarios=ordered_saved_scenarios,
+        activity_log=resolved_activity_log,
+        feasibility_summary=resolved_feasibility_summary,
+        policy_context=policy_context,
+        proposal_context=proposal_context,
+    )
+
     payload: dict[str, Any] = {
         "trip_record": trip_record,
         "session": resolved_session,
@@ -1922,24 +1936,25 @@ def _build_persisted_trip_workspace(
             "checkpoints": [],
             "artifacts": [],
         },
-        "planner_panel_state": _build_planner_panel_state(
-            trip=trip_record["trip"],
-            scenario_search=resolved_scenario_search,
-            session=resolved_session,
-            saved_scenarios=ordered_saved_scenarios,
-            activity_log=resolved_activity_log,
-            feasibility_summary=resolved_feasibility_summary,
-            policy_context=policy_context,
-            proposal_context=proposal_context,
-        ),
+        "planner_panel_state": planner_panel_state,
         "runtime_state": runtime_state,
         "feasibility_summary": resolved_feasibility_summary,
         "inventory_summary": resolved_inventory_summary,
         "budget_state": resolved_budget_state,
-        "policy_state": (policy_context or {}).get("policy_state"),
-        "proposal_state": (proposal_context or {}).get("proposal_state"),
+        "policy_state": raw_policy_state,
+        "proposal_state": raw_proposal_state,
     }
-    payload["view_model"] = _build_workspace_view_model(payload, trip_mode=record.mode)
+    if not include_debug:
+        payload["trip_record"] = _public_workspace_trip_record(trip_record)
+        payload["policy_state"] = _public_workspace_policy_state(raw_policy_state)
+        payload["proposal_state"] = _public_workspace_proposal_state(raw_proposal_state)
+        payload["planner_panel_state"] = _public_workspace_planner_panel_state(planner_panel_state)
+        payload = _strip_raw_workspace_diagnostic_keys(payload)
+    payload["view_model"] = _build_workspace_view_model(
+        payload,
+        trip_mode=record.mode,
+        include_debug=include_debug,
+    )
     return payload
 
 
@@ -1980,6 +1995,154 @@ _DEBUG_PAYLOAD_KEYS: tuple[str, ...] = (
     "activity_log",
     "planner_memory",
 )
+
+
+def _public_workspace_policy_state(policy_state: Any) -> dict[str, Any] | None:
+    if not isinstance(policy_state, dict) or not policy_state:
+        return None
+
+    constraint_set = deepcopy(policy_state.get("constraint_set") or {})
+    if isinstance(constraint_set, dict):
+        for key in ("policy_id", "organization_id", "policy_version"):
+            constraint_set.pop(key, None)
+    else:
+        constraint_set = {}
+
+    organization_context = deepcopy(policy_state.get("organization_context") or {})
+    if isinstance(organization_context, dict):
+        organization_context.pop("organization_id", None)
+    else:
+        organization_context = {}
+
+    public_state: dict[str, Any] = {}
+    if constraint_set:
+        public_state["constraint_set"] = constraint_set
+    if organization_context:
+        public_state["organization_context"] = organization_context
+    notes = policy_state.get("notes")
+    if isinstance(notes, list) and notes:
+        public_state["notes"] = list(notes)
+    tags = policy_state.get("tags")
+    if isinstance(tags, list) and tags:
+        public_state["tags"] = list(tags)
+    return public_state or None
+
+
+def _public_workspace_trip_record(trip_record: dict[str, Any]) -> dict[str, Any]:
+    public_record = deepcopy(trip_record)
+    trip = public_record.get("trip")
+    if isinstance(trip, dict):
+        artifacts = trip.get("artifacts")
+        if isinstance(artifacts, dict):
+            artifacts.pop("policy_state_id", None)
+    artifact_refs = public_record.get("artifact_refs")
+    if isinstance(artifact_refs, dict):
+        artifact_refs.pop("policy_state_id", None)
+    return public_record
+
+
+def _strip_raw_workspace_diagnostic_keys(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _strip_raw_workspace_diagnostic_keys(item)
+            for key, item in value.items()
+            if key not in {"policy_state_id", "proposal_state_id"}
+        }
+    if isinstance(value, list):
+        return [_strip_raw_workspace_diagnostic_keys(item) for item in value]
+    return value
+
+
+def _public_workspace_follow_up(follow_up: Any) -> dict[str, Any] | None:
+    if not isinstance(follow_up, dict) or not follow_up:
+        return None
+    public_keys = {
+        "status",
+        "path",
+        "title",
+        "summary",
+        "recommended_action",
+        "recommended_label",
+        "alternatives",
+        "guidance",
+        "notes",
+        "selected_alternative",
+        "requested_exception",
+    }
+    return {key: deepcopy(value) for key, value in follow_up.items() if key in public_keys}
+
+
+def _public_workspace_proposal_state(proposal_state: Any) -> dict[str, Any] | None:
+    if not isinstance(proposal_state, dict) or not proposal_state:
+        return None
+
+    proposal = proposal_state.get("proposal") if isinstance(proposal_state, dict) else {}
+    proposal = proposal if isinstance(proposal, dict) else {}
+    public_proposal: dict[str, Any] = {}
+    approval_notes = proposal.get("approval_notes")
+    if isinstance(approval_notes, list) and approval_notes:
+        public_proposal["approval_notes"] = list(approval_notes)
+    comparables = proposal.get("comparables")
+    if isinstance(comparables, list) and comparables:
+        public_proposal["comparables"] = deepcopy(comparables)
+
+    summary = proposal_state.get("summary")
+    summary = summary if isinstance(summary, dict) else {}
+    public_summary_keys = {
+        "submission_summary",
+        "approval_ready",
+        "comparable_count",
+        "highlights",
+        "follow_up_status",
+        "follow_up_title",
+        "follow_up_summary",
+    }
+    public_summary = {
+        key: deepcopy(value)
+        for key, value in summary.items()
+        if key in public_summary_keys and value is not None
+    }
+
+    return {
+        "proposal": public_proposal,
+        "evaluation": {"evaluation_result": None},
+        "summary": public_summary,
+        "follow_up": _public_workspace_follow_up(proposal_state.get("follow_up")),
+    }
+
+
+def _public_workspace_planner_panel_state(
+    planner_panel_state: dict[str, Any],
+) -> dict[str, Any]:
+    public_state = deepcopy(planner_panel_state)
+    trip = public_state.get("trip")
+    if isinstance(trip, dict):
+        artifacts = trip.get("artifacts")
+        if isinstance(artifacts, dict):
+            artifacts.pop("policy_state_id", None)
+    proposal = public_state.get("proposal")
+    if isinstance(proposal, dict):
+        for key in (
+            "proposal_id",
+            "trip_id",
+            "proposal_version",
+            "scenario_id",
+            "constraint_set_id",
+        ):
+            proposal.pop(key, None)
+        for option in proposal.get("selected_options") or []:
+            if isinstance(option, dict):
+                option.pop("option_id", None)
+                option.pop("justification_refs", None)
+        public_state["proposal"] = proposal or None
+    policy_evaluation = public_state.get("policy_evaluation")
+    if isinstance(policy_evaluation, dict):
+        public_state["policy_evaluation"] = {
+            key: deepcopy(value)
+            for key, value in policy_evaluation.items()
+            if key in {"notes", "recommendation", "summary"}
+        } or None
+    return public_state
 
 
 def _workspace_policy_state_is_active(
@@ -2106,6 +2269,7 @@ def _build_workspace_view_model(
     payload: dict[str, Any],
     *,
     trip_mode: str | None = None,
+    include_debug: bool = True,
 ) -> dict[str, Any]:
     """Map a workspace payload dict into the typed product view model.
 
@@ -2230,6 +2394,8 @@ def _build_workspace_view_model(
 
     debug_sections: dict[str, dict[str, Any]] = {}
     for key in _DEBUG_PAYLOAD_KEYS:
+        if not include_debug and key in {"policy_state", "proposal_state"}:
+            continue
         raw_value = payload.get(key)
         if raw_value is None:
             continue
@@ -2982,6 +3148,7 @@ def get_workspace_payload(
     *,
     user: AuthenticatedUser,
     trip_id: str,
+    include_debug: bool = True,
 ) -> dict[str, Any] | None:
     fixture = _FIXTURES.get(trip_id)
     if fixture is not None:
@@ -3072,7 +3239,9 @@ def get_workspace_payload(
             "proposal_state": None,
         }
         fixture_payload["view_model"] = _build_workspace_view_model(
-            fixture_payload, trip_mode=trip_record.trip.mode
+            fixture_payload,
+            trip_mode=trip_record.trip.mode,
+            include_debug=include_debug,
         )
         return fixture_payload
 
@@ -3194,18 +3363,19 @@ def get_workspace_payload(
         budget_state=load_budget_payload_for_workspace(db_session, record=record),
         policy_context=(
             get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
-            if record.mode == "business"
+            if record.mode == "business" or include_debug
             else None
         ),
         proposal_context=(
             get_workspace_proposal_payload(db_session, user=user, trip_id=trip_id)
-            if record.mode == "business"
+            if record.mode == "business" or include_debug
             else None
         ),
         inventory_bundles=persisted_inventory_bundles,
         inventory_summary=inventory_summary,
         scenario_search=runtime_search,
         feasibility_summary=feasibility_summary,
+        include_debug=include_debug,
     )
 
 
@@ -3286,6 +3456,7 @@ def update_workspace_planning_mode(
     user: AuthenticatedUser,
     trip_id: str,
     planning_mode: str,
+    include_debug: bool = True,
 ) -> dict[str, Any]:
     if planning_mode not in PLANNING_MODES:
         raise ValueError(f"planning_mode must be one of {', '.join(PLANNING_MODES)}")
@@ -3302,7 +3473,12 @@ def update_workspace_planning_mode(
     record.updated_at = now
     db_session.commit()
 
-    payload = get_workspace_payload(db_session, user=user, trip_id=trip_id)
+    payload = get_workspace_payload(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        include_debug=include_debug,
+    )
     if payload is None:
         raise WorkspaceTripNotFoundError(f"Trip '{trip_id}' was not found.")
     return payload
@@ -3469,9 +3645,7 @@ def update_planning_notebook_item(
         .where(PersistedPlanningNotebookItem.notebook_item_id == notebook_item_id)
     )
     if item is None:
-        raise WorkspaceTripNotFoundError(
-            f"Notebook item '{notebook_item_id}' was not found."
-        )
+        raise WorkspaceTripNotFoundError(f"Notebook item '{notebook_item_id}' was not found.")
     if updates.get("category") is not None:
         item.category = _validate_notebook_choice(
             "category", str(updates["category"]), PLANNING_NOTEBOOK_CATEGORIES
@@ -3519,9 +3693,7 @@ def delete_planning_notebook_item(
         .where(PersistedPlanningNotebookItem.notebook_item_id == notebook_item_id)
     )
     if item is None:
-        raise WorkspaceTripNotFoundError(
-            f"Notebook item '{notebook_item_id}' was not found."
-        )
+        raise WorkspaceTripNotFoundError(f"Notebook item '{notebook_item_id}' was not found.")
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     if session_record.notebook_focus_item_id == notebook_item_id:
         session_record.notebook_focus_item_id = None
@@ -3549,9 +3721,7 @@ def set_planning_notebook_focus(
             .where(PersistedPlanningNotebookItem.notebook_item_id == notebook_item_id)
         )
         if item is None:
-            raise WorkspaceTripNotFoundError(
-                f"Notebook item '{notebook_item_id}' was not found."
-            )
+            raise WorkspaceTripNotFoundError(f"Notebook item '{notebook_item_id}' was not found.")
         if category is None:
             category = item.category
         elif category != item.category:
@@ -3650,6 +3820,7 @@ def answer_workspace_planner_decision(
     trip_id: str,
     decision_id: str,
     choice: str,
+    include_debug: bool = True,
 ) -> dict[str, Any]:
     record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
@@ -3712,7 +3883,15 @@ def answer_workspace_planner_decision(
         metadata={"choice": choice},
     )
     db_session.commit()
-    return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
+    return (
+        get_workspace_payload(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            include_debug=include_debug,
+        )
+        or {}
+    )
 
 
 def submit_workspace_option_feedback(
@@ -3723,6 +3902,7 @@ def submit_workspace_option_feedback(
     option_id: str,
     action_type: str,
     decision_id: str | None = None,
+    include_debug: bool = True,
 ) -> dict[str, Any]:
     record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
@@ -3853,7 +4033,15 @@ def submit_workspace_option_feedback(
         metadata={"action_type": action_type, "option_set_id": option_set_id},
     )
     db_session.commit()
-    return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
+    return (
+        get_workspace_payload(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            include_debug=include_debug,
+        )
+        or {}
+    )
 
 
 def _without_route_option_notes(notes: list[str], option_id: str) -> list[str]:
@@ -3869,6 +4057,7 @@ def submit_workspace_route_option_action(
     trip_id: str,
     option_id: str,
     action_type: str,
+    include_debug: bool = True,
 ) -> dict[str, Any]:
     if action_type not in ROUTE_OPTION_ACTIONS:
         raise ValueError(f"action_type must be one of {', '.join(ROUTE_OPTION_ACTIONS)}")
@@ -4014,4 +4203,12 @@ def submit_workspace_route_option_action(
         metadata={"action_type": action_type, "option_set_id": option_set_id},
     )
     db_session.commit()
-    return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
+    return (
+        get_workspace_payload(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            include_debug=include_debug,
+        )
+        or {}
+    )
