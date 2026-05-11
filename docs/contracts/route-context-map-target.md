@@ -23,7 +23,7 @@ consolidation so subsequent map work has a single contract to extend.
 **Surface module:** [`frontend/src/components/maps/mapSurface.ts`](../../frontend/src/components/maps/mapSurface.ts)
 (canonical TypeScript types — `TripMapSurfaceModel`, `MapSurfaceProvider`,
 `RouteStop`, `RouteSegment`, `MapMarker`, `MapMarkerKind`,
-`MapProviderLoadState`).
+`MapFocusCue`, `MapProviderLoadState`).
 
 The first map target renders **route context for the active route option** in
 the trip workspace. It supports three traveler-facing scopes without changing
@@ -34,6 +34,13 @@ the selected route option:
 | `global` | Understand the whole trip outline. | Keeps the main anchors and complete rough route visible. Labels the shape as approximate. |
 | `regional` | Compare the selected route option. | Shows all legs for the active route option and remains synchronized with route-option selection. |
 | `local` | Focus on one travel leg. | Narrows the visible route to a selected segment and nearby planning markers. If a route has fewer than two stops, the UI explains that segment detail is pending. |
+
+When the workspace payload includes planning-ledger entries with explicit map
+links, the target also surfaces those as **map focus cues**. Focus cues do not
+invent geography from free text. They attach only when a ledger entry names a
+route option, route segment, marker, bundle, or destination through
+`related_option_id`, `source_refs`, or metadata keys such as `route_segment_id`,
+`map_marker_id`, `bundle_id`, or `destination`.
 
 It does not render timeline-only structure, saved-trip overviews, or multiple
 simultaneous geography overlays. Those are separate surfaces in this epic
@@ -73,6 +80,24 @@ contract below.
 | `rough_route_geometry` | object[] | yes | Approximate route segments. These are planning shapes, not turn-by-turn directions. |
 | `confidence.level` | `high`\|`medium`\|`low` | yes | Coarse confidence label for route precision. |
 | `confidence.summary` | string | yes | Traveler-facing copy explaining approximate versus more detailed map state. |
+
+### From `planning_ledger`
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `entries[*].ledger_entry_id` | string | yes, when ledger present | Stable identifier for the linked planning note. |
+| `entries[*].summary` | string | yes, when ledger present | Traveler-facing note copy shown in the map sidebar when linked. |
+| `entries[*].status` | string | yes, when ledger present | Superseded entries are ignored by the map focus layer. |
+| `entries[*].item_type` | string | yes, when ledger present | Rendered as a short note type label such as route option, open question, or source. |
+| `entries[*].related_option_id` | string \| null | optional | Links a note to the active route option when it equals `scenario_id` or `route_option_id`. |
+| `entries[*].source_refs` | string[] | optional | May link a note to a route option, route segment, marker, bundle, or destination. |
+| `entries[*].metadata` | object | optional | May carry `route_segment_id`, `map_segment_id`, `selected_segment_id`, `map_marker_id`, `marker_id`, `bundle_id`, `destination`, or `route_option_id`. |
+
+Linked ledger entries are rendered as `MapFocusCue` values in
+`buildTripMapSurfaceModel`. The normal UI uses those cues to emphasize the
+linked marker or segment and to show a compact "Linked planning notes" list.
+Unlinked ledger text stays in the planning ledger panel; the map should not
+guess links by broad keyword matching.
 
 ### From `feasibility_summary`
 

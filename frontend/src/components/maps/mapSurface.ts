@@ -6,6 +6,8 @@ import type {
 
 type TripMapScenario = RuntimeScenarioComparison["scenarios"][number];
 type InventoryBundle = WorkspaceData["inventory_summary"]["bundles"][number];
+type PlanningLedgerState = NonNullable<WorkspaceData["planning_ledger"]>;
+type PlanningLedgerEntry = PlanningLedgerState["entries"][number];
 
 export type MapProviderLoadState = "ready" | "loading" | "error";
 
@@ -26,6 +28,7 @@ export type MapSurfaceProvider =
 
 export type RouteStop = {
   id: string;
+  sourceId: string;
   label: string;
   description: string;
   x: number;
@@ -34,8 +37,21 @@ export type RouteStop = {
 
 export type MapMarkerKind = "stop" | "lodging" | "activity" | "transport" | "policy";
 
+export type MapFocusCue = {
+  ledgerEntryId: string;
+  label: string;
+  summary: string;
+  status: PlanningLedgerEntry["status"];
+  itemType: PlanningLedgerEntry["item_type"];
+  targetKind: "route" | "segment" | "marker";
+  targetId: string;
+  markerId: string | null;
+  segmentId: string | null;
+};
+
 export type MapMarker = {
   id: string;
+  sourceId: string;
   kind: MapMarkerKind;
   label: string;
   summary: string;
@@ -43,6 +59,7 @@ export type MapMarker = {
   x: number;
   y: number;
   emphasized: boolean;
+  focusCues: MapFocusCue[];
 };
 
 export type RouteSegment = {
@@ -56,6 +73,7 @@ export type RouteSegment = {
   x2: number;
   y2: number;
   warning: string | null;
+  focusCues: MapFocusCue[];
 };
 
 export type MapViewScope = "global" | "regional" | "local";
@@ -67,6 +85,7 @@ export type MapWorkspaceView = {
   selectedSegmentId: string | null;
   placeMarkers: MapMarker[];
   roughRouteGeometry: RouteSegment[];
+  focusCues: MapFocusCue[];
   confidence: {
     level: MapGeometryConfidence;
     summary: string;
@@ -115,6 +134,8 @@ export type TripMapSurfaceModel = {
   visibleRouteStops: RouteStop[];
   visibleRouteSegments: RouteSegment[];
   visibleMarkers: MapMarker[];
+  focusCues: MapFocusCue[];
+  visibleFocusCues: MapFocusCue[];
   destinationAnchors: string[];
   destinationContext: string[];
   scenarioFocusAreas: string[];
@@ -278,6 +299,7 @@ function buildRouteSegments(routeStops: RouteStop[], routeWarning: string | null
       x2: nextStop.x,
       y2: nextStop.y,
       warning: index === 0 ? routeWarning : null,
+      focusCues: [],
     };
   });
 }
@@ -297,6 +319,7 @@ function buildMarkers({
 }): MapMarker[] {
   const stopMarkers = routeStops.map((stop, index) => ({
     id: `${stop.id}-marker`,
+    sourceId: stop.sourceId,
     kind: "stop" as const,
     label: stop.label,
     summary: index === 0 ? "Route origin" : index === routeStops.length - 1 ? "Route destination" : "Route stop",
@@ -304,6 +327,7 @@ function buildMarkers({
     x: stop.x,
     y: stop.y,
     emphasized: index === 0 || index === routeStops.length - 1,
+    focusCues: [],
   }));
   const bundleMarkers = bundles.flatMap((bundle, index) => {
     const coordinate = coordinateForMarker(index, bundles.length);
@@ -311,6 +335,7 @@ function buildMarkers({
     const destinations = bundle.destination_names.filter(Boolean).join(", ") || "No destination anchors";
     return markerKinds.map((kind, markerIndex) => ({
       id: `bundle-${bundle.bundle_id}-${kind}`,
+      sourceId: bundle.bundle_id,
       kind,
       label: bundle.title,
       summary: `${bundle.option_count} option(s) anchored to ${destinations}`,
@@ -318,6 +343,7 @@ function buildMarkers({
       x: coordinate.x + markerIndex * 3,
       y: coordinate.y + markerIndex * 3,
       emphasized: activeScenario.recommended_for_selection && index === 0 && markerIndex === 0,
+      focusCues: [],
     }));
   });
   const policyMarker =
@@ -326,6 +352,7 @@ function buildMarkers({
       : [
           {
             id: `${activeScenario.scenario_id}-policy-warning`,
+            sourceId: activeScenario.scenario_id,
             kind: "policy" as const,
             label: "Route burden warning",
             summary: routeWarning,
@@ -338,6 +365,7 @@ function buildMarkers({
             x: 82,
             y: 18,
             emphasized: true,
+            focusCues: [],
           },
         ];
 
@@ -455,6 +483,241 @@ function visibleMapContentFor({
   };
 }
 
+function normalizedRef(value: unknown): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function normalizeRefList(values: unknown): string[] {
+  if (typeof values === "string") {
+    return [values];
+  }
+  if (Array.isArray(values)) {
+    return values.filter((value): value is string => typeof value === "string");
+  }
+  return [];
+}
+
+function entryMapRefs(entry: PlanningLedgerEntry): string[] {
+  const metadata = entry.metadata ?? {};
+  const refs = [
+    entry.related_option_id,
+    entry.related_decision_id,
+    ...entry.source_refs,
+    ...entry.source_message_ids,
+    metadata["map_marker_id"],
+    metadata["marker_id"],
+    metadata["map_marker_ids"],
+    metadata["marker_ids"],
+    metadata["route_segment_id"],
+    metadata["map_segment_id"],
+    metadata["selected_segment_id"],
+    metadata["route_segment_ids"],
+    metadata["map_segment_ids"],
+    metadata["route_option_id"],
+    metadata["scenario_id"],
+    metadata["bundle_id"],
+    metadata["destination"],
+    metadata["destination_id"],
+    metadata["place_id"],
+  ];
+  return Array.from(
+    new Set(refs.flatMap(normalizeRefList).map((ref) => ref.trim()).filter(Boolean))
+  );
+}
+
+function labelForLedgerEntry(entry: PlanningLedgerEntry): string {
+  switch (entry.item_type) {
+    case "option_rejected":
+      return "Rejected option";
+    case "option_considered":
+      return "Route option";
+    case "decision":
+      return "Decision";
+    case "assumption":
+      return "Assumption";
+    case "constraint":
+      return "Constraint";
+    case "open_question":
+      return "Open question";
+    case "source_reference":
+      return "Source";
+    default:
+      return "Planning note";
+  }
+}
+
+function buildMapFocusCues({
+  activeScenario,
+  markers,
+  routeSegments,
+  planningLedger,
+}: {
+  activeScenario: TripMapScenario;
+  markers: MapMarker[];
+  routeSegments: RouteSegment[];
+  planningLedger?: PlanningLedgerState | null;
+}): MapFocusCue[] {
+  const entries = planningLedger?.entries ?? [];
+  if (entries.length === 0) {
+    return [];
+  }
+
+  const routeIds = new Set(
+    [activeScenario.scenario_id, activeScenario.route_option_id].filter(
+      (value): value is string => Boolean(value)
+    )
+  );
+  const markerById = new Map(markers.map((marker) => [marker.id, marker]));
+  const markerBySourceId = new Map(markers.map((marker) => [marker.sourceId, marker]));
+  const markerByLabel = new Map(markers.map((marker) => [normalizedRef(marker.label), marker]));
+  const segmentById = new Map(routeSegments.map((segment) => [segment.id, segment]));
+  const cues: MapFocusCue[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of entries) {
+    if (entry.status === "superseded") {
+      continue;
+    }
+    const summary = entry.summary.trim();
+    if (summary === "") {
+      continue;
+    }
+
+    const refs = entryMapRefs(entry);
+    let target:
+      | { targetKind: "marker"; targetId: string; markerId: string; segmentId: null }
+      | { targetKind: "segment"; targetId: string; markerId: null; segmentId: string }
+      | { targetKind: "route"; targetId: string; markerId: null; segmentId: null }
+      | null = null;
+
+    for (const ref of refs) {
+      const marker =
+        markerById.get(ref) ??
+        markerBySourceId.get(ref) ??
+        markerByLabel.get(normalizedRef(ref));
+      if (marker) {
+        target = {
+          targetKind: "marker",
+          targetId: marker.id,
+          markerId: marker.id,
+          segmentId: null,
+        };
+        break;
+      }
+    }
+
+    if (target == null) {
+      for (const ref of refs) {
+        const segment = segmentById.get(ref);
+        if (segment) {
+          target = {
+            targetKind: "segment",
+            targetId: segment.id,
+            markerId: null,
+            segmentId: segment.id,
+          };
+          break;
+        }
+      }
+    }
+
+    if (target == null) {
+      for (const ref of refs) {
+        if (routeIds.has(ref)) {
+          target = {
+            targetKind: "route",
+            targetId: ref,
+            markerId: null,
+            segmentId: null,
+          };
+          break;
+        }
+      }
+    }
+
+    if (target == null) {
+      continue;
+    }
+
+    const key = `${entry.ledger_entry_id}:${target.targetKind}:${target.targetId}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    cues.push({
+      ledgerEntryId: entry.ledger_entry_id,
+      label: labelForLedgerEntry(entry),
+      summary,
+      status: entry.status,
+      itemType: entry.item_type,
+      ...target,
+    });
+  }
+
+  return cues.slice(0, 8);
+}
+
+function attachFocusCues({
+  markers,
+  routeSegments,
+  focusCues,
+}: {
+  markers: MapMarker[];
+  routeSegments: RouteSegment[];
+  focusCues: MapFocusCue[];
+}): { markers: MapMarker[]; routeSegments: RouteSegment[] } {
+  const cuesByMarkerId = new Map<string, MapFocusCue[]>();
+  const cuesBySegmentId = new Map<string, MapFocusCue[]>();
+  for (const cue of focusCues) {
+    if (cue.markerId) {
+      cuesByMarkerId.set(cue.markerId, [...(cuesByMarkerId.get(cue.markerId) ?? []), cue]);
+    }
+    if (cue.segmentId) {
+      cuesBySegmentId.set(cue.segmentId, [...(cuesBySegmentId.get(cue.segmentId) ?? []), cue]);
+    }
+  }
+
+  return {
+    markers: markers.map((marker) => {
+      const markerFocusCues = cuesByMarkerId.get(marker.id) ?? [];
+      return {
+        ...marker,
+        emphasized: marker.emphasized || markerFocusCues.length > 0,
+        focusCues: markerFocusCues,
+      };
+    }),
+    routeSegments: routeSegments.map((segment) => ({
+      ...segment,
+      focusCues: cuesBySegmentId.get(segment.id) ?? [],
+    })),
+  };
+}
+
+function visibleFocusCuesFor({
+  focusCues,
+  visibleMarkers,
+  visibleRouteSegments,
+}: {
+  focusCues: MapFocusCue[];
+  visibleMarkers: MapMarker[];
+  visibleRouteSegments: RouteSegment[];
+}): MapFocusCue[] {
+  const visibleMarkerIds = new Set(visibleMarkers.map((marker) => marker.id));
+  const visibleSegmentIds = new Set(visibleRouteSegments.map((segment) => segment.id));
+  return focusCues.filter((cue) => {
+    if (cue.targetKind === "route") {
+      return true;
+    }
+    if (cue.markerId) {
+      return visibleMarkerIds.has(cue.markerId);
+    }
+    if (cue.segmentId) {
+      return visibleSegmentIds.has(cue.segmentId);
+    }
+    return false;
+  });
+}
+
 function deriveMapConfidence({
   routeState,
   provider,
@@ -492,6 +755,7 @@ export function buildTripMapSurfaceModel({
   providerLoadState = "ready",
   activeScope = "regional",
   selectedSegmentId,
+  planningLedger,
 }: {
   activeScenario: TripMapScenario;
   bundles: InventoryBundle[];
@@ -504,11 +768,13 @@ export function buildTripMapSurfaceModel({
   providerLoadState?: MapProviderLoadState;
   activeScope?: MapViewScope;
   selectedSegmentId?: string | null;
+  planningLedger?: PlanningLedgerState | null;
 }): TripMapSurfaceModel {
   const routeStops = activeScenario.route_sequence.map((stop, index) => {
     const coordinate = coordinateForRouteIndex(index, activeScenario.route_sequence.length);
     return {
       id: `${activeScenario.scenario_id}-${stop}-${index}`,
+      sourceId: stop,
       label: humanizeStop(stop),
       description: describeStop(index, activeScenario.route_sequence.length),
       x: coordinate.x,
@@ -531,13 +797,26 @@ export function buildTripMapSurfaceModel({
   const trimmedApiKey = googleMapsApiKey?.trim() ?? "";
   const routeWarning = deriveRouteWarning(activeScenario, feasibilitySummary);
   const routeSegments = buildRouteSegments(routeStops, routeWarning);
-  const markers = buildMarkers({
+  const baseMarkers = buildMarkers({
     activeScenario,
     bundles,
     routeStops,
     routeWarning,
     policyPosture,
   });
+  const focusCues = buildMapFocusCues({
+    activeScenario,
+    markers: baseMarkers,
+    routeSegments,
+    planningLedger,
+  });
+  const focusedMapContent = attachFocusCues({
+    markers: baseMarkers,
+    routeSegments,
+    focusCues,
+  });
+  const markers = focusedMapContent.markers;
+  const focusedRouteSegments = focusedMapContent.routeSegments;
   const routeState = routeStops.length >= 2 ? "ready" : "sparse";
   const scenarioAffordances = buildScenarioAffordances({
     activeScenario,
@@ -592,9 +871,14 @@ export function buildTripMapSurfaceModel({
   const visibleMapContent = visibleMapContentFor({
     activeScope,
     routeStops,
-    routeSegments,
+    routeSegments: focusedRouteSegments,
     markers,
     selectedSegmentId,
+  });
+  const visibleFocusCues = visibleFocusCuesFor({
+    focusCues,
+    visibleMarkers: visibleMapContent.markers,
+    visibleRouteSegments: visibleMapContent.routeSegments,
   });
   const scope = scopePresentationFor({
     activeScope,
@@ -606,6 +890,7 @@ export function buildTripMapSurfaceModel({
     selectedSegmentId: visibleMapContent.selectedSegment?.id ?? null,
     placeMarkers: visibleMapContent.markers,
     roughRouteGeometry: visibleMapContent.routeSegments,
+    focusCues: visibleFocusCues,
     confidence: deriveMapConfidence({ routeState, provider }),
     diagnostics: {
       provider,
@@ -617,11 +902,13 @@ export function buildTripMapSurfaceModel({
   return {
     provider,
     routeStops,
-    routeSegments,
+    routeSegments: focusedRouteSegments,
     markers,
     visibleRouteStops: visibleMapContent.routeStops,
     visibleRouteSegments: visibleMapContent.routeSegments,
     visibleMarkers: visibleMapContent.markers,
+    focusCues,
+    visibleFocusCues,
     destinationAnchors,
     destinationContext,
     scenarioFocusAreas: scenarioFocusAreas?.filter(Boolean) ?? [],

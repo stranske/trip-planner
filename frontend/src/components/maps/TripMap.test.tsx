@@ -103,11 +103,64 @@ const feasibilitySummary: FeasibilitySummary = {
   assessments: [],
 };
 
+const planningLedger: WorkspaceData["planning_ledger"] = {
+  entries: [
+    {
+      ledger_entry_id: "ledger:route-baseline",
+      trip_id: "trip:scandinavia",
+      session_state_id: "session:scandinavia",
+      item_type: "option_considered",
+      status: "active",
+      category: "route_options",
+      summary: "Keep rail-first route as the baseline until ferry timing is known.",
+      detail: "",
+      source_message_ids: [],
+      source_refs: [],
+      related_option_id: "route-option:rail-first",
+      related_decision_id: null,
+      supersedes_entry_id: null,
+      metadata: {},
+      created_at: "2026-05-10T00:00:00Z",
+      updated_at: "2026-05-10T00:00:00Z",
+    },
+    {
+      ledger_entry_id: "ledger:oslo-transfer",
+      trip_id: "trip:scandinavia",
+      session_state_id: "session:scandinavia",
+      item_type: "open_question",
+      status: "active",
+      category: "questions",
+      summary: "Remember Oslo rail transfer timing.",
+      detail: "",
+      source_message_ids: [],
+      source_refs: [],
+      related_option_id: null,
+      related_decision_id: null,
+      supersedes_entry_id: null,
+      metadata: { bundle_id: "bundle-rail" },
+      created_at: "2026-05-10T00:00:00Z",
+      updated_at: "2026-05-10T00:00:00Z",
+    },
+  ],
+  summary: {
+    active_decisions: [],
+    open_questions: [],
+    active_options: [],
+    rejected_options: [],
+    constraints: [],
+    assumptions: [],
+    source_references: [],
+  },
+};
+
 afterEach(() => {
   cleanup();
 });
 
-function renderTripMap(onSelectScenario = vi.fn()) {
+function renderTripMap(
+  onSelectScenario = vi.fn(),
+  ledger?: WorkspaceData["planning_ledger"]
+) {
   render(
     <TripMap
       comparison={comparison}
@@ -119,6 +172,7 @@ function renderTripMap(onSelectScenario = vi.fn()) {
       feasibilitySummary={feasibilitySummary}
       tripPrimaryRegions={["Sweden", "Norway"]}
       policyPosture="No approval packet yet"
+      planningLedger={ledger}
       compactLayout={false}
     />
   );
@@ -162,5 +216,24 @@ describe("TripMap", () => {
     expect(screen.queryByText(/Google Maps JavaScript/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Provider misconfigured/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Provider error/i)).not.toBeInTheDocument();
+  });
+
+  it("surfaces linked planning ledger entries as map focus cues", () => {
+    renderTripMap(vi.fn(), planningLedger);
+
+    expect(screen.getByLabelText("Route context map")).toHaveTextContent(
+      "2 linked planning note"
+    );
+    expect(screen.getByLabelText("Linked planning notes")).toHaveTextContent(
+      "Keep rail-first route as the baseline until ferry timing is known."
+    );
+    expect(screen.getByLabelText("Linked planning notes for selected marker")).toHaveTextContent(
+      "Remember Oslo rail transfer timing."
+    );
+    expect(
+      screen.getByRole("button", {
+        name: /transport marker: Rail transfer anchors.*1 linked planning note/i,
+      })
+    ).toBeInTheDocument();
   });
 });

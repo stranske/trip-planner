@@ -978,6 +978,11 @@ a {
   stroke-dasharray: 7 5;
 }
 
+.map-route-line-focused {
+  stroke-width: 6;
+  filter: drop-shadow(0 0 3px rgba(56, 117, 107, 0.5));
+}
+
 .map-marker {
   position: absolute;
   display: grid;
@@ -1073,6 +1078,12 @@ a {
   outline-offset: 3px;
 }
 
+.map-stop-focused .map-stop-marker {
+  box-shadow:
+    0 0 0 6px rgba(56, 117, 107, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
 .map-stop-copy {
   display: grid;
   gap: 0.3rem;
@@ -1132,6 +1143,10 @@ a {
   outline: 2px solid rgba(56, 117, 107, 0.25);
 }
 
+.map-option-marker-focused {
+  box-shadow: 0 0 0 4px rgba(56, 117, 107, 0.12);
+}
+
 .map-warning {
   margin: 0;
   border-radius: 8px;
@@ -1143,6 +1158,24 @@ a {
 
 .map-marker-detail {
   border: 1px solid rgba(56, 117, 107, 0.2);
+}
+
+.map-ledger-focus-list {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.85rem 0 0;
+  padding-left: 1rem;
+  color: #365063;
+}
+
+.map-ledger-focus-list li {
+  padding-left: 0.15rem;
+}
+
+.map-ledger-focus-list span {
+  display: block;
+  color: #13212c;
+  font-weight: 800;
 }
 
 .map-metrics {

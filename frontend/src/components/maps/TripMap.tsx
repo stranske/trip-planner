@@ -21,6 +21,7 @@ export function TripMap({
   feasibilitySummary,
   tripPrimaryRegions,
   policyPosture,
+  planningLedger,
   compactLayout,
 }: {
   comparison: RuntimeScenarioComparison;
@@ -32,6 +33,7 @@ export function TripMap({
   feasibilitySummary: FeasibilitySummary;
   tripPrimaryRegions: string[];
   policyPosture: string | null;
+  planningLedger?: WorkspaceData["planning_ledger"];
   compactLayout: boolean;
 }) {
   const activeScenario =
@@ -62,6 +64,7 @@ export function TripMap({
       scenarioFocusAreas={scenarioFocusAreas}
       tripPrimaryRegions={tripPrimaryRegions}
       policyPosture={policyPosture}
+      planningLedger={planningLedger}
       compactLayout={compactLayout}
     />
   );
@@ -77,6 +80,7 @@ function ActiveTripMap({
   scenarioFocusAreas,
   tripPrimaryRegions,
   policyPosture,
+  planningLedger,
   compactLayout,
 }: {
   activeScenario: TripMapScenario;
@@ -88,6 +92,7 @@ function ActiveTripMap({
   scenarioFocusAreas?: string[];
   tripPrimaryRegions: string[];
   policyPosture: string | null;
+  planningLedger?: WorkspaceData["planning_ledger"];
   compactLayout: boolean;
 }) {
   const googleMapsApiKey =
@@ -109,8 +114,12 @@ function ActiveTripMap({
     providerLoadState,
     activeScope,
     selectedSegmentId,
+    planningLedger,
   });
-  const initialMarkerId = mapSurface.visibleMarkers[0]?.id ?? null;
+  const initialMarkerId =
+    mapSurface.visibleMarkers.find((marker) => marker.focusCues.length > 0)?.id ??
+    mapSurface.visibleMarkers[0]?.id ??
+    null;
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(initialMarkerId);
   const selectedMarker = useMemo(
     () =>
@@ -208,6 +217,9 @@ function ActiveTripMap({
             <span className="map-provider-name">{mapSurface.scope.label}</span>
             <span>{mapSurface.visibleRouteSegments.length} shown segment(s)</span>
             <span>{mapSurface.visibleMarkers.length} shown marker(s)</span>
+            {mapSurface.visibleFocusCues.length > 0 ? (
+              <span>{mapSurface.visibleFocusCues.length} linked planning note(s)</span>
+            ) : null}
           </div>
           {mapSurface.provider.kind === "google-maps-js" ? (
             <InteractiveProviderMap
@@ -236,6 +248,16 @@ function ActiveTripMap({
             <h3>Map view</h3>
             <p>{mapSurface.scope.summary}</p>
             <p className="muted-copy">{mapSurface.workspaceView.confidence.summary}</p>
+            {mapSurface.visibleFocusCues.length > 0 ? (
+              <ul className="map-ledger-focus-list" aria-label="Linked planning notes">
+                {mapSurface.visibleFocusCues.slice(0, 4).map((cue) => (
+                  <li key={cue.ledgerEntryId}>
+                    <span>{cue.label}</span>
+                    {cue.summary}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </article>
           {selectedMarker ? (
             <article className="decision-card map-marker-detail" aria-live="polite">
@@ -243,6 +265,19 @@ function ActiveTripMap({
               <h3>{selectedMarker.label}</h3>
               <p>{selectedMarker.summary}</p>
               <p className="muted-copy">{selectedMarker.detail}</p>
+              {selectedMarker.focusCues.length > 0 ? (
+                <ul
+                  className="map-ledger-focus-list"
+                  aria-label="Linked planning notes for selected marker"
+                >
+                  {selectedMarker.focusCues.map((cue) => (
+                    <li key={cue.ledgerEntryId}>
+                      <span>{cue.label}</span>
+                      {cue.summary}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </article>
           ) : null}
           <dl className="workspace-meta map-metrics">
@@ -368,7 +403,9 @@ function InteractiveProviderMap({
             y1={segment.y1}
             x2={segment.x2}
             y2={segment.y2}
-            className={segment.warning ? "map-route-line map-route-line-warning" : "map-route-line"}
+            className={`map-route-line${segment.warning ? " map-route-line-warning" : ""}${
+              segment.focusCues.length > 0 ? " map-route-line-focused" : ""
+            }`}
           />
         ))}
       </svg>
@@ -410,11 +447,14 @@ function FallbackRouteSchematic({
       <div className="map-fallback-route">
         {routeStops.map((stop, index) => {
           const markerId = `${stop.id}-marker`;
+          const marker = markers.find((candidate) => candidate.id === markerId);
           return (
             <button
               key={stop.id}
               type="button"
-              className={`map-stop${selectedMarker?.id === markerId ? " map-stop-selected" : ""}`}
+              className={`map-stop${selectedMarker?.id === markerId ? " map-stop-selected" : ""}${
+                marker?.focusCues.length ? " map-stop-focused" : ""
+              }`}
               aria-pressed={selectedMarker?.id === markerId}
               onClick={() => onSelectMarker(markerId)}
             >
@@ -434,7 +474,8 @@ function FallbackRouteSchematic({
             type="button"
             className={`map-option-marker map-option-marker-${marker.kind}${
               selectedMarker?.id === marker.id ? " map-option-marker-selected" : ""
-            }`}
+            }${marker.focusCues.length > 0 ? " map-option-marker-focused" : ""}`}
+            aria-label={markerAccessibleLabel(marker)}
             aria-pressed={selectedMarker?.id === marker.id}
             onClick={() => onSelectMarker(marker.id)}
           >
@@ -448,7 +489,13 @@ function FallbackRouteSchematic({
 }
 
 function markerAccessibleLabel(marker: MapMarker): string {
-  return `${marker.kind} marker: ${marker.label}. ${marker.summary}`;
+  const focusSummary =
+    marker.focusCues.length === 0
+      ? ""
+      : ` ${marker.focusCues.length} linked planning note${
+          marker.focusCues.length === 1 ? "" : "s"
+        }.`;
+  return `${marker.kind} marker: ${marker.label}. ${marker.summary}${focusSummary}`;
 }
 
 function markerLabel(kind: MapMarker["kind"]): string {

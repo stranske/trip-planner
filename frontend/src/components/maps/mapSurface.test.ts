@@ -159,6 +159,145 @@ describe("mapSurface", () => {
     expect(localModel.scope.precisionLabel).toBe("Segment-level planning view");
   });
 
+  it("connects directly linked ledger entries to map markers and route segments", () => {
+    const baseInput = {
+      activeScenario: {
+        scenario_id: "scenario:focus",
+        route_option_id: "route-option:focus",
+        title: "Kyoto route focus",
+        rank: 1,
+        status: "lead",
+        summary: "Baseline",
+        comparison_note: "Lead route",
+        option_count: 2,
+        route_sequence: ["kyoto", "uji", "nara"],
+        route_summary: "kyoto -> uji -> nara",
+        recommended_for_selection: true,
+        feasible: true,
+        metrics: {
+          score: 0.91,
+          travel_minutes: 180,
+          transfers: 2,
+          estimated_total: null,
+        },
+        delta: {
+          score_delta: 0,
+          travel_minutes_delta: 0,
+          transfers_delta: 0,
+          estimated_total_delta: null,
+        },
+        highlights: ["Short regional route."],
+      },
+      bundles: [
+        {
+          bundle_id: "bundle-uji-tea",
+          title: "Uji tea anchors",
+          bundle_context: "activity_route",
+          summary: "Tea stops that should stay near the Uji leg.",
+          destination_names: ["Uji"],
+          option_count: 2,
+          strengths: [],
+          tradeoffs: [],
+        },
+      ],
+      feasibilitySummary: {
+        assessment_count: 0,
+        recommended_bundle_count: 0,
+        blocking_bundle_count: 0,
+        attention_bundle_count: 0,
+        notes: [],
+        assessments: [],
+      },
+      googleMapsApiKey: "test-key",
+    };
+    const initialModel = buildTripMapSurfaceModel(baseInput);
+    const focusedSegmentId = initialModel.routeSegments[1].id;
+
+    const model = buildTripMapSurfaceModel({
+      ...baseInput,
+      planningLedger: {
+        entries: [
+          {
+            ledger_entry_id: "ledger:route",
+            trip_id: "trip:kyoto",
+            session_state_id: "session:kyoto",
+            item_type: "option_considered",
+            status: "active",
+            category: "route_options",
+            summary: "Keep this route in view while checking lodging.",
+            detail: "",
+            source_message_ids: [],
+            source_refs: [],
+            related_option_id: "route-option:focus",
+            related_decision_id: null,
+            supersedes_entry_id: null,
+            metadata: {},
+            created_at: "2026-05-10T00:00:00Z",
+            updated_at: "2026-05-10T00:00:00Z",
+          },
+          {
+            ledger_entry_id: "ledger:segment",
+            trip_id: "trip:kyoto",
+            session_state_id: "session:kyoto",
+            item_type: "open_question",
+            status: "active",
+            category: "questions",
+            summary: "Check whether Uji to Nara is too much in one day.",
+            detail: "",
+            source_message_ids: [],
+            source_refs: [],
+            related_option_id: null,
+            related_decision_id: null,
+            supersedes_entry_id: null,
+            metadata: { route_segment_id: focusedSegmentId },
+            created_at: "2026-05-10T00:00:00Z",
+            updated_at: "2026-05-10T00:00:00Z",
+          },
+          {
+            ledger_entry_id: "ledger:marker",
+            trip_id: "trip:kyoto",
+            session_state_id: "session:kyoto",
+            item_type: "assumption",
+            status: "active",
+            category: "assumption",
+            summary: "Uji tea anchors should remain visible on the map.",
+            detail: "",
+            source_message_ids: [],
+            source_refs: [],
+            related_option_id: null,
+            related_decision_id: null,
+            supersedes_entry_id: null,
+            metadata: { bundle_id: "bundle-uji-tea" },
+            created_at: "2026-05-10T00:00:00Z",
+            updated_at: "2026-05-10T00:00:00Z",
+          },
+        ],
+        summary: {
+          active_decisions: [],
+          open_questions: [],
+          active_options: [],
+          rejected_options: [],
+          constraints: [],
+          assumptions: [],
+          source_references: [],
+        },
+      },
+    });
+
+    expect(model.focusCues.map((cue) => cue.targetKind)).toEqual([
+      "route",
+      "segment",
+      "marker",
+    ]);
+    expect(model.workspaceView.focusCues).toEqual(model.visibleFocusCues);
+    expect(model.routeSegments[1].focusCues[0].summary).toContain("Uji to Nara");
+    expect(
+      model.markers.find(
+        (marker) => marker.sourceId === "bundle-uji-tea" && marker.focusCues.length > 0
+      )?.focusCues[0].summary
+    ).toContain("Uji tea anchors");
+  });
+
   it("falls back when Google Maps is not configured", () => {
     const model = buildTripMapSurfaceModel({
       activeScenario: {
