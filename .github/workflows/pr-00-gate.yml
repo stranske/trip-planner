@@ -147,6 +147,13 @@ jobs:
           state="success"
           description="All checks passed"
 
+          is_terminal_ok() {
+            case "$1" in
+              success|skipped) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
           if [ "$python_result" = "failure" ]; then
             state="failure"
             description="Python CI failed"
@@ -159,18 +166,43 @@ jobs:
           elif [ "$python_result" = "cancelled" ] || [ "$runtime_result" = "cancelled" ] || [ "$cross_repo_result" = "cancelled" ]; then
             state="error"
             description="Checks were cancelled"
-          elif [ "$python_result" = "success" ] && [ "$runtime_result" = "success" ] && [ "$cross_repo_result" = "success" ]; then
+          elif is_terminal_ok "$python_result" && is_terminal_ok "$runtime_result" && is_terminal_ok "$cross_repo_result"; then
             state="success"
-            description="Python, runtime, and cross-repo CI passed"
-          elif [ "$python_result" = "success" ] && [ "$runtime_result" = "skipped" ] && [ "$cross_repo_result" = "skipped" ]; then
-            state="success"
-            description="Python CI passed; runtime and cross-repo CI skipped"
-          elif [ "$python_result" = "skipped" ] && [ "$runtime_result" = "success" ] && [ "$cross_repo_result" = "skipped" ]; then
-            state="success"
-            description="Runtime CI passed; Python and cross-repo CI skipped"
-          elif [ "$python_result" = "skipped" ] && [ "$runtime_result" = "skipped" ] && [ "$cross_repo_result" = "skipped" ]; then
-            state="success"
-            description="Checks skipped (no relevant changes)"
+            ran=()
+            skipped=()
+            for pair in "Python CI:$python_result" "runtime CI:$runtime_result" "cross-repo smoke:$cross_repo_result"; do
+              name="${pair%%:*}"
+              result="${pair#*:}"
+              if [ "$result" = "success" ]; then
+                ran+=("$name")
+              else
+                skipped+=("$name")
+              fi
+            done
+            join_csv() {
+              local sep=', '
+              local first=1
+              local out=''
+              local item
+              for item in "$@"; do
+                if [ "$first" -eq 1 ]; then
+                  out="$item"
+                  first=0
+                else
+                  out="$out$sep$item"
+                fi
+              done
+              printf '%s' "$out"
+            }
+            if [ "${#ran[@]}" -eq 0 ]; then
+              description="Checks skipped (no relevant changes)"
+            elif [ "${#skipped[@]}" -eq 0 ]; then
+              description="Python, runtime, and cross-repo CI passed"
+            else
+              ran_csv=$(join_csv "${ran[@]}")
+              skipped_csv=$(join_csv "${skipped[@]}")
+              description="${ran_csv} passed; ${skipped_csv} skipped"
+            fi
           else
             state="pending"
             description="Checks still running"
