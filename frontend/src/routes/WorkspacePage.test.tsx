@@ -1059,7 +1059,7 @@ describe("WorkspacePage", () => {
     fireEvent.click(screen.getByText("Advanced diagnostics"));
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Proposal state" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Proposal diagnostics" })).toBeInTheDocument();
     });
     expect(document.body.textContent ?? "").toContain("proposal_state_id");
   });
@@ -2264,7 +2264,12 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Needs exception")).toBeInTheDocument();
     expect(screen.getAllByText("Reoptimize plan").length).toBeGreaterThan(0);
     expect(screen.getByText("Use a compliant downtown property")).toBeInTheDocument();
-    expect(screen.getByText("Nightly lodging exceeds the allowed cap.")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain("Nightly lodging exceeds the allowed cap.");
+
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+    await waitFor(() => {
+      expect(document.body.textContent ?? "").toContain("Nightly lodging exceeds the allowed cap.");
+    });
   });
 
   it("surfaces exception guidance and approval requirements from live policy results", async () => {
@@ -2344,7 +2349,16 @@ describe("WorkspacePage", () => {
     expect(
       screen.getByText("Exception rationale: The client workshop starts before the first compliant arrival window."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Schedule exception requires manager approval.")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain(
+      "Schedule exception requires manager approval.",
+    );
+
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+    await waitFor(() => {
+      expect(document.body.textContent ?? "").toContain(
+        "Schedule exception requires manager approval.",
+      );
+    });
   });
 
   it("skips the follow-up card when legacy records expose an empty follow-up object", async () => {
