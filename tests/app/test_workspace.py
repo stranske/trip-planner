@@ -422,6 +422,116 @@ def test_workspace_planning_notebook_rejects_invalid_category(client: TestClient
     assert rejected.status_code == 422
 
 
+def test_workspace_planning_ledger_rejects_supersedes_cycles(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Ledger supersedes trip",
+            "summary": "Prevent circular ledger history.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+
+    first = client.post(
+        f"/api/workspace/{trip_id}/planning-ledger",
+        json={
+            "item_type": "decision",
+            "category": "lodging",
+            "summary": "Stay near Baixa.",
+        },
+    )
+    assert first.status_code == 200, first.text
+    first_id = first.json()["ledger_entry_id"]
+    second = client.post(
+        f"/api/workspace/{trip_id}/planning-ledger",
+        json={
+            "item_type": "decision",
+            "category": "lodging",
+            "summary": "Stay near Alfama instead.",
+        },
+    )
+    assert second.status_code == 200, second.text
+    second_id = second.json()["ledger_entry_id"]
+
+    valid_chain = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{second_id}",
+        json={"supersedes_entry_id": first_id},
+    )
+    assert valid_chain.status_code == 200, valid_chain.text
+    assert valid_chain.json()["supersedes_entry_id"] == first_id
+
+    self_cycle = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{first_id}",
+        json={"supersedes_entry_id": first_id},
+    )
+    assert self_cycle.status_code == 400
+    assert "same ledger entry" in self_cycle.json()["detail"]
+
+    indirect_cycle = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{first_id}",
+        json={"supersedes_entry_id": second_id},
+    )
+    assert indirect_cycle.status_code == 400
+    assert "cycle" in indirect_cycle.json()["detail"]
+
+    missing_target = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{first_id}",
+        json={"supersedes_entry_id": "ledger:does-not-exist"},
+    )
+    assert missing_target.status_code == 400
+    assert "existing ledger entry" in missing_target.json()["detail"]
+
+    other_trip = client.post(
+        "/api/trips",
+        json={
+            "title": "Other ledger trip",
+            "summary": "Keep supersedes chains scoped to one trip.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-08",
+                "end_date": "2026-06-10",
+                "duration_days": 3,
+                "primary_regions": ["Porto"],
+            },
+        },
+    )
+    assert other_trip.status_code == 201
+    other_trip_id = other_trip.json()["trip"]["trip_id"]
+    other_entry = client.post(
+        f"/api/workspace/{other_trip_id}/planning-ledger",
+        json={
+            "item_type": "decision",
+            "category": "lodging",
+            "summary": "Stay near Ribeira.",
+        },
+    )
+    assert other_entry.status_code == 200, other_entry.text
+
+    other_trip_target = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{first_id}",
+        json={"supersedes_entry_id": other_entry.json()["ledger_entry_id"]},
+    )
+    assert other_trip_target.status_code == 400
+    assert "existing ledger entry" in other_trip_target.json()["detail"]
+
+    blank_target = client.patch(
+        f"/api/workspace/{trip_id}/planning-ledger/{second_id}",
+        json={"supersedes_entry_id": "   "},
+    )
+    assert blank_target.status_code == 200, blank_target.text
+    assert blank_target.json()["supersedes_entry_id"] is None
+
+
 def test_route_option_actions_create_durable_ledger_history(client: TestClient) -> None:
     created = client.post(
         "/api/trips",
