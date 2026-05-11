@@ -149,11 +149,7 @@ function formatMetric(scenario: RouteOptionScenario): string {
 }
 
 function routeTradeoffSummaries(scenario: RouteOptionScenario): string[] {
-  return [
-    scenario.comparison_note,
-    ...(scenario.highlights ?? []),
-    ...(scenario.unresolved_questions ?? []).map((question) => `Open question: ${question}`),
-  ]
+  return [scenario.comparison_note, ...(scenario.highlights ?? [])]
     .map((summary) => summary.trim())
     .filter(Boolean)
     .slice(0, 3);

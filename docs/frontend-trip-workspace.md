@@ -55,6 +55,19 @@ These fixtures live in `bundle/app-shell/mock-state.js` so later route work can 
 - `#559` should attach maps and route/timeline views to these workspace summaries.
 - `#560` should let the planner side panel drive the same scenario and checkpoint records instead of replacing them.
 
+## Traveler-Facing Workspace Polish
+
+Issue `#1164` adds the traveler/debug split expected for the full planning workspace:
+
+- the hero area includes a compact "How to use this trip workspace" disclosure that stays closed by default
+- planning mode, map scope, segment, and route-option controls carry traveler-friendly hover help
+- planner replies render stable sections for next step, options considered, tradeoffs, saved notes, rejected options, open questions, decisions, and summary
+- scattered note, decision, checklist, comparison, and follow-up prompts start from traveler phrasing instead of tool names
+- route-option cards keep three or four alternatives visible with concise tradeoff summaries
+- raw tool traces, provider details, IDs, and runtime payloads remain behind diagnostics disclosures
+
+The frontend tests pin the normal traveler view so raw IDs, provider labels, tool names, and runtime/debug terms do not leak into primary copy.
+
 ## Minimum Trip Data To Open The Workspace
 
 Issue `#687` extends the shell so a freshly created persisted trip can open `/workspace/:tripId` before any saved scenarios exist.

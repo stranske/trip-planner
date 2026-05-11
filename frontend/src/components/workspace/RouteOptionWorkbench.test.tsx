@@ -163,8 +163,11 @@ describe("RouteOptionWorkbench", () => {
     expect(screen.getByLabelText("Fjord-focus route route option")).toHaveTextContent(
       "More scenery with more transfers."
     );
-    expect(screen.getByLabelText("Fjord-focus route route option")).toHaveTextContent(
+    expect(screen.getByLabelText("Fjord-focus route route option")).not.toHaveTextContent(
       "Open question: Can the longer scenic transfer still fit the trip pace?"
+    );
+    expect(screen.getByLabelText("Fjord-focus route route option")).toHaveTextContent(
+      "Can the longer scenic transfer still fit the trip pace?"
     );
     expect(screen.getByLabelText("Flight-hop route route option")).toHaveTextContent("Rejected");
     expect(

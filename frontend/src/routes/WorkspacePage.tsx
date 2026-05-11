@@ -789,10 +789,6 @@ function plannerBlockHeading(block: PlannerStructuredBlock, index: number): stri
   return presentation.label;
 }
 
-function plannerBlockKindLabel(block: PlannerStructuredBlock, index: number): string {
-  return plannerBlockPresentation(block, index).label;
-}
-
 function PlannerStructuredBlockList({ blocks }: { blocks: PlannerStructuredBlock[] }) {
   if (blocks.length === 0) {
     return null;
@@ -806,7 +802,6 @@ function PlannerStructuredBlockList({ blocks }: { blocks: PlannerStructuredBlock
           key={`${block.kind}-${block.title}-${blockIndex}`}
           className={`planner-response-block planner-response-block-${block.kind}`}
         >
-          <span className="planner-block-kind">{plannerBlockKindLabel(block, blockIndex)}</span>
           <h4>{plannerBlockHeading(block, blockIndex)}</h4>
           {block.title && block.title !== plannerBlockHeading(block, blockIndex) ? (
             <p className="planner-block-source-title">{block.title}</p>
