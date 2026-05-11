@@ -1022,7 +1022,8 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Ready for approval")).toBeInTheDocument();
     expect(screen.getAllByText("Advance to approval").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Options and readiness signals" })).toBeInTheDocument();
-    expect(screen.getByText("Conference Hotel")).toBeInTheDocument();
+    expect(screen.queryByText("Conference Hotel")).not.toBeInTheDocument();
+    expect(screen.queryByText("proposal-state:trip-leisure-kyoto-draft")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Planner notes to keep" })).toBeInTheDocument();
     expect(screen.getByText("Planner checkpoint 1")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Compare this workspace with other saved trips" })).toBeInTheDocument();
@@ -1055,6 +1056,108 @@ describe("WorkspacePage", () => {
     expect(screen.queryByRole("heading", { name: "Options and readiness signals" })).not.toBeInTheDocument();
     expect(screen.queryByText("Approval posture")).not.toBeInTheDocument();
     expect(screen.queryByText("Policy posture")).not.toBeInTheDocument();
+  });
+
+  it("keeps business approval readiness visible in user-facing language", async () => {
+    const businessWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      trip_record: {
+        ...workspacePayload.trip_record,
+        trip: {
+          ...workspacePayload.trip_record.trip,
+          trip_id: "trip-business-tokyo-summit",
+          title: "Tokyo client summit",
+          summary: "Business trip with approval-ready policy posture.",
+          mode: "business",
+          status: "active",
+          trip_frame: {
+            ...workspacePayload.trip_record.trip.trip_frame,
+            duration_days: 5,
+            primary_regions: ["Tokyo", "Yokohama"],
+          },
+        },
+      },
+      planner_panel_state: {
+        ...workspacePayload.planner_panel_state,
+        trip: {
+          ...workspacePayload.planner_panel_state.trip,
+          trip_id: "trip-business-tokyo-summit",
+          title: "Tokyo client summit",
+          mode: "business",
+          status: "active",
+        },
+      },
+      view_model: {
+        user_summary: {
+          trip_title: "Tokyo client summit",
+          trip_mode: "business",
+          mode_label: "Business trip",
+          status: "ready",
+          headline: "Approval readiness is available for this trip.",
+          decided: ["Approval packet is ready."],
+          uncertain: [],
+        },
+        next_step: {
+          title: "Review approval packet",
+          summary: "Policy evaluation passed and the packet can move to approval handling.",
+          action_label: "Advance to approval",
+          action_target: "approval",
+          blocked: false,
+        },
+        panel_visibility: {
+          show_budget_panel: true,
+          show_policy_posture: true,
+          show_proposal_panel: true,
+          show_approval_readiness_panel: true,
+        },
+        policy_presentation: {
+          active_policy_state: true,
+          posture_label: "Ready for approval",
+          approval_status_label: "Ready for approval",
+          next_step_label: "Advance to approval",
+          summary: "Policy evaluation passed and the approval packet is ready.",
+        },
+        business_summary: {
+          approval_status: "approved",
+          headline: "Approval packet is ready",
+          blockers: [],
+        },
+        debug_state: {
+          sections: {
+            proposal_state: {
+              title: "Proposal state",
+              payload: workspacePayload.proposal_state,
+            },
+          },
+        },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(businessWorkspace),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("heading", { name: "Tokyo client summit" }).length).toBeGreaterThan(0);
+    });
+
+    expect(screen.getByText("Business trip")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review approval packet" })).toBeInTheDocument();
+    expect(screen.getByText("Approval readiness is available for this trip.")).toBeInTheDocument();
+    expect(screen.getAllByText("Ready for approval").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Advance to approval").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Approval posture").length).toBeGreaterThan(0);
+    expect(screen.getByText("Advanced diagnostics")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain("proposal_state_id");
+
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Proposal diagnostics" })).toBeInTheDocument();
+    });
+    expect(document.body.textContent ?? "").toContain("proposal_state_id");
   });
 
   it("persists planning mode selections through the workspace API", async () => {
@@ -1490,26 +1593,48 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Seoul gallery weekend is stored as a leisure trip with 1 traveler(s).")).toBeInTheDocument();
   });
 
-  it("falls back to plain number formatting when comparable currency codes are invalid", async () => {
+  it("reveals raw proposal diagnostics only through advanced diagnostics", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
         ...workspacePayload,
-        proposal_state: {
-          ...workspacePayload.proposal_state,
-          proposal: {
-            ...workspacePayload.proposal_state.proposal,
-            comparables: [
-              {
-                ...workspacePayload.proposal_state.proposal.comparables[0],
-                estimated_cost: {
-                  ...workspacePayload.proposal_state.proposal.comparables[0].estimated_cost,
-                  currency: "INVALID",
-                },
-              },
-            ],
+        view_model: {
+          user_summary: {
+            trip_title: workspacePayload.trip_record.trip.title,
+            trip_mode: "leisure",
+            mode_label: "Leisure trip",
+            status: "ready",
+            headline: "Your trip plan is ready to review.",
+            decided: ["2 saved scenario draft(s)"],
+            uncertain: [],
+          },
+          next_step: {
+            title: "Review and pick a scenario",
+            summary:
+              "Compare the saved scenarios and choose one to keep planning around.",
+            action_label: "Open scenario comparison",
+            action_target: "scenario-comparison",
+            blocked: false,
+          },
+          panel_visibility: {
+            show_budget_panel: true,
+            show_policy_posture: true,
+            show_proposal_panel: true,
+            show_approval_readiness_panel: true,
+          },
+          policy_presentation: {
+            active_policy_state: true,
+            posture_label: "Ready for approval",
+            approval_status_label: "Ready for approval",
+            next_step_label: "Advance to approval",
+            summary: "Policy evaluation passed and the approval packet is ready.",
+          },
+          business_summary: null,
+          debug_state: {
+            sections: {},
           },
         },
       }),
+      trips: Promise.resolve(tripComparisonPayload),
     });
 
     renderWorkspacePage();
@@ -1517,8 +1642,63 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Options and readiness signals" })).toBeInTheDocument();
     });
+    expect(screen.getByText("Advanced diagnostics")).toBeInTheDocument();
+    expect(screen.queryByText("Proposal diagnostics")).not.toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain("proposal_state_id");
 
-    expect(screen.getByText(/Marriott via Navan · 245/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Proposal diagnostics" })).toBeInTheDocument();
+    });
+    expect(document.body.textContent ?? "").toContain("proposal_state_id");
+  });
+
+  it("closes advanced diagnostics when the workspace changes", async () => {
+    const firstWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      proposal_state: {
+        ...workspacePayload.proposal_state,
+        proposal_state_id: "proposal-state-first",
+      },
+    };
+    const nextWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      proposal_state: {
+        ...workspacePayload.proposal_state,
+        proposal_state_id: "proposal-state-next",
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(firstWorkspace),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    const { rerender } = renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Advanced diagnostics")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+    await waitFor(() => {
+      expect(document.body.textContent ?? "").toContain("proposal-state-first");
+    });
+
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(nextWorkspace),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+    rerender(
+      <TestMemoryRouter>
+        <WorkspacePage />
+      </TestMemoryRouter>
+    );
+
+    await waitFor(() => {
+      const disclosure = document.querySelector(".workspace-debug-disclosure");
+      expect(disclosure).not.toHaveAttribute("open");
+    });
+    expect(document.body.textContent ?? "").not.toContain("proposal-state-next");
   });
 
   it("shows an empty-state message when no route sequence is available", async () => {
@@ -2238,7 +2418,12 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Needs exception")).toBeInTheDocument();
     expect(screen.getAllByText("Reoptimize plan").length).toBeGreaterThan(0);
     expect(screen.getByText("Use a compliant downtown property")).toBeInTheDocument();
-    expect(screen.getByText("Nightly lodging exceeds the allowed cap.")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain("Nightly lodging exceeds the allowed cap.");
+
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+    await waitFor(() => {
+      expect(document.body.textContent ?? "").toContain("Nightly lodging exceeds the allowed cap.");
+    });
   });
 
   it("surfaces exception guidance and approval requirements from live policy results", async () => {
@@ -2318,7 +2503,16 @@ describe("WorkspacePage", () => {
     expect(
       screen.getByText("Exception rationale: The client workshop starts before the first compliant arrival window."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Schedule exception requires manager approval.")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain(
+      "Schedule exception requires manager approval.",
+    );
+
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+    await waitFor(() => {
+      expect(document.body.textContent ?? "").toContain(
+        "Schedule exception requires manager approval.",
+      );
+    });
   });
 
   it("skips the follow-up card when legacy records expose an empty follow-up object", async () => {
