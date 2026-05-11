@@ -221,7 +221,7 @@ Issues: `#543` (epic), `#544`–`#548`
 
 Design ref: [`docs/langchain-planner-runtime-epic.md`](langchain-planner-runtime-epic.md)
 
-> **Partial.** The planner runtime now has a trip-scoped conversation API, persisted session/checkpoint records, a model-backed runnable, and an explicit app-tool registry/executor. The remaining gap is no longer "no planner tools"; it is that the first-pass registry covers workspace, budget, policy, proposal, decision, feedback, and planning-notebook state, while richer source retrieval, route-provider queries, dynamic model routing, and semantic reorientation remain follow-on work.
+> **Partial.** The planner runtime now has a trip-scoped conversation API, persisted session/checkpoint records, a model-backed runnable, an explicit app-tool registry/executor, and deterministic model-routing by task class and planning mode. The remaining gap is no longer "no planner tools"; it is that the first-pass registry covers workspace, budget, policy, proposal, decision, feedback, and planning-notebook state, while richer source retrieval, route-provider queries, and semantic reorientation remain follow-on work.
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
