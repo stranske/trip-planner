@@ -114,6 +114,71 @@ These are additive checks, not prerequisites for the default local matrix:
 
 Only run live integration verification when a branch explicitly changes those seams or when you need release confidence on an already configured environment. Their absence should not fail the standard production-readiness lane.
 
+## Live TPP Verification Setup
+
+The `live-tpp` check inside `make full-product-check` has three modes selected via `--live-tpp`:
+
+- `auto` (default): runs when configured, otherwise reports `SKIPPED` with a remediation hint.
+- `off`: never runs; reports `SKIPPED` regardless of configuration.
+- `required`: runs and fails the verifier when configuration is missing or invalid.
+
+The verifier supports two configured transport modes. Pick exactly one per run; `TPP_BASE_URL` takes precedence and the sibling-checkout path is never resolved when it is set.
+
+### Sibling-checkout mode (`TPP_REPO_PATH`)
+
+Use this when you have a local `Travel-Plan-Permission` checkout and want the verifier to start and stop the HTTP service for you.
+
+```bash
+export TPP_REPO_PATH=../Travel-Plan-Permission        # or any absolute checkout path
+export TPP_ACCESS_TOKEN=local-dev-token
+export TPP_OIDC_PROVIDER=google
+make full-product-check
+```
+
+The verifier resolves the interpreter for the sibling service in this order:
+
+1. `<TPP_REPO_PATH>/.venv/bin/python` if that file exists
+2. `uv run --directory <TPP_REPO_PATH> python` when `uv.lock` is present and `uv` is installed
+3. fail-fast with an actionable setup error otherwise
+
+It binds the service to `http://127.0.0.1:<free-port>` (default `8765` when free), waits up to twenty seconds for `/readyz`, then runs the live policy/proposal/evaluation round-trip against that service. The service is terminated automatically on exit.
+
+When the sibling service does not become ready, the verifier reports `live-tpp` `FAIL` and includes:
+
+- the resolved interpreter command and the full launch command
+- the working directory and current `Popen` return code
+- the last fifty lines of captured TPP `stdout` and `stderr`
+
+Use that context to fix the sibling environment (missing dependencies, wrong Python version, port collisions) before re-running.
+
+### External-service mode (`TPP_BASE_URL`)
+
+Use this when a `Travel-Plan-Permission` service is already running (for example in CI or a remote sandbox).
+
+```bash
+export TPP_BASE_URL=https://tpp.preview.example.com
+export TPP_ACCESS_TOKEN=live-token
+export TPP_OIDC_PROVIDER=google
+make full-product-check
+```
+
+In this mode the verifier never resolves a sibling interpreter, never starts a subprocess, and trusts the externally managed service. A regression test (`tests/app/test_full_product_verification.py::test_started_tpp_service_with_base_url_does_not_attempt_sibling_resolution`) keeps that contract honest.
+
+### Interpreting the `live-tpp` result
+
+| Status | Meaning | Typical remediation |
+|--------|---------|---------------------|
+| `PASS` | live round-trip completed: policy sync, proposal submission, status poll, evaluation ingest | none |
+| `READY` | configuration is valid; live round-trip will run | none (transitional state surfaced by `tpp_prerequisite_status`) |
+| `SKIPPED` (`mode: off`) | `--live-tpp off` was requested | rerun with `--live-tpp auto` (or `required`) after exporting the env vars below |
+| `SKIPPED` (`missing_env: TPP_BASE_URL or TPP_REPO_PATH`) | no transport target configured | set either `TPP_BASE_URL` or `TPP_REPO_PATH` |
+| `BLOCKED` (`missing_env`) | transport target set but `TPP_ACCESS_TOKEN` / `TPP_OIDC_PROVIDER` missing | export the missing env vars for the configured transport target |
+| `BLOCKED` (`invalid_path_detail.kind = missing`) | `TPP_REPO_PATH` does not exist | point it at a real sibling checkout or unset it and use `TPP_BASE_URL` |
+| `BLOCKED` (`invalid_path_detail.kind = not-a-directory`) | `TPP_REPO_PATH` exists but is a file | unset it or set it to the checkout directory |
+| `FAIL` | sibling service failed to reach `/readyz`, or the live round-trip surfaced a non-success status | inspect the embedded `command`, `stdout_tail`, and `stderr_tail` in the failure details |
+
+Every non-`PASS` `live-tpp` result with actionable next steps includes a `remediation` field in its details payload, surfaced on stderr alongside the JSON detail blob.
+
 ## Failure Reporting Expectations
 
 When a check fails, record:

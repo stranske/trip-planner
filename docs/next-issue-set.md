@@ -82,6 +82,8 @@ This note captures the remaining gaps after the recent readiness, planner-runtim
 - Failures include actionable service command, env var, and recent log context.
 - The traveler-facing UI keeps policy failure details understandable without developer jargon.
 
+**Status (2026-05-11, issue #1161):** Code-side scaffolding for diagnostics and mode-safety is in place. The verifier now emits a `remediation` hint on every non-PASS `live-tpp` result, distinguishes `invalid_path` kinds (`missing` vs `not-a-directory`), and is regression-pinned so `TPP_BASE_URL` mode never resolves a sibling interpreter. The two configured transport modes are documented in [`docs/local-testing-plan.md` → "Live TPP Verification Setup"](local-testing-plan.md#live-tpp-verification-setup) and cross-linked from [`docs/live-tpp-execution-reoptimization-epic.md`](live-tpp-execution-reoptimization-epic.md#local-verification-setup). The remaining gap is exercising one configured environment so `make full-product-check` reports `live-tpp PASS` instead of `SKIPPED`; that requires either a sibling `Travel-Plan-Permission` checkout with a working `.venv`/`uv` setup or an externally hosted preview, neither of which is exercised by the default CI matrix yet.
+
 ## 5. Deepen Map, Route, And Timeline Presentation
 
 **Goal:** Make map/timeline surfaces support a coherent global, regional, and local review flow.
