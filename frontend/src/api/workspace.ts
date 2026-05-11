@@ -265,6 +265,46 @@ export type RuntimeScenarioComparison = {
       estimated_total_delta: number | null;
     };
     highlights: string[];
+    map_view?: {
+      active_scope: "global" | "regional" | "local";
+      active_route_option_id: string;
+      selected_segment_id: string | null;
+      place_markers: Array<{
+        id: string;
+        source_id: string;
+        label: string;
+        route_index: number;
+        x: number;
+        y: number;
+      }>;
+      rough_route_geometry: Array<{
+        id: string;
+        from_marker_id: string;
+        to_marker_id: string;
+        from_label: string;
+        to_label: string;
+        x1: number;
+        y1: number;
+        x2: number;
+        y2: number;
+        warning: string | null;
+      }>;
+      confidence: {
+        level: "high" | "medium" | "low";
+        summary: string;
+      };
+    };
+    map_diagnostics?: {
+      provider: {
+        kind: string;
+        status: string;
+        details: string;
+      };
+      route_state: "ready" | "sparse";
+      route_warning: string | null;
+      source_result_id: string;
+      objective_refs: string[];
+    };
   }>;
   source_refs: string[];
 };

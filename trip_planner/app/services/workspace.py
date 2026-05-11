@@ -865,6 +865,119 @@ def _route_option_available_actions(state: str) -> list[dict[str, str]]:
     return actions
 
 
+def _humanize_route_stop(stop: str) -> str:
+    return (
+        stop.replace("dest-city-", "")
+        .replace("dest-", "")
+        .replace("city-", "")
+        .replace("_", " ")
+        .replace("-", " ")
+        .strip()
+        .title()
+    )
+
+
+def _map_coordinate_for_route_index(index: int, route_length: int) -> dict[str, float]:
+    if route_length <= 1:
+        return {"x": 0.5, "y": 0.5}
+
+    progress = index / (route_length - 1)
+    wave = -1 if index % 2 == 0 else 1
+    return {
+        "x": round(0.12 + progress * 0.76, 4),
+        "y": round(0.52 + wave * 0.18, 4),
+    }
+
+
+def _build_runtime_map_place_markers(route_sequence: list[str]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": f"route-stop:{index + 1}",
+            "source_id": stop,
+            "label": _humanize_route_stop(stop),
+            "route_index": index,
+            **_map_coordinate_for_route_index(index, len(route_sequence)),
+        }
+        for index, stop in enumerate(route_sequence)
+        if stop
+    ]
+
+
+def _build_runtime_map_route_geometry(
+    place_markers: list[dict[str, Any]],
+    *,
+    route_warning: str | None,
+) -> list[dict[str, Any]]:
+    segments: list[dict[str, Any]] = []
+    for index, marker in enumerate(place_markers[:-1]):
+        next_marker = place_markers[index + 1]
+        segments.append(
+            {
+                "id": f"route-segment:{index + 1}",
+                "from_marker_id": marker["id"],
+                "to_marker_id": next_marker["id"],
+                "from_label": marker["label"],
+                "to_label": next_marker["label"],
+                "x1": marker["x"],
+                "y1": marker["y"],
+                "x2": next_marker["x"],
+                "y2": next_marker["y"],
+                "warning": route_warning if index == 0 else None,
+            }
+        )
+    return segments
+
+
+def _build_runtime_map_view_payload(
+    *,
+    scenario: dict[str, Any],
+    summary: dict[str, Any],
+    route_sequence: list[str],
+) -> dict[str, Any]:
+    confidence_level = "high" if summary.get("feasible", False) else "medium"
+    route_warning = None if summary.get("feasible", False) else "Scenario feasibility needs review."
+    place_markers = _build_runtime_map_place_markers(route_sequence)
+    rough_route_geometry = _build_runtime_map_route_geometry(
+        place_markers,
+        route_warning=route_warning,
+    )
+    return {
+        "active_scope": "regional",
+        "active_route_option_id": scenario["scenario_id"],
+        "selected_segment_id": rough_route_geometry[0]["id"] if rough_route_geometry else None,
+        "place_markers": place_markers,
+        "rough_route_geometry": rough_route_geometry,
+        "confidence": {
+            "level": confidence_level,
+            "summary": (
+                "This route outline is drawn from ranked scenario data."
+                if confidence_level == "high"
+                else "This route outline is approximate while feasibility is still settling."
+            ),
+        },
+    }
+
+
+def _build_runtime_map_diagnostics_payload(
+    *,
+    scenario: dict[str, Any],
+    summary: dict[str, Any],
+    route_sequence: list[str],
+) -> dict[str, Any]:
+    has_route = len(route_sequence) > 1
+    return {
+        "provider": {
+            "kind": "fallback",
+            "status": "sparse-route" if not has_route else "fallback",
+            "details": "Route geometry is synthesized from scenario route_sequence.",
+        },
+        "route_state": "ready" if has_route else "sparse",
+        "route_warning": None if summary.get("feasible", False) else "scenario_not_feasible",
+        "source_result_id": scenario["source_result_id"],
+        "objective_refs": list(scenario.get("objective_refs") or []),
+    }
+
+
 def _build_runtime_scenario_comparison(
     *,
     trip_id: str,
@@ -997,6 +1110,16 @@ def _build_runtime_scenario_comparison(
                 "highlights": _comparison_highlights(scenario=scenario, lead=lead),
                 "source_result_id": scenario["source_result_id"],
                 "objective_refs": list(scenario.get("objective_refs") or []),
+                "map_view": _build_runtime_map_view_payload(
+                    scenario=scenario,
+                    summary=summary,
+                    route_sequence=list(summary.get("route_sequence") or []),
+                ),
+                "map_diagnostics": _build_runtime_map_diagnostics_payload(
+                    scenario=scenario,
+                    summary=summary,
+                    route_sequence=list(summary.get("route_sequence") or []),
+                ),
             }
         )
 
@@ -1531,24 +1654,12 @@ def _serialize_ledger_entry(record: PersistedPlanningLedgerEntry) -> dict[str, A
 def _planning_ledger_summary(entries: list[dict[str, Any]]) -> dict[str, Any]:
     active = [entry for entry in entries if entry["status"] == "active"]
     return {
-        "active_decisions": [
-            entry for entry in active if entry["item_type"] == "decision"
-        ],
-        "open_questions": [
-            entry for entry in active if entry["item_type"] == "open_question"
-        ],
-        "active_options": [
-            entry for entry in active if entry["item_type"] == "option_considered"
-        ],
-        "rejected_options": [
-            entry for entry in entries if entry["item_type"] == "option_rejected"
-        ],
-        "constraints": [
-            entry for entry in active if entry["item_type"] == "constraint"
-        ],
-        "assumptions": [
-            entry for entry in active if entry["item_type"] == "assumption"
-        ],
+        "active_decisions": [entry for entry in active if entry["item_type"] == "decision"],
+        "open_questions": [entry for entry in active if entry["item_type"] == "open_question"],
+        "active_options": [entry for entry in active if entry["item_type"] == "option_considered"],
+        "rejected_options": [entry for entry in entries if entry["item_type"] == "option_rejected"],
+        "constraints": [entry for entry in active if entry["item_type"] == "constraint"],
+        "assumptions": [entry for entry in active if entry["item_type"] == "assumption"],
         "source_references": [
             entry for entry in active if entry["item_type"] == "source_reference"
         ],
@@ -1641,9 +1752,7 @@ def _add_planning_ledger_entry(
     metadata: dict[str, Any] | None = None,
 ) -> PersistedPlanningLedgerEntry:
     if item_type not in PLANNING_LEDGER_ITEM_TYPES:
-        raise ValueError(
-            f"item_type must be one of {', '.join(PLANNING_LEDGER_ITEM_TYPES)}"
-        )
+        raise ValueError(f"item_type must be one of {', '.join(PLANNING_LEDGER_ITEM_TYPES)}")
     if status not in PLANNING_LEDGER_STATUSES:
         raise ValueError(f"status must be one of {', '.join(PLANNING_LEDGER_STATUSES)}")
     now = datetime.now(UTC)
@@ -3224,9 +3333,7 @@ def update_planning_ledger_entry(
         .where(PersistedPlanningLedgerEntry.ledger_entry_id == ledger_entry_id)
     )
     if entry is None:
-        raise WorkspaceTripNotFoundError(
-            f"Ledger entry '{ledger_entry_id}' was not found."
-        )
+        raise WorkspaceTripNotFoundError(f"Ledger entry '{ledger_entry_id}' was not found.")
     if updates.get("status") is not None:
         status = str(updates["status"])
         if status not in PLANNING_LEDGER_STATUSES:
@@ -3684,11 +3791,11 @@ def submit_workspace_option_feedback(
     ledger_status = (
         "rejected"
         if action_type == "reject"
-        else "completed"
-        if action_type == "accept"
-        else "deferred"
-        if action_type == "save_as_fallback"
-        else "active"
+        else (
+            "completed"
+            if action_type == "accept"
+            else "deferred" if action_type == "save_as_fallback" else "active"
+        )
     )
     _add_planning_ledger_entry(
         db_session,
@@ -3846,11 +3953,11 @@ def submit_workspace_route_option_action(
     ledger_status = (
         "rejected"
         if action_type == "reject"
-        else "completed"
-        if action_type == "make_baseline"
-        else "deferred"
-        if action_type == "keep"
-        else "active"
+        else (
+            "completed"
+            if action_type == "make_baseline"
+            else "deferred" if action_type == "keep" else "active"
+        )
     )
     _add_planning_ledger_entry(
         db_session,

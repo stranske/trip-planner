@@ -1451,6 +1451,7 @@ function WorkspacePageContent({
           feasibilitySummary={currentWorkspace.feasibility_summary}
           tripPrimaryRegions={trip.trip_frame.primary_regions}
           policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : null}
+          planningLedger={currentWorkspace.planning_ledger}
           compactLayout={isCompactLayout}
         />
 

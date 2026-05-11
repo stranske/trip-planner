@@ -79,6 +79,14 @@ describe("mapSurface", () => {
     ]);
     expect(model.routeStops.map((stop) => stop.label)).toEqual(["Kyoto", "Uji", "Kyoto"]);
     expect(model.routeSegments).toHaveLength(2);
+    expect(model.workspaceView.activeScope).toBe("regional");
+    expect(model.workspaceView.activeRouteOptionId).toBe("scenario:1");
+    expect(model.workspaceView.selectedSegmentId).toBe(model.routeSegments[0].id);
+    expect(model.workspaceView.placeMarkers).toEqual(model.markers);
+    expect(model.workspaceView.roughRouteGeometry).toEqual(model.routeSegments);
+    expect(model.workspaceView.confidence.level).toBe("high");
+    expect(model.workspaceView.diagnostics.provider).toEqual(model.provider);
+    expect(model.workspaceView.diagnostics.routeState).toBe("ready");
     expect(model.markers.map((marker) => marker.kind)).toEqual([
       "stop",
       "stop",
@@ -86,6 +94,208 @@ describe("mapSurface", () => {
       "transport",
       "policy",
     ]);
+  });
+
+  it("switches between whole-trip and local map scopes without losing the route option", () => {
+    const baseInput = {
+      activeScenario: {
+        scenario_id: "scenario:scope",
+        title: "Kyoto local detail",
+        rank: 1,
+        status: "lead",
+        summary: "Baseline",
+        comparison_note: "Lead route",
+        option_count: 2,
+        route_sequence: ["kyoto", "uji", "nara"],
+        route_summary: "kyoto -> uji -> nara",
+        recommended_for_selection: true,
+        feasible: true,
+        metrics: {
+          score: 0.91,
+          travel_minutes: 180,
+          transfers: 2,
+          estimated_total: null,
+        },
+        delta: {
+          score_delta: 0,
+          travel_minutes_delta: 0,
+          transfers_delta: 0,
+          estimated_total_delta: null,
+        },
+        highlights: ["Short regional route."],
+      },
+      bundles: [],
+      feasibilitySummary: {
+        assessment_count: 0,
+        recommended_bundle_count: 0,
+        blocking_bundle_count: 0,
+        attention_bundle_count: 0,
+        notes: [],
+        assessments: [],
+      },
+      googleMapsApiKey: "test-key",
+    };
+    const globalModel = buildTripMapSurfaceModel({
+      ...baseInput,
+      activeScope: "global",
+    });
+    const secondSegmentId = globalModel.routeSegments[1].id;
+    const localModel = buildTripMapSurfaceModel({
+      ...baseInput,
+      activeScope: "local",
+      selectedSegmentId: secondSegmentId,
+    });
+
+    expect(globalModel.workspaceView.activeScope).toBe("global");
+    expect(globalModel.workspaceView.activeRouteOptionId).toBe("scenario:scope");
+    expect(globalModel.visibleRouteSegments).toHaveLength(2);
+    expect(globalModel.scope.precisionLabel).toBe("Approximate trip outline");
+
+    expect(localModel.workspaceView.activeScope).toBe("local");
+    expect(localModel.workspaceView.activeRouteOptionId).toBe("scenario:scope");
+    expect(localModel.workspaceView.selectedSegmentId).toBe(secondSegmentId);
+    expect(localModel.visibleRouteSegments).toHaveLength(1);
+    expect(localModel.visibleRouteStops.map((stop) => stop.label)).toEqual(["Uji", "Nara"]);
+    expect(localModel.scope.precisionLabel).toBe("Segment-level planning view");
+  });
+
+  it("connects directly linked ledger entries to map markers and route segments", () => {
+    const baseInput = {
+      activeScenario: {
+        scenario_id: "scenario:focus",
+        route_option_id: "route-option:focus",
+        title: "Kyoto route focus",
+        rank: 1,
+        status: "lead",
+        summary: "Baseline",
+        comparison_note: "Lead route",
+        option_count: 2,
+        route_sequence: ["kyoto", "uji", "nara"],
+        route_summary: "kyoto -> uji -> nara",
+        recommended_for_selection: true,
+        feasible: true,
+        metrics: {
+          score: 0.91,
+          travel_minutes: 180,
+          transfers: 2,
+          estimated_total: null,
+        },
+        delta: {
+          score_delta: 0,
+          travel_minutes_delta: 0,
+          transfers_delta: 0,
+          estimated_total_delta: null,
+        },
+        highlights: ["Short regional route."],
+      },
+      bundles: [
+        {
+          bundle_id: "bundle-uji-tea",
+          title: "Uji tea anchors",
+          bundle_context: "activity_route",
+          summary: "Tea stops that should stay near the Uji leg.",
+          destination_names: ["Uji"],
+          option_count: 2,
+          strengths: [],
+          tradeoffs: [],
+        },
+      ],
+      feasibilitySummary: {
+        assessment_count: 0,
+        recommended_bundle_count: 0,
+        blocking_bundle_count: 0,
+        attention_bundle_count: 0,
+        notes: [],
+        assessments: [],
+      },
+      googleMapsApiKey: "test-key",
+    };
+    const initialModel = buildTripMapSurfaceModel(baseInput);
+    const focusedSegmentId = initialModel.routeSegments[1].id;
+
+    const model = buildTripMapSurfaceModel({
+      ...baseInput,
+      planningLedger: {
+        entries: [
+          {
+            ledger_entry_id: "ledger:route",
+            trip_id: "trip:kyoto",
+            session_state_id: "session:kyoto",
+            item_type: "option_considered",
+            status: "active",
+            category: "route_options",
+            summary: "Keep this route in view while checking lodging.",
+            detail: "",
+            source_message_ids: [],
+            source_refs: [],
+            related_option_id: "route-option:focus",
+            related_decision_id: null,
+            supersedes_entry_id: null,
+            metadata: {},
+            created_at: "2026-05-10T00:00:00Z",
+            updated_at: "2026-05-10T00:00:00Z",
+          },
+          {
+            ledger_entry_id: "ledger:segment",
+            trip_id: "trip:kyoto",
+            session_state_id: "session:kyoto",
+            item_type: "open_question",
+            status: "active",
+            category: "questions",
+            summary: "Check whether Uji to Nara is too much in one day.",
+            detail: "",
+            source_message_ids: [],
+            source_refs: [],
+            related_option_id: null,
+            related_decision_id: null,
+            supersedes_entry_id: null,
+            metadata: { route_segment_id: focusedSegmentId },
+            created_at: "2026-05-10T00:00:00Z",
+            updated_at: "2026-05-10T00:00:00Z",
+          },
+          {
+            ledger_entry_id: "ledger:marker",
+            trip_id: "trip:kyoto",
+            session_state_id: "session:kyoto",
+            item_type: "assumption",
+            status: "active",
+            category: "assumption",
+            summary: "Uji tea anchors should remain visible on the map.",
+            detail: "",
+            source_message_ids: [],
+            source_refs: [],
+            related_option_id: null,
+            related_decision_id: null,
+            supersedes_entry_id: null,
+            metadata: { bundle_id: "bundle-uji-tea" },
+            created_at: "2026-05-10T00:00:00Z",
+            updated_at: "2026-05-10T00:00:00Z",
+          },
+        ],
+        summary: {
+          active_decisions: [],
+          open_questions: [],
+          active_options: [],
+          rejected_options: [],
+          constraints: [],
+          assumptions: [],
+          source_references: [],
+        },
+      },
+    });
+
+    expect(model.focusCues.map((cue) => cue.targetKind)).toEqual([
+      "route",
+      "segment",
+      "marker",
+    ]);
+    expect(model.workspaceView.focusCues).toEqual(model.visibleFocusCues);
+    expect(model.routeSegments[1].focusCues[0].summary).toContain("Uji to Nara");
+    expect(
+      model.markers.find(
+        (marker) => marker.sourceId === "bundle-uji-tea" && marker.focusCues.length > 0
+      )?.focusCues[0].summary
+    ).toContain("Uji tea anchors");
   });
 
   it("falls back when Google Maps is not configured", () => {
@@ -130,6 +340,7 @@ describe("mapSurface", () => {
     expect(model.provider.kind).toBe("fallback");
     expect(model.provider.summary).toContain("bounded textual route fallback");
     expect(model.provider.status).toBe("misconfigured");
+    expect(model.workspaceView.confidence.level).toBe("medium");
     expect(model.scenarioComparisonSummary).toBe(
       "Scenario comparison summary is still syncing to this workspace review surface."
     );
@@ -271,6 +482,7 @@ describe("mapSurface", () => {
     expect(model.routeState).toBe("sparse");
     expect(model.provider.kind).toBe("fallback");
     expect(model.provider.status).toBe("sparse-route");
+    expect(model.workspaceView.confidence.level).toBe("low");
     expect(model.routeSegments).toHaveLength(0);
     expect(model.markers).toHaveLength(1);
   });

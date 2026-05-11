@@ -40,8 +40,19 @@ _REQUIRED_SCENARIO_FIELDS = (
     "route_sequence",
     "route_summary",
     "policy_posture",
+    "map_view",
+    "map_diagnostics",
 )
-_REQUIRED_SEGMENT_FIELDS = ("id", "fromLabel", "toLabel", "x1", "y1", "x2", "y2")
+_REQUIRED_MAP_VIEW_FIELDS = (
+    "active_scope",
+    "active_route_option_id",
+    "selected_segment_id",
+    "place_markers",
+    "rough_route_geometry",
+    "confidence",
+)
+_REQUIRED_MARKER_FIELDS = ("id", "label", "x", "y")
+_REQUIRED_GEOMETRY_FIELDS = ("id", "from_label", "to_label", "x1", "y1", "x2", "y2")
 
 
 def _missing(payload: dict, fields: tuple[str, ...], label: str) -> list[str]:
@@ -75,11 +86,19 @@ def test_route_context_map_target_fixture_exposes_required_fields() -> None:
     )
     for index, scenario in enumerate(scenarios):
         missing += _missing(scenario, _REQUIRED_SCENARIO_FIELDS, f"scenarios[{index}]")
-        for seg_index, segment in enumerate(scenario.get("route_segments") or []):
+        map_view = scenario.get("map_view") or {}
+        missing += _missing(map_view, _REQUIRED_MAP_VIEW_FIELDS, f"scenarios[{index}].map_view")
+        for marker_index, marker in enumerate(map_view.get("place_markers") or []):
+            missing += _missing(
+                marker,
+                _REQUIRED_MARKER_FIELDS,
+                f"scenarios[{index}].map_view.place_markers[{marker_index}]",
+            )
+        for seg_index, segment in enumerate(map_view.get("rough_route_geometry") or []):
             missing += _missing(
                 segment,
-                _REQUIRED_SEGMENT_FIELDS,
-                f"scenarios[{index}].route_segments[{seg_index}]",
+                _REQUIRED_GEOMETRY_FIELDS,
+                f"scenarios[{index}].map_view.rough_route_geometry[{seg_index}]",
             )
 
     assert not missing, (
@@ -102,7 +121,8 @@ def test_route_context_map_target_segments_use_normalized_coordinates() -> None:
     out_of_range: list[str] = []
 
     for scenario in fixture["runtime_scenario_comparison"]["scenarios"]:
-        for segment in scenario.get("route_segments") or []:
+        map_view = scenario.get("map_view") or {}
+        for segment in map_view.get("rough_route_geometry") or []:
             for axis in ("x1", "y1", "x2", "y2"):
                 value = segment.get(axis)
                 if value is None or not (0.0 <= float(value) <= 1.0):
@@ -126,7 +146,8 @@ def test_route_context_map_target_segments_emit_optional_warning_field() -> None
     """
     fixture = _load_fixture()
     for scenario in fixture["runtime_scenario_comparison"]["scenarios"]:
-        for segment in scenario.get("route_segments") or []:
+        map_view = scenario.get("map_view") or {}
+        for segment in map_view.get("rough_route_geometry") or []:
             assert "warning" in segment, (
                 f"Segment {segment.get('id')!r} on scenario "
                 f"{scenario.get('scenario_id')!r} is missing the documented "
