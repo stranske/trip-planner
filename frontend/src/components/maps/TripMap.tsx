@@ -5,6 +5,7 @@ import {
   formatEstimatedTotal,
   type MapMarker,
   type MapProviderLoadState,
+  type MapViewScope,
 } from "./mapSurface";
 
 type InventoryBundle = WorkspaceData["inventory_summary"]["bundles"][number];
@@ -19,7 +20,9 @@ export function TripMap({
   bundles,
   feasibilitySummary,
   tripPrimaryRegions,
+  tripMode,
   policyPosture,
+  planningLedger,
   compactLayout,
 }: {
   comparison: RuntimeScenarioComparison;
@@ -30,7 +33,9 @@ export function TripMap({
   bundles: InventoryBundle[];
   feasibilitySummary: FeasibilitySummary;
   tripPrimaryRegions: string[];
-  policyPosture: string;
+  tripMode: string;
+  policyPosture: string | null;
+  planningLedger?: WorkspaceData["planning_ledger"];
   compactLayout: boolean;
 }) {
   const activeScenario =
@@ -60,7 +65,9 @@ export function TripMap({
       scenarioComparisonSummary={scenarioComparisonSummary}
       scenarioFocusAreas={scenarioFocusAreas}
       tripPrimaryRegions={tripPrimaryRegions}
+      tripMode={tripMode}
       policyPosture={policyPosture}
+      planningLedger={planningLedger}
       compactLayout={compactLayout}
     />
   );
@@ -75,7 +82,9 @@ function ActiveTripMap({
   scenarioComparisonSummary,
   scenarioFocusAreas,
   tripPrimaryRegions,
+  tripMode,
   policyPosture,
+  planningLedger,
   compactLayout,
 }: {
   activeScenario: TripMapScenario;
@@ -86,7 +95,9 @@ function ActiveTripMap({
   scenarioComparisonSummary?: string | null;
   scenarioFocusAreas?: string[];
   tripPrimaryRegions: string[];
-  policyPosture: string;
+  tripMode: string;
+  policyPosture: string | null;
+  planningLedger?: WorkspaceData["planning_ledger"];
   compactLayout: boolean;
 }) {
   const googleMapsApiKey =
@@ -94,6 +105,8 @@ function ActiveTripMap({
     import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY;
   const providerLoadState =
     (import.meta.env.VITE_GOOGLE_MAPS_PROVIDER_STATE as MapProviderLoadState | undefined) ?? "ready";
+  const [activeScope, setActiveScope] = useState<MapViewScope>("regional");
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const mapSurface = buildTripMapSurfaceModel({
     activeScenario,
     bundles,
@@ -101,39 +114,91 @@ function ActiveTripMap({
     scenarioComparisonSummary,
     scenarioFocusAreas,
     tripPrimaryRegions,
+    tripMode,
     policyPosture,
     googleMapsApiKey,
     providerLoadState,
+    activeScope,
+    selectedSegmentId,
+    planningLedger,
   });
-  const initialMarkerId = mapSurface.markers[0]?.id ?? null;
+  const initialMarkerId =
+    mapSurface.visibleMarkers.find((marker) => marker.focusCues.length > 0)?.id ??
+    mapSurface.visibleMarkers[0]?.id ??
+    null;
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(initialMarkerId);
   const selectedMarker = useMemo(
     () =>
-      mapSurface.markers.find((marker) => marker.id === selectedMarkerId) ??
-      mapSurface.markers[0] ??
+      mapSurface.visibleMarkers.find((marker) => marker.id === selectedMarkerId) ??
+      mapSurface.visibleMarkers[0] ??
       null,
-    [mapSurface.markers, selectedMarkerId]
+    [mapSurface.visibleMarkers, selectedMarkerId]
   );
 
   useEffect(() => {
     setSelectedMarkerId(initialMarkerId);
   }, [activeScenario.scenario_id, initialMarkerId]);
 
+  useEffect(() => {
+    setSelectedSegmentId(null);
+  }, [activeScenario.scenario_id]);
+
+  function handleScopeChange(nextScope: MapViewScope) {
+    setActiveScope(nextScope);
+    if (nextScope === "local" && selectedSegmentId == null) {
+      setSelectedSegmentId(mapSurface.routeSegments[0]?.id ?? null);
+    }
+  }
+
   return (
     <section className="status-card map-card">
-      <p className="status-label">Map surface</p>
-      <h2>Map preview for {activeScenario.title}</h2>
+      <p className="status-label">Trip map</p>
+      <h2>Map for {activeScenario.title}</h2>
       <p>{activeScenario.summary}</p>
-      <div className="map-provider-banner" aria-label="Map provider status">
-        <span className={`map-provider-pill map-provider-pill-${mapSurface.provider.status}`}>
-          {mapSurface.provider.label}
+      <div className="map-provider-banner" aria-label="Map view confidence">
+        <span
+          className={`map-provider-pill map-confidence-pill-${mapSurface.workspaceView.confidence.level}`}
+        >
+          {mapSurface.scope.precisionLabel}
         </span>
-        <p className="muted-copy">
-          {compactLayout ? "Compact" : "Full"} review keeps the provider state and fallback path
-          visible before the traveler studies the route.
-        </p>
+        <p className="muted-copy">{mapSurface.scope.summary}</p>
       </div>
-      <p className="muted-copy">{mapSurface.provider.summary}</p>
+      <p className="muted-copy">{mapSurface.workspaceView.confidence.summary}</p>
+      <div className="map-scope-controls" aria-label="Map view scope">
+        {mapSurface.scopeOptions.map((option) => (
+          <button
+            key={option.scope}
+            type="button"
+            title={option.title}
+            className={`map-scope-button${
+              option.scope === mapSurface.scope.activeScope ? " map-scope-button-active" : ""
+            }`}
+            aria-pressed={option.scope === mapSurface.scope.activeScope}
+            onClick={() => handleScopeChange(option.scope)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {activeScope === "local" && mapSurface.routeSegments.length > 0 ? (
+        <div className="map-segment-selector" aria-label="Local segment selector">
+          {mapSurface.routeSegments.map((segment) => (
+            <button
+              key={segment.id}
+              type="button"
+              className={`map-segment-button${
+                segment.id === mapSurface.workspaceView.selectedSegmentId
+                  ? " map-segment-button-active"
+                  : ""
+              }`}
+              aria-pressed={segment.id === mapSurface.workspaceView.selectedSegmentId}
+              onClick={() => setSelectedSegmentId(segment.id)}
+            >
+              {segment.fromLabel} to {segment.toLabel}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="map-scenario-toggle" aria-label="Map scenario previews">
         {comparison.scenarios.map((scenario) => (
           <button
@@ -152,26 +217,29 @@ function ActiveTripMap({
       <div className="map-surface" aria-label="Route context map">
         <div
           className={`map-route map-route-${mapSurface.provider.kind}`}
-          aria-label={`${mapSurface.provider.label} route overlay`}
+          aria-label={`${mapSurface.scope.label} route drawing`}
         >
           <div className="map-provider-toolbar">
-            <span className="map-provider-name">{mapSurface.provider.label}</span>
-            <span>{mapSurface.routeSegments.length} segment(s)</span>
-            <span>{mapSurface.markers.length} marker(s)</span>
+            <span className="map-provider-name">{mapSurface.scope.label}</span>
+            <span>{mapSurface.visibleRouteSegments.length} shown segment(s)</span>
+            <span>{mapSurface.visibleMarkers.length} shown marker(s)</span>
+            {mapSurface.visibleFocusCues.length > 0 ? (
+              <span>{mapSurface.visibleFocusCues.length} linked planning note(s)</span>
+            ) : null}
           </div>
           {mapSurface.provider.kind === "google-maps-js" ? (
             <InteractiveProviderMap
               title={activeScenario.title}
-              markers={mapSurface.markers}
+              markers={mapSurface.visibleMarkers}
               selectedMarker={selectedMarker}
-              routeSegments={mapSurface.routeSegments}
+              routeSegments={mapSurface.visibleRouteSegments}
               onSelectMarker={setSelectedMarkerId}
             />
           ) : (
             <FallbackRouteSchematic
-              markers={mapSurface.markers}
+              markers={mapSurface.visibleMarkers}
               selectedMarker={selectedMarker}
-              routeStops={mapSurface.routeStops}
+              routeStops={mapSurface.visibleRouteStops}
               onSelectMarker={setSelectedMarkerId}
             />
           )}
@@ -183,8 +251,19 @@ function ActiveTripMap({
         </div>
         <div className="map-sidebar">
           <article className="decision-card">
-            <h3>{providerPathHeading(mapSurface.provider)}</h3>
-            <p>{mapSurface.provider.summary}</p>
+            <h3>Map view</h3>
+            <p>{mapSurface.scope.summary}</p>
+            <p className="muted-copy">{mapSurface.workspaceView.confidence.summary}</p>
+            {mapSurface.visibleFocusCues.length > 0 ? (
+              <ul className="map-ledger-focus-list" aria-label="Linked planning notes">
+                {mapSurface.visibleFocusCues.slice(0, 4).map((cue) => (
+                  <li key={cue.ledgerEntryId}>
+                    <span>{cue.label}</span>
+                    {cue.summary}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </article>
           {selectedMarker ? (
             <article className="decision-card map-marker-detail" aria-live="polite">
@@ -192,6 +271,19 @@ function ActiveTripMap({
               <h3>{selectedMarker.label}</h3>
               <p>{selectedMarker.summary}</p>
               <p className="muted-copy">{selectedMarker.detail}</p>
+              {selectedMarker.focusCues.length > 0 ? (
+                <ul
+                  className="map-ledger-focus-list"
+                  aria-label="Linked planning notes for selected marker"
+                >
+                  {selectedMarker.focusCues.map((cue) => (
+                    <li key={cue.ledgerEntryId}>
+                      <span>{cue.label}</span>
+                      {cue.summary}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </article>
           ) : null}
           <dl className="workspace-meta map-metrics">
@@ -238,7 +330,11 @@ function ActiveTripMap({
           </article>
           <article className="decision-card">
             <h3>Destination context</h3>
-            <p className="muted-copy">Policy posture: {mapSurface.policyPosture}</p>
+            {mapSurface.policyPosture ? (
+              <p className="muted-copy" data-testid="policy-posture">
+                Approval posture: {mapSurface.policyPosture}
+              </p>
+            ) : null}
             <p>{mapSurface.feasibilitySummary}</p>
             <div className="map-anchor-list">
               {mapSurface.destinationContext.length === 0 ? (
@@ -315,7 +411,9 @@ function InteractiveProviderMap({
             y1={segment.y1}
             x2={segment.x2}
             y2={segment.y2}
-            className={segment.warning ? "map-route-line map-route-line-warning" : "map-route-line"}
+            className={`map-route-line${segment.warning ? " map-route-line-warning" : ""}${
+              segment.focusCues.length > 0 ? " map-route-line-focused" : ""
+            }`}
           />
         ))}
       </svg>
@@ -357,11 +455,14 @@ function FallbackRouteSchematic({
       <div className="map-fallback-route">
         {routeStops.map((stop, index) => {
           const markerId = `${stop.id}-marker`;
+          const marker = markers.find((candidate) => candidate.id === markerId);
           return (
             <button
               key={stop.id}
               type="button"
-              className={`map-stop${selectedMarker?.id === markerId ? " map-stop-selected" : ""}`}
+              className={`map-stop${selectedMarker?.id === markerId ? " map-stop-selected" : ""}${
+                marker?.focusCues.length ? " map-stop-focused" : ""
+              }`}
               aria-pressed={selectedMarker?.id === markerId}
               onClick={() => onSelectMarker(markerId)}
             >
@@ -381,7 +482,8 @@ function FallbackRouteSchematic({
             type="button"
             className={`map-option-marker map-option-marker-${marker.kind}${
               selectedMarker?.id === marker.id ? " map-option-marker-selected" : ""
-            }`}
+            }${marker.focusCues.length > 0 ? " map-option-marker-focused" : ""}`}
+            aria-label={markerAccessibleLabel(marker)}
             aria-pressed={selectedMarker?.id === marker.id}
             onClick={() => onSelectMarker(marker.id)}
           >
@@ -395,7 +497,13 @@ function FallbackRouteSchematic({
 }
 
 function markerAccessibleLabel(marker: MapMarker): string {
-  return `${marker.kind} marker: ${marker.label}. ${marker.summary}`;
+  const focusSummary =
+    marker.focusCues.length === 0
+      ? ""
+      : ` ${marker.focusCues.length} linked planning note${
+          marker.focusCues.length === 1 ? "" : "s"
+        }.`;
+  return `${marker.kind} marker: ${marker.label}. ${marker.summary}${focusSummary}`;
 }
 
 function markerLabel(kind: MapMarker["kind"]): string {
@@ -411,24 +519,5 @@ function markerLabel(kind: MapMarker["kind"]): string {
     case "stop":
     default:
       return "S";
-  }
-}
-
-function providerPathHeading(provider: ReturnType<typeof buildTripMapSurfaceModel>["provider"]): string {
-  if (provider.kind === "google-maps-js") {
-    return "Live provider path";
-  }
-
-  switch (provider.status) {
-    case "loading":
-      return "Provider loading fallback path";
-    case "provider-error":
-      return "Provider error fallback path";
-    case "sparse-route":
-      return "Sparse route fallback path";
-    case "misconfigured":
-      return "Textual fallback route path";
-    default:
-      return "Fallback route path";
   }
 }

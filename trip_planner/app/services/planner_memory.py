@@ -74,6 +74,13 @@ def _checkpoint_summary(
         if latest_reply_record is not None
         else ""
     )
+    turn_metadata = (
+        latest_reply_record.payload.get("turn_metadata") if latest_reply_record is not None else {}
+    )
+    if not isinstance(turn_metadata, dict):
+        turn_metadata = {}
+    plan_maturity = str(turn_metadata.get("plan_maturity") or "") or None
+    task_class = str(turn_metadata.get("task_class") or "") or None
     refs = list(
         dict.fromkeys(
             ref
@@ -105,6 +112,8 @@ def _checkpoint_summary(
             "ref_count": len(refs[:8]),
             "tool_call_count": len(tool_calls),
             "selected_planning_mode": selected_planning_mode or None,
+            "plan_maturity": plan_maturity,
+            "task_class": task_class,
             "planning_stage": (
                 latest_reply_record.payload.get("planning_stage")
                 if latest_reply_record is not None
@@ -244,6 +253,7 @@ def _serialize_checkpoint(record: PersistedPlannerCheckpoint) -> dict[str, Any]:
         "message_count": record.message_count,
         "summary": record.summary,
         "source_message_ids": list(record.source_message_ids),
+        "metadata_payload": dict(record.metadata_payload or {}),
         "created_at": record.created_at.astimezone(UTC).isoformat(),
         "updated_at": record.updated_at.astimezone(UTC).isoformat(),
     }

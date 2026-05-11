@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -48,6 +49,10 @@ from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
     PersistedPlannerAction,
 )
+from trip_planner.persistence.models.planning_ledger import PersistedPlanningLedgerEntry
+from trip_planner.persistence.models.planning_notebook import (
+    PersistedPlanningNotebookItem,
+)
 from trip_planner.persistence.models.scenario import (
     PersistedSavedScenario,
 )
@@ -77,6 +82,50 @@ class WorkspaceFixture:
 
 
 WORKSPACE_ACTIVITY_LOG_LIMIT = 50
+PLANNING_LEDGER_LIMIT = 100
+PLANNING_LEDGER_ITEM_TYPES: tuple[str, ...] = (
+    "option_considered",
+    "option_rejected",
+    "decision",
+    "assumption",
+    "open_question",
+    "constraint",
+    "source_reference",
+)
+PLANNING_LEDGER_STATUSES: tuple[str, ...] = (
+    "active",
+    "completed",
+    "rejected",
+    "superseded",
+    "deferred",
+)
+PLANNING_NOTEBOOK_LIMIT = 200
+PLANNING_NOTEBOOK_CATEGORIES: tuple[str, ...] = (
+    "route",
+    "lodging",
+    "activities",
+    "budget",
+    "documents",
+    "policy",
+    "other",
+)
+PLANNING_NOTEBOOK_STATUSES: tuple[str, ...] = ("active", "completed", "archived")
+PLANNING_NOTEBOOK_PRIORITIES: tuple[str, ...] = ("low", "normal", "high")
+PLANNING_NOTEBOOK_SOURCES: tuple[str, ...] = ("user", "planner")
+ROUTE_OPTION_STATES: tuple[str, ...] = (
+    "active",
+    "baseline",
+    "fallback",
+    "rejected",
+    "needs_research",
+)
+ROUTE_OPTION_ACTIONS: tuple[str, ...] = (
+    "make_baseline",
+    "keep",
+    "reject",
+    "reopen",
+    "revise",
+)
 _BOOTSTRAP_SCENARIO_SCORE_BY_LABEL = {
     "baseline": 0.82,
     "fallback": 0.68,
@@ -119,11 +168,13 @@ def _load_trip_record(name: str) -> PersistedTripRecord:
     return PersistedTripRecord.from_dict(_load_json(_state_fixture_dir("trips") / name))
 
 
-def _load_saved_scenarios(name: str) -> tuple[list[SavedScenarioRecord], ScenarioComparison | None]:
+def _load_saved_scenarios(
+    name: str,
+) -> tuple[list[SavedScenarioRecord], ScenarioComparison | None]:
     payload = _load_json(_state_fixture_dir("scenarios") / name)
     records = [SavedScenarioRecord.from_dict(item) for item in payload["records"]]
     comparison = payload.get("comparison")
-    return records, ScenarioComparison.from_dict(comparison) if comparison is not None else None
+    return records, (ScenarioComparison.from_dict(comparison) if comparison is not None else None)
 
 
 def _load_session(name: str) -> PlanningSessionState:
@@ -279,7 +330,10 @@ def _business_search_result(trip_id: str) -> ScenarioSearchResult:
                     route_sequence=["home", "client-site", "conference-hotel"],
                     notes=["compliant-first"],
                 ),
-                supporting_option_ids=["option:approved-rail", "option:conference-hotel"],
+                supporting_option_ids=[
+                    "option:approved-rail",
+                    "option:conference-hotel",
+                ],
                 objective_refs=["objective:client-summit"],
                 explanation_records=[
                     ExplanationRecord(
@@ -341,7 +395,7 @@ def _business_search_result(trip_id: str) -> ScenarioSearchResult:
             ),
         ],
         explanation=[
-            "Business timeline still derives from route order; policy posture is communicated via scenario tradeoffs."
+            "Business timeline still derives from route order; approval posture is communicated via scenario tradeoffs."
         ],
         source_refs=["ranked-results:client-summit", "objective:client-summit"],
     )
@@ -368,6 +422,179 @@ def _build_scenario_search(
     )
 
 
+def _generated_route_sequence(route_sequence: list[str], *, variant: str) -> list[str]:
+    clean_sequence = [stop for stop in route_sequence if stop]
+    if not clean_sequence:
+        clean_sequence = ["first-base", "comparison-stop"]
+    if variant == "reverse":
+        return (
+            list(reversed(clean_sequence))
+            if len(clean_sequence) > 1
+            else [
+                clean_sequence[0],
+                "nearby-base",
+            ]
+        )
+    if len(clean_sequence) == 1:
+        return [clean_sequence[0], "nearby-base", clean_sequence[0]]
+    return [*clean_sequence, clean_sequence[0]]
+
+
+def _adjust_estimated_total(
+    estimated_total: dict[str, Any] | None,
+    *,
+    delta: float,
+) -> dict[str, Any] | None:
+    if not isinstance(estimated_total, dict):
+        return estimated_total
+    typical_amount = estimated_total.get("typical_amount")
+    if typical_amount is None:
+        return estimated_total
+    adjusted = dict(estimated_total)
+    adjusted["typical_amount"] = round(max(0.0, float(typical_amount) + delta), 2)
+    return adjusted
+
+
+def _route_option_variant(
+    *,
+    base_scenario: dict[str, Any],
+    trip_id: str,
+    variant: str,
+    rank: int,
+    title: str,
+    headline: str,
+    tradeoff_summary: str,
+    score_delta: float,
+    travel_minutes_delta: int,
+    transfer_delta: int,
+    estimated_total_delta: float,
+    scenario_kind: str,
+) -> dict[str, Any]:
+    generated = deepcopy(base_scenario)
+    base_summary = dict(base_scenario.get("scenario_summary") or {})
+    base_route = list(base_summary.get("route_sequence") or [])
+    generated_id = f"scenario:{trip_id}:route-option:{variant}"
+    generated["scenario_id"] = generated_id
+    generated["title"] = title
+    generated["rank"] = rank
+    generated["source_result_id"] = (
+        f"{base_scenario.get('source_result_id', generated_id)}:{variant}"
+    )
+    generated["score"] = round(
+        max(0.05, min(0.98, float(base_scenario.get("score", 0.5)) + score_delta)), 2
+    )
+    generated["scenario_summary"] = {
+        **base_summary,
+        "headline": headline,
+        "scenario_kind": scenario_kind,
+        "recommended_for_selection": False,
+        "estimated_total": _adjust_estimated_total(
+            base_summary.get("estimated_total"),
+            delta=estimated_total_delta,
+        ),
+        "total_travel_minutes": max(
+            0,
+            int(base_summary.get("total_travel_minutes") or 0) + travel_minutes_delta,
+        ),
+        "total_transfer_count": max(
+            0,
+            int(base_summary.get("total_transfer_count") or 0) + transfer_delta,
+        ),
+        "route_sequence": _generated_route_sequence(base_route, variant=variant),
+        "notes": [
+            *list(base_summary.get("notes") or []),
+            "generated_route_option",
+        ],
+    }
+    generated["unresolved_tradeoffs"] = [
+        *list(base_scenario.get("unresolved_tradeoffs") or []),
+        {
+            "tradeoff_id": f"tradeoff:{trip_id}:route-option:{variant}",
+            "code": f"generated_{variant}_route",
+            "summary": tradeoff_summary,
+            "severity": "warning",
+            "blocking": False,
+            "related_ids": [str(base_scenario.get("scenario_id") or "")],
+            "notes": ["Generated as a rough comparison route until deeper planner research runs."],
+        },
+    ]
+    generated["notes"] = [
+        *list(base_scenario.get("notes") or []),
+        "Generated as a rough route option from the current workspace route shape.",
+    ]
+    return generated
+
+
+def _ensure_route_option_search_depth(
+    record: PersistedTrip,
+    scenario_search: dict[str, Any],
+) -> dict[str, Any]:
+    scenarios = list(scenario_search.get("scenarios") or [])
+    if len(scenarios) >= 3 or not scenarios:
+        return scenario_search
+
+    expanded = dict(scenario_search)
+    expanded_scenarios = [deepcopy(scenario) for scenario in scenarios]
+    base_scenario = scenarios[0]
+    next_rank = len(expanded_scenarios) + 1
+    if len(expanded_scenarios) < 3:
+        expanded_scenarios.append(
+            _route_option_variant(
+                base_scenario=base_scenario,
+                trip_id=record.trip_id,
+                variant="reverse",
+                rank=next_rank,
+                title="Reverse-order route option",
+                headline="Same anchors in a different order to test pacing and arrival flow.",
+                tradeoff_summary=(
+                    "Reversing the order may improve arrival rhythm, but the planner still "
+                    "needs to validate local transfer timing."
+                ),
+                score_delta=-0.08,
+                travel_minutes_delta=45,
+                transfer_delta=1,
+                estimated_total_delta=120.0,
+                scenario_kind="alternative",
+            )
+        )
+        next_rank += 1
+    if len(expanded_scenarios) < 3:
+        expanded_scenarios.append(
+            _route_option_variant(
+                base_scenario=base_scenario,
+                trip_id=record.trip_id,
+                variant="loop",
+                rank=next_rank,
+                title="Loop route option",
+                headline="Return through the starting anchor to preserve a fallback exit path.",
+                tradeoff_summary=(
+                    "The loop keeps a recovery path open but adds movement that may not be "
+                    "worth it for the final plan."
+                ),
+                score_delta=-0.14,
+                travel_minutes_delta=90,
+                transfer_delta=2,
+                estimated_total_delta=240.0,
+                scenario_kind="fallback",
+            )
+        )
+
+    expanded["scenarios"] = expanded_scenarios[:4]
+    expanded["explanation"] = [
+        *list(expanded.get("explanation") or []),
+        "Route option workbench generated rough alternatives so the traveler can compare more than one path.",
+    ]
+    expanded["source_refs"] = list(
+        dict.fromkeys(
+            [
+                *list(expanded.get("source_refs") or []),
+                f"route-options:{record.trip_id}",
+            ]
+        )
+    )
+    return expanded
+
+
 def _build_runtime_scenario_search_for_trip(
     *,
     record: PersistedTrip,
@@ -384,15 +611,18 @@ def _build_runtime_scenario_search_for_trip(
         return _empty_workspace_scenario_search()
 
     if inventory_bundles:
-        return _build_scenario_search(
-            trip_id=record.trip_id,
-            trip_mode=record.mode,
-            bundles=inventory_bundles,
-            trip_title=record.title,
-            primary_regions=tuple(record.primary_regions),
-            duration_days=record.duration_days,
-            traveler_party_kind=record.traveler_party_kind,
-        ).to_dict()
+        return _ensure_route_option_search_depth(
+            record,
+            _build_scenario_search(
+                trip_id=record.trip_id,
+                trip_mode=record.mode,
+                bundles=inventory_bundles,
+                trip_title=record.title,
+                primary_regions=tuple(record.primary_regions),
+                duration_days=record.duration_days,
+                traveler_party_kind=record.traveler_party_kind,
+            ).to_dict(),
+        )
 
     if saved_scenarios:
         return _build_saved_scenario_runtime_search(
@@ -468,18 +698,314 @@ def _comparison_highlights(
     return highlights
 
 
+def _latest_presentation_for_option_set(
+    session: dict[str, Any] | None,
+    option_set_id: str,
+) -> dict[str, Any] | None:
+    if session is None:
+        return None
+    presentations = session.get("recent_option_presentations", [])
+    if not isinstance(presentations, list):
+        return None
+    for presentation in reversed(presentations):
+        if isinstance(presentation, dict) and presentation.get("option_set_id") == option_set_id:
+            return presentation
+    return None
+
+
+def _note_option_ids(notes: list[Any], prefix: str) -> set[str]:
+    marker = f"{prefix}:"
+    return {
+        note.split(":", 1)[1]
+        for note in notes
+        if isinstance(note, str) and note.startswith(marker) and note.split(":", 1)[1]
+    }
+
+
+def _session_route_option_state(
+    session: dict[str, Any] | None,
+    option_set_id: str,
+) -> tuple[set[str], str | None, set[str], set[str]]:
+    presentation = _latest_presentation_for_option_set(session, option_set_id)
+    if presentation is None:
+        return set(), None, set(), set()
+
+    rejected_option_ids = {
+        item for item in presentation.get("rejected_option_ids", []) if isinstance(item, str)
+    }
+    selected_option_id = presentation.get("selected_option_id")
+    if not isinstance(selected_option_id, str) or selected_option_id == "":
+        selected_option_id = None
+    notes = list(presentation.get("notes") or [])
+    return (
+        rejected_option_ids,
+        selected_option_id,
+        _note_option_ids(notes, "fallback"),
+        _note_option_ids(notes, "needs_research"),
+    )
+
+
+def _route_option_state(
+    *,
+    scenario_id: str,
+    status: str,
+    lead_scenario_id: str,
+    rejected_option_ids: set[str],
+    selected_option_id: str | None,
+    fallback_option_ids: set[str],
+    needs_research_option_ids: set[str],
+) -> str:
+    if scenario_id in rejected_option_ids:
+        return "rejected"
+    if status == "blocked":
+        return "needs_research"
+    if scenario_id == selected_option_id or (
+        selected_option_id is None and scenario_id == lead_scenario_id
+    ):
+        return "baseline"
+    if scenario_id in needs_research_option_ids:
+        return "needs_research"
+    if scenario_id in fallback_option_ids or status == "fallback":
+        return "fallback"
+    return "active"
+
+
+def _route_option_purpose(*, state: str, status: str, scenario: dict[str, Any]) -> str:
+    title = scenario.get("title") or "This route"
+    if state == "baseline":
+        return f"Use {title} as the route everything else is compared against."
+    if state == "fallback":
+        return f"Keep {title} available as a backup or later comparison lane."
+    if state == "rejected":
+        return f"Keep {title} in history so the reason for rejecting it is not lost."
+    if state == "needs_research":
+        return f"Send {title} back for a focused revision before treating it as settled."
+    if status == "recommended":
+        return f"Compare {title} as a strong candidate before making it the baseline."
+    return f"Compare {title} as an active alternative while the route is still taking shape."
+
+
+def _route_option_confidence(*, scenario: dict[str, Any], state: str) -> float:
+    try:
+        confidence = float(scenario.get("score", 0.5))
+    except (TypeError, ValueError):
+        confidence = 0.5
+    summary = scenario.get("scenario_summary") or {}
+    if not summary.get("feasible", True):
+        confidence = min(confidence, 0.35)
+    if state == "needs_research":
+        confidence = min(confidence, 0.55)
+    if state == "rejected":
+        confidence = min(confidence, 0.4)
+    for tradeoff in scenario.get("unresolved_tradeoffs", []):
+        if tradeoff.get("severity") == "critical" or tradeoff.get("blocking"):
+            confidence = min(confidence, 0.58)
+    return round(max(0.05, min(confidence, 0.98)), 2)
+
+
+def _route_option_unresolved_questions(*, scenario: dict[str, Any], state: str) -> list[str]:
+    summary = scenario.get("scenario_summary") or {}
+    questions: list[str] = []
+    if not summary.get("route_sequence"):
+        questions.append("Which stops should anchor this route?")
+    if summary.get("estimated_total") is None:
+        questions.append("What rough cost range should this route assume?")
+    for tradeoff in scenario.get("unresolved_tradeoffs", [])[:2]:
+        tradeoff_summary = tradeoff.get("summary")
+        if isinstance(tradeoff_summary, str) and tradeoff_summary:
+            questions.append(f"Can this tradeoff work for the trip: {tradeoff_summary}")
+    if state == "needs_research":
+        questions.append("What should the planner change before comparing this route again?")
+    return questions[:3]
+
+
+def _route_option_available_actions(state: str) -> list[dict[str, str]]:
+    if state not in ROUTE_OPTION_STATES:
+        raise ValueError(f"state must be one of {', '.join(ROUTE_OPTION_STATES)}")
+    if state == "rejected":
+        return [
+            {
+                "action_type": "reopen",
+                "label": "Reopen",
+                "description": "Move this route back into the active comparison set.",
+            }
+        ]
+
+    actions: list[dict[str, str]] = []
+    if state not in {"baseline", "needs_research"}:
+        actions.append(
+            {
+                "action_type": "make_baseline",
+                "label": "Make baseline",
+                "description": "Use this route as the main plan while keeping alternatives visible.",
+            }
+        )
+    if state != "fallback":
+        actions.append(
+            {
+                "action_type": "keep",
+                "label": "Keep for later",
+                "description": "Preserve this route as a backup option without making it the main plan.",
+            }
+        )
+    actions.extend(
+        [
+            {
+                "action_type": "reject",
+                "label": "Reject",
+                "description": "Move this route to history so it stops competing with active options.",
+            },
+            {
+                "action_type": "revise",
+                "label": "Revise",
+                "description": "Ask the planner to improve this route before the next checkpoint.",
+            },
+        ]
+    )
+    return actions
+
+
+def _humanize_route_stop(stop: str) -> str:
+    return (
+        stop.replace("dest-city-", "")
+        .replace("dest-", "")
+        .replace("city-", "")
+        .replace("_", " ")
+        .replace("-", " ")
+        .strip()
+        .title()
+    )
+
+
+def _map_coordinate_for_route_index(index: int, route_length: int) -> dict[str, float]:
+    if route_length <= 1:
+        return {"x": 0.5, "y": 0.5}
+
+    progress = index / (route_length - 1)
+    wave = -1 if index % 2 == 0 else 1
+    return {
+        "x": round(0.12 + progress * 0.76, 4),
+        "y": round(0.52 + wave * 0.18, 4),
+    }
+
+
+def _build_runtime_map_place_markers(route_sequence: list[str]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": f"route-stop:{index + 1}",
+            "source_id": stop,
+            "label": _humanize_route_stop(stop),
+            "route_index": index,
+            **_map_coordinate_for_route_index(index, len(route_sequence)),
+        }
+        for index, stop in enumerate(route_sequence)
+        if stop
+    ]
+
+
+def _build_runtime_map_route_geometry(
+    place_markers: list[dict[str, Any]],
+    *,
+    route_warning: str | None,
+) -> list[dict[str, Any]]:
+    segments: list[dict[str, Any]] = []
+    for index, marker in enumerate(place_markers[:-1]):
+        next_marker = place_markers[index + 1]
+        segments.append(
+            {
+                "id": f"route-segment:{index + 1}",
+                "from_marker_id": marker["id"],
+                "to_marker_id": next_marker["id"],
+                "from_label": marker["label"],
+                "to_label": next_marker["label"],
+                "x1": marker["x"],
+                "y1": marker["y"],
+                "x2": next_marker["x"],
+                "y2": next_marker["y"],
+                "warning": route_warning if index == 0 else None,
+            }
+        )
+    return segments
+
+
+def _build_runtime_map_view_payload(
+    *,
+    scenario: dict[str, Any],
+    summary: dict[str, Any],
+    route_sequence: list[str],
+) -> dict[str, Any]:
+    confidence_level = "high" if summary.get("feasible", False) else "medium"
+    route_warning = None if summary.get("feasible", False) else "Scenario feasibility needs review."
+    place_markers = _build_runtime_map_place_markers(route_sequence)
+    rough_route_geometry = _build_runtime_map_route_geometry(
+        place_markers,
+        route_warning=route_warning,
+    )
+    return {
+        "active_scope": "regional",
+        "active_route_option_id": scenario["scenario_id"],
+        "selected_segment_id": rough_route_geometry[0]["id"] if rough_route_geometry else None,
+        "place_markers": place_markers,
+        "rough_route_geometry": rough_route_geometry,
+        "confidence": {
+            "level": confidence_level,
+            "summary": (
+                "This route outline is drawn from ranked scenario data."
+                if confidence_level == "high"
+                else "This route outline is approximate while feasibility is still settling."
+            ),
+        },
+    }
+
+
+def _build_runtime_map_diagnostics_payload(
+    *,
+    scenario: dict[str, Any],
+    summary: dict[str, Any],
+    route_sequence: list[str],
+) -> dict[str, Any]:
+    has_route = len(route_sequence) > 1
+    return {
+        "provider": {
+            "kind": "fallback",
+            "status": "sparse-route" if not has_route else "fallback",
+            "details": "Route geometry is synthesized from scenario route_sequence.",
+        },
+        "route_state": "ready" if has_route else "sparse",
+        "route_warning": None if summary.get("feasible", False) else "scenario_not_feasible",
+        "source_result_id": scenario["source_result_id"],
+        "objective_refs": list(scenario.get("objective_refs") or []),
+    }
+
+
 def _build_runtime_scenario_comparison(
     *,
     trip_id: str,
     trip_title: str,
     scenario_search: dict[str, Any],
+    session: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     scenarios = list(scenario_search.get("scenarios", []))
+    option_set_id = _bootstrap_option_set_id(trip_id)
+    (
+        rejected_option_ids,
+        selected_option_id,
+        fallback_option_ids,
+        needs_research_option_ids,
+    ) = _session_route_option_state(session, option_set_id)
     comparison_axes = [
         {"key": "score", "label": "Planner score", "direction": "higher_better"},
-        {"key": "travel_minutes", "label": "Travel minutes", "direction": "lower_better"},
+        {
+            "key": "travel_minutes",
+            "label": "Travel minutes",
+            "direction": "lower_better",
+        },
         {"key": "transfers", "label": "Transfers", "direction": "lower_better"},
-        {"key": "estimated_total", "label": "Estimated total", "direction": "lower_better"},
+        {
+            "key": "estimated_total",
+            "label": "Estimated total",
+            "direction": "lower_better",
+        },
     ]
     if not scenarios:
         return {
@@ -495,17 +1021,57 @@ def _build_runtime_scenario_comparison(
             "source_refs": list(scenario_search.get("source_refs") or []),
         }
 
-    lead = scenarios[0]
+    scenario_ids = {scenario["scenario_id"] for scenario in scenarios}
+    if selected_option_id not in scenario_ids or selected_option_id in rejected_option_ids:
+        selected_option_id = None
+    lead = (
+        next(
+            (
+                scenario
+                for scenario in scenarios
+                if selected_option_id is not None and scenario["scenario_id"] == selected_option_id
+            ),
+            None,
+        )
+        or scenarios[0]
+    )
     rows = []
     for scenario in scenarios:
         summary = scenario["scenario_summary"]
         estimated_total = summary.get("estimated_total")
+        status = _comparison_status_label(scenario)
+        state = _route_option_state(
+            scenario_id=scenario["scenario_id"],
+            status=status,
+            lead_scenario_id=lead["scenario_id"],
+            rejected_option_ids=rejected_option_ids,
+            selected_option_id=selected_option_id,
+            fallback_option_ids=fallback_option_ids,
+            needs_research_option_ids=needs_research_option_ids,
+        )
+        unresolved_questions = _route_option_unresolved_questions(
+            scenario=scenario,
+            state=state,
+        )
+        available_actions = _route_option_available_actions(state)
         rows.append(
             {
                 "scenario_id": scenario["scenario_id"],
+                "route_option_id": scenario["scenario_id"],
                 "title": scenario["title"],
                 "rank": scenario["rank"],
-                "status": _comparison_status_label(scenario),
+                "status": status,
+                "state": state,
+                "purpose": _route_option_purpose(
+                    state=state,
+                    status=status,
+                    scenario=scenario,
+                ),
+                "confidence": _route_option_confidence(scenario=scenario, state=state),
+                "unresolved_questions": unresolved_questions,
+                "available_actions": available_actions,
+                "open_question": unresolved_questions[0] if unresolved_questions else None,
+                "available_action": available_actions[0] if available_actions else None,
                 "summary": summary["headline"],
                 "comparison_note": (
                     "Lead route for the current workspace comparison set."
@@ -544,6 +1110,16 @@ def _build_runtime_scenario_comparison(
                 "highlights": _comparison_highlights(scenario=scenario, lead=lead),
                 "source_result_id": scenario["source_result_id"],
                 "objective_refs": list(scenario.get("objective_refs") or []),
+                "map_view": _build_runtime_map_view_payload(
+                    scenario=scenario,
+                    summary=summary,
+                    route_sequence=list(summary.get("route_sequence") or []),
+                ),
+                "map_diagnostics": _build_runtime_map_diagnostics_payload(
+                    scenario=scenario,
+                    summary=summary,
+                    route_sequence=list(summary.get("route_sequence") or []),
+                ),
             }
         )
 
@@ -875,7 +1451,9 @@ def _saved_scenario_priority(saved_scenario: dict[str, Any]) -> tuple[int, str]:
     return priority, version.get("title", saved_scenario["saved_scenario_id"])
 
 
-def _ordered_saved_scenarios(saved_scenarios: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _ordered_saved_scenarios(
+    saved_scenarios: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     return sorted(saved_scenarios, key=_saved_scenario_priority)
 
 
@@ -1052,12 +1630,190 @@ def _workspace_activity_outputs(
     return outputs
 
 
+def _serialize_ledger_entry(record: PersistedPlanningLedgerEntry) -> dict[str, Any]:
+    return {
+        "ledger_entry_id": record.ledger_entry_id,
+        "trip_id": record.trip_id,
+        "session_state_id": record.session_state_id,
+        "item_type": record.item_type,
+        "status": record.status,
+        "category": record.category,
+        "summary": record.summary,
+        "detail": record.detail,
+        "source_message_ids": list(record.source_message_ids or []),
+        "source_refs": list(record.source_refs or []),
+        "related_option_id": record.related_option_id,
+        "related_decision_id": record.related_decision_id,
+        "supersedes_entry_id": record.supersedes_entry_id,
+        "metadata": dict(record.metadata_payload or {}),
+        "created_at": _isoformat(record.created_at),
+        "updated_at": _isoformat(record.updated_at),
+    }
+
+
+def _planning_ledger_summary(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    active = [entry for entry in entries if entry["status"] == "active"]
+    return {
+        "active_decisions": [entry for entry in active if entry["item_type"] == "decision"],
+        "open_questions": [entry for entry in active if entry["item_type"] == "open_question"],
+        "active_options": [entry for entry in active if entry["item_type"] == "option_considered"],
+        "rejected_options": [entry for entry in entries if entry["item_type"] == "option_rejected"],
+        "constraints": [entry for entry in active if entry["item_type"] == "constraint"],
+        "assumptions": [entry for entry in active if entry["item_type"] == "assumption"],
+        "source_references": [
+            entry for entry in active if entry["item_type"] == "source_reference"
+        ],
+    }
+
+
+def _planning_ledger_state(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"entries": entries, "summary": _planning_ledger_summary(entries)}
+
+
+def _serialize_notebook_item(record: PersistedPlanningNotebookItem) -> dict[str, Any]:
+    return {
+        "notebook_item_id": record.notebook_item_id,
+        "trip_id": record.trip_id,
+        "session_state_id": record.session_state_id,
+        "title": record.title,
+        "note": record.note or "",
+        "category": record.category,
+        "status": record.status,
+        "priority": record.priority,
+        "source": record.source,
+        "linked_ledger_entry_id": record.linked_ledger_entry_id,
+        "source_message_ids": list(record.source_message_ids or []),
+        "tags": list(record.tags or []),
+        "metadata": dict(record.metadata_payload or {}),
+        "completed_at": _isoformat(record.completed_at) if record.completed_at else None,
+        "created_at": _isoformat(record.created_at),
+        "updated_at": _isoformat(record.updated_at),
+    }
+
+
+def _planning_notebook_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
+    active = [item for item in items if item["status"] == "active"]
+    completed = [item for item in items if item["status"] == "completed"]
+    archived = [item for item in items if item["status"] == "archived"]
+    by_category: dict[str, list[dict[str, Any]]] = {
+        category: [] for category in PLANNING_NOTEBOOK_CATEGORIES
+    }
+    for item in active:
+        by_category.setdefault(item["category"], []).append(item)
+    return {
+        "active_items": active,
+        "completed_items": completed,
+        "archived_items": archived,
+        "by_category": by_category,
+    }
+
+
+def _planning_notebook_state(
+    items: list[dict[str, Any]],
+    *,
+    focus_category: str | None = None,
+    focus_item_id: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "items": items,
+        "summary": _planning_notebook_summary(items),
+        "focus": {
+            "category": focus_category,
+            "notebook_item_id": focus_item_id,
+        },
+    }
+
+
+def _ledger_category_for_type(item_type: str) -> str:
+    if item_type in {"option_considered", "option_rejected"}:
+        return "route_options"
+    if item_type == "open_question":
+        return "questions"
+    if item_type == "source_reference":
+        return "sources"
+    return item_type
+
+
+def _add_planning_ledger_entry(
+    db_session: Session,
+    *,
+    trip_id: str,
+    session_state_id: str,
+    item_type: str,
+    summary: str,
+    status: str = "active",
+    category: str | None = None,
+    detail: str = "",
+    source_message_ids: list[str] | None = None,
+    source_refs: list[str] | None = None,
+    related_option_id: str | None = None,
+    related_decision_id: str | None = None,
+    supersedes_entry_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> PersistedPlanningLedgerEntry:
+    if item_type not in PLANNING_LEDGER_ITEM_TYPES:
+        raise ValueError(f"item_type must be one of {', '.join(PLANNING_LEDGER_ITEM_TYPES)}")
+    if status not in PLANNING_LEDGER_STATUSES:
+        raise ValueError(f"status must be one of {', '.join(PLANNING_LEDGER_STATUSES)}")
+    now = datetime.now(UTC)
+    entry = PersistedPlanningLedgerEntry(
+        ledger_entry_id=f"ledger:{secrets.token_hex(16)}",
+        trip_id=trip_id,
+        session_state_id=session_state_id,
+        item_type=item_type,
+        status=status,
+        category=category or _ledger_category_for_type(item_type),
+        summary=summary[:280],
+        detail=detail,
+        source_message_ids=list(source_message_ids or []),
+        source_refs=list(source_refs or []),
+        related_option_id=related_option_id,
+        related_decision_id=related_decision_id,
+        supersedes_entry_id=supersedes_entry_id,
+        metadata_payload=dict(metadata or {}),
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(entry)
+    return entry
+
+
+def _validate_planning_ledger_supersedes_target(
+    db_session: Session,
+    *,
+    trip_id: str,
+    ledger_entry_id: str,
+    supersedes_entry_id: str,
+) -> None:
+    if not supersedes_entry_id.strip():
+        raise ValueError("supersedes_entry_id must reference an existing ledger entry.")
+    if supersedes_entry_id == ledger_entry_id:
+        raise ValueError("supersedes_entry_id cannot reference the same ledger entry.")
+
+    seen: set[str] = {ledger_entry_id}
+    current_id: str | None = supersedes_entry_id
+    while current_id:
+        if current_id in seen:
+            raise ValueError("supersedes_entry_id cannot create a cycle.")
+        seen.add(current_id)
+        current = db_session.scalar(
+            select(PersistedPlanningLedgerEntry)
+            .where(PersistedPlanningLedgerEntry.trip_id == trip_id)
+            .where(PersistedPlanningLedgerEntry.ledger_entry_id == current_id)
+        )
+        if current is None:
+            raise ValueError("supersedes_entry_id must reference an existing ledger entry.")
+        current_id = current.supersedes_entry_id
+
+
 def _build_persisted_trip_workspace(
     record: PersistedTrip,
     *,
     session: dict[str, Any] | None = None,
     saved_scenarios: list[dict[str, Any]] | None = None,
     activity_log: list[dict[str, Any]] | None = None,
+    planning_ledger: dict[str, Any] | None = None,
+    planning_notebook: dict[str, Any] | None = None,
     planner_memory: dict[str, Any] | None = None,
     budget_state: dict[str, Any] | None = None,
     policy_context: dict[str, Any] | None = None,
@@ -1066,6 +1822,7 @@ def _build_persisted_trip_workspace(
     inventory_summary: dict[str, Any] | None = None,
     scenario_search: dict[str, Any] | None = None,
     feasibility_summary: dict[str, Any] | None = None,
+    include_debug: bool = True,
 ) -> dict[str, Any]:
     resolved_session = session or _default_workspace_session(record).to_dict()
     trip_record = _serialize_persisted_trip_record(record)
@@ -1133,6 +1890,7 @@ def _build_persisted_trip_workspace(
         trip_id=record.trip_id,
         trip_title=trip_record["trip"]["title"],
         scenario_search=resolved_scenario_search,
+        session=resolved_session,
     )
     ranking = build_scenario_ranking_payload(
         trip_id=record.trip_id,
@@ -1143,7 +1901,20 @@ def _build_persisted_trip_workspace(
         runtime_scenario_comparison=runtime_scenario_comparison,
     )
 
-    return {
+    raw_policy_state = (policy_context or {}).get("policy_state")
+    raw_proposal_state = (proposal_context or {}).get("proposal_state")
+    planner_panel_state = _build_planner_panel_state(
+        trip=trip_record["trip"],
+        scenario_search=resolved_scenario_search,
+        session=resolved_session,
+        saved_scenarios=ordered_saved_scenarios,
+        activity_log=resolved_activity_log,
+        feasibility_summary=resolved_feasibility_summary,
+        policy_context=policy_context,
+        proposal_context=proposal_context,
+    )
+
+    payload: dict[str, Any] = {
         "trip_record": trip_record,
         "session": resolved_session,
         "saved_scenarios": ordered_saved_scenarios,
@@ -1157,29 +1928,34 @@ def _build_persisted_trip_workspace(
         "route_comparison": runtime_scenario_comparison,
         "runtime_scenario_comparison": runtime_scenario_comparison,
         "activity_log": resolved_activity_log,
+        "planning_ledger": planning_ledger or _planning_ledger_state([]),
+        "planning_notebook": planning_notebook or _planning_notebook_state([]),
         "planner_memory": planner_memory
         or {
             "current_checkpoint_id": resolved_session.get("current_checkpoint_id"),
             "checkpoints": [],
             "artifacts": [],
         },
-        "planner_panel_state": _build_planner_panel_state(
-            trip=trip_record["trip"],
-            scenario_search=resolved_scenario_search,
-            session=resolved_session,
-            saved_scenarios=ordered_saved_scenarios,
-            activity_log=resolved_activity_log,
-            feasibility_summary=resolved_feasibility_summary,
-            policy_context=policy_context,
-            proposal_context=proposal_context,
-        ),
+        "planner_panel_state": planner_panel_state,
         "runtime_state": runtime_state,
         "feasibility_summary": resolved_feasibility_summary,
         "inventory_summary": resolved_inventory_summary,
         "budget_state": resolved_budget_state,
-        "policy_state": (policy_context or {}).get("policy_state"),
-        "proposal_state": (proposal_context or {}).get("proposal_state"),
+        "policy_state": raw_policy_state,
+        "proposal_state": raw_proposal_state,
     }
+    if not include_debug:
+        payload["trip_record"] = _public_workspace_trip_record(trip_record)
+        payload["policy_state"] = _public_workspace_policy_state(raw_policy_state)
+        payload["proposal_state"] = _public_workspace_proposal_state(raw_proposal_state)
+        payload["planner_panel_state"] = _public_workspace_planner_panel_state(planner_panel_state)
+        payload = _strip_raw_workspace_diagnostic_keys(payload)
+    payload["view_model"] = _build_workspace_view_model(
+        payload,
+        trip_mode=record.mode,
+        include_debug=include_debug,
+    )
+    return payload
 
 
 def _empty_workspace_scenario_search() -> dict[str, Any]:
@@ -1191,6 +1967,450 @@ def _empty_workspace_scenario_search() -> dict[str, Any]:
             "Scenario search and comparisons will appear after planning begins.",
         ],
         "source_refs": [],
+    }
+
+
+_TRIP_MODE_LABELS: dict[str, str] = {
+    "leisure": "Leisure trip",
+    "business": "Business trip",
+}
+
+# Raw workspace payload keys that must NEVER appear in user-facing view-model
+# copy. They are mirrored under WorkspaceDebugState.sections so an explicit
+# debug/advanced affordance can still surface them.
+_DEBUG_PAYLOAD_KEYS: tuple[str, ...] = (
+    "runtime_state",
+    "inventory_summary",
+    "scenario_search",
+    "ranking",
+    "route_comparison",
+    "runtime_scenario_comparison",
+    "feasibility_summary",
+    "planner_panel_state",
+    "policy_state",
+    "proposal_state",
+    "trip_record",
+    "session",
+    "saved_scenarios",
+    "activity_log",
+    "planner_memory",
+)
+
+
+def _public_workspace_policy_state(policy_state: Any) -> dict[str, Any] | None:
+    if not isinstance(policy_state, dict) or not policy_state:
+        return None
+
+    constraint_set = deepcopy(policy_state.get("constraint_set") or {})
+    if isinstance(constraint_set, dict):
+        for key in ("policy_id", "organization_id", "policy_version"):
+            constraint_set.pop(key, None)
+    else:
+        constraint_set = {}
+
+    organization_context = deepcopy(policy_state.get("organization_context") or {})
+    if isinstance(organization_context, dict):
+        organization_context.pop("organization_id", None)
+    else:
+        organization_context = {}
+
+    public_state: dict[str, Any] = {}
+    if constraint_set:
+        public_state["constraint_set"] = constraint_set
+    if organization_context:
+        public_state["organization_context"] = organization_context
+    notes = policy_state.get("notes")
+    if isinstance(notes, list) and notes:
+        public_state["notes"] = list(notes)
+    tags = policy_state.get("tags")
+    if isinstance(tags, list) and tags:
+        public_state["tags"] = list(tags)
+    return public_state or None
+
+
+def _public_workspace_trip_record(trip_record: dict[str, Any]) -> dict[str, Any]:
+    public_record = deepcopy(trip_record)
+    trip = public_record.get("trip")
+    if isinstance(trip, dict):
+        artifacts = trip.get("artifacts")
+        if isinstance(artifacts, dict):
+            artifacts.pop("policy_state_id", None)
+    artifact_refs = public_record.get("artifact_refs")
+    if isinstance(artifact_refs, dict):
+        artifact_refs.pop("policy_state_id", None)
+    return public_record
+
+
+def _strip_raw_workspace_diagnostic_keys(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _strip_raw_workspace_diagnostic_keys(item)
+            for key, item in value.items()
+            if key not in {"policy_state_id", "proposal_state_id"}
+        }
+    if isinstance(value, list):
+        return [_strip_raw_workspace_diagnostic_keys(item) for item in value]
+    return value
+
+
+def _public_workspace_follow_up(follow_up: Any) -> dict[str, Any] | None:
+    if not isinstance(follow_up, dict) or not follow_up:
+        return None
+    public_keys = {
+        "status",
+        "path",
+        "title",
+        "summary",
+        "recommended_action",
+        "recommended_label",
+        "alternatives",
+        "guidance",
+        "notes",
+        "selected_alternative",
+        "requested_exception",
+    }
+    return {key: deepcopy(value) for key, value in follow_up.items() if key in public_keys}
+
+
+def _public_workspace_proposal_state(proposal_state: Any) -> dict[str, Any] | None:
+    if not isinstance(proposal_state, dict) or not proposal_state:
+        return None
+
+    proposal = proposal_state.get("proposal") if isinstance(proposal_state, dict) else {}
+    proposal = proposal if isinstance(proposal, dict) else {}
+    public_proposal: dict[str, Any] = {}
+    approval_notes = proposal.get("approval_notes")
+    if isinstance(approval_notes, list) and approval_notes:
+        public_proposal["approval_notes"] = list(approval_notes)
+    comparables = proposal.get("comparables")
+    if isinstance(comparables, list) and comparables:
+        public_proposal["comparables"] = deepcopy(comparables)
+
+    summary = proposal_state.get("summary")
+    summary = summary if isinstance(summary, dict) else {}
+    public_summary_keys = {
+        "submission_summary",
+        "approval_ready",
+        "comparable_count",
+        "highlights",
+        "follow_up_status",
+        "follow_up_title",
+        "follow_up_summary",
+    }
+    public_summary = {
+        key: deepcopy(value)
+        for key, value in summary.items()
+        if key in public_summary_keys and value is not None
+    }
+
+    return {
+        "proposal": public_proposal,
+        "evaluation": {"evaluation_result": None},
+        "summary": public_summary,
+        "follow_up": _public_workspace_follow_up(proposal_state.get("follow_up")),
+    }
+
+
+def _public_workspace_planner_panel_state(
+    planner_panel_state: dict[str, Any],
+) -> dict[str, Any]:
+    public_state = deepcopy(planner_panel_state)
+    trip = public_state.get("trip")
+    if isinstance(trip, dict):
+        artifacts = trip.get("artifacts")
+        if isinstance(artifacts, dict):
+            artifacts.pop("policy_state_id", None)
+    proposal = public_state.get("proposal")
+    if isinstance(proposal, dict):
+        for key in (
+            "proposal_id",
+            "trip_id",
+            "proposal_version",
+            "scenario_id",
+            "constraint_set_id",
+        ):
+            proposal.pop(key, None)
+        for option in proposal.get("selected_options") or []:
+            if isinstance(option, dict):
+                option.pop("option_id", None)
+                option.pop("justification_refs", None)
+        public_state["proposal"] = proposal or None
+    policy_evaluation = public_state.get("policy_evaluation")
+    if isinstance(policy_evaluation, dict):
+        public_state["policy_evaluation"] = {
+            key: deepcopy(value)
+            for key, value in policy_evaluation.items()
+            if key in {"notes", "recommendation", "summary"}
+        } or None
+    return public_state
+
+
+def _workspace_policy_state_is_active(
+    *,
+    policy_state: Any,
+    proposal_state: Any,
+) -> bool:
+    if isinstance(policy_state, dict) and policy_state:
+        return True
+    if not isinstance(proposal_state, dict) or not proposal_state:
+        return False
+
+    summary = proposal_state.get("summary") or {}
+    summary = summary if isinstance(summary, dict) else {}
+    if proposal_state.get("execution_id"):
+        return True
+    if summary.get("approval_ready"):
+        return True
+    if summary.get("evaluation_result_status") or summary.get("follow_up_status"):
+        return True
+    submission_status = str(
+        summary.get("submission_status") or proposal_state.get("submission_status") or ""
+    ).lower()
+    evaluation_status = str(
+        summary.get("evaluation_transport_status") or proposal_state.get("evaluation_status") or ""
+    ).lower()
+    return submission_status not in {"", "pending"} or evaluation_status not in {
+        "",
+        "pending",
+    }
+
+
+def _workspace_approval_status(
+    proposal_state: dict[str, Any],
+) -> tuple[str, str, list[str]]:
+    proposal_summary = proposal_state.get("summary") or {}
+    proposal_summary = proposal_summary if isinstance(proposal_summary, dict) else {}
+    approval_ready = bool(proposal_summary.get("approval_ready"))
+    follow_up_status = str(proposal_summary.get("follow_up_status") or "").lower()
+    evaluation_status = str(
+        proposal_summary.get("evaluation_result_status")
+        or proposal_summary.get("submission_status")
+        or ""
+    ).lower()
+
+    if approval_ready:
+        return "approved", "Your trip is ready for approval.", []
+    if evaluation_status in {"in_review", "pending", "submitted"}:
+        return "in_review", "Your trip approval is in review.", []
+    if evaluation_status in {"failed", "rejected", "needs_attention"} or follow_up_status in {
+        "exception_required",
+        "reoptimization_required",
+        "remediation_required",
+    }:
+        blockers = [
+            str(item)
+            for item in (proposal_summary.get("highlights") or [])
+            if isinstance(item, str)
+        ]
+        return "needs_attention", "Approval needs your attention.", blockers
+    if proposal_state:
+        return "not_ready", "Approval is not ready yet.", []
+    return "not_applicable", "Approval is not required yet.", []
+
+
+def _policy_presentation_for_workspace(
+    *,
+    active_policy_state: bool,
+    proposal_state: Any,
+) -> dict[str, Any]:
+    if not active_policy_state:
+        return {
+            "active_policy_state": False,
+            "posture_label": "Not applicable",
+            "approval_status_label": "Not applicable",
+            "next_step_label": "No policy action needed",
+            "summary": "Policy approval is not part of this workspace yet.",
+        }
+
+    proposal_state = proposal_state if isinstance(proposal_state, dict) else {}
+    if not proposal_state:
+        return {
+            "active_policy_state": True,
+            "posture_label": "Approval not started",
+            "approval_status_label": "Approval not started",
+            "next_step_label": "Build approval packet",
+            "summary": "No approval packet has been submitted yet.",
+        }
+
+    approval_status, headline, blockers = _workspace_approval_status(proposal_state)
+    summary = proposal_state.get("summary") or {}
+    summary = summary if isinstance(summary, dict) else {}
+    follow_up_status = str(summary.get("follow_up_status") or "").lower()
+
+    if approval_status == "approved":
+        posture_label = "Ready for approval"
+        next_step_label = "Prepare approval packet"
+    elif follow_up_status == "exception_required":
+        posture_label = "Needs exception"
+        next_step_label = "Review exception request"
+    elif approval_status == "needs_attention":
+        posture_label = "Needs follow-up"
+        next_step_label = "Resolve policy follow-up"
+    elif approval_status == "in_review":
+        posture_label = "Waiting for policy review"
+        next_step_label = "Wait for policy review"
+    elif approval_status == "not_ready":
+        posture_label = "Not ready for approval"
+        next_step_label = "Complete approval packet"
+    else:
+        posture_label = "Policy state available"
+        next_step_label = "Review policy details"
+
+    return {
+        "active_policy_state": True,
+        "posture_label": posture_label,
+        "approval_status_label": posture_label,
+        "next_step_label": next_step_label,
+        "summary": " ".join([headline, *blockers[:1]]).strip(),
+    }
+
+
+def _build_workspace_view_model(
+    payload: dict[str, Any],
+    *,
+    trip_mode: str | None = None,
+    include_debug: bool = True,
+) -> dict[str, Any]:
+    """Map a workspace payload dict into the typed product view model.
+
+    The mapper deliberately keeps user-facing strings free of raw runtime,
+    provider, fallback, policy/proposal id, and trip-scoped object id
+    language. Raw payloads are mirrored under ``debug_state.sections`` so the
+    frontend can render them only behind an explicit debug affordance.
+    """
+
+    trip_record = payload.get("trip_record") or {}
+    trip_block = trip_record.get("trip") if isinstance(trip_record, dict) else {}
+    trip_block = trip_block if isinstance(trip_block, dict) else {}
+
+    resolved_mode = str(trip_mode or trip_block.get("mode") or "leisure")
+    if resolved_mode not in _TRIP_MODE_LABELS:
+        resolved_mode = "leisure"
+    mode_label = _TRIP_MODE_LABELS[resolved_mode]
+
+    runtime_state = payload.get("runtime_state") or {}
+    runtime_state = runtime_state if isinstance(runtime_state, dict) else {}
+    status = str(runtime_state.get("status") or "empty")
+    if status not in {"ready", "partial", "empty"}:
+        status = "empty"
+
+    trip_title = str(trip_block.get("title") or "Trip workspace")
+
+    saved_scenarios = payload.get("saved_scenarios") or []
+    saved_scenarios = saved_scenarios if isinstance(saved_scenarios, list) else []
+    feasibility_summary = payload.get("feasibility_summary") or {}
+    feasibility_summary = feasibility_summary if isinstance(feasibility_summary, dict) else {}
+
+    decided: list[str] = []
+    if saved_scenarios:
+        decided.append(f"{len(saved_scenarios)} saved scenario draft(s)")
+    inventory_summary = payload.get("inventory_summary") or {}
+    inventory_summary = inventory_summary if isinstance(inventory_summary, dict) else {}
+    bundle_count = int(inventory_summary.get("bundle_count") or 0)
+    if bundle_count:
+        decided.append(f"{bundle_count} inventory bundle(s) assembled")
+
+    uncertain: list[str] = []
+    attention_count = int(feasibility_summary.get("attention_bundle_count") or 0)
+    if attention_count:
+        uncertain.append(f"{attention_count} bundle(s) need attention")
+    if status == "empty":
+        uncertain.append("Trip context is not complete yet.")
+    elif status == "partial":
+        uncertain.append("Scenario comparison is not yet ready.")
+
+    if status == "ready":
+        headline = "Your trip plan is ready to review."
+        next_step_title = "Review and pick a scenario"
+        next_step_summary = "Compare the saved scenarios and choose one to keep planning around."
+        next_step_action = "Open scenario comparison"
+        next_step_target = "scenario-comparison"
+        blocked = False
+    elif status == "partial":
+        headline = "Your trip plan is partially assembled."
+        next_step_title = "Continue planning"
+        next_step_summary = (
+            "Inventory is in place; resolve the open uncertainties to unlock"
+            " scenario comparison."
+        )
+        next_step_action = "Continue planning"
+        next_step_target = "planner"
+        blocked = False
+    else:
+        headline = "Trip planning hasn't started yet."
+        next_step_title = "Start planning"
+        next_step_summary = "Add the missing trip context to start assembling scenarios."
+        next_step_action = "Open trip setup"
+        next_step_target = "trip-setup"
+        blocked = True
+
+    user_summary = {
+        "trip_title": trip_title,
+        "trip_mode": resolved_mode,
+        "mode_label": mode_label,
+        "status": status,
+        "headline": headline,
+        "decided": decided,
+        "uncertain": uncertain,
+    }
+
+    next_step = {
+        "title": next_step_title,
+        "summary": next_step_summary,
+        "action_label": next_step_action,
+        "action_target": next_step_target,
+        "blocked": blocked,
+    }
+
+    policy_state = payload.get("policy_state")
+    proposal_state_value = payload.get("proposal_state")
+    active_policy_state = _workspace_policy_state_is_active(
+        policy_state=policy_state,
+        proposal_state=proposal_state_value,
+    )
+    show_policy_panels = resolved_mode == "business" or active_policy_state
+    panel_visibility = {
+        "show_budget_panel": True,
+        "show_policy_posture": show_policy_panels,
+        "show_proposal_panel": show_policy_panels,
+        "show_approval_readiness_panel": show_policy_panels,
+    }
+    policy_presentation = _policy_presentation_for_workspace(
+        active_policy_state=show_policy_panels,
+        proposal_state=proposal_state_value,
+    )
+
+    business_summary: dict[str, Any] | None = None
+    if resolved_mode == "business":
+        proposal_state = payload.get("proposal_state") or {}
+        proposal_state = proposal_state if isinstance(proposal_state, dict) else {}
+        approval_status, approval_headline, blockers = _workspace_approval_status(proposal_state)
+
+        business_summary = {
+            "approval_status": approval_status,
+            "headline": approval_headline,
+            "blockers": blockers,
+        }
+
+    debug_sections: dict[str, dict[str, Any]] = {}
+    for key in _DEBUG_PAYLOAD_KEYS:
+        if not include_debug and key in {"policy_state", "proposal_state"}:
+            continue
+        raw_value = payload.get(key)
+        if raw_value is None:
+            continue
+        debug_sections[key] = {
+            "title": key.replace("_", " ").title(),
+            "payload": raw_value,
+        }
+
+    return {
+        "user_summary": user_summary,
+        "next_step": next_step,
+        "panel_visibility": panel_visibility,
+        "policy_presentation": policy_presentation,
+        "business_summary": business_summary,
+        "debug_state": {"sections": debug_sections},
     }
 
 
@@ -1262,6 +2482,7 @@ def _build_runtime_scenario_comparison_payload(
             fixture = None
     if fixture is not None:
         trip_record = _load_trip_record(fixture.trip_fixture)
+        session = _load_session(fixture.session_fixture)
         inventory_bundles = assemble_inventory_bundles_for_trip(
             trip_id=trip_id,
             trip_mode=trip_record.trip.mode,
@@ -1279,6 +2500,7 @@ def _build_runtime_scenario_comparison_payload(
             trip_id=trip_id,
             trip_title=trip_record.trip.title,
             scenario_search=scenario_search.to_dict(),
+            session=session.to_dict(),
         )
 
     try:
@@ -1286,6 +2508,7 @@ def _build_runtime_scenario_comparison_payload(
     except WorkspaceTripNotFoundError:
         return None
 
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
     persisted_saved_scenarios_records = list(
         db_session.scalars(
             select(PersistedSavedScenario)
@@ -1294,7 +2517,6 @@ def _build_runtime_scenario_comparison_payload(
         ).all()
     )
     if not persisted_saved_scenarios_records:
-        session_record = _get_or_create_workspace_session_record(db_session, record=record)
         persisted_saved_scenarios_records = _create_bootstrap_saved_scenarios(
             db_session,
             record=record,
@@ -1324,6 +2546,7 @@ def _build_runtime_scenario_comparison_payload(
             saved_scenarios=persisted_saved_scenarios,
             inventory_status=inventory_status,
         ),
+        session=_serialize_session_record(session_record),
     )
 
 
@@ -1440,7 +2663,10 @@ def _sync_workspace_session_record(
         ):
             decision["related_saved_scenario_id"] = ordered_ids[0]
             decision["related_option_set_id"] = option_set_id
-            session_record.pending_decisions = [decision, *session_record.pending_decisions[1:]]
+            session_record.pending_decisions = [
+                decision,
+                *session_record.pending_decisions[1:],
+            ]
             updated = True
 
     if updated:
@@ -1487,8 +2713,16 @@ def _build_planner_panel_state(
             "scope": "scenario_selection",
             "title": scenario_search.get("title") or "Workspace planner scenarios",
             "comparison_axes": [
-                {"key": "score", "label": "Planner score", "direction": "higher_better"},
-                {"key": "travel_minutes", "label": "Travel minutes", "direction": "lower_better"},
+                {
+                    "key": "score",
+                    "label": "Planner score",
+                    "direction": "higher_better",
+                },
+                {
+                    "key": "travel_minutes",
+                    "label": "Travel minutes",
+                    "direction": "lower_better",
+                },
                 {"key": "transfers", "label": "Transfers", "direction": "lower_better"},
             ],
             "explanation": list(scenario_search.get("explanation") or [])
@@ -1535,8 +2769,16 @@ def _build_planner_panel_state(
             "scope": "trip_setup",
             "title": "Planner workspace bootstrap",
             "comparison_axes": [
-                {"key": "scope", "label": "Planning scope", "direction": "higher_better"},
-                {"key": "specificity", "label": "Trip specificity", "direction": "higher_better"},
+                {
+                    "key": "scope",
+                    "label": "Planning scope",
+                    "direction": "higher_better",
+                },
+                {
+                    "key": "specificity",
+                    "label": "Trip specificity",
+                    "direction": "higher_better",
+                },
             ],
             "explanation": [
                 "This starter panel is seeded from the persisted trip record until ranked planner scenarios exist.",
@@ -1715,8 +2957,8 @@ def _build_planner_panel_state(
         outputs.append(
             {
                 "output_id": f"output:{trip['trip_id']}:policy-ready",
-                "title": "Policy posture loaded",
-                "body": "The workspace is using persisted policy inputs instead of mock approval-readiness state.",
+                "title": "Approval readiness loaded",
+                "body": "The workspace is using saved approval inputs instead of placeholder readiness state.",
                 "tags": ["policy", "workspace", trip["mode"]],
                 "status": (
                     "positive"
@@ -1733,8 +2975,8 @@ def _build_planner_panel_state(
             {
                 "action_id": f"action:{trip['trip_id']}:review-policy",
                 "action_kind": "prepare_approval",
-                "label": "Review policy posture",
-                "description": "Inspect imported policy constraints and approval-readiness before moving to submission work.",
+                "label": "Review approval readiness",
+                "description": "Inspect saved approval constraints and readiness before moving to submission work.",
                 "emphasis": "primary",
                 "target_section": "approval",
             },
@@ -1753,16 +2995,16 @@ def _build_planner_panel_state(
         "timeout",
     }:
         if policy_error_code == "breaker_open":
-            notice_title = "Live TPP breaker is open"
+            notice_title = "Approval service is temporarily unavailable"
             notice_body = (
-                "Live policy sync transport is temporarily unavailable. The workspace is using "
-                "stored-policy posture until the breaker reset window elapses."
+                "The workspace is using the latest saved approval information while the live "
+                "service recovers."
             )
         else:
-            notice_title = "Live TPP request timed out"
+            notice_title = "Approval service request timed out"
             notice_body = (
-                "Live policy sync transport timed out. The workspace is using stored-policy "
-                "posture while live transport recovers."
+                "The workspace is using the latest saved approval information while the live "
+                "service recovers."
             )
         outputs.append(
             {
@@ -1772,8 +3014,8 @@ def _build_planner_panel_state(
                 "tags": ["policy", "transport", "stored-policy", trip["mode"]],
                 "status": "caution",
                 "highlights": [
-                    f"error_code={policy_error_code}",
-                    str(policy_transport_error.get("message") or ""),
+                    "Saved approval information is still available.",
+                    "Retry the live approval refresh later.",
                 ],
             }
         )
@@ -1783,8 +3025,8 @@ def _build_planner_panel_state(
         outputs.append(
             {
                 "output_id": f"output:{trip['trip_id']}:proposal-lifecycle",
-                "title": "Proposal lifecycle loaded",
-                "body": "The workspace now carries persisted proposal submission and evaluation state.",
+                "title": "Approval packet loaded",
+                "body": "The workspace now carries saved approval packet and review state.",
                 "tags": ["proposal", "approval", trip["mode"]],
                 "status": (
                     "positive"
@@ -1805,27 +3047,32 @@ def _build_planner_panel_state(
             error_code = _transport_error_code(transport_error)
             if error_code in {"breaker_open", "timeout"}:
                 if error_code == "breaker_open":
-                    notice_title = "Live TPP breaker is open"
+                    notice_title = "Approval service is temporarily unavailable"
                     notice_body = (
-                        "Live policy transport is temporarily unavailable. The workspace is using "
-                        "stored-policy posture until the breaker reset window elapses."
+                        "The workspace is using the latest saved approval information while the "
+                        "live service recovers."
                     )
                 else:
-                    notice_title = "Live TPP request timed out"
+                    notice_title = "Approval service request timed out"
                     notice_body = (
-                        "Live policy transport timed out. The workspace is using stored-policy "
-                        "posture while live transport recovers."
+                        "The workspace is using the latest saved approval information while the "
+                        "live service recovers."
                     )
                 outputs.append(
                     {
                         "output_id": f"output:{trip['trip_id']}:proposal-transport-fallback",
                         "title": notice_title,
                         "body": notice_body,
-                        "tags": ["proposal", "transport", "stored-policy", trip["mode"]],
+                        "tags": [
+                            "proposal",
+                            "transport",
+                            "stored-policy",
+                            trip["mode"],
+                        ],
                         "status": "caution",
                         "highlights": [
-                            f"error_code={error_code}",
-                            str(transport_error.get("message") or ""),
+                            "Saved approval information is still available.",
+                            "Retry the live approval refresh later.",
                         ],
                     }
                 )
@@ -1901,6 +3148,7 @@ def get_workspace_payload(
     *,
     user: AuthenticatedUser,
     trip_id: str,
+    include_debug: bool = True,
 ) -> dict[str, Any] | None:
     fixture = _FIXTURES.get(trip_id)
     if fixture is not None:
@@ -1939,6 +3187,7 @@ def get_workspace_payload(
             trip_id=trip_id,
             trip_title=trip_record.trip.title,
             scenario_search=scenario_search.to_dict(),
+            session=session.to_dict(),
         )
         ranking = build_scenario_ranking_payload(
             trip_id=trip_id,
@@ -1949,16 +3198,18 @@ def get_workspace_payload(
             assembly_input=inventory_assembly_input,
         )
 
-        return {
+        fixture_payload: dict[str, Any] = {
             "trip_record": trip_record.to_dict(),
             "session": session.to_dict(),
             "saved_scenarios": [record.to_dict() for record in saved_scenarios],
-            "scenario_comparison": scenario_comparison.to_dict() if scenario_comparison else None,
+            "scenario_comparison": (scenario_comparison.to_dict() if scenario_comparison else None),
             "scenario_search": scenario_search.to_dict(),
             "ranking": ranking,
             "route_comparison": runtime_scenario_comparison,
             "runtime_scenario_comparison": runtime_scenario_comparison,
             "activity_log": [],
+            "planning_ledger": _planning_ledger_state([]),
+            "planning_notebook": _planning_notebook_state([]),
             "planner_memory": {
                 "current_checkpoint_id": session.current_checkpoint_id,
                 "checkpoints": [],
@@ -1987,6 +3238,12 @@ def get_workspace_payload(
             "policy_state": None,
             "proposal_state": None,
         }
+        fixture_payload["view_model"] = _build_workspace_view_model(
+            fixture_payload,
+            trip_mode=trip_record.trip.mode,
+            include_debug=include_debug,
+        )
+        return fixture_payload
 
     record = db_session.scalar(
         select(PersistedTrip)
@@ -2061,6 +3318,18 @@ def get_workspace_payload(
         .order_by(PersistedActivityLogEvent.occurred_at.desc())
         .limit(WORKSPACE_ACTIVITY_LOG_LIMIT)
     ).all()
+    ledger_records = db_session.scalars(
+        select(PersistedPlanningLedgerEntry)
+        .where(PersistedPlanningLedgerEntry.trip_id == trip_id)
+        .order_by(PersistedPlanningLedgerEntry.updated_at.desc())
+        .limit(PLANNING_LEDGER_LIMIT)
+    ).all()
+    notebook_records = db_session.scalars(
+        select(PersistedPlanningNotebookItem)
+        .where(PersistedPlanningNotebookItem.trip_id == trip_id)
+        .order_by(PersistedPlanningNotebookItem.updated_at.desc())
+        .limit(PLANNING_NOTEBOOK_LIMIT)
+    ).all()
     feasibility_summary = build_feasibility_summary_payload(persisted_inventory_bundles)
     return _build_persisted_trip_workspace(
         record,
@@ -2078,6 +3347,14 @@ def get_workspace_payload(
             for scenario in persisted_saved_scenarios
         ],
         activity_log=[_serialize_activity_record(item) for item in activity_records],
+        planning_ledger=_planning_ledger_state(
+            [_serialize_ledger_entry(item) for item in ledger_records]
+        ),
+        planning_notebook=_planning_notebook_state(
+            [_serialize_notebook_item(item) for item in notebook_records],
+            focus_category=session_record.notebook_focus_category,
+            focus_item_id=session_record.notebook_focus_item_id,
+        ),
         planner_memory=build_planner_memory_payload(
             db_session,
             trip_id=trip_id,
@@ -2086,18 +3363,19 @@ def get_workspace_payload(
         budget_state=load_budget_payload_for_workspace(db_session, record=record),
         policy_context=(
             get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
-            if record.mode == "business"
+            if record.mode == "business" or include_debug
             else None
         ),
         proposal_context=(
             get_workspace_proposal_payload(db_session, user=user, trip_id=trip_id)
-            if record.mode == "business"
+            if record.mode == "business" or include_debug
             else None
         ),
         inventory_bundles=persisted_inventory_bundles,
         inventory_summary=inventory_summary,
         scenario_search=runtime_search,
         feasibility_summary=feasibility_summary,
+        include_debug=include_debug,
     )
 
 
@@ -2178,6 +3456,7 @@ def update_workspace_planning_mode(
     user: AuthenticatedUser,
     trip_id: str,
     planning_mode: str,
+    include_debug: bool = True,
 ) -> dict[str, Any]:
     if planning_mode not in PLANNING_MODES:
         raise ValueError(f"planning_mode must be one of {', '.join(PLANNING_MODES)}")
@@ -2194,10 +3473,266 @@ def update_workspace_planning_mode(
     record.updated_at = now
     db_session.commit()
 
-    payload = get_workspace_payload(db_session, user=user, trip_id=trip_id)
+    payload = get_workspace_payload(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        include_debug=include_debug,
+    )
     if payload is None:
         raise WorkspaceTripNotFoundError(f"Trip '{trip_id}' was not found.")
     return payload
+
+
+def create_planning_ledger_entry(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    item_type: str,
+    summary: str,
+    status: str = "active",
+    category: str = "general",
+    detail: str = "",
+    source_message_ids: list[str] | None = None,
+    source_refs: list[str] | None = None,
+    related_option_id: str | None = None,
+    related_decision_id: str | None = None,
+) -> dict[str, Any]:
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    entry = _add_planning_ledger_entry(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session_record.session_state_id,
+        item_type=item_type,
+        status=status,
+        category=category,
+        summary=summary,
+        detail=detail,
+        source_message_ids=source_message_ids,
+        source_refs=source_refs,
+        related_option_id=related_option_id,
+        related_decision_id=related_decision_id,
+        metadata={"created_by": "workspace_api"},
+    )
+    record.updated_at = datetime.now(UTC)
+    db_session.commit()
+    db_session.refresh(entry)
+    return _serialize_ledger_entry(entry)
+
+
+def update_planning_ledger_entry(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    ledger_entry_id: str,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    entry = db_session.scalar(
+        select(PersistedPlanningLedgerEntry)
+        .where(PersistedPlanningLedgerEntry.trip_id == trip_id)
+        .where(PersistedPlanningLedgerEntry.ledger_entry_id == ledger_entry_id)
+    )
+    if entry is None:
+        raise WorkspaceTripNotFoundError(f"Ledger entry '{ledger_entry_id}' was not found.")
+    if updates.get("status") is not None:
+        status = str(updates["status"])
+        if status not in PLANNING_LEDGER_STATUSES:
+            raise ValueError(f"status must be one of {', '.join(PLANNING_LEDGER_STATUSES)}")
+        entry.status = status
+    if "supersedes_entry_id" in updates:
+        raw_supersedes_entry_id = updates["supersedes_entry_id"]
+        supersedes_entry_id = (
+            None
+            if raw_supersedes_entry_id is None
+            else str(raw_supersedes_entry_id).strip() or None
+        )
+        if supersedes_entry_id is not None:
+            _validate_planning_ledger_supersedes_target(
+                db_session,
+                trip_id=trip_id,
+                ledger_entry_id=ledger_entry_id,
+                supersedes_entry_id=supersedes_entry_id,
+            )
+        entry.supersedes_entry_id = supersedes_entry_id
+    for field in (
+        "category",
+        "summary",
+        "detail",
+        "related_option_id",
+        "related_decision_id",
+    ):
+        if updates.get(field) is not None:
+            setattr(entry, field, updates[field])
+    if updates.get("source_message_ids") is not None:
+        entry.source_message_ids = list(updates["source_message_ids"])
+    if updates.get("source_refs") is not None:
+        entry.source_refs = list(updates["source_refs"])
+    entry.updated_at = datetime.now(UTC)
+    db_session.commit()
+    db_session.refresh(entry)
+    return _serialize_ledger_entry(entry)
+
+
+def _validate_notebook_choice(field: str, value: str, allowed: tuple[str, ...]) -> str:
+    if value not in allowed:
+        raise ValueError(f"{field} must be one of {', '.join(allowed)}")
+    return value
+
+
+def create_planning_notebook_item(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    title: str,
+    note: str = "",
+    category: str = "other",
+    status: str = "active",
+    priority: str = "normal",
+    source: str = "user",
+    linked_ledger_entry_id: str | None = None,
+    source_message_ids: list[str] | None = None,
+    tags: list[str] | None = None,
+) -> dict[str, Any]:
+    _validate_notebook_choice("category", category, PLANNING_NOTEBOOK_CATEGORIES)
+    _validate_notebook_choice("status", status, PLANNING_NOTEBOOK_STATUSES)
+    _validate_notebook_choice("priority", priority, PLANNING_NOTEBOOK_PRIORITIES)
+    _validate_notebook_choice("source", source, PLANNING_NOTEBOOK_SOURCES)
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    now = datetime.now(UTC)
+    item = PersistedPlanningNotebookItem(
+        notebook_item_id=f"notebook:{secrets.token_hex(16)}",
+        trip_id=trip_id,
+        session_state_id=session_record.session_state_id,
+        title=title[:240],
+        note=note,
+        category=category,
+        status=status,
+        priority=priority,
+        source=source,
+        linked_ledger_entry_id=linked_ledger_entry_id,
+        source_message_ids=list(source_message_ids or []),
+        tags=list(tags or []),
+        metadata_payload={"created_by": "workspace_api"},
+        completed_at=now if status == "completed" else None,
+        created_at=now,
+        updated_at=now,
+    )
+    db_session.add(item)
+    record.updated_at = now
+    db_session.commit()
+    db_session.refresh(item)
+    return _serialize_notebook_item(item)
+
+
+def update_planning_notebook_item(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    notebook_item_id: str,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    item = db_session.scalar(
+        select(PersistedPlanningNotebookItem)
+        .where(PersistedPlanningNotebookItem.trip_id == trip_id)
+        .where(PersistedPlanningNotebookItem.notebook_item_id == notebook_item_id)
+    )
+    if item is None:
+        raise WorkspaceTripNotFoundError(f"Notebook item '{notebook_item_id}' was not found.")
+    if updates.get("category") is not None:
+        item.category = _validate_notebook_choice(
+            "category", str(updates["category"]), PLANNING_NOTEBOOK_CATEGORIES
+        )
+    if updates.get("priority") is not None:
+        item.priority = _validate_notebook_choice(
+            "priority", str(updates["priority"]), PLANNING_NOTEBOOK_PRIORITIES
+        )
+    if updates.get("status") is not None:
+        new_status = _validate_notebook_choice(
+            "status", str(updates["status"]), PLANNING_NOTEBOOK_STATUSES
+        )
+        now = datetime.now(UTC)
+        if new_status == "completed" and item.status != "completed":
+            item.completed_at = now
+        elif new_status != "completed":
+            item.completed_at = None
+        item.status = new_status
+    for field in ("title", "note", "linked_ledger_entry_id"):
+        if updates.get(field) is not None:
+            setattr(item, field, updates[field])
+    if updates.get("source_message_ids") is not None:
+        item.source_message_ids = list(updates["source_message_ids"])
+    if updates.get("tags") is not None:
+        item.tags = list(updates["tags"])
+    now = datetime.now(UTC)
+    item.updated_at = now
+    record.updated_at = now
+    db_session.commit()
+    db_session.refresh(item)
+    return _serialize_notebook_item(item)
+
+
+def delete_planning_notebook_item(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    notebook_item_id: str,
+) -> None:
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    item = db_session.scalar(
+        select(PersistedPlanningNotebookItem)
+        .where(PersistedPlanningNotebookItem.trip_id == trip_id)
+        .where(PersistedPlanningNotebookItem.notebook_item_id == notebook_item_id)
+    )
+    if item is None:
+        raise WorkspaceTripNotFoundError(f"Notebook item '{notebook_item_id}' was not found.")
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    if session_record.notebook_focus_item_id == notebook_item_id:
+        session_record.notebook_focus_item_id = None
+    db_session.delete(item)
+    record.updated_at = datetime.now(UTC)
+    db_session.commit()
+
+
+def set_planning_notebook_focus(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    category: str | None,
+    notebook_item_id: str | None,
+) -> dict[str, Any]:
+    if category is not None:
+        _validate_notebook_choice("category", category, PLANNING_NOTEBOOK_CATEGORIES)
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    if notebook_item_id is not None:
+        item = db_session.scalar(
+            select(PersistedPlanningNotebookItem)
+            .where(PersistedPlanningNotebookItem.trip_id == trip_id)
+            .where(PersistedPlanningNotebookItem.notebook_item_id == notebook_item_id)
+        )
+        if item is None:
+            raise WorkspaceTripNotFoundError(f"Notebook item '{notebook_item_id}' was not found.")
+        if category is None:
+            category = item.category
+        elif category != item.category:
+            raise ValueError(
+                f"category '{category}' does not match notebook item category '{item.category}'."
+            )
+    session_record.notebook_focus_category = category
+    session_record.notebook_focus_item_id = notebook_item_id
+    record.updated_at = datetime.now(UTC)
+    db_session.commit()
+    return {"category": category, "notebook_item_id": notebook_item_id}
 
 
 def _current_workspace_option_set(
@@ -2285,6 +3820,7 @@ def answer_workspace_planner_decision(
     trip_id: str,
     decision_id: str,
     choice: str,
+    include_debug: bool = True,
 ) -> dict[str, Any]:
     record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
@@ -2333,8 +3869,29 @@ def answer_workspace_planner_decision(
         choice=choice,
         payload={"decision_title": matching.title},
     )
+    _add_planning_ledger_entry(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        item_type="decision",
+        status="completed",
+        category="decisions",
+        summary=f"{matching.title}: {choice}",
+        detail=matching.prompt,
+        source_refs=[activity_event_id],
+        related_decision_id=decision_id,
+        metadata={"choice": choice},
+    )
     db_session.commit()
-    return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
+    return (
+        get_workspace_payload(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            include_debug=include_debug,
+        )
+        or {}
+    )
 
 
 def submit_workspace_option_feedback(
@@ -2345,6 +3902,7 @@ def submit_workspace_option_feedback(
     option_id: str,
     action_type: str,
     decision_id: str | None = None,
+    include_debug: bool = True,
 ) -> dict[str, Any]:
     record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
@@ -2451,5 +4009,206 @@ def submit_workspace_option_feedback(
         option_id=option_id,
         payload={"summary": summary},
     )
+    ledger_type = "option_rejected" if action_type == "reject" else "option_considered"
+    ledger_status = (
+        "rejected"
+        if action_type == "reject"
+        else (
+            "completed"
+            if action_type == "accept"
+            else "deferred" if action_type == "save_as_fallback" else "active"
+        )
+    )
+    _add_planning_ledger_entry(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        item_type=ledger_type,
+        status=ledger_status,
+        summary=summary,
+        detail=f"Planner panel feedback action: {action_type}",
+        source_refs=[activity_event_id],
+        related_option_id=option_id,
+        related_decision_id=decision_id,
+        metadata={"action_type": action_type, "option_set_id": option_set_id},
+    )
     db_session.commit()
-    return get_workspace_payload(db_session, user=user, trip_id=trip_id) or {}
+    return (
+        get_workspace_payload(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            include_debug=include_debug,
+        )
+        or {}
+    )
+
+
+def _without_route_option_notes(notes: list[str], option_id: str) -> list[str]:
+    managed_prefixes = ("fallback:", "needs_research:")
+    managed_tokens = {f"{prefix}{option_id}" for prefix in managed_prefixes}
+    return [note for note in notes if note not in managed_tokens]
+
+
+def submit_workspace_route_option_action(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    option_id: str,
+    action_type: str,
+    include_debug: bool = True,
+) -> dict[str, Any]:
+    if action_type not in ROUTE_OPTION_ACTIONS:
+        raise ValueError(f"action_type must be one of {', '.join(ROUTE_OPTION_ACTIONS)}")
+
+    record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    session_record = _get_or_create_workspace_session_record(db_session, record=record)
+    session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
+    option_set_id, valid_option_ids = _current_workspace_option_set(session, trip_id=trip_id)
+    if option_id not in valid_option_ids:
+        raise ValueError(
+            f"Route option '{option_id}' is not available in the current workspace comparison."
+        )
+
+    presentation = (
+        session.recent_option_presentations[0]
+        if session.recent_option_presentations
+        else _default_workspace_presentation(trip_id, session.updated_at)
+    )
+    presentation.surfaced_option_ids = valid_option_ids
+    presentation.option_set_id = option_set_id
+    if presentation.highlighted_option_id not in valid_option_ids:
+        presentation.highlighted_option_id = valid_option_ids[0]
+    if presentation.selected_option_id not in valid_option_ids:
+        presentation.selected_option_id = None
+    presentation.rejected_option_ids = [
+        item for item in presentation.rejected_option_ids if item in valid_option_ids
+    ]
+    presentation.notes = _without_route_option_notes(list(presentation.notes), option_id)
+
+    if action_type == "make_baseline":
+        presentation.selected_option_id = option_id
+        presentation.rejected_option_ids = [
+            item for item in presentation.rejected_option_ids if item != option_id
+        ]
+        event_kind = "decision_recorded"
+        summary = f"Traveler made route option '{option_id}' the comparison baseline."
+    elif action_type == "keep":
+        presentation.rejected_option_ids = [
+            item for item in presentation.rejected_option_ids if item != option_id
+        ]
+        if presentation.selected_option_id == option_id:
+            presentation.selected_option_id = None
+        presentation.notes.append(f"fallback:{option_id}")
+        event_kind = "decision_recorded"
+        summary = f"Traveler kept route option '{option_id}' for later comparison."
+    elif action_type == "reject":
+        if option_id not in presentation.rejected_option_ids:
+            presentation.rejected_option_ids.append(option_id)
+        if presentation.selected_option_id == option_id:
+            presentation.selected_option_id = None
+        event_kind = "option_rejected"
+        summary = f"Traveler rejected route option '{option_id}'."
+    elif action_type == "reopen":
+        presentation.rejected_option_ids = [
+            item for item in presentation.rejected_option_ids if item != option_id
+        ]
+        event_kind = "decision_recorded"
+        summary = f"Traveler reopened route option '{option_id}' for comparison."
+    else:
+        presentation.rejected_option_ids = [
+            item for item in presentation.rejected_option_ids if item != option_id
+        ]
+        presentation.notes.append(f"needs_research:{option_id}")
+        session.interaction_state.auto_advance_research_passes += 1
+        event_kind = "rerank_requested"
+        summary = f"Traveler asked the planner to revise route option '{option_id}'."
+
+    presentation.summary = summary
+    session.recent_option_presentations = [presentation]
+    session.updated_at = _isoformat(datetime.now(UTC))
+    session.notes.append(f"route-option:{action_type}:{option_id}")
+    if action_type == "revise" and not session.pending_decisions:
+        session.pending_decisions = [
+            PendingDecision(
+                decision_id=f"decision:{trip_id}:route-option-revision",
+                title="Confirm route revision focus",
+                prompt="Should the planner revise this route before comparing options again?",
+                created_at=session.updated_at,
+                choices=[
+                    "Revise this route option.",
+                    "Keep comparing the current options.",
+                ],
+                related_option_set_id=option_set_id,
+                notes=["Generated after a route-option revision request."],
+            )
+        ]
+
+    session_record.recent_option_presentations = [
+        item.to_dict() for item in session.recent_option_presentations
+    ]
+    session_record.pending_decisions = [item.to_dict() for item in session.pending_decisions]
+    session_record.interaction_state = session.interaction_state.to_dict()
+    session_record.notes = list(session.notes)
+    session_record.last_updated_at = session.updated_at
+    record.updated_at = datetime.now(UTC)
+    activity_event_id = f"activity:{trip_id}:{secrets.token_hex(4)}"
+    occurred_at = _isoformat(datetime.now(UTC))
+    _append_activity_event(
+        db_session,
+        activity_event_id=activity_event_id,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        occurred_at=occurred_at,
+        event_kind=event_kind,
+        summary=summary,
+        related_option_set_id=option_set_id,
+        metadata={"action_type": action_type, "option_id": option_id},
+    )
+    _record_planner_action(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        activity_event_id=activity_event_id,
+        occurred_at=occurred_at,
+        action_type=f"route_option_{action_type}",
+        option_set_id=option_set_id,
+        option_id=option_id,
+        payload={
+            "summary": summary,
+            "route_option_action": action_type,
+        },
+    )
+    ledger_type = "option_rejected" if action_type == "reject" else "option_considered"
+    ledger_status = (
+        "rejected"
+        if action_type == "reject"
+        else (
+            "completed"
+            if action_type == "make_baseline"
+            else "deferred" if action_type == "keep" else "active"
+        )
+    )
+    _add_planning_ledger_entry(
+        db_session,
+        trip_id=trip_id,
+        session_state_id=session.session_state_id,
+        item_type=ledger_type,
+        status=ledger_status,
+        summary=summary,
+        detail=f"Route option action: {action_type}",
+        source_refs=[activity_event_id],
+        related_option_id=option_id,
+        metadata={"action_type": action_type, "option_set_id": option_set_id},
+    )
+    db_session.commit()
+    return (
+        get_workspace_payload(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            include_debug=include_debug,
+        )
+        or {}
+    )

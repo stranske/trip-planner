@@ -26,6 +26,14 @@ export type TripRecord = {
 };
 
 export type PlanningMode = "delegated" | "collaborative" | "revealed-preference" | "in-trip";
+export type RouteOptionState = "active" | "baseline" | "fallback" | "rejected" | "needs_research";
+export type RouteOptionActionType = "make_baseline" | "keep" | "reject" | "reopen" | "revise";
+
+export type RouteOptionAction = {
+  action_type: RouteOptionActionType;
+  label: string;
+  description: string;
+};
 
 export type SessionState = {
   current_saved_scenario_id: string | null;
@@ -226,6 +234,14 @@ export type RuntimeScenarioComparison = {
     title: string;
     rank: number;
     status: string;
+    state?: RouteOptionState;
+    route_option_id?: string;
+    purpose?: string;
+    confidence?: number;
+    unresolved_questions?: string[];
+    open_question?: string | null;
+    available_actions?: RouteOptionAction[];
+    available_action?: RouteOptionAction | null;
     summary: string;
     comparison_note: string;
     option_count: number;
@@ -249,6 +265,46 @@ export type RuntimeScenarioComparison = {
       estimated_total_delta: number | null;
     };
     highlights: string[];
+    map_view?: {
+      active_scope: "global" | "regional" | "local";
+      active_route_option_id: string;
+      selected_segment_id: string | null;
+      place_markers: Array<{
+        id: string;
+        source_id: string;
+        label: string;
+        route_index: number;
+        x: number;
+        y: number;
+      }>;
+      rough_route_geometry: Array<{
+        id: string;
+        from_marker_id: string;
+        to_marker_id: string;
+        from_label: string;
+        to_label: string;
+        x1: number;
+        y1: number;
+        x2: number;
+        y2: number;
+        warning: string | null;
+      }>;
+      confidence: {
+        level: "high" | "medium" | "low";
+        summary: string;
+      };
+    };
+    map_diagnostics?: {
+      provider: {
+        kind: string;
+        status: string;
+        details: string;
+      };
+      route_state: "ready" | "sparse";
+      route_warning: string | null;
+      source_result_id: string;
+      objective_refs: string[];
+    };
   }>;
   source_refs: string[];
 };
@@ -300,6 +356,106 @@ export type PlannerMemoryState = {
   artifacts: PlannerMemoryArtifact[];
 };
 
+export type PlanningLedgerEntryType =
+  | "option_considered"
+  | "option_rejected"
+  | "decision"
+  | "assumption"
+  | "open_question"
+  | "constraint"
+  | "source_reference";
+
+export type PlanningLedgerEntryStatus =
+  | "active"
+  | "completed"
+  | "rejected"
+  | "superseded"
+  | "deferred";
+
+export type PlanningLedgerEntry = {
+  ledger_entry_id: string;
+  trip_id: string;
+  session_state_id: string;
+  item_type: PlanningLedgerEntryType;
+  status: PlanningLedgerEntryStatus;
+  category: string;
+  summary: string;
+  detail: string;
+  source_message_ids: string[];
+  source_refs: string[];
+  related_option_id: string | null;
+  related_decision_id: string | null;
+  supersedes_entry_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlanningLedgerState = {
+  entries: PlanningLedgerEntry[];
+  summary: {
+    active_decisions: PlanningLedgerEntry[];
+    open_questions: PlanningLedgerEntry[];
+    active_options: PlanningLedgerEntry[];
+    rejected_options: PlanningLedgerEntry[];
+    constraints: PlanningLedgerEntry[];
+    assumptions: PlanningLedgerEntry[];
+    source_references: PlanningLedgerEntry[];
+  };
+};
+
+export type NotebookCategory =
+  | "route"
+  | "lodging"
+  | "activities"
+  | "budget"
+  | "documents"
+  | "policy"
+  | "other";
+
+export type NotebookStatus = "active" | "completed" | "archived";
+export type NotebookPriority = "low" | "normal" | "high";
+export type NotebookSource = "user" | "planner";
+
+export type PlanningNotebookItem = {
+  notebook_item_id: string;
+  trip_id: string;
+  session_state_id: string;
+  title: string;
+  note: string;
+  category: NotebookCategory;
+  status: NotebookStatus;
+  priority: NotebookPriority;
+  source: NotebookSource;
+  linked_ledger_entry_id: string | null;
+  source_message_ids: string[];
+  tags: string[];
+  metadata: Record<string, unknown>;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlanningNotebookSummary = {
+  total_count: number;
+  active_count: number;
+  completed_count: number;
+  active_items: PlanningNotebookItem[];
+  completed_items: PlanningNotebookItem[];
+  by_category: Record<string, PlanningNotebookItem[]>;
+};
+
+export type PlanningNotebookFocus = {
+  category: NotebookCategory | null;
+  notebook_item_id: string | null;
+};
+
+export type PlanningNotebookState = {
+  items: PlanningNotebookItem[];
+  summary: PlanningNotebookSummary;
+  focus: PlanningNotebookFocus;
+};
+
 export type ActivityLogEntry = {
   activity_event_id: string;
   occurred_at: string;
@@ -316,6 +472,26 @@ export type PlannerToolCallResponse = {
   output: Record<string, unknown>;
 };
 
+export type PlannerTurnMetadata = {
+  plan_maturity: string;
+  task_class: string;
+  visible_response_blocks: Array<{
+    kind: string;
+    title: string;
+    items: string[];
+  }>;
+  debug_routing_details: Record<string, unknown>;
+};
+
+export type PlannerStructuredBlock = {
+  kind: string;
+  title: string;
+  body: string;
+  items: string[];
+  metadata: Record<string, unknown>;
+  hidden: boolean;
+};
+
 export type PlannerMessage = {
   message_id: string;
   role: "user" | "planner" | string;
@@ -323,6 +499,8 @@ export type PlannerMessage = {
   created_at: string;
   refs: string[];
   tool_calls: PlannerToolCallResponse[];
+  structured_blocks: PlannerStructuredBlock[];
+  turn_metadata?: PlannerTurnMetadata | null;
 };
 
 export type PlannerSessionResponse = {
@@ -343,6 +521,68 @@ export type PlannerSessionResponse = {
   messages: PlannerMessage[];
 };
 
+export type WorkspaceUserSummary = {
+  trip_title: string;
+  trip_mode: "leisure" | "business";
+  mode_label: string;
+  status: "ready" | "partial" | "empty";
+  headline: string;
+  decided: string[];
+  uncertain: string[];
+};
+
+export type WorkspaceNextStep = {
+  title: string;
+  summary: string;
+  action_label: string | null;
+  action_target: string | null;
+  blocked: boolean;
+};
+
+export type WorkspaceBusinessSummary = {
+  approval_status:
+    | "not_applicable"
+    | "not_ready"
+    | "in_review"
+    | "approved"
+    | "needs_attention";
+  headline: string;
+  blockers: string[];
+};
+
+export type WorkspaceDebugSection = {
+  title: string;
+  payload: unknown;
+};
+
+export type WorkspaceDebugState = {
+  sections: Record<string, WorkspaceDebugSection>;
+};
+
+export type WorkspacePanelVisibility = {
+  show_budget_panel: boolean;
+  show_policy_posture: boolean;
+  show_proposal_panel: boolean;
+  show_approval_readiness_panel: boolean;
+};
+
+export type WorkspacePolicyPresentation = {
+  active_policy_state: boolean;
+  posture_label: string;
+  approval_status_label: string;
+  next_step_label: string;
+  summary: string;
+};
+
+export type WorkspaceViewModel = {
+  user_summary: WorkspaceUserSummary;
+  next_step: WorkspaceNextStep;
+  panel_visibility: WorkspacePanelVisibility;
+  policy_presentation: WorkspacePolicyPresentation;
+  business_summary: WorkspaceBusinessSummary | null;
+  debug_state: WorkspaceDebugState;
+};
+
 export type WorkspaceData = {
   trip_record: TripRecord;
   session: SessionState;
@@ -358,6 +598,8 @@ export type WorkspaceData = {
   runtime_scenario_comparison: RuntimeScenarioComparison;
   activity_log: ActivityLogEntry[];
   planner_memory: PlannerMemoryState;
+  planning_ledger?: PlanningLedgerState;
+  planning_notebook?: PlanningNotebookState;
   planner_panel_state: PlannerPanelState;
   runtime_state: {
     status: "ready" | "partial" | "empty";
@@ -470,6 +712,7 @@ export type WorkspaceData = {
       follow_up_summary?: string;
     };
   } | null;
+  view_model: WorkspaceViewModel | null;
 };
 
 export type BudgetPlanUpsertPayload = {
@@ -583,6 +826,50 @@ export async function updateWorkspacePlanningMode(
   });
 }
 
+export async function createPlanningLedgerEntry(
+  tripId: string,
+  payload: {
+    item_type: PlanningLedgerEntryType;
+    status?: PlanningLedgerEntryStatus;
+    category?: string;
+    summary: string;
+    detail?: string;
+    source_message_ids?: string[];
+    source_refs?: string[];
+    related_option_id?: string | null;
+    related_decision_id?: string | null;
+  }
+): Promise<PlanningLedgerEntry> {
+  return fetchJson<PlanningLedgerEntry>({
+    path: `/api/workspace/${tripId}/planning-ledger`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updatePlanningLedgerEntry(
+  tripId: string,
+  ledgerEntryId: string,
+  payload: Partial<Pick<
+    PlanningLedgerEntry,
+    "status" | "category" | "summary" | "detail" | "source_message_ids" | "source_refs" | "supersedes_entry_id"
+  >>
+): Promise<PlanningLedgerEntry> {
+  return fetchJson<PlanningLedgerEntry>({
+    path: `/api/workspace/${tripId}/planning-ledger/${ledgerEntryId}`,
+    method: "PATCH",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function submitPlannerOptionFeedback(
   tripId: string,
   optionId: string,
@@ -599,6 +886,24 @@ export async function submitPlannerOptionFeedback(
     body: JSON.stringify({
       action_type: actionType,
       decision_id: decisionId,
+    }),
+  });
+}
+
+export async function submitRouteOptionAction(
+  tripId: string,
+  optionId: string,
+  actionType: RouteOptionActionType
+): Promise<WorkspaceData> {
+  return fetchJson<WorkspaceData>({
+    path: `/api/workspace/${tripId}/route-options/${optionId}/action`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      action_type: actionType,
     }),
   });
 }
@@ -629,6 +934,63 @@ export async function recordWorkspaceSpendEvent(
     headers: {
       "Content-Type": "application/json",
     },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createNotebookItem(
+  tripId: string,
+  payload: {
+    title: string;
+    category: NotebookCategory;
+    note?: string;
+    priority?: NotebookPriority;
+    linked_ledger_entry_id?: string | null;
+  }
+): Promise<PlanningNotebookItem> {
+  return fetchJson<PlanningNotebookItem>({
+    path: `/api/workspace/${tripId}/planning-notebook`,
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateNotebookItem(
+  tripId: string,
+  notebookItemId: string,
+  payload: Partial<Pick<PlanningNotebookItem, "title" | "note" | "category" | "status" | "priority">>
+): Promise<PlanningNotebookItem> {
+  return fetchJson<PlanningNotebookItem>({
+    path: `/api/workspace/${tripId}/planning-notebook/${notebookItemId}`,
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteNotebookItem(
+  tripId: string,
+  notebookItemId: string
+): Promise<void> {
+  await fetchJson<unknown>({
+    path: `/api/workspace/${tripId}/planning-notebook/${notebookItemId}`,
+    method: "DELETE",
+    credentials: "include",
+  });
+}
+
+export async function setNotebookFocus(
+  tripId: string,
+  payload: { category?: NotebookCategory | null; notebook_item_id?: string | null }
+): Promise<PlanningNotebookFocus> {
+  return fetchJson<PlanningNotebookFocus>({
+    path: `/api/workspace/${tripId}/planning-notebook/focus`,
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 }

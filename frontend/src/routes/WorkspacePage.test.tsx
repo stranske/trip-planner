@@ -6,13 +6,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiClientError } from "../lib/api/errors";
 import {
   answerPlannerDecision,
+  createNotebookItem,
+  deleteNotebookItem,
   fetchPlannerSession,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
   saveWorkspaceBudget,
+  setNotebookFocus,
   submitPlannerTurn,
   submitPlannerOptionFeedback,
+  submitRouteOptionAction,
+  updateNotebookItem,
   updateWorkspacePlanningMode,
+  type PlanningLedgerEntry,
   type PlannerSessionResponse,
   type WorkspaceData,
 } from "../api/workspace";
@@ -27,11 +33,16 @@ vi.mock("../api/workspace", async () => {
     answerPlannerDecision: vi.fn(),
     fetchPlannerSession: vi.fn(),
     submitPlannerOptionFeedback: vi.fn(),
+    submitRouteOptionAction: vi.fn(),
     submitPlannerTurn: vi.fn(),
     updateWorkspacePlanningMode: vi.fn(),
     saveWorkspaceBudget: vi.fn(),
     recordWorkspaceSpendEvent: vi.fn(),
     refreshWorkspaceProposalStatus: vi.fn(),
+    createNotebookItem: vi.fn(),
+    updateNotebookItem: vi.fn(),
+    deleteNotebookItem: vi.fn(),
+    setNotebookFocus: vi.fn(),
   };
 });
 
@@ -47,11 +58,16 @@ const mockedUseLoaderData = vi.mocked(useLoaderData);
 const mockedAnswerPlannerDecision = vi.mocked(answerPlannerDecision);
 const mockedFetchPlannerSession = vi.mocked(fetchPlannerSession);
 const mockedSubmitPlannerOptionFeedback = vi.mocked(submitPlannerOptionFeedback);
+const mockedSubmitRouteOptionAction = vi.mocked(submitRouteOptionAction);
 const mockedSubmitPlannerTurn = vi.mocked(submitPlannerTurn);
 const mockedUpdateWorkspacePlanningMode = vi.mocked(updateWorkspacePlanningMode);
 const mockedSaveWorkspaceBudget = vi.mocked(saveWorkspaceBudget);
 const mockedRecordWorkspaceSpendEvent = vi.mocked(recordWorkspaceSpendEvent);
 const mockedRefreshWorkspaceProposalStatus = vi.mocked(refreshWorkspaceProposalStatus);
+const mockedCreateNotebookItem = vi.mocked(createNotebookItem);
+const mockedUpdateNotebookItem = vi.mocked(updateNotebookItem);
+const mockedDeleteNotebookItem = vi.mocked(deleteNotebookItem);
+const mockedSetNotebookFocus = vi.mocked(setNotebookFocus);
 const tripComparisonPayload: TripRecord[] = [
   {
     trip_id: "trip-leisure-kyoto-draft",
@@ -692,6 +708,7 @@ const workspacePayload = {
       },
     ],
   },
+  view_model: null,
 } satisfies WorkspaceData;
 
 const plannerSessionPayload = {
@@ -723,6 +740,7 @@ const plannerSessionPayload = {
       created_at: "2026-04-12T06:09:00+00:00",
       refs: ["session:trip-leisure-kyoto-draft"],
       tool_calls: [],
+      structured_blocks: [],
     },
     {
       message_id: "planner-action:trip-leisure-kyoto-draft:planner-1",
@@ -731,6 +749,7 @@ const plannerSessionPayload = {
       created_at: "2026-04-12T06:10:00+00:00",
       refs: ["session:trip-leisure-kyoto-draft", "scenario:trip-leisure-kyoto-draft:1"],
       tool_calls: [],
+      structured_blocks: [],
     },
   ],
 } satisfies PlannerSessionResponse;
@@ -772,6 +791,7 @@ describe("WorkspacePage", () => {
   beforeEach(() => {
     mockedFetchPlannerSession.mockResolvedValue(plannerSessionPayload);
     mockedSubmitPlannerTurn.mockResolvedValue(plannerSessionPayload);
+    mockedSubmitRouteOptionAction.mockResolvedValue(workspacePayload);
   });
 
   afterEach(() => {
@@ -786,11 +806,296 @@ describe("WorkspacePage", () => {
     mockedAnswerPlannerDecision.mockReset();
     mockedFetchPlannerSession.mockReset();
     mockedSubmitPlannerOptionFeedback.mockReset();
+    mockedSubmitRouteOptionAction.mockReset();
     mockedSubmitPlannerTurn.mockReset();
     mockedUpdateWorkspacePlanningMode.mockReset();
     mockedSaveWorkspaceBudget.mockReset();
     mockedRecordWorkspaceSpendEvent.mockReset();
     mockedRefreshWorkspaceProposalStatus.mockReset();
+    mockedCreateNotebookItem.mockReset();
+    mockedUpdateNotebookItem.mockReset();
+    mockedDeleteNotebookItem.mockReset();
+    mockedSetNotebookFocus.mockReset();
+  });
+
+  it("does not render raw runtime/provider/debug labels for default leisure workspaces", async () => {
+    const leisureWorkspaceWithViewModel: WorkspaceData = {
+      ...workspacePayload,
+      view_model: {
+        user_summary: {
+          trip_title: workspacePayload.trip_record.trip.title,
+          trip_mode: "leisure",
+          mode_label: "Leisure trip",
+          status: "ready",
+          headline: "Your trip plan is ready to review.",
+          decided: ["2 saved scenario draft(s)"],
+          uncertain: [],
+        },
+        next_step: {
+          title: "Review and pick a scenario",
+          summary:
+            "Compare the saved scenarios and choose one to keep planning around.",
+          action_label: "Open scenario comparison",
+          action_target: "scenario-comparison",
+          blocked: false,
+        },
+        panel_visibility: {
+          show_budget_panel: true,
+          show_policy_posture: false,
+          show_proposal_panel: false,
+          show_approval_readiness_panel: false,
+        },
+        policy_presentation: {
+          active_policy_state: false,
+          posture_label: "Not applicable",
+          approval_status_label: "Not applicable",
+          next_step_label: "No policy action needed",
+          summary: "Policy approval is not part of this workspace yet.",
+        },
+        business_summary: null,
+        debug_state: { sections: {} },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(leisureWorkspaceWithViewModel),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length
+      ).toBeGreaterThan(0);
+    });
+    expect(screen.getByText("Leisure trip")).toBeInTheDocument();
+    expect(screen.getByText("Your trip plan is ready to review.")).toBeInTheDocument();
+    expect(screen.getByText("2 saved scenario draft(s)")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review and pick a scenario" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Compare the saved scenarios and choose one to keep planning around.")
+    ).toBeInTheDocument();
+    const helpDisclosure = screen.getByText("How to use this trip workspace").closest("details");
+    expect(helpDisclosure).not.toBeNull();
+    expect(helpDisclosure).not.toHaveAttribute("open");
+
+    const renderedText = document.body.textContent ?? "";
+    const forbiddenRawLabels = [
+      "runtime provider",
+      "fallback mode",
+      "trip-scoped",
+      "runtime-backed",
+      "api client",
+      "policy_state_id",
+      "proposal_state_id",
+      "session_state_id",
+      "scenario_search_id",
+    ];
+    for (const label of forbiddenRawLabels) {
+      expect(renderedText.toLowerCase()).not.toContain(label.toLowerCase());
+    }
+  });
+
+  it("renders planning ledger summary buckets including rejected options and sources", async () => {
+    const ledgerTimestamp = "2026-04-12T06:10:00+00:00";
+    const makeLedgerEntry = (
+      overrides: Partial<PlanningLedgerEntry>
+    ): PlanningLedgerEntry => ({
+      ledger_entry_id: "ledger:test-entry",
+      trip_id: "trip-leisure-kyoto-draft",
+      session_state_id: "session:trip-leisure-kyoto-draft",
+      item_type: "decision",
+      status: "active",
+      category: "decision",
+      summary: "Keep Kyoto as the baseline.",
+      detail: "",
+      source_message_ids: [],
+      source_refs: [],
+      related_option_id: null,
+      related_decision_id: null,
+      supersedes_entry_id: null,
+      metadata: {},
+      created_at: ledgerTimestamp,
+      updated_at: ledgerTimestamp,
+      ...overrides,
+    });
+    const decisionEntry = makeLedgerEntry({
+      ledger_entry_id: "ledger:decision",
+      item_type: "decision",
+      summary: "Keep Kyoto as the baseline.",
+    });
+    const rejectedEntry = makeLedgerEntry({
+      ledger_entry_id: "ledger:rejected-option",
+      item_type: "option_rejected",
+      status: "rejected",
+      category: "route_options",
+      summary: "Reject Osaka-heavy fallback for this trip.",
+      related_option_id: "scenario:trip-leisure-kyoto-draft:2",
+    });
+    const sourceEntry = makeLedgerEntry({
+      ledger_entry_id: "ledger:source",
+      item_type: "source_reference",
+      category: "sources",
+      summary: "Traveler preferred lower transfer pressure.",
+      source_refs: ["planner-action:trip-leisure-kyoto-draft:user-2"],
+    });
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        planning_ledger: {
+          entries: [decisionEntry, rejectedEntry, sourceEntry],
+          summary: {
+            active_decisions: [decisionEntry],
+            open_questions: [],
+            active_options: [],
+            rejected_options: [rejectedEntry],
+            constraints: [],
+            assumptions: [],
+            source_references: [sourceEntry],
+          },
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    const ledgerPanel = await screen.findByLabelText("Planning ledger");
+    expect(within(ledgerPanel).getByRole("heading", { name: "Decisions" })).toBeInTheDocument();
+    expect(within(ledgerPanel).getByText("Keep Kyoto as the baseline.")).toBeInTheDocument();
+    expect(
+      within(ledgerPanel).getByRole("heading", { name: "Rejected options" })
+    ).toBeInTheDocument();
+    expect(
+      within(ledgerPanel).getByText("Reject Osaka-heavy fallback for this trip.")
+    ).toBeInTheDocument();
+    expect(within(ledgerPanel).getByRole("heading", { name: "Sources" })).toBeInTheDocument();
+    expect(
+      within(ledgerPanel).getByText("Traveler preferred lower transfer pressure.")
+    ).toBeInTheDocument();
+  });
+
+  it("does not render policy posture, proposal lifecycle, approval packet, or tpp label elements for leisure mode when advanced debug is disabled", async () => {
+    const leisureWorkspaceWithViewModel: WorkspaceData = {
+      ...workspacePayload,
+      view_model: {
+        user_summary: {
+          trip_title: workspacePayload.trip_record.trip.title,
+          trip_mode: "leisure",
+          mode_label: "Leisure trip",
+          status: "ready",
+          headline: "Your trip plan is ready to review.",
+          decided: ["2 saved scenario draft(s)"],
+          uncertain: [],
+        },
+        next_step: {
+          title: "Review and pick a scenario",
+          summary: "Compare the saved scenarios and choose one to keep planning around.",
+          action_label: "Open scenario comparison",
+          action_target: "scenario-comparison",
+          blocked: false,
+        },
+        panel_visibility: {
+          show_budget_panel: true,
+          show_policy_posture: false,
+          show_proposal_panel: false,
+          show_approval_readiness_panel: false,
+        },
+        policy_presentation: {
+          active_policy_state: false,
+          posture_label: "Not applicable",
+          approval_status_label: "Not applicable",
+          next_step_label: "No policy action needed",
+          summary: "Policy approval is not part of this workspace yet.",
+        },
+        business_summary: null,
+        debug_state: { sections: {} },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(leisureWorkspaceWithViewModel),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length
+      ).toBeGreaterThan(0);
+    });
+
+    const suppressedSelectors = [
+      "policy-posture",
+      "proposal-lifecycle",
+      "approval-packet",
+      "tpp-label",
+    ] as const;
+    for (const selector of suppressedSelectors) {
+      expect(screen.queryAllByTestId(selector)).toHaveLength(0);
+      expect(screen.queryAllByLabelText(selector)).toHaveLength(0);
+    }
+  });
+
+  it("renders policy posture, proposal lifecycle, approval packet, and tpp label elements for leisure mode when advanced debug is enabled", async () => {
+    const leisureWorkspaceWithAdvancedViewModel: WorkspaceData = {
+      ...workspacePayload,
+      view_model: {
+        user_summary: {
+          trip_title: workspacePayload.trip_record.trip.title,
+          trip_mode: "leisure",
+          mode_label: "Leisure trip",
+          status: "ready",
+          headline: "Your trip plan is ready to review.",
+          decided: ["2 saved scenario draft(s)"],
+          uncertain: [],
+        },
+        next_step: {
+          title: "Review and pick a scenario",
+          summary: "Compare the saved scenarios and choose one to keep planning around.",
+          action_label: "Open scenario comparison",
+          action_target: "scenario-comparison",
+          blocked: false,
+        },
+        panel_visibility: {
+          show_budget_panel: true,
+          show_policy_posture: true,
+          show_proposal_panel: true,
+          show_approval_readiness_panel: true,
+        },
+        policy_presentation: {
+          active_policy_state: true,
+          posture_label: "Approval-ready",
+          approval_status_label: "Ready for approval",
+          next_step_label: "Advance to approval",
+          summary: "Policy evaluation passed for the saved scenario.",
+        },
+        business_summary: null,
+        debug_state: { sections: {} },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(leisureWorkspaceWithAdvancedViewModel),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length
+      ).toBeGreaterThan(0);
+    });
+
+    expect(screen.getAllByTestId("policy-posture")[0]).toHaveTextContent("Approval-ready");
+    expect(screen.getByTestId("proposal-lifecycle")).toHaveTextContent(
+      "Approval packet is ready"
+    );
+    expect(screen.getByTestId("approval-packet")).toHaveTextContent("Approval readiness");
+    expect(screen.getByTestId("approval-packet")).toHaveTextContent("Ready for approval");
+    expect(screen.getByTestId("approval-packet")).toHaveTextContent("Advance to approval");
+    expect(screen.getByTestId("tpp-label")).toHaveTextContent("Options and readiness signals");
+    expect(screen.getByTestId("tpp-label")).toHaveTextContent("Advance to approval");
   });
 
   it("renders timeline structure from persisted trip and scenario state", async () => {
@@ -808,41 +1113,41 @@ describe("WorkspacePage", () => {
     const routeContextMap = screen.getByLabelText("Route context map");
 
     expect(screen.getAllByRole("heading", { name: "Kyoto base with Uji day trip" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Map for Kyoto base with Uji day trip" })).toBeInTheDocument();
     expect(within(routeContextMap).getAllByText("Kyoto").length).toBeGreaterThan(0);
     expect(within(routeContextMap).getAllByText("Uji").length).toBeGreaterThan(0);
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
-    expect(screen.getByText("Trip-scoped planner surface")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Planning mode" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Traveler planning workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "How should the planner work?" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Collaborative/ })).toBeChecked();
     await waitFor(() => {
       expect(mockedFetchPlannerSession).toHaveBeenCalledWith("trip-leisure-kyoto-draft");
     });
-    expect(screen.getByRole("heading", { name: "Message the trip planner" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Message your planner" })).toBeInTheDocument();
     await waitFor(() => {
       expect(
         screen.getByText("Compare the Kyoto baseline against the Osaka fallback before locking the plan.")
       ).toBeInTheDocument();
     });
-    expect(screen.getByText("read workspace state")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Compare routes" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Planner tools available")).not.toBeInTheDocument();
     expect(routeContextMap).toBeInTheDocument();
     expect(screen.getByText("Destination context")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Trip rhythm and day sequencing" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Trip rhythm and day sequence" })).toBeInTheDocument();
     expect(screen.getByLabelText("Timeline summary")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Review-ready scenario tradeoffs" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review route tradeoffs" })).toBeInTheDocument();
     expect(screen.getByLabelText("Scenario review board")).toBeInTheDocument();
-    expect(screen.getAllByText("Policy posture").length).toBeGreaterThan(0);
-    expect(
-      screen.getByRole("heading", { name: workspacePayload.inventory_summary.runtime_state.title })
-    ).toBeInTheDocument();
+    expect(screen.getAllByText("Approval posture").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Places and options to review" })).toBeInTheDocument();
     expect(screen.getAllByText("Osaka arrival buffer").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Kyoto cultural anchor").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Approval packet is ready" })).toBeInTheDocument();
-    expect(screen.getByText("approval-ready")).toBeInTheDocument();
+    expect(screen.getByText("Ready for approval")).toBeInTheDocument();
     expect(screen.getAllByText("Advance to approval").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Comparables and readiness signals" })).toBeInTheDocument();
-    expect(screen.getByText("Conference Hotel")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "User-visible planner checkpoints" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Options and readiness signals" })).toBeInTheDocument();
+    expect(screen.queryByText("Conference Hotel")).not.toBeInTheDocument();
+    expect(screen.queryByText("proposal-state:trip-leisure-kyoto-draft")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Planner notes to keep" })).toBeInTheDocument();
     expect(screen.getByText("Planner checkpoint 1")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Compare this workspace with other saved trips" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" })).toBeInTheDocument();
@@ -853,6 +1158,129 @@ describe("WorkspacePage", () => {
       );
       expect(plannerPanel).toBeTruthy();
     });
+  });
+
+  it("hides proposal and approval panels for leisure workspaces without active policy state", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: null,
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length).toBeGreaterThan(0);
+    });
+
+    expect(screen.queryByText("Approval packet")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Options and readiness signals" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Approval posture")).not.toBeInTheDocument();
+    expect(screen.queryByText("Policy posture")).not.toBeInTheDocument();
+  });
+
+  it("keeps business approval readiness visible in user-facing language", async () => {
+    const businessWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      trip_record: {
+        ...workspacePayload.trip_record,
+        trip: {
+          ...workspacePayload.trip_record.trip,
+          trip_id: "trip-business-tokyo-summit",
+          title: "Tokyo client summit",
+          summary: "Business trip with approval-ready policy posture.",
+          mode: "business",
+          status: "active",
+          trip_frame: {
+            ...workspacePayload.trip_record.trip.trip_frame,
+            duration_days: 5,
+            primary_regions: ["Tokyo", "Yokohama"],
+          },
+        },
+      },
+      planner_panel_state: {
+        ...workspacePayload.planner_panel_state,
+        trip: {
+          ...workspacePayload.planner_panel_state.trip,
+          trip_id: "trip-business-tokyo-summit",
+          title: "Tokyo client summit",
+          mode: "business",
+          status: "active",
+        },
+      },
+      view_model: {
+        user_summary: {
+          trip_title: "Tokyo client summit",
+          trip_mode: "business",
+          mode_label: "Business trip",
+          status: "ready",
+          headline: "Approval readiness is available for this trip.",
+          decided: ["Approval packet is ready."],
+          uncertain: [],
+        },
+        next_step: {
+          title: "Review approval packet",
+          summary: "Policy evaluation passed and the packet can move to approval handling.",
+          action_label: "Advance to approval",
+          action_target: "approval",
+          blocked: false,
+        },
+        panel_visibility: {
+          show_budget_panel: true,
+          show_policy_posture: true,
+          show_proposal_panel: true,
+          show_approval_readiness_panel: true,
+        },
+        policy_presentation: {
+          active_policy_state: true,
+          posture_label: "Ready for approval",
+          approval_status_label: "Ready for approval",
+          next_step_label: "Advance to approval",
+          summary: "Policy evaluation passed and the approval packet is ready.",
+        },
+        business_summary: {
+          approval_status: "approved",
+          headline: "Approval packet is ready",
+          blockers: [],
+        },
+        debug_state: {
+          sections: {
+            proposal_state: {
+              title: "Proposal state",
+              payload: workspacePayload.proposal_state,
+            },
+          },
+        },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(businessWorkspace),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("heading", { name: "Tokyo client summit" }).length).toBeGreaterThan(0);
+    });
+
+    expect(screen.getByText("Business trip")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review approval packet" })).toBeInTheDocument();
+    expect(screen.getByText("Approval readiness is available for this trip.")).toBeInTheDocument();
+    expect(screen.getAllByText("Ready for approval").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Advance to approval").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Approval posture").length).toBeGreaterThan(0);
+    expect(screen.getByText("Advanced diagnostics")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain("proposal_state_id");
+
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Proposal diagnostics" })).toBeInTheDocument();
+    });
+    expect(document.body.textContent ?? "").toContain("proposal_state_id");
   });
 
   it("persists planning mode selections through the workspace API", async () => {
@@ -872,7 +1300,7 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Planning mode" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "How should the planner work?" })).toBeInTheDocument();
     });
     await user.click(screen.getByRole("radio", { name: /Delegated/ }));
 
@@ -898,6 +1326,18 @@ describe("WorkspacePage", () => {
           created_at: "2026-04-12T06:15:00+00:00",
           refs: ["session:trip-leisure-kyoto-draft"],
           tool_calls: [],
+          structured_blocks: [
+            {
+              kind: "traveler_input_summary",
+              title: "Traveler input summary",
+              body: "Key details pulled out of the traveler message.",
+              items: ["Preferences: Keep Uji, reduce transfer pressure"],
+              metadata: {
+                preferences: ["Keep Uji, but reduce transfer pressure"],
+              },
+              hidden: false,
+            },
+          ],
         },
         {
           message_id: "planner-action:trip-leisure-kyoto-draft:planner-2",
@@ -905,6 +1345,89 @@ describe("WorkspacePage", () => {
           content: "Keep the Uji day trip and compare fewer evening moves before the next checkpoint.",
           created_at: "2026-04-12T06:16:00+00:00",
           refs: ["session:trip-leisure-kyoto-draft", "scenario:trip-leisure-kyoto-draft:1"],
+          turn_metadata: {
+            plan_maturity: "coherent_plan",
+            task_class: "route_comparison",
+            visible_response_blocks: [
+              {
+                kind: "next_steps",
+                title: "Next planning moves",
+                items: ["Compare fewer evening moves.", "Preserve Uji as the baseline day trip."],
+              },
+            ],
+            debug_routing_details: {
+              runtime_mode: "fallback",
+              runtime_provider: null,
+            },
+          },
+          structured_blocks: [
+            {
+              kind: "summary",
+              title: "Planner summary",
+              body: "Keep the Uji day trip and reduce evening movement.",
+              items: ["Preserve the preferred Kyoto baseline."],
+              metadata: {},
+              hidden: false,
+            },
+            {
+              kind: "question",
+              title: "Questions to settle",
+              body: "",
+              items: ["How much evening variety should the route preserve?"],
+              metadata: {},
+              hidden: false,
+            },
+            {
+              kind: "decision",
+              title: "Open decisions",
+              body: "",
+              items: ["Should the current Kyoto route become the saved baseline?"],
+              metadata: {
+                decision_ids: ["decision:save-baseline"],
+              },
+              hidden: false,
+            },
+            {
+              kind: "route_option",
+              title: "Route options in view",
+              body: "",
+              items: ["Kyoto base with Uji day trip: Balanced Kyoto culture baseline"],
+              metadata: {
+                option_ids: ["scenario:trip-leisure-kyoto-draft:1"],
+              },
+              hidden: false,
+            },
+            {
+              kind: "comparison",
+              title: "Comparison frame",
+              body: "",
+              items: [
+                "Kyoto baseline has fewer transfers; Osaka fallback has more evening variety.",
+              ],
+              metadata: {},
+              hidden: false,
+            },
+            {
+              kind: "next_action",
+              title: "Next actions",
+              body: "",
+              items: ["Compare fewer evening moves.", "Preserve Uji as the baseline day trip."],
+              metadata: {},
+              hidden: false,
+            },
+            {
+              kind: "debug",
+              title: "Planner diagnostics",
+              body: "Routing details and tool traces are hidden from the normal traveler view.",
+              items: [],
+              metadata: {
+                routing: {
+                  runtime_mode: "fallback",
+                },
+              },
+              hidden: true,
+            },
+          ],
           tool_calls: [
             {
               tool_name: "read_workspace_state",
@@ -931,8 +1454,8 @@ describe("WorkspacePage", () => {
       expect(screen.getByText("Can you summarize what I should compare next?")).toBeInTheDocument();
     });
 
-    await user.type(screen.getByLabelText("Message"), "Keep Uji, but reduce transfer pressure.");
-    await user.click(screen.getByRole("button", { name: "Send planner turn" }));
+    await user.type(screen.getByLabelText("Message the planner"), "Keep Uji, but reduce transfer pressure.");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
 
     await waitFor(() => {
       expect(mockedSubmitPlannerTurn).toHaveBeenCalledWith(
@@ -940,11 +1463,46 @@ describe("WorkspacePage", () => {
         "Keep Uji, but reduce transfer pressure."
       );
     });
-    expect(
-      screen.getByText("Keep the Uji day trip and compare fewer evening moves before the next checkpoint.")
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByText("Keep the Uji day trip and compare fewer evening moves before the next checkpoint.")
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByText("coherent plan")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Planner summary" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Questions to settle" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Open decisions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Route options in view" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Comparison frame" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Next actions" })).toBeInTheDocument();
+    expect(screen.getByText("Traveler input summary")).toBeInTheDocument();
+    expect(screen.getByText("Compare fewer evening moves.")).toBeInTheDocument();
+    expect(screen.queryByText("Planner diagnostics")).not.toBeInTheDocument();
+    expect(screen.queryByText("read_workspace_state: Read the current workspace state.")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Diagnostics" }));
+    expect(screen.getByText("Planner diagnostics")).toBeInTheDocument();
     expect(screen.getByText("read_workspace_state: Read the current workspace state.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Message")).toHaveValue("");
+    expect(screen.getByLabelText("Message the planner")).toHaveValue("");
+  });
+
+  it("fills traveler-friendly prompt suggestions into the planner message box", async () => {
+    const user = userEvent.setup();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Summarize decisions" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Summarize decisions" }));
+
+    expect(screen.getByLabelText("Message the planner")).toHaveValue(
+      "Summarize what we have decided, what is still open, and what you recommend next."
+    );
   });
 
   it("labels the planner panel as deterministic fallback when runtime metadata is absent", async () => {
@@ -956,14 +1514,14 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Planner runtime state")).toBeInTheDocument();
+      expect(screen.getByLabelText("Planner availability")).toBeInTheDocument();
     });
 
-    const runtime = screen.getByLabelText("Planner runtime state");
-    expect(within(runtime).getByText("Deterministic fallback planner")).toHaveClass(
+    const runtime = screen.getByLabelText("Planner availability");
+    expect(within(runtime).getByText("Guided planner")).toHaveClass(
       "planner-runtime-pill--fallback"
     );
-    expect(within(runtime).getByText("Fallback")).toBeInTheDocument();
+    expect(within(runtime).getByText("Planning guide")).toBeInTheDocument();
   });
 
   it("merges fetched planner session state into the workspace surface", async () => {
@@ -996,12 +1554,12 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Planner runtime state")).toBeInTheDocument();
+      expect(screen.getByLabelText("Planner availability")).toBeInTheDocument();
     });
 
-    const runtime = screen.getByLabelText("Planner runtime state");
+    const runtime = screen.getByLabelText("Planner availability");
     await waitFor(() => {
-      expect(within(runtime).getByText("Model-backed planner")).toHaveClass(
+      expect(within(runtime).getByText("AI-assisted planner")).toHaveClass(
         "planner-runtime-pill--ready"
       );
     });
@@ -1029,12 +1587,12 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Planner runtime state")).toBeInTheDocument();
+      expect(screen.getByLabelText("Planner availability")).toBeInTheDocument();
     });
 
-    const runtime = screen.getByLabelText("Planner runtime state");
-    expect(within(runtime).getByText("Model-backed planner")).toHaveClass("planner-runtime-pill--ready");
-    expect(within(runtime).getByText("Model-backed")).toBeInTheDocument();
+    const runtime = screen.getByLabelText("Planner availability");
+    expect(within(runtime).getByText("AI-assisted planner")).toHaveClass("planner-runtime-pill--ready");
+    expect(within(runtime).getByText("Live assistance")).toBeInTheDocument();
   });
 
   it("updates the map surface when a different scenario preview is selected", async () => {
@@ -1051,7 +1609,7 @@ describe("WorkspacePage", () => {
     });
 
     expect(
-      screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })
+      screen.getByRole("heading", { name: "Map for Kyoto base with Uji day trip" })
     ).toBeInTheDocument();
     expect(screen.getAllByText("kyoto -> uji -> kyoto").length).toBeGreaterThan(0);
     expect(screen.getByText("93 / 100 planner score")).toBeInTheDocument();
@@ -1059,7 +1617,7 @@ describe("WorkspacePage", () => {
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 
     expect(
-      screen.getByRole("heading", { name: "Map preview for Kyoto plus Osaka fallback" })
+      screen.getByRole("heading", { name: "Map for Kyoto plus Osaka fallback" })
     ).toBeInTheDocument();
     expect(screen.getAllByText("kyoto -> osaka -> kyoto").length).toBeGreaterThan(0);
     expect(screen.getByText("88 / 100 planner score")).toBeInTheDocument();
@@ -1087,20 +1645,24 @@ describe("WorkspacePage", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText("Google Maps JavaScript adapter").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Route geometry overlay for Kyoto base with Uji day trip")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /stop marker:/ }).length).toBeGreaterThan(0);
     expect(container.querySelector("iframe")).toBeNull();
     expect(screen.queryByTitle(/google maps/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Fallback option markers")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
+    expect(
+      screen.getAllByText("High confidence: the route has enough map detail for close review.")
+        .length
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("Google Maps JavaScript adapter")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /lodging marker: Osaka arrival buffer/ }));
     expect(screen.getAllByRole("heading", { name: "Osaka arrival buffer" }).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /activity marker: Kyoto cultural anchor/ }));
     expect(screen.getAllByRole("heading", { name: "Kyoto cultural anchor" }).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /policy marker: Route burden warning/ }));
     expect(screen.getByRole("heading", { name: "Route burden warning" })).toBeInTheDocument();
-    expect(screen.getAllByText("Policy or feasibility warning active").length).toBeGreaterThan(0);
-    expect(screen.getByText("Live provider path")).toBeInTheDocument();
+    expect(screen.getAllByText("Feasibility warning active").length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 
@@ -1123,8 +1685,8 @@ describe("WorkspacePage", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText("Google Maps JavaScript adapter").length).toBeGreaterThan(0);
-    expect(screen.getByText("Live provider path")).toBeInTheDocument();
+    expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
+    expect(screen.queryByText("Google Maps JavaScript adapter")).not.toBeInTheDocument();
   });
 
   it("updates the dedicated comparison surfaces when scenario and trip selections change", async () => {
@@ -1143,7 +1705,7 @@ describe("WorkspacePage", () => {
     expect(screen.getAllByText("Moderate travel friction with a clear cultural center of gravity.").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" }));
     expect(
-      screen.getByRole("heading", { name: "Map preview for Kyoto plus Osaka fallback" })
+      screen.getByRole("heading", { name: "Map for Kyoto plus Osaka fallback" })
     ).toBeInTheDocument();
     expect(screen.getAllByText("Osaka rainy-day fallback").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Higher transfer load to preserve nightlife breadth.").length).toBeGreaterThan(0);
@@ -1154,35 +1716,112 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Seoul gallery weekend is stored as a leisure trip with 1 traveler(s).")).toBeInTheDocument();
   });
 
-  it("falls back to plain number formatting when comparable currency codes are invalid", async () => {
+  it("reveals raw proposal diagnostics only through advanced diagnostics", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
         ...workspacePayload,
-        proposal_state: {
-          ...workspacePayload.proposal_state,
-          proposal: {
-            ...workspacePayload.proposal_state.proposal,
-            comparables: [
-              {
-                ...workspacePayload.proposal_state.proposal.comparables[0],
-                estimated_cost: {
-                  ...workspacePayload.proposal_state.proposal.comparables[0].estimated_cost,
-                  currency: "INVALID",
-                },
-              },
-            ],
+        view_model: {
+          user_summary: {
+            trip_title: workspacePayload.trip_record.trip.title,
+            trip_mode: "leisure",
+            mode_label: "Leisure trip",
+            status: "ready",
+            headline: "Your trip plan is ready to review.",
+            decided: ["2 saved scenario draft(s)"],
+            uncertain: [],
+          },
+          next_step: {
+            title: "Review and pick a scenario",
+            summary:
+              "Compare the saved scenarios and choose one to keep planning around.",
+            action_label: "Open scenario comparison",
+            action_target: "scenario-comparison",
+            blocked: false,
+          },
+          panel_visibility: {
+            show_budget_panel: true,
+            show_policy_posture: true,
+            show_proposal_panel: true,
+            show_approval_readiness_panel: true,
+          },
+          policy_presentation: {
+            active_policy_state: true,
+            posture_label: "Ready for approval",
+            approval_status_label: "Ready for approval",
+            next_step_label: "Advance to approval",
+            summary: "Policy evaluation passed and the approval packet is ready.",
+          },
+          business_summary: null,
+          debug_state: {
+            sections: {},
           },
         },
       }),
+      trips: Promise.resolve(tripComparisonPayload),
     });
 
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Comparables and readiness signals" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Options and readiness signals" })).toBeInTheDocument();
+    });
+    expect(screen.getByText("Advanced diagnostics")).toBeInTheDocument();
+    expect(screen.queryByText("Proposal diagnostics")).not.toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain("proposal_state_id");
+
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Proposal diagnostics" })).toBeInTheDocument();
+    });
+    expect(document.body.textContent ?? "").toContain("proposal_state_id");
+  });
+
+  it("closes advanced diagnostics when the workspace changes", async () => {
+    const firstWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      proposal_state: {
+        ...workspacePayload.proposal_state,
+        proposal_state_id: "proposal-state-first",
+      },
+    };
+    const nextWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      proposal_state: {
+        ...workspacePayload.proposal_state,
+        proposal_state_id: "proposal-state-next",
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(firstWorkspace),
+      trips: Promise.resolve(tripComparisonPayload),
     });
 
-    expect(screen.getByText(/Marriott via Navan · 245/)).toBeInTheDocument();
+    const { rerender } = renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Advanced diagnostics")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+    await waitFor(() => {
+      expect(document.body.textContent ?? "").toContain("proposal-state-first");
+    });
+
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(nextWorkspace),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+    rerender(
+      <TestMemoryRouter>
+        <WorkspacePage />
+      </TestMemoryRouter>
+    );
+
+    await waitFor(() => {
+      const disclosure = document.querySelector(".workspace-debug-disclosure");
+      expect(disclosure).not.toHaveAttribute("open");
+    });
+    expect(document.body.textContent ?? "").not.toContain("proposal-state-next");
   });
 
   it("shows an empty-state message when no route sequence is available", async () => {
@@ -1238,11 +1877,11 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByText("Timeline data is not ready")).toBeInTheDocument();
+      expect(screen.getByText("Day plan is not ready yet")).toBeInTheDocument();
     });
     expect(
       screen.getByText(
-        "Trip context is ready now, so the next planning pass can attach saved scenarios and timeline stops."
+        "Ask the planner to compare routes or draft a first sequence of stops."
       )
     ).toBeInTheDocument();
     await waitFor(() => {
@@ -1252,6 +1891,9 @@ describe("WorkspacePage", () => {
 
   it("renders the fallback map state and compact review copy on small screens", async () => {
     stubMatchMedia(true);
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "");
+    vi.stubEnv("VITE_GOOGLE_MAPS_EMBED_API_KEY", "");
+    vi.stubEnv("VITE_GOOGLE_MAPS_PROVIDER_STATE", "missing");
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve(workspacePayload),
       trips: Promise.resolve(tripComparisonPayload),
@@ -1260,12 +1902,18 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Compact scenario tradeoffs" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Compact route tradeoffs" })).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Compact review stack keeps map, timeline, and tradeoff calls visible on smaller screens.")).toBeInTheDocument();
-    expect(screen.getByText("Textual fallback route path")).toBeInTheDocument();
-    expect(screen.getAllByText(/Google Maps JavaScript is not configured in this environment/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Compact review keeps route, day plan, and next choices close together.")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
+    });
+    expect(
+      screen.getAllByText("Medium confidence: this is an approximate sketch from the current route stops.")
+        .length
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText(/Google Maps JavaScript is not configured in this environment/)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Compact day-by-day review" })).toBeInTheDocument();
   });
 
@@ -1280,10 +1928,10 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByText("Provider loading fallback path")).toBeInTheDocument();
+      expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
     });
 
-    expect(screen.getAllByText(/Google Maps JavaScript is loading/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Google Maps JavaScript is loading/)).not.toBeInTheDocument();
     expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
   });
 
@@ -1298,10 +1946,10 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByText("Provider error fallback path")).toBeInTheDocument();
+      expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
     });
 
-    expect(screen.getAllByText(/failed to load/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/failed to load/)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Fallback option markers")).toBeInTheDocument();
     expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
   });
@@ -1342,11 +1990,14 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByText("Sparse route fallback path")).toBeInTheDocument();
+      expect(
+        screen.getAllByText("Low confidence: the route needs more stops before the map can show its shape.")
+          .length
+      ).toBeGreaterThan(0);
     });
 
-    expect(screen.getAllByText(/needs at least an origin and destination/).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Map preview for Kyoto base with Uji day trip" })).toBeInTheDocument();
+    expect(screen.queryByText(/needs at least an origin and destination/)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Map for Kyoto base with Uji day trip" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
   });
 
@@ -1371,13 +2022,13 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Review-ready scenario tradeoffs" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Review route tradeoffs" })).toBeInTheDocument();
     });
 
     expect(screen.queryByLabelText("Scenario review board")).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        "No runtime scenarios are available yet, so there is nothing to review in the scenario board."
+        "No route ideas are available yet, so there is nothing to compare."
       )
     ).toBeInTheDocument();
   });
@@ -1472,10 +2123,8 @@ describe("WorkspacePage", () => {
 
     expect(screen.getByText("Dates not set yet")).toBeInTheDocument();
     expect(screen.getByText("Duration not set yet")).toBeInTheDocument();
-    expect(screen.getByText("Runtime inventory is partially specified")).toBeInTheDocument();
-    expect(
-      screen.getByText("Runtime bundle assembly is waiting on the rest of the trip frame.")
-    ).toBeInTheDocument();
+    expect(screen.getByText("Options need more trip detail")).toBeInTheDocument();
+    expect(screen.getByText("The planner needs a little more trip detail before it can group options.")).toBeInTheDocument();
     await waitFor(() => {
       expect(getPlannerHost().shadowRoot?.querySelector('[aria-label="Planner side panel"]')).toBeTruthy();
     });
@@ -1550,7 +2199,7 @@ describe("WorkspacePage", () => {
         )
       ).toBeInTheDocument();
     });
-    expect(screen.getAllByText("pending").length).toBeGreaterThan(0);
+    expect(screen.getByText("Waiting for policy review")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Refresh live status" })).not.toBeInTheDocument();
   });
 
@@ -1584,7 +2233,7 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Policy review is deferred" })).toBeInTheDocument();
     });
-    expect(screen.getAllByText("deferred").length).toBeGreaterThan(0);
+    expect(screen.getByText("Waiting for policy review")).toBeInTheDocument();
     expect(screen.getByText("Proposal queued for evaluation")).toBeInTheDocument();
     expect(screen.getByText("Keep the workspace open for remote results")).toBeInTheDocument();
   });
@@ -1619,7 +2268,7 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Policy review is running" })).toBeInTheDocument();
     });
-    expect(screen.getAllByText("running").length).toBeGreaterThan(0);
+    expect(screen.getByText("Waiting for policy review")).toBeInTheDocument();
     expect(screen.getByText("Policy engine accepted the packet and is still evaluating it.")).toBeInTheDocument();
     expect(screen.getByText("Keep the workspace open for remote results")).toBeInTheDocument();
   });
@@ -1819,7 +2468,7 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Live policy execution needs attention" })).toBeInTheDocument();
     });
-    expect(screen.getAllByText("failed").length).toBeGreaterThan(0);
+    expect(screen.getByText("Needs policy retry")).toBeInTheDocument();
     expect(screen.getByText("TPP gateway returned a 502 response for the proposal submission.")).toBeInTheDocument();
     expect(screen.getByText("Review the live transport failure")).toBeInTheDocument();
   });
@@ -1889,10 +2538,15 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Policy review finished with follow-up" })).toBeInTheDocument();
     });
-    expect(screen.getByText("completed with follow-up")).toBeInTheDocument();
+    expect(screen.getByText("Needs exception")).toBeInTheDocument();
     expect(screen.getAllByText("Reoptimize plan").length).toBeGreaterThan(0);
     expect(screen.getByText("Use a compliant downtown property")).toBeInTheDocument();
-    expect(screen.getByText("Nightly lodging exceeds the allowed cap.")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain("Nightly lodging exceeds the allowed cap.");
+
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+    await waitFor(() => {
+      expect(document.body.textContent ?? "").toContain("Nightly lodging exceeds the allowed cap.");
+    });
   });
 
   it("surfaces exception guidance and approval requirements from live policy results", async () => {
@@ -1963,7 +2617,7 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Policy review finished with follow-up" })).toBeInTheDocument();
     });
-    expect(screen.getByText("completed with follow-up")).toBeInTheDocument();
+    expect(screen.getByText("Needs exception")).toBeInTheDocument();
     expect(screen.getAllByText("Prepare exception packet").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Attach the compliant comparable to the exception packet.")).toHaveLength(2);
     expect(
@@ -1972,7 +2626,16 @@ describe("WorkspacePage", () => {
     expect(
       screen.getByText("Exception rationale: The client workshop starts before the first compliant arrival window."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Schedule exception requires manager approval.")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain(
+      "Schedule exception requires manager approval.",
+    );
+
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+    await waitFor(() => {
+      expect(document.body.textContent ?? "").toContain(
+        "Schedule exception requires manager approval.",
+      );
+    });
   });
 
   it("skips the follow-up card when legacy records expose an empty follow-up object", async () => {
@@ -2370,6 +3033,376 @@ describe("WorkspacePage", () => {
     });
   });
 
+  it("renders the planning notebook panel when planning_notebook is present in the workspace", async () => {
+    const notebookWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      planning_notebook: {
+        items: [
+          {
+            notebook_item_id: "nb-item:1",
+            trip_id: "trip-leisure-kyoto-draft",
+            session_state_id: "session-state:kyoto-spring",
+            title: "Check shinkansen pass options",
+            note: "Compare 7-day vs 14-day pass costs",
+            category: "route",
+            status: "active",
+            priority: "high",
+            source: "user",
+            linked_ledger_entry_id: null,
+            source_message_ids: [],
+            tags: [],
+            metadata: {},
+            completed_at: null,
+            created_at: "2026-04-12T06:00:00Z",
+            updated_at: "2026-04-12T06:00:00Z",
+          },
+          {
+            notebook_item_id: "nb-item:2",
+            trip_id: "trip-leisure-kyoto-draft",
+            session_state_id: "session-state:kyoto-spring",
+            title: "Confirm Nishiki Market visit",
+            note: "",
+            category: "activities",
+            status: "completed",
+            priority: "normal",
+            source: "user",
+            linked_ledger_entry_id: null,
+            source_message_ids: [],
+            tags: [],
+            metadata: {},
+            completed_at: "2026-04-12T07:00:00Z",
+            created_at: "2026-04-12T06:00:00Z",
+            updated_at: "2026-04-12T07:00:00Z",
+          },
+        ],
+        summary: {
+          total_count: 2,
+          active_count: 1,
+          completed_count: 1,
+          active_items: [
+            {
+              notebook_item_id: "nb-item:1",
+              trip_id: "trip-leisure-kyoto-draft",
+              session_state_id: "session-state:kyoto-spring",
+              title: "Check shinkansen pass options",
+              note: "Compare 7-day vs 14-day pass costs",
+              category: "route",
+              status: "active",
+              priority: "high",
+              source: "user",
+              linked_ledger_entry_id: null,
+              source_message_ids: [],
+              tags: [],
+              metadata: {},
+              completed_at: null,
+              created_at: "2026-04-12T06:00:00Z",
+              updated_at: "2026-04-12T06:00:00Z",
+            },
+          ],
+          completed_items: [
+            {
+              notebook_item_id: "nb-item:2",
+              trip_id: "trip-leisure-kyoto-draft",
+              session_state_id: "session-state:kyoto-spring",
+              title: "Confirm Nishiki Market visit",
+              note: "",
+              category: "activities",
+              status: "completed",
+              priority: "normal",
+              source: "user",
+              linked_ledger_entry_id: null,
+              source_message_ids: [],
+              tags: [],
+              metadata: {},
+              completed_at: "2026-04-12T07:00:00Z",
+              created_at: "2026-04-12T06:00:00Z",
+              updated_at: "2026-04-12T07:00:00Z",
+            },
+          ],
+          by_category: {
+            route: [],
+            activities: [],
+          },
+        },
+        focus: { category: null, notebook_item_id: null },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(notebookWorkspace) });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Planning notebook" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Check shinkansen pass options")).toBeInTheDocument();
+    expect(screen.getByText("Compare 7-day vs 14-day pass costs")).toBeInTheDocument();
+    expect(screen.getByLabelText("Notebook item title")).toBeInTheDocument();
+
+    const completedToggle = screen.getByText(/Completed \(1\)/);
+    expect(completedToggle).toBeInTheDocument();
+  });
+
+  it("captures a new notebook item and surfaces it in the active list", async () => {
+    const emptyNotebookWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      planning_notebook: {
+        items: [],
+        summary: {
+          total_count: 0,
+          active_count: 0,
+          completed_count: 0,
+          active_items: [],
+          completed_items: [],
+          by_category: {},
+        },
+        focus: { category: null, notebook_item_id: null },
+      },
+    };
+    const newItem = {
+      notebook_item_id: "nb-item:new",
+      trip_id: "trip-leisure-kyoto-draft",
+      session_state_id: "session-state:kyoto-spring",
+      title: "Book luggage storage at Kyoto Station",
+      note: "",
+      category: "route" as const,
+      status: "active" as const,
+      priority: "normal" as const,
+      source: "user" as const,
+      linked_ledger_entry_id: null,
+      source_message_ids: [],
+      tags: [],
+      metadata: {},
+      completed_at: null,
+      created_at: "2026-04-12T08:00:00Z",
+      updated_at: "2026-04-12T08:00:00Z",
+    };
+
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(emptyNotebookWorkspace) });
+    mockedCreateNotebookItem.mockResolvedValue(newItem);
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Planning notebook" })).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Notebook item title"), "Book luggage storage at Kyoto Station");
+    await user.click(screen.getByRole("button", { name: "Add to notebook" }));
+
+    await waitFor(() => {
+      expect(mockedCreateNotebookItem).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        expect.objectContaining({ title: "Book luggage storage at Kyoto Station", category: "other" })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Book luggage storage at Kyoto Station")).toBeInTheDocument();
+    });
+  });
+
+  it("completes an active notebook item and moves it to the completed section", async () => {
+    const activeItem = {
+      notebook_item_id: "nb-item:active",
+      trip_id: "trip-leisure-kyoto-draft",
+      session_state_id: "session-state:kyoto-spring",
+      title: "Research tea ceremony venues",
+      note: "",
+      category: "activities" as const,
+      status: "active" as const,
+      priority: "normal" as const,
+      source: "user" as const,
+      linked_ledger_entry_id: null,
+      source_message_ids: [],
+      tags: [],
+      metadata: {},
+      completed_at: null,
+      created_at: "2026-04-12T06:00:00Z",
+      updated_at: "2026-04-12T06:00:00Z",
+    };
+    const completedItem = { ...activeItem, status: "completed" as const, completed_at: "2026-04-12T09:00:00Z" };
+
+    const notebookWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      planning_notebook: {
+        items: [activeItem],
+        summary: {
+          total_count: 1,
+          active_count: 1,
+          completed_count: 0,
+          active_items: [activeItem],
+          completed_items: [],
+          by_category: { activities: [activeItem] },
+        },
+        focus: { category: null, notebook_item_id: null },
+      },
+    };
+
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(notebookWorkspace) });
+    mockedUpdateNotebookItem.mockResolvedValue(completedItem);
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Research tea ceremony venues")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.click(
+      within(screen.getByLabelText("Research tea ceremony venues")).getByRole("button", { name: "Complete" })
+    );
+
+    await waitFor(() => {
+      expect(mockedUpdateNotebookItem).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        "nb-item:active",
+        { status: "completed" }
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Completed \(1\)/)).toBeInTheDocument();
+    });
+  });
+
+  it("deletes a notebook item and removes it from the active list", async () => {
+    const itemToDelete = {
+      notebook_item_id: "nb-item:delete-me",
+      trip_id: "trip-leisure-kyoto-draft",
+      session_state_id: "session-state:kyoto-spring",
+      title: "Draft lodging short-list",
+      note: "",
+      category: "lodging" as const,
+      status: "active" as const,
+      priority: "normal" as const,
+      source: "user" as const,
+      linked_ledger_entry_id: null,
+      source_message_ids: [],
+      tags: [],
+      metadata: {},
+      completed_at: null,
+      created_at: "2026-04-12T06:00:00Z",
+      updated_at: "2026-04-12T06:00:00Z",
+    };
+
+    const notebookWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      planning_notebook: {
+        items: [itemToDelete],
+        summary: {
+          total_count: 1,
+          active_count: 1,
+          completed_count: 0,
+          active_items: [itemToDelete],
+          completed_items: [],
+          by_category: { lodging: [itemToDelete] },
+        },
+        focus: { category: null, notebook_item_id: null },
+      },
+    };
+
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(notebookWorkspace) });
+    mockedDeleteNotebookItem.mockResolvedValue(undefined);
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Draft lodging short-list")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.click(
+      within(screen.getByLabelText("Draft lodging short-list")).getByRole("button", { name: "Delete" })
+    );
+
+    await waitFor(() => {
+      expect(mockedDeleteNotebookItem).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        "nb-item:delete-me"
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Draft lodging short-list")).not.toBeInTheDocument();
+    });
+  });
+
+  it("sets the active focus on a notebook item when the user clicks Focus", async () => {
+    const item = {
+      notebook_item_id: "nb-item:focus-target",
+      trip_id: "trip-leisure-kyoto-draft",
+      session_state_id: "session-state:kyoto-spring",
+      title: "Map out Arashiyama day hike",
+      note: "",
+      category: "activities" as const,
+      status: "active" as const,
+      priority: "normal" as const,
+      source: "user" as const,
+      linked_ledger_entry_id: null,
+      source_message_ids: [],
+      tags: [],
+      metadata: {},
+      completed_at: null,
+      created_at: "2026-04-12T06:00:00Z",
+      updated_at: "2026-04-12T06:00:00Z",
+    };
+
+    const notebookWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      planning_notebook: {
+        items: [item],
+        summary: {
+          total_count: 1,
+          active_count: 1,
+          completed_count: 0,
+          active_items: [item],
+          completed_items: [],
+          by_category: { activities: [item] },
+        },
+        focus: { category: null, notebook_item_id: null },
+      },
+    };
+
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(notebookWorkspace) });
+    mockedSetNotebookFocus.mockResolvedValue({ category: null, notebook_item_id: "nb-item:focus-target" });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Map out Arashiyama day hike")).toBeInTheDocument();
+    });
+
+    const user = userEvent.setup();
+    await user.click(
+      within(screen.getByLabelText("Map out Arashiyama day hike")).getByRole("button", { name: "Focus" })
+    );
+
+    await waitFor(() => {
+      expect(mockedSetNotebookFocus).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        expect.objectContaining({ notebook_item_id: "nb-item:focus-target" })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Active focus:")).toBeInTheDocument();
+    });
+  });
+
+  it("hides the planning notebook panel when planning_notebook is absent", async () => {
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Planning ledger" })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("heading", { name: "Planning notebook" })).not.toBeInTheDocument();
+  });
+
   it("renders the shared route error card when the workspace loader rejects", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.reject(
@@ -2384,7 +3417,7 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Workspace request failed" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Trip workspace could not load" })).toBeInTheDocument();
     });
 
     expect(screen.getByText("Backend warming up")).toBeInTheDocument();

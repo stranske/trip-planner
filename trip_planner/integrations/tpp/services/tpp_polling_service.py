@@ -47,9 +47,7 @@ class TPPPollingService:
         if timeout_seconds == 0 and no_deadline_max_attempts < 1:
             raise ValueError("no_deadline_max_attempts must be >= 1")
         self._poll_response_provider = poll_response_provider
-        self._timeout_seconds: float | None = (
-            timeout_seconds if timeout_seconds > 0 else None
-        )
+        self._timeout_seconds: float | None = timeout_seconds if timeout_seconds > 0 else None
         self._no_deadline_max_attempts = (
             no_deadline_max_attempts if self._timeout_seconds is None else None
         )
@@ -61,17 +59,11 @@ class TPPPollingService:
             raise ValueError("request must be a TPPRequestEnvelope")
 
         started_at = self._now()
-        deadline = (
-            None
-            if self._timeout_seconds is None
-            else started_at + self._timeout_seconds
-        )
+        deadline = None if self._timeout_seconds is None else started_at + self._timeout_seconds
         attempt = 1
 
         while True:
-            envelope = self._normalize_poll_response(
-                self._poll_response_provider(request)
-            )
+            envelope = self._normalize_poll_response(self._poll_response_provider(request))
             if self._is_terminal(envelope):
                 return envelope
             if (
