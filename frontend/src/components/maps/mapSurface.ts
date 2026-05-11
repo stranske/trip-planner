@@ -750,6 +750,7 @@ export function buildTripMapSurfaceModel({
   scenarioComparisonSummary,
   scenarioFocusAreas,
   tripPrimaryRegions = [],
+  tripMode = null,
   policyPosture = null,
   googleMapsApiKey,
   providerLoadState = "ready",
@@ -763,6 +764,7 @@ export function buildTripMapSurfaceModel({
   scenarioComparisonSummary?: string | null;
   scenarioFocusAreas?: string[];
   tripPrimaryRegions?: string[];
+  tripMode?: string | null;
   policyPosture?: string | null;
   googleMapsApiKey?: string | null;
   providerLoadState?: MapProviderLoadState;
@@ -796,13 +798,14 @@ export function buildTripMapSurfaceModel({
   );
   const trimmedApiKey = googleMapsApiKey?.trim() ?? "";
   const routeWarning = deriveRouteWarning(activeScenario, feasibilitySummary);
+  const resolvedPolicyPosture = tripMode === "leisure" ? null : policyPosture;
   const routeSegments = buildRouteSegments(routeStops, routeWarning);
   const baseMarkers = buildMarkers({
     activeScenario,
     bundles,
     routeStops,
     routeWarning,
-    policyPosture,
+    policyPosture: resolvedPolicyPosture,
   });
   const focusCues = buildMapFocusCues({
     activeScenario,
@@ -822,7 +825,7 @@ export function buildTripMapSurfaceModel({
     activeScenario,
     routeState,
     routeWarning,
-    policyPosture,
+    policyPosture: resolvedPolicyPosture,
   });
   let provider: MapSurfaceProvider;
 
@@ -916,7 +919,7 @@ export function buildTripMapSurfaceModel({
       scenarioComparisonSummary?.trim() ||
       "Scenario comparison summary is still syncing to this workspace review surface.",
     scenarioAffordances,
-    policyPosture,
+    policyPosture: resolvedPolicyPosture,
     feasibilitySummary: summarizeFeasibility(feasibilitySummary, destinationAnchors),
     routeState,
     routeWarning,

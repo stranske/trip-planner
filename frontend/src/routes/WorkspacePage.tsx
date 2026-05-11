@@ -1450,6 +1450,7 @@ function WorkspacePageContent({
           bundles={currentWorkspace.inventory_summary.bundles}
           feasibilitySummary={currentWorkspace.feasibility_summary}
           tripPrimaryRegions={trip.trip_frame.primary_regions}
+          tripMode={trip.mode}
           policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : null}
           planningLedger={currentWorkspace.planning_ledger}
           compactLayout={isCompactLayout}
@@ -1734,7 +1735,13 @@ function WorkspacePageContent({
                       {reviewMetrics.map((metric) => (
                         <div key={`${scenario.scenario_id}-${metric.label}`}>
                           <dt>{metric.label}</dt>
-                          <dd>{metric.value}</dd>
+                          <dd
+                            data-testid={
+                              metric.label === "Approval posture" ? "policy-posture" : undefined
+                            }
+                          >
+                            {metric.value}
+                          </dd>
                         </div>
                       ))}
                     </dl>

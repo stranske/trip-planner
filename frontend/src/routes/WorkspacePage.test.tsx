@@ -1087,9 +1087,7 @@ describe("WorkspacePage", () => {
       ).toBeGreaterThan(0);
     });
 
-    expect(screen.getByTestId("policy-posture")).toHaveTextContent(
-      "Approval posture: Approval-ready"
-    );
+    expect(screen.getAllByTestId("policy-posture")[0]).toHaveTextContent("Approval-ready");
     expect(screen.getByTestId("proposal-lifecycle")).toHaveTextContent(
       "Approval packet is ready"
     );
@@ -1561,7 +1559,7 @@ describe("WorkspacePage", () => {
     expect(screen.getAllByRole("heading", { name: "Kyoto cultural anchor" }).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: /policy marker: Route burden warning/ }));
     expect(screen.getByRole("heading", { name: "Route burden warning" })).toBeInTheDocument();
-    expect(screen.getAllByText("Approval or feasibility warning active").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Feasibility warning active").length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 

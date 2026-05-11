@@ -20,6 +20,7 @@ export function TripMap({
   bundles,
   feasibilitySummary,
   tripPrimaryRegions,
+  tripMode,
   policyPosture,
   planningLedger,
   compactLayout,
@@ -32,6 +33,7 @@ export function TripMap({
   bundles: InventoryBundle[];
   feasibilitySummary: FeasibilitySummary;
   tripPrimaryRegions: string[];
+  tripMode: string;
   policyPosture: string | null;
   planningLedger?: WorkspaceData["planning_ledger"];
   compactLayout: boolean;
@@ -63,6 +65,7 @@ export function TripMap({
       scenarioComparisonSummary={scenarioComparisonSummary}
       scenarioFocusAreas={scenarioFocusAreas}
       tripPrimaryRegions={tripPrimaryRegions}
+      tripMode={tripMode}
       policyPosture={policyPosture}
       planningLedger={planningLedger}
       compactLayout={compactLayout}
@@ -79,6 +82,7 @@ function ActiveTripMap({
   scenarioComparisonSummary,
   scenarioFocusAreas,
   tripPrimaryRegions,
+  tripMode,
   policyPosture,
   planningLedger,
   compactLayout,
@@ -91,6 +95,7 @@ function ActiveTripMap({
   scenarioComparisonSummary?: string | null;
   scenarioFocusAreas?: string[];
   tripPrimaryRegions: string[];
+  tripMode: string;
   policyPosture: string | null;
   planningLedger?: WorkspaceData["planning_ledger"];
   compactLayout: boolean;
@@ -109,6 +114,7 @@ function ActiveTripMap({
     scenarioComparisonSummary,
     scenarioFocusAreas,
     tripPrimaryRegions,
+    tripMode,
     policyPosture,
     googleMapsApiKey,
     providerLoadState,
