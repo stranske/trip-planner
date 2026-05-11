@@ -647,6 +647,139 @@ def test_planner_turn_tool_reads_are_grounded_in_persisted_workspace_state(
     )
 
 
+def test_planner_turn_executes_provider_rich_read_only_tools(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": "Use richer tools to inspect sources, map status, and route refresh.",
+            "tool_calls": [
+                {"tool_name": "read_source_summary"},
+                {"tool_name": "read_map_provider_status"},
+                {"tool_name": "read_route_geometry"},
+                {"tool_name": "refresh_route_comparison"},
+                {"tool_name": "read_source_quality_summary"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    planner_reply = response.json()["messages"][-1]
+    tool_outputs = {item["tool_name"]: item for item in planner_reply["tool_calls"]}
+    assert set(tool_outputs) == {
+        "read_source_summary",
+        "read_map_provider_status",
+        "read_route_geometry",
+        "refresh_route_comparison",
+        "read_source_quality_summary",
+    }
+    assert tool_outputs["read_source_summary"]["status"] == "completed"
+    assert tool_outputs["read_source_summary"]["mutates_state"] is False
+    assert tool_outputs["read_source_summary"]["output"]["source_refs"]
+    assert len(tool_outputs["read_source_summary"]["output"]["source_refs"]) <= 10
+    assert tool_outputs["read_map_provider_status"]["output"]["provider"]["status"] in {
+        "fallback",
+        "loading",
+        "provider-error",
+        "sparse-route",
+        "misconfigured",
+    }
+    assert tool_outputs["read_map_provider_status"]["output"]["route_state"] == "ready"
+    assert tool_outputs["read_route_geometry"]["status"] == "completed"
+    assert tool_outputs["read_route_geometry"]["output"]["rough_route_geometry"]
+    assert tool_outputs["refresh_route_comparison"]["output"]["scenarios"]
+    assert (
+        tool_outputs["refresh_route_comparison"]["output"]["lead_scenario_id"]
+        == response.json()["planner_panel_state"]["option_set"]["options"][0]["option_id"]
+    )
+    assert tool_outputs["read_source_quality_summary"]["status"] == "not_available"
+    assert tool_outputs["read_source_quality_summary"]["output"]["quality_state"] == "not_available"
+
+    with get_session_factory()() as db_session:
+        stored = db_session.scalars(
+            select(PersistedPlannerAction)
+            .where(PersistedPlannerAction.trip_id == trip_id)
+            .order_by(PersistedPlannerAction.occurred_at.asc())
+        ).all()
+        persisted_tool_names = {item["tool_name"] for item in stored[-1].payload["tool_calls"]}
+        assert persisted_tool_names == set(tool_outputs)
+        checkpoint = db_session.get(
+            PersistedPlannerCheckpoint,
+            response.json()["planner_memory"]["current_checkpoint_id"],
+        )
+        assert checkpoint is not None
+        assert checkpoint.metadata_payload["tool_call_count"] == 5
+
+
+def test_planner_turn_reuses_workspace_payload_for_provider_rich_read_only_tools(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trip_id = _create_trip(client)
+    from trip_planner.app.services import planner_tools
+
+    original_get_workspace_payload = planner_tools.get_workspace_payload
+    workspace_payload_call_count = 0
+
+    def counted_get_workspace_payload(*args: Any, **kwargs: Any) -> dict[str, Any] | None:
+        nonlocal workspace_payload_call_count
+        workspace_payload_call_count += 1
+        return original_get_workspace_payload(*args, **kwargs)
+
+    monkeypatch.setattr(
+        planner_tools,
+        "get_workspace_payload",
+        counted_get_workspace_payload,
+    )
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": "Inspect source and route state without rebuilding payloads.",
+            "tool_calls": [
+                {"tool_name": "read_source_summary"},
+                {"tool_name": "read_map_provider_status"},
+                {"tool_name": "read_route_geometry"},
+                {"tool_name": "refresh_route_comparison"},
+                {"tool_name": "read_source_quality_summary"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert workspace_payload_call_count == 1
+
+
+def test_planner_turn_reports_sparse_provider_tool_state(client: TestClient) -> None:
+    trip_id = _create_trip(client)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": "Inspect a route option that does not exist.",
+            "tool_calls": [
+                {
+                    "tool_name": "read_map_provider_status",
+                    "arguments": {"route_option_id": "route-option:missing"},
+                },
+                {
+                    "tool_name": "read_route_geometry",
+                    "arguments": {"route_option_id": "route-option:missing"},
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    planner_reply = response.json()["messages"][-1]
+    tool_outputs = {item["tool_name"]: item for item in planner_reply["tool_calls"]}
+    assert tool_outputs["read_map_provider_status"]["status"] == "not_available"
+    assert tool_outputs["read_map_provider_status"]["output"]["route_state"] == "missing"
+    assert tool_outputs["read_route_geometry"]["status"] == "not_available"
+    assert tool_outputs["read_route_geometry"]["output"]["rough_route_geometry"] == []
+
+
 def test_planner_turn_records_model_tool_errors_without_fabricating_success(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
