@@ -106,8 +106,16 @@ const PLANNER_PROMPT_SUGGESTIONS: PlannerPromptSuggestion[] = [
     draft: "Compare the strongest route options and tell me the main tradeoffs.",
   },
   {
-    label: "Remember a note",
+    label: "Save a note",
     draft: "Please remember this for later: ",
+  },
+  {
+    label: "Record decision",
+    draft: "I decided to ",
+  },
+  {
+    label: "Update checklist",
+    draft: "Add this to my planning checklist: ",
   },
   {
     label: "Revisit lodging",
@@ -122,6 +130,42 @@ const PLANNER_PROMPT_SUGGESTIONS: PlannerPromptSuggestion[] = [
     draft: "Show route or lodging ideas we considered and rejected, with the reason for each.",
   },
 ];
+
+const PLANNER_BLOCK_PRESENTATION: Record<string, { label: string; order: number }> = {
+  next_action: { label: "Next step", order: 10 },
+  next_actions: { label: "Next step", order: 10 },
+  next_steps: { label: "Next step", order: 10 },
+  route_option: { label: "Options considered", order: 20 },
+  route_options: { label: "Options considered", order: 20 },
+  options: { label: "Options considered", order: 20 },
+  comparison: { label: "Tradeoffs", order: 30 },
+  tradeoff: { label: "Tradeoffs", order: 30 },
+  tradeoffs: { label: "Tradeoffs", order: 30 },
+  notebook: { label: "Saved notes", order: 40 },
+  planning_note: { label: "Saved notes", order: 40 },
+  saved_note: { label: "Saved notes", order: 40 },
+  saved_notes: { label: "Saved notes", order: 40 },
+  rejected_option: { label: "Rejected options", order: 50 },
+  rejected_options: { label: "Rejected options", order: 50 },
+  question: { label: "Open questions", order: 60 },
+  questions: { label: "Open questions", order: 60 },
+  open_question: { label: "Open questions", order: 60 },
+  decision: { label: "Decisions to make", order: 70 },
+  decisions: { label: "Decisions to make", order: 70 },
+  summary: { label: "Summary", order: 80 },
+  traveler_input_summary: { label: "What I heard", order: 90 },
+};
+
+function formatTravelerToken(value: string | null | undefined, fallback = "Not set yet"): string {
+  if (!value) {
+    return fallback;
+  }
+  return value
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 function formatDateRange(startDate: string | null, endDate: string | null): string {
   if (!startDate && !endDate) {
@@ -724,24 +768,49 @@ function isPlannerDiagnosticBlock(block: PlannerStructuredBlock): boolean {
   return block.hidden || hiddenPlannerBlockKinds.has(block.kind);
 }
 
-function plannerBlockKindLabel(kind: string): string {
-  return kind.replace(/_/g, " ");
+function plannerBlockPresentation(block: PlannerStructuredBlock, index: number) {
+  return (
+    PLANNER_BLOCK_PRESENTATION[block.kind] ?? {
+      label: formatTravelerToken(block.kind, "Planner note"),
+      order: 100 + index,
+    }
+  );
+}
+
+function orderedPlannerBlocks(blocks: PlannerStructuredBlock[]): PlannerStructuredBlock[] {
+  return blocks
+    .map((block, index) => ({ block, index, order: plannerBlockPresentation(block, index).order }))
+    .sort((left, right) => left.order - right.order || left.index - right.index)
+    .map(({ block }) => block);
+}
+
+function plannerBlockHeading(block: PlannerStructuredBlock, index: number): string {
+  const presentation = plannerBlockPresentation(block, index);
+  return presentation.label;
+}
+
+function plannerBlockKindLabel(block: PlannerStructuredBlock, index: number): string {
+  return plannerBlockPresentation(block, index).label;
 }
 
 function PlannerStructuredBlockList({ blocks }: { blocks: PlannerStructuredBlock[] }) {
   if (blocks.length === 0) {
     return null;
   }
+  const orderedBlocks = orderedPlannerBlocks(blocks);
 
   return (
     <div className="planner-response-blocks">
-      {blocks.map((block, blockIndex) => (
+      {orderedBlocks.map((block, blockIndex) => (
         <section
           key={`${block.kind}-${block.title}-${blockIndex}`}
           className={`planner-response-block planner-response-block-${block.kind}`}
         >
-          <span className="planner-block-kind">{plannerBlockKindLabel(block.kind)}</span>
-          <h4>{block.title}</h4>
+          <span className="planner-block-kind">{plannerBlockKindLabel(block, blockIndex)}</span>
+          <h4>{plannerBlockHeading(block, blockIndex)}</h4>
+          {block.title && block.title !== plannerBlockHeading(block, blockIndex) ? (
+            <p className="planner-block-source-title">{block.title}</p>
+          ) : null}
           {block.body ? <p>{block.body}</p> : null}
           {block.items.length > 0 ? (
             <ul>
@@ -873,7 +942,7 @@ function PlanningLedgerPanel({
                 {group.entries.slice(0, 4).map((entry) => (
                   <li key={entry.ledger_entry_id}>
                     <span>{entry.summary}</span>
-                    <small>{entry.status.replace("_", " ")}</small>
+                    <small>{formatTravelerToken(entry.status)}</small>
                   </li>
                 ))}
               </ul>
@@ -1419,11 +1488,11 @@ function WorkspacePageContent({
           </div>
           <div>
             <dt>Mode</dt>
-            <dd>{trip.mode}</dd>
+            <dd>{productView?.user_summary.mode_label ?? formatTravelerToken(trip.mode)}</dd>
           </div>
           <div>
             <dt>Status</dt>
-            <dd>{trip.status}</dd>
+            <dd>{formatTravelerToken(trip.status)}</dd>
           </div>
         </dl>
         <p className="workspace-hero-emphasis">
@@ -1786,11 +1855,11 @@ function WorkspacePageContent({
             <div className="scenario-stack">
               {workspace.inventory_summary.bundles.map((bundle) => (
                 <article key={bundle.bundle_id} className="scenario-card">
-                  <p className="scenario-kicker">{bundle.bundle_context.replace(/_/g, " ")}</p>
+                  <p className="scenario-kicker">{formatTravelerToken(bundle.bundle_context)}</p>
                   <h3>{bundle.title}</h3>
                   <p>{bundle.summary}</p>
                   <p className="muted-copy">
-                    {bundle.destination_names.join(" -> ")} · {bundle.option_count} normalized option
+                    {bundle.destination_names.join(" to ")} · {bundle.option_count} option
                     {bundle.option_count === 1 ? "" : "s"}
                   </p>
                 </article>
@@ -2015,15 +2084,15 @@ function WorkspacePageContent({
           <dl className="workspace-meta">
             <div>
               <dt>Interaction</dt>
-              <dd>{currentWorkspace.session.interaction_state.interaction_style}</dd>
+              <dd>{formatTravelerToken(currentWorkspace.session.interaction_state.interaction_style)}</dd>
             </div>
             <div>
               <dt>Initiative</dt>
-              <dd>{currentWorkspace.session.interaction_state.initiative_level}</dd>
+              <dd>{formatTravelerToken(currentWorkspace.session.interaction_state.initiative_level)}</dd>
             </div>
             <div>
               <dt>Checkpointing</dt>
-              <dd>{currentWorkspace.session.interaction_state.checkpoint_frequency}</dd>
+              <dd>{formatTravelerToken(currentWorkspace.session.interaction_state.checkpoint_frequency)}</dd>
             </div>
           </dl>
           <div className="decision-stack">

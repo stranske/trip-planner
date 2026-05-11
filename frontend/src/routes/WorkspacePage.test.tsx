@@ -868,7 +868,7 @@ describe("WorkspacePage", () => {
         screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length
       ).toBeGreaterThan(0);
     });
-    expect(screen.getByText("Leisure trip")).toBeInTheDocument();
+    expect(screen.getAllByText("Leisure trip").length).toBeGreaterThan(0);
     expect(screen.getByText("Your trip plan is ready to review.")).toBeInTheDocument();
     expect(screen.getByText("2 saved scenario draft(s)")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Review and pick a scenario" })).toBeInTheDocument();
@@ -1266,7 +1266,7 @@ describe("WorkspacePage", () => {
       expect(screen.getAllByRole("heading", { name: "Tokyo client summit" }).length).toBeGreaterThan(0);
     });
 
-    expect(screen.getByText("Business trip")).toBeInTheDocument();
+    expect(screen.getAllByText("Business trip").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Review approval packet" })).toBeInTheDocument();
     expect(screen.getByText("Approval readiness is available for this trip.")).toBeInTheDocument();
     expect(screen.getAllByText("Ready for approval").length).toBeGreaterThan(0);
@@ -1408,6 +1408,22 @@ describe("WorkspacePage", () => {
               hidden: false,
             },
             {
+              kind: "saved_note",
+              title: "Saved planning notes",
+              body: "",
+              items: ["Traveler wants Uji preserved unless it creates a transfer-heavy evening."],
+              metadata: {},
+              hidden: false,
+            },
+            {
+              kind: "rejected_option",
+              title: "Ideas not moving forward",
+              body: "",
+              items: ["Skip the Osaka-heavy night route for now."],
+              metadata: {},
+              hidden: false,
+            },
+            {
               kind: "next_action",
               title: "Next actions",
               body: "",
@@ -1469,14 +1485,18 @@ describe("WorkspacePage", () => {
       ).toBeInTheDocument();
     });
     expect(screen.getByText("coherent plan")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Planner summary" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Questions to settle" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Open decisions" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Route options in view" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Comparison frame" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Next actions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Next step" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Options considered" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tradeoffs" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Saved notes" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Rejected options" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Open questions" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Decisions to make" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Summary" })).toBeInTheDocument();
     expect(screen.getByText("Traveler input summary")).toBeInTheDocument();
     expect(screen.getByText("Compare fewer evening moves.")).toBeInTheDocument();
+    expect(screen.getByText("Traveler wants Uji preserved unless it creates a transfer-heavy evening.")).toBeInTheDocument();
+    expect(screen.getByText("Skip the Osaka-heavy night route for now.")).toBeInTheDocument();
     expect(screen.queryByText("Planner diagnostics")).not.toBeInTheDocument();
     expect(screen.queryByText("read_workspace_state: Read the current workspace state.")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Diagnostics" }));
@@ -1502,6 +1522,33 @@ describe("WorkspacePage", () => {
 
     expect(screen.getByLabelText("Message the planner")).toHaveValue(
       "Summarize what we have decided, what is still open, and what you recommend next."
+    );
+  });
+
+  it("offers natural input starts for notes, decisions, checklist items, and follow-up questions", async () => {
+    const user = userEvent.setup();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Save a note" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Record decision" }));
+    expect(screen.getByLabelText("Message the planner")).toHaveValue("I decided to ");
+
+    await user.click(screen.getByRole("button", { name: "Update checklist" }));
+    expect(screen.getByLabelText("Message the planner")).toHaveValue(
+      "Add this to my planning checklist: "
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save a note" }));
+    expect(screen.getByLabelText("Message the planner")).toHaveValue(
+      "Please remember this for later: "
     );
   });
 

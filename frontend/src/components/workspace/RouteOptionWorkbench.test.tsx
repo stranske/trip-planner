@@ -157,7 +157,21 @@ describe("RouteOptionWorkbench", () => {
     expect(screen.getByLabelText("Fjord-focus route route option")).toHaveTextContent(
       "74% confidence"
     );
+    expect(screen.getByLabelText("Fjord-focus route route option")).toHaveTextContent(
+      "Tradeoff summary"
+    );
+    expect(screen.getByLabelText("Fjord-focus route route option")).toHaveTextContent(
+      "More scenery with more transfers."
+    );
+    expect(screen.getByLabelText("Fjord-focus route route option")).toHaveTextContent(
+      "Open question: Can the longer scenic transfer still fit the trip pace?"
+    );
     expect(screen.getByLabelText("Flight-hop route route option")).toHaveTextContent("Rejected");
+    expect(
+      within(screen.getByLabelText("Rail-first route route option")).getByRole("button", {
+        name: "View route",
+      })
+    ).toHaveAttribute("title", "Show Rail-first route on the map and day plan.");
 
     fireEvent.click(
       within(screen.getByLabelText("Fjord-focus route route option")).getByRole("button", {

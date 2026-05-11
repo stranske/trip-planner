@@ -210,6 +210,7 @@ function ActiveTripMap({
                   ? " map-segment-button-active"
                   : ""
               }`}
+              title={`Focus the day plan on ${segment.fromLabel} to ${segment.toLabel}.`}
               aria-pressed={segment.id === mapSurface.workspaceView.selectedSegmentId}
               onClick={() => onSelectSegment(segment.id)}
             >
@@ -227,6 +228,7 @@ function ActiveTripMap({
             className={`map-toggle-chip${
               scenario.scenario_id === activeScenario.scenario_id ? " map-toggle-chip-active" : ""
             }`}
+            title={`Preview ${scenario.title} on the map.`}
             aria-pressed={scenario.scenario_id === activeScenario.scenario_id}
             onClick={() => onSelectScenario(scenario.scenario_id)}
           >

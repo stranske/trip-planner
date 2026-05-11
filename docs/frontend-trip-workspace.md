@@ -68,3 +68,15 @@ The minimum required data is:
 - whichever trip-frame fields are already known (`start_date`, `end_date`, `duration_days`, `primary_regions`)
 
 Everything else may remain empty on first load. The workspace should still render the trip shell, initialize a minimal session reference, and show timeline/scenario empty states until later planning issues attach saved scenarios, comparisons, and activity history.
+
+## Traveler Surface And Diagnostics Split
+
+Issue `#1164` finishes the first product-polish pass on the workspace surface:
+
+- normal traveler copy uses trip, route, option, day-plan, and decision language instead of raw runtime/provider/tool terms
+- planner replies are grouped into stable traveler sections for next step, options considered, tradeoffs, saved notes, rejected options, open questions, decisions, and summaries
+- prompt chips help travelers start note capture, decision, checklist, route-comparison, and follow-up messages without developer phrasing
+- route and map controls keep comparison, scope, and segment behavior discoverable through concise button labels and hover titles
+- raw IDs, tool traces, provider metadata, and debug payloads remain available only through diagnostics disclosures
+
+The practical rule remains the same: the workspace can translate planner state into traveler-readable sections, but diagnostics and canonical payloads stay inspectable for support without becoming primary product copy.

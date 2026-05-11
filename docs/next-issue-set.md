@@ -131,6 +131,8 @@ This note captures the remaining gaps after the recent readiness, planner-runtim
 
 **Why it matters:** The app now hides several raw provider/debug labels, but the next pass should make traveler input formatting, planner reply formatting, help affordances, and route-option comparison feel intentional.
 
+**Status (2026-05-11, issue #1164):** Implemented for the current workspace shell. The primary workspace now keeps raw IDs, tool traces, provider details, and debug payloads behind diagnostics; planner replies render in stable sections for next step, options considered, tradeoffs, saved notes, rejected options, open questions, decisions, and summaries; prompt chips cover note capture, decisions, checklist items, route comparisons, and follow-up summaries; route-option cards show tradeoff summaries for up to four options; and planning/map controls include traveler-friendly hover titles.
+
 **Scope:**
 
 - Add a compact, expandable "How to use this workspace" help section.

@@ -148,6 +148,17 @@ function formatMetric(scenario: RouteOptionScenario): string {
   }, ${cost}`;
 }
 
+function routeTradeoffSummaries(scenario: RouteOptionScenario): string[] {
+  return [
+    scenario.comparison_note,
+    ...(scenario.highlights ?? []),
+    ...(scenario.unresolved_questions ?? []).map((question) => `Open question: ${question}`),
+  ]
+    .map((summary) => summary.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
 export function RouteOptionWorkbench({
   comparison,
   selectedScenarioId,
@@ -200,6 +211,7 @@ export function RouteOptionWorkbench({
           const optionId = routeOptionId(scenario);
           const actions = scenario.available_actions ?? FALLBACK_ACTIONS[state];
           const isSelected = scenario.scenario_id === selectedScenarioId;
+          const tradeoffSummaries = routeTradeoffSummaries(scenario);
 
           return (
             <article
@@ -214,6 +226,7 @@ export function RouteOptionWorkbench({
                 <button
                   type="button"
                   className="map-toggle-chip"
+                  title={`Show ${scenario.title} on the map and day plan.`}
                   aria-pressed={isSelected}
                   onClick={() => onSelectScenario(scenario.scenario_id)}
                 >
@@ -236,6 +249,16 @@ export function RouteOptionWorkbench({
                   <dd>{formatConfidence(scenario.confidence)}</dd>
                 </div>
               </dl>
+              {tradeoffSummaries.length > 0 ? (
+                <div className="route-option-tradeoffs">
+                  <p className="scenario-kicker">Tradeoff summary</p>
+                  <ul>
+                    {tradeoffSummaries.map((summary) => (
+                      <li key={summary}>{summary}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {(scenario.unresolved_questions ?? []).length > 0 ? (
                 <div className="route-option-questions">
                   <p className="scenario-kicker">Open questions</p>
