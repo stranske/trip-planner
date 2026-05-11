@@ -65,6 +65,26 @@ _TOOL_DEFINITIONS: tuple[PlannerToolDefinition, ...] = (
         description="Read the current scenario ranking and comparison outputs for the active trip.",
     ),
     PlannerToolDefinition(
+        tool_name="read_source_summary",
+        description="Read bounded source and provenance summaries from current workspace inventory and scenario contracts.",
+    ),
+    PlannerToolDefinition(
+        tool_name="read_source_quality_summary",
+        description="Read source quality scoring status when available, otherwise return a bounded not_available result.",
+    ),
+    PlannerToolDefinition(
+        tool_name="read_map_provider_status",
+        description="Read map/provider status and route readiness without requiring live map credentials.",
+    ),
+    PlannerToolDefinition(
+        tool_name="read_route_geometry",
+        description="Read bounded route geometry and marker readiness for the active or requested route option.",
+    ),
+    PlannerToolDefinition(
+        tool_name="refresh_route_comparison",
+        description="Refresh the deterministic route comparison payload used by the workspace.",
+    ),
+    PlannerToolDefinition(
         tool_name="read_budget_state",
         description="Read the persisted workspace budget summary for the active trip.",
     ),
@@ -135,6 +155,38 @@ def _workspace_payload(
 
 def _ref_list(*refs: str | None) -> list[str]:
     return [ref for ref in refs if ref]
+
+
+def _bounded_items(items: list[Any], limit: int) -> list[Any]:
+    return items[: max(0, min(limit, 20))]
+
+
+def _route_scenarios(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return list((payload.get("runtime_scenario_comparison") or {}).get("scenarios") or [])
+
+
+def _select_route_scenario(
+    payload: dict[str, Any],
+    arguments: dict[str, Any],
+) -> dict[str, Any] | None:
+    scenarios = _route_scenarios(payload)
+    requested_id = str(
+        arguments.get("route_option_id") or arguments.get("scenario_id") or ""
+    ).strip()
+    if requested_id:
+        return next(
+            (
+                scenario
+                for scenario in scenarios
+                if scenario.get("route_option_id") == requested_id
+                or scenario.get("scenario_id") == requested_id
+            ),
+            None,
+        )
+    lead_id = (payload.get("runtime_scenario_comparison") or {}).get("lead_scenario_id")
+    return next(
+        (scenario for scenario in scenarios if scenario.get("scenario_id") == lead_id), None
+    ) or (scenarios[0] if scenarios else None)
 
 
 def _category_allocations(
@@ -237,6 +289,259 @@ def _refresh_scenarios(
         mutates_state=False,
         refs=_ref_list(
             payload["session"]["session_state_id"], runtime_comparison["lead_scenario_id"]
+        ),
+        output=output,
+    )
+
+
+def _read_source_summary(
+    db_session: Session,
+    user: AuthenticatedUser,
+    trip_id: str,
+    arguments: dict[str, Any],
+) -> PlannerToolResult:
+    del arguments
+    payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
+    inventory = payload["inventory_summary"]
+    scenario_search = payload["scenario_search"]
+    source_refs = list(
+        dict.fromkeys(
+            [
+                *list(scenario_search.get("source_refs") or []),
+                *[
+                    ref
+                    for scenario in list(scenario_search.get("scenarios") or [])
+                    for ref in list(scenario.get("source_refs") or [])
+                ],
+            ]
+        )
+    )
+    source_metadata = inventory.get("source_metadata") or {}
+    provenance_context = source_metadata.get("provenance_context") or {}
+    bundles = _bounded_items(list(inventory.get("bundles") or []), 5)
+    output = {
+        "source_type": source_metadata.get("source_type") or "unknown",
+        "adapter_name": source_metadata.get("adapter_name") or "",
+        "bundle_count": inventory.get("bundle_count", 0),
+        "source_refs": _bounded_items(source_refs, 10),
+        "source_result_set_id": scenario_search.get("source_result_set_id"),
+        "input_record_ids": _bounded_items(
+            list(provenance_context.get("input_record_ids") or []),
+            10,
+        ),
+        "issues": _bounded_items(
+            list((inventory.get("runtime_state") or {}).get("issues") or []),
+            5,
+        ),
+        "bundles": [
+            {
+                "bundle_id": item.get("bundle_id"),
+                "title": item.get("title"),
+                "destination_names": _bounded_items(list(item.get("destination_names") or []), 5),
+                "option_count": item.get("option_count", 0),
+            }
+            for item in bundles
+        ],
+    }
+    status = "completed" if source_refs or bundles else "not_available"
+    return PlannerToolResult(
+        tool_name="read_source_summary",
+        status=status,
+        summary=(
+            f"Read {len(output['source_refs'])} source reference(s) and "
+            f"{len(output['bundles'])} inventory bundle summary item(s)."
+            if status == "completed"
+            else "No source-backed workspace summary is available for this trip yet."
+        ),
+        mutates_state=False,
+        refs=_ref_list(payload["session"]["session_state_id"], *output["source_refs"]),
+        output=output,
+    )
+
+
+def _read_source_quality_summary(
+    db_session: Session,
+    user: AuthenticatedUser,
+    trip_id: str,
+    arguments: dict[str, Any],
+) -> PlannerToolResult:
+    del arguments
+    payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
+    inventory = payload["inventory_summary"]
+    runtime_state = inventory.get("runtime_state") or {}
+    quality_rows = []
+    for bundle in _bounded_items(list(inventory.get("bundles") or []), 5):
+        quality_rows.append(
+            {
+                "target_id": bundle.get("bundle_id"),
+                "target_title": bundle.get("title"),
+                "status": "not_available",
+                "score": None,
+                "summary": "Source quality scoring service is not implemented for this target yet.",
+            }
+        )
+    return PlannerToolResult(
+        tool_name="read_source_quality_summary",
+        status="not_available",
+        summary=(
+            "Source quality scoring is not implemented yet; returned bounded placeholder rows "
+            "for current workspace targets."
+        ),
+        mutates_state=False,
+        refs=_ref_list(payload["session"]["session_state_id"]),
+        output={
+            "quality_state": "not_available",
+            "runtime_inventory_status": runtime_state.get("status", "unknown"),
+            "rows": quality_rows,
+            "next_service": "source_quality_scoring",
+        },
+    )
+
+
+def _read_map_provider_status(
+    db_session: Session,
+    user: AuthenticatedUser,
+    trip_id: str,
+    arguments: dict[str, Any],
+) -> PlannerToolResult:
+    payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
+    scenario = _select_route_scenario(payload, arguments)
+    if scenario is None:
+        return PlannerToolResult(
+            tool_name="read_map_provider_status",
+            status="not_available",
+            summary="No route scenario is available for map/provider status.",
+            mutates_state=False,
+            refs=_ref_list(payload["session"]["session_state_id"]),
+            output={
+                "provider": {"kind": "fallback", "status": "sparse-route"},
+                "route_state": "missing",
+                "route_option_id": None,
+                "map_confidence": "none",
+            },
+        )
+    diagnostics = scenario.get("map_diagnostics") or {}
+    provider = diagnostics.get("provider") or {}
+    confidence = (scenario.get("map_view") or {}).get("confidence") or {}
+    provider_status = str(provider.get("status") or "fallback")
+    route_state = str(diagnostics.get("route_state") or "unknown")
+    return PlannerToolResult(
+        tool_name="read_map_provider_status",
+        status="completed" if route_state == "ready" else provider_status,
+        summary=(
+            f"Map provider state is {provider_status}; route geometry state is {route_state}."
+        ),
+        mutates_state=False,
+        refs=_ref_list(
+            payload["session"]["session_state_id"],
+            scenario.get("route_option_id"),
+            diagnostics.get("source_result_id"),
+        ),
+        output={
+            "route_option_id": scenario.get("route_option_id"),
+            "scenario_id": scenario.get("scenario_id"),
+            "provider": {
+                "kind": provider.get("kind") or "fallback",
+                "status": provider_status,
+                "details": provider.get("details") or "",
+            },
+            "route_state": route_state,
+            "route_warning": diagnostics.get("route_warning"),
+            "map_confidence": confidence.get("level", "unknown"),
+            "summary": confidence.get("summary") or scenario.get("summary"),
+        },
+    )
+
+
+def _read_route_geometry(
+    db_session: Session,
+    user: AuthenticatedUser,
+    trip_id: str,
+    arguments: dict[str, Any],
+) -> PlannerToolResult:
+    payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
+    scenario = _select_route_scenario(payload, arguments)
+    if scenario is None:
+        return PlannerToolResult(
+            tool_name="read_route_geometry",
+            status="not_available",
+            summary="No route scenario is available for geometry inspection.",
+            mutates_state=False,
+            refs=_ref_list(payload["session"]["session_state_id"]),
+            output={"route_option_id": None, "place_markers": [], "rough_route_geometry": []},
+        )
+    map_view = scenario.get("map_view") or {}
+    markers = _bounded_items(list(map_view.get("place_markers") or []), 12)
+    geometry = _bounded_items(list(map_view.get("rough_route_geometry") or []), 12)
+    status = "completed" if geometry else "sparse-route"
+    return PlannerToolResult(
+        tool_name="read_route_geometry",
+        status=status,
+        summary=(
+            f"Read {len(markers)} route marker(s) and {len(geometry)} route segment(s)."
+            if geometry
+            else "Route geometry is sparse; no route segments are available yet."
+        ),
+        mutates_state=False,
+        refs=_ref_list(payload["session"]["session_state_id"], scenario.get("route_option_id")),
+        output={
+            "route_option_id": scenario.get("route_option_id"),
+            "scenario_id": scenario.get("scenario_id"),
+            "active_scope": map_view.get("active_scope"),
+            "selected_segment_id": map_view.get("selected_segment_id"),
+            "place_markers": markers,
+            "rough_route_geometry": geometry,
+            "confidence": map_view.get("confidence") or {},
+        },
+    )
+
+
+def _refresh_route_comparison(
+    db_session: Session,
+    user: AuthenticatedUser,
+    trip_id: str,
+    arguments: dict[str, Any],
+) -> PlannerToolResult:
+    del arguments
+    payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
+    comparison = payload["runtime_scenario_comparison"]
+    scenarios = _bounded_items(list(comparison.get("scenarios") or []), 5)
+    output = {
+        "title": comparison.get("title"),
+        "summary": comparison.get("summary"),
+        "lead_scenario_id": comparison.get("lead_scenario_id"),
+        "comparison_axes": _bounded_items(list(comparison.get("comparison_axes") or []), 8),
+        "scenarios": [
+            {
+                "scenario_id": item.get("scenario_id"),
+                "route_option_id": item.get("route_option_id"),
+                "title": item.get("title"),
+                "rank": item.get("rank"),
+                "state": item.get("state"),
+                "status": item.get("status"),
+                "summary": item.get("summary"),
+                "route_summary": item.get("route_summary"),
+                "metrics": item.get("metrics") or {},
+                "delta": item.get("delta") or {},
+                "source_result_id": item.get("source_result_id"),
+            }
+            for item in scenarios
+        ],
+        "source_refs": _bounded_items(list(comparison.get("source_refs") or []), 10),
+    }
+    return PlannerToolResult(
+        tool_name="refresh_route_comparison",
+        status="completed" if scenarios else "not_available",
+        summary=(
+            f"Refreshed deterministic route comparison with {len(scenarios)} scenario row(s)."
+            if scenarios
+            else "No deterministic route comparison rows are available yet."
+        ),
+        mutates_state=False,
+        refs=_ref_list(
+            payload["session"]["session_state_id"],
+            comparison.get("lead_scenario_id"),
+            *output["source_refs"],
         ),
         output=output,
     )
@@ -590,6 +895,11 @@ _TOOL_HANDLERS: dict[str, PlannerToolHandler] = {
     "read_workspace_state": _read_workspace_state,
     "refresh_inventory": _refresh_inventory,
     "refresh_scenarios": _refresh_scenarios,
+    "read_source_summary": _read_source_summary,
+    "read_source_quality_summary": _read_source_quality_summary,
+    "read_map_provider_status": _read_map_provider_status,
+    "read_route_geometry": _read_route_geometry,
+    "refresh_route_comparison": _refresh_route_comparison,
     "read_budget_state": _read_budget_state,
     "update_budget_plan": _update_budget_plan,
     "read_policy_state": _read_policy_state,

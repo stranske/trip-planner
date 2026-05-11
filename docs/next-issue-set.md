@@ -48,6 +48,8 @@ This note captures the remaining gaps after the recent readiness, planner-runtim
 
 **Why it matters:** `planner_tools.py` is now real, but the model cannot yet request richer source or provider work. This limits how much the planner can revise a route based on fresh information.
 
+**Status:** Implemented for provider-rich tool seams. The planner can now call bounded source-summary, map-provider-status, route-geometry, and deterministic route-comparison refresh tools. Source-quality scoring remains a separate executable-engine gap; the planner tool returns an explicit `not_available` result until that service exists.
+
 **Scope:**
 
 - Add read-only tools for source retrieval and source-quality summaries.

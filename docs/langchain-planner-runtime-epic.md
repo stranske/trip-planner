@@ -21,11 +21,11 @@ The first-pass planner runtime now exists and should be treated as the baseline 
 
 - `trip_planner/app/routes/planner.py` exposes trip-scoped session, resume, and turn endpoints.
 - `trip_planner/app/services/planner.py` owns deterministic fallback replies, the model-backed runnable, model-request metadata, structured planner blocks, explicit tool-call execution, and persisted turn payloads.
-- `trip_planner/app/services/planner_tools.py` exposes the current application tool registry for workspace state, inventory and scenario refresh, budget state and updates, policy/proposal reads, pending decisions, option feedback, and planning-notebook actions.
+- `trip_planner/app/services/planner_tools.py` exposes the current application tool registry for workspace state, inventory and scenario refresh, provider-rich source/map/route reads, bounded source-quality placeholders, budget state and updates, policy/proposal reads, pending decisions, option feedback, and planning-notebook actions.
 - `trip_planner/persistence/models/planner_memory.py` and `trip_planner/app/services/planner_memory.py` persist checkpoint and summary records that make planner sessions resumable.
 - `frontend/src/components/planner/PlanningModeSelector.tsx`, `trip_planner/app/routes/workspace.py`, and `trip_planner/app/services/workspace.py` persist the selected planning mode for delegated, collaborative, revealed-preference, and in-trip work.
 
-The remaining runtime gap is depth rather than absence. The repo still needs dynamic model routing, richer source/map/provider-backed planner tools, semantic recall for scattered planning notes, and live-provider verification for release confidence.
+The remaining runtime gap is depth rather than absence. The repo still needs semantic recall for scattered planning notes, executable source-quality scoring, and live-provider verification for release confidence.
 
 ## Runtime Configuration
 
@@ -72,6 +72,18 @@ unit policy lives in `tests/app/test_planner_routing.py`; route-level
 integration is covered in `tests/app/test_planner_routes.py`. Verifying
 without live credentials uses the existing fallback runtime plus the
 `FakePlannerChatModel` test seam in `tests/app/test_planner_routes.py`.
+
+## Provider-Rich Planner Tools
+
+The planner tool registry now includes read-only tools for provider-aware route and source inspection:
+
+- `read_source_summary` reads bounded source/provenance summaries from inventory and scenario contracts.
+- `read_map_provider_status` reports fallback, sparse-route, loading, provider-error, or ready map/provider state from the same route diagnostics consumed by the workspace map surface.
+- `read_route_geometry` exposes bounded route markers and rough route geometry for the active or requested route option.
+- `refresh_route_comparison` refreshes the deterministic workspace route-comparison payload instead of letting the model re-rank options in the prompt.
+- `read_source_quality_summary` returns an explicit `not_available` state until the executable source-quality scoring engine exists.
+
+All of these tools are non-mutating, include refs and bounded payloads, and are persisted in planner turn traces like the original workspace, budget, policy, and proposal tools.
 
 ## Dependency Chain
 
