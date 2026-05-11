@@ -1494,9 +1494,11 @@ function WorkspacePageContent({
         />
 
         {panelVisibility.showApprovalReadinessPanel ? (
-          <section className="status-card">
-          <p className="status-label">Approval packet</p>
-          <h2>{proposalLifecycle?.title ?? "Proposal lifecycle in progress"}</h2>
+          <section className="status-card" data-testid="approval-packet">
+            <p className="status-label">Approval packet</p>
+            <h2 data-testid="proposal-lifecycle">
+              {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
+            </h2>
           {currentWorkspace.proposal_state == null ? (
             <p className="muted-copy">
               Approval packet records have not been saved for this workspace yet.
@@ -1835,9 +1837,9 @@ function WorkspacePageContent({
         </section>
 
         {panelVisibility.showProposalPanel ? (
-          <section className="status-card">
-          <p className="status-label">Approval details</p>
-          <h2>Options and readiness signals</h2>
+          <section className="status-card" data-testid="tpp-label">
+            <p className="status-label">Approval details</p>
+            <h2>Options and readiness signals</h2>
           {currentWorkspace.proposal_state == null ? (
             <p className="muted-copy">Approval-packet details will render here once the packet is saved.</p>
           ) : (

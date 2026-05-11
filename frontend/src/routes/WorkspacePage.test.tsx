@@ -1037,6 +1037,69 @@ describe("WorkspacePage", () => {
     }
   });
 
+  it("renders policy posture, proposal lifecycle, approval packet, and tpp label elements for leisure mode when advanced debug is enabled", async () => {
+    const leisureWorkspaceWithAdvancedViewModel: WorkspaceData = {
+      ...workspacePayload,
+      view_model: {
+        user_summary: {
+          trip_title: workspacePayload.trip_record.trip.title,
+          trip_mode: "leisure",
+          mode_label: "Leisure trip",
+          status: "ready",
+          headline: "Your trip plan is ready to review.",
+          decided: ["2 saved scenario draft(s)"],
+          uncertain: [],
+        },
+        next_step: {
+          title: "Review and pick a scenario",
+          summary: "Compare the saved scenarios and choose one to keep planning around.",
+          action_label: "Open scenario comparison",
+          action_target: "scenario-comparison",
+          blocked: false,
+        },
+        panel_visibility: {
+          show_budget_panel: true,
+          show_policy_posture: true,
+          show_proposal_panel: true,
+          show_approval_readiness_panel: true,
+        },
+        policy_presentation: {
+          active_policy_state: true,
+          posture_label: "Approval-ready",
+          approval_status_label: "Ready for approval",
+          next_step_label: "Advance to approval",
+          summary: "Policy evaluation passed for the saved scenario.",
+        },
+        business_summary: null,
+        debug_state: { sections: {} },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(leisureWorkspaceWithAdvancedViewModel),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length
+      ).toBeGreaterThan(0);
+    });
+
+    expect(screen.getByTestId("policy-posture")).toHaveTextContent(
+      "Approval posture: Approval-ready"
+    );
+    expect(screen.getByTestId("proposal-lifecycle")).toHaveTextContent(
+      "Approval packet is ready"
+    );
+    expect(screen.getByTestId("approval-packet")).toHaveTextContent("Approval readiness");
+    expect(screen.getByTestId("approval-packet")).toHaveTextContent("Ready for approval");
+    expect(screen.getByTestId("approval-packet")).toHaveTextContent("Advance to approval");
+    expect(screen.getByTestId("tpp-label")).toHaveTextContent("Options and readiness signals");
+    expect(screen.getByTestId("tpp-label")).toHaveTextContent("Conference Hotel");
+  });
+
   it("renders timeline structure from persisted trip and scenario state", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve(workspacePayload),

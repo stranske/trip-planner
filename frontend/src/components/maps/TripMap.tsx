@@ -325,7 +325,9 @@ function ActiveTripMap({
           <article className="decision-card">
             <h3>Destination context</h3>
             {mapSurface.policyPosture ? (
-              <p className="muted-copy">Approval posture: {mapSurface.policyPosture}</p>
+              <p className="muted-copy" data-testid="policy-posture">
+                Approval posture: {mapSurface.policyPosture}
+              </p>
             ) : null}
             <p>{mapSurface.feasibilitySummary}</p>
             <div className="map-anchor-list">
