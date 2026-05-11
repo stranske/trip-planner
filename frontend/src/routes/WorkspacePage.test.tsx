@@ -18,6 +18,7 @@ import {
   submitRouteOptionAction,
   updateNotebookItem,
   updateWorkspacePlanningMode,
+  type PlanningLedgerEntry,
   type PlannerSessionResponse,
   type WorkspaceData,
 } from "../api/workspace";
@@ -893,6 +894,85 @@ describe("WorkspacePage", () => {
     for (const label of forbiddenRawLabels) {
       expect(renderedText.toLowerCase()).not.toContain(label.toLowerCase());
     }
+  });
+
+  it("renders planning ledger summary buckets including rejected options and sources", async () => {
+    const ledgerTimestamp = "2026-04-12T06:10:00+00:00";
+    const makeLedgerEntry = (
+      overrides: Partial<PlanningLedgerEntry>
+    ): PlanningLedgerEntry => ({
+      ledger_entry_id: "ledger:test-entry",
+      trip_id: "trip-leisure-kyoto-draft",
+      session_state_id: "session:trip-leisure-kyoto-draft",
+      item_type: "decision",
+      status: "active",
+      category: "decision",
+      summary: "Keep Kyoto as the baseline.",
+      detail: "",
+      source_message_ids: [],
+      source_refs: [],
+      related_option_id: null,
+      related_decision_id: null,
+      supersedes_entry_id: null,
+      metadata: {},
+      created_at: ledgerTimestamp,
+      updated_at: ledgerTimestamp,
+      ...overrides,
+    });
+    const decisionEntry = makeLedgerEntry({
+      ledger_entry_id: "ledger:decision",
+      item_type: "decision",
+      summary: "Keep Kyoto as the baseline.",
+    });
+    const rejectedEntry = makeLedgerEntry({
+      ledger_entry_id: "ledger:rejected-option",
+      item_type: "option_rejected",
+      status: "rejected",
+      category: "route_options",
+      summary: "Reject Osaka-heavy fallback for this trip.",
+      related_option_id: "scenario:trip-leisure-kyoto-draft:2",
+    });
+    const sourceEntry = makeLedgerEntry({
+      ledger_entry_id: "ledger:source",
+      item_type: "source_reference",
+      category: "sources",
+      summary: "Traveler preferred lower transfer pressure.",
+      source_refs: ["planner-action:trip-leisure-kyoto-draft:user-2"],
+    });
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        planning_ledger: {
+          entries: [decisionEntry, rejectedEntry, sourceEntry],
+          summary: {
+            active_decisions: [decisionEntry],
+            open_questions: [],
+            active_options: [],
+            rejected_options: [rejectedEntry],
+            constraints: [],
+            assumptions: [],
+            source_references: [sourceEntry],
+          },
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    const ledgerPanel = await screen.findByLabelText("Planning ledger");
+    expect(within(ledgerPanel).getByRole("heading", { name: "Decisions" })).toBeInTheDocument();
+    expect(within(ledgerPanel).getByText("Keep Kyoto as the baseline.")).toBeInTheDocument();
+    expect(
+      within(ledgerPanel).getByRole("heading", { name: "Rejected options" })
+    ).toBeInTheDocument();
+    expect(
+      within(ledgerPanel).getByText("Reject Osaka-heavy fallback for this trip.")
+    ).toBeInTheDocument();
+    expect(within(ledgerPanel).getByRole("heading", { name: "Sources" })).toBeInTheDocument();
+    expect(
+      within(ledgerPanel).getByText("Traveler preferred lower transfer pressure.")
+    ).toBeInTheDocument();
   });
 
   it("renders timeline structure from persisted trip and scenario state", async () => {

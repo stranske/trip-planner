@@ -1778,6 +1778,34 @@ def _add_planning_ledger_entry(
     return entry
 
 
+def _validate_planning_ledger_supersedes_target(
+    db_session: Session,
+    *,
+    trip_id: str,
+    ledger_entry_id: str,
+    supersedes_entry_id: str,
+) -> None:
+    if not supersedes_entry_id.strip():
+        raise ValueError("supersedes_entry_id must reference an existing ledger entry.")
+    if supersedes_entry_id == ledger_entry_id:
+        raise ValueError("supersedes_entry_id cannot reference the same ledger entry.")
+
+    seen: set[str] = {ledger_entry_id}
+    current_id: str | None = supersedes_entry_id
+    while current_id:
+        if current_id in seen:
+            raise ValueError("supersedes_entry_id cannot create a cycle.")
+        seen.add(current_id)
+        current = db_session.scalar(
+            select(PersistedPlanningLedgerEntry)
+            .where(PersistedPlanningLedgerEntry.trip_id == trip_id)
+            .where(PersistedPlanningLedgerEntry.ledger_entry_id == current_id)
+        )
+        if current is None:
+            raise ValueError("supersedes_entry_id must reference an existing ledger entry.")
+        current_id = current.supersedes_entry_id
+
+
 def _build_persisted_trip_workspace(
     record: PersistedTrip,
     *,
@@ -3339,13 +3367,27 @@ def update_planning_ledger_entry(
         if status not in PLANNING_LEDGER_STATUSES:
             raise ValueError(f"status must be one of {', '.join(PLANNING_LEDGER_STATUSES)}")
         entry.status = status
+    if "supersedes_entry_id" in updates:
+        raw_supersedes_entry_id = updates["supersedes_entry_id"]
+        supersedes_entry_id = (
+            None
+            if raw_supersedes_entry_id is None
+            else str(raw_supersedes_entry_id).strip() or None
+        )
+        if supersedes_entry_id is not None:
+            _validate_planning_ledger_supersedes_target(
+                db_session,
+                trip_id=trip_id,
+                ledger_entry_id=ledger_entry_id,
+                supersedes_entry_id=supersedes_entry_id,
+            )
+        entry.supersedes_entry_id = supersedes_entry_id
     for field in (
         "category",
         "summary",
         "detail",
         "related_option_id",
         "related_decision_id",
-        "supersedes_entry_id",
     ):
         if updates.get(field) is not None:
             setattr(entry, field, updates[field])
