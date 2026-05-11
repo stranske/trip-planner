@@ -160,9 +160,7 @@ def test_no_production_tpp_imports_from_legacy_app_namespaces() -> None:
 
     for path_str in _git_ls_files("trip_planner/**/*.py"):
         path = Path(path_str)
-        for index, line in enumerate(
-            path.read_text(encoding="utf-8").splitlines(), start=1
-        ):
+        for index, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if pattern.search(line):
                 offenders.append(f"{path_str}:{index}")
 
@@ -179,12 +177,10 @@ def test_tpp_canonical_services_package_exists() -> None:
     package_init = services_dir / "__init__.py"
 
     assert services_dir.is_dir(), (
-        "Expected canonical TPP services directory at "
-        "trip_planner/integrations/tpp/services."
+        "Expected canonical TPP services directory at " "trip_planner/integrations/tpp/services."
     )
     assert package_init.is_file(), (
-        "Expected package marker at "
-        "trip_planner/integrations/tpp/services/__init__.py."
+        "Expected package marker at " "trip_planner/integrations/tpp/services/__init__.py."
     )
 
 

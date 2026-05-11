@@ -4,17 +4,30 @@ import { useLoaderData } from "react-router-dom";
 import type { TripRecord } from "../api/trips";
 import {
   answerPlannerDecision,
+  createNotebookItem,
+  deleteNotebookItem,
   fetchPlannerSession,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
   saveWorkspaceBudget,
+  setNotebookFocus,
   submitPlannerTurn,
+  submitRouteOptionAction,
+  updateNotebookItem,
   updateWorkspacePlanningMode,
   type ActualSpendEventUpsertPayload,
   type BudgetPlanUpsertPayload,
   type BudgetWorkspaceState,
+  type NotebookCategory,
+  type NotebookPriority,
+  type PlannerMessage,
   type PlannerSessionResponse,
+  type PlannerStructuredBlock,
   type PlanningMode,
+  type PlanningNotebookFocus,
+  type PlanningNotebookItem,
+  type PlanningNotebookState,
+  type RouteOptionActionType,
   submitPlannerOptionFeedback,
   type SavedScenarioRecord,
   type WorkspaceData,
@@ -24,6 +37,8 @@ import { TripMap } from "../components/maps/TripMap";
 import { PlanningModeSelector } from "../components/planner/PlanningModeSelector";
 import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
 import { TripComparison } from "../components/trips/TripComparison";
+import { PlanningNotebookPanel } from "../components/workspace/PlanningNotebookPanel";
+import { RouteOptionWorkbench } from "../components/workspace/RouteOptionWorkbench";
 import { ScenarioComparison } from "../components/workspace/ScenarioComparison";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
 
@@ -44,6 +59,18 @@ type ScenarioReviewMetric = {
   value: string;
 };
 
+type WorkspacePanelVisibility = {
+  showBudgetPanel: boolean;
+  showPolicyPosture: boolean;
+  showProposalPanel: boolean;
+  showApprovalReadinessPanel: boolean;
+};
+
+type PlannerPromptSuggestion = {
+  label: string;
+  draft: string;
+};
+
 type ProposalLifecycleState =
   | "pending"
   | "deferred"
@@ -54,10 +81,33 @@ type ProposalLifecycleState =
 
 type ProposalLifecyclePresentation = {
   state: ProposalLifecycleState;
-  label: string;
+  readinessLabel: string;
   title: string;
   summary: string;
 };
+
+const PLANNER_PROMPT_SUGGESTIONS: PlannerPromptSuggestion[] = [
+  {
+    label: "Compare routes",
+    draft: "Compare the strongest route options and tell me the main tradeoffs.",
+  },
+  {
+    label: "Remember a note",
+    draft: "Please remember this for later: ",
+  },
+  {
+    label: "Revisit lodging",
+    draft: "Revisit lodging options with budget, location, and transfer friction in mind.",
+  },
+  {
+    label: "Summarize decisions",
+    draft: "Summarize what we have decided, what is still open, and what you recommend next.",
+  },
+  {
+    label: "Show rejected ideas",
+    draft: "Show route or lodging ideas we considered and rejected, with the reason for each.",
+  },
+];
 
 function formatDateRange(startDate: string | null, endDate: string | null): string {
   if (!startDate && !endDate) {
@@ -203,6 +253,11 @@ function formatScenarioScore(score: number): string {
 }
 
 function formatPolicyPosture(workspace: WorkspaceData): string {
+  const presentation = workspace.view_model?.policy_presentation;
+  if (presentation?.active_policy_state && presentation.posture_label) {
+    return presentation.posture_label;
+  }
+
   const proposalState = workspace.proposal_state;
   if (proposalState == null) {
     return "No approval packet yet";
@@ -219,11 +274,55 @@ function formatPolicyPosture(workspace: WorkspaceData): string {
   return proposalState.summary.evaluation_result_status ?? "review pending";
 }
 
+function hasActivePolicyState(proposalState: WorkspaceData["proposal_state"]): boolean {
+  if (proposalState == null) {
+    return false;
+  }
+
+  if (proposalState.execution_id) {
+    return true;
+  }
+
+  if (proposalState.summary.approval_ready) {
+    return true;
+  }
+
+  if (proposalState.summary.evaluation_result_status || proposalState.summary.follow_up_status) {
+    return true;
+  }
+
+  return proposalState.submission_status !== "pending" || proposalState.evaluation_status != null;
+}
+
+function deriveWorkspacePanelVisibility(workspace: WorkspaceData): WorkspacePanelVisibility {
+  const viewModelVisibility = workspace.view_model?.panel_visibility;
+  if (viewModelVisibility) {
+    return {
+      showBudgetPanel: viewModelVisibility.show_budget_panel,
+      showPolicyPosture: viewModelVisibility.show_policy_posture,
+      showProposalPanel: viewModelVisibility.show_proposal_panel,
+      showApprovalReadinessPanel: viewModelVisibility.show_approval_readiness_panel,
+    };
+  }
+
+  const isBusinessTrip = workspace.trip_record.trip.mode === "business";
+  const activePolicyState = hasActivePolicyState(workspace.proposal_state);
+  const showPolicyPanels = isBusinessTrip || activePolicyState;
+
+  return {
+    showBudgetPanel: true,
+    showPolicyPosture: showPolicyPanels,
+    showProposalPanel: showPolicyPanels,
+    showApprovalReadinessPanel: showPolicyPanels,
+  };
+}
+
 function buildScenarioReviewMetrics(
   workspace: WorkspaceData,
-  scenario: WorkspaceData["route_comparison"]["scenarios"][number]
+  scenario: WorkspaceData["route_comparison"]["scenarios"][number],
+  panelVisibility: WorkspacePanelVisibility
 ): ScenarioReviewMetric[] {
-  return [
+  const metrics: ScenarioReviewMetric[] = [
     {
       label: "Estimated total",
       value:
@@ -246,11 +345,16 @@ function buildScenarioReviewMetrics(
       label: "Feasibility",
       value: scenario.feasible ? "Ready to review" : "Needs feasibility work",
     },
-    {
-      label: "Policy posture",
-      value: formatPolicyPosture(workspace),
-    },
   ];
+
+  if (panelVisibility.showPolicyPosture) {
+    metrics.push({
+      label: "Approval posture",
+      value: formatPolicyPosture(workspace),
+    });
+  }
+
+  return metrics;
 }
 
 function ScenarioSummaryCard({
@@ -326,7 +430,7 @@ function deriveProposalLifecyclePresentation(
   if (summary.approval_ready || followUpStatus === "resolved") {
     return {
       state: "approval-ready",
-      label: "approval-ready",
+      readinessLabel: "Ready for approval",
       title: "Approval packet is ready",
       summary:
         summary.follow_up_summary ??
@@ -338,7 +442,7 @@ function deriveProposalLifecyclePresentation(
   if (isFailedLifecycleStatus(submissionStatus) || isFailedLifecycleStatus(evaluationTransportStatus)) {
     return {
       state: "failed",
-      label: "failed",
+      readinessLabel: "Needs policy retry",
       title: "Live policy execution needs attention",
       summary:
         summary.submission_summary ??
@@ -350,9 +454,14 @@ function deriveProposalLifecyclePresentation(
     summary.evaluation_result_status != null ||
     (followUpStatus != null && followUpStatus !== "awaiting_evaluation")
   ) {
+    const needsException =
+      followUpStatus === "exception_required" ||
+      followUpStatus === "exception_requested" ||
+      followUpStatus === "reoptimization_required" ||
+      summary.evaluation_result_status === "non_compliant";
     return {
       state: "completed-with-follow-up",
-      label: "completed with follow-up",
+      readinessLabel: needsException ? "Needs exception" : "Needs follow-up",
       title: "Policy review finished with follow-up",
       summary:
         summary.follow_up_summary ??
@@ -363,7 +472,7 @@ function deriveProposalLifecyclePresentation(
   if (submissionStatus === "deferred" || evaluationTransportStatus === "deferred") {
     return {
       state: "deferred",
-      label: "deferred",
+      readinessLabel: "Waiting for policy review",
       title: "Policy review is deferred",
       summary:
         summary.submission_summary ??
@@ -379,7 +488,7 @@ function deriveProposalLifecyclePresentation(
   ) {
     return {
       state: "running",
-      label: "running",
+      readinessLabel: "Waiting for policy review",
       title: awaitingEvaluation ? "Awaiting policy evaluation result" : "Policy review is running",
       summary:
         summary.follow_up_summary ??
@@ -390,8 +499,8 @@ function deriveProposalLifecyclePresentation(
 
   return {
     state: "pending",
-    label: "pending",
-    title: "Proposal submission is pending",
+    readinessLabel: "Waiting for policy review",
+    title: "Approval packet is pending",
     summary: "Build and submit the approval packet to start live policy execution for this workspace.",
   };
 }
@@ -400,6 +509,30 @@ function hasRenderableFollowUp(
   followUp: NonNullable<WorkspaceData["proposal_state"]>["follow_up"]
 ): followUp is NonNullable<NonNullable<WorkspaceData["proposal_state"]>["follow_up"]> {
   return Boolean(followUp?.status && followUp?.title && followUp?.summary);
+}
+
+function rebuildNotebookState(
+  notebook: PlanningNotebookState,
+  items: PlanningNotebookItem[]
+): PlanningNotebookState {
+  const activeItems = items.filter((i) => i.status === "active");
+  const completedItems = items.filter((i) => i.status === "completed");
+  const byCategory: Record<string, PlanningNotebookItem[]> = {};
+  for (const item of activeItems) {
+    (byCategory[item.category] ??= []).push(item);
+  }
+  return {
+    ...notebook,
+    items,
+    summary: {
+      total_count: items.length,
+      active_count: activeItems.length,
+      completed_count: completedItems.length,
+      active_items: activeItems,
+      completed_items: completedItems,
+      by_category: byCategory,
+    },
+  };
 }
 
 function mergeWorkspaceBudgetState(
@@ -451,6 +584,192 @@ function mergePlannerSessionState(
   };
 }
 
+const hiddenPlannerBlockKinds = new Set(["debug", "tool_call", "tool_trace", "diagnostic"]);
+
+function legacyStructuredBlocks(message: PlannerMessage): PlannerStructuredBlock[] {
+  return (
+    message.turn_metadata?.visible_response_blocks.map((block) => ({
+      kind: block.kind,
+      title: block.title,
+      body: "",
+      items: block.items,
+      metadata: {},
+      hidden: false,
+    })) ?? []
+  );
+}
+
+function messageStructuredBlocks(message: PlannerMessage): PlannerStructuredBlock[] {
+  return (message.structured_blocks ?? []).length > 0
+    ? message.structured_blocks
+    : legacyStructuredBlocks(message);
+}
+
+function isPlannerDiagnosticBlock(block: PlannerStructuredBlock): boolean {
+  return block.hidden || hiddenPlannerBlockKinds.has(block.kind);
+}
+
+function plannerBlockKindLabel(kind: string): string {
+  return kind.replace(/_/g, " ");
+}
+
+function PlannerStructuredBlockList({ blocks }: { blocks: PlannerStructuredBlock[] }) {
+  if (blocks.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="planner-response-blocks">
+      {blocks.map((block, blockIndex) => (
+        <section
+          key={`${block.kind}-${block.title}-${blockIndex}`}
+          className={`planner-response-block planner-response-block-${block.kind}`}
+        >
+          <span className="planner-block-kind">{plannerBlockKindLabel(block.kind)}</span>
+          <h4>{block.title}</h4>
+          {block.body ? <p>{block.body}</p> : null}
+          {block.items.length > 0 ? (
+            <ul>
+              {block.items.map((item, itemIndex) => (
+                <li key={`${block.kind}-${block.title}-${itemIndex}`}>{item}</li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function PlannerMessageDiagnostics({
+  message,
+  blocks,
+}: {
+  message: PlannerMessage;
+  blocks: PlannerStructuredBlock[];
+}) {
+  if (blocks.length === 0 && message.tool_calls.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="planner-diagnostics">
+      {blocks.map((block, blockIndex) => (
+        <details key={`${message.message_id}-${block.kind}-${blockIndex}`}>
+          <summary>{block.title}</summary>
+          {block.body ? <p>{block.body}</p> : null}
+          {block.items.length > 0 ? (
+            <ul>
+              {block.items.map((item, itemIndex) => (
+                <li key={`${message.message_id}-${block.kind}-${itemIndex}`}>{item}</li>
+              ))}
+            </ul>
+          ) : null}
+          {Object.keys(block.metadata).length > 0 ? (
+            <pre>{JSON.stringify(block.metadata, null, 2)}</pre>
+          ) : null}
+        </details>
+      ))}
+      {message.tool_calls.length > 0 ? (
+        <details>
+          <summary>Tool calls</summary>
+          <ul className="planner-tool-call-list">
+            {message.tool_calls.map((toolCall, toolCallIndex) => (
+              <li key={`${message.message_id}-${toolCall.tool_name}-${toolCallIndex}`}>
+                {toolCall.tool_name}: {toolCall.summary}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function PlannerConversationMessage({
+  message,
+  showDiagnostics,
+}: {
+  message: PlannerMessage;
+  showDiagnostics: boolean;
+}) {
+  const blocks = messageStructuredBlocks(message);
+  const visibleBlocks = blocks.filter((block) => !isPlannerDiagnosticBlock(block));
+  const diagnosticBlocks = blocks.filter(isPlannerDiagnosticBlock);
+
+  return (
+    <article className={`planner-message planner-message-${message.role}`}>
+      <p className="scenario-kicker">{message.role === "user" ? "Traveler" : "Planner"}</p>
+      <p>{message.content}</p>
+      {message.turn_metadata?.plan_maturity ? (
+        <span className="planner-routing-pill">
+          {message.turn_metadata.plan_maturity.replace(/_/g, " ")}
+        </span>
+      ) : null}
+      <PlannerStructuredBlockList blocks={visibleBlocks} />
+      {showDiagnostics ? (
+        <PlannerMessageDiagnostics message={message} blocks={diagnosticBlocks} />
+      ) : null}
+    </article>
+  );
+}
+
+function PlanningLedgerPanel({
+  ledger,
+}: {
+  ledger: WorkspaceData["planning_ledger"] | undefined;
+}) {
+  const resolvedLedger = ledger ?? {
+    entries: [],
+    summary: {
+      active_decisions: [],
+      open_questions: [],
+      active_options: [],
+      rejected_options: [],
+      constraints: [],
+      assumptions: [],
+      source_references: [],
+    },
+  };
+  const summaryGroups = [
+    { label: "Decisions", entries: resolvedLedger.summary.active_decisions },
+    { label: "Open questions", entries: resolvedLedger.summary.open_questions },
+    { label: "Active options", entries: resolvedLedger.summary.active_options },
+    { label: "Rejected options", entries: resolvedLedger.summary.rejected_options },
+    { label: "Constraints", entries: resolvedLedger.summary.constraints },
+    { label: "Assumptions", entries: resolvedLedger.summary.assumptions },
+    { label: "Sources", entries: resolvedLedger.summary.source_references },
+  ].filter((group) => group.entries.length > 0);
+
+  return (
+    <section className="status-card planning-ledger-card" aria-label="Planning ledger">
+      <p className="status-label">Ledger</p>
+      <h2>Planning ledger</h2>
+      {resolvedLedger.entries.length === 0 ? (
+        <p className="muted-copy">
+          Decisions, questions, constraints, and route option history will appear here.
+        </p>
+      ) : (
+        <div className="planning-ledger-grid">
+          {summaryGroups.map((group) => (
+            <section key={group.label} className="planning-ledger-group">
+              <h3>{group.label}</h3>
+              <ul>
+                {group.entries.slice(0, 4).map((entry) => (
+                  <li key={entry.ledger_entry_id}>
+                    <span>{entry.summary}</span>
+                    <small>{entry.status.replace("_", " ")}</small>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function WorkspacePage() {
   const { workspace, trips } = useLoaderData() as LoaderData;
   const resolve = useMemo(
@@ -463,13 +782,13 @@ export function WorkspacePage() {
       resolve={resolve}
       loading={{
         label: "Workspace",
-        title: "Loading persisted trip state",
-        message: "Hydrating trip, session, and saved-scenario records for the timeline surface.",
+        title: "Opening your trip workspace",
+        message: "Loading the latest route ideas, notes, budget, and planning state.",
       }}
       error={{
         label: "Workspace",
-        title: "Workspace request failed",
-        message: "The shared API client could not load the workspace payload.",
+        title: "Trip workspace could not load",
+        message: "Refresh the page or try again after the latest trip data is available.",
       }}
     >
       {([resolvedWorkspace, resolvedTrips]) => (
@@ -499,19 +818,26 @@ function WorkspacePageContent({
   const [plannerConversationBusyLabel, setPlannerConversationBusyLabel] = useState<string | null>(
     null
   );
+  const [showPlannerDiagnostics, setShowPlannerDiagnostics] = useState(false);
   const [plannerError, setPlannerError] = useState<string | null>(null);
   const [plannerBusyLabel, setPlannerBusyLabel] = useState<string | null>(null);
   const [planningModeBusy, setPlanningModeBusy] = useState(false);
   const [planningModeError, setPlanningModeError] = useState<string | null>(null);
+  const [showWorkspaceDebugDetails, setShowWorkspaceDebugDetails] = useState(false);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
+  const [notebookError, setNotebookError] = useState<string | null>(null);
+  const [notebookBusyLabel, setNotebookBusyLabel] = useState<string | null>(null);
   const [proposalError, setProposalError] = useState<string | null>(null);
   const [proposalBusyLabel, setProposalBusyLabel] = useState<string | null>(null);
+  const [routeOptionError, setRouteOptionError] = useState<string | null>(null);
+  const [routeOptionBusyLabel, setRouteOptionBusyLabel] = useState<string | null>(null);
   const plannerSessionLoadVersion = useRef(0);
   const isCompactLayout = useCompactWorkspaceLayout();
   useEffect(() => {
     setCurrentWorkspace(workspace);
     setSelectedScenarioId(resolveMapScenarioId(workspace));
+    setShowWorkspaceDebugDetails(false);
   }, [workspace]);
 
   useEffect(() => {
@@ -568,6 +894,7 @@ function WorkspacePageContent({
   }, [workspace.trip_record.trip.trip_id]);
 
   const { trip } = currentWorkspace.trip_record;
+  const productView = currentWorkspace.view_model;
   const activeScenario = resolveActiveScenario(currentWorkspace);
   const routeComparison = resolveRouteComparison(currentWorkspace);
   const selectedRuntimeScenario =
@@ -593,6 +920,22 @@ function WorkspacePageContent({
           renderableProposalFollowUp
         );
   const scenarioPolicyPosture = formatPolicyPosture(currentWorkspace);
+  const panelVisibility = deriveWorkspacePanelVisibility(currentWorkspace);
+  const workspaceDebugSections = useMemo(() => {
+    const sections = { ...(productView?.debug_state.sections ?? {}) };
+    if (currentWorkspace.proposal_state != null) {
+      sections.proposal_state = {
+        title: "Proposal diagnostics",
+        payload: currentWorkspace.proposal_state,
+      };
+    }
+    return sections;
+  }, [productView?.debug_state.sections, currentWorkspace.proposal_state]);
+  const workspaceDebugDisclosureKey = [
+    trip.trip_id,
+    currentWorkspace.proposal_state?.proposal_state_id ?? "no-proposal",
+    Object.keys(workspaceDebugSections).sort().join("|"),
+  ].join(":");
   function handleScenarioSelection(scenarioId: string) {
     setSelectedScenarioId(scenarioId);
   }
@@ -656,6 +999,23 @@ function WorkspacePageContent({
     }
   }
 
+  async function handleRouteOptionAction(optionId: string, actionType: RouteOptionActionType) {
+    setRouteOptionError(null);
+    setRouteOptionBusyLabel("Saving route option...");
+    plannerSessionLoadVersion.current += 1;
+    try {
+      const nextWorkspace = await submitRouteOptionAction(trip.trip_id, optionId, actionType);
+      startTransition(() => {
+        setCurrentWorkspace(nextWorkspace);
+        setSelectedScenarioId(resolveMapScenarioId(nextWorkspace));
+      });
+    } catch (error) {
+      setRouteOptionError(error instanceof Error ? error.message : "Route option update failed.");
+    } finally {
+      setRouteOptionBusyLabel(null);
+    }
+  }
+
   async function handlePlannerTurnSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = plannerConversationDraft.trim();
@@ -681,6 +1041,11 @@ function WorkspacePageContent({
     } finally {
       setPlannerConversationBusyLabel(null);
     }
+  }
+
+  function handlePlannerPromptSuggestion(draft: string) {
+    setPlannerConversationDraft(draft);
+    setPlannerConversationError(null);
   }
 
   async function handleBudgetSave(payload: BudgetPlanUpsertPayload) {
@@ -713,6 +1078,132 @@ function WorkspacePageContent({
     }
   }
 
+  function mergeNotebookItem(
+    current: WorkspaceData,
+    updatedItem: PlanningNotebookItem
+  ): WorkspaceData {
+    const notebook = current.planning_notebook;
+    if (!notebook) {
+      return current;
+    }
+    const items = notebook.items.map((item) =>
+      item.notebook_item_id === updatedItem.notebook_item_id ? updatedItem : item
+    );
+    const existingIds = new Set(notebook.items.map((i) => i.notebook_item_id));
+    if (!existingIds.has(updatedItem.notebook_item_id)) {
+      items.push(updatedItem);
+    }
+    return { ...current, planning_notebook: rebuildNotebookState(notebook, items) };
+  }
+
+  function mergeNotebookItemDeleted(
+    current: WorkspaceData,
+    notebookItemId: string
+  ): WorkspaceData {
+    const notebook = current.planning_notebook;
+    if (!notebook) {
+      return current;
+    }
+    const items = notebook.items.filter((item) => item.notebook_item_id !== notebookItemId);
+    const nextFocus: PlanningNotebookFocus = {
+      category: notebook.focus.category,
+      notebook_item_id:
+        notebook.focus.notebook_item_id === notebookItemId
+          ? null
+          : notebook.focus.notebook_item_id,
+    };
+    return {
+      ...current,
+      planning_notebook: { ...rebuildNotebookState(notebook, items), focus: nextFocus },
+    };
+  }
+
+  function mergeNotebookFocus(
+    current: WorkspaceData,
+    nextFocus: PlanningNotebookFocus
+  ): WorkspaceData {
+    const notebook = current.planning_notebook;
+    if (!notebook) {
+      return current;
+    }
+    return { ...current, planning_notebook: { ...notebook, focus: nextFocus } };
+  }
+
+  async function handleNotebookCreate(payload: {
+    title: string;
+    category: NotebookCategory;
+    note?: string;
+    priority?: NotebookPriority;
+  }) {
+    setNotebookError(null);
+    setNotebookBusyLabel("Adding notebook item...");
+    try {
+      const newItem = await createNotebookItem(trip.trip_id, payload);
+      startTransition(() => {
+        setCurrentWorkspace((current) => mergeNotebookItem(current, newItem));
+      });
+    } catch (error) {
+      setNotebookError(error instanceof Error ? error.message : "Notebook item creation failed.");
+    } finally {
+      setNotebookBusyLabel(null);
+    }
+  }
+
+  async function handleNotebookComplete(notebookItemId: string) {
+    setNotebookError(null);
+    try {
+      const updatedItem = await updateNotebookItem(trip.trip_id, notebookItemId, {
+        status: "completed",
+      });
+      startTransition(() => {
+        setCurrentWorkspace((current) => mergeNotebookItem(current, updatedItem));
+      });
+    } catch (error) {
+      setNotebookError(error instanceof Error ? error.message : "Notebook item update failed.");
+    }
+  }
+
+  async function handleNotebookReopen(notebookItemId: string) {
+    setNotebookError(null);
+    try {
+      const updatedItem = await updateNotebookItem(trip.trip_id, notebookItemId, {
+        status: "active",
+      });
+      startTransition(() => {
+        setCurrentWorkspace((current) => mergeNotebookItem(current, updatedItem));
+      });
+    } catch (error) {
+      setNotebookError(error instanceof Error ? error.message : "Notebook item reopen failed.");
+    }
+  }
+
+  async function handleNotebookDelete(notebookItemId: string) {
+    setNotebookError(null);
+    try {
+      await deleteNotebookItem(trip.trip_id, notebookItemId);
+      startTransition(() => {
+        setCurrentWorkspace((current) => mergeNotebookItemDeleted(current, notebookItemId));
+      });
+    } catch (error) {
+      setNotebookError(error instanceof Error ? error.message : "Notebook item deletion failed.");
+    }
+  }
+
+  async function handleNotebookSetFocus(focus: {
+    category?: NotebookCategory | null;
+    notebook_item_id?: string | null;
+  }) {
+    setNotebookError(null);
+    try {
+      const nextFocus = await setNotebookFocus(trip.trip_id, focus);
+      startTransition(() => {
+        setCurrentWorkspace((current) => mergeNotebookFocus(current, nextFocus));
+      });
+    } catch (error) {
+      setNotebookError(error instanceof Error ? error.message : "Notebook focus update failed.");
+    }
+  }
+
   async function handleProposalRefresh() {
     setProposalError(null);
     setProposalBusyLabel("Refreshing live policy status...");
@@ -737,9 +1228,56 @@ function WorkspacePageContent({
       data-layout={isCompactLayout ? "compact" : "full"}
     >
       <div className="workspace-hero status-card">
-        <p className="status-label">Workspace timeline</p>
-        <h2>{trip.title}</h2>
-        <p>{trip.summary}</p>
+        <p className="status-label">
+          {productView?.user_summary.mode_label ?? "Trip workspace"}
+        </p>
+        <h2>{productView?.user_summary.trip_title ?? trip.title}</h2>
+        <p>{productView?.user_summary.headline ?? trip.summary}</p>
+        {productView ? (
+          <div className="decision-stack" aria-label="Product workspace summary">
+            {productView.user_summary.decided.length > 0 ? (
+              <article className="decision-card">
+                <p className="scenario-kicker">Decided</p>
+                <ul>
+                  {productView.user_summary.decided.map((item, index) => (
+                    <li key={`${index}-${item}`}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+            ) : null}
+            {productView.user_summary.uncertain.length > 0 ? (
+              <article className="decision-card">
+                <p className="scenario-kicker">Still open</p>
+                <ul>
+                  {productView.user_summary.uncertain.map((item, index) => (
+                    <li key={`${index}-${item}`}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+            ) : null}
+            <article className="decision-card">
+              <p className="scenario-kicker">Next action</p>
+              <h3>{productView.next_step.title}</h3>
+              <p>{productView.next_step.summary}</p>
+              {productView.next_step.action_label ? (
+                <p className="muted-copy">{productView.next_step.action_label}</p>
+              ) : null}
+            </article>
+            {productView.business_summary ? (
+              <article className="decision-card">
+                <p className="scenario-kicker">Approval readiness</p>
+                <h3>{productView.business_summary.headline}</h3>
+                {productView.business_summary.blockers.length > 0 ? (
+                  <ul>
+                    {productView.business_summary.blockers.map((blocker, index) => (
+                      <li key={`${index}-${blocker}`}>{blocker}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </article>
+            ) : null}
+          </div>
+        ) : null}
         <dl className="workspace-meta">
           <div>
             <dt>Dates</dt>
@@ -764,31 +1302,74 @@ function WorkspacePageContent({
         </dl>
         <p className="workspace-hero-emphasis">
           {isCompactLayout
-            ? "Compact review stack keeps map, timeline, and tradeoff calls visible on smaller screens."
-            : "Review-ready workspace keeps route context, daily pacing, and tradeoffs visible at once."}
+            ? "Compact review keeps route, day plan, and next choices close together."
+            : "Use this trip workspace to compare options, capture traveler notes, and move toward one clear next step."}
         </p>
+        <details className="workspace-help-disclosure">
+          <summary>How to use this trip workspace</summary>
+          <div className="workspace-help-grid">
+            <article>
+              <h3>Check the next decision</h3>
+              <p>Start with trip status and open choices, then ask your planner for the next action to take.</p>
+            </article>
+            <article>
+              <h3>Compare options</h3>
+              <p>Use the map, route tradeoffs, day plan, and saved ideas to compare what fits this traveler goal.</p>
+            </article>
+            <article>
+              <h3>Capture reminders</h3>
+              <p>Send reminders to your planner so they stay with this trip and can be pulled into the next revision.</p>
+            </article>
+          </div>
+        </details>
+        {Object.keys(workspaceDebugSections).length > 0 ? (
+          <details
+            key={workspaceDebugDisclosureKey}
+            className="workspace-debug-disclosure"
+            open={showWorkspaceDebugDetails}
+            onToggle={(event) => setShowWorkspaceDebugDetails(event.currentTarget.open)}
+          >
+            <summary>Advanced diagnostics</summary>
+            <p className="muted-copy">
+              {Object.keys(workspaceDebugSections).length} debug section
+              {Object.keys(workspaceDebugSections).length === 1 ? "" : "s"} available for
+              troubleshooting.
+            </p>
+            {showWorkspaceDebugDetails ? (
+              <div className="workspace-debug-section-list">
+                {Object.entries(workspaceDebugSections).map(([sectionId, section]) => (
+                  <article key={sectionId} className="workspace-debug-section">
+                    <h3>{section.title}</h3>
+                    <pre>{JSON.stringify(section.payload, null, 2)}</pre>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </details>
+        ) : null}
       </div>
 
       <div className="workspace-grid">
         <section className="status-card planner-panel-card">
-          <p className="status-label">Planner panel</p>
-          <h2>Trip-scoped planner surface</h2>
+          <p className="status-label">Planner</p>
+          <h2>Traveler planning workspace</h2>
           <p className="muted-copy">
-            {currentWorkspace.planner_panel_state.planner_behavior.runtime_summary ??
-              "The existing planner side panel now mounts inside the workspace route and reads trip-scoped API data."}
+            Use your planner to compare options, keep context, and decide the next best trip step.
           </p>
-          <div className="planner-runtime-row" aria-label="Planner runtime state">
+          <div className="planner-runtime-row" aria-label="Planner availability">
             <span
               className={`planner-runtime-pill planner-runtime-pill--${
                 currentWorkspace.planner_panel_state.planner_behavior.runtime_status ?? "fallback"
               }`}
             >
-              {currentWorkspace.planner_panel_state.planner_behavior.runtime_label ?? "Deterministic fallback planner"}
+              {currentWorkspace.planner_panel_state.planner_behavior.runtime_mode === "model"
+                ? "AI-assisted planner"
+                : "Guided planner"}
             </span>
             <span className="planner-runtime-mode">
               {currentWorkspace.planner_panel_state.planner_behavior.runtime_mode === "model"
-                ? "Model-backed"
-                : "Fallback"}
+                ? "Live assistance"
+                : "Planning guide"}
             </span>
           </div>
           <PlanningModeSelector
@@ -808,17 +1389,27 @@ function WorkspacePageContent({
           <section className="planner-conversation-card" aria-label="Planner conversation">
             <div className="planner-conversation-header">
               <div>
-                <p className="scenario-kicker">Conversation runtime</p>
-                <h3>Message the trip planner</h3>
+                <p className="scenario-kicker">Conversation</p>
+                <h3>Message your planner</h3>
                 <p>
-                  Turns are persisted through the trip-scoped planner API and refresh the same
-                  panel state, memory, and activity trail used by the workspace.
+                  Ask for comparisons, summaries, reminders, or a specific next step. The answer
+                  stays with this trip.
                 </p>
               </div>
-              <span className="planner-conversation-pill">
-                {plannerSession?.messages.length ?? 0} message
-                {(plannerSession?.messages.length ?? 0) === 1 ? "" : "s"}
-              </span>
+              <div className="planner-conversation-actions">
+                <span className="planner-conversation-pill">
+                  {plannerSession?.messages.length ?? 0} message
+                  {(plannerSession?.messages.length ?? 0) === 1 ? "" : "s"}
+                </span>
+                <button
+                  type="button"
+                  className="planner-diagnostics-toggle"
+                  aria-pressed={showPlannerDiagnostics}
+                  onClick={() => setShowPlannerDiagnostics((current) => !current)}
+                >
+                  Diagnostics
+                </button>
+              </div>
             </div>
             {plannerConversationBusyLabel ? (
               <p className="muted-copy">{plannerConversationBusyLabel}</p>
@@ -830,65 +1421,57 @@ function WorkspacePageContent({
               {plannerSession == null || plannerSession.messages.length === 0 ? (
                 <article className="planner-message planner-message-empty">
                   <p>
-                    No conversation turns have been persisted yet. Send a message to start the
-                    runtime-backed planner thread for this trip.
+                    No planner conversation yet. Send a message to start shaping this trip.
                   </p>
                 </article>
               ) : (
                 plannerSession.messages.map((message) => (
-                  <article
+                  <PlannerConversationMessage
                     key={message.message_id}
-                    className={`planner-message planner-message-${message.role}`}
-                  >
-                    <p className="scenario-kicker">
-                      {message.role === "user" ? "Traveler" : "Planner"}
-                    </p>
-                    <p>{message.content}</p>
-                    {message.tool_calls.length > 0 ? (
-                      <ul className="planner-tool-call-list">
-                        {message.tool_calls.map((toolCall) => (
-                          <li key={`${message.message_id}-${toolCall.tool_name}`}>
-                            {toolCall.tool_name}: {toolCall.summary}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </article>
+                    message={message}
+                    showDiagnostics={showPlannerDiagnostics}
+                  />
                 ))
               )}
             </div>
-            {plannerSession?.available_tools.length ? (
-              <div className="planner-tool-strip" aria-label="Planner tools available">
-                {plannerSession.available_tools.slice(0, 4).map((tool) => (
-                  <span key={tool.tool_name}>{tool.tool_name.replace(/_/g, " ")}</span>
-                ))}
-              </div>
-            ) : null}
+            <div className="planner-prompt-suggestions" aria-label="Planner prompt suggestions">
+              {PLANNER_PROMPT_SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion.label}
+                  type="button"
+                  onClick={() => handlePlannerPromptSuggestion(suggestion.draft)}
+                >
+                  {suggestion.label}
+                </button>
+              ))}
+            </div>
             <form className="planner-conversation-form" onSubmit={handlePlannerTurnSubmit}>
               <label>
-                Message
+                Message the planner
                 <textarea
                   value={plannerConversationDraft}
                   onChange={(event) => setPlannerConversationDraft(event.target.value)}
-                  placeholder="Ask the planner what to compare, revise, or inspect next."
+                  placeholder="Ask what to compare, what to remember, or what decision comes next."
                   rows={3}
                 />
               </label>
               <button type="submit" disabled={Boolean(plannerConversationBusyLabel)}>
-                Send planner turn
+                Send message
               </button>
             </form>
           </section>
         </section>
 
-        <WorkspaceBudgetPanel
-          budgetState={currentWorkspace.budget_state}
-          tripMode={trip.mode}
-          busyLabel={budgetBusyLabel}
-          errorMessage={budgetError}
-          onSaveBudget={handleBudgetSave}
-          onRecordSpend={handleSpendRecord}
-        />
+        {panelVisibility.showBudgetPanel ? (
+          <WorkspaceBudgetPanel
+            budgetState={currentWorkspace.budget_state}
+            tripMode={trip.mode}
+            busyLabel={budgetBusyLabel}
+            errorMessage={budgetError}
+            onSaveBudget={handleBudgetSave}
+            onRecordSpend={handleSpendRecord}
+          />
+        ) : null}
 
         <TripMap
           comparison={routeComparison}
@@ -899,7 +1482,9 @@ function WorkspacePageContent({
           bundles={currentWorkspace.inventory_summary.bundles}
           feasibilitySummary={currentWorkspace.feasibility_summary}
           tripPrimaryRegions={trip.trip_frame.primary_regions}
-          policyPosture={scenarioPolicyPosture}
+          tripMode={trip.mode}
+          policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : null}
+          planningLedger={currentWorkspace.planning_ledger}
           compactLayout={isCompactLayout}
         />
 
@@ -910,6 +1495,30 @@ function WorkspacePageContent({
           onSelectScenario={handleScenarioSelection}
         />
 
+        <RouteOptionWorkbench
+          comparison={routeComparison}
+          selectedScenarioId={selectedScenarioId}
+          busyLabel={routeOptionBusyLabel}
+          errorMessage={routeOptionError}
+          onSelectScenario={handleScenarioSelection}
+          onRouteOptionAction={handleRouteOptionAction}
+        />
+
+        <PlanningLedgerPanel ledger={currentWorkspace.planning_ledger} />
+
+        {currentWorkspace.planning_notebook ? (
+          <PlanningNotebookPanel
+            notebookState={currentWorkspace.planning_notebook}
+            busyLabel={notebookBusyLabel}
+            errorMessage={notebookError}
+            onCreateItem={handleNotebookCreate}
+            onCompleteItem={handleNotebookComplete}
+            onReopenItem={handleNotebookReopen}
+            onDeleteItem={handleNotebookDelete}
+            onSetFocus={handleNotebookSetFocus}
+          />
+        ) : null}
+
         <TripComparison
           currentTrip={currentWorkspace.trip_record.trip}
           trips={trips}
@@ -917,12 +1526,15 @@ function WorkspacePageContent({
           onSelectTrip={setSelectedTripComparisonId}
         />
 
-        <section className="status-card">
-          <p className="status-label">Approval packet</p>
-          <h2>{proposalLifecycle?.title ?? "Proposal lifecycle in progress"}</h2>
+        {panelVisibility.showApprovalReadinessPanel ? (
+          <section className="status-card" data-testid="approval-packet">
+            <p className="status-label">Approval packet</p>
+            <h2 data-testid="proposal-lifecycle">
+              {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
+            </h2>
           {currentWorkspace.proposal_state == null ? (
             <p className="muted-copy">
-              Proposal submission and evaluation records have not been persisted for this workspace yet.
+              Approval packet records have not been saved for this workspace yet.
             </p>
           ) : (
             <>
@@ -930,40 +1542,29 @@ function WorkspacePageContent({
               {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
               <dl className="workspace-meta">
                 <div>
-                  <dt>Workspace state</dt>
-                  <dd>{proposalLifecycle?.label ?? "pending"}</dd>
-                </div>
-                <div>
-                  <dt>Submission</dt>
-                  <dd>{currentWorkspace.proposal_state.summary.submission_status ?? "unknown"}</dd>
-                </div>
-                <div>
-                  <dt>Transport</dt>
+                  <dt>Approval readiness</dt>
                   <dd>
-                    {currentWorkspace.proposal_state.summary.evaluation_transport_status ??
-                      currentWorkspace.proposal_state.evaluation_status ??
-                      "pending"}
+                    {currentWorkspace.view_model?.policy_presentation.approval_status_label ??
+                      proposalLifecycle?.readinessLabel ??
+                      "Waiting for policy review"}
                   </dd>
                 </div>
                 <div>
-                  <dt>Evaluation</dt>
-                  <dd>{currentWorkspace.proposal_state.summary.evaluation_result_status ?? "pending"}</dd>
+                  <dt>Packet status</dt>
+                  <dd>{currentWorkspace.proposal_state.summary.submission_status ?? "unknown"}</dd>
                 </div>
                 <div>
                   <dt>Comparables</dt>
                   <dd>{currentWorkspace.proposal_state.summary.comparable_count ?? 0}</dd>
                 </div>
                 <div>
-                  <dt>Proposal version</dt>
-                  <dd>{currentWorkspace.proposal_state.proposal_version}</dd>
-                </div>
-                <div>
                   <dt>Next step</dt>
                   <dd>
-                    {formatFollowUpStatus(
-                      renderableProposalFollowUp?.status ??
-                        currentWorkspace.proposal_state.summary.follow_up_status
-                    )}
+                    {currentWorkspace.view_model?.policy_presentation.next_step_label ??
+                      formatFollowUpStatus(
+                        renderableProposalFollowUp?.status ??
+                          currentWorkspace.proposal_state.summary.follow_up_status
+                      )}
                   </dd>
                 </div>
               </dl>
@@ -1011,18 +1612,27 @@ function WorkspacePageContent({
               </div>
             </>
           )}
-        </section>
+          </section>
+        ) : null}
 
         <section className="status-card">
-          <p className="status-label">Inventory bundles</p>
-          <h2>{workspace.inventory_summary.runtime_state.title}</h2>
-          <p>{workspace.inventory_summary.runtime_state.summary}</p>
+          <p className="status-label">Things to consider</p>
+          <h2>
+            {workspace.inventory_summary.bundle_count > 0
+              ? "Places and options to review"
+              : "Options need more trip detail"}
+          </h2>
+          <p>
+            {workspace.inventory_summary.bundle_count > 0
+              ? "Grouped lodging, transport, and activity ideas are ready to inspect."
+              : "Add dates, trip length, or route direction so the planner can group useful options."}
+          </p>
           <p className="muted-copy">{workspace.inventory_summary.notes[0]}</p>
           {workspace.inventory_summary.bundle_count === 0 ? (
             <p className="muted-copy">
               {workspace.inventory_summary.runtime_state.status === "partial"
-                ? "Runtime bundle assembly is waiting on the rest of the trip frame."
-                : "Bundle assembly has not started yet for this trip."}
+                ? "The planner needs a little more trip detail before it can group options."
+                : "No option groups have been created for this trip yet."}
             </p>
           ) : (
             <div className="scenario-stack">
@@ -1042,20 +1652,20 @@ function WorkspacePageContent({
         </section>
 
         <section className="status-card">
-          <p className="status-label">Timeline</p>
+          <p className="status-label">Day plan</p>
           {timelineStops.length === 0 || activeScenario.scenario === null ? (
             <>
-              <h2>Timeline data is not ready</h2>
+              <h2>Day plan is not ready yet</h2>
               <p>
-                The workspace needs a scenario route sequence before it can render day-by-day pacing.
+                Choose or build a route idea before reviewing day-by-day pacing.
               </p>
               <p className="muted-copy">
-                Trip context is ready now, so the next planning pass can attach saved scenarios and timeline stops.
+                Ask the planner to compare routes or draft a first sequence of stops.
               </p>
             </>
           ) : (
             <>
-              <h2>{isCompactLayout ? "Compact day-by-day review" : "Trip rhythm and day sequencing"}</h2>
+              <h2>{isCompactLayout ? "Compact day-by-day review" : "Trip rhythm and day sequence"}</h2>
               <p>{selectedRuntimeScenario?.summary ?? activeScenario.scenario.scenario_summary.headline}</p>
               <div className="timeline-summary-grid" aria-label="Timeline summary">
                 <article className="timeline-summary-card">
@@ -1082,7 +1692,11 @@ function WorkspacePageContent({
                       ? "Planner score pending"
                       : `${formatScenarioScore(selectedRuntimeScenario.metrics.score)} planner score`}
                   </h3>
-                  <p>{scenarioPolicyPosture} packet posture for the current workspace.</p>
+                  <p>
+                    {panelVisibility.showPolicyPosture
+                      ? `${scenarioPolicyPosture} approval posture for the current workspace.`
+                      : "Pacing and route burden stay visible without approval details."}
+                  </p>
                 </article>
                 <article className="timeline-summary-card">
                   <p className="scenario-kicker">Options</p>
@@ -1093,7 +1707,7 @@ function WorkspacePageContent({
                   </h3>
                   <p>
                     {selectedRuntimeScenario?.comparison_note ??
-                      "Option-level details update when scenario comparison data is available."}
+                      "Details update as route ideas become clearer."}
                   </p>
                 </article>
               </div>
@@ -1108,7 +1722,7 @@ function WorkspacePageContent({
                       <h3>{stop.label}</h3>
                       <p>
                         Days {stop.startDay}-{stop.endDay} keep this stop visible in the selected
-                        scenario review path.
+                        route review path.
                       </p>
                     </div>
                   </li>
@@ -1119,16 +1733,21 @@ function WorkspacePageContent({
         </section>
 
         <section className="status-card">
-          <p className="status-label">Scenario review board</p>
-          <h2>{isCompactLayout ? "Compact scenario tradeoffs" : "Review-ready scenario tradeoffs"}</h2>
+          <p className="status-label">Route tradeoffs</p>
+          <h2>{isCompactLayout ? "Compact route tradeoffs" : "Review route tradeoffs"}</h2>
           <p>
-            Cost, route burden, feasibility, and policy posture stay scannable here without
-            forcing the traveler into raw scenario notes.
+            {panelVisibility.showPolicyPosture
+              ? "Cost, route burden, feasibility, and approval posture stay scannable here without forcing you into raw planning notes."
+              : "Cost, route burden, and feasibility stay scannable here without forcing you into raw planning notes."}
           </p>
           {routeComparison.scenarios.length > 0 ? (
             <div className="scenario-review-grid" aria-label="Scenario review board">
               {routeComparison.scenarios.map((scenario) => {
-                const reviewMetrics = buildScenarioReviewMetrics(currentWorkspace, scenario);
+                const reviewMetrics = buildScenarioReviewMetrics(
+                  currentWorkspace,
+                  scenario,
+                  panelVisibility
+                );
                 const isSelected = scenario.scenario_id === selectedScenarioId;
 
                 return (
@@ -1148,7 +1767,13 @@ function WorkspacePageContent({
                       {reviewMetrics.map((metric) => (
                         <div key={`${scenario.scenario_id}-${metric.label}`}>
                           <dt>{metric.label}</dt>
-                          <dd>{metric.value}</dd>
+                          <dd
+                            data-testid={
+                              metric.label === "Approval posture" ? "policy-posture" : undefined
+                            }
+                          >
+                            {metric.value}
+                          </dd>
                         </div>
                       ))}
                     </dl>
@@ -1165,14 +1790,14 @@ function WorkspacePageContent({
           ) : (
             <p className="muted-copy">
               {currentWorkspace.runtime_state.status === "partial"
-                ? "Runtime comparison is waiting on richer trip inputs before scenario review can start."
-                : "No runtime scenarios are available yet, so there is nothing to review in the scenario board."}
+                ? "Add a little more trip detail before route comparison can start."
+                : "No route ideas are available yet, so there is nothing to compare."}
             </p>
           )}
         </section>
 
         <section className="status-card">
-          <p className="status-label">Scenario context</p>
+          <p className="status-label">Saved ideas</p>
           <h2>{currentWorkspace.scenario_search.title}</h2>
           <div className="scenario-stack">
             {currentWorkspace.saved_scenarios.map((savedScenario) => {
@@ -1193,8 +1818,8 @@ function WorkspacePageContent({
             })}
             {currentWorkspace.saved_scenarios.length === 0 ? (
               <p className="muted-copy">
-                No saved scenarios exist yet. The mounted planner panel carries the bootstrap context until planner
-                history is persisted.
+                No saved route ideas exist yet. Ask the planner to compare routes or save a
+                promising direction.
               </p>
             ) : null}
           </div>
@@ -1203,8 +1828,8 @@ function WorkspacePageContent({
 
       <div className="workspace-grid">
         <section className="status-card">
-          <p className="status-label">Session state</p>
-          <h2>Current planning posture</h2>
+          <p className="status-label">Planning settings</p>
+          <h2>Current collaboration style</h2>
           <dl className="workspace-meta">
             <div>
               <dt>Interaction</dt>
@@ -1221,7 +1846,7 @@ function WorkspacePageContent({
           </dl>
           <div className="decision-stack">
             {currentWorkspace.session.pending_decisions.length === 0 ? (
-              <p className="muted-copy">No blocking decisions are currently waiting on the traveler.</p>
+              <p className="muted-copy">No blocking decisions are waiting for you right now.</p>
             ) : (
               currentWorkspace.session.pending_decisions.map((decision) => (
                 <article key={decision.decision_id} className="decision-card">
@@ -1234,7 +1859,7 @@ function WorkspacePageContent({
         </section>
 
         <section className="status-card">
-          <p className="status-label">Comparison</p>
+          <p className="status-label">Saved comparison</p>
           <h2>{currentWorkspace.scenario_comparison?.summary ?? "No comparison saved yet"}</h2>
           {currentWorkspace.scenario_comparison ? (
             <>
@@ -1246,15 +1871,16 @@ function WorkspacePageContent({
               </ul>
             </>
           ) : (
-            <p className="muted-copy">The workspace will surface durable scenario tradeoff comparisons here.</p>
+            <p className="muted-copy">Saved route tradeoff comparisons will appear here.</p>
           )}
         </section>
 
-        <section className="status-card">
-          <p className="status-label">Proposal details</p>
-          <h2>Comparables and readiness signals</h2>
+        {panelVisibility.showProposalPanel ? (
+          <section className="status-card" data-testid="tpp-label">
+            <p className="status-label">Approval details</p>
+            <h2>Options and readiness signals</h2>
           {currentWorkspace.proposal_state == null ? (
-            <p className="muted-copy">Approval-packet details will render here once a proposal is submitted.</p>
+            <p className="muted-copy">Approval-packet details will render here once the packet is saved.</p>
           ) : (
             <div className="decision-stack">
               {renderableProposalFollowUp ? (
@@ -1288,53 +1914,22 @@ function WorkspacePageContent({
                   <p>{alternative.rationale}</p>
                 </article>
               ))}
-              {(currentWorkspace.proposal_state.proposal.comparables ?? []).map((comparable) => (
-                <article
-                  key={`${comparable.category}-${comparable.label}`}
-                  className="decision-card"
-                >
-                  <h3>{comparable.label}</h3>
-                  <p>
-                    {comparable.vendor} via {comparable.booking_channel} ·{" "}
-                    {formatCurrency(
-                      comparable.estimated_cost.typical_amount,
-                      comparable.estimated_cost.currency
-                    )}
-                  </p>
-                  <p className="muted-copy">{comparable.notes.join(" ")}</p>
-                </article>
-              ))}
-              {(currentWorkspace.proposal_state.evaluation.evaluation_result?.approval_requirements ?? []).map(
-                (requirement) => (
-                  <article key={requirement.role} className="decision-card">
-                    <h3>{requirement.role}</h3>
-                    <p>{requirement.reason}</p>
-                  </article>
-                )
-              )}
-              {(currentWorkspace.proposal_state.evaluation.evaluation_result?.failure_reasons ?? []).map(
-                (failure) => (
-                  <article key={failure.code} className="decision-card">
-                    <h3>{failure.code.replace(/_/g, " ")}</h3>
-                    <p>{failure.message}</p>
-                  </article>
-                )
-              )}
             </div>
           )}
-        </section>
+          </section>
+        ) : null}
 
         <section className="status-card">
-          <p className="status-label">Planner memory</p>
+          <p className="status-label">Planning notes</p>
           <h2>
             {currentWorkspace.planner_memory.artifacts.length > 0
-              ? "User-visible planner checkpoints"
-              : "Planner memory has not been summarized yet"}
+              ? "Planner notes to keep"
+              : "No planner notes have been saved yet"}
           </h2>
           {currentWorkspace.planner_memory.artifacts.length === 0 ? (
             <p className="muted-copy">
-              The workspace will surface durable planner summaries here after the first persisted
-              planner conversation turn.
+              Important summaries and remembered decisions will appear here after the first planner
+              conversation.
             </p>
           ) : (
             <div className="decision-stack">
@@ -1350,11 +1945,11 @@ function WorkspacePageContent({
         </section>
 
         <section className="status-card">
-          <p className="status-label">Activity trail</p>
-          <h2>Persisted planner actions</h2>
+          <p className="status-label">Recent activity</p>
+          <h2>Latest trip planning actions</h2>
           <div className="decision-stack">
             {currentWorkspace.activity_log.length === 0 ? (
-              <p className="muted-copy">Planner actions will appear here after the first persisted decision or feedback event.</p>
+              <p className="muted-copy">Planner actions will appear here after the first decision or feedback event.</p>
             ) : (
               currentWorkspace.activity_log.slice(0, 4).map((entry) => (
                 <article key={entry.activity_event_id} className="decision-card">

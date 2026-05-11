@@ -48,6 +48,8 @@ class PersistedPlanningSessionState(Base):
     pending_decisions: Mapped[list[dict]] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String(32), default="active")
     selected_planning_mode: Mapped[str] = mapped_column(String(32), default="collaborative")
+    notebook_focus_category: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    notebook_focus_item_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
     current_checkpoint_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
     current_saved_scenario_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
     active_budget_plan_id: Mapped[str | None] = mapped_column(String(96), nullable=True)

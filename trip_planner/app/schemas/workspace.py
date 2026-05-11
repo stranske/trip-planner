@@ -43,6 +43,250 @@ class InventorySummary(BaseModel):
     )
 
 
+class WorkspaceUserSummary(BaseModel):
+    """User-facing trip summary for the product workspace surface.
+
+    Field values must avoid raw runtime/provider/object-id language; that
+    detail belongs in :class:`WorkspaceDebugState` and is rendered behind an
+    explicit debug affordance.
+    """
+
+    trip_title: str = Field(description="Human-readable trip title.")
+    trip_mode: Literal["leisure", "business"] = Field(
+        description="Workspace product mode used to gate user-facing copy."
+    )
+    mode_label: str = Field(description="User-friendly mode label (e.g. 'Leisure trip').")
+    status: Literal["ready", "partial", "empty"] = Field(
+        description="High-level workspace status used for top-level framing."
+    )
+    headline: str = Field(description="Short user-facing headline for the trip.")
+    decided: list[str] = Field(
+        default_factory=list,
+        description="User-facing 'what has been decided' bullet list.",
+    )
+    uncertain: list[str] = Field(
+        default_factory=list,
+        description="User-facing 'what is still uncertain' bullet list.",
+    )
+
+
+class WorkspaceNextStep(BaseModel):
+    """Recommended next user action for the trip workspace."""
+
+    title: str = Field(description="Short next-step title in user language.")
+    summary: str = Field(description="Longer next-step summary in user language.")
+    action_label: str | None = Field(
+        default=None,
+        description="Optional CTA label rendered alongside the next-step copy.",
+    )
+    action_target: str | None = Field(
+        default=None,
+        description="Optional anchor or route hint for the recommended action.",
+    )
+    blocked: bool = Field(
+        default=False,
+        description="True when the recommended action is blocked on a missing input.",
+    )
+
+
+class WorkspaceBusinessSummary(BaseModel):
+    """Optional business-mode approval readiness expressed in user language."""
+
+    approval_status: Literal[
+        "not_applicable",
+        "not_ready",
+        "in_review",
+        "approved",
+        "needs_attention",
+    ] = Field(description="Approval readiness in user-facing terms.")
+    headline: str = Field(description="Short user-facing approval headline.")
+    blockers: list[str] = Field(
+        default_factory=list,
+        description="User-facing list of open approval blockers.",
+    )
+
+
+class WorkspacePanelVisibility(BaseModel):
+    """Mode-aware rules for normal workspace panels."""
+
+    show_budget_panel: bool = True
+    show_policy_posture: bool = False
+    show_proposal_panel: bool = False
+    show_approval_readiness_panel: bool = False
+
+
+class WorkspacePolicyPresentation(BaseModel):
+    """User-facing policy/proposal state labels for the normal workspace."""
+
+    active_policy_state: bool = False
+    posture_label: str = "Not applicable"
+    approval_status_label: str = "Not applicable"
+    next_step_label: str = "No policy action needed"
+    summary: str = "Policy approval is not part of this workspace yet."
+
+
+class WorkspaceDebugSection(BaseModel):
+    """A named debug-only payload section that mirrors raw runtime state."""
+
+    title: str = Field(description="Debug section title shown in the advanced surface.")
+    payload: Any = Field(
+        default_factory=dict,
+        description="Raw payload attached to this debug section.",
+    )
+
+
+class WorkspaceDebugState(BaseModel):
+    """Hidden debug surface containing raw runtime/provider/object-id payloads.
+
+    The product workspace view should only render this state behind an
+    explicit debug/advanced affordance.
+    """
+
+    sections: dict[str, WorkspaceDebugSection] = Field(
+        default_factory=dict,
+        description="Named raw debug sections keyed by stable section id.",
+    )
+
+
+class WorkspaceViewModel(BaseModel):
+    """Typed product view model that translates :class:`WorkspaceResponse`.
+
+    The view model splits the workspace payload into traveler-facing,
+    business-facing, and debug-facing sections so the frontend can render a
+    stable user surface without leaking raw runtime detail.
+    """
+
+    user_summary: WorkspaceUserSummary
+    next_step: WorkspaceNextStep
+    panel_visibility: WorkspacePanelVisibility = Field(default_factory=WorkspacePanelVisibility)
+    policy_presentation: WorkspacePolicyPresentation = Field(
+        default_factory=WorkspacePolicyPresentation
+    )
+    business_summary: WorkspaceBusinessSummary | None = None
+    debug_state: WorkspaceDebugState
+
+
+class PlanningLedgerEntry(BaseModel):
+    ledger_entry_id: str
+    trip_id: str
+    session_state_id: str
+    item_type: Literal[
+        "option_considered",
+        "option_rejected",
+        "decision",
+        "assumption",
+        "open_question",
+        "constraint",
+        "source_reference",
+    ]
+    status: Literal["active", "completed", "rejected", "superseded", "deferred"]
+    category: str
+    summary: str
+    detail: str = ""
+    source_message_ids: list[str] = Field(default_factory=list)
+    source_refs: list[str] = Field(default_factory=list)
+    related_option_id: str | None = None
+    related_decision_id: str | None = None
+    supersedes_entry_id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: str
+    updated_at: str
+
+
+class PlanningLedgerSummary(BaseModel):
+    active_decisions: list[PlanningLedgerEntry] = Field(default_factory=list)
+    open_questions: list[PlanningLedgerEntry] = Field(default_factory=list)
+    active_options: list[PlanningLedgerEntry] = Field(default_factory=list)
+    rejected_options: list[PlanningLedgerEntry] = Field(default_factory=list)
+    constraints: list[PlanningLedgerEntry] = Field(default_factory=list)
+    assumptions: list[PlanningLedgerEntry] = Field(default_factory=list)
+    source_references: list[PlanningLedgerEntry] = Field(default_factory=list)
+
+
+class PlanningLedgerState(BaseModel):
+    entries: list[PlanningLedgerEntry] = Field(default_factory=list)
+    summary: PlanningLedgerSummary = Field(default_factory=PlanningLedgerSummary)
+
+
+NotebookCategory = Literal[
+    "route",
+    "lodging",
+    "activities",
+    "budget",
+    "documents",
+    "policy",
+    "other",
+]
+NotebookStatus = Literal["active", "completed", "archived"]
+NotebookPriority = Literal["low", "normal", "high"]
+NotebookSource = Literal["user", "planner"]
+
+
+class PlanningNotebookItem(BaseModel):
+    notebook_item_id: str
+    trip_id: str
+    session_state_id: str
+    title: str
+    note: str = ""
+    category: NotebookCategory
+    status: NotebookStatus
+    priority: NotebookPriority = "normal"
+    source: NotebookSource = "user"
+    linked_ledger_entry_id: str | None = None
+    source_message_ids: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    completed_at: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class PlanningNotebookFocus(BaseModel):
+    category: NotebookCategory | None = None
+    notebook_item_id: str | None = None
+
+
+class PlanningNotebookSummary(BaseModel):
+    active_items: list[PlanningNotebookItem] = Field(default_factory=list)
+    completed_items: list[PlanningNotebookItem] = Field(default_factory=list)
+    archived_items: list[PlanningNotebookItem] = Field(default_factory=list)
+    by_category: dict[str, list[PlanningNotebookItem]] = Field(default_factory=dict)
+
+
+class PlanningNotebookState(BaseModel):
+    items: list[PlanningNotebookItem] = Field(default_factory=list)
+    summary: PlanningNotebookSummary = Field(default_factory=PlanningNotebookSummary)
+    focus: PlanningNotebookFocus = Field(default_factory=PlanningNotebookFocus)
+
+
+class PlanningNotebookCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=240)
+    note: str = Field(default="", max_length=4000)
+    category: NotebookCategory = "other"
+    status: NotebookStatus = "active"
+    priority: NotebookPriority = "normal"
+    source: NotebookSource = "user"
+    linked_ledger_entry_id: str | None = Field(default=None, max_length=96)
+    source_message_ids: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+
+class PlanningNotebookUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=240)
+    note: str | None = Field(default=None, max_length=4000)
+    category: NotebookCategory | None = None
+    status: NotebookStatus | None = None
+    priority: NotebookPriority | None = None
+    linked_ledger_entry_id: str | None = Field(default=None, max_length=96)
+    source_message_ids: list[str] | None = None
+    tags: list[str] | None = None
+
+
+class PlanningNotebookFocusRequest(BaseModel):
+    category: NotebookCategory | None = None
+    notebook_item_id: str | None = Field(default=None, max_length=96)
+
+
 class WorkspaceResponse(BaseModel):
     trip_record: dict[str, Any] = Field(
         description="Persisted trip record payload for the workspace."
@@ -84,6 +328,14 @@ class WorkspaceResponse(BaseModel):
     planner_panel_state: dict[str, Any] = Field(
         description="Workspace-scoped planner panel payload for the mounted side-panel UI.",
     )
+    planning_ledger: PlanningLedgerState = Field(
+        default_factory=PlanningLedgerState,
+        description="Durable trip-scoped ledger of decisions, options, questions, assumptions, constraints, and sources.",
+    )
+    planning_notebook: PlanningNotebookState = Field(
+        default_factory=PlanningNotebookState,
+        description="Trip-scoped notebook items grouped by category with active focus and completed archives.",
+    )
     runtime_state: dict[str, Any] = Field(
         description="Top-level runtime readiness summary for the workspace surface.",
     )
@@ -104,6 +356,13 @@ class WorkspaceResponse(BaseModel):
     proposal_state: dict[str, Any] | None = Field(
         default=None,
         description="Persisted proposal submission and evaluation lifecycle state for business-workspace flows.",
+    )
+    view_model: WorkspaceViewModel | None = Field(
+        default=None,
+        description=(
+            "Typed product workspace view model with user-facing summary, next-step,"
+            " optional business-summary, and hidden debug sections."
+        ),
     )
 
 
@@ -132,5 +391,41 @@ class PlannerOptionFeedbackRequest(BaseModel):
     decision_id: str | None = Field(default=None, max_length=96)
 
 
+class RouteOptionActionRequest(BaseModel):
+    action_type: Literal["make_baseline", "keep", "reject", "reopen", "revise"]
+
+
 class PlanningModeUpdateRequest(BaseModel):
     planning_mode: str = Field(min_length=1, max_length=32)
+
+
+class PlanningLedgerEntryCreateRequest(BaseModel):
+    item_type: Literal[
+        "option_considered",
+        "option_rejected",
+        "decision",
+        "assumption",
+        "open_question",
+        "constraint",
+        "source_reference",
+    ]
+    status: Literal["active", "completed", "rejected", "superseded", "deferred"] = "active"
+    category: str = Field(default="general", min_length=1, max_length=64)
+    summary: str = Field(min_length=1, max_length=280)
+    detail: str = Field(default="", max_length=4000)
+    source_message_ids: list[str] = Field(default_factory=list)
+    source_refs: list[str] = Field(default_factory=list)
+    related_option_id: str | None = Field(default=None, max_length=128)
+    related_decision_id: str | None = Field(default=None, max_length=96)
+
+
+class PlanningLedgerEntryUpdateRequest(BaseModel):
+    status: Literal["active", "completed", "rejected", "superseded", "deferred"] | None = None
+    category: str | None = Field(default=None, min_length=1, max_length=64)
+    summary: str | None = Field(default=None, min_length=1, max_length=280)
+    detail: str | None = Field(default=None, max_length=4000)
+    source_message_ids: list[str] | None = None
+    source_refs: list[str] | None = None
+    related_option_id: str | None = Field(default=None, max_length=128)
+    related_decision_id: str | None = Field(default=None, max_length=96)
+    supersedes_entry_id: str | None = Field(default=None, max_length=96)
