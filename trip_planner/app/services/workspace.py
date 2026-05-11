@@ -908,8 +908,8 @@ def _build_runtime_map_route_geometry(
     *,
     route_warning: str | None,
     total_travel_minutes: int,
-    total_distance_km: float | None = None,
     feasible: bool,
+    total_distance_km: float | None = None,
 ) -> list[dict[str, Any]]:
     segments: list[dict[str, Any]] = []
     segment_count = max(1, len(place_markers) - 1)

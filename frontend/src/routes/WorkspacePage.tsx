@@ -220,19 +220,24 @@ function routeSegmentFocusesFor(
   const markerById = new Map(markers.map((marker) => [marker.id, marker]));
   const providerSegments = scenario.map_view?.rough_route_geometry ?? [];
   if (providerSegments.length > 0) {
-    return providerSegments.map((segment, index) => {
+    return providerSegments.flatMap((segment) => {
       const fromMarker = markerById.get(segment.from_marker_id);
       const toMarker = markerById.get(segment.to_marker_id);
-      return {
-        id: segment.id,
-        fromLabel: segment.from_label,
-        toLabel: segment.to_label,
-        fromIndex: fromMarker?.route_index ?? index,
-        toIndex: toMarker?.route_index ?? index + 1,
-        durationMinutes: segment.duration_minutes ?? null,
-        confidence: segment.confidence ?? scenario.map_view?.confidence.level ?? "medium",
-        unavailableReason: segment.unavailable_reason ?? null,
-      };
+      if (fromMarker == null || toMarker == null) {
+        return [];
+      }
+      return [
+        {
+          id: segment.id,
+          fromLabel: segment.from_label,
+          toLabel: segment.to_label,
+          fromIndex: fromMarker.route_index,
+          toIndex: toMarker.route_index,
+          durationMinutes: segment.duration_minutes ?? null,
+          confidence: segment.confidence ?? scenario.map_view?.confidence.level ?? "medium",
+          unavailableReason: segment.unavailable_reason ?? null,
+        },
+      ];
     });
   }
 
