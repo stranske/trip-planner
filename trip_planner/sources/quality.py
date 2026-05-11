@@ -321,8 +321,6 @@ class SourceQualityScorer:
 
         tags = self._summary_tags(per_source, conflict_detected, len(per_source))
         fragments = self._summary_fragments(
-            per_source=per_source,
-            confidence=confidence,
             label=label,
             conflict_detected=conflict_detected,
             conflict_summary=conflict_summary,
@@ -448,8 +446,8 @@ class SourceQualityScorer:
         if trust.review_consistency is not None:
             components.append(trust.review_consistency)
         if trust.editorial_independence is not None:
-            # editorial independence reduces commercial-bias risk; we treat it as
-            # additive on top of the other reliability signals.
+            # editorial independence reduces commercial-bias risk and is blended
+            # with the other reliability signals.
             components.append(trust.editorial_independence)
         if trust.commerciality is not None:
             # commerciality is informative but does not penalize: commercial-inventory
@@ -548,8 +546,6 @@ class SourceQualityScorer:
     def _summary_fragments(
         self,
         *,
-        per_source: Sequence[SourceQualityScore],
-        confidence: float,
         label: str,
         conflict_detected: bool,
         conflict_summary: str,
