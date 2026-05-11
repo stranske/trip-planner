@@ -123,6 +123,8 @@ This note captures the remaining gaps after the recent readiness, planner-runtim
 - Stale or conflicting inputs reduce confidence without deleting useful options.
 - Source-quality behavior is deterministic and covered by tests.
 
+**Status (2026-05-11):** The deterministic engine, conflict detection, and traveler-facing summary shape are implemented in `trip_planner/sources/quality.py` with `tests/sources/test_source_quality.py` and a ranking-explanation builder in `trip_planner/ranking/explanations.py` (`tests/ranking/test_source_confidence_explanation.py`). The remaining downstream work is to attach resolved `SourceRecord`/`ProvenanceReference` instances onto bundles so the `read_source_quality_summary` planner tool and the leisure/business engines can consume the engine end-to-end.
+
 ## 7. Finish Product UX Cleanup For Traveler Comfort
 
 **Goal:** Remove remaining developer-shaped copy and make the workspace feel like a planning product rather than an implementation surface.

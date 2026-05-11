@@ -5,8 +5,8 @@ It distinguishes docs-only claims from tested implementations so weekly reviews 
 without re-reading every design doc.
 
 **Last updated:** 2026-05-11
-**Test suite baseline:** 524 passed, 1 xfailed (was 3; two resolved by issue #1046 audit — see `tests/planner/MIGRATIONS.md`)  
-**Source baseline:** 159 Python modules (~21.5 K LOC), 84 test modules (~18 K LOC), 38 TypeScript/React files
+**Test suite baseline:** 976 passed, 1 xfailed (issue #1163 added 24 source-quality and explanation-builder tests)  
+**Source baseline:** 161 Python modules (~22 K LOC), 86 test modules (~18.5 K LOC), 38 TypeScript/React files
 
 ---
 
@@ -134,8 +134,8 @@ Design ref: [`docs/ranking-route-search-epic.md`](ranking-route-search-epic.md)
 |------------|--------|-------|--------|
 | Leisure ranking | `trip_planner/ranking/leisure.py` | `tests/ranking/` | ✅ Implemented |
 | Business ranking | `trip_planner/ranking/business.py` | `tests/ranking/` | ✅ Implemented |
-| Ranking explanations | `trip_planner/ranking/explanations.py` | — | 🟡 Partial |
-| Source quality model | `docs/source-quality-model.md` | — | 📄 Docs-only |
+| Ranking explanations | `trip_planner/ranking/explanations.py` | `tests/ranking/test_source_confidence_explanation.py` | ✅ Implemented |
+| Source quality model | `trip_planner/sources/quality.py` + `docs/source-quality-model.md` | `tests/sources/test_source_quality.py` | ✅ Implemented |
 | Source channel strategy | `docs/source-channel-strategy.md` | — | 📄 Docs-only |
 
 ---
@@ -325,11 +325,10 @@ From [`docs/product-architecture-brief.md`](product-architecture-brief.md) and [
 These design commitments are still missing, partial, or not yet verified in a live provider environment. Each is a candidate for a follow-up issue:
 
 1. **Semantic planner memory and reorientation** — planner checkpoints and notebook state exist, but there is no semantic recall/reorientation layer for scattered traveler notes and "I was working on..." context shifts. See §13 above.
-2. **Executable source-quality scoring** — provider-rich planner tools now expose source summaries, route/map status, route geometry, route comparison refresh, and an explicit source-quality `not_available` seam. The scoring engine itself remains a separate design commitment. See §13 above.
+2. **Per-bundle source-quality wiring** — `SourceQualityScorer`, `SourceConfidenceSummary`, and `build_source_confidence_explanation` are fully implemented and tested (issue #1163). The remaining gap is attaching resolved `SourceRecord`/`ProvenanceReference` instances to `InventoryBundle` so the `read_source_quality_summary` planner tool and the leisure/business ranking engines can consume the engine end-to-end.
 3. **Live TPP transport verification** — `live-tpp-execution-reoptimization-epic.md`. All seams exist but no live HTTP round-trip is required by the default test matrix. See §15 above.
-4. **Source quality model implementation** — `source-quality-model.md` + `source-channel-strategy.md`. Design defined; no engine code.
-5. **Provider-rich timeline/map depth** — workspace timeline and map surfaces now share route/segment focus and per-leg timing/confidence, but still need live provider distance/geometry verification and richer source-backed option details. See §16 above.
-6. **Preference explanation generation tests** — `trip_planner/preferences/explanations.py` exists; no `tests/preferences/test_explanations.py`.
+4. **Provider-rich timeline/map depth** — workspace timeline and map surfaces now share route/segment focus and per-leg timing/confidence, but still need live provider distance/geometry verification and richer source-backed option details. See §16 above.
+5. **Preference explanation generation tests** — `trip_planner/preferences/explanations.py` exists; no `tests/preferences/test_explanations.py`.
 
 ---
 

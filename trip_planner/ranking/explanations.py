@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 
 from trip_planner._validators import require_non_empty, require_strings
+from trip_planner.sources.quality import SourceConfidenceSummary
 
 EXPLANATION_RECORD_TYPES: tuple[str, ...] = (
     "summary",
@@ -54,3 +55,72 @@ class ExplanationRecord:
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+def build_source_confidence_explanation(
+    *,
+    target_id: str,
+    target_kind: str = "item",
+    summary: SourceConfidenceSummary,
+    source_refs: list[str] | None = None,
+) -> ExplanationRecord:
+    """Build a ``confidence`` ExplanationRecord from a fused source summary.
+
+    Ranking engines and planner-tool consumers can call this when a candidate
+    or option carries a :class:`SourceConfidenceSummary` so that traveler-facing
+    explanations include source-confidence language alongside the existing
+    ranking-confidence record.
+    """
+
+    if not isinstance(summary, SourceConfidenceSummary):
+        raise ValueError("summary must be a SourceConfidenceSummary")
+    if target_kind not in EXPLANATION_TARGET_KINDS:
+        raise ValueError(f"target_kind must be one of {EXPLANATION_TARGET_KINDS}")
+
+    machine_context: dict[str, str] = {
+        "source_confidence": f"{summary.confidence:.2f}",
+        "source_confidence_label": summary.confidence_label,
+        "contributing_source_count": str(summary.contributing_source_count),
+        "freshness": summary.freshness_summary,
+        "conflict_detected": "true" if summary.conflict_detected else "false",
+    }
+
+    refs: list[str] = []
+    seen: set[str] = set()
+    for entry in source_refs or []:
+        if entry and entry not in seen:
+            refs.append(entry)
+            seen.add(entry)
+    for score in summary.per_source_scores:
+        if score.source_id not in seen:
+            refs.append(score.source_id)
+            seen.add(score.source_id)
+    refs = refs[:6]
+
+    factor_keys = ["source_confidence", *summary.tags[:4]]
+
+    headline_map = {
+        "very_high": "Strong source coverage",
+        "high": "Solid source coverage",
+        "moderate": "Mixed source coverage",
+        "uncertain": "Uncertain source coverage",
+        "sparse": "Sparse source coverage",
+    }
+    headline = headline_map.get(summary.confidence_label, "Source confidence")
+
+    summary_text = " ".join(summary.explanation_fragments) or (
+        "Source confidence is summarized from the contributing source records."
+    )
+
+    return ExplanationRecord(
+        explanation_id=f"source-confidence:{target_id}",
+        record_type="confidence",
+        target_kind=target_kind,
+        target_id=target_id,
+        headline=headline,
+        summary=summary_text,
+        factor_keys=factor_keys,
+        machine_context=machine_context,
+        human_summary=list(summary.explanation_fragments),
+        source_refs=refs,
+    )
