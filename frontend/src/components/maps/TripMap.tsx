@@ -23,6 +23,10 @@ export function TripMap({
   tripMode,
   policyPosture,
   planningLedger,
+  activeScope,
+  selectedSegmentId,
+  onScopeChange,
+  onSelectSegment,
   compactLayout,
 }: {
   comparison: RuntimeScenarioComparison;
@@ -36,6 +40,10 @@ export function TripMap({
   tripMode: string;
   policyPosture: string | null;
   planningLedger?: WorkspaceData["planning_ledger"];
+  activeScope: MapViewScope;
+  selectedSegmentId: string | null;
+  onScopeChange: (scope: MapViewScope) => void;
+  onSelectSegment: (segmentId: string | null) => void;
   compactLayout: boolean;
 }) {
   const activeScenario =
@@ -68,6 +76,10 @@ export function TripMap({
       tripMode={tripMode}
       policyPosture={policyPosture}
       planningLedger={planningLedger}
+      activeScope={activeScope}
+      selectedSegmentId={selectedSegmentId}
+      onScopeChange={onScopeChange}
+      onSelectSegment={onSelectSegment}
       compactLayout={compactLayout}
     />
   );
@@ -85,6 +97,10 @@ function ActiveTripMap({
   tripMode,
   policyPosture,
   planningLedger,
+  activeScope,
+  selectedSegmentId,
+  onScopeChange,
+  onSelectSegment,
   compactLayout,
 }: {
   activeScenario: TripMapScenario;
@@ -98,6 +114,10 @@ function ActiveTripMap({
   tripMode: string;
   policyPosture: string | null;
   planningLedger?: WorkspaceData["planning_ledger"];
+  activeScope: MapViewScope;
+  selectedSegmentId: string | null;
+  onScopeChange: (scope: MapViewScope) => void;
+  onSelectSegment: (segmentId: string | null) => void;
   compactLayout: boolean;
 }) {
   const googleMapsApiKey =
@@ -105,8 +125,6 @@ function ActiveTripMap({
     import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY;
   const providerLoadState =
     (import.meta.env.VITE_GOOGLE_MAPS_PROVIDER_STATE as MapProviderLoadState | undefined) ?? "ready";
-  const [activeScope, setActiveScope] = useState<MapViewScope>("regional");
-  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const mapSurface = buildTripMapSurfaceModel({
     activeScenario,
     bundles,
@@ -139,16 +157,17 @@ function ActiveTripMap({
     setSelectedMarkerId(initialMarkerId);
   }, [activeScenario.scenario_id, initialMarkerId]);
 
-  useEffect(() => {
-    setSelectedSegmentId(null);
-  }, [activeScenario.scenario_id]);
-
   function handleScopeChange(nextScope: MapViewScope) {
-    setActiveScope(nextScope);
-    if (nextScope === "local" && selectedSegmentId == null) {
-      setSelectedSegmentId(mapSurface.routeSegments[0]?.id ?? null);
+    onScopeChange(nextScope);
+    if (nextScope === "local" && mapSurface.workspaceView.selectedSegmentId == null) {
+      onSelectSegment(mapSurface.routeSegments[0]?.id ?? null);
     }
   }
+
+  const selectedSegment =
+    mapSurface.routeSegments.find(
+      (segment) => segment.id === mapSurface.workspaceView.selectedSegmentId
+    ) ?? null;
 
   return (
     <section className="status-card map-card">
@@ -192,9 +211,10 @@ function ActiveTripMap({
                   : ""
               }`}
               aria-pressed={segment.id === mapSurface.workspaceView.selectedSegmentId}
-              onClick={() => setSelectedSegmentId(segment.id)}
+              onClick={() => onSelectSegment(segment.id)}
             >
               {segment.fromLabel} to {segment.toLabel}
+              {segment.durationMinutes != null ? ` · ${segment.durationMinutes} min` : ""}
             </button>
           ))}
         </div>
@@ -304,6 +324,30 @@ function ActiveTripMap({
               <dd>{formatEstimatedTotal(activeScenario.metrics.estimated_total)}</dd>
             </div>
           </dl>
+          {selectedSegment ? (
+            <article className="decision-card">
+              <h3>Segment focus</h3>
+              <p>
+                {selectedSegment.fromLabel} to {selectedSegment.toLabel}
+                {selectedSegment.durationMinutes != null
+                  ? ` · ${selectedSegment.durationMinutes} min`
+                  : ""}
+                {selectedSegment.distanceKm != null
+                  ? ` · ${selectedSegment.distanceKm.toFixed(1)} km`
+                  : ""}
+              </p>
+              <p className="muted-copy">
+                {selectedSegment.confidence === "high"
+                  ? "Provider detail is available for close segment review."
+                  : selectedSegment.confidence === "medium"
+                    ? "Segment timing is estimated from ranked route data."
+                    : "Segment detail needs more route or provider evidence."}
+              </p>
+              {selectedSegment.unavailableReason ? (
+                <p className="muted-copy">{selectedSegment.unavailableReason}</p>
+              ) : null}
+            </article>
+          ) : null}
           <article className="decision-card">
             <h3>Scenario comparison</h3>
             <p>{mapSurface.scenarioComparisonSummary}</p>

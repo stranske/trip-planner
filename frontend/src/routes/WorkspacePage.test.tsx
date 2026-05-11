@@ -1650,7 +1650,7 @@ describe("WorkspacePage", () => {
     expect(container.querySelector("iframe")).toBeNull();
     expect(screen.queryByTitle(/google maps/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Fallback option markers")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
+    expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Regional route review");
     expect(
       screen.getAllByText("High confidence: the route has enough map detail for close review.")
         .length
@@ -1685,7 +1685,7 @@ describe("WorkspacePage", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
+    expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Regional route review");
     expect(screen.queryByText("Google Maps JavaScript adapter")).not.toBeInTheDocument();
   });
 
@@ -1907,7 +1907,7 @@ describe("WorkspacePage", () => {
 
     expect(screen.getByText("Compact review keeps route, day plan, and next choices close together.")).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
+      expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Regional route review");
     });
     expect(
       screen.getAllByText("Medium confidence: this is an approximate sketch from the current route stops.")
@@ -1928,7 +1928,7 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
+      expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Regional route review");
     });
 
     expect(screen.queryByText(/Google Maps JavaScript is loading/)).not.toBeInTheDocument();
@@ -1946,7 +1946,7 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Approximate route shape");
+      expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Regional route review");
     });
 
     expect(screen.queryByText(/failed to load/)).not.toBeInTheDocument();

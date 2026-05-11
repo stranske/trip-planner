@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { FeasibilitySummary, RuntimeScenarioComparison, WorkspaceData } from "../../api/workspace";
@@ -159,30 +160,44 @@ afterEach(() => {
 
 function renderTripMap(
   onSelectScenario = vi.fn(),
-  ledger?: WorkspaceData["planning_ledger"]
+  ledger?: WorkspaceData["planning_ledger"],
+  onSelectSegment = vi.fn()
 ) {
-  render(
-    <TripMap
-      comparison={comparison}
-      scenarioComparisonSummary="Rail-first stays the easiest route to compare against."
-      scenarioFocusAreas={["route_pace"]}
-      activeScenarioId="route-option:rail-first"
-      onSelectScenario={onSelectScenario}
-      bundles={bundles}
-      feasibilitySummary={feasibilitySummary}
-      tripPrimaryRegions={["Sweden", "Norway"]}
-      tripMode="business"
-      policyPosture="No approval packet yet"
-      planningLedger={ledger}
-      compactLayout={false}
-    />
-  );
-  return onSelectScenario;
+  function Harness() {
+    const [activeScope, setActiveScope] = useState<"global" | "regional" | "local">("regional");
+    const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+    return (
+      <TripMap
+        comparison={comparison}
+        scenarioComparisonSummary="Rail-first stays the easiest route to compare against."
+        scenarioFocusAreas={["route_pace"]}
+        activeScenarioId="route-option:rail-first"
+        onSelectScenario={onSelectScenario}
+        bundles={bundles}
+        feasibilitySummary={feasibilitySummary}
+        tripPrimaryRegions={["Sweden", "Norway"]}
+        tripMode="business"
+        policyPosture="No approval packet yet"
+        planningLedger={ledger}
+        activeScope={activeScope}
+        selectedSegmentId={selectedSegmentId}
+        onScopeChange={setActiveScope}
+        onSelectSegment={(segmentId) => {
+          onSelectSegment(segmentId);
+          setSelectedSegmentId(segmentId);
+        }}
+        compactLayout={false}
+      />
+    );
+  }
+
+  render(<Harness />);
+  return { onSelectScenario, onSelectSegment };
 }
 
 describe("TripMap", () => {
   it("switches map scopes without changing the selected route option", () => {
-    const onSelectScenario = renderTripMap();
+    const { onSelectScenario, onSelectSegment } = renderTripMap();
 
     const scopeControls = screen.getByLabelText("Map view scope");
     expect(within(scopeControls).getByRole("button", { name: "Route" })).toHaveAttribute(
@@ -195,9 +210,9 @@ describe("TripMap", () => {
     expect(screen.getByLabelText("Local segment selector")).toBeInTheDocument();
     expect(screen.getByText("Segment-level planning view")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Oslo to Bergen" }));
-    expect(screen.getByLabelText("Oslo to Bergen route drawing")).toHaveTextContent(
-      "1 shown segment"
+    fireEvent.click(screen.getByRole("button", { name: /Oslo to Bergen/ }));
+    expect(onSelectSegment).toHaveBeenCalledWith(
+      "route-option:rail-first-oslo-1-route-option:rail-first-bergen-2"
     );
 
     fireEvent.click(within(scopeControls).getByRole("button", { name: "Whole trip" }));
@@ -212,7 +227,7 @@ describe("TripMap", () => {
     renderTripMap();
 
     expect(screen.getByLabelText("Map view confidence")).toHaveTextContent(
-      "Approximate route shape"
+      "Regional route review"
     );
     expect(screen.queryByText(/Google Maps JavaScript/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Provider misconfigured/i)).not.toBeInTheDocument();
@@ -236,5 +251,13 @@ describe("TripMap", () => {
         name: /transport marker: Rail transfer anchors.*1 linked planning note/i,
       })
     ).toBeInTheDocument();
+  });
+
+  it("renders segment timing and confidence in traveler language", () => {
+    renderTripMap();
+
+    expect(screen.getByRole("heading", { name: "Segment focus" })).toBeInTheDocument();
+    expect(screen.getByText(/Stockholm to Oslo · 210 min/)).toBeInTheDocument();
+    expect(screen.getByText("Segment timing is estimated from ranked route data.")).toBeInTheDocument();
   });
 });

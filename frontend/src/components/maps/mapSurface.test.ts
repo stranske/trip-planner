@@ -209,6 +209,113 @@ describe("mapSurface", () => {
     expect(localModel.scope.precisionLabel).toBe("Segment-level planning view");
   });
 
+  it("uses provider-rich map view segment details when the runtime payload supplies them", () => {
+    const model = buildTripMapSurfaceModel({
+      activeScenario: {
+        scenario_id: "scenario:provider",
+        route_option_id: "route-option:provider",
+        title: "Provider route",
+        rank: 1,
+        status: "lead",
+        summary: "Baseline",
+        comparison_note: "Lead route",
+        option_count: 2,
+        route_sequence: ["kyoto", "uji", "nara"],
+        route_summary: "kyoto -> uji -> nara",
+        recommended_for_selection: true,
+        feasible: true,
+        metrics: {
+          score: 0.91,
+          travel_minutes: 180,
+          transfers: 2,
+          estimated_total: null,
+        },
+        delta: {
+          score_delta: 0,
+          travel_minutes_delta: 0,
+          transfers_delta: 0,
+          estimated_total_delta: null,
+        },
+        highlights: ["Short regional route."],
+        map_view: {
+          active_scope: "regional",
+          active_route_option_id: "route-option:provider",
+          selected_segment_id: "segment:uji-nara",
+          place_markers: [
+            { id: "marker:kyoto", source_id: "kyoto", label: "Kyoto", route_index: 0, x: 0.1, y: 0.5 },
+            { id: "marker:uji", source_id: "uji", label: "Uji", route_index: 1, x: 0.45, y: 0.3 },
+            { id: "marker:nara", source_id: "nara", label: "Nara", route_index: 2, x: 0.85, y: 0.6 },
+          ],
+          rough_route_geometry: [
+            {
+              id: "segment:kyoto-uji",
+              from_marker_id: "marker:kyoto",
+              to_marker_id: "marker:uji",
+              from_label: "Kyoto",
+              to_label: "Uji",
+              x1: 0.1,
+              y1: 0.5,
+              x2: 0.45,
+              y2: 0.3,
+              warning: null,
+              duration_minutes: 42,
+              distance_km: 17.5,
+              confidence: "high",
+              unavailable_reason: null,
+            },
+            {
+              id: "segment:uji-nara",
+              from_marker_id: "marker:uji",
+              to_marker_id: "marker:nara",
+              from_label: "Uji",
+              to_label: "Nara",
+              x1: 0.45,
+              y1: 0.3,
+              x2: 0.85,
+              y2: 0.6,
+              warning: null,
+              duration_minutes: 58,
+              distance_km: null,
+              confidence: "medium",
+              unavailable_reason: "Provider distance is not available.",
+            },
+          ],
+          confidence: {
+            level: "high",
+            summary: "Provider detail is available.",
+          },
+        },
+      },
+      bundles: [],
+      feasibilitySummary: {
+        assessment_count: 0,
+        recommended_bundle_count: 0,
+        blocking_bundle_count: 0,
+        attention_bundle_count: 0,
+        notes: [],
+        assessments: [],
+      },
+      googleMapsApiKey: "test-key",
+      activeScope: "local",
+      selectedSegmentId: "segment:uji-nara",
+    });
+
+    expect(model.workspaceView.activeRouteOptionId).toBe("route-option:provider");
+    expect(model.visibleRouteStops.map((stop) => stop.label)).toEqual(["Uji", "Nara"]);
+    expect(model.visibleRouteSegments[0]).toMatchObject({
+      id: "segment:uji-nara",
+      durationMinutes: 58,
+      distanceKm: null,
+      confidence: "medium",
+      unavailableReason: "Provider distance is not available.",
+    });
+    expect(model.routeSegments[0]).toMatchObject({
+      durationMinutes: 42,
+      distanceKm: 17.5,
+      confidence: "high",
+    });
+  });
+
   it("connects directly linked ledger entries to map markers and route segments", () => {
     const baseInput = {
       activeScenario: {

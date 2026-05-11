@@ -907,8 +907,18 @@ def _build_runtime_map_route_geometry(
     place_markers: list[dict[str, Any]],
     *,
     route_warning: str | None,
+    total_travel_minutes: int,
+    total_distance_km: float | None = None,
+    feasible: bool,
 ) -> list[dict[str, Any]]:
     segments: list[dict[str, Any]] = []
+    segment_count = max(1, len(place_markers) - 1)
+    per_segment_minutes = max(0, round(total_travel_minutes / segment_count))
+    per_segment_distance_km = (
+        round(total_distance_km / segment_count, 1)
+        if total_distance_km is not None and total_distance_km > 0
+        else None
+    )
     for index, marker in enumerate(place_markers[:-1]):
         next_marker = place_markers[index + 1]
         segments.append(
@@ -923,6 +933,14 @@ def _build_runtime_map_route_geometry(
                 "x2": next_marker["x"],
                 "y2": next_marker["y"],
                 "warning": route_warning if index == 0 else None,
+                "duration_minutes": per_segment_minutes,
+                "distance_km": per_segment_distance_km,
+                "confidence": "medium" if feasible else "low",
+                "unavailable_reason": (
+                    None
+                    if per_segment_distance_km is not None
+                    else "Provider distance is not available; duration is estimated from ranked scenario timing."
+                ),
             }
         )
     return segments
@@ -940,6 +958,9 @@ def _build_runtime_map_view_payload(
     rough_route_geometry = _build_runtime_map_route_geometry(
         place_markers,
         route_warning=route_warning,
+        total_travel_minutes=int(summary.get("total_travel_minutes") or 0),
+        total_distance_km=summary.get("total_distance_km"),
+        feasible=bool(summary.get("feasible", False)),
     )
     return {
         "active_scope": "regional",
