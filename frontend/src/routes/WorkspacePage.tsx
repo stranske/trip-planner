@@ -1148,6 +1148,7 @@ function WorkspacePageContent({
         {productView && Object.keys(productView.debug_state.sections).length > 0 ? (
           <details
             className="workspace-debug-disclosure"
+            open={showWorkspaceDebugDetails}
             onToggle={(event) => setShowWorkspaceDebugDetails(event.currentTarget.open)}
           >
             <summary>Advanced diagnostics</summary>
