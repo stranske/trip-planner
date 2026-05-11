@@ -327,6 +327,48 @@ a {
   font-size: 0.96rem;
 }
 
+.workspace-debug-disclosure {
+  margin-top: 1rem;
+  max-width: 56rem;
+}
+
+.workspace-debug-disclosure summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.workspace-debug-section-list {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 0.9rem;
+}
+
+.workspace-debug-section {
+  border: 1px solid rgba(19, 33, 44, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 0.85rem;
+}
+
+.workspace-debug-section h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.96rem;
+}
+
+.workspace-debug-section pre {
+  max-height: 320px;
+  overflow: auto;
+  margin: 0;
+  border-radius: 8px;
+  background: rgba(19, 33, 44, 0.06);
+  color: #13212c;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  padding: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .workspace-meta {
   display: grid;
   gap: 0.9rem;

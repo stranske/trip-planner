@@ -789,6 +789,7 @@ function WorkspacePageContent({
   const [plannerBusyLabel, setPlannerBusyLabel] = useState<string | null>(null);
   const [planningModeBusy, setPlanningModeBusy] = useState(false);
   const [planningModeError, setPlanningModeError] = useState<string | null>(null);
+  const [showWorkspaceDebugDetails, setShowWorkspaceDebugDetails] = useState(false);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
   const [proposalError, setProposalError] = useState<string | null>(null);
@@ -800,6 +801,7 @@ function WorkspacePageContent({
   useEffect(() => {
     setCurrentWorkspace(workspace);
     setSelectedScenarioId(resolveMapScenarioId(workspace));
+    setShowWorkspaceDebugDetails(false);
   }, [workspace]);
 
   useEffect(() => {
@@ -1144,13 +1146,26 @@ function WorkspacePageContent({
           </div>
         </details>
         {productView && Object.keys(productView.debug_state.sections).length > 0 ? (
-          <details className="workspace-debug-disclosure">
+          <details
+            className="workspace-debug-disclosure"
+            onToggle={(event) => setShowWorkspaceDebugDetails(event.currentTarget.open)}
+          >
             <summary>Advanced diagnostics</summary>
             <p className="muted-copy">
               {Object.keys(productView.debug_state.sections).length} debug section
               {Object.keys(productView.debug_state.sections).length === 1 ? "" : "s"} available for
               troubleshooting.
             </p>
+            {showWorkspaceDebugDetails ? (
+              <div className="workspace-debug-section-list">
+                {Object.entries(productView.debug_state.sections).map(([sectionId, section]) => (
+                  <article key={sectionId} className="workspace-debug-section">
+                    <h3>{section.title}</h3>
+                    <pre>{JSON.stringify(section.payload, null, 2)}</pre>
+                  </article>
+                ))}
+              </div>
+            ) : null}
           </details>
         ) : null}
       </div>

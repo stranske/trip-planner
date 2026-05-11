@@ -961,6 +961,108 @@ describe("WorkspacePage", () => {
     expect(screen.queryByText("Policy posture")).not.toBeInTheDocument();
   });
 
+  it("keeps business approval readiness visible in user-facing language", async () => {
+    const businessWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      trip_record: {
+        ...workspacePayload.trip_record,
+        trip: {
+          ...workspacePayload.trip_record.trip,
+          trip_id: "trip-business-tokyo-summit",
+          title: "Tokyo client summit",
+          summary: "Business trip with approval-ready policy posture.",
+          mode: "business",
+          status: "active",
+          trip_frame: {
+            ...workspacePayload.trip_record.trip.trip_frame,
+            duration_days: 5,
+            primary_regions: ["Tokyo", "Yokohama"],
+          },
+        },
+      },
+      planner_panel_state: {
+        ...workspacePayload.planner_panel_state,
+        trip: {
+          ...workspacePayload.planner_panel_state.trip,
+          trip_id: "trip-business-tokyo-summit",
+          title: "Tokyo client summit",
+          mode: "business",
+          status: "active",
+        },
+      },
+      view_model: {
+        user_summary: {
+          trip_title: "Tokyo client summit",
+          trip_mode: "business",
+          mode_label: "Business trip",
+          status: "ready",
+          headline: "Approval readiness is available for this trip.",
+          decided: ["Approval packet is ready."],
+          uncertain: [],
+        },
+        next_step: {
+          title: "Review approval packet",
+          summary: "Policy evaluation passed and the packet can move to approval handling.",
+          action_label: "Advance to approval",
+          action_target: "approval",
+          blocked: false,
+        },
+        panel_visibility: {
+          show_budget_panel: true,
+          show_policy_posture: true,
+          show_proposal_panel: true,
+          show_approval_readiness_panel: true,
+        },
+        policy_presentation: {
+          active_policy_state: true,
+          posture_label: "Ready for approval",
+          approval_status_label: "Ready for approval",
+          next_step_label: "Advance to approval",
+          summary: "Policy evaluation passed and the approval packet is ready.",
+        },
+        business_summary: {
+          approval_status: "approved",
+          headline: "Approval packet is ready",
+          blockers: [],
+        },
+        debug_state: {
+          sections: {
+            proposal_state: {
+              title: "Proposal state",
+              payload: workspacePayload.proposal_state,
+            },
+          },
+        },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(businessWorkspace),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("heading", { name: "Tokyo client summit" }).length).toBeGreaterThan(0);
+    });
+
+    expect(screen.getByText("Business trip")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review approval packet" })).toBeInTheDocument();
+    expect(screen.getByText("Approval readiness is available for this trip.")).toBeInTheDocument();
+    expect(screen.getAllByText("Ready for approval").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Advance to approval").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Approval posture").length).toBeGreaterThan(0);
+    expect(screen.getByText("Advanced diagnostics")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain("proposal_state_id");
+
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Proposal state" })).toBeInTheDocument();
+    });
+    expect(document.body.textContent ?? "").toContain("proposal_state_id");
+  });
+
   it("persists planning mode selections through the workspace API", async () => {
     const user = userEvent.setup();
     mockedUseLoaderData.mockReturnValue({
