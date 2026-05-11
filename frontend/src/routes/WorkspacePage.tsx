@@ -895,6 +895,11 @@ function WorkspacePageContent({
     }
     return sections;
   }, [productView?.debug_state.sections, currentWorkspace.proposal_state]);
+  const workspaceDebugDisclosureKey = [
+    trip.trip_id,
+    currentWorkspace.proposal_state?.proposal_state_id ?? "no-proposal",
+    Object.keys(workspaceDebugSections).sort().join("|"),
+  ].join(":");
   function handleScenarioSelection(scenarioId: string) {
     setSelectedScenarioId(scenarioId);
   }
@@ -1157,6 +1162,7 @@ function WorkspacePageContent({
         </details>
         {Object.keys(workspaceDebugSections).length > 0 ? (
           <details
+            key={workspaceDebugDisclosureKey}
             className="workspace-debug-disclosure"
             open={showWorkspaceDebugDetails}
             onToggle={(event) => setShowWorkspaceDebugDetails(event.currentTarget.open)}

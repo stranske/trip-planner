@@ -1554,6 +1554,53 @@ describe("WorkspacePage", () => {
     expect(document.body.textContent ?? "").toContain("proposal_state_id");
   });
 
+  it("closes advanced diagnostics when the workspace changes", async () => {
+    const firstWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      proposal_state: {
+        ...workspacePayload.proposal_state,
+        proposal_state_id: "proposal-state-first",
+      },
+    };
+    const nextWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      proposal_state: {
+        ...workspacePayload.proposal_state,
+        proposal_state_id: "proposal-state-next",
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(firstWorkspace),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    const { rerender } = renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Advanced diagnostics")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("Advanced diagnostics"));
+    await waitFor(() => {
+      expect(document.body.textContent ?? "").toContain("proposal-state-first");
+    });
+
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(nextWorkspace),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+    rerender(
+      <TestMemoryRouter>
+        <WorkspacePage />
+      </TestMemoryRouter>
+    );
+
+    await waitFor(() => {
+      const disclosure = document.querySelector(".workspace-debug-disclosure");
+      expect(disclosure).not.toHaveAttribute("open");
+    });
+    expect(document.body.textContent ?? "").not.toContain("proposal-state-next");
+  });
+
   it("shows an empty-state message when no route sequence is available", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
