@@ -323,10 +323,11 @@ function buildRouteSegments(
   const providerSegments = activeScenario.map_view?.rough_route_geometry ?? [];
   if (providerSegments.length > 0) {
     const stopById = new Map(routeStops.map((stop) => [stop.id, stop]));
-    return providerSegments.map((segment) => {
-      const fromStop = stopById.get(segment.from_marker_id);
-      const toStop = stopById.get(segment.to_marker_id);
-      return {
+    return providerSegments
+      .filter(
+        (segment) => stopById.has(segment.from_marker_id) && stopById.has(segment.to_marker_id)
+      )
+      .map((segment) => ({
         id: segment.id,
         fromStopId: segment.from_marker_id,
         toStopId: segment.to_marker_id,
@@ -342,10 +343,7 @@ function buildRouteSegments(
         confidence: segment.confidence ?? activeScenario.map_view?.confidence.level ?? "medium",
         unavailableReason: segment.unavailable_reason ?? null,
         focusCues: [],
-      };
-    }).filter(
-      (segment) => stopById.has(segment.fromStopId) || stopById.has(segment.toStopId)
-    );
+      }));
   }
 
   return routeStops.slice(0, -1).map((stop, index) => {
