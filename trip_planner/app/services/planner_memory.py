@@ -75,9 +75,7 @@ def _checkpoint_summary(
         else ""
     )
     turn_metadata = (
-        latest_reply_record.payload.get("turn_metadata")
-        if latest_reply_record is not None
-        else {}
+        latest_reply_record.payload.get("turn_metadata") if latest_reply_record is not None else {}
     )
     if not isinstance(turn_metadata, dict):
         turn_metadata = {}
