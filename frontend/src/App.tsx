@@ -25,16 +25,16 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">Trip Planner Runtime</p>
-          <h1>Persisted planner workspace</h1>
+          <p className="eyebrow">Trip Planner</p>
+          <h1>Plan trips with a saved workspace</h1>
           <p className="lede">
             {session
-              ? `Signed in as ${session.user.display_name}. Saved trips are now the persisted planning container for later workspace issues.`
-              : "The React shell now bootstraps through cookie-backed sessions before protected planner routes load."}
+              ? `Signed in as ${session.user.display_name}. Open a trip to keep decisions, notes, budgets, and route options together.`
+              : "Sign in to continue planning trips, compare routes, and keep notes in one place."}
           </p>
         </div>
         <nav aria-label="Primary">
-          <NavLink to="/health">Health</NavLink>
+          <NavLink to="/health">Status</NavLink>
           {session ? (
             <>
               <NavLink to="/trips">Trips</NavLink>

@@ -107,6 +107,7 @@ function NotebookItemCard({
 export function PlanningNotebookPanel({
   notebookState,
   busyLabel,
+  successMessage,
   errorMessage,
   onCreateItem,
   onCompleteItem,
@@ -116,6 +117,7 @@ export function PlanningNotebookPanel({
 }: {
   notebookState: PlanningNotebookState;
   busyLabel: string | null;
+  successMessage?: string | null;
   errorMessage: string | null;
   onCreateItem: (payload: { title: string; category: NotebookCategory; note?: string; priority?: NotebookPriority }) => Promise<void>;
   onCompleteItem: (notebookItemId: string) => Promise<void>;
@@ -235,6 +237,11 @@ export function PlanningNotebookPanel({
       ) : null}
 
       {busyLabel ? <p className="muted-copy">{busyLabel}</p> : null}
+      {successMessage ? (
+        <p className="planner-inline-success" role="status">
+          {successMessage}
+        </p>
+      ) : null}
       {errorMessage ? <p className="planner-inline-error">{errorMessage}</p> : null}
       {validationMessage ? <p className="planner-inline-error">{validationMessage}</p> : null}
 

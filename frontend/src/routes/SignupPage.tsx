@@ -35,11 +35,10 @@ export function SignupPage() {
   return (
     <section className="auth-layout">
       <article className="status-card auth-card">
-        <p className="status-label">Account foundation</p>
+        <p className="status-label">New account</p>
         <h2>Create your planner account</h2>
         <p className="lede">
-          This first pass keeps auth intentionally small-business sized: email, password, and a
-          durable session cookie.
+          Save trips, compare options, and return to planning work without losing the thread.
         </p>
         <form className="auth-form" onSubmit={handleSubmit}>
           <label>

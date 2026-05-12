@@ -624,6 +624,10 @@ a {
   color: #912c22;
 }
 
+.planner-inline-success {
+  color: #25633f;
+}
+
 .planner-panel-host .planner-panel {
   min-height: 100%;
 }
@@ -1561,6 +1565,27 @@ a {
   gap: 1rem;
 }
 
+.trip-card-actions,
+.trip-delete-confirmation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.trip-delete-confirmation {
+  padding: 0.85rem;
+  border: 1px solid rgba(145, 44, 34, 0.22);
+  border-radius: 12px;
+  background: rgba(145, 44, 34, 0.07);
+}
+
+.trip-delete-confirmation p {
+  flex-basis: 100%;
+  margin: 0;
+  color: #5a2a24;
+}
+
 .cta-link {
   display: inline-flex;
   width: fit-content;
@@ -1571,6 +1596,35 @@ a {
   background: #13212c;
   color: #f7f1e5;
   font-weight: 600;
+}
+
+.secondary-link,
+.secondary-button,
+.danger-button {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.7rem 0.95rem;
+  border: 1px solid rgba(19, 33, 44, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #13212c;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.danger-button {
+  border-color: rgba(145, 44, 34, 0.36);
+  color: #912c22;
+}
+
+.secondary-button:disabled,
+.danger-button:disabled {
+  cursor: progress;
+  opacity: 0.58;
 }
 
 .status-grid {

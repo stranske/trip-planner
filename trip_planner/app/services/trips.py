@@ -6,7 +6,7 @@ import re
 import secrets
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
@@ -17,6 +17,25 @@ from trip_planner.contracts.trip import (
     TripArtifactRefs,
     TripFrameSummary,
 )
+from trip_planner.persistence.models.activity import (
+    PersistedActivityLogEvent,
+    PersistedPlannerAction,
+)
+from trip_planner.persistence.models.budget import (
+    PersistedActualSpendEvent,
+    PersistedBudgetPlan,
+    PersistedBudgetPlanVersion,
+)
+from trip_planner.persistence.models.planner_memory import (
+    PersistedPlannerCheckpoint,
+    PersistedPlannerMemoryArtifact,
+)
+from trip_planner.persistence.models.planning_ledger import PersistedPlanningLedgerEntry
+from trip_planner.persistence.models.planning_notebook import PersistedPlanningNotebookItem
+from trip_planner.persistence.models.policy import PersistedPolicyState
+from trip_planner.persistence.models.proposal import PersistedProposalState
+from trip_planner.persistence.models.scenario import PersistedSavedScenario
+from trip_planner.persistence.models.session import PersistedPlanningSessionState
 from trip_planner.persistence.models.trip import PersistedTrip
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -177,3 +196,36 @@ def get_trip(db_session: Session, *, user: AuthenticatedUser, trip_id: str) -> d
     if record is None:
         return None
     return serialize_trip(record)
+
+
+def delete_trip(db_session: Session, *, user: AuthenticatedUser, trip_id: str) -> bool:
+    record = db_session.scalar(
+        select(PersistedTrip)
+        .where(PersistedTrip.trip_id == trip_id)
+        .where(PersistedTrip.user_id == user.user_id)
+    )
+    if record is None:
+        return False
+
+    # Keep deletion deterministic in SQLite test databases, where foreign-key
+    # cascade enforcement is not guaranteed unless PRAGMA foreign_keys is on.
+    for model in (
+        PersistedActualSpendEvent,
+        PersistedBudgetPlanVersion,
+        PersistedBudgetPlan,
+        PersistedPlannerAction,
+        PersistedActivityLogEvent,
+        PersistedPlannerMemoryArtifact,
+        PersistedPlannerCheckpoint,
+        PersistedPlanningLedgerEntry,
+        PersistedPlanningNotebookItem,
+        PersistedPolicyState,
+        PersistedProposalState,
+        PersistedSavedScenario,
+        PersistedPlanningSessionState,
+    ):
+        db_session.execute(delete(model).where(model.trip_id == trip_id))
+
+    db_session.delete(record)
+    db_session.commit()
+    return True

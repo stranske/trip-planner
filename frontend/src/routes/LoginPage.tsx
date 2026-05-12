@@ -44,11 +44,10 @@ export function LoginPage() {
   return (
     <section className="auth-layout">
       <article className="status-card auth-card">
-        <p className="status-label">Account access</p>
+        <p className="status-label">Welcome back</p>
         <h2>Sign in to resume planning</h2>
         <p className="lede">
-          Use the small-business account foundation to restore your saved trip workspace and
-          session state.
+          Continue working with your saved trips, route comparisons, notes, and planning history.
         </p>
         <form className="auth-form" onSubmit={handleSubmit}>
           <label>
