@@ -14,7 +14,7 @@ describe("fetchJson", () => {
       ok: true,
       status: 200,
       statusText: "OK",
-      json: async () => ({ service: "trip-planner-api" }),
+      text: async () => JSON.stringify({ service: "trip-planner-api" }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -34,7 +34,7 @@ describe("fetchJson", () => {
       ok: true,
       status: 200,
       statusText: "OK",
-      json: async () => ({ ok: true }),
+      text: async () => JSON.stringify({ ok: true }),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -72,13 +72,27 @@ describe("fetchJson", () => {
     } satisfies Partial<ApiClientError>);
   });
 
+  it("allows successful no-content responses for mutation endpoints", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+        statusText: "No Content",
+        text: async () => "",
+      })
+    );
+
+    await expect(fetchJson<void>({ path: "/api/trips/trip-1", method: "DELETE" })).resolves.toBeUndefined();
+  });
+
   it("resolves request URLs against VITE_API_BASE_URL when configured", async () => {
     vi.stubEnv("VITE_API_BASE_URL", "https://api.example.test/base/");
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       statusText: "OK",
-      json: async () => ({ ok: true }),
+      text: async () => JSON.stringify({ ok: true }),
     });
     vi.stubGlobal("fetch", fetchMock);
 

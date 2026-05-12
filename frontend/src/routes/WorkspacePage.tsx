@@ -156,6 +156,14 @@ const PLANNER_BLOCK_PRESENTATION: Record<string, { label: string; order: number 
   traveler_input_summary: { label: "What I heard", order: 90 },
 };
 
+const ROUTE_OPTION_ACTION_SUCCESS: Record<RouteOptionActionType, string> = {
+  make_baseline: "Route saved as the working baseline.",
+  keep: "Route kept for later comparison.",
+  reject: "Route moved out of the active comparison.",
+  reopen: "Route returned to the active comparison.",
+  revise: "Revision request saved for the planner.",
+};
+
 function formatTravelerToken(value: string | null | undefined, fallback = "Not set yet"): string {
   if (!value) {
     return fallback;
@@ -995,6 +1003,7 @@ function WorkspacePageContent({
   );
   const [plannerSession, setPlannerSession] = useState<PlannerSessionResponse | null>(null);
   const [plannerConversationDraft, setPlannerConversationDraft] = useState("");
+  const [plannerConversationNotice, setPlannerConversationNotice] = useState<string | null>(null);
   const [plannerConversationError, setPlannerConversationError] = useState<string | null>(null);
   const [plannerConversationBusyLabel, setPlannerConversationBusyLabel] = useState<string | null>(
     null
@@ -1009,17 +1018,23 @@ function WorkspacePageContent({
   const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
   const [notebookError, setNotebookError] = useState<string | null>(null);
   const [notebookBusyLabel, setNotebookBusyLabel] = useState<string | null>(null);
+  const [notebookSuccess, setNotebookSuccess] = useState<string | null>(null);
   const [proposalError, setProposalError] = useState<string | null>(null);
   const [proposalBusyLabel, setProposalBusyLabel] = useState<string | null>(null);
   const [routeOptionError, setRouteOptionError] = useState<string | null>(null);
   const [routeOptionBusyLabel, setRouteOptionBusyLabel] = useState<string | null>(null);
+  const [routeOptionSuccess, setRouteOptionSuccess] = useState<string | null>(null);
   const plannerSessionLoadVersion = useRef(0);
+  const plannerConversationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const isCompactLayout = useCompactWorkspaceLayout();
   useEffect(() => {
     setCurrentWorkspace(workspace);
     setSelectedScenarioId(resolveMapScenarioId(workspace));
     setSelectedMapScope("regional");
     setSelectedSegmentId(null);
+    setPlannerConversationNotice(null);
+    setRouteOptionSuccess(null);
+    setNotebookSuccess(null);
     setShowWorkspaceDebugDetails(false);
   }, [workspace]);
 
@@ -1191,6 +1206,7 @@ function WorkspacePageContent({
 
   async function handleRouteOptionAction(optionId: string, actionType: RouteOptionActionType) {
     setRouteOptionError(null);
+    setRouteOptionSuccess(null);
     setRouteOptionBusyLabel("Saving route option...");
     plannerSessionLoadVersion.current += 1;
     try {
@@ -1198,6 +1214,7 @@ function WorkspacePageContent({
       startTransition(() => {
         setCurrentWorkspace(nextWorkspace);
         setSelectedScenarioId(resolveMapScenarioId(nextWorkspace));
+        setRouteOptionSuccess(ROUTE_OPTION_ACTION_SUCCESS[actionType]);
       });
     } catch (error) {
       setRouteOptionError(error instanceof Error ? error.message : "Route option update failed.");
@@ -1214,6 +1231,7 @@ function WorkspacePageContent({
       return;
     }
 
+    setPlannerConversationNotice(null);
     setPlannerConversationError(null);
     setPlannerConversationBusyLabel("Sending planner turn...");
     plannerSessionLoadVersion.current += 1;
@@ -1235,7 +1253,9 @@ function WorkspacePageContent({
 
   function handlePlannerPromptSuggestion(draft: string) {
     setPlannerConversationDraft(draft);
+    setPlannerConversationNotice("Draft added. Edit it if needed, then send it to the planner.");
     setPlannerConversationError(null);
+    plannerConversationTextareaRef.current?.focus();
   }
 
   async function handleBudgetSave(payload: BudgetPlanUpsertPayload) {
@@ -1326,11 +1346,13 @@ function WorkspacePageContent({
     priority?: NotebookPriority;
   }) {
     setNotebookError(null);
+    setNotebookSuccess(null);
     setNotebookBusyLabel("Adding notebook item...");
     try {
       const newItem = await createNotebookItem(trip.trip_id, payload);
       startTransition(() => {
         setCurrentWorkspace((current) => mergeNotebookItem(current, newItem));
+        setNotebookSuccess("Notebook item added.");
       });
     } catch (error) {
       setNotebookError(error instanceof Error ? error.message : "Notebook item creation failed.");
@@ -1341,12 +1363,14 @@ function WorkspacePageContent({
 
   async function handleNotebookComplete(notebookItemId: string) {
     setNotebookError(null);
+    setNotebookSuccess(null);
     try {
       const updatedItem = await updateNotebookItem(trip.trip_id, notebookItemId, {
         status: "completed",
       });
       startTransition(() => {
         setCurrentWorkspace((current) => mergeNotebookItem(current, updatedItem));
+        setNotebookSuccess("Notebook item marked complete.");
       });
     } catch (error) {
       setNotebookError(error instanceof Error ? error.message : "Notebook item update failed.");
@@ -1355,12 +1379,14 @@ function WorkspacePageContent({
 
   async function handleNotebookReopen(notebookItemId: string) {
     setNotebookError(null);
+    setNotebookSuccess(null);
     try {
       const updatedItem = await updateNotebookItem(trip.trip_id, notebookItemId, {
         status: "active",
       });
       startTransition(() => {
         setCurrentWorkspace((current) => mergeNotebookItem(current, updatedItem));
+        setNotebookSuccess("Notebook item reopened.");
       });
     } catch (error) {
       setNotebookError(error instanceof Error ? error.message : "Notebook item reopen failed.");
@@ -1369,10 +1395,12 @@ function WorkspacePageContent({
 
   async function handleNotebookDelete(notebookItemId: string) {
     setNotebookError(null);
+    setNotebookSuccess(null);
     try {
       await deleteNotebookItem(trip.trip_id, notebookItemId);
       startTransition(() => {
         setCurrentWorkspace((current) => mergeNotebookItemDeleted(current, notebookItemId));
+        setNotebookSuccess("Notebook item deleted.");
       });
     } catch (error) {
       setNotebookError(error instanceof Error ? error.message : "Notebook item deletion failed.");
@@ -1384,10 +1412,14 @@ function WorkspacePageContent({
     notebook_item_id?: string | null;
   }) {
     setNotebookError(null);
+    setNotebookSuccess(null);
     try {
       const nextFocus = await setNotebookFocus(trip.trip_id, focus);
       startTransition(() => {
         setCurrentWorkspace((current) => mergeNotebookFocus(current, nextFocus));
+        setNotebookSuccess(
+          focus.category || focus.notebook_item_id ? "Notebook focus updated." : "Notebook focus cleared."
+        );
       });
     } catch (error) {
       setNotebookError(error instanceof Error ? error.message : "Notebook focus update failed.");
@@ -1622,6 +1654,11 @@ function WorkspacePageContent({
             {plannerConversationBusyLabel ? (
               <p className="muted-copy">{plannerConversationBusyLabel}</p>
             ) : null}
+            {plannerConversationNotice ? (
+              <p className="planner-inline-success" role="status">
+                {plannerConversationNotice}
+              </p>
+            ) : null}
             {plannerConversationError ? (
               <p className="planner-inline-error">{plannerConversationError}</p>
             ) : null}
@@ -1657,6 +1694,7 @@ function WorkspacePageContent({
               <label>
                 Message the planner
                 <textarea
+                  ref={plannerConversationTextareaRef}
                   value={plannerConversationDraft}
                   onChange={(event) => setPlannerConversationDraft(event.target.value)}
                   placeholder="Ask what to compare, what to remember, or what decision comes next."
@@ -1711,6 +1749,7 @@ function WorkspacePageContent({
           comparison={routeComparison}
           selectedScenarioId={selectedScenarioId}
           busyLabel={routeOptionBusyLabel}
+          successMessage={routeOptionSuccess}
           errorMessage={routeOptionError}
           onSelectScenario={handleScenarioSelection}
           onRouteOptionAction={handleRouteOptionAction}
@@ -1722,6 +1761,7 @@ function WorkspacePageContent({
           <PlanningNotebookPanel
             notebookState={currentWorkspace.planning_notebook}
             busyLabel={notebookBusyLabel}
+            successMessage={notebookSuccess}
             errorMessage={notebookError}
             onCreateItem={handleNotebookCreate}
             onCompleteItem={handleNotebookComplete}

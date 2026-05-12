@@ -78,6 +78,40 @@ def test_trip_create_list_and_detail_flow(client: TestClient) -> None:
     assert detail.json()["trip"]["trip_frame"]["traveler_party"]["notes"] == "Window seat preferred"
 
 
+def test_trip_delete_removes_owned_trip_and_workspace_state(client: TestClient) -> None:
+    signup(client, email="owner@example.com", display_name="Owner")
+
+    create = client.post(
+        "/api/trips",
+        json={
+            "title": "Kyoto Spring",
+            "summary": "Food and gardens",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 7},
+        },
+    )
+    assert create.status_code == 201
+    trip_id = create.json()["trip"]["trip_id"]
+
+    workspace = client.get(f"/api/workspace/{trip_id}")
+    assert workspace.status_code == 200
+    notebook = client.post(
+        f"/api/workspace/{trip_id}/planning-notebook",
+        json={"title": "Remember museum tickets", "category": "activities"},
+    )
+    assert notebook.status_code == 200
+
+    delete = client.delete(f"/api/trips/{trip_id}")
+    assert delete.status_code == 200
+    assert delete.json() == {"deleted": True}
+
+    listing = client.get("/api/trips")
+    assert listing.status_code == 200
+    assert listing.json()["trips"] == []
+    assert client.get(f"/api/trips/{trip_id}").status_code == 404
+    assert client.get(f"/api/workspace/{trip_id}").status_code == 404
+
+
 def test_trip_routes_require_authentication(client: TestClient) -> None:
     assert client.get("/api/trips").status_code == 401
     assert (
@@ -112,6 +146,33 @@ def test_trip_detail_hides_other_users_records(client: TestClient) -> None:
 
     detail = client.get(f"/api/trips/{trip_id}")
     assert detail.status_code == 404
+
+
+def test_trip_delete_hides_other_users_records(client: TestClient) -> None:
+    signup(client, email="owner@example.com", display_name="Owner")
+    create = client.post(
+        "/api/trips",
+        json={
+            "title": "Kyoto Spring",
+            "summary": "Food and gardens",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 7},
+        },
+    )
+    trip_id = create.json()["trip"]["trip_id"]
+
+    client.post("/api/auth/logout")
+    signup(client, email="other@example.com", display_name="Other")
+
+    delete = client.delete(f"/api/trips/{trip_id}")
+    assert delete.status_code == 404
+
+    client.post("/api/auth/logout")
+    client.post(
+        "/api/auth/login",
+        json={"email": "owner@example.com", "password": "password123"},
+    )
+    assert client.get(f"/api/trips/{trip_id}").status_code == 200
 
 
 def test_trip_create_rejects_invalid_mode(client: TestClient) -> None:

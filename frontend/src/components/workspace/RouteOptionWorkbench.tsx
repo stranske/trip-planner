@@ -159,6 +159,7 @@ export function RouteOptionWorkbench({
   comparison,
   selectedScenarioId,
   busyLabel,
+  successMessage,
   errorMessage,
   onSelectScenario,
   onRouteOptionAction,
@@ -166,6 +167,7 @@ export function RouteOptionWorkbench({
   comparison: RuntimeScenarioComparison;
   selectedScenarioId: string | null;
   busyLabel: string | null;
+  successMessage?: string | null;
   errorMessage: string | null;
   onSelectScenario: (scenarioId: string) => void;
   onRouteOptionAction: (optionId: string, actionType: RouteOptionActionType) => void;
@@ -200,6 +202,11 @@ export function RouteOptionWorkbench({
         </span>
       </div>
       {busyLabel ? <p className="muted-copy">{busyLabel}</p> : null}
+      {successMessage ? (
+        <p className="planner-inline-success" role="status">
+          {successMessage}
+        </p>
+      ) : null}
       {errorMessage ? <p className="planner-inline-error">{errorMessage}</p> : null}
       <div className="route-option-grid" aria-label="Route option comparison workbench">
         {scenarios.map((scenario) => {

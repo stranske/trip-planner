@@ -38,3 +38,7 @@ class TripResponse(BaseModel):
 
 class TripListResponse(BaseModel):
     trips: list[dict]
+
+
+class DeleteTripResponse(BaseModel):
+    deleted: bool = True

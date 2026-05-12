@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from trip_planner.app.schemas.trips import CreateTripRequest, TripListResponse, TripResponse
+from trip_planner.app.schemas.trips import (
+    CreateTripRequest,
+    DeleteTripResponse,
+    TripListResponse,
+    TripResponse,
+)
 from trip_planner.app.services.auth import AuthenticatedUser, require_authenticated_user
-from trip_planner.app.services.trips import create_trip, get_trip, list_trips
+from trip_planner.app.services.trips import create_trip, delete_trip, get_trip, list_trips
 from trip_planner.persistence.db import get_db_session
 
 router = APIRouter(tags=["trips"])
@@ -50,3 +55,15 @@ def read_trip_detail(
     if trip is None:
         raise HTTPException(status_code=404, detail=f"Trip '{trip_id}' was not found.")
     return TripResponse(trip=trip)
+
+
+@router.delete("/trips/{trip_id}", response_model=DeleteTripResponse)
+def delete_trip_record(
+    trip_id: str,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> DeleteTripResponse:
+    deleted = delete_trip(db_session, user=user, trip_id=trip_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Trip '{trip_id}' was not found.")
+    return DeleteTripResponse()

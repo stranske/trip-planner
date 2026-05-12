@@ -133,3 +133,11 @@ export async function createTrip(payload: CreateTripPayload): Promise<TripRecord
   });
   return response.trip;
 }
+
+export async function deleteTrip(tripId: string): Promise<void> {
+  await fetchJson<unknown>({
+    path: `/api/trips/${tripId}`,
+    method: "DELETE",
+    credentials: "include",
+  });
+}

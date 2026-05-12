@@ -8,12 +8,13 @@ function fileUrlToFsPath(relativePath: string): string {
 }
 
 const bundleDirectory = fileUrlToFsPath("../bundle");
+const frontendDirectory = fileUrlToFsPath(".");
 
 export default defineConfig({
   plugins: [react()],
   server: {
     fs: {
-      allow: [bundleDirectory],
+      allow: [frontendDirectory, bundleDirectory],
     },
     port: 5173,
     proxy: {

@@ -27,8 +27,17 @@ export async function fetchJson<T>({ path, headers, ...init }: JsonRequestOption
     throw await createApiClientError(requestUrl, response);
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const responseText = await response.text();
+  if (!responseText) {
+    return undefined as T;
+  }
+
   try {
-    return (await response.json()) as T;
+    return JSON.parse(responseText) as T;
   } catch (error) {
     throw new ApiClientError(`Response from ${requestUrl} was not valid JSON.`, {
       path: requestUrl,

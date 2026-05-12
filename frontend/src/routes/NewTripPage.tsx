@@ -49,10 +49,10 @@ export function NewTripPage() {
   return (
     <section className="auth-layout">
       <article className="status-card auth-card">
-        <p className="status-label">Trip creation</p>
-        <h2>Create a persisted trip</h2>
+        <p className="status-label">New trip</p>
+        <h2>Create a trip</h2>
         <p className="lede">
-          Capture the durable planning container now so later scenario and policy issues can attach to it.
+          Add the basics now. You can refine routes, notes, budget, and decisions in the planner.
         </p>
         <form className="auth-form" onSubmit={handleSubmit}>
           <label>
