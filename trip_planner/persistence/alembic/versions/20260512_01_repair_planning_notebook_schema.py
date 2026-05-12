@@ -21,7 +21,12 @@ def _columns(table_name: str) -> set[str]:
     inspector = sa.inspect(bind)
     if not inspector.has_table(table_name):
         return set()
-    return {column["name"] for column in inspector.get_columns(table_name)}
+    names: set[str] = set()
+    for column in inspector.get_columns(table_name):
+        name = column.get("name")
+        if isinstance(name, str):
+            names.add(name)
+    return names
 
 
 def _indexes(table_name: str) -> set[str]:
@@ -29,7 +34,12 @@ def _indexes(table_name: str) -> set[str]:
     inspector = sa.inspect(bind)
     if not inspector.has_table(table_name):
         return set()
-    return {index["name"] for index in inspector.get_indexes(table_name)}
+    names: set[str] = set()
+    for index in inspector.get_indexes(table_name):
+        name = index.get("name")
+        if isinstance(name, str):
+            names.add(name)
+    return names
 
 
 def _add_index_if_missing(table_name: str, index_name: str, columns: list[str]) -> None:
