@@ -24,6 +24,11 @@ Run `make install` once from a clean checkout to create `.venv` and install all 
 
 Black's local config is centralized in `pyproject.toml` with `line-length = 100`, matching the remote automation. Older local commands that passed `--line-length 100` explicitly are equivalent, but the flag should no longer be needed from a correctly synced checkout and refreshed `.venv`.
 
+The backend runtime contract is Python `>=3.12,<3.14`. Local and CI checks currently cover
+Python 3.12 and 3.13, and `.python-version` pins hosted Render builds to the 3.12 line.
+If a deploy host reports Python 3.14 or newer, treat that as environment drift and fix the
+runtime pin before using the deploy for readiness testing.
+
 ```bash
 make runtime-production-check
 ```

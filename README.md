@@ -191,6 +191,9 @@ Required deployment configuration:
 
 - Netlify project env vars, optional live map adapter: `VITE_GOOGLE_MAPS_BROWSER_API_KEY`
 - Render service env vars: `TRIP_PLANNER_CORS_ORIGINS`, `TRIP_PLANNER_CORS_ORIGIN_REGEX`, and live TPP variables when remote policy execution is intentionally enabled
+- Render Python runtime: the repo pins `.python-version` to Python 3.12 and `pyproject.toml`
+  declares `requires-python = ">=3.12,<3.14"`. Keep that deploy runtime aligned with the
+  CI matrix (`3.12`, `3.13`); do not rely on Render's moving default Python version.
 
 ## Python Unit Tests
 
