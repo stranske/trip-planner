@@ -181,14 +181,15 @@ The product deployment is split across two persistent services:
 - Netlify hosts the Vite frontend at `https://stranske-trip-planner.netlify.app`.
 - Render hosts the FastAPI backend and Postgres database.
 
-The Netlify deploy workflow builds `frontend/dist` from `main`, deploys that directory to Netlify production, and ships `frontend/public/_redirects` with the bundle. The redirect file proxies `/api/*` to the Render backend before falling back to `/index.html`, so the deployed frontend can call `/api/...` without requiring a hard-coded API origin in the browser bundle.
+Netlify is connected directly to the GitHub repo and builds production from `main` using `netlify.toml`. The build ships `frontend/public/_redirects` with the bundle. The redirect file proxies `/api/*` to the Render backend before falling back to `/index.html`, so the deployed frontend can call `/api/...` without requiring a hard-coded API origin in the browser bundle.
+
+Do not use the old token-based GitHub Action upload path for production deploys. That path depended on expiring Netlify API tokens and could drift from the Git-connected production site.
 
 `render.yaml` is the Render Blueprint source for the backend service and database. Render should track `main` for this file; stale topic branches will leave the live backend pinned to old commits even when GitHub `main` has advanced.
 
-Required deployment secrets:
+Required deployment configuration:
 
-- GitHub Actions: `NETLIFY_SITE_ID` and either `NETLIFY_AUTH_TOKEN` or the legacy `NETLIFY_TOKEN`
-- GitHub Actions, optional live map adapter: `VITE_GOOGLE_MAPS_BROWSER_API_KEY`
+- Netlify project env vars, optional live map adapter: `VITE_GOOGLE_MAPS_BROWSER_API_KEY`
 - Render service env vars: `TRIP_PLANNER_CORS_ORIGINS`, `TRIP_PLANNER_CORS_ORIGIN_REGEX`, and live TPP variables when remote policy execution is intentionally enabled
 
 ## Python Unit Tests
