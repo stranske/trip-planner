@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Literal
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -46,7 +47,7 @@ def _is_cross_site_request(request: Request) -> bool:
 
 def _set_session_cookie(request: Request, response: Response, token: str) -> None:
     is_https = _request_is_https(request)
-    samesite = "none" if is_https and _is_cross_site_request(request) else "lax"
+    samesite: Literal["none", "lax"] = "none" if is_https and _is_cross_site_request(request) else "lax"
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,

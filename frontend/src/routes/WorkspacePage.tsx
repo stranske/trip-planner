@@ -1026,8 +1026,11 @@ function WorkspacePageContent({
   const [routeOptionSuccess, setRouteOptionSuccess] = useState<string | null>(null);
   const plannerSessionLoadVersion = useRef(0);
   const plannerConversationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const previousWorkspaceRef = useRef(workspace);
   const isCompactLayout = useCompactWorkspaceLayout();
   useEffect(() => {
+    const previousWorkspace = previousWorkspaceRef.current;
+    previousWorkspaceRef.current = workspace;
     setCurrentWorkspace(workspace);
     setSelectedScenarioId(resolveMapScenarioId(workspace));
     setSelectedMapScope("regional");
@@ -1035,7 +1038,9 @@ function WorkspacePageContent({
     setPlannerConversationNotice(null);
     setRouteOptionSuccess(null);
     setNotebookSuccess(null);
-    setShowWorkspaceDebugDetails(false);
+    if (previousWorkspace !== workspace) {
+      setShowWorkspaceDebugDetails(false);
+    }
   }, [workspace]);
 
   useEffect(() => {
