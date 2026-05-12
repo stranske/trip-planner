@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
@@ -24,14 +26,34 @@ from trip_planner.persistence.db import get_db_session
 router = APIRouter(tags=["auth"])
 
 
+def _request_is_https(request: Request) -> bool:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", maxsplit=1)[0]
+    return request.url.scheme == "https" or forwarded_proto.strip().lower() == "https"
+
+
+def _is_cross_site_request(request: Request) -> bool:
+    origin = request.headers.get("origin")
+    if not origin:
+        return False
+
+    origin_host = urlsplit(origin).hostname
+    request_host = request.url.hostname
+    if origin_host is None or request_host is None:
+        return False
+
+    return origin_host.lower() != request_host.lower()
+
+
 def _set_session_cookie(request: Request, response: Response, token: str) -> None:
+    is_https = _request_is_https(request)
+    samesite = "none" if is_https and _is_cross_site_request(request) else "lax"
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
         max_age=SESSION_TTL_DAYS * 24 * 60 * 60,
         httponly=True,
-        samesite="lax",
-        secure=request.url.scheme != "http",
+        samesite=samesite,
+        secure=is_https,
         path="/",
     )
 

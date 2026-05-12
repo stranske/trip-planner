@@ -17,6 +17,9 @@ _DEFAULT_SQLITE_PATH = Path(__file__).resolve().parents[2] / ".tmp" / "trip_plan
 _ENGINE_CACHE: dict[str, Engine] = {}
 _SESSION_FACTORY_CACHE: dict[str, sessionmaker[Session]] = {}
 _MIGRATED_URLS: set[str] = set()
+_POSTGRESQL_URL_PREFIX = "postgresql://"
+_POSTGRES_URL_PREFIX = "postgres://"
+_POSTGRESQL_PSYCOPG_URL_PREFIX = "postgresql+psycopg://"
 
 
 class Base(DeclarativeBase):
@@ -24,7 +27,19 @@ class Base(DeclarativeBase):
 
 
 def get_database_url() -> str:
-    return os.environ.get("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{_DEFAULT_SQLITE_PATH}")
+    return normalize_database_url(
+        os.environ.get("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{_DEFAULT_SQLITE_PATH}")
+    )
+
+
+def normalize_database_url(url: str) -> str:
+    if url.startswith(_POSTGRESQL_PSYCOPG_URL_PREFIX):
+        return url
+    if url.startswith(_POSTGRESQL_URL_PREFIX):
+        return f"{_POSTGRESQL_PSYCOPG_URL_PREFIX}{url[len(_POSTGRESQL_URL_PREFIX):]}"
+    if url.startswith(_POSTGRES_URL_PREFIX):
+        return f"{_POSTGRESQL_PSYCOPG_URL_PREFIX}{url[len(_POSTGRES_URL_PREFIX):]}"
+    return url
 
 
 def _engine_options(url: str) -> dict[str, Any]:
@@ -49,7 +64,7 @@ def _ensure_sqlite_parent_dir(url: str) -> None:
 
 
 def get_engine(url: str | None = None) -> Engine:
-    resolved_url = url or get_database_url()
+    resolved_url = normalize_database_url(url or get_database_url())
     engine = _ENGINE_CACHE.get(resolved_url)
     if engine is None:
         _ensure_sqlite_parent_dir(resolved_url)
@@ -59,7 +74,7 @@ def get_engine(url: str | None = None) -> Engine:
 
 
 def get_session_factory(url: str | None = None) -> sessionmaker[Session]:
-    resolved_url = url or get_database_url()
+    resolved_url = normalize_database_url(url or get_database_url())
     session_factory = _SESSION_FACTORY_CACHE.get(resolved_url)
     if session_factory is None:
         session_factory = sessionmaker(
@@ -81,7 +96,7 @@ def get_db_session() -> Iterator[Session]:
 
 
 def ensure_database_ready(url: str | None = None) -> None:
-    resolved_url = url or get_database_url()
+    resolved_url = normalize_database_url(url or get_database_url())
     if resolved_url in _MIGRATED_URLS:
         return
 

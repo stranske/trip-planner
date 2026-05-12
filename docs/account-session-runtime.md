@@ -18,9 +18,9 @@ Issue `#683` adds the first runtime-backed account access layer for the Trip Pla
 
 ## Runtime Assumptions
 
-- The first persistence baseline uses `SQLite` plus `SQLAlchemy`.
+- The first local persistence baseline uses `SQLite` plus `SQLAlchemy`; hosted Render deploys use managed Postgres through `psycopg`.
 - Schema changes are applied through Alembic migrations at app startup.
-- Session cookies are `HttpOnly`, `SameSite=Lax`, and sized for local/runtime development.
+- Session cookies are `HttpOnly`; local same-site requests use `SameSite=Lax`, while forwarded HTTPS cross-site API requests use `SameSite=None; Secure`.
 - Session records store a hash of the cookie token, not the raw token itself.
 - Protected app routes should call the backend session check before hydrating workspace data.
 

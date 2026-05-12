@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -16,6 +17,25 @@ from trip_planner.app.routes.trips import router as trips_router
 from trip_planner.app.routes.workspace import router as workspace_router
 from trip_planner.persistence.db import ensure_database_ready
 
+_LOCAL_CORS_ORIGINS = ("http://127.0.0.1:5173", "http://localhost:5173")
+
+
+def get_allowed_cors_origins() -> list[str]:
+    configured_origins = os.getenv("TRIP_PLANNER_CORS_ORIGINS", "")
+    origins = list(_LOCAL_CORS_ORIGINS)
+
+    for configured_origin in configured_origins.replace("\n", ",").split(","):
+        origin = configured_origin.strip().rstrip("/")
+        if origin and origin not in origins:
+            origins.append(origin)
+
+    return origins
+
+
+def get_allowed_cors_origin_regex() -> str | None:
+    configured_regex = os.getenv("TRIP_PLANNER_CORS_ORIGIN_REGEX", "").strip()
+    return configured_regex or None
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -33,7 +53,8 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+        allow_origins=get_allowed_cors_origins(),
+        allow_origin_regex=get_allowed_cors_origin_regex(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

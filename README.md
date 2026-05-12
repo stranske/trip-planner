@@ -194,6 +194,8 @@ Required deployment configuration:
 - Render Python runtime: the repo pins `.python-version` to Python 3.12 and `pyproject.toml`
   declares `requires-python = ">=3.12,<3.14"`. Keep that deploy runtime aligned with the
   CI matrix (`3.12`, `3.13`); do not rely on Render's moving default Python version.
+- Render Postgres URLs are normalized to the `psycopg` SQLAlchemy driver at startup, and
+  `psycopg[binary]` is a runtime dependency. Removing either breaks managed Postgres deploys.
 
 ## Python Unit Tests
 

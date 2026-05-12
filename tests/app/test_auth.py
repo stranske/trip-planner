@@ -136,3 +136,33 @@ def test_signup_sets_secure_cookie_for_https_requests(
 
     assert response.status_code == 201
     assert "Secure" in response.headers["set-cookie"]
+
+
+def test_signup_sets_cross_site_cookie_for_forwarded_https_requests(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'trip-planner.db'}")
+    reset_database_state()
+    app = create_app()
+
+    with TestClient(app, base_url="http://trip-planner-api.example.test") as secure_client:
+        response = secure_client.post(
+            "/api/auth/signup",
+            headers={
+                "Origin": "https://stranske-trip-planner.netlify.app",
+                "X-Forwarded-Proto": "https",
+            },
+            json={
+                "email": "hosted-owner@example.com",
+                "password": "password123",
+                "display_name": "Hosted Owner",
+            },
+        )
+
+    reset_database_state()
+
+    assert response.status_code == 201
+    set_cookie = response.headers["set-cookie"]
+    assert "Secure" in set_cookie
+    assert "SameSite=none" in set_cookie
