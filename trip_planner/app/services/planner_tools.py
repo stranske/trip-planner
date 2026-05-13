@@ -19,6 +19,8 @@ from trip_planner.app.services.workspace import (
     set_planning_notebook_focus,
     submit_workspace_option_feedback,
 )
+from trip_planner.sources import QualityValueFitSummary, SourceQualityScorer, SourceRecord
+from trip_planner.sources import SourceTrustSignals
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +72,7 @@ _TOOL_DEFINITIONS: tuple[PlannerToolDefinition, ...] = (
     ),
     PlannerToolDefinition(
         tool_name="read_source_quality_summary",
-        description="Read source quality scoring status when available, otherwise return a bounded not_available result.",
+        description="Read source quality scoring state for attached workspace source records.",
     ),
     PlannerToolDefinition(
         tool_name="read_map_provider_status",
@@ -184,6 +186,25 @@ def _ref_list(*refs: str | None) -> list[str]:
 
 def _bounded_items(items: list[Any], limit: int) -> list[Any]:
     return items[: max(0, min(limit, 20))]
+
+
+def _source_record_from_payload(payload: Any) -> SourceRecord | None:
+    if isinstance(payload, SourceRecord):
+        return payload
+    if not isinstance(payload, dict):
+        return None
+    trust_payload = payload.get("trust_signals") or {}
+    quality_payload = payload.get("quality_summary") or {}
+    try:
+        return SourceRecord(
+            **{
+                **payload,
+                "trust_signals": SourceTrustSignals(**trust_payload),
+                "quality_summary": QualityValueFitSummary(**quality_payload),
+            }
+        )
+    except (TypeError, ValueError):
+        return None
 
 
 def _route_scenarios(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -394,28 +415,49 @@ def _read_source_quality_summary(
     payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
     inventory = payload["inventory_summary"]
     runtime_state = inventory.get("runtime_state") or {}
+    scorer = SourceQualityScorer()
     quality_rows = []
     for bundle in _bounded_items(list(inventory.get("bundles") or []), 5):
+        source_records = [
+            record
+            for record in (
+                _source_record_from_payload(item) for item in bundle.get("source_records", [])
+            )
+            if record is not None
+        ]
+        summary = scorer.summarize(
+            source_records,
+            subject_kind="option",
+            intended_option_kind=str(bundle.get("bundle_context") or "mixed"),
+        )
+        row_status = "completed" if summary.contributing_source_count else "missing_source_records"
         quality_rows.append(
             {
                 "target_id": bundle.get("bundle_id"),
                 "target_title": bundle.get("title"),
-                "status": "not_available",
-                "score": None,
-                "summary": "Source quality scoring service is not implemented for this target yet.",
+                "status": row_status,
+                "score": summary.confidence if summary.contributing_source_count else None,
+                "confidence_label": summary.confidence_label,
+                "contributing_source_count": summary.contributing_source_count,
+                "category_counts": dict(summary.category_counts),
+                "summary": " ".join(summary.explanation_fragments[:2]),
+                "tags": list(summary.tags),
             }
         )
+    completed_rows = [row for row in quality_rows if row["status"] == "completed"]
+    tool_status = "completed" if completed_rows else "missing_source_records"
     return PlannerToolResult(
         tool_name="read_source_quality_summary",
-        status="not_available",
+        status=tool_status,
         summary=(
-            "Source quality scoring is not implemented yet; returned bounded placeholder rows "
-            "for current workspace targets."
+            f"Scored source quality for {len(completed_rows)} workspace bundle(s)."
+            if completed_rows
+            else "No source records are attached to the current workspace targets yet."
         ),
         mutates_state=False,
         refs=_ref_list(payload["session"]["session_state_id"]),
         output={
-            "quality_state": "not_available",
+            "quality_state": tool_status,
             "runtime_inventory_status": runtime_state.get("status", "unknown"),
             "rows": quality_rows,
             "next_service": "source_quality_scoring",

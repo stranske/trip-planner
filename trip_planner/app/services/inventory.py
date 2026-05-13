@@ -16,11 +16,13 @@ from trip_planner.sources import (
     AdapterIssue,
     NormalizationHandoff,
     ProvenanceReference,
+    QualityValueFitSummary,
     RawSnapshot,
     RawSourceRecord,
     SourceAdapter,
     SourceQuery,
     SourceRecord,
+    SourceTrustSignals,
 )
 
 _BUNDLE_RESOURCE_PACKAGE = "trip_planner.resources.options.bundles"
@@ -155,6 +157,19 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
             category="commercial_inventory",
             coverage_scope="global",
             supported_option_kinds=["mixed", "lodging"],
+            trust_signals=SourceTrustSignals(
+                freshness_days=0,
+                freshness_confidence=0.7,
+                commerciality=0.5,
+                operational_reliability=0.65,
+                notes=["Fixture source freshness is pinned to the bundled fixture capture date."],
+            ),
+            quality_summary=QualityValueFitSummary(
+                quality_signal=0.68,
+                value_signal=0.62,
+                fit_signal=0.7,
+                confidence=0.66,
+            ),
             notes=[
                 "Provides a bounded adapter seam until live provider-backed inventory is available."
             ],
@@ -231,6 +246,7 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
         records: list[RawSourceRecord] = []
         for index, fixture_name in enumerate(fixture_names, start=1):
             mixed_option = _load_mixed_option_fixture(fixture_name)
+            source_record_payload = self.source_record.to_dict()
             records.append(
                 RawSourceRecord(
                     record_id=f"{query.query_id}:{index}",
@@ -240,7 +256,13 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
                     payload={
                         "fixture_name": fixture_name,
                         "trip_id": self.trip_id,
-                        "bundle_payloads": [bundle.to_dict() for bundle in mixed_option.bundles],
+                        "bundle_payloads": [
+                            {
+                                **bundle.to_dict(),
+                                "source_records": [source_record_payload],
+                            }
+                            for bundle in mixed_option.bundles
+                        ],
                     },
                     captured_at="2026-04-11T00:00:00Z",
                     metadata={
@@ -338,6 +360,23 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
             category="commercial_inventory",
             coverage_scope="global",
             supported_option_kinds=["mixed", "lodging", "activity", "rail"],
+            coverage_regions=list(self.primary_regions),
+            trust_signals=SourceTrustSignals(
+                freshness_days=0,
+                freshness_confidence=0.85,
+                commerciality=0.7,
+                operational_reliability=0.76,
+                notes=[
+                    "Runtime inventory is generated from current persisted trip context.",
+                    f"Primary region count: {len(self.primary_regions)}.",
+                ],
+            ),
+            quality_summary=QualityValueFitSummary(
+                quality_signal=0.78 if trip_mode == "business" else 0.74,
+                value_signal=0.72 if trip_mode == "business" else 0.69,
+                fit_signal=0.8 if primary_regions else 0.55,
+                confidence=0.76 if primary_regions else 0.5,
+            ),
             notes=["Derives normalized inventory seeds directly from persisted trip context."],
         )
         self.supported_entity_scopes = ("mixed",)
@@ -612,6 +651,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                 "value_signal": baseline_signal - 0.05,
                 "fit_signal": baseline_signal,
             },
+            "source_records": [self.source_record.to_dict()],
             "feasibility": {"available": True, "internally_consistent": True},
             "explanation": {
                 "headline": "Runtime inventory assembled from persisted trip context.",
@@ -1003,6 +1043,7 @@ def build_inventory_summary_payload(
                 "option_count": len(bundle.option_ids),
                 "strengths": list(bundle.explanation.strengths[:2]),
                 "tradeoffs": list(bundle.explanation.tradeoffs[:2]),
+                "source_records": [record.to_dict() for record in bundle.source_records],
             }
             for bundle in bundles
         ],

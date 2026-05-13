@@ -18,6 +18,7 @@ from trip_planner.persistence.models.planner_memory import (
     PersistedPlannerMemoryArtifact,
 )
 from trip_planner.persistence.models.session import PersistedPlanningSessionState
+from trip_planner.sources import CONFIDENCE_LABELS
 
 
 @pytest.fixture
@@ -693,8 +694,18 @@ def test_planner_turn_executes_provider_rich_read_only_tools(client: TestClient)
         tool_outputs["refresh_route_comparison"]["output"]["lead_scenario_id"]
         == response.json()["planner_panel_state"]["option_set"]["options"][0]["option_id"]
     )
-    assert tool_outputs["read_source_quality_summary"]["status"] == "not_available"
-    assert tool_outputs["read_source_quality_summary"]["output"]["quality_state"] == "not_available"
+    quality_tool_output = tool_outputs["read_source_quality_summary"]
+    assert quality_tool_output["status"] in {"completed", "partial"}
+    assert quality_tool_output["output"]["quality_state"] != "not_available"
+    quality_rows = quality_tool_output["output"]["rows"]
+    assert quality_rows
+    assert any(
+        row["status"] == "completed"
+        and row["score"] is not None
+        and row["confidence_label"] in CONFIDENCE_LABELS
+        and row["contributing_source_count"] > 0
+        for row in quality_rows
+    )
 
     with get_session_factory()() as db_session:
         stored = db_session.scalars(
