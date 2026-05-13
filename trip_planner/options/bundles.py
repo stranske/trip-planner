@@ -19,6 +19,7 @@ from trip_planner._option_contracts import (
     OptionCostSummary,
     OptionQualitySummary,
 )
+from trip_planner.sources.models import QualityValueFitSummary, SourceRecord, SourceTrustSignals
 
 from .activities import ActivityOption
 from .destinations import Destination
@@ -68,6 +69,18 @@ def _parse_money_range(payload: dict[str, Any] | None, field_name: str) -> Money
 
 def _dedupe_strings(values: list[str]) -> list[str]:
     return list(dict.fromkeys(values))
+
+
+def _parse_source_record(payload: dict[str, Any]) -> SourceRecord:
+    trust_payload = payload.get("trust_signals") or {}
+    quality_payload = payload.get("quality_summary") or {}
+    return SourceRecord(
+        **{
+            **payload,
+            "trust_signals": SourceTrustSignals(**trust_payload),
+            "quality_summary": QualityValueFitSummary(**quality_payload),
+        }
+    )
 
 
 @dataclass(slots=True)
@@ -268,6 +281,7 @@ class InventoryBundle:
     quality_value_fit: BundleQualityValueFitSummary = field(
         default_factory=BundleQualityValueFitSummary
     )
+    source_records: list[SourceRecord] = field(default_factory=list)
     feasibility: BundleFeasibility = field(default_factory=BundleFeasibility)
     explanation: BundleExplanation = field(default_factory=BundleExplanation)
     summary: str = ""
@@ -296,6 +310,8 @@ class InventoryBundle:
             raise ValueError("provenance_summary must be a BundleProvenanceSummary")
         if not isinstance(self.quality_value_fit, BundleQualityValueFitSummary):
             raise ValueError("quality_value_fit must be a BundleQualityValueFitSummary")
+        if any(not isinstance(item, SourceRecord) for item in self.source_records):
+            raise ValueError("source_records must contain SourceRecord instances")
         if not isinstance(self.feasibility, BundleFeasibility):
             raise ValueError("feasibility must be a BundleFeasibility")
         if not isinstance(self.explanation, BundleExplanation):
@@ -430,6 +446,10 @@ class InventoryBundle:
             quality_value_fit=BundleQualityValueFitSummary(
                 **_optional_mapping_field(payload, "quality_value_fit")
             ),
+            source_records=[
+                _parse_source_record(item)
+                for item in _optional_list_field(payload, "source_records")
+            ],
             feasibility=BundleFeasibility(**_optional_mapping_field(payload, "feasibility")),
             explanation=BundleExplanation(**_optional_mapping_field(payload, "explanation")),
             summary=payload.get("summary", ""),
