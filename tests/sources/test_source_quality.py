@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from trip_planner.app.services.inventory import (
+    _build_inventory_assembly_input,
+    assemble_inventory_bundles_for_trip,
+)
 from trip_planner.sources import (
     CONFIDENCE_LABELS,
     ProvenanceReference,
@@ -396,6 +400,36 @@ def test_summarize_accepts_mixed_record_and_provenance_inputs() -> None:
     assert summary.confidence_label in CONFIDENCE_LABELS
     assert summary.category_counts["commercial_inventory"] == 1
     assert summary.category_counts["official_operational"] == 1
+
+
+def test_runtime_inventory_bundles_feed_source_quality_summary() -> None:
+    assembly_input = _build_inventory_assembly_input(
+        trip_id="trip-runtime-source-quality",
+        trip_mode="leisure",
+        primary_regions=("Kyoto",),
+        start_date="2026-06-01",
+        end_date="2026-06-05",
+        duration_days=4,
+        trip_title="Kyoto source quality smoke",
+        traveler_party_kind="couple",
+        traveler_count=2,
+        allow_fixture_fallback=False,
+    )
+
+    bundles = assemble_inventory_bundles_for_trip(assembly_input=assembly_input)
+    source_records = [record for bundle in bundles for record in bundle.source_records]
+    summary = SourceQualityScorer().summarize(
+        source_records,
+        subject_kind="option",
+        intended_option_kind="mixed",
+    )
+
+    assert bundles
+    assert source_records
+    assert summary.contributing_source_count == len(source_records)
+    assert summary.confidence > 0
+    assert summary.confidence_label in CONFIDENCE_LABELS
+    assert summary.category_counts["commercial_inventory"] >= 1
 
 
 def test_scorer_rejects_invalid_intended_option_kind() -> None:
