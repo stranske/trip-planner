@@ -13,7 +13,7 @@ This document describes all labels that trigger automated workflows or affect CI
 | `agent:auto` | Issue or PR labeled | Delegates routing to the auto-delegation policy; do not combine with concrete `agent:<name>` labels
 | `agent:retry` | PR labeled | Requests one re-dispatch of the matching keepalive runner
 | `agent:rate-limited` | Auto-applied | Marks a PR as backing off from a rate-limit failure
-| `agent:codex-invite` | Issue labeled | (**Deprecated** — no workflow references this label; see detail section) |
+| ~~`agent:codex-invite`~~ | *(deprecated)* | No workflow, script, or tool references this label by name; the generic `agent:<name>-invite` mechanism in `reusable-agents-issue-bridge.yml` still works but this specific label is unmaintained — see detail section below
 | `agent:needs-attention` | Auto-applied | Indicates agent needs human intervention
 | `status:ready` | Issue labeled | Marks issue as ready for agent processing
 | `agents:format` | Issue labeled | Direct issue formatting
@@ -184,13 +184,20 @@ This document describes all labels that trigger automated workflows or affect CI
 
 ---
 
-### `agent:codex-invite`
+### ~~`agent:codex-invite`~~ *(deprecated)*
 
-**Applies to:** Issues
+> **Deprecated.** `grep -rn codex-invite .github/ scripts/ tools/` returns no matches. The label is not referenced by name in any active workflow, script, or tool. The underlying `-invite` suffix mechanism in `reusable-agents-issue-bridge.yml` remains functional for any `agent:<name>-invite` label, but `agent:codex-invite` specifically is unmaintained. Do not apply this label; use `force_mode: false` at the workflow call site instead if you need invite-mode control.
 
-**Status:** **Deprecated.** `grep -rn codex-invite .github/ scripts/ tools/` returns no matches on `main`. No workflow, script, or tool currently references this label. It was an invite-mode override for `agent:codex` that kept the issue-triggered bridge in invite mode, but the feature is no longer wired in any active workflow. Do not apply this label; it has no effect.
+**Applies to:** Issues (must be paired with `agent:codex`)
 
-**If invite-mode behaviour is needed:** Use the base `agent:codex` or `agent:claude` label and configure the intake workflow directly.
+**Trigger:** When applied to an issue together with `agent:codex`
+
+**Effect:**
+1. The issue-bridge label parser in `.github/workflows/reusable-agents-issue-bridge.yml` strips the `-invite` suffix and records `invite=true` for the base `agent:codex` entry (see the `inviteSuffix` handling around the `parses agent:<name>-invite` block).
+2. The mode-resolution step then selects `invite` mode for codex when the calling workflow does not force its input mode (`force_mode: false`). If the caller leaves `force_mode` at its default `true`, the bridge respects the requested input mode instead.
+3. Applying `agent:codex-invite` alone (without `agent:codex`) is rejected: the bridge fails with `Invite labels (agent:codex-invite) require a matching base agent:<name>.`
+
+**Workflow:** `.github/workflows/reusable-agents-issue-bridge.yml` (label parser + mode resolution). The generic `agent:<name>-invite` mechanism is implemented in the same file, so the same pattern applies to other concrete agents.
 
 ---
 
@@ -527,7 +534,7 @@ These labels are used for categorization but do not trigger workflows.
 | `agent:<name>` + `agents:keepalive` | `agent:retry` | Forces one re-dispatch; keepalive removes the label at the top of its run
 | `agent:retry` | (removed by `agents-keepalive-loop.yml`) | Co-removes any stale `agent:rate-limited`
 | `agent:rate-limited` | `agent:retry` | Retry-label handler removes stale `agent:rate-limited` before keepalive evaluation
-| `agent:codex` | `agent:codex-invite` | (**Deprecated**) No longer active; label has no effect |
+| `agent:codex` | `agent:codex-invite` | Selects issue-bridge `invite` mode for `agent:codex` when `force_mode: false`; with the default forced input mode, the requested mode still wins
 | `agent:codex` | `status:ready` | Agent begins processing
 | `agent:needs-attention` | (removed) | Agent resumes processing
 | (none) | `agents:format` | Direct formatting
