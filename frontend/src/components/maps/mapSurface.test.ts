@@ -242,7 +242,16 @@ describe("mapSurface", () => {
           active_route_option_id: "route-option:provider",
           selected_segment_id: "segment:uji-nara",
           place_markers: [
-            { id: "marker:kyoto", source_id: "kyoto", label: "Kyoto", route_index: 0, x: 0.1, y: 0.5 },
+            {
+              id: "marker:kyoto",
+              source_id: "kyoto",
+              label: "Kyoto",
+              description: "Source-backed route origin.",
+              source_refs: ["source:provider-route"],
+              route_index: 0,
+              x: 0.1,
+              y: 0.5,
+            },
             { id: "marker:uji", source_id: "uji", label: "Uji", route_index: 1, x: 0.45, y: 0.3 },
             { id: "marker:nara", source_id: "nara", label: "Nara", route_index: 2, x: 0.85, y: 0.6 },
           ],
@@ -301,6 +310,10 @@ describe("mapSurface", () => {
     });
 
     expect(model.workspaceView.activeRouteOptionId).toBe("route-option:provider");
+    expect(model.routeStops[0]).toMatchObject({
+      description: "Source-backed route origin.",
+      sourceRefs: ["source:provider-route"],
+    });
     expect(model.visibleRouteStops.map((stop) => stop.label)).toEqual(["Uji", "Nara"]);
     expect(model.visibleRouteSegments[0]).toMatchObject({
       id: "segment:uji-nara",

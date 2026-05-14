@@ -275,7 +275,7 @@ Design ref: [`docs/live-tpp-execution-reoptimization-epic.md`](live-tpp-executio
 Design refs: [`docs/google-maps-platform-hardening-epic.md`](google-maps-platform-hardening-epic.md), [`docs/maps-timeline-comparison-epic.md`](maps-timeline-comparison-epic.md)  
 Issues: `#679` (epic), `#698`–`#700`
 
-> **Partial.** The map adapter boundary, bounded fallback rendering, Google Maps JavaScript provider path, global/regional/segment map-scope controls, workspace timeline rendering, shared route/segment focus, source-quality summaries, and scenario comparison surfaces now exist. Remaining work is mostly product depth: live provider verification in configured environments, deeper option-marker detail, and real provider distance geometry beyond the current duration-first runtime segment payload.
+> **Partial.** The map adapter boundary, bounded fallback rendering, Google Maps JavaScript provider path, global/regional/segment map-scope controls, workspace timeline rendering, shared route/segment focus, source-quality summaries, and scenario comparison surfaces now exist. Issue `#1191` adds deterministic route-depth metadata for source-backed markers and per-segment distance-verification state without requiring live Google Maps credentials. Remaining work is mostly release/live-provider confidence, not default local behavior.
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
@@ -283,12 +283,12 @@ Issues: `#679` (epic), `#698`–`#700`
 | Route-context map contract (`docs/contracts/route-context-map-target.md`) | `docs/contracts/route-context-map-target.md`, `frontend/src/components/maps/mapSurface.ts`, `frontend/src/components/maps/TripMap.tsx` | `tests/contracts/test_route_context_map_target.py`, frontend map tests | ✅ Implemented |
 | Global/regional/segment map scope switching | `frontend/src/components/maps/mapSurface.ts`, `frontend/src/components/maps/TripMap.tsx` | `frontend/src/components/maps/mapSurface.test.ts`, `frontend/src/components/maps/TripMap.test.tsx`, `frontend/src/routes/WorkspacePage.test.tsx` | ✅ Implemented |
 | Timeline view for trip structure + day sequencing (`#698`) | `frontend/src/routes/WorkspacePage.tsx` (`buildTimelineStops`, timeline section, segment focus notes) | `frontend/src/routes/WorkspacePage.test.tsx` | 🟡 Partial (segment timing/confidence shipped; source-backed per-stop timing still pending) |
-| Dedicated map surface for route + option context (`#699`) | `frontend/src/components/maps/TripMap.tsx`, `frontend/src/components/maps/mapSurface.ts` | frontend map/workspace tests | ✅ Implemented |
+| Dedicated map surface for route + option context (`#699`, `#1191`) | `frontend/src/components/maps/TripMap.tsx`, `frontend/src/components/maps/mapSurface.ts`, `trip_planner/app/services/workspace.py`, `docs/reports/provider-rich-route-depth.md` | frontend map/workspace tests, `tests/app/test_planner_routes.py`, `tests/app/test_workspace.py` | ✅ Implemented |
 | Saved-scenario + trip comparison views (`#700`) | `frontend/src/components/workspace/ScenarioComparison.tsx`, `components/trips/TripComparison.tsx`, `frontend/src/routes/WorkspacePage.tsx` | `frontend/src/routes/WorkspacePage.test.tsx` | 🟡 Partial (workspace-tested; targeted component tests still thin) |
 | Traveler-facing workspace polish and hidden diagnostics (`#1164`) | `frontend/src/routes/WorkspacePage.tsx`, `frontend/src/components/workspace/RouteOptionWorkbench.tsx`, `frontend/src/components/maps/TripMap.tsx`, `frontend/src/components/planner/PlanningModeSelector.tsx` | `frontend/src/routes/WorkspacePage.test.tsx`, `frontend/src/components/workspace/RouteOptionWorkbench.test.tsx`, `frontend/src/components/maps/TripMap.test.tsx`, `frontend/src/components/planner/PlanningModeSelector.test.tsx` | ✅ Implemented |
 | Workspace timeline contract | `docs/workspace_timeline_contract.md`, `frontend/src/routes/WorkspacePage.tsx` | `frontend/src/routes/WorkspacePage.test.tsx` | 🟡 Partial |
 
-**Gap detail (follow-up issue candidate):** The shipped timeline and map surfaces now let a traveler move between whole-trip outline, regional comparison, and precise segment review without losing selected route context, and issue `#1164` keeps raw runtime/provider/debug details behind diagnostics while improving planner reply and route-option presentation. The next gap is deeper provider richness: live distance/geometry verification and more inspectable option-marker detail.
+**Gap detail:** The shipped timeline and map surfaces now let a traveler move between whole-trip outline, regional comparison, and precise segment review without losing selected route context, and issue `#1164` keeps raw runtime/provider/debug details behind diagnostics while improving planner reply and route-option presentation. Issue `#1191` resolves the default-runtime depth gap by exposing source-backed marker descriptions, segment source refs, and an explicit `distance_verification_state` through the workspace and planner-tool payloads. Live Google Maps distance/geometry verification remains an opt-in release verification concern.
 
 ---
 
@@ -326,7 +326,7 @@ From [`docs/product-architecture-brief.md`](product-architecture-brief.md) and [
 These design commitments are still missing, partial, or not yet verified in a live provider environment. Each is a candidate for a follow-up issue:
 
 1. **Semantic planner memory and reorientation** — planner checkpoints and notebook state exist, but there is no semantic recall/reorientation layer for scattered traveler notes and "I was working on..." context shifts. See §13 above.
-2. **Provider-rich timeline/map depth** — workspace timeline and map surfaces now share route/segment focus and per-leg timing/confidence, but still need live provider distance/geometry verification and richer source-backed option details. See §16 above.
+2. **Provider-rich timeline/map depth** — default workspace and planner-tool payloads now expose source-backed marker detail and per-segment distance-verification state. Remaining work is live provider verification in configured release environments. See §16 above.
 3. **Preference explanation generation tests** — `trip_planner/preferences/explanations.py` exists; no `tests/preferences/test_explanations.py`.
 
 ---

@@ -688,7 +688,17 @@ def test_planner_turn_executes_provider_rich_read_only_tools(client: TestClient)
     }
     assert tool_outputs["read_map_provider_status"]["output"]["route_state"] == "ready"
     assert tool_outputs["read_route_geometry"]["status"] == "completed"
-    assert tool_outputs["read_route_geometry"]["output"]["rough_route_geometry"]
+    geometry_output = tool_outputs["read_route_geometry"]["output"]
+    assert geometry_output["rough_route_geometry"]
+    assert geometry_output["place_markers"]
+    assert geometry_output["place_markers"][0]["description"].startswith("Route stop 1")
+    assert geometry_output["place_markers"][0]["source_refs"]
+    first_segment = geometry_output["rough_route_geometry"][0]
+    assert first_segment["duration_minutes"] is not None
+    assert first_segment["provider_distance_available"] is False
+    assert first_segment["distance_verification_state"] == "duration_estimate_only"
+    assert first_segment["unavailable_reason"]
+    assert first_segment["source_refs"] == geometry_output["place_markers"][0]["source_refs"]
     assert tool_outputs["refresh_route_comparison"]["output"]["scenarios"]
     assert (
         tool_outputs["refresh_route_comparison"]["output"]["lead_scenario_id"]
