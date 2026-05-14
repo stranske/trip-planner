@@ -255,6 +255,11 @@ What landed:
   `confidence`, so ranking and route-search outputs can attach source-confidence
   language alongside the existing ranking-confidence record without disrupting
   the existing engines.
+- Runtime inventory assembly now attaches concrete `SourceRecord` entries to
+  generated `InventoryBundle` instances. The `read_source_quality_summary`
+  planner tool consumes those attached records and returns real confidence
+  summaries for runtime-built and fixture-backed bundles instead of the previous
+  bounded `not_available` placeholder.
 - Stale, conflicting, and sparse inputs are reflected in `confidence_label`,
   `tags`, and `explanation_fragments`; useful-but-uncertain options remain
   visible rather than being deleted.

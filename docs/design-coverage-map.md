@@ -221,7 +221,7 @@ Issues: `#543` (epic), `#544`–`#548`
 
 Design ref: [`docs/langchain-planner-runtime-epic.md`](langchain-planner-runtime-epic.md)
 
-> **Partial.** The planner runtime now has a trip-scoped conversation API, persisted session/checkpoint records, a model-backed runnable, an explicit app-tool registry/executor, deterministic model-routing by task class and planning mode, and provider-rich source/map/route read tools. The remaining gaps are executable source-quality scoring, semantic planner memory/reorientation, and live-provider verification.
+> **Partial.** The planner runtime now has a trip-scoped conversation API, persisted session/checkpoint records, a model-backed runnable, an explicit app-tool registry/executor, deterministic model-routing by task class and planning mode, and provider-rich source/map/route read tools, including executable source-quality scoring for attached inventory source records. The remaining gaps are semantic planner memory/reorientation and live-provider verification.
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
@@ -233,7 +233,7 @@ Design ref: [`docs/langchain-planner-runtime-epic.md`](langchain-planner-runtime
 | Dynamic model routing by task complexity | `trip_planner/app/services/planner_routing.py`, `trip_planner/app/services/planner.py` (`_planner_turn_metadata`) | `tests/app/test_planner_routing.py`, `tests/app/test_planner_routes.py` | ✅ Implemented |
 | Provider-rich planner tools (source retrieval, route/map status, route comparison refresh, source-quality seam) | `trip_planner/app/services/planner_tools.py` | `tests/app/test_planner_routes.py` | ✅ Implemented |
 
-**Gap detail (follow-up issue candidate):** The runtime executes explicit planner tools, persists their traces, routes each turn into a task class plus a fast/standard/deep model effort class biased by the selected planning mode, and can inspect provider-rich source/map/route state. It still needs executable source-quality scoring, semantic planner memory that can reorient when a traveler says "I was working on lodging" or "put this in the Oslo file," and live-provider verification for configured environments.
+**Gap detail (follow-up issue candidate):** The runtime executes explicit planner tools, persists their traces, routes each turn into a task class plus a fast/standard/deep model effort class biased by the selected planning mode, and can inspect provider-rich source/map/route state. `read_source_quality_summary` now scores attached inventory source records from runtime and fixture-backed bundles. It still needs semantic planner memory that can reorient when a traveler says "I was working on lodging" or "put this in the Oslo file," and live-provider verification for configured environments.
 
 ---
 
@@ -275,7 +275,7 @@ Design ref: [`docs/live-tpp-execution-reoptimization-epic.md`](live-tpp-executio
 Design refs: [`docs/google-maps-platform-hardening-epic.md`](google-maps-platform-hardening-epic.md), [`docs/maps-timeline-comparison-epic.md`](maps-timeline-comparison-epic.md)  
 Issues: `#679` (epic), `#698`–`#700`
 
-> **Partial.** The map adapter boundary, bounded fallback rendering, Google Maps JavaScript provider path, global/regional/segment map-scope controls, workspace timeline rendering, shared route/segment focus, and scenario comparison surfaces now exist. Remaining work is mostly product depth: live provider verification in configured environments, deeper option-marker/source-quality detail, and real provider distance geometry beyond the current duration-first runtime segment payload.
+> **Partial.** The map adapter boundary, bounded fallback rendering, Google Maps JavaScript provider path, global/regional/segment map-scope controls, workspace timeline rendering, shared route/segment focus, source-quality summaries, and scenario comparison surfaces now exist. Remaining work is mostly product depth: live provider verification in configured environments, deeper option-marker detail, and real provider distance geometry beyond the current duration-first runtime segment payload.
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
@@ -288,7 +288,7 @@ Issues: `#679` (epic), `#698`–`#700`
 | Traveler-facing workspace polish and hidden diagnostics (`#1164`) | `frontend/src/routes/WorkspacePage.tsx`, `frontend/src/components/workspace/RouteOptionWorkbench.tsx`, `frontend/src/components/maps/TripMap.tsx`, `frontend/src/components/planner/PlanningModeSelector.tsx` | `frontend/src/routes/WorkspacePage.test.tsx`, `frontend/src/components/workspace/RouteOptionWorkbench.test.tsx`, `frontend/src/components/maps/TripMap.test.tsx`, `frontend/src/components/planner/PlanningModeSelector.test.tsx` | ✅ Implemented |
 | Workspace timeline contract | `docs/workspace_timeline_contract.md`, `frontend/src/routes/WorkspacePage.tsx` | `frontend/src/routes/WorkspacePage.test.tsx` | 🟡 Partial |
 
-**Gap detail (follow-up issue candidate):** The shipped timeline and map surfaces now let a traveler move between whole-trip outline, regional comparison, and precise segment review without losing selected route context, and issue `#1164` keeps raw runtime/provider/debug details behind diagnostics while improving planner reply and route-option presentation. The next gap is deeper provider richness: live distance/geometry verification, source-quality scoring on route evidence, and more inspectable option-marker detail.
+**Gap detail (follow-up issue candidate):** The shipped timeline and map surfaces now let a traveler move between whole-trip outline, regional comparison, and precise segment review without losing selected route context, and issue `#1164` keeps raw runtime/provider/debug details behind diagnostics while improving planner reply and route-option presentation. The next gap is deeper provider richness: live distance/geometry verification and more inspectable option-marker detail.
 
 ---
 
@@ -326,10 +326,8 @@ From [`docs/product-architecture-brief.md`](product-architecture-brief.md) and [
 These design commitments are still missing, partial, or not yet verified in a live provider environment. Each is a candidate for a follow-up issue:
 
 1. **Semantic planner memory and reorientation** — planner checkpoints and notebook state exist, but there is no semantic recall/reorientation layer for scattered traveler notes and "I was working on..." context shifts. See §13 above.
-2. **Per-bundle source-quality wiring** — `SourceQualityScorer`, `SourceConfidenceSummary`, and `build_source_confidence_explanation` are fully implemented and tested (issue #1163). The remaining gap is attaching resolved `SourceRecord`/`ProvenanceReference` instances to `InventoryBundle` so the `read_source_quality_summary` planner tool and the leisure/business ranking engines can consume the engine end-to-end.
-3. **Live TPP transport verification** — `live-tpp-execution-reoptimization-epic.md`. A sibling-checkout live HTTP round-trip was verified on 2026-05-14; default CI remains opt-in and skips without live transport config. See §15 above.
-4. **Provider-rich timeline/map depth** — workspace timeline and map surfaces now share route/segment focus and per-leg timing/confidence, but still need live provider distance/geometry verification and richer source-backed option details. See §16 above.
-5. **Preference explanation generation tests** — `trip_planner/preferences/explanations.py` exists; no `tests/preferences/test_explanations.py`.
+2. **Provider-rich timeline/map depth** — workspace timeline and map surfaces now share route/segment focus and per-leg timing/confidence, but still need live provider distance/geometry verification and richer source-backed option details. See §16 above.
+3. **Preference explanation generation tests** — `trip_planner/preferences/explanations.py` exists; no `tests/preferences/test_explanations.py`.
 
 ---
 
