@@ -2017,3 +2017,149 @@ def test_failed_evaluation_error_and_retry_fields_are_persisted_and_reloadable(
 
     assert state["evaluation_status"] == "failed"
     assert state["summary"]["evaluation_result_status"] is None
+
+
+def test_proposal_state_persists_across_create_app_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Issue #1187 task-list item: proposal state persists across a
+    ``create_app()`` restart.
+
+    The live-tpp verification captured for PR #1190 demonstrated a
+    successful lifecycle PASS, but did not prove that proposal state
+    survives a trip-planner app restart against the same backing DB. This
+    test closes that gap by:
+
+    1. Creating the app instance, submitting a proposal + its evaluation,
+       and asserting the lifecycle landed on disk via a workspace GET.
+    2. Closing the first TestClient (drops the SQLAlchemy session factory
+       reference and exits the FastAPI lifespan).
+    3. Building a *fresh* ``create_app()`` instance against the **same**
+       SQLite file (no ``reset_database_state``), opening a new TestClient,
+       and asserting the same workspace GET returns the proposal +
+       evaluation exactly as persisted by the first app instance.
+
+    A regression where proposal state is held only in process memory (e.g.
+    a non-persistent cache layer accidentally promoted to the proposal
+    source-of-truth) would surface here as a 404 / empty proposal payload
+    from the second app instance.
+    """
+    db_path = tmp_path / "restart-persistence.db"
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{db_path}")
+    reset_database_state()
+
+    # ---- First app instance: submit + evaluate a proposal. ------------------
+    app_first = create_app()
+    with TestClient(app_first) as client_first:
+        client_first.post(
+            "/api/auth/signup",
+            json={
+                "email": "restart@example.com",
+                "password": "password123",
+                "display_name": "Restart Owner",
+            },
+        )
+        created = client_first.post(
+            "/api/trips",
+            json={
+                "title": "Restart-persistence proposal",
+                "summary": "Proves proposal state survives create_app() restart.",
+                "mode": "business",
+                "trip_frame": {
+                    "start_date": "2026-05-04",
+                    "end_date": "2026-05-06",
+                    "duration_days": 3,
+                    "primary_regions": ["Chicago"],
+                },
+            },
+        )
+        trip_id = created.json()["trip"]["trip_id"]
+
+        submission_fixture = _load_fixture("proposal_submit_deferred.json")
+        submission_fixture["request"]["trip_id"] = trip_id
+        submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+        submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+
+        submitted = client_first.put(
+            f"/api/workspace/{trip_id}/proposal",
+            json={
+                "proposal": _proposal_payload(trip_id),
+                "request": submission_fixture["request"],
+                "response": submission_fixture["response"],
+                "proposal_version": "proposal-v3",
+                "scenario_id": "scenario-a",
+            },
+        )
+        assert submitted.status_code == 200
+
+        evaluation_fixture = _load_fixture("results", "approved_evaluation.json")
+        evaluation_fixture["request"]["trip_id"] = trip_id
+        evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+        evaluation_fixture["response"]["result_payload"]["trip_id"] = trip_id
+        evaluation_fixture["response"]["result_payload"]["proposal_id"] = f"proposal:{trip_id}"
+        evaluation_fixture["response"]["result_payload"]["evaluation_result"][
+            "proposal_id"
+        ] = f"proposal:{trip_id}"
+
+        evaluated = client_first.put(
+            f"/api/workspace/{trip_id}/proposal/evaluation",
+            json={
+                "request": evaluation_fixture["request"],
+                "response": evaluation_fixture["response"],
+                "proposal_version": "proposal-v3",
+                "scenario_id": "scenario-a",
+            },
+        )
+        assert evaluated.status_code == 200
+
+        first_app_view = client_first.get(f"/api/workspace/{trip_id}/proposal").json()
+        first_evaluation_id = first_app_view["proposal_state"]["evaluation"][
+            "evaluation_result"
+        ]["evaluation_id"]
+        first_evaluation_status = first_app_view["proposal_state"]["evaluation"][
+            "evaluation_result"
+        ]["status"]
+
+    # Confirm the SQLite file actually exists on disk before we restart.
+    assert db_path.exists(), "first app instance did not persist the DB file"
+
+    # ---- Second app instance against the SAME DB (no reset). ----------------
+    # If proposal state were held only in process memory or a non-persistent
+    # cache, the second client below would see an empty / 404 proposal
+    # payload, which is exactly the regression this test guards against.
+    app_second = create_app()
+    with TestClient(app_second) as client_second:
+        # Sign in as the same user (the persisted account survives the
+        # restart along with the proposal).
+        signin = client_second.post(
+            "/api/auth/login",
+            json={"email": "restart@example.com", "password": "password123"},
+        )
+        assert signin.status_code == 200, signin.text
+
+        reloaded = client_second.get(f"/api/workspace/{trip_id}/proposal")
+        assert reloaded.status_code == 200, reloaded.text
+        reloaded_payload = reloaded.json()
+
+        # Exact-value match across the restart — proposal_id, evaluation
+        # status, evaluation_id, and the persisted summary must all be
+        # identical between the two app instances.
+        assert (
+            reloaded_payload["proposal_state"]["proposal"]["proposal_id"]
+            == f"proposal:{trip_id}"
+        )
+        assert (
+            reloaded_payload["proposal_state"]["evaluation"]["evaluation_result"][
+                "evaluation_id"
+            ]
+            == first_evaluation_id
+        )
+        assert (
+            reloaded_payload["proposal_state"]["evaluation"]["evaluation_result"]["status"]
+            == first_evaluation_status
+        )
+        assert (
+            reloaded_payload["proposal_state"]["summary"]["submission_status"] == "deferred"
+        )
+
+    reset_database_state()

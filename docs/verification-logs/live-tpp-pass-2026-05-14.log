@@ -48,3 +48,42 @@ Full-product verification results
 - PASS local-business-journey: {"evaluation_status": "compliant", "follow_up_status": "resolved", "planning_mode": "collaborative", "proposal_id": "proposal:trip-full-product-business-verification-17ac74", "status_poll": "failed", "trip_id": "trip-full-product-business-verification-17ac74"}
 - SKIPPED map-provider: {"message": "Fallback map path is expected without live Google Maps credentials.", "missing_env": "VITE_GOOGLE_MAPS_BROWSER_API_KEY", "provider_state": "fallback"}
 - PASS live-tpp: {"base_url": "http://127.0.0.1:8765", "evaluation_status": "non_compliant", "execution_id": "exec-f99d88dd1951", "proposal_id": "proposal:trip-full-product-business-verification-17ac74", "status_poll": "deferred", "trip_id": "trip-full-product-business-verification-17ac74"}
+
+---
+
+Addendum 2026-05-14 — restart-persistence coverage
+==================================================
+
+The "all four lifecycle calls return HTTP 200 AND proposal state persists
+across `create_app()` restart" task-list item in issue #1187 was not
+demonstrated by the original verification log above (the captured run
+exercises the lifecycle once but never restarts the trip-planner app).
+
+Restart-persistence is now covered by a focused pytest at
+`tests/app/test_proposal.py::test_proposal_state_persists_across_create_app_restart`.
+The test:
+
+1. Sets `TRIP_PLANNER_DATABASE_URL` to a per-test SQLite file under tmp.
+2. Builds `create_app()` instance A, runs the full proposal submit +
+   evaluation lifecycle via TestClient against fixture HTTP responses
+   (the same fixtures used by the existing persisted-lifecycle tests).
+3. Closes the first TestClient (drops the SQLAlchemy session factory
+   reference and exits the FastAPI lifespan).
+4. Builds a fresh `create_app()` instance B against the SAME SQLite file
+   (no `reset_database_state`), signs the same user back in via
+   `/api/auth/login`, and asserts the proposal_id, evaluation_id, and
+   summary submission_status match the values persisted by instance A.
+
+This proves restart-persistence at the trip-planner layer without
+requiring live TPP infrastructure (which is one-shot and not re-runnable
+in CI). The live-tpp PASS above and this fixture-backed restart test
+together address both halves of the original task-list item.
+
+Run with:
+
+    pytest tests/app/test_proposal.py::test_proposal_state_persists_across_create_app_restart -v
+
+Expected result: PASSED. A regression where proposal state were held only
+in process memory (e.g. a non-persistent cache promoted to the proposal
+source-of-truth) would surface here as a 404 / empty proposal payload
+from the second app instance.
