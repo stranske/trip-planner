@@ -31,6 +31,7 @@ export type RouteStop = {
   sourceId: string;
   label: string;
   description: string;
+  sourceRefs: string[];
   x: number;
   y: number;
 };
@@ -296,7 +297,8 @@ function buildRouteStops(activeScenario: TripMapScenario): RouteStop[] {
       id: marker.id,
       sourceId: marker.source_id,
       label: marker.label,
-      description: describeStop(index, providerMarkers.length),
+      description: marker.description ?? describeStop(index, providerMarkers.length),
+      sourceRefs: marker.source_refs ?? [],
       x: marker.x * 100,
       y: marker.y * 100,
     }));
@@ -309,6 +311,7 @@ function buildRouteStops(activeScenario: TripMapScenario): RouteStop[] {
       sourceId: stop,
       label: humanizeStop(stop),
       description: describeStop(index, activeScenario.route_sequence.length),
+      sourceRefs: [],
       x: coordinate.x,
       y: coordinate.y,
     };

@@ -889,12 +889,22 @@ def _map_coordinate_for_route_index(index: int, route_length: int) -> dict[str, 
     }
 
 
-def _build_runtime_map_place_markers(route_sequence: list[str]) -> list[dict[str, Any]]:
+def _build_runtime_map_place_markers(
+    route_sequence: list[str],
+    *,
+    source_refs: list[str],
+) -> list[dict[str, Any]]:
+    stop_count = len([stop for stop in route_sequence if stop])
     return [
         {
             "id": f"route-stop:{index + 1}",
             "source_id": stop,
             "label": _humanize_route_stop(stop),
+            "description": (
+                f"Route stop {index + 1} of {stop_count}, sourced from the ranked scenario "
+                "route sequence."
+            ),
+            "source_refs": list(source_refs),
             "route_index": index,
             **_map_coordinate_for_route_index(index, len(route_sequence)),
         }
@@ -909,6 +919,7 @@ def _build_runtime_map_route_geometry(
     route_warning: str | None,
     total_travel_minutes: int,
     feasible: bool,
+    source_refs: list[str],
     total_distance_km: float | None = None,
 ) -> list[dict[str, Any]]:
     segments: list[dict[str, Any]] = []
@@ -919,6 +930,7 @@ def _build_runtime_map_route_geometry(
         if total_distance_km is not None and total_distance_km > 0
         else None
     )
+    distance_available = per_segment_distance_km is not None
     for index, marker in enumerate(place_markers[:-1]):
         next_marker = place_markers[index + 1]
         segments.append(
@@ -936,9 +948,17 @@ def _build_runtime_map_route_geometry(
                 "duration_minutes": per_segment_minutes,
                 "distance_km": per_segment_distance_km,
                 "confidence": "medium" if feasible else "low",
+                "provider_distance_available": distance_available,
+                "distance_verification_state": (
+                    "scenario_distance_available"
+                    if distance_available
+                    else "duration_estimate_only"
+                ),
+                "distance_source": "scenario_summary" if distance_available else None,
+                "source_refs": list(source_refs),
                 "unavailable_reason": (
                     None
-                    if per_segment_distance_km is not None
+                    if distance_available
                     else "Provider distance is not available; duration is estimated from ranked scenario timing."
                 ),
             }
@@ -954,13 +974,22 @@ def _build_runtime_map_view_payload(
 ) -> dict[str, Any]:
     confidence_level = "high" if summary.get("feasible", False) else "medium"
     route_warning = None if summary.get("feasible", False) else "Scenario feasibility needs review."
-    place_markers = _build_runtime_map_place_markers(route_sequence)
+    source_refs = [
+        ref
+        for ref in [
+            scenario.get("source_result_id"),
+            *list(scenario.get("objective_refs") or []),
+        ]
+        if ref
+    ]
+    place_markers = _build_runtime_map_place_markers(route_sequence, source_refs=source_refs)
     rough_route_geometry = _build_runtime_map_route_geometry(
         place_markers,
         route_warning=route_warning,
         total_travel_minutes=int(summary.get("total_travel_minutes") or 0),
         total_distance_km=summary.get("total_distance_km"),
         feasible=bool(summary.get("feasible", False)),
+        source_refs=source_refs,
     )
     return {
         "active_scope": "regional",

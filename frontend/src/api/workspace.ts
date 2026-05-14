@@ -273,6 +273,8 @@ export type RuntimeScenarioComparison = {
         id: string;
         source_id: string;
         label: string;
+        description?: string;
+        source_refs?: string[];
         route_index: number;
         x: number;
         y: number;
@@ -291,6 +293,10 @@ export type RuntimeScenarioComparison = {
         duration_minutes?: number | null;
         distance_km?: number | null;
         confidence?: "high" | "medium" | "low" | null;
+        provider_distance_available?: boolean;
+        distance_verification_state?: "scenario_distance_available" | "duration_estimate_only";
+        distance_source?: string | null;
+        source_refs?: string[];
         unavailable_reason?: string | null;
       }>;
       confidence: {
