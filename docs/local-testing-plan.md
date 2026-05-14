@@ -129,6 +129,8 @@ The `live-tpp` check inside `make full-product-check` has three modes selected v
 
 The verifier supports two configured transport modes. Pick exactly one per run; `TPP_BASE_URL` takes precedence and the sibling-checkout path is never resolved when it is set.
 
+Verified environment: on 2026-05-14, `python scripts/check_full_product_verification.py --live-tpp=required` reported `PASS live-tpp` using sibling-checkout mode against `Travel-Plan-Permission` commit `ee84f95` and trip-planner commit `ef8ee5b8d`. The captured, token-redacted log is [`docs/verification-logs/live-tpp-pass-2026-05-14.log`](verification-logs/live-tpp-pass-2026-05-14.log). The run used `TPP_REPO_PATH`, `TPP_ACCESS_TOKEN`, and `TPP_OIDC_PROVIDER=google`; no external `TPP_BASE_URL` was required.
+
 ### Sibling-checkout mode (`TPP_REPO_PATH`)
 
 Use this when you have a local `Travel-Plan-Permission` checkout and want the verifier to start and stop the HTTP service for you.
