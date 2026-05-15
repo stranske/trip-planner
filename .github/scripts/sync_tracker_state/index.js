@@ -151,24 +151,39 @@ function issueHasMarker(issue = {}, markerPattern = null) {
   return patternMatches(issue.body || '', markerPattern);
 }
 
-function issueMatchesTracker(issue = {}, { label, titlePattern, markerPattern } = {}) {
+function issueMatchesTracker(
+  issue = {},
+  { label, titlePattern, markerPattern, allowBodylessTitleCandidate = false } = {},
+) {
   if (issue.pull_request) {
     return false;
   }
   const names = labelNames(issue);
   const requiredLabels = unique([label]).filter(Boolean);
-  const hasRequiredLabel = requiredLabels.length === 0 ||
+  const hasRequiredLabel = requiredLabels.length > 0 &&
     requiredLabels.some((name) => names.includes(name));
   const hasDurableLabel = names.includes(DURABLE_TRACKER_LABEL);
-  const hasTitle = patternMatches(issue.title || '', titlePattern);
+  const hasTitleConstraint = Boolean(titlePattern);
+  const hasMarkerConstraint = Boolean(markerPattern);
+  const hasTitle = hasTitleConstraint ? patternMatches(issue.title || '', titlePattern) : true;
   const hasMarker = issueHasMarker(issue, markerPattern);
-  if (titlePattern && hasTitle) {
+  const hasLabelGate = hasDurableLabel || hasRequiredLabel;
+  if (
+    allowBodylessTitleCandidate &&
+    hasTitleConstraint &&
+    markerPattern &&
+    hasTitle &&
+    !cleanString(issue.body)
+  ) {
     return true;
   }
-  if (markerPattern && hasTitle && !cleanString(issue.body)) {
-    return true;
+  if (!hasTitleConstraint && hasMarkerConstraint) {
+    return hasMarker;
   }
-  return (hasDurableLabel || hasRequiredLabel || hasMarker) && (hasTitle || hasMarker);
+  if (!hasTitleConstraint) {
+    return hasLabelGate;
+  }
+  return (hasLabelGate || hasMarker) && (hasTitle || hasMarker);
 }
 
 async function ensureLabels({
@@ -215,7 +230,12 @@ async function findTracker({ github, owner, repo, label, titlePattern, markerPat
     }
   }
   for (const issue of byNumber.values()) {
-    if (!issueMatchesTracker(issue, { label, titlePattern, markerPattern })) {
+    if (!issueMatchesTracker(issue, {
+      label,
+      titlePattern,
+      markerPattern,
+      allowBodylessTitleCandidate: true,
+    })) {
       continue;
     }
     const fullIssue = await getIssue({ github, owner, repo, issueNumber: issue.number, core, withRetry });
