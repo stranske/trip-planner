@@ -151,7 +151,10 @@ function issueHasMarker(issue = {}, markerPattern = null) {
   return patternMatches(issue.body || '', markerPattern);
 }
 
-function issueMatchesTracker(issue = {}, { label, titlePattern, markerPattern } = {}) {
+function issueMatchesTracker(
+  issue = {},
+  { label, titlePattern, markerPattern, allowBodylessTitleCandidate = false } = {},
+) {
   if (issue.pull_request) {
     return false;
   }
@@ -160,12 +163,14 @@ function issueMatchesTracker(issue = {}, { label, titlePattern, markerPattern } 
   const hasRequiredLabel = requiredLabels.length === 0 ||
     requiredLabels.some((name) => names.includes(name));
   const hasDurableLabel = names.includes(DURABLE_TRACKER_LABEL);
-  const hasTitle = patternMatches(issue.title || '', titlePattern);
+  const hasTitle = Boolean(titlePattern) && patternMatches(issue.title || '', titlePattern);
   const hasMarker = issueHasMarker(issue, markerPattern);
-  if (titlePattern && hasTitle) {
-    return true;
-  }
-  if (markerPattern && hasTitle && !cleanString(issue.body)) {
+  if (
+    allowBodylessTitleCandidate &&
+    markerPattern &&
+    hasTitle &&
+    !cleanString(issue.body)
+  ) {
     return true;
   }
   return (hasDurableLabel || hasRequiredLabel || hasMarker) && (hasTitle || hasMarker);
@@ -215,7 +220,12 @@ async function findTracker({ github, owner, repo, label, titlePattern, markerPat
     }
   }
   for (const issue of byNumber.values()) {
-    if (!issueMatchesTracker(issue, { label, titlePattern, markerPattern })) {
+    if (!issueMatchesTracker(issue, {
+      label,
+      titlePattern,
+      markerPattern,
+      allowBodylessTitleCandidate: true,
+    })) {
       continue;
     }
     const fullIssue = await getIssue({ github, owner, repo, issueNumber: issue.number, core, withRetry });
