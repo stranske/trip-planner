@@ -14,10 +14,11 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 try:
     from scripts.langchain.trace_utils import TraceInfo, invoke_with_trace
@@ -152,6 +153,29 @@ class TaskFate:
         return payload
 
 
+class TriageCleanItem(TypedDict):
+    """Clean task record with the original input position."""
+
+    task: str
+    index: int
+
+
+class TriageFlaggedItem(TypedDict):
+    """Flagged task record with heuristic warnings and original position."""
+
+    task: str
+    warnings: list[str]
+    index: int
+
+
+class TriageResult(TypedDict):
+    """Structured result returned by ``triage_tasks``."""
+
+    clean: list[str]
+    clean_items: list[TriageCleanItem]
+    flagged: list[TriageFlaggedItem]
+
+
 @dataclass
 class ValidationResult:
     """Complete result of task validation."""
@@ -234,7 +258,7 @@ WARNING_SIGNALS: dict[str, Any] = {
 # ---------------------------------------------------------------------------
 
 
-def triage_tasks(tasks: list[str]) -> dict[str, list[Any]]:
+def triage_tasks(tasks: list[str]) -> TriageResult:
     """
     Separate tasks into clean vs flagged for review.
 
@@ -242,11 +266,13 @@ def triage_tasks(tasks: list[str]) -> dict[str, list[Any]]:
         tasks: List of task strings to triage
 
     Returns:
-        Dictionary with "clean" (list[str]) and "flagged" (list[dict]) keys
+        Dictionary with "clean" (list[str]), "clean_items" (list[dict] with
+        task/index pairs), and "flagged" (list[dict] with task, warnings, and
+        index) keys
     """
     clean: list[str] = []
-    clean_items: list[dict[str, Any]] = []
-    flagged: list[dict[str, Any]] = []
+    clean_items: list[TriageCleanItem] = []
+    flagged: list[TriageFlaggedItem] = []
 
     for index, task in enumerate(tasks):
         if not task or not task.strip():
@@ -302,7 +328,10 @@ def _load_refinement_prompt() -> str:
 REFINEMENT_PATTERN = re.compile(r"^\s*[-*]?\s*(KEEP|IMPROVE|DROP)\s*:\s*(.+)$", re.IGNORECASE)
 
 
-def _parse_refinement_response(response: str, flagged: list[dict[str, Any]]) -> list[TaskFate]:
+def _parse_refinement_response(
+    response: str,
+    flagged: Sequence[Mapping[str, Any]],
+) -> list[TaskFate]:
     """
     Parse LLM refinement response into TaskFate objects.
 
@@ -385,13 +414,13 @@ def _parse_refinement_response(response: str, flagged: list[dict[str, Any]]) -> 
 
 
 def refine_flagged_tasks(
-    flagged: list[dict[str, Any]], context: str = ""
+    flagged: Sequence[Mapping[str, Any]], context: str = ""
 ) -> tuple[list[str], list[TaskFate], str | None, TraceInfo]:
     """
     Send flagged tasks to LLM for refinement decision.
 
     Args:
-        flagged: List of {"task": str, "warnings": list[str]} dicts
+        flagged: Sequence of mappings with "task", optional "warnings", and optional "index" keys.
         context: Optional issue context for LLM
 
     Returns:
@@ -520,7 +549,7 @@ def merge_with_audit(
     refined: list[str],
     fates: list[TaskFate],
     original_count: int,
-    clean_items: list[dict[str, Any]] | None = None,
+    clean_items: Sequence[Mapping[str, Any]] | None = None,
 ) -> tuple[list[str], str]:
     """
     Merge clean and refined tasks, returning audit summary.
