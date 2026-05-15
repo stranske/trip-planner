@@ -169,7 +169,7 @@ def _is_delegated_call_type_error(exc: TypeError) -> bool:
     return (
         len(frames) > 1
         and frames[0].code is invoke_with_trace.__code__
-        and all(frame.code.co_name in {"invoke", "__call__"} for frame in frames[1:])
+        and frames[1].code.co_name in {"invoke", "__call__"}
         and _is_forwarding_invoke_call(frames[-1])
     )
 

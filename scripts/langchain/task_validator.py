@@ -629,9 +629,9 @@ def validate_tasks(
     Returns:
         ValidationResult with final tasks and full audit trail
     """
-    tasks = [task for task in tasks if task and task.strip()]
+    indexed_tasks = [(index, task) for index, task in enumerate(tasks) if task and task.strip()]
 
-    if not tasks:
+    if not indexed_tasks:
         return ValidationResult(
             tasks=[],
             fates=[],
@@ -639,10 +639,16 @@ def validate_tasks(
             provider_used=None,
         )
 
+    original_indexes = [index for index, _task in indexed_tasks]
+    tasks = [task for _index, task in indexed_tasks]
     original_count = len(tasks)
 
     # Pass 1: Heuristic triage
     triage_result = triage_tasks(tasks)
+    for item in triage_result["clean_items"]:
+        item["index"] = original_indexes[item["index"]]
+    for item in triage_result["flagged"]:
+        item["index"] = original_indexes[item["index"]]
     clean = triage_result["clean"]
     flagged = triage_result["flagged"]
 
