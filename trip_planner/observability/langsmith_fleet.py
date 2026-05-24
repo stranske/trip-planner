@@ -33,7 +33,7 @@ ENV_LANGCHAIN_TRACING_V2: Final = "LANGCHAIN_TRACING_V2"
 ENV_LANGCHAIN_API_KEY: Final = "LANGCHAIN_API_KEY"
 ENV_FLEET_PATH: Final = "TRIP_PLANNER_LANGSMITH_FLEET_PATH"
 
-Status = Literal["success", "error", "fallback", "no_secret", "skipped"]
+Status = Literal["success", "error", "fallback", "no_secret"]
 
 
 @dataclass(frozen=True, slots=True)

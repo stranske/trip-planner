@@ -640,7 +640,7 @@ def test_configured_planner_model_receives_langsmith_trace_config(
     assert langsmith_config["metadata"]["trip_id_hash"] != trip_id
     assert langsmith_config["metadata"]["provider"] == "openai"
     assert langsmith_config["metadata"]["model"] == "fake-planner-model"
-    assert fake_model.requests[0]["runtime_context"]["langsmith_run_config"] == langsmith_config
+    assert "langsmith_run_config" not in fake_model.requests[0]["runtime_context"]
     records = [json.loads(line) for line in artifact_path.read_text().splitlines()]
     assert records
     assert records[0]["status"] == "success"

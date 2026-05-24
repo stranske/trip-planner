@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import re
 import secrets
-from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Callable, Protocol
@@ -66,6 +65,7 @@ class PlannerConversationRequest:
     planner_panel_state: dict[str, Any]
     session: PlanningSessionState
     runtime_context: dict[str, Any]
+    langsmith_run_config: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1035,7 +1035,7 @@ class ModelBackedPlannerConversationRunnable:
                 "runtime_context": request.runtime_context,
                 "provider": self._config.provider,
                 "model": self._config.model,
-                "langsmith_run_config": request.runtime_context.get("langsmith_run_config"),
+                "langsmith_run_config": request.langsmith_run_config,
             }
         )
         content = str(raw.get("content") or "").strip()
@@ -1448,7 +1448,7 @@ def submit_planner_turn(
         planner_memory=planner_memory,
         activity_log=activity_log,
     )
-    runtime_context["langsmith_run_config"] = build_langsmith_run_config(
+    langsmith_run_config = build_langsmith_run_config(
         context=fleet_context,
         metadata=_planner_turn_metadata(
             message=normalized_message,
@@ -1465,6 +1465,7 @@ def submit_planner_turn(
                 planner_panel_state=workspace_payload["planner_panel_state"],
                 session=session,
                 runtime_context=runtime_context,
+                langsmith_run_config=langsmith_run_config,
             )
         )
     except Exception as error:
@@ -1569,8 +1570,15 @@ def submit_planner_turn(
         context_readiness=runtime_context["context_readiness"],
         artifact_ref=str(fleet_artifact_path),
     )
-    with suppress(Exception):
+    fleet_write_status = "failed"
+    fleet_write_error: str | None = None
+    fleet_record_count = 0
+    try:
         append_fleet_records(fleet_artifact_path, fleet_records)
+        fleet_write_status = "written"
+        fleet_record_count = len(fleet_records)
+    except Exception as error:  # pragma: no cover - defensive metadata path
+        fleet_write_error = type(error).__name__
     _record_planner_action(
         db_session,
         trip_id=trip_id,
@@ -1594,10 +1602,14 @@ def submit_planner_turn(
             "runtime_mode": runtime_config.mode,
             "context_readiness": runtime_context["context_readiness"],
             "langsmith_fleet": {
-                "artifact_path": str(fleet_artifact_path),
+                "artifact_path": (
+                    str(fleet_artifact_path) if fleet_write_status == "written" else ""
+                ),
                 "run_id": fleet_context.run_id,
                 "trace_id": fleet_context.trace_id,
-                "record_count": len(fleet_records),
+                "record_count": fleet_record_count,
+                "write_status": fleet_write_status,
+                "write_error": fleet_write_error,
             },
         },
     )

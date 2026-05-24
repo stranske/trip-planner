@@ -96,6 +96,7 @@ def test_planner_fleet_record_summarizes_domain_metadata_without_raw_payload(mon
     serialized = json.dumps(record)
     assert "trip-private" not in serialized
     assert "session-private" not in serialized
+    assert record["domain"]["fallback_state"] == "missing_model_config"
 
 
 def test_write_fleet_records_uses_deterministic_ndjson(tmp_path):

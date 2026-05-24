@@ -2805,15 +2805,12 @@ describe("WorkspacePage", () => {
     });
 
     const user = userEvent.setup();
-    fireEvent.change(screen.getByLabelText("Budget title"), {
-      target: { value: "Kyoto spring guardrails" },
-    });
-    fireEvent.change(screen.getByLabelText("Lodging cap"), {
-      target: { value: "600" },
-    });
-    fireEvent.change(screen.getByLabelText("Food cap"), {
-      target: { value: "180" },
-    });
+    await user.clear(screen.getByLabelText("Budget title"));
+    await user.type(screen.getByLabelText("Budget title"), "Kyoto spring guardrails");
+    await user.clear(screen.getByLabelText("Lodging cap"));
+    await user.type(screen.getByLabelText("Lodging cap"), "600");
+    await user.clear(screen.getByLabelText("Food cap"));
+    await user.type(screen.getByLabelText("Food cap"), "180");
     await user.click(screen.getByRole("button", { name: "Save budget plan" }));
 
     await waitFor(() => {
