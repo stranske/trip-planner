@@ -80,7 +80,10 @@ def test_planner_fleet_record_summarizes_domain_metadata_without_raw_payload(mon
             {"tool_name": "refresh_inventory", "status": "completed", "mutates_state": False},
             {"tool_name": "update_budget_plan", "status": "completed", "mutates_state": True},
         ],
-        context_readiness={"status": "partial", "missing_sections": ["policy"]},
+        context_readiness={
+            "status": "partial",
+            "missing_sections": ["policy_state", "raw traveler note: private details"],
+        },
         artifact_ref="artifacts/langsmith/langsmith-fleet.ndjson",
     )
 
@@ -93,9 +96,11 @@ def test_planner_fleet_record_summarizes_domain_metadata_without_raw_payload(mon
     assert record["domain"]["budget_constraint_status"] == "used"
     assert record["domain"]["mutating_tool_call_count"] == 1
     assert record["domain"]["context_readiness_status"] == "partial"
+    assert record["domain"]["missing_context_sections"] == ["policy_state", "other"]
     serialized = json.dumps(record)
     assert "trip-private" not in serialized
     assert "session-private" not in serialized
+    assert "raw traveler note: private details" not in serialized
     assert record["domain"]["fallback_state"] == "missing_model_config"
 
 

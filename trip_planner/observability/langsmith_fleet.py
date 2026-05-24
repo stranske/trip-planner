@@ -32,6 +32,17 @@ ENV_LANGSMITH_PROJECT: Final = "LANGSMITH_PROJECT"
 ENV_LANGCHAIN_TRACING_V2: Final = "LANGCHAIN_TRACING_V2"
 ENV_LANGCHAIN_API_KEY: Final = "LANGCHAIN_API_KEY"
 ENV_FLEET_PATH: Final = "TRIP_PLANNER_LANGSMITH_FLEET_PATH"
+_KNOWN_CONTEXT_SECTIONS: Final = {
+    "trip",
+    "planner_panel_state",
+    "autonomy_preferences",
+    "budget_state",
+    "policy_state",
+    "proposal_state",
+    "runtime_scenario_comparison",
+    "planning_ledger",
+    "recent_activity",
+}
 
 Status = Literal["success", "error", "fallback", "no_secret"]
 
@@ -144,7 +155,9 @@ def build_planner_fleet_records(
         ),
         "persisted_workspace_result": "available",
         "context_readiness_status": context_readiness.get("status") or "unknown",
-        "missing_context_sections": list(context_readiness.get("missing_sections") or []),
+        "missing_context_sections": _safe_context_sections(
+            context_readiness.get("missing_sections") or []
+        ),
     }
     return [
         _record(
@@ -263,6 +276,16 @@ def _tool_state(calls: list[dict[str, Any]], names: set[str]) -> str:
     if any(str(item.get("status") or "") in {"completed", "partial"} for item in matched):
         return "used"
     return "unavailable"
+
+
+def _safe_context_sections(sections: Iterable[Any]) -> list[str]:
+    safe_sections: list[str] = []
+    for section in sections:
+        name = str(section).strip()
+        if not name:
+            continue
+        safe_sections.append(name if name in _KNOWN_CONTEXT_SECTIONS else "other")
+    return [item for item in dict.fromkeys(safe_sections)]
 
 
 def _first_error_category(failed_calls: list[dict[str, Any]]) -> str | None:
