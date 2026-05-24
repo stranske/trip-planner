@@ -1,3 +1,4 @@
+import json
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,12 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+    monkeypatch.delenv("LANGCHAIN_API_KEY", raising=False)
+    monkeypatch.delenv("LANGCHAIN_PROJECT", raising=False)
+    monkeypatch.delenv("LANGSMITH_PROJECT", raising=False)
+    monkeypatch.delenv("LANGCHAIN_TRACING_V2", raising=False)
+    monkeypatch.delenv("TRIP_PLANNER_LANGSMITH_FLEET_PATH", raising=False)
     set_planner_chat_model_factory_for_tests(None)
     reset_database_state()
     app = create_app()
@@ -549,6 +556,97 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
         assert checkpoint is not None
         assert checkpoint.metadata_payload["tool_call_count"] == 6
         assert checkpoint.metadata_payload["selected_planning_mode"] == "collaborative"
+
+
+def test_planner_turn_emits_no_secret_langsmith_fleet_artifact(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    trip_id = _create_trip(client)
+    artifact_path = tmp_path / "langsmith-fleet.ndjson"
+    monkeypatch.setenv("TRIP_PLANNER_LANGSMITH_FLEET_PATH", str(artifact_path))
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": "Compare Chicago food options without storing my exact traveler note.",
+            "tool_calls": [{"tool_name": "read_budget_state"}],
+        },
+    )
+
+    assert response.status_code == 200
+    records = [json.loads(line) for line in artifact_path.read_text().splitlines()]
+    assert len(records) == 1
+    record = records[0]
+    assert record["schema_version"] == "langsmith-fleet/v1"
+    assert record["repo"] == "stranske/trip-planner"
+    assert record["surface"] == "planner-conversation"
+    assert record["operation"] == "planner-turn"
+    assert record["status"] == "no_secret"
+    assert record["github_issue"] == "stranske/trip-planner#1208"
+    domain = record["domain"]
+    assert domain["planning_mode"] == "collaborative"
+    assert domain["tool_call_count"] == 1
+    assert domain["budget_constraint_status"] == "used"
+    assert "trip_id_hash" in domain
+    serialized = json.dumps(record)
+    assert trip_id not in serialized
+    assert "Compare Chicago food options" not in serialized
+
+    with get_session_factory()() as db_session:
+        stored = db_session.scalars(
+            select(PersistedPlannerAction)
+            .where(PersistedPlannerAction.trip_id == trip_id)
+            .order_by(PersistedPlannerAction.occurred_at.asc())
+        ).all()
+        fleet_payload = stored[-1].payload["langsmith_fleet"]
+        assert fleet_payload["artifact_path"] == str(artifact_path)
+        assert fleet_payload["record_count"] == 1
+        assert fleet_payload["run_id"].startswith("planner-turn:")
+
+
+def test_configured_planner_model_receives_langsmith_trace_config(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    trip_id = _create_trip(client)
+    artifact_path = tmp_path / "langsmith-fleet.ndjson"
+    fake_model = FakePlannerChatModel(
+        {
+            "content": "I read the current workspace before recommending next steps.",
+            "tool_calls": [{"tool_name": "read_workspace_state", "arguments": {}}],
+        }
+    )
+    monkeypatch.setenv("TRIP_PLANNER_LANGSMITH_FLEET_PATH", str(artifact_path))
+    monkeypatch.setenv("LANGSMITH_API_KEY", "fake-langsmith-key")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL", "fake-planner-model")
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-openai-key")
+    set_planner_chat_model_factory_for_tests(lambda _: fake_model)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Use the configured model path with trace metadata."},
+    )
+
+    assert response.status_code == 200
+    langsmith_config = fake_model.requests[0]["langsmith_run_config"]
+    assert langsmith_config["run_name"] == "trip-planner.planner-conversation"
+    assert "repo:trip-planner" in langsmith_config["tags"]
+    assert langsmith_config["metadata"]["repo"] == "stranske/trip-planner"
+    assert langsmith_config["metadata"]["trip_id_hash"]
+    assert langsmith_config["metadata"]["trip_id_hash"] != trip_id
+    assert langsmith_config["metadata"]["provider"] == "openai"
+    assert langsmith_config["metadata"]["model"] == "fake-planner-model"
+    assert fake_model.requests[0]["runtime_context"]["langsmith_run_config"] == langsmith_config
+    records = [json.loads(line) for line in artifact_path.read_text().splitlines()]
+    assert records
+    assert records[0]["status"] == "success"
+    assert records[0]["provider"] == "openai"
+    assert records[0]["model"] == "fake-planner-model"
+    assert records[0]["domain"]["provider_state"] == "model"
 
 
 def test_planner_turn_tool_reads_are_grounded_in_persisted_workspace_state(

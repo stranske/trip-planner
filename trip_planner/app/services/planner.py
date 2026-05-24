@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Callable, Protocol
@@ -39,6 +40,13 @@ from trip_planner.app.services.workspace import (
     _record_planner_action,
     _serialize_activity_record,
     _serialize_session_record,
+)
+from trip_planner.observability.langsmith_fleet import (
+    PlannerFleetContext,
+    append_fleet_records,
+    build_langsmith_run_config,
+    build_planner_fleet_records,
+    default_fleet_artifact_path,
 )
 from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
@@ -977,6 +985,10 @@ class _OpenAIPlannerChatModel:
             for tool in payload["available_tools"]
         ]
         model = self._model.bind_tools(tools)
+        invoke_kwargs: dict[str, Any] = {}
+        langsmith_run_config = payload.get("langsmith_run_config")
+        if isinstance(langsmith_run_config, dict):
+            invoke_kwargs["config"] = langsmith_run_config
         response = model.invoke(
             [
                 (
@@ -995,7 +1007,8 @@ class _OpenAIPlannerChatModel:
                         default=str,
                     ),
                 ),
-            ]
+            ],
+            **invoke_kwargs,
         )
         tool_calls: list[dict[str, Any]] = []
         for call in getattr(response, "tool_calls", []) or []:
@@ -1022,6 +1035,7 @@ class ModelBackedPlannerConversationRunnable:
                 "runtime_context": request.runtime_context,
                 "provider": self._config.provider,
                 "model": self._config.model,
+                "langsmith_run_config": request.runtime_context.get("langsmith_run_config"),
             }
         )
         content = str(raw.get("content") or "").strip()
@@ -1418,11 +1432,30 @@ def submit_planner_turn(
     activity_log = _activity_log(db_session, trip_id=trip_id)
     runtime_config = get_planner_runtime_config()
     runnable = _planner_runnable(runtime_config)
+    fleet_context = PlannerFleetContext(
+        run_id=f"planner-turn:{secrets.token_hex(8)}",
+        session_id=session.session_state_id,
+        trip_id=trip_id,
+        planning_mode=session.selected_planning_mode,
+        provider=runtime_config.provider,
+        model=runtime_config.model,
+        trace_id=f"planner-trace:{secrets.token_hex(8)}",
+        recorded_at=occurred_at,
+    )
     runtime_context = _planner_runtime_context(
         workspace_payload,
         session=session,
         planner_memory=planner_memory,
         activity_log=activity_log,
+    )
+    runtime_context["langsmith_run_config"] = build_langsmith_run_config(
+        context=fleet_context,
+        metadata=_planner_turn_metadata(
+            message=normalized_message,
+            runtime_config=runtime_config,
+            turn_index=len(activity_log),
+            planning_mode=session.selected_planning_mode,
+        ),
     )
     try:
         reply = runnable.invoke(
@@ -1527,6 +1560,17 @@ def submit_planner_turn(
         actor="planner",
         metadata={"ref_count": str(len(reply.refs))},
     )
+    fleet_artifact_path = default_fleet_artifact_path()
+    fleet_records = build_planner_fleet_records(
+        context=fleet_context,
+        runtime_mode=runtime_config.mode,
+        turn_metadata=reply.turn_metadata or {},
+        tool_calls=reply.tool_calls,
+        context_readiness=runtime_context["context_readiness"],
+        artifact_ref=str(fleet_artifact_path),
+    )
+    with suppress(Exception):
+        append_fleet_records(fleet_artifact_path, fleet_records)
     _record_planner_action(
         db_session,
         trip_id=trip_id,
@@ -1549,6 +1593,12 @@ def submit_planner_turn(
             ),
             "runtime_mode": runtime_config.mode,
             "context_readiness": runtime_context["context_readiness"],
+            "langsmith_fleet": {
+                "artifact_path": str(fleet_artifact_path),
+                "run_id": fleet_context.run_id,
+                "trace_id": fleet_context.trace_id,
+                "record_count": len(fleet_records),
+            },
         },
     )
     refresh_planner_memory(
