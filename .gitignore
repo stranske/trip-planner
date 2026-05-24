@@ -29,3 +29,6 @@ frontend/.env.*.local
 node_modules/
 dist/
 *.tsbuildinfo
+
+# Runtime LangSmith fleet artifacts are regenerated and can contain local trace IDs.
+artifacts/langsmith/
