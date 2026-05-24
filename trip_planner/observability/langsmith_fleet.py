@@ -115,12 +115,12 @@ def build_planner_fleet_records(
     fallback_reason = turn_metadata.get("fallback_reason")
     if failed_calls:
         status: Status = "error"
+    elif not os.environ.get(ENV_LANGSMITH_KEY, "").strip():
+        status = "no_secret"
     elif runtime_mode == "fallback" or fallback_reason:
         status = "fallback"
     elif tracing_enabled:
         status = "success"
-    elif not os.environ.get(ENV_LANGSMITH_KEY, "").strip():
-        status = "no_secret"
     else:
         status = "no_secret"
 
