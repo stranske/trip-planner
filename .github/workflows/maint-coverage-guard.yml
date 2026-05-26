@@ -136,7 +136,7 @@ jobs:
                   paginateWithRetry: (githubInstance, method, params) =>
                     githubInstance.paginate(method, params),
                 };
-            const { paginateWithRetry } = retryHelpers;
+            const { paginateWithRetry, withRetry } = retryHelpers;
 
             const runs = await paginateWithRetry(
               github, github.rest.actions.listWorkflowRuns,
@@ -160,11 +160,72 @@ jobs:
                 new Date(b.run_started_at || b.created_at || 0) -
                 new Date(a.run_started_at || a.created_at || 0),
             );
-            const candidate =
-              runs.find((run) => ['success', 'neutral'].includes(run.conclusion || '')) || runs[0];
+            const successfulRuns = runs.filter((run) =>
+              ['success', 'neutral'].includes(run.conclusion || ''),
+            );
+            const runsToProbe = successfulRuns.slice(0, 10);
+            const requiredCoverageArtifactNames = new Set([
+              'gate-coverage-trend',
+              'gate-coverage-trend-history',
+              'gate-coverage',
+            ]);
+            let candidate = null;
+            for (const run of runsToProbe) {
+              let artifacts = [];
+              try {
+                artifacts = await paginateWithRetry(
+                  github,
+                  github.rest.actions.listWorkflowRunArtifacts,
+                  {
+                    owner,
+                    repo,
+                    run_id: run.id,
+                    per_page: 100,
+                  },
+                );
+              } catch (error) {
+                core.warning(
+                  `Skipping Gate run ${run.id}; artifact lookup failed: ${error.message}`,
+                );
+                continue;
+              }
+
+              const availableCoverageArtifactNames = new Set(
+                artifacts
+                  .filter((artifact) => !artifact.expired)
+                  .map((artifact) => artifact.name),
+              );
+              const missingCoverageArtifactNames = [...requiredCoverageArtifactNames].filter(
+                (artifactName) => !availableCoverageArtifactNames.has(artifactName),
+              );
+              if (!missingCoverageArtifactNames.length) {
+                candidate = run;
+                break;
+              }
+              core.info(
+                [
+                  `Skipping Gate run ${run.id}; missing required coverage artifacts:`,
+                  missingCoverageArtifactNames.join(', '),
+                ].join(' '),
+              );
+            }
+
+            if (!candidate && !successfulRuns.length) {
+              core.warning(
+                'Unable to locate a successful or neutral completed Gate workflow run.',
+              );
+              core.setOutput('run_id', '');
+              return;
+            }
 
             if (!candidate) {
-              core.warning('Unable to locate a completed Gate workflow run.');
+              core.warning(
+                [
+                  'Unable to locate a recent successful Gate workflow run with required',
+                  'coverage artifacts: gate-coverage-trend, gate-coverage-trend-history,',
+                  'gate-coverage.',
+                ].join(' '),
+              );
               core.setOutput('run_id', '');
               return;
             }
