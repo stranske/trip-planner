@@ -1,3 +1,46 @@
+## 2026-05-27T18:51Z - closer pushed CI recovery for PR #1253
+
+- Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1250`; follow-up PR `#1253`; branch `codex/followup-1250-test-scenarios-path`.
+- Action: pushed CI recovery commit `d38f55415` and posted PR evidence comment `pull/1253#issuecomment-4557643136`.
+- Validation before push:
+  - `python -m pytest tests/itinerary/test_scenarios.py tests/state/test_scenarios.py -q` -> 21 passed.
+  - `python -m pytest -q` -> 1014 passed, 1 skipped, 160 warnings.
+  - `python -m ruff check tests/itinerary/__init__.py tests/state/__init__.py tests/itinerary/test_scenarios.py docs/design-coverage-map.md workloop-state.md` -> passed.
+  - `python -m ruff format --check tests/itinerary/__init__.py tests/state/__init__.py tests/itinerary/test_scenarios.py` -> passed.
+  - `git diff --check` -> clean.
+- Post-push state: PR #1253 head is `d38f55415c8bbfaad8272d35604612f171b212fa`; merge state remains `UNSTABLE` only because fresh CI/Gate/review-target checks are pending. No unresolved review threads were present before the push.
+- Next action: re-check fresh required checks on `d38f55415`; if green and review threads remain clear, merge PR #1253, apply `verify:compare`, emit `pr_merged` and `verify_label_applied`, and wait for follow-up verifier PASS.
+
+## 2026-05-27T18:49Z - closer CI recovery for PR #1253
+
+- Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1250`; merged source PR `#1252`; follow-up PR `#1253`.
+- Blocker: required Python CI and Gate failed on head `33fc0f4e0` because pytest collected `tests/itinerary/test_scenarios.py` and `tests/state/test_scenarios.py` as the same top-level module name `test_scenarios`.
+- Fix: kept the verifier/acceptance-required path `tests/itinerary/test_scenarios.py` and added package markers for `tests/itinerary` and `tests/state` so full-suite collection imports them as distinct package modules. No production code changes.
+- Validation:
+  - `python -m pytest tests/itinerary/test_scenarios.py tests/state/test_scenarios.py -q` -> 21 passed.
+  - `python -m pytest -q` -> 1014 passed, 1 skipped, 160 warnings.
+  - `python -m ruff check tests/itinerary/__init__.py tests/state/__init__.py tests/itinerary/test_scenarios.py docs/design-coverage-map.md workloop-state.md` -> passed.
+  - `python -m ruff format --check tests/itinerary/__init__.py tests/state/__init__.py tests/itinerary/test_scenarios.py` -> passed.
+- Next action: push the recovery commit to `codex/followup-1250-test-scenarios-path`, then re-check PR #1253. If fresh checks are green and review threads remain clear, merge #1253, apply `verify:compare`, emit `pr_merged` and `verify_label_applied`, then wait for follow-up verifier PASS before any final source-issue disposition.
+
+## 2026-05-27T18:36Z - closer verifier follow-up for PR #1252
+
+- Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1250`; merged source PR `#1252`.
+- Verifier state: PR #1252 has a durable Provider Comparison Report with both providers CONCERNS. The actionable issue is a traceability/acceptance mismatch: the approved issue and acceptance commands named `tests/itinerary/test_scenarios.py`, while merged PR #1252 created `tests/itinerary/test_itinerary_scenarios.py`. The report also could not confirm missing-explanations coverage from the truncated diff, but current merged code has `test_itinerary_scenario_requires_explanation_records`.
+- Follow-up branch: `codex/followup-1250-test-scenarios-path`, based on `origin/main` `d6ee11aa2`.
+- Fix: renamed `tests/itinerary/test_itinerary_scenarios.py` to `tests/itinerary/test_scenarios.py` and updated `docs/design-coverage-map.md` to reference the acceptance-path file. No production code changes.
+- Validation:
+  - `python -m pytest tests/itinerary/test_scenarios.py -q` -> 10 passed.
+  - `python -m ruff check tests/itinerary/test_scenarios.py` -> passed.
+  - `python -m ruff format --check tests/itinerary/test_scenarios.py` -> passed.
+  - `git diff --check` -> clean.
+- PR: `#1253` (https://github.com/stranske/trip-planner/pull/1253), open/non-draft, labels `codex`, `codex-automation`, `agent:codex`, `agents:keepalive`, `autofix`, `repo-review-approved`, `priority:normal`.
+- Post-push state: fresh CI is pending. One older Gate row shows a canceled path-classification run, but a newer Gate row is passing; re-check current required checks before merging.
+- Next action: after checks are green, merge PR #1253, apply `verify:compare`, then close #1250 only after the follow-up verifier passes.
+
 ## 2026-05-27T16:11Z - opener lane issue #1250 materializing
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
