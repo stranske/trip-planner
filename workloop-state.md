@@ -25,7 +25,8 @@
 - Issue: `#1243` (`Add dedicated tests for preference explanation generation module`)
 - Branch: `codex/issue-1243-preference-explanation-tests`
 - Lane: opener / codex
-- Status: implementation complete locally; preparing push and ready-for-review PR.
+- PR: `#1244` (https://github.com/stranske/trip-planner/pull/1244)
+- Status: ready-for-review PR opened, non-draft, closing issue `#1243`.
 - Selection notes:
   - Cap-health after opener infra repair reported `total_opener_owned=2`, `raw_cap_reached=false`, `non_drainable_count=0`.
   - Existing opener PRs were classified as draining: LMS `#173` with green Gate evidence and trip-planner `#1241` with current Gate/CI in progress.
@@ -42,7 +43,8 @@
   - `python -m ruff check tests/preferences/test_explanations.py` -> passed.
   - `python -m ruff format --check tests/preferences/test_explanations.py` -> passed.
   - `git diff --check` -> passed.
-- Next action: commit, push, open ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`.
+- Labels verified on PR: `agent:codex`, `agents:keepalive`, `autofix`, `repo-review-approved`, `priority:high`.
+- Next action: keepalive owns PR `#1244`; opener should move to the next eligible issue on a future round after cap checks.
 
 ## 2026-05-27T02:42Z - opener lane issue #1235 PR opened
 
