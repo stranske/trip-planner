@@ -143,6 +143,7 @@ _TOOL_DEFINITIONS: tuple[PlannerToolDefinition, ...] = (
 )
 
 _TOOL_BY_NAME = {item.tool_name: item for item in _TOOL_DEFINITIONS}
+_NOTEBOOK_CONTEXT_NOTE_MAX_CHARS = 320
 
 
 def list_planner_tools() -> list[dict[str, Any]]:
@@ -1021,6 +1022,14 @@ def _read_planning_notebook(
     )
 
 
+def _notebook_context_note_excerpt(note: Any) -> tuple[str, bool]:
+    text = str(note or "").strip()
+    if len(text) <= _NOTEBOOK_CONTEXT_NOTE_MAX_CHARS:
+        return text, False
+    excerpt = text[: _NOTEBOOK_CONTEXT_NOTE_MAX_CHARS - 3].rstrip()
+    return f"{excerpt}...", True
+
+
 def _read_notebook_context(
     db_session: Session,
     user: AuthenticatedUser,
@@ -1046,10 +1055,12 @@ def _read_notebook_context(
         bucket = categories.setdefault(category, [])
         if len(bucket) >= 3:
             continue
+        note_excerpt, note_truncated = _notebook_context_note_excerpt(item.get("note"))
         bucket.append(
             {
                 "title": item.get("title") or "",
-                "note": item.get("note") or "",
+                "note": note_excerpt,
+                "note_truncated": note_truncated,
                 "category": category,
                 "priority": item.get("priority") or "normal",
                 "updated_at": item.get("updated_at"),

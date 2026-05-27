@@ -1392,6 +1392,13 @@ def test_read_notebook_context_tool_bounds_items_per_category(
                     "tool_name": "capture_notebook_item",
                     "arguments": {
                         "title": f"Activity idea {index}.",
+                        "note": (
+                            "Use this long planning detail to confirm the context "
+                            "reader emits bounded recall excerpts. "
+                            + ("museum lunch timing " * 40)
+                        )
+                        if index == 3
+                        else f"Activity note {index}.",
                         "category": "activities",
                     },
                 }
@@ -1429,6 +1436,8 @@ def test_read_notebook_context_tool_bounds_items_per_category(
     assert len(output["categories"]["activities"]) == 3
     assert "session_state_id" not in output
     assert "memory_artifact_id" not in output
+    assert output["categories"]["activities"][0]["note_truncated"] is True
+    assert len(output["categories"]["activities"][0]["note"]) <= 320
     for bucket in output["categories"].values():
         for item in bucket:
             assert "session_state_id" not in item

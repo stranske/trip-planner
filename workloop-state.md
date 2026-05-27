@@ -1,3 +1,12 @@
+## 2026-05-27T14:25Z - closer review-thread recovery for PR #1241
+
+- Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1240`; PR `#1241`; branch `claude/issue-1240-notebook-context`; head before fix `97a659370af684bda2c17208d066f055a770ddcf`.
+- Blocker: one unresolved Copilot review thread on `trip_planner/app/services/planner_tools.py` reported that `read_notebook_context` returned full unbounded notebook notes, risking large planner context/tool trace payloads.
+- Fix: added a 320-character note excerpt helper for `read_notebook_context`, returned bounded `note` text plus `note_truncated`, and extended the direct tool test to cover a long note.
+- Validation: `python -m pytest tests/app/test_planner_routes.py::test_session_resume_message_triggers_read_notebook_context tests/app/test_planner_routes.py::test_read_notebook_context_tool_bounds_items_per_category -q` -> 2 passed; `python -m ruff check trip_planner/app/services/planner_tools.py tests/app/test_planner_routes.py` -> passed; `python -m ruff format --check trip_planner/app/services/planner_tools.py tests/app/test_planner_routes.py` -> passed; `git diff --check` -> clean.
+- Next action: push the fix to PR #1241, post closer evidence, resolve review thread `PRRT_kwDOOzvyds6FHsDZ`, and let fresh Gate/CI run.
+
 ## 2026-05-27T13:57Z - claude opener materialized issue #1240 (semantic notebook recall)
 
 - Automation: `pd-workloop-resume` (claude_code opener lane) from the neutral Code workspace.
