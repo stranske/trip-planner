@@ -19,6 +19,7 @@
   - `git diff --check` -> passed.
 - PR: `#1252` (https://github.com/stranske/trip-planner/pull/1252), ready-for-review, non-draft, `Closes #1250`.
 - Labels verified on PR: `agent:codex`, `agents:keepalive`, `autofix`, `repo-review-approved`, `priority:normal`.
+- Same-round cap hygiene: `Inv-Man-Intake#463` had stale `needs-human` after keepalive completion evidence; opener infra repair removed it, added `agent:retry`, and fresh Gate/Gate Followups runs started. Final cap-health: `total_opener_owned=2`, `raw_cap_reached=false`, `non_drainable_count=0`; `#463` and `#1252` both draining with active workflow evidence.
 - Next action: keepalive owns PR `#1252`; opener should move to the next eligible issue on a future round after cap checks.
 
 ## 2026-05-27T15:08Z - closer conflict recovery for PR #1244
