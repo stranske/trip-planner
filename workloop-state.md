@@ -1,3 +1,16 @@
+## 2026-05-27T18:49Z - closer CI recovery for PR #1253
+
+- Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1250`; merged source PR `#1252`; follow-up PR `#1253`.
+- Blocker: required Python CI and Gate failed on head `33fc0f4e0` because pytest collected `tests/itinerary/test_scenarios.py` and `tests/state/test_scenarios.py` as the same top-level module name `test_scenarios`.
+- Fix: kept the verifier/acceptance-required path `tests/itinerary/test_scenarios.py` and added package markers for `tests/itinerary` and `tests/state` so full-suite collection imports them as distinct package modules. No production code changes.
+- Validation:
+  - `python -m pytest tests/itinerary/test_scenarios.py tests/state/test_scenarios.py -q` -> 21 passed.
+  - `python -m pytest -q` -> 1014 passed, 1 skipped, 160 warnings.
+  - `python -m ruff check tests/itinerary/__init__.py tests/state/__init__.py tests/itinerary/test_scenarios.py docs/design-coverage-map.md workloop-state.md` -> passed.
+  - `python -m ruff format --check tests/itinerary/__init__.py tests/state/__init__.py tests/itinerary/test_scenarios.py` -> passed.
+- Next action: push the recovery commit to `codex/followup-1250-test-scenarios-path`, then re-check PR #1253. If fresh checks are green and review threads remain clear, merge #1253, apply `verify:compare`, emit `pr_merged` and `verify_label_applied`, then wait for follow-up verifier PASS before any final source-issue disposition.
+
 ## 2026-05-27T18:36Z - closer verifier follow-up for PR #1252
 
 - Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
