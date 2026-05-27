@@ -1,3 +1,12 @@
+## 2026-05-27T15:08Z - closer conflict recovery for PR #1244
+
+- Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1243`; PR `#1244`; branch `codex/issue-1243-preference-explanation-tests`.
+- Blocker: PR #1244 became `DIRTY` / `CONFLICTING` after PR #1241 merged into `main`.
+- Fix: rebased the branch onto `origin/main` at `683b9552` and resolved the `workloop-state.md` history conflict by preserving both PR #1241 and PR #1244 lane entries.
+- Validation: `python -m pytest tests/preferences/test_explanations.py tests/preferences/test_resolution.py -q` -> 18 passed; `python -m ruff check tests/preferences/test_explanations.py` -> passed; `python -m ruff format --check tests/preferences/test_explanations.py` -> passed; `git diff --check` -> clean.
+- Next action: push the rebased branch, then let fresh Gate/CI run before merge.
+
 ## 2026-05-27T14:25Z - closer review-thread recovery for PR #1241
 
 - Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
