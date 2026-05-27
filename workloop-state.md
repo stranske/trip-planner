@@ -1,3 +1,17 @@
+## 2026-05-27T18:36Z - closer verifier follow-up for PR #1252
+
+- Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1250`; merged source PR `#1252`.
+- Verifier state: PR #1252 has a durable Provider Comparison Report with both providers CONCERNS. The actionable issue is a traceability/acceptance mismatch: the approved issue and acceptance commands named `tests/itinerary/test_scenarios.py`, while merged PR #1252 created `tests/itinerary/test_itinerary_scenarios.py`. The report also could not confirm missing-explanations coverage from the truncated diff, but current merged code has `test_itinerary_scenario_requires_explanation_records`.
+- Follow-up branch: `codex/followup-1250-test-scenarios-path`, based on `origin/main` `d6ee11aa2`.
+- Fix: renamed `tests/itinerary/test_itinerary_scenarios.py` to `tests/itinerary/test_scenarios.py` and updated `docs/design-coverage-map.md` to reference the acceptance-path file. No production code changes.
+- Validation:
+  - `python -m pytest tests/itinerary/test_scenarios.py -q` -> 10 passed.
+  - `python -m ruff check tests/itinerary/test_scenarios.py` -> passed.
+  - `python -m ruff format --check tests/itinerary/test_scenarios.py` -> passed.
+  - `git diff --check` -> clean.
+- Next action: push branch, open bounded follow-up PR linked to #1250/#1252, then let CI/verifier run. After the follow-up merges and verifier passes, close #1250.
+
 ## 2026-05-27T16:11Z - opener lane issue #1250 materializing
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
