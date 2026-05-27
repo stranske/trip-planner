@@ -91,7 +91,7 @@ Design refs: [`docs/itinerary-objective-derivation-boundary.md`](itinerary-objec
 | Itinerary objective derivation | `trip_planner/itinerary/objective_derivation.py` | `tests/itinerary/test_objective_derivation.py` | ✅ Implemented |
 | Route feasibility checking | `trip_planner/itinerary/feasibility.py` | `tests/itinerary/test_feasibility.py` | ✅ Implemented |
 | Move cost calculation | `trip_planner/itinerary/move_costs.py` | `tests/itinerary/` | ✅ Implemented |
-| Scenario generation | `trip_planner/itinerary/scenarios.py` | `tests/itinerary/test_scenarios.py` | ✅ Implemented |
+| Scenario generation | `trip_planner/itinerary/scenarios.py` | `tests/itinerary/test_itinerary_scenarios.py` | ✅ Implemented |
 | Itinerary search | `trip_planner/itinerary/search.py` | `tests/itinerary/test_itinerary_search.py` | ✅ Implemented |
 
 ---

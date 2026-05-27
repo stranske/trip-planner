@@ -8,14 +8,14 @@
   - High-priority LMS `#121` was closed after verifier disposition; high-priority trip-planner `#1247` was already merged/reopened only for verifier sequencing.
   - Normal-priority `#462` is already linked to open PR `#463`; `#1250` was the highest-priority/oldest unlinked implementation issue.
 - Implementation:
-  - Added `tests/itinerary/test_scenarios.py` with direct contract coverage for `ScenarioTradeoff`, `ScenarioSummary`, `ItineraryScenario`, and `ScenarioSearchResult`.
+  - Added `tests/itinerary/test_itinerary_scenarios.py` with direct contract coverage for `ScenarioTradeoff`, `ScenarioSummary`, `ItineraryScenario`, and `ScenarioSearchResult`.
   - Covered serialized `to_dict()` shapes, nested `MoneyRange` and `ExplanationRecord` payloads, invalid tradeoff severity, invalid scenario kind, missing explanation records, and duplicate scenario ranks.
   - Updated `docs/design-coverage-map.md` §4 to mark scenario generation implemented with the dedicated test file.
 - Validation:
-  - `python -m pytest tests/itinerary/test_scenarios.py -q` -> 10 passed.
+  - `python -m pytest tests/itinerary/test_itinerary_scenarios.py -q` -> 10 passed.
   - `python -m pytest tests/itinerary -q` -> 40 passed.
-  - `python -m ruff check tests/itinerary/test_scenarios.py` -> passed.
-  - `python -m ruff format --check tests/itinerary/test_scenarios.py` -> passed.
+  - `python -m ruff check tests/itinerary/test_itinerary_scenarios.py` -> passed.
+  - `python -m ruff format --check tests/itinerary/test_itinerary_scenarios.py` -> passed.
   - `git diff --check` -> passed.
 - PR: `#1252` (https://github.com/stranske/trip-planner/pull/1252), ready-for-review, non-draft, `Closes #1250`.
 - Labels verified on PR: `agent:codex`, `agents:keepalive`, `autofix`, `repo-review-approved`, `priority:normal`.
