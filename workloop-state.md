@@ -1,4 +1,17 @@
-## 2026-05-27T02:55Z - opener lane issue #1235 materializing
+## 2026-05-27T02:42Z - opener lane issue #1235 PR opened
+
+- Repo: `stranske/trip-planner`
+- Issue: `#1235` (`Add fuzzy/deterministic matching layer for planner notebook focus and reorientation`)
+- PR: `#1236` (https://github.com/stranske/trip-planner/pull/1236)
+- Branch: `codex/issue-1235-notebook-focus-matching`
+- Lane: opener / codex
+- Status: ready-for-review PR opened, non-draft, closing issue `#1235`.
+- Labels verified on PR: `agent:codex`, `agents:keepalive`, `autofix`, `repo-review-approved`, `priority:high`.
+- Cap-health after PR creation: `total_opener_owned=1`, `raw_cap_reached=false`, `non_drainable_count=0`; PR `#1236` classified `draining` with active Gate evidence.
+- Relay: emitted `pr_opened active.source_repo=stranske/trip-planner active.source_issue=1235 active.source_pr=1236 active.next_action=wait_for_keepalive`.
+- Next action: keepalive owns PR `#1236`; opener should move to the next eligible issue on a future round after cap checks.
+
+## 2026-05-27T02:39Z - opener lane issue #1235 materializing
 
 - Repo: `stranske/trip-planner`
 - Issue: `#1235` (`Add fuzzy/deterministic matching layer for planner notebook focus and reorientation`)
