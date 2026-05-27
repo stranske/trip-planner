@@ -1,3 +1,24 @@
+## 2026-05-27T16:11Z - opener lane issue #1250 materializing
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1250` (`Add dedicated tests for itinerary scenario generation contracts`).
+- Branch: `codex/issue-1250-itinerary-scenario-tests`, base `origin/main` `d1df0d0f4`.
+- Selection notes:
+  - Cap-health after opener infra repair showed raw cap below limit (`total_opener_owned=1`, `raw_cap_reached=false`) with Inv-Man-Intake PR `#463` actively moving via fresh Gate/CI evidence.
+  - High-priority LMS `#121` was closed after verifier disposition; high-priority trip-planner `#1247` was already merged/reopened only for verifier sequencing.
+  - Normal-priority `#462` is already linked to open PR `#463`; `#1250` was the highest-priority/oldest unlinked implementation issue.
+- Implementation:
+  - Added `tests/itinerary/test_scenarios.py` with direct contract coverage for `ScenarioTradeoff`, `ScenarioSummary`, `ItineraryScenario`, and `ScenarioSearchResult`.
+  - Covered serialized `to_dict()` shapes, nested `MoneyRange` and `ExplanationRecord` payloads, invalid tradeoff severity, invalid scenario kind, missing explanation records, and duplicate scenario ranks.
+  - Updated `docs/design-coverage-map.md` §4 to mark scenario generation implemented with the dedicated test file.
+- Validation:
+  - `python -m pytest tests/itinerary/test_scenarios.py -q` -> 10 passed.
+  - `python -m pytest tests/itinerary -q` -> 40 passed.
+  - `python -m ruff check tests/itinerary/test_scenarios.py` -> passed.
+  - `python -m ruff format --check tests/itinerary/test_scenarios.py` -> passed.
+  - `git diff --check` -> passed.
+- Next action: commit, push, open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; then emit `pr_opened`.
+
 ## 2026-05-27T15:08Z - closer conflict recovery for PR #1244
 
 - Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
