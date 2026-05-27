@@ -8,8 +8,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
 from trip_planner.app.main import create_app
+from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.planner import set_planner_chat_model_factory_for_tests
+from trip_planner.app.services.planner_tools import (
+    execute_planner_tool_call,
+    list_planner_tools,
+)
 from trip_planner.persistence.db import get_session_factory, reset_database_state
+from trip_planner.persistence.models.account import UserAccount
 from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
     PersistedPlannerAction,
@@ -1315,3 +1321,125 @@ def test_planner_resume_regenerates_memory_from_raw_transcript(
     assert payload["planner_memory"]["artifacts"][0]["summary"].startswith(
         "Turn 1 checkpoint"
     )
+
+
+def test_session_resume_message_triggers_read_notebook_context(
+    client: TestClient,
+) -> None:
+    trip_id = _create_trip(client)
+
+    lodging = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": "Capture a lodging note.",
+            "tool_calls": [
+                {
+                    "tool_name": "capture_notebook_item",
+                    "arguments": {
+                        "title": "Hold the lakeside lodge for the first two nights.",
+                        "category": "lodging",
+                    },
+                }
+            ],
+        },
+    )
+    assert lodging.status_code == 200, lodging.text
+
+    route = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": "Capture a route note.",
+            "tool_calls": [
+                {
+                    "tool_name": "capture_notebook_item",
+                    "arguments": {
+                        "title": "Compare the scenic train against the early flight.",
+                        "category": "route",
+                    },
+                }
+            ],
+        },
+    )
+    assert route.status_code == 200, route.text
+
+    resumed = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Let's pick up where we left off."},
+    )
+    assert resumed.status_code == 200, resumed.text
+    reply = resumed.json()["messages"][-1]
+    context_call = next(
+        item
+        for item in reply["tool_calls"]
+        if item["tool_name"] == "read_notebook_context"
+    )
+    assert context_call["status"] == "completed"
+    assert set(context_call["output"]["categories"]) == {"lodging", "route"}
+    assert context_call["output"]["open_item_count"] == 2
+
+
+def test_read_notebook_context_tool_bounds_items_per_category(
+    client: TestClient,
+) -> None:
+    trip_id = _create_trip(client)
+
+    captured = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={
+            "message": "Capture several activity ideas.",
+            "tool_calls": [
+                {
+                    "tool_name": "capture_notebook_item",
+                    "arguments": {
+                        "title": f"Activity idea {index}.",
+                        "note": (
+                            "Use this long planning detail to confirm the context "
+                            "reader emits bounded recall excerpts. "
+                            + ("museum lunch timing " * 40)
+                        )
+                        if index == 3
+                        else f"Activity note {index}.",
+                        "category": "activities",
+                    },
+                }
+                for index in range(4)
+            ],
+        },
+    )
+    assert captured.status_code == 200, captured.text
+
+    assert any(
+        tool["tool_name"] == "read_notebook_context" for tool in list_planner_tools()
+    )
+
+    with get_session_factory()() as db_session:
+        account = db_session.scalar(
+            select(UserAccount).where(UserAccount.email == "planner@example.com")
+        )
+        assert account is not None
+        user = AuthenticatedUser(
+            user_id=account.user_id,
+            email=account.email,
+            display_name=account.display_name,
+        )
+        result = execute_planner_tool_call(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            tool_name="read_notebook_context",
+            arguments={},
+        ).to_dict()
+
+    assert result["status"] == "completed"
+    output = result["output"]
+    assert output["open_item_count"] == 4
+    assert len(output["categories"]["activities"]) == 3
+    assert "session_state_id" not in output
+    assert "memory_artifact_id" not in output
+    assert output["categories"]["activities"][0]["note_truncated"] is True
+    assert len(output["categories"]["activities"][0]["note"]) <= 320
+    for bucket in output["categories"].values():
+        for item in bucket:
+            assert "session_state_id" not in item
+            assert "memory_artifact_id" not in item
+            assert "notebook_item_id" not in item

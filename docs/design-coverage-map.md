@@ -221,7 +221,7 @@ Issues: `#543` (epic), `#544`–`#548`
 
 Design ref: [`docs/langchain-planner-runtime-epic.md`](langchain-planner-runtime-epic.md)
 
-> **Partial.** The planner runtime now has a trip-scoped conversation API, persisted session/checkpoint records, a model-backed runnable, an explicit app-tool registry/executor, deterministic model-routing by task class and planning mode, and provider-rich source/map/route read tools, including executable source-quality scoring for attached inventory source records. The remaining gaps are semantic planner memory/reorientation and live-provider verification.
+> **Partial.** The planner runtime now has a trip-scoped conversation API, persisted session/checkpoint records, a model-backed runnable, an explicit app-tool registry/executor, deterministic model-routing by task class and planning mode, provider-rich source/map/route read tools (including executable source-quality scoring for attached inventory source records), and a deterministic cross-category notebook recall layer for session resumption. The remaining gap is live-provider verification.
 
 | Commitment | Source | Tests | Status |
 |------------|--------|-------|--------|
@@ -232,8 +232,9 @@ Design ref: [`docs/langchain-planner-runtime-epic.md`](langchain-planner-runtime
 | Planning mode selection (delegated / collaborative / revealed-preference / in-trip) | `frontend/src/components/planner/PlanningModeSelector.tsx`, `trip_planner/app/routes/workspace.py`, `trip_planner/app/services/workspace.py` | `frontend/src/components/planner/PlanningModeSelector.test.tsx`, `frontend/src/routes/WorkspacePage.test.tsx`, `tests/app/test_workspace.py` | ✅ Implemented |
 | Dynamic model routing by task complexity | `trip_planner/app/services/planner_routing.py`, `trip_planner/app/services/planner.py` (`_planner_turn_metadata`) | `tests/app/test_planner_routing.py`, `tests/app/test_planner_routes.py` | ✅ Implemented |
 | Provider-rich planner tools (source retrieval, route/map status, route comparison refresh, source-quality seam) | `trip_planner/app/services/planner_tools.py` | `tests/app/test_planner_routes.py` | ✅ Implemented |
+| Semantic notebook recall for session resumption | `trip_planner/app/services/planner_tools.py` (`read_notebook_context`), `trip_planner/app/services/planner.py` (`_implicit_notebook_tool_calls`) | `tests/app/test_planner_routes.py` | ✅ Implemented |
 
-**Gap detail:** The runtime executes explicit planner tools, persists their traces, routes each turn into a task class plus a fast/standard/deep model effort class biased by the selected planning mode, and can inspect provider-rich source/map/route state. `read_source_quality_summary` now scores attached inventory source records from runtime and fixture-backed bundles. Planner memory reorientation now uses `_match_notebook_category` to map common traveler vocabulary such as hotels/stays to lodging and flights/trains to route, with clarification for ambiguous later/future-list references. Live-provider verification for configured environments remains tracked separately.
+**Gap detail:** The runtime executes explicit planner tools, persists their traces, routes each turn into a task class plus a fast/standard/deep model effort class biased by the selected planning mode, and can inspect provider-rich source/map/route state. `read_source_quality_summary` now scores attached inventory source records from runtime and fixture-backed bundles. Planner memory reorientation uses `_match_notebook_category` to map common traveler vocabulary such as hotels/stays to lodging and flights/trains to route, with clarification for ambiguous later/future-list references. The new `read_notebook_context` tool synthesizes the trip-scoped planning notebook across all categories (≤3 most-recent active items per category) and is invoked deterministically on session-resume phrases ("pick up where we left off", "what were we working on") so the planner can surface active context without the traveler re-stating it. Live-provider verification for configured environments remains tracked separately.
 
 ---
 
@@ -325,7 +326,7 @@ From [`docs/product-architecture-brief.md`](product-architecture-brief.md) and [
 
 These design commitments are still missing, partial, or not yet verified in a live provider environment. Each is a candidate for a follow-up issue:
 
-1. **Semantic planner memory and reorientation** — planner checkpoints and notebook state exist, but there is no semantic recall/reorientation layer for scattered traveler notes and "I was working on..." context shifts. See §13 above.
+1. **Semantic planner memory and reorientation** — ✅ Addressed by the `read_notebook_context` tool, which synthesizes trip-scoped notebook context across categories and fires on session-resume phrases. Remaining work is deeper embedding-based recall over free-text notes (explicitly out of scope for the deterministic layer). See §13 above.
 2. **Provider-rich timeline/map depth** — default workspace and planner-tool payloads now expose source-backed marker detail and per-segment distance-verification state. Remaining work is live provider verification in configured release environments. See §16 above.
 3. **Preference explanation generation tests** — `trip_planner/preferences/explanations.py` exists; no `tests/preferences/test_explanations.py`.
 

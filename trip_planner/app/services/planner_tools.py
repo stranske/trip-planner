@@ -19,7 +19,11 @@ from trip_planner.app.services.workspace import (
     set_planning_notebook_focus,
     submit_workspace_option_feedback,
 )
-from trip_planner.sources import QualityValueFitSummary, SourceQualityScorer, SourceRecord
+from trip_planner.sources import (
+    QualityValueFitSummary,
+    SourceQualityScorer,
+    SourceRecord,
+)
 from trip_planner.sources import SourceTrustSignals
 
 
@@ -50,7 +54,9 @@ class PlannerToolResult:
         }
 
 
-PlannerToolHandler = Callable[[Session, AuthenticatedUser, str, dict[str, Any]], PlannerToolResult]
+PlannerToolHandler = Callable[
+    [Session, AuthenticatedUser, str, dict[str, Any]], PlannerToolResult
+]
 
 
 _TOOL_DEFINITIONS: tuple[PlannerToolDefinition, ...] = (
@@ -127,9 +133,17 @@ _TOOL_DEFINITIONS: tuple[PlannerToolDefinition, ...] = (
         tool_name="read_planning_notebook",
         description="Read active or completed planning notebook items for the current trip.",
     ),
+    PlannerToolDefinition(
+        tool_name="read_notebook_context",
+        description=(
+            "Summarize active planning notebook context across all categories for "
+            "session resumption."
+        ),
+    ),
 )
 
 _TOOL_BY_NAME = {item.tool_name: item for item in _TOOL_DEFINITIONS}
+_NOTEBOOK_CONTEXT_NOTE_MAX_CHARS = 320
 
 
 def list_planner_tools() -> list[dict[str, Any]]:
@@ -208,7 +222,9 @@ def _source_record_from_payload(payload: Any) -> SourceRecord | None:
 
 
 def _route_scenarios(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    return list((payload.get("runtime_scenario_comparison") or {}).get("scenarios") or [])
+    return list(
+        (payload.get("runtime_scenario_comparison") or {}).get("scenarios") or []
+    )
 
 
 def _select_route_scenario(
@@ -231,7 +247,8 @@ def _select_route_scenario(
         )
     lead_id = (payload.get("runtime_scenario_comparison") or {}).get("lead_scenario_id")
     return next(
-        (scenario for scenario in scenarios if scenario.get("scenario_id") == lead_id), None
+        (scenario for scenario in scenarios if scenario.get("scenario_id") == lead_id),
+        None,
     ) or (scenarios[0] if scenarios else None)
 
 
@@ -276,8 +293,12 @@ def _read_workspace_state(
     output = {
         "trip_title": planner_panel["trip"]["title"],
         "pending_decision_count": len(planner_panel.get("pending_decisions") or []),
-        "option_count": len((planner_panel.get("option_set") or {}).get("options") or []),
-        "output_titles": [item["title"] for item in planner_panel.get("outputs") or []][:3],
+        "option_count": len(
+            (planner_panel.get("option_set") or {}).get("options") or []
+        ),
+        "output_titles": [item["title"] for item in planner_panel.get("outputs") or []][
+            :3
+        ],
     }
     return PlannerToolResult(
         tool_name="read_workspace_state",
@@ -325,7 +346,9 @@ def _refresh_scenarios(
     runtime_comparison = payload["runtime_scenario_comparison"]
     output = {
         "search_title": scenario_search["title"],
-        "scenario_titles": [item["title"] for item in scenario_search.get("scenarios") or []],
+        "scenario_titles": [
+            item["title"] for item in scenario_search.get("scenarios") or []
+        ],
         "lead_scenario_id": runtime_comparison["lead_scenario_id"],
     }
     return PlannerToolResult(
@@ -334,7 +357,8 @@ def _refresh_scenarios(
         summary="Read the current ranked scenario and comparison outputs.",
         mutates_state=False,
         refs=_ref_list(
-            payload["session"]["session_state_id"], runtime_comparison["lead_scenario_id"]
+            payload["session"]["session_state_id"],
+            runtime_comparison["lead_scenario_id"],
         ),
         output=output,
     )
@@ -383,7 +407,9 @@ def _read_source_summary(
             {
                 "bundle_id": item.get("bundle_id"),
                 "title": item.get("title"),
-                "destination_names": _bounded_items(list(item.get("destination_names") or []), 5),
+                "destination_names": _bounded_items(
+                    list(item.get("destination_names") or []), 5
+                ),
                 "option_count": item.get("option_count", 0),
             }
             for item in bundles
@@ -421,7 +447,8 @@ def _read_source_quality_summary(
         source_records = [
             record
             for record in (
-                _source_record_from_payload(item) for item in bundle.get("source_records", [])
+                _source_record_from_payload(item)
+                for item in bundle.get("source_records", [])
             )
             if record is not None
         ]
@@ -430,13 +457,19 @@ def _read_source_quality_summary(
             subject_kind="option",
             intended_option_kind=str(bundle.get("bundle_context") or "mixed"),
         )
-        row_status = "completed" if summary.contributing_source_count else "missing_source_records"
+        row_status = (
+            "completed"
+            if summary.contributing_source_count
+            else "missing_source_records"
+        )
         quality_rows.append(
             {
                 "target_id": bundle.get("bundle_id"),
                 "target_title": bundle.get("title"),
                 "status": row_status,
-                "score": summary.confidence if summary.contributing_source_count else None,
+                "score": summary.confidence
+                if summary.contributing_source_count
+                else None,
                 "confidence_label": summary.confidence_label,
                 "contributing_source_count": summary.contributing_source_count,
                 "category_counts": dict(summary.category_counts),
@@ -535,7 +568,11 @@ def _read_route_geometry(
             summary="No route scenario is available for geometry inspection.",
             mutates_state=False,
             refs=_ref_list(payload["session"]["session_state_id"]),
-            output={"route_option_id": None, "place_markers": [], "rough_route_geometry": []},
+            output={
+                "route_option_id": None,
+                "place_markers": [],
+                "rough_route_geometry": [],
+            },
         )
     map_view = scenario.get("map_view") or {}
     markers = _bounded_items(list(map_view.get("place_markers") or []), 12)
@@ -550,7 +587,9 @@ def _read_route_geometry(
             else "Route geometry is sparse; no route segments are available yet."
         ),
         mutates_state=False,
-        refs=_ref_list(payload["session"]["session_state_id"], scenario.get("route_option_id")),
+        refs=_ref_list(
+            payload["session"]["session_state_id"], scenario.get("route_option_id")
+        ),
         output={
             "route_option_id": scenario.get("route_option_id"),
             "scenario_id": scenario.get("scenario_id"),
@@ -577,7 +616,9 @@ def _refresh_route_comparison(
         "title": comparison.get("title"),
         "summary": comparison.get("summary"),
         "lead_scenario_id": comparison.get("lead_scenario_id"),
-        "comparison_axes": _bounded_items(list(comparison.get("comparison_axes") or []), 8),
+        "comparison_axes": _bounded_items(
+            list(comparison.get("comparison_axes") or []), 8
+        ),
         "scenarios": [
             {
                 "scenario_id": item.get("scenario_id"),
@@ -636,7 +677,8 @@ def _read_budget_state(
         summary="Read the current workspace budget summary.",
         mutates_state=False,
         refs=_ref_list(
-            payload.get("budget_plan", {}) and payload["budget_plan"].get("budget_plan_id")
+            payload.get("budget_plan", {})
+            and payload["budget_plan"].get("budget_plan_id")
         ),
         output=output,
     )
@@ -650,7 +692,9 @@ def _update_budget_plan(
 ) -> PlannerToolResult:
     total_amount = float(arguments.get("total_amount", 0))
     title = str(arguments.get("title") or "Planner-generated budget plan")
-    budget_payload = get_workspace_budget_payload(db_session, user=user, trip_id=trip_id)
+    budget_payload = get_workspace_budget_payload(
+        db_session, user=user, trip_id=trip_id
+    )
     workspace_payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
     summary = budget_payload["summary"]
     categories = list(summary.get("suggested_categories") or [])[:4]
@@ -684,7 +728,9 @@ def _update_budget_plan(
                 "summary": "Planner-generated budget baseline.",
                 "tags": ["planner-tool"],
                 "notes": ["Created from the explicit planner tool boundary."],
-                "allocations": _category_allocations(total_amount, categories, currency),
+                "allocations": _category_allocations(
+                    total_amount, categories, currency
+                ),
             }
         ],
         summary=f"Planner set the working budget to {currency} {total_amount:.2f}.",
@@ -700,7 +746,8 @@ def _update_budget_plan(
         summary=f"Updated the workspace budget plan to {currency} {total_amount:.2f}.",
         mutates_state=True,
         refs=_ref_list(
-            result["budget_plan"]["budget_plan_id"], result["summary"]["current_scenario_budget_id"]
+            result["budget_plan"]["budget_plan_id"],
+            result["summary"]["current_scenario_budget_id"],
         ),
         output=output,
     )
@@ -716,7 +763,9 @@ def _read_policy_state(
     payload = get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
     summary = payload["summary"]
     output = {
-        "status": summary.get("status", "ready" if payload.get("policy_state") else "missing"),
+        "status": summary.get(
+            "status", "ready" if payload.get("policy_state") else "missing"
+        ),
         "ready_for_submission": bool(
             summary.get("ready_for_submission") or summary.get("approval_ready")
         ),
@@ -733,7 +782,8 @@ def _read_policy_state(
         summary="Read the current workspace policy state.",
         mutates_state=False,
         refs=_ref_list(
-            payload.get("policy_state", {}) and payload["policy_state"].get("policy_state_id")
+            payload.get("policy_state", {})
+            and payload["policy_state"].get("policy_state_id")
         ),
         output=output,
     )
@@ -750,7 +800,9 @@ def _read_proposal_state(
     summary = payload["summary"]
     follow_up_status = summary.get("follow_up_status")
     output = {
-        "status": summary.get("status") or summary.get("evaluation_result_status") or "missing",
+        "status": summary.get("status")
+        or summary.get("evaluation_result_status")
+        or "missing",
         "requires_follow_up": bool(
             summary.get("requires_follow_up")
             or follow_up_status
@@ -772,7 +824,8 @@ def _read_proposal_state(
         summary="Read the current workspace proposal state.",
         mutates_state=False,
         refs=_ref_list(
-            payload.get("proposal_state", {}) and payload["proposal_state"].get("proposal_state_id")
+            payload.get("proposal_state", {})
+            and payload["proposal_state"].get("proposal_state_id")
         ),
         output=output,
     )
@@ -790,12 +843,16 @@ def _answer_pending_decision(
     )
     if not pending_decisions:
         raise ValueError("No pending planner decisions are available for this trip.")
-    decision_id = str(arguments.get("decision_id") or pending_decisions[0]["decision_id"])
+    decision_id = str(
+        arguments.get("decision_id") or pending_decisions[0]["decision_id"]
+    )
     matching = next(
         (item for item in pending_decisions if item["decision_id"] == decision_id), None
     )
     if matching is None:
-        raise ValueError(f"Decision '{decision_id}' is not available in the planner panel.")
+        raise ValueError(
+            f"Decision '{decision_id}' is not available in the planner panel."
+        )
     choice = str(arguments.get("choice") or "").strip()
     if not choice:
         raise ValueError("answer_pending_decision requires a non-empty choice.")
@@ -833,7 +890,10 @@ def _record_option_feedback(
         raise ValueError("record_option_feedback requires action_type.")
     workspace_payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
     options = list(
-        (workspace_payload["planner_panel_state"].get("option_set") or {}).get("options") or []
+        (workspace_payload["planner_panel_state"].get("option_set") or {}).get(
+            "options"
+        )
+        or []
     )
     if not options:
         raise ValueError("No planner options are available for this trip.")
@@ -850,7 +910,9 @@ def _record_option_feedback(
     output = {
         "option_id": option_id,
         "action_type": action_type,
-        "pending_decision_count": len(result["planner_panel_state"].get("pending_decisions") or []),
+        "pending_decision_count": len(
+            result["planner_panel_state"].get("pending_decisions") or []
+        ),
     }
     return PlannerToolResult(
         tool_name="record_option_feedback",
@@ -881,7 +943,9 @@ def _capture_notebook_item(
         status=str(arguments.get("status") or "active").strip(),
         priority=str(arguments.get("priority") or "normal").strip(),
         source="planner",
-        source_message_ids=[str(item) for item in list(arguments.get("source_message_ids") or [])],
+        source_message_ids=[
+            str(item) for item in list(arguments.get("source_message_ids") or [])
+        ],
         tags=[str(item) for item in list(arguments.get("tags") or [])],
     )
     return PlannerToolResult(
@@ -958,6 +1022,74 @@ def _read_planning_notebook(
     )
 
 
+def _notebook_context_note_excerpt(note: Any) -> tuple[str, bool]:
+    text = str(note or "").strip()
+    if len(text) <= _NOTEBOOK_CONTEXT_NOTE_MAX_CHARS:
+        return text, False
+    excerpt = text[: _NOTEBOOK_CONTEXT_NOTE_MAX_CHARS - 3].rstrip()
+    return f"{excerpt}...", True
+
+
+def _read_notebook_context(
+    db_session: Session,
+    user: AuthenticatedUser,
+    trip_id: str,
+    arguments: dict[str, Any],
+) -> PlannerToolResult:
+    del arguments
+    payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
+    notebook = payload["planning_notebook"]
+    active_items = [
+        item for item in (notebook.get("items") or []) if item.get("status") == "active"
+    ]
+    active_items.sort(
+        key=lambda item: (
+            str(item.get("updated_at") or ""),
+            str(item.get("created_at") or ""),
+        ),
+        reverse=True,
+    )
+    categories: dict[str, list[dict[str, Any]]] = {}
+    for item in active_items:
+        category = str(item.get("category") or "other")
+        bucket = categories.setdefault(category, [])
+        if len(bucket) >= 3:
+            continue
+        note_excerpt, note_truncated = _notebook_context_note_excerpt(item.get("note"))
+        bucket.append(
+            {
+                "title": item.get("title") or "",
+                "note": note_excerpt,
+                "note_truncated": note_truncated,
+                "category": category,
+                "priority": item.get("priority") or "normal",
+                "updated_at": item.get("updated_at"),
+            }
+        )
+    focus = notebook.get("focus") or {}
+    output = {
+        "context_state": "active" if active_items else "empty",
+        "active_categories": list(categories.keys()),
+        "open_item_count": len(active_items),
+        "summarized_item_count": sum(len(bucket) for bucket in categories.values()),
+        "categories": categories,
+        "focus_category": focus.get("category"),
+    }
+    return PlannerToolResult(
+        tool_name="read_notebook_context",
+        status="completed",
+        summary=(
+            f"Summarized {output['summarized_item_count']} active notebook item(s) across "
+            f"{len(categories)} category(ies) for session resumption."
+            if active_items
+            else "No active planning notebook context is available for this trip yet."
+        ),
+        mutates_state=False,
+        refs=_ref_list(payload["session"]["session_state_id"]),
+        output=output,
+    )
+
+
 _TOOL_HANDLERS: dict[str, PlannerToolHandler] = {
     "read_workspace_state": _read_workspace_state,
     "refresh_inventory": _refresh_inventory,
@@ -976,6 +1108,7 @@ _TOOL_HANDLERS: dict[str, PlannerToolHandler] = {
     "capture_notebook_item": _capture_notebook_item,
     "set_notebook_focus": _set_notebook_focus,
     "read_planning_notebook": _read_planning_notebook,
+    "read_notebook_context": _read_notebook_context,
 }
 
 
