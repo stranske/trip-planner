@@ -59,7 +59,7 @@ Issues: `#506` (epic), `#507`–`#512`
 | Preference resolution engine (`#510`) | `trip_planner/preferences/resolution.py` | `tests/preferences/test_resolution.py` | ✅ Implemented |
 | Autonomy + revealed-preference updates (`#511`) | `trip_planner/preferences/autonomy.py`, `revealed_preference.py` | `tests/preferences/test_autonomy.py`, `test_revealed_preference.py` | ✅ Implemented |
 | Interaction tracking | `trip_planner/preferences/interactions.py` | `tests/preferences/test_interactions.py` | ✅ Implemented |
-| Explanation generation | `trip_planner/preferences/explanations.py` | — | 🟡 Partial (no dedicated test) |
+| Explanation generation | `trip_planner/preferences/explanations.py` | `tests/preferences/test_explanations.py` | ✅ Implemented |
 | Legacy request adapter | `trip_planner/preferences/legacy_request_adapter.py` | — | 🟡 Partial (no dedicated test) |
 | Preference roadmap items (collaborative, in-trip, revealed-preference modes) | `docs/preference-roadmap.md` | — | 📄 Docs-only |
 
@@ -328,8 +328,6 @@ These design commitments are still missing, partial, or not yet verified in a li
 
 1. **Semantic planner memory and reorientation** — ✅ Addressed by the `read_notebook_context` tool, which synthesizes trip-scoped notebook context across categories and fires on session-resume phrases. Remaining work is deeper embedding-based recall over free-text notes (explicitly out of scope for the deterministic layer). See §13 above.
 2. **Provider-rich timeline/map depth** — default workspace and planner-tool payloads now expose source-backed marker detail and per-segment distance-verification state. Remaining work is live provider verification in configured release environments. See §16 above.
-3. **Preference explanation generation tests** — `trip_planner/preferences/explanations.py` exists; no `tests/preferences/test_explanations.py`.
-
 ---
 
 ## How to Use This Map in Weekly Reviews

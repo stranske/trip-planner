@@ -19,6 +19,31 @@
 - Validation (`.venv`): `pytest tests/app/test_planner_routes.py tests/app/test_workspace.py` -> 100 passed; planner suite `test_planner_routes.py + test_planner_turn_e2e.py + test_planner_routing.py` -> 75 passed; `ruff check` + `ruff format --check` clean on changed files; `mypy` clean on `planner_tools.py`/`planner.py`.
 - Next action: keepalive owns CI/review on the opened PR (`agent:claude`); closer owns post-merge verification. Unrelated local `.gitignore` change left unstaged.
 
+## 2026-05-27T14:06Z - opener lane issue #1243 materializing
+
+- Repo: `stranske/trip-planner`
+- Issue: `#1243` (`Add dedicated tests for preference explanation generation module`)
+- Branch: `codex/issue-1243-preference-explanation-tests`
+- Lane: opener / codex
+- Status: implementation complete locally; preparing push and ready-for-review PR.
+- Selection notes:
+  - Cap-health after opener infra repair reported `total_opener_owned=2`, `raw_cap_reached=false`, `non_drainable_count=0`.
+  - Existing opener PRs were classified as draining: LMS `#173` with green Gate evidence and trip-planner `#1241` with current Gate/CI in progress.
+  - Priority discovery found trip-planner `#1240` and LMS `#121`, both already linked to open opener PRs; Workflows `#2159` remains scoped-blocked for closer/workflow-health disposition.
+  - Approved queue candidate_index 2 was the highest-priority unmaterialized implementation item; no matching open issue/PR existed, so opener materialized issue `#1243`.
+- Implementation:
+  - Added `tests/preferences/test_explanations.py` with direct `to_dict()` contract coverage for `MaterialInfluence`, `DimensionResolutionExplanation`, `HybridFactorExplanation`, `InteractionActivation`, `ResolutionExplanation`, and `ResolvedLeisureProfile`.
+  - Added a sentinel test for `DimensionResolutionExplanation.explanation_code == "default_seed"`.
+  - Updated `docs/design-coverage-map.md` to mark explanation generation implemented with the new dedicated test file and removed the stale remaining-follow-up claim.
+- Validation:
+  - `python -m pytest tests/preferences/test_explanations.py -q` -> 5 passed.
+  - `python -m pytest tests/preferences/test_explanations.py tests/preferences/test_resolution.py -q` -> 18 passed.
+  - `python -m pytest tests/preferences -q` -> 185 passed.
+  - `python -m ruff check tests/preferences/test_explanations.py` -> passed.
+  - `python -m ruff format --check tests/preferences/test_explanations.py` -> passed.
+  - `git diff --check` -> passed.
+- Next action: commit, push, open ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`.
+
 ## 2026-05-27T02:42Z - opener lane issue #1235 PR opened
 
 - Repo: `stranske/trip-planner`
