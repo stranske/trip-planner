@@ -10,7 +10,9 @@
   - `python -m ruff check tests/itinerary/test_scenarios.py` -> passed.
   - `python -m ruff format --check tests/itinerary/test_scenarios.py` -> passed.
   - `git diff --check` -> clean.
-- Next action: push branch, open bounded follow-up PR linked to #1250/#1252, then let CI/verifier run. After the follow-up merges and verifier passes, close #1250.
+- PR: `#1253` (https://github.com/stranske/trip-planner/pull/1253), open/non-draft, labels `codex`, `codex-automation`, `agent:codex`, `agents:keepalive`, `autofix`, `repo-review-approved`, `priority:normal`.
+- Post-push state: fresh CI is pending. One older Gate row shows a canceled path-classification run, but a newer Gate row is passing; re-check current required checks before merging.
+- Next action: after checks are green, merge PR #1253, apply `verify:compare`, then close #1250 only after the follow-up verifier passes.
 
 ## 2026-05-27T16:11Z - opener lane issue #1250 materializing
 
