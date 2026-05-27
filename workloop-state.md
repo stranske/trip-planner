@@ -1,3 +1,17 @@
+## 2026-05-27T18:51Z - closer pushed CI recovery for PR #1253
+
+- Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1250`; follow-up PR `#1253`; branch `codex/followup-1250-test-scenarios-path`.
+- Action: pushed CI recovery commit `d38f55415` and posted PR evidence comment `pull/1253#issuecomment-4557643136`.
+- Validation before push:
+  - `python -m pytest tests/itinerary/test_scenarios.py tests/state/test_scenarios.py -q` -> 21 passed.
+  - `python -m pytest -q` -> 1014 passed, 1 skipped, 160 warnings.
+  - `python -m ruff check tests/itinerary/__init__.py tests/state/__init__.py tests/itinerary/test_scenarios.py docs/design-coverage-map.md workloop-state.md` -> passed.
+  - `python -m ruff format --check tests/itinerary/__init__.py tests/state/__init__.py tests/itinerary/test_scenarios.py` -> passed.
+  - `git diff --check` -> clean.
+- Post-push state: PR #1253 head is `d38f55415c8bbfaad8272d35604612f171b212fa`; merge state remains `UNSTABLE` only because fresh CI/Gate/review-target checks are pending. No unresolved review threads were present before the push.
+- Next action: re-check fresh required checks on `d38f55415`; if green and review threads remain clear, merge PR #1253, apply `verify:compare`, emit `pr_merged` and `verify_label_applied`, and wait for follow-up verifier PASS.
+
 ## 2026-05-27T18:49Z - closer CI recovery for PR #1253
 
 - Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
