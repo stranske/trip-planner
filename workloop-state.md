@@ -1,3 +1,15 @@
+## 2026-05-27T13:57Z - claude opener materialized issue #1240 (semantic notebook recall)
+
+- Automation: `pd-workloop-resume` (claude_code opener lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`.
+- Source issue: [#1240](https://github.com/stranske/trip-planner/issues/1240) `Add semantic planner memory reorientation layer for cross-notebook context synthesis` (priority:high, repo-review-approved — approved-queue candidate_index 1).
+- Branch: `claude/issue-1240-notebook-context`, base `origin/main` `e2082a9d7`. PR: opening this round.
+- Design decision (documented in PR body): the approved issue body cited `PersistedPlannerMemoryArtifact` for category grouping, but that model has no `category` field — it holds conversation-summary checkpoints. The data created by `capture_notebook_item` (the path the acceptance criteria exercise) is `PersistedPlanningNotebookItem`, which IS trip-scoped (queried by `trip_id` at `workspace.py:3378`) and has a `category` column. Implemented `read_notebook_context` against the trip-scoped planning notebook (via the workspace payload, consistent with the other read tools) — satisfies AC1/AC4 and delivers the cross-session "pick up where we left off" synthesis the design intends.
+- Implementation: added `read_notebook_context` tool (`planner_tools.py`) — groups active notebook items by category, ≤3 most-recent per category, excludes raw schema fields (no `session_state_id`/`memory_artifact_id`/`notebook_item_id` in output). Wired a deterministic implicit call in `_implicit_notebook_tool_calls` (`planner.py`) on session-resume markers (`pick up where`, `where we left off`, `what were we working on`, `resume planning`, ...). Updated `docs/design-coverage-map.md` §13 + remaining-gaps summary.
+- Tests: added `test_session_resume_message_triggers_read_notebook_context` (route-level: resume message -> reply `tool_calls` contains `read_notebook_context` status completed across 2 categories) and `test_read_notebook_context_tool_bounds_items_per_category` (direct `execute_planner_tool_call`: `list_planner_tools()` registration, <=3 per category for 4 items, no raw schema keys) to `tests/app/test_planner_routes.py`.
+- Validation (`.venv`): `pytest tests/app/test_planner_routes.py tests/app/test_workspace.py` -> 100 passed; planner suite `test_planner_routes.py + test_planner_turn_e2e.py + test_planner_routing.py` -> 75 passed; `ruff check` + `ruff format --check` clean on changed files; `mypy` clean on `planner_tools.py`/`planner.py`.
+- Next action: keepalive owns CI/review on the opened PR (`agent:claude`); closer owns post-merge verification. Unrelated local `.gitignore` change left unstaged.
+
 ## 2026-05-27T02:42Z - opener lane issue #1235 PR opened
 
 - Repo: `stranske/trip-planner`

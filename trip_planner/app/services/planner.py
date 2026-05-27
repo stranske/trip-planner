@@ -198,6 +198,15 @@ _NOTEBOOK_AMBIGUOUS_REFERENCE_MARKERS = (
     "aside for later",
     "for later",
 )
+_NOTEBOOK_SESSION_RESUME_MARKERS = (
+    "pick up where",
+    "where we left off",
+    "what were we working on",
+    "what was i working on",
+    "resume planning",
+    "resume where we",
+    "catch me up",
+)
 
 _DATE_MARKERS = (
     "january",
@@ -758,6 +767,8 @@ def _implicit_notebook_tool_calls(message: str) -> list[dict[str, Any]]:
                 arguments["category"] = category
                 break
         calls.append({"tool_name": "read_planning_notebook", "arguments": arguments})
+    if any(marker in lowered for marker in _NOTEBOOK_SESSION_RESUME_MARKERS):
+        calls.append({"tool_name": "read_notebook_context", "arguments": {}})
     return calls
 
 
