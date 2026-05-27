@@ -1,3 +1,12 @@
+## 2026-05-27T15:08Z - closer conflict recovery for PR #1244
+
+- Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1243`; PR `#1244`; branch `codex/issue-1243-preference-explanation-tests`.
+- Blocker: PR #1244 became `DIRTY` / `CONFLICTING` after PR #1241 merged into `main`.
+- Fix: rebased the branch onto `origin/main` at `683b9552` and resolved the `workloop-state.md` history conflict by preserving both PR #1241 and PR #1244 lane entries.
+- Validation: `python -m pytest tests/preferences/test_explanations.py tests/preferences/test_resolution.py -q` -> 18 passed; `python -m ruff check tests/preferences/test_explanations.py` -> passed; `python -m ruff format --check tests/preferences/test_explanations.py` -> passed; `git diff --check` -> clean.
+- Next action: push the rebased branch, then let fresh Gate/CI run before merge.
+
 ## 2026-05-27T14:25Z - closer review-thread recovery for PR #1241
 
 - Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.
@@ -18,6 +27,43 @@
 - Tests: added `test_session_resume_message_triggers_read_notebook_context` (route-level: resume message -> reply `tool_calls` contains `read_notebook_context` status completed across 2 categories) and `test_read_notebook_context_tool_bounds_items_per_category` (direct `execute_planner_tool_call`: `list_planner_tools()` registration, <=3 per category for 4 items, no raw schema keys) to `tests/app/test_planner_routes.py`.
 - Validation (`.venv`): `pytest tests/app/test_planner_routes.py tests/app/test_workspace.py` -> 100 passed; planner suite `test_planner_routes.py + test_planner_turn_e2e.py + test_planner_routing.py` -> 75 passed; `ruff check` + `ruff format --check` clean on changed files; `mypy` clean on `planner_tools.py`/`planner.py`.
 - Next action: keepalive owns CI/review on the opened PR (`agent:claude`); closer owns post-merge verification. Unrelated local `.gitignore` change left unstaged.
+
+## 2026-05-27T14:08Z - opener cap hygiene for PR #1241
+
+- Repo: `stranske/trip-planner`
+- PR: `#1241` (`Issue #1240: Add read_notebook_context tool for session-resume recall`)
+- Branch: `claude/issue-1240-notebook-context`
+- Lane: opener / codex cap-drain sweep
+- Evidence: final cap-health after opening PR `#1244` showed `#1241` as `needs-dispatch-evidence` after Gate completed successfully; labels were otherwise plausible and the PR was non-draft.
+- Action: added `agent:retry` and dispatched `agents-81-gate-followups.yml` with `pr_number=1241`, `force_retry=true`.
+- Next action: wait for Gate Followups/keepalive evidence; keepalive/closer owns subsequent PR drain.
+
+## 2026-05-27T14:06Z - opener lane issue #1243 materializing
+
+- Repo: `stranske/trip-planner`
+- Issue: `#1243` (`Add dedicated tests for preference explanation generation module`)
+- Branch: `codex/issue-1243-preference-explanation-tests`
+- Lane: opener / codex
+- PR: `#1244` (https://github.com/stranske/trip-planner/pull/1244)
+- Status: ready-for-review PR opened, non-draft, closing issue `#1243`.
+- Selection notes:
+  - Cap-health after opener infra repair reported `total_opener_owned=2`, `raw_cap_reached=false`, `non_drainable_count=0`.
+  - Existing opener PRs were classified as draining: LMS `#173` with green Gate evidence and trip-planner `#1241` with current Gate/CI in progress.
+  - Priority discovery found trip-planner `#1240` and LMS `#121`, both already linked to open opener PRs; Workflows `#2159` remains scoped-blocked for closer/workflow-health disposition.
+  - Approved queue candidate_index 2 was the highest-priority unmaterialized implementation item; no matching open issue/PR existed, so opener materialized issue `#1243`.
+- Implementation:
+  - Added `tests/preferences/test_explanations.py` with direct `to_dict()` contract coverage for `MaterialInfluence`, `DimensionResolutionExplanation`, `HybridFactorExplanation`, `InteractionActivation`, `ResolutionExplanation`, and `ResolvedLeisureProfile`.
+  - Added a sentinel test for `DimensionResolutionExplanation.explanation_code == "default_seed"`.
+  - Updated `docs/design-coverage-map.md` to mark explanation generation implemented with the new dedicated test file and removed the stale remaining-follow-up claim.
+- Validation:
+  - `python -m pytest tests/preferences/test_explanations.py -q` -> 5 passed.
+  - `python -m pytest tests/preferences/test_explanations.py tests/preferences/test_resolution.py -q` -> 18 passed.
+  - `python -m pytest tests/preferences -q` -> 185 passed.
+  - `python -m ruff check tests/preferences/test_explanations.py` -> passed.
+  - `python -m ruff format --check tests/preferences/test_explanations.py` -> passed.
+  - `git diff --check` -> passed.
+- Labels verified on PR: `agent:codex`, `agents:keepalive`, `autofix`, `repo-review-approved`, `priority:high`.
+- Next action: keepalive owns PR `#1244`; opener should move to the next eligible issue on a future round after cap checks.
 
 ## 2026-05-27T02:42Z - opener lane issue #1235 PR opened
 
