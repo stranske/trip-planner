@@ -19,6 +19,16 @@
 - Validation (`.venv`): `pytest tests/app/test_planner_routes.py tests/app/test_workspace.py` -> 100 passed; planner suite `test_planner_routes.py + test_planner_turn_e2e.py + test_planner_routing.py` -> 75 passed; `ruff check` + `ruff format --check` clean on changed files; `mypy` clean on `planner_tools.py`/`planner.py`.
 - Next action: keepalive owns CI/review on the opened PR (`agent:claude`); closer owns post-merge verification. Unrelated local `.gitignore` change left unstaged.
 
+## 2026-05-27T14:08Z - opener cap hygiene for PR #1241
+
+- Repo: `stranske/trip-planner`
+- PR: `#1241` (`Issue #1240: Add read_notebook_context tool for session-resume recall`)
+- Branch: `claude/issue-1240-notebook-context`
+- Lane: opener / codex cap-drain sweep
+- Evidence: final cap-health after opening PR `#1244` showed `#1241` as `needs-dispatch-evidence` after Gate completed successfully; labels were otherwise plausible and the PR was non-draft.
+- Action: added `agent:retry` and dispatched `agents-81-gate-followups.yml` with `pr_number=1241`, `force_retry=true`.
+- Next action: wait for Gate Followups/keepalive evidence; keepalive/closer owns subsequent PR drain.
+
 ## 2026-05-27T14:06Z - opener lane issue #1243 materializing
 
 - Repo: `stranske/trip-planner`
