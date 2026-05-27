@@ -17,7 +17,9 @@
   - `python -m ruff check tests/itinerary/test_scenarios.py` -> passed.
   - `python -m ruff format --check tests/itinerary/test_scenarios.py` -> passed.
   - `git diff --check` -> passed.
-- Next action: commit, push, open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; then emit `pr_opened`.
+- PR: `#1252` (https://github.com/stranske/trip-planner/pull/1252), ready-for-review, non-draft, `Closes #1250`.
+- Labels verified on PR: `agent:codex`, `agents:keepalive`, `autofix`, `repo-review-approved`, `priority:normal`.
+- Next action: keepalive owns PR `#1252`; opener should move to the next eligible issue on a future round after cap checks.
 
 ## 2026-05-27T15:08Z - closer conflict recovery for PR #1244
 
