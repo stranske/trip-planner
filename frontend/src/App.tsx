@@ -1,8 +1,40 @@
 import { startTransition, useState } from "react";
-import { NavLink, Outlet, useLoaderData, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLoaderData, useNavigate, useRouteError } from "react-router-dom";
 
 import { logout } from "./api/auth";
+import { getErrorMessage } from "./lib/api/errors";
 import type { RootLoaderData } from "./router";
+
+export function InitialRouteFallback() {
+  return (
+    <div className="app-shell">
+      <section className="status-card">
+        <p className="status-label">Backend status</p>
+        <h2>Waking up the server</h2>
+        <p>Checking /api/health before loading the planner.</p>
+      </section>
+    </div>
+  );
+}
+
+export function RootErrorBoundary() {
+  const error = useRouteError();
+
+  return (
+    <div className="app-shell">
+      <section className="status-card status-card-error">
+        <p className="status-label">Backend status</p>
+        <h2>Backend startup check failed</h2>
+        <p>
+          {getErrorMessage(
+            error,
+            "The backend did not respond before the cold-start retry budget was exhausted."
+          )}
+        </p>
+      </section>
+    </div>
+  );
+}
 
 export default function App() {
   const { session } = useLoaderData() as RootLoaderData;
