@@ -170,12 +170,41 @@ describe("fetchJson", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const request = fetchJson({ path: "/api/health" });
-    await vi.advanceTimersByTimeAsync(250 + 500);
-
-    await expect(request).rejects.toMatchObject({
+    // Attach the rejection expectation before advancing timers so the
+    // settled-during-advance rejection is observed in-band instead of
+    // surfacing as an unhandled rejection while the timers flush.
+    const rejection = expect(request).rejects.toMatchObject({
       name: "ApiClientError",
       status: 503,
     } satisfies Partial<ApiClientError>);
+    await vi.advanceTimersByTimeAsync(250 + 500);
+
+    await rejection;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("aborts a hung health probe and consumes the retry budget", async () => {
+    vi.useFakeTimers();
+    // Never resolve unless the request is aborted; the bounded timeout must
+    // be what drives the retry budget so a hanging backend cannot pend forever.
+    const fetchMock = vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+          });
+        })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = fetchJson({ path: "/api/health" });
+    const rejection = expect(request).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    // Three 5s timeouts plus the two inter-attempt retry delays.
+    await vi.advanceTimersByTimeAsync(3 * 5000 + 250 + 500);
+
+    await rejection;
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 

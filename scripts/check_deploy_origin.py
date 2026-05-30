@@ -16,6 +16,10 @@ def _host(origin: str) -> str:
     parsed = urlparse(origin.rstrip("/"))
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise SystemExit(f"Invalid origin in deploy configuration: {origin!r}")
+    if parsed.path or parsed.params or parsed.query or parsed.fragment:
+        raise SystemExit(
+            f"Deploy origin must be scheme + host only (no path/query/fragment): {origin!r}"
+        )
     return parsed.netloc
 
 

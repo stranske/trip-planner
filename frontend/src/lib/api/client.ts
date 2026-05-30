@@ -7,6 +7,10 @@ type JsonRequestOptions = RequestInit & {
 const HEALTH_RETRY_STATUSES = new Set([502, 503, 504]);
 const HEALTH_RETRY_ATTEMPTS = 3;
 const HEALTH_RETRY_DELAY_MS = 250;
+// Bound each cold-start health probe so a backend that hangs (rather than
+// returning 502/503/504) still consumes the retry budget and surfaces a
+// bounded error instead of leaving the loading UI pending indefinitely.
+const HEALTH_RETRY_TIMEOUT_MS = 5000;
 
 function resolveRequestUrl(path: string): string {
   const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
@@ -31,6 +35,28 @@ function retryDelay(attemptIndex: number): Promise<void> {
   });
 }
 
+async function fetchWithTimeout(
+  requestUrl: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  // Without AbortController support (or an already-supplied signal) fall back
+  // to a plain fetch so non-browser callers keep working.
+  if (!timeoutMs || typeof AbortController === "undefined" || init.signal) {
+    return fetch(requestUrl, init);
+  }
+
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+  try {
+    return await fetch(requestUrl, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 async function fetchWithHealthRetry(
   requestUrl: string,
   init: RequestInit,
@@ -41,7 +67,9 @@ async function fetchWithHealthRetry(
 
   for (let attempt = 1; attempt <= attemptCount; attempt += 1) {
     try {
-      const response = await fetch(requestUrl, init);
+      const response = retryEnabled
+        ? await fetchWithTimeout(requestUrl, init, HEALTH_RETRY_TIMEOUT_MS)
+        : await fetch(requestUrl, init);
       if (
         retryEnabled &&
         attempt < attemptCount &&
