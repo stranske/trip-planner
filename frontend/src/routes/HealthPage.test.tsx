@@ -40,7 +40,7 @@ describe("HealthPage", () => {
 
     renderHealthPage();
 
-    expect(screen.getByText("Checking the live runtime")).toBeInTheDocument();
+    expect(screen.getByText("Waking up the server")).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "trip-planner-api" })).toBeInTheDocument();
@@ -61,12 +61,12 @@ describe("HealthPage", () => {
 
     renderHealthPage();
 
-    expect(screen.getByText("Checking the live runtime")).toBeInTheDocument();
+    expect(screen.getByText("Waking up the server")).toBeInTheDocument();
 
     rejectRequest?.(new Error("Backend offline"));
 
     await waitFor(() => {
-      expect(screen.getByText("Health request failed")).toBeInTheDocument();
+      expect(screen.getByText("Backend still unavailable")).toBeInTheDocument();
     });
 
     expect(screen.getByText("Backend offline")).toBeInTheDocument();

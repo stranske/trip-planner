@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "python ../scripts/write_frontend_redirects.py && python ../scripts/check_deploy_origin.py",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run --exclude src/smoke/**",

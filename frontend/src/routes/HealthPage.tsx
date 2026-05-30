@@ -41,13 +41,13 @@ export function HealthPage() {
       resolve={health}
       loading={{
         label: "Backend status",
-        title: "Checking the live runtime",
-        message: "Fetching the FastAPI health endpoint.",
+        title: "Waking up the server",
+        message: "Checking the FastAPI health endpoint with bounded cold-start retries.",
       }}
       error={{
         label: "Backend status",
-        title: "Health request failed",
-        message: "The shared API client could not load backend health.",
+        title: "Backend still unavailable",
+        message: "The API did not answer before the retry budget was exhausted.",
       }}
     >
       {(resolvedHealth) => <HealthStatusCard health={resolvedHealth} />}
