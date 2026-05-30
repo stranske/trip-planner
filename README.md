@@ -193,6 +193,28 @@ python scripts/check_deploy_origin.py
 
 The check fails when the README's public synthetic API host and the generated Netlify redirect host differ.
 
+### Try the demo (synthetic data)
+
+For a non-production checkout, you can seed a synthetic demo user plus two
+ready-to-explore trips so a tester sees a populated workspace immediately. The
+seed is **opt-in** (it no-ops unless `TRIP_PLANNER_SEED_DEMO=1`) and uses only
+synthetic data; the planner runs in its deterministic `fallback` mode, so **no
+proprietary data and no external LLM** are involved.
+
+```bash
+TRIP_PLANNER_SEED_DEMO=1 python scripts/seed_demo_data.py
+```
+
+Then sign in at `/login` with the documented demo credentials and open either
+seeded workspace (the script prints the exact `/workspace/<trip_id>` URLs):
+
+- email: `demo@trip-planner.local`
+- password: `demo-trip-planner-2026`
+
+Each `/workspace/<trip_id>` immediately shows ranked scenarios and the
+(schematic) map card. Do **not** run this seed against a production deployment;
+it exists for local and non-production evaluation only.
+
 ## Persistent Deployment
 
 The product deployment is split across two persistent services:
