@@ -159,7 +159,9 @@ def seed_demo_data(*, force: bool = False) -> DemoSeedResult | None:
     session = get_session_factory()()
     try:
         user = _ensure_demo_user(session)
-        existing_by_title = {trip["title"]: trip["trip_id"] for trip in list_trips(session, user=user)}
+        existing_by_title = {
+            trip["title"]: trip["trip_id"] for trip in list_trips(session, user=user)
+        }
 
         leisure_trip_id = _ensure_trip(
             session,
