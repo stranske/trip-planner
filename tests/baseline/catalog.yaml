@@ -1,0 +1,47 @@
+# Trip-planner scenario catalog -- transport-option deterministic compute.
+#
+# Same shape as the TMP catalog, but the "directional" checks here are
+# cross-entity ORDERINGS (one option vs another) rather than control-vs-variant.
+# The shared baseline_kit engine treats both identically (compare two numbers).
+
+fixtures:
+  - coastal_flight.json
+  - scenic_rail.json
+  - island_ferry.json
+  - regional_rental_car.json
+  - downtown_local_ground.json
+
+# Directional orderings -- each compares `left` vs `right` on a metric.
+# Confirmed against existing tests/options/test_transport.py assertions.
+orderings:
+  - id: car_cheaper_than_flight
+    left: regional_rental_car.json
+    right: coastal_flight.json
+    metric: cost_total
+    direction: less_than
+    enforce: true
+  - id: flight_fewer_transfers_than_rail
+    left: coastal_flight.json
+    right: scenic_rail.json
+    metric: transfer_count
+    direction: less_than
+    enforce: true
+  - id: rail_better_fit_than_flight
+    left: scenic_rail.json
+    right: coastal_flight.json
+    metric: overall_signal
+    direction: greater_than
+    enforce: true
+  - id: ferry_cheaper_than_rail
+    left: island_ferry.json
+    right: scenic_rail.json
+    metric: cost_total
+    direction: less_than
+    enforce: true
+
+# The must-cover metric dimensions (coverage manifest asserts these appear in
+# at least one ordering).
+priority_metrics:
+  - cost_total
+  - transfer_count
+  - overall_signal
