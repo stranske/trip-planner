@@ -6,13 +6,14 @@ import {
 } from "react-router-dom";
 
 import { fetchCurrentSession } from "./api/auth";
+import { fetchHealthStatus } from "./api/health";
 import {
   fetchTrip,
   fetchTripScenarioHistory,
   fetchTrips,
 } from "./api/trips";
 import { fetchWorkspace } from "./api/workspace";
-import App from "./App";
+import App, { RootErrorBoundary } from "./App";
 import { ApiClientError } from "./lib/api/errors";
 import { healthLoader, HealthPage } from "./routes/HealthPage";
 import { LoginPage } from "./routes/LoginPage";
@@ -42,6 +43,7 @@ function loadSession(request: Request): Promise<RootLoaderData> {
 
   const pending = (async () => {
     try {
+      await fetchHealthStatus();
       return { session: await fetchCurrentSession() };
     } catch (error) {
       if (isUnauthorized(error)) {
@@ -52,13 +54,14 @@ function loadSession(request: Request): Promise<RootLoaderData> {
   })();
 
   sessionLoadCache.set(request.url, pending);
-  pending.finally(() => {
+  const clearCache = () => {
     queueMicrotask(() => {
       if (sessionLoadCache.get(request.url) === pending) {
         sessionLoadCache.delete(request.url);
       }
     });
-  });
+  };
+  pending.then(clearCache, clearCache);
   return pending;
 }
 
@@ -143,6 +146,7 @@ export const appRoutes: RouteObject[] = [
     path: "/",
     id: "root",
     element: <App />,
+    errorElement: <RootErrorBoundary />,
     loader: rootLoader,
     children: [
       {

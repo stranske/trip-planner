@@ -1,3 +1,23 @@
+## 2026-05-30T16:10Z - opener lane issue #1259 materializing
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1259` (`Replace the cold-starting public Render+Netlify path with a documented internal or synthetic-data demo deploy, and pin the API origin`).
+- Branch: `codex/issue-1259-demo-deploy-origin`, base `origin/main` `d14ff6b54`.
+- Selection notes: raw opener cap was below limit (`total_opener_owned=2`, `raw_cap_reached=false`). Opener repaired `Travel-Plan-Permission#1131` by dispatching Gate Followups, recorded it as green/clean closer-drain evidence, then continued liveness selection. Scoped blockers remained `Workflows#2159`, `Inv-Man-Intake#469/#470`, and `learning-management-system#180`; already-linked/merged high candidates were skipped. `trip-planner#1259` was the oldest high-priority unlinked implementation issue outside those blockers.
+- Implementation:
+  - Added bounded retry/backoff for `GET /api/health` in the shared frontend client so initial 502/503/504 or transient network cold-start failures can recover before surfacing an error.
+  - Updated the health route loading/error treatment to show the server wake-up state and exhausted-retry error.
+  - Added `scripts/write_frontend_redirects.py` to generate Netlify `_redirects` from `TRIP_PLANNER_API_ORIGIN` or `VITE_API_BASE_URL`, with the existing Render origin as the synthetic-demo default.
+  - Added `scripts/check_deploy_origin.py`, wired it into `npm run build` and `scripts/check_production_readiness.sh`, and documented the synthetic-only public deploy plus internal-perimeter requirement in `README.md`.
+- Validation:
+  - `npm --prefix frontend run test -- --run src/lib/api/client.test.ts src/routes/HealthPage.test.tsx` -> 10 passed.
+  - `python -m py_compile scripts/check_deploy_origin.py scripts/write_frontend_redirects.py && python scripts/check_deploy_origin.py` -> passed.
+  - `npm --prefix frontend run build` -> passed, including redirect generation and deploy-origin drift check.
+- PR: `#1265` (https://github.com/stranske/trip-planner/pull/1265), open/non-draft, labels `agent:codex`, `agents:keepalive`, `autofix`, `priority:high`, and `repo-review-approved`.
+- Post-open state: initial checks are pending/starting. One immediate Gate row reported path-classification failure while the run was still in progress; opener attempted to read logs but GitHub reported logs unavailable until completion. Keepalive owns the next CI/review iteration.
+- Relay: `pr_opened active.source_repo=stranske/trip-planner active.source_issue=1259 active.source_pr=1265 active.next_action=wait_for_keepalive`.
+- Next action: keepalive owns PR #1265 CI/review iteration; closer owns post-merge verifier/issue closure.
+
 ## 2026-05-27T18:51Z - closer pushed CI recovery for PR #1253
 
 - Automation: `imi-merge-verify-closer` (codex closer lane) from the neutral Code workspace.

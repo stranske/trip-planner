@@ -7,6 +7,16 @@ export type HealthStatus = {
   version: string;
 };
 
+let inFlightHealthProbe: Promise<HealthStatus> | null = null;
+
 export async function fetchHealthStatus(): Promise<HealthStatus> {
-  return fetchJson<HealthStatus>({ path: "/api/health" });
+  if (inFlightHealthProbe) {
+    return inFlightHealthProbe;
+  }
+
+  inFlightHealthProbe = fetchJson<HealthStatus>({ path: "/api/health" }).finally(() => {
+    inFlightHealthProbe = null;
+  });
+
+  return inFlightHealthProbe;
 }

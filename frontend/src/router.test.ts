@@ -12,6 +12,10 @@ vi.mock("./api/auth", () => ({
   fetchCurrentSession: vi.fn(),
 }));
 
+vi.mock("./api/health", () => ({
+  fetchHealthStatus: vi.fn(),
+}));
+
 vi.mock("./api/trips", () => ({
   fetchTrip: vi.fn().mockResolvedValue({ trip_id: "trip-1" }),
   fetchTripScenarioHistory: vi.fn().mockResolvedValue({
@@ -65,6 +69,13 @@ describe("router auth loaders", () => {
 
   it("restores the signed-in session during app bootstrap", async () => {
     const { fetchCurrentSession } = await import("./api/auth");
+    const { fetchHealthStatus } = await import("./api/health");
+    vi.mocked(fetchHealthStatus).mockResolvedValueOnce({
+      service: "trip-planner",
+      status: "ok",
+      environment: "test",
+      version: "dev",
+    });
     vi.mocked(fetchCurrentSession).mockResolvedValueOnce({
       user: {
         user_id: "user:test",
@@ -88,10 +99,41 @@ describe("router auth loaders", () => {
         },
       },
     });
+    expect(vi.mocked(fetchHealthStatus).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(fetchCurrentSession).mock.invocationCallOrder[0]
+    );
+  });
+
+  it("surfaces backend startup failure before the auth session lookup", async () => {
+    const { fetchCurrentSession } = await import("./api/auth");
+    const { fetchHealthStatus } = await import("./api/health");
+    const startupError = new ApiClientError("The backend startup check failed.", {
+      path: "/api/health",
+      status: 504,
+      statusText: "Gateway Timeout",
+    });
+    vi.mocked(fetchHealthStatus).mockRejectedValueOnce(startupError);
+
+    await expect(
+      rootLoader({
+        params: {},
+        request: new Request("http://localhost/"),
+        context: undefined,
+      })
+    ).rejects.toBe(startupError);
+
+    expect(fetchCurrentSession).not.toHaveBeenCalled();
   });
 
   it("keeps auth pages open when no cookie-backed session exists", async () => {
     const { fetchCurrentSession } = await import("./api/auth");
+    const { fetchHealthStatus } = await import("./api/health");
+    vi.mocked(fetchHealthStatus).mockResolvedValueOnce({
+      service: "trip-planner",
+      status: "ok",
+      environment: "test",
+      version: "dev",
+    });
     vi.mocked(fetchCurrentSession).mockRejectedValueOnce(
       new ApiClientError("No active planner session was found.", {
         path: "/api/auth/session",
@@ -111,6 +153,13 @@ describe("router auth loaders", () => {
 
   it("reuses the same session lookup within a navigation", async () => {
     const { fetchCurrentSession } = await import("./api/auth");
+    const { fetchHealthStatus } = await import("./api/health");
+    vi.mocked(fetchHealthStatus).mockResolvedValueOnce({
+      service: "trip-planner",
+      status: "ok",
+      environment: "test",
+      version: "dev",
+    });
     vi.mocked(fetchCurrentSession).mockResolvedValue({
       user: {
         user_id: "user:test",
@@ -141,10 +190,18 @@ describe("router auth loaders", () => {
       reason: expect.any(Response),
     });
     expect(fetchCurrentSession).toHaveBeenCalledTimes(1);
+    expect(fetchHealthStatus).toHaveBeenCalledTimes(1);
   });
 
   it("redirects protected workspace routes back to sign-in when the session check fails", async () => {
     const { fetchCurrentSession } = await import("./api/auth");
+    const { fetchHealthStatus } = await import("./api/health");
+    vi.mocked(fetchHealthStatus).mockResolvedValueOnce({
+      service: "trip-planner",
+      status: "ok",
+      environment: "test",
+      version: "dev",
+    });
     vi.mocked(fetchCurrentSession).mockRejectedValueOnce(
       new ApiClientError("No active planner session was found.", {
         path: "/api/auth/session",
@@ -171,8 +228,15 @@ describe("router auth loaders", () => {
 
   it("loads workspace data and persisted trips for signed-in users", async () => {
     const { fetchCurrentSession } = await import("./api/auth");
+    const { fetchHealthStatus } = await import("./api/health");
     const { fetchTrips } = await import("./api/trips");
     const { fetchWorkspace } = await import("./api/workspace");
+    vi.mocked(fetchHealthStatus).mockResolvedValueOnce({
+      service: "trip-planner",
+      status: "ok",
+      environment: "test",
+      version: "dev",
+    });
     vi.mocked(fetchCurrentSession).mockResolvedValueOnce({
       user: {
         user_id: "user:test",
@@ -200,7 +264,14 @@ describe("router auth loaders", () => {
 
   it("loads the persisted trip list for signed-in users", async () => {
     const { fetchCurrentSession } = await import("./api/auth");
+    const { fetchHealthStatus } = await import("./api/health");
     const { fetchTrips } = await import("./api/trips");
+    vi.mocked(fetchHealthStatus).mockResolvedValueOnce({
+      service: "trip-planner",
+      status: "ok",
+      environment: "test",
+      version: "dev",
+    });
     vi.mocked(fetchCurrentSession).mockResolvedValueOnce({
       user: {
         user_id: "user:test",
@@ -221,7 +292,14 @@ describe("router auth loaders", () => {
 
   it("loads a persisted trip detail for signed-in users", async () => {
     const { fetchCurrentSession } = await import("./api/auth");
+    const { fetchHealthStatus } = await import("./api/health");
     const { fetchTrip, fetchTripScenarioHistory } = await import("./api/trips");
+    vi.mocked(fetchHealthStatus).mockResolvedValueOnce({
+      service: "trip-planner",
+      status: "ok",
+      environment: "test",
+      version: "dev",
+    });
     vi.mocked(fetchCurrentSession).mockResolvedValueOnce({
       user: {
         user_id: "user:test",

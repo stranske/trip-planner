@@ -5,6 +5,7 @@ import { ApiClientError } from "./errors";
 
 describe("fetchJson", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
@@ -123,5 +124,107 @@ describe("fetchJson", () => {
       path: "https://api.example.test/api/health",
       status: 503,
     } satisfies Partial<ApiClientError>);
+  });
+
+  it("retries the first health probe when the backend is waking up", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+        clone() {
+          return this;
+        },
+        json: async () => ({ detail: "Backend warming up" }),
+        text: async () => "Backend warming up",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        text: async () => JSON.stringify({ status: "ok" }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = fetchJson<{ status: string }>({ path: "/api/health" });
+    await vi.advanceTimersByTimeAsync(250);
+
+    await expect(request).resolves.toEqual({ status: "ok" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops after the bounded retry budget for health probes", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      statusText: "Service Unavailable",
+      clone() {
+        return this;
+      },
+      json: async () => ({ detail: "Backend warming up" }),
+      text: async () => "Backend warming up",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = fetchJson({ path: "/api/health" });
+    // Attach the rejection expectation before advancing timers so the
+    // settled-during-advance rejection is observed in-band instead of
+    // surfacing as an unhandled rejection while the timers flush.
+    const rejection = expect(request).rejects.toMatchObject({
+      name: "ApiClientError",
+      status: 503,
+    } satisfies Partial<ApiClientError>);
+    await vi.advanceTimersByTimeAsync(250 + 500);
+
+    await rejection;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("aborts a hung health probe and consumes the retry budget", async () => {
+    vi.useFakeTimers();
+    // Never resolve unless the request is aborted; the bounded timeout must
+    // be what drives the retry budget so a hanging backend cannot pend forever.
+    const fetchMock = vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+          });
+        })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = fetchJson({ path: "/api/health" });
+    const rejection = expect(request).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    // Three 5s timeouts plus the two inter-attempt retry delays.
+    await vi.advanceTimersByTimeAsync(3 * 5000 + 250 + 500);
+
+    await rejection;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not retry non-health API requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      statusText: "Bad Gateway",
+      clone() {
+        return this;
+      },
+      json: async () => ({ detail: "Backend warming up" }),
+      text: async () => "Backend warming up",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchJson({ path: "/api/trips" })).rejects.toMatchObject({
+      name: "ApiClientError",
+      status: 502,
+    } satisfies Partial<ApiClientError>);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

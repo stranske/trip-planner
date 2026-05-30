@@ -59,6 +59,9 @@ fi
 cd "${repo_root}"
 
 if [ "${run_local}" = "true" ]; then
+  echo "==> Deploy origin drift check"
+  python scripts/check_deploy_origin.py
+
   echo "==> Backend critical-journey API checks"
   python -m pytest \
     tests/app/test_auth.py \

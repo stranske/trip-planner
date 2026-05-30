@@ -174,14 +174,33 @@ The verification path covers:
 These checks validate the local full-stack MVP that already exists in this repo. They exercise the map adapter and fallback seam with mocked provider state. They do not prove live Google Maps rendering or remote Travel-Plan-Permission transport.
 The production-focused testing plan in [docs/local-testing-plan.md](docs/local-testing-plan.md) adds the critical auth, trip, workspace, policy, proposal, and preview-verification journeys on top of that baseline.
 
+## Demo Deploy (data-zoned)
+
+The public browser path is for synthetic or fixture trips only:
+
+- Frontend: `https://stranske-trip-planner.netlify.app`
+- Public synthetic API origin: `https://trip-planner-api-s40u.onrender.com`
+
+Do not enter proprietary, client, or personally identifying trip data into the public Netlify or Render services. Real travel data requires an internal-perimeter browser host that runs the FastAPI backend and Postgres database inside the approved organization boundary, with any live LLM or Travel-Plan-Permission transport explicitly enabled by that environment's data-zone controls.
+
+Netlify builds generate `frontend/public/_redirects` from `TRIP_PLANNER_API_ORIGIN` during `npm run build`. If that env var is unset, the build uses the public synthetic API origin above. The frontend also honors `VITE_API_BASE_URL` for local, preview, or internal hosts that should call an API directly instead of relying on Netlify redirects.
+
+Run this drift check after changing deployment hosts:
+
+```bash
+python scripts/check_deploy_origin.py
+```
+
+The check fails when the README's public synthetic API host and the generated Netlify redirect host differ.
+
 ## Persistent Deployment
 
 The product deployment is split across two persistent services:
 
 - Netlify hosts the Vite frontend at `https://stranske-trip-planner.netlify.app`.
-- Render hosts the FastAPI backend and Postgres database.
+- Render hosts the FastAPI backend and Postgres database for the public synthetic demo.
 
-Netlify is connected directly to the GitHub repo and builds production from `main` using `netlify.toml`. The build ships `frontend/public/_redirects` with the bundle. The redirect file proxies `/api/*` to the Render backend before falling back to `/index.html`, so the deployed frontend can call `/api/...` without requiring a hard-coded API origin in the browser bundle.
+Netlify is connected directly to the GitHub repo and builds production from `main` using `netlify.toml`. The build writes `frontend/public/_redirects` from `TRIP_PLANNER_API_ORIGIN` before shipping the bundle. The redirect file proxies `/api/*` to the configured backend before falling back to `/index.html`, so the deployed frontend can call `/api/...` without hard-coding an API origin in browser source.
 
 Do not use the old token-based GitHub Action upload path for production deploys. That path depended on expiring Netlify API tokens and could drift from the Git-connected production site.
 
@@ -189,6 +208,7 @@ Do not use the old token-based GitHub Action upload path for production deploys.
 
 Required deployment configuration:
 
+- Netlify project env vars, public synthetic API: `TRIP_PLANNER_API_ORIGIN`
 - Netlify project env vars, optional live map adapter: `VITE_GOOGLE_MAPS_BROWSER_API_KEY`
 - Render service env vars: `TRIP_PLANNER_CORS_ORIGINS`, `TRIP_PLANNER_CORS_ORIGIN_REGEX`, and live TPP variables when remote policy execution is intentionally enabled
 - Render Python runtime: the repo pins `.python-version` to Python 3.12 and `pyproject.toml`
