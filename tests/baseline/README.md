@@ -5,8 +5,12 @@ Scenario-driven wiring/sensibility/regression tests built on the shared
 
 ## Requires
 
-`baseline_kit` must be importable (pilot: `pip install -e ../app-baseline-kit`
-into the same environment). It is not yet published.
+`baseline_kit` (the shared core) must be importable. It lives in
+`stranske/Workflows` under `packages/app-baseline-kit`:
+
+```bash
+pip install "app-baseline-kit @ git+https://github.com/stranske/Workflows.git#subdirectory=packages/app-baseline-kit"
+```
 
 ## Target surface
 
