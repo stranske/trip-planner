@@ -155,6 +155,30 @@ describe("fetchJson", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("stops after the bounded retry budget for health probes", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      statusText: "Service Unavailable",
+      clone() {
+        return this;
+      },
+      json: async () => ({ detail: "Backend warming up" }),
+      text: async () => "Backend warming up",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = fetchJson({ path: "/api/health" });
+    await vi.advanceTimersByTimeAsync(250 + 500);
+
+    await expect(request).rejects.toMatchObject({
+      name: "ApiClientError",
+      status: 503,
+    } satisfies Partial<ApiClientError>);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it("does not retry non-health API requests", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
