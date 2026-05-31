@@ -7,7 +7,6 @@ by an ordering).
 
 from __future__ import annotations
 
-
 from baseline_kit import CoverageManifest, load_catalog
 
 from . import adapter
