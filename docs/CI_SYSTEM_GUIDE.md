@@ -55,6 +55,15 @@ provides:
 | `reusable-12-ci-docker.yml` | Docker build + smoke test | Projects with Dockerfile |
 | `reusable-18-autofix.yml` | Automated code formatting fixes | All projects (via autofix label) |
 
+> **Coverage floor baseline.** `.github/workflows/ci.yml` passes `coverage-min: '88'`
+> to `reusable-10-ci-python.yml`. This reflects the measured backend baseline of
+> **89%** (`python -m pytest --cov=trip_planner`, 1021 passed / 1 skipped on
+> 2026-05-31), rounded down to **88** to absorb minor cross-version (3.12/3.13)
+> variation. The previous placeholder floor of `8` was too low to catch real
+> regressions. Re-measure and raise this floor (never below the current measured
+> value) when the suite grows; change only the literal in this repo's `ci.yml`,
+> not the reusable workflow.
+
 ### Agent Automation System
 
 The Workflows repo includes a sophisticated agent automation system:

@@ -31,7 +31,9 @@ jobs:
       format_check: false
       typecheck: true
       coverage: true
-      coverage-min: '8'
+      # Floor set to measured backend baseline (89% on 2026-05-31), rounded down
+      # to 88 for cross-version (3.12/3.13) headroom. See docs/CI_SYSTEM_GUIDE.md.
+      coverage-min: '88'
     secrets: inherit
 
   runtime:
