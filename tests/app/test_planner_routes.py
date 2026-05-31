@@ -37,6 +37,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
         "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'planner.db'}"
     )
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", raising=False)
+    monkeypatch.delenv("TRIP_PLANNER_PLANNER_PROVIDER", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_DATA_ZONE", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT", raising=False)

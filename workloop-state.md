@@ -1,3 +1,12 @@
+## 2026-05-31T09:25Z - closer fixed PR #1272 test-fixture env isolation
+
+- Automation: `imi-merge-verify-closer` (codex closer lane), neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1263`; PR `#1272`; branch `codex/issue-1263-data-zone-redaction`.
+- Batch context: closed Trend_Model_Project issue `#5351` after merged PR `#5362` received durable provider-comparison PASS/PASS. trip-planner `#1271` stayed async because Netlify header/redirect checks were still pending/unstable; `#1272` was selected as the complex lane because checks were green/clean but one Copilot review thread remained unresolved.
+- Review fix: the shared `tests/app/test_planner_routes.py` client fixture now clears both planner provider env names: `TRIP_PLANNER_PLANNER_MODEL_PROVIDER` and the alias `TRIP_PLANNER_PLANNER_PROVIDER`. This prevents ambient shell/CI state from making fallback-mode planner tests order-dependent.
+- Validation: `python -m pytest tests/app/test_planner_routes.py::test_planner_session_endpoint_bootstraps_trip_scoped_session tests/app/test_planner_routes.py::test_proprietary_zone_blocks_openai_without_authorized_endpoint tests/app/test_planner_routes.py::test_openai_planner_payload_uses_redaction_hook -q` -> 3 passed; `git diff --check` -> clean.
+- Next action after push: re-check PR #1272 review threads and checks. If the Copilot thread is resolved and checks remain green, merge #1272, apply `verify:compare`, then keep issue #1263 open until durable verifier PASS.
+
 ## 2026-05-31T09:10Z - opener lane issue #1263 final scoped diff
 
 - Repo: `stranske/trip-planner`; issue `#1263`; PR `#1272`; branch `codex/issue-1263-data-zone-redaction`.
