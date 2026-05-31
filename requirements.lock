@@ -12,7 +12,7 @@ anyio==4.13.0
     #   httpx
     #   openai
     #   starlette
-app-baseline-kit @ git+https://github.com/stranske/Workflows.git@4581ee9c91240b6d3ef628f0f8ff982f6bcaba36#subdirectory=packages/app-baseline-kit
+app-baseline-kit @ git+https://github.com/stranske/Workflows.git@13f94883220bbfb0ca69a4666fb44a49e0ae8172#subdirectory=packages/app-baseline-kit
     # via trip-planner (pyproject.toml)
 ast-serialize==0.3.0
     # via mypy
