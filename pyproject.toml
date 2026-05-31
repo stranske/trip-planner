@@ -27,6 +27,7 @@ dev = [
     "types-PyYAML==6.0.12.20260510",
     "pytest-httpserver==1.1.5",
     "numpy==2.3.0",
+    "pandas==2.3.3",
     # Shared app behavior baseline harness (pulls pytest-regressions). Pinned to
     # the Workflows default branch; move to a tagged ref once the package is versioned.
     "app-baseline-kit @ git+https://github.com/stranske/Workflows.git#subdirectory=packages/app-baseline-kit",
