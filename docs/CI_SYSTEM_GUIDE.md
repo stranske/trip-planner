@@ -55,11 +55,12 @@ provides:
 | `reusable-12-ci-docker.yml` | Docker build + smoke test | Projects with Dockerfile |
 | `reusable-18-autofix.yml` | Automated code formatting fixes | All projects (via autofix label) |
 
-> **Coverage floor baseline.** `.github/workflows/ci.yml` passes `coverage-min: '88'`
-> to `reusable-10-ci-python.yml`. This reflects the measured backend baseline of
-> **89%** (`python -m pytest --cov=trip_planner`, 1021 passed / 1 skipped on
-> 2026-05-31), rounded down to **88** to absorb minor cross-version (3.12/3.13)
-> variation. The previous placeholder floor of `8` was too low to catch real
+> **Coverage floor baseline.** `.github/workflows/ci.yml` passes `coverage-min: '83'`
+> to `reusable-10-ci-python.yml`. This reflects the reusable workflow's measured
+> fallback coverage baseline of about **84%** (84.10% in CI on Python 3.12/3.13,
+> 83.98% in local fallback validation on 2026-05-31), rounded down to **83** to
+> absorb minor cross-environment variation. The previous placeholder floor of `8`
+> was too low to catch real
 > regressions. Re-measure and raise this floor (never below the current measured
 > value) when the suite grows; change only the literal in this repo's `ci.yml`,
 > not the reusable workflow.
