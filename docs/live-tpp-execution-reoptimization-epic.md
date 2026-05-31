@@ -127,6 +127,8 @@ The `make full-product-check` lane is the live-verification surface for this epi
 
 Both modes also require `TPP_ACCESS_TOKEN` and `TPP_OIDC_PROVIDER`. Missing values are reported as `SKIPPED` or `BLOCKED` (depending on whether a transport target is configured), each with a `remediation` hint that names the next concrete env var or command.
 
+`TRIP_PLANNER_DATA_ZONE` is the shared privacy boundary for the live TPP and planner LLM seams. The default `synthetic` zone is suitable for demo and fixture data. In `proprietary`, live TPP must target an in-perimeter `TPP_BASE_URL` or sibling service, and the OpenAI planner path remains `BLOCKED` unless `TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT` marks an approved no-train endpoint. When that marker is present, the planner still applies the outbound prompt redaction hook before invoking the model.
+
 For the full result-state matrix, env-var matrix, and example invocations, see [`docs/local-testing-plan.md` → "Live TPP Verification Setup"](local-testing-plan.md#live-tpp-verification-setup). Keep that section as the operator-facing source of truth; this epic doc records the design intent behind the seam, not the runbook.
 
 ### Default Local Behavior

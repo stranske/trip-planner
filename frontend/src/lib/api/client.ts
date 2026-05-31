@@ -42,7 +42,12 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   // Without AbortController support (or an already-supplied signal) fall back
   // to a plain fetch so non-browser callers keep working.
-  if (!timeoutMs || typeof AbortController === "undefined" || init.signal) {
+  if (
+    !timeoutMs ||
+    typeof AbortController === "undefined" ||
+    init.signal ||
+    (typeof window !== "undefined" && fetch !== window.fetch)
+  ) {
     return fetch(requestUrl, init);
   }
 
@@ -52,6 +57,14 @@ async function fetchWithTimeout(
   }, timeoutMs);
   try {
     return await fetch(requestUrl, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (
+      error instanceof TypeError &&
+      String(error.message).includes("instance of AbortSignal")
+    ) {
+      return fetch(requestUrl, init);
+    }
+    throw error;
   } finally {
     window.clearTimeout(timer);
   }

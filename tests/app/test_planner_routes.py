@@ -9,7 +9,10 @@ from sqlalchemy import delete, select
 
 from trip_planner.app.main import create_app
 from trip_planner.app.services.auth import AuthenticatedUser
-from trip_planner.app.services.planner import set_planner_chat_model_factory_for_tests
+from trip_planner.app.services.planner import (
+    set_planner_chat_model_factory_for_tests,
+    set_planner_prompt_redactor_for_tests,
+)
 from trip_planner.app.services.planner_tools import (
     execute_planner_tool_call,
     list_planner_tools,
@@ -35,6 +38,8 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     )
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
+    monkeypatch.delenv("TRIP_PLANNER_DATA_ZONE", raising=False)
+    monkeypatch.delenv("TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
     monkeypatch.delenv("LANGCHAIN_API_KEY", raising=False)
@@ -43,6 +48,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     monkeypatch.delenv("LANGCHAIN_TRACING_V2", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_LANGSMITH_FLEET_PATH", raising=False)
     set_planner_chat_model_factory_for_tests(None)
+    set_planner_prompt_redactor_for_tests(None)
     reset_database_state()
     app = create_app()
 
@@ -59,6 +65,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
         yield test_client
 
     set_planner_chat_model_factory_for_tests(None)
+    set_planner_prompt_redactor_for_tests(None)
     reset_database_state()
 
 
@@ -186,6 +193,71 @@ def test_planner_session_reports_model_runtime_when_configured(
     assert runtime["mode"] == "model"
     assert runtime["provider"] == "openai"
     assert runtime["model"] == "fake-planner-model"
+
+
+def test_proprietary_zone_blocks_openai_without_authorized_endpoint(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trip_id = _create_trip(client)
+    monkeypatch.setenv("TRIP_PLANNER_DATA_ZONE", "proprietary")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL", "fake-planner-model")
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-test-key")
+
+    response = client.get(f"/api/planner/{trip_id}/session")
+
+    assert response.status_code == 200
+    runtime = response.json()["runtime"]
+    assert runtime["mode"] == "fallback"
+    assert runtime["data_zone"] == "proprietary"
+    assert runtime["llm_status"] == "blocked"
+    assert runtime["fallback_reason"] == "proprietary_zone_llm_blocked"
+
+    monkeypatch.setenv("TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT", "1")
+    authorized_response = client.get(f"/api/planner/{trip_id}/session")
+
+    assert authorized_response.status_code == 200
+    authorized_runtime = authorized_response.json()["runtime"]
+    assert authorized_runtime["mode"] == "model"
+    assert authorized_runtime["provider"] == "openai"
+    assert authorized_runtime["llm_status"] == "authorized"
+
+
+def test_openai_planner_payload_uses_redaction_hook(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trip_id = _create_trip(client)
+    fake_model = FakePlannerChatModel(
+        {"content": "The redacted prompt is safe to send.", "tool_calls": []}
+    )
+    redacted_payloads: list[dict[str, Any]] = []
+
+    def redactor(payload: dict[str, Any]) -> dict[str, Any]:
+        redacted = dict(payload)
+        redacted["message"] = "[redacted traveler prompt]"
+        redacted_payloads.append(redacted)
+        return redacted
+
+    monkeypatch.setenv("TRIP_PLANNER_DATA_ZONE", "proprietary")
+    monkeypatch.setenv("TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT", "1")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL", "fake-planner-model")
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-test-key")
+    set_planner_chat_model_factory_for_tests(lambda _: fake_model)
+    set_planner_prompt_redactor_for_tests(redactor)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "My traveler note contains sensitive account context."},
+    )
+
+    assert response.status_code == 200
+    assert redacted_payloads
+    assert fake_model.requests[0]["message"] == "[redacted traveler prompt]"
+    assert fake_model.requests[0]["data_zone"] == "proprietary"
+    assert "sensitive account context" not in json.dumps(fake_model.requests[0])
 
 
 def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> None:

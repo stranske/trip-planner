@@ -5,6 +5,7 @@ from scripts import check_full_product_verification as verifier
 from scripts.check_full_product_verification import (
     CheckResult,
     classify_map_prerequisite,
+    classify_planner_llm_prerequisite,
     run_product_journeys,
     run_frontend_runtime_smoke,
     tpp_prerequisite_status,
@@ -17,6 +18,11 @@ def test_full_product_local_journeys_cover_runtime_identifiers(monkeypatch) -> N
         "TPP_ACCESS_TOKEN",
         "TPP_OIDC_PROVIDER",
         "TPP_REPO_PATH",
+        "TRIP_PLANNER_DATA_ZONE",
+        "TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT",
+        "TRIP_PLANNER_PLANNER_MODEL_PROVIDER",
+        "TRIP_PLANNER_PLANNER_MODEL",
+        "OPENAI_API_KEY",
         "VITE_GOOGLE_MAPS_PROVIDER_STATE",
         "VITE_GOOGLE_MAPS_BROWSER_API_KEY",
         "VITE_GOOGLE_MAPS_EMBED_API_KEY",
@@ -72,6 +78,38 @@ def test_map_provider_check_fails_when_configured_provider_errors(monkeypatch) -
 
     assert check.status == "FAIL"
     assert check.details["provider_state"] == "error"
+
+
+def test_planner_llm_check_blocks_openai_in_proprietary_zone_without_marker() -> None:
+    check = classify_planner_llm_prerequisite(
+        env={
+            "TRIP_PLANNER_DATA_ZONE": "proprietary",
+            "TRIP_PLANNER_PLANNER_MODEL_PROVIDER": "openai",
+            "TRIP_PLANNER_PLANNER_MODEL": "gpt-test",
+            "OPENAI_API_KEY": "fake-key",
+        }
+    )
+
+    assert check.status == "BLOCKED"
+    assert check.details["data_zone"] == "proprietary"
+    assert check.details["llm_status"] == "blocked"
+    assert check.details["fallback_reason"] == "proprietary_zone_llm_blocked"
+
+
+def test_planner_llm_check_reports_authorized_openai_ready() -> None:
+    check = classify_planner_llm_prerequisite(
+        env={
+            "TRIP_PLANNER_DATA_ZONE": "proprietary",
+            "TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT": "1",
+            "TRIP_PLANNER_PLANNER_MODEL_PROVIDER": "openai",
+            "TRIP_PLANNER_PLANNER_MODEL": "gpt-test",
+            "OPENAI_API_KEY": "fake-key",
+        }
+    )
+
+    assert check.status == "READY"
+    assert check.details["data_zone"] == "proprietary"
+    assert check.details["llm_status"] == "authorized"
 
 
 def test_live_tpp_auto_reports_missing_config_as_skipped(monkeypatch, tmp_path) -> None:

@@ -84,8 +84,10 @@ class PlannerChatModel(Protocol):
 
 
 PlannerChatModelFactory = Callable[[PlannerRuntimeConfig], PlannerChatModel]
+PlannerPromptRedactor = Callable[[dict[str, Any]], dict[str, Any]]
 
 _PLANNER_CHAT_MODEL_FACTORY: PlannerChatModelFactory | None = None
+_PLANNER_PROMPT_REDACTOR: PlannerPromptRedactor | None = None
 _GROUNDING_TOOL_NAMES: tuple[str, ...] = (
     "read_workspace_state",
     "refresh_inventory",
@@ -1059,6 +1061,18 @@ def set_planner_chat_model_factory_for_tests(
     _PLANNER_CHAT_MODEL_FACTORY = factory
 
 
+def set_planner_prompt_redactor_for_tests(
+    redactor: PlannerPromptRedactor | None,
+) -> None:
+    global _PLANNER_PROMPT_REDACTOR
+    _PLANNER_PROMPT_REDACTOR = redactor
+
+
+def _redact_openai_planner_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    redactor = _PLANNER_PROMPT_REDACTOR or (lambda item: item)
+    return redactor(payload)
+
+
 class PlannerConversationRunnable(Protocol):
     """LangChain-style runnable abstraction for planner conversation turns."""
 
@@ -1220,17 +1234,19 @@ class ModelBackedPlannerConversationRunnable:
         self._chat_model = chat_model
 
     def invoke(self, request: PlannerConversationRequest) -> PlannerConversationReply:
-        raw = self._chat_model.invoke(
-            {
-                "message": request.message,
-                "trip_id": request.trip_id,
-                "available_tools": list_planner_tools(),
-                "runtime_context": request.runtime_context,
-                "provider": self._config.provider,
-                "model": self._config.model,
-                "langsmith_run_config": request.langsmith_run_config,
-            }
-        )
+        model_payload = {
+            "message": request.message,
+            "trip_id": request.trip_id,
+            "available_tools": list_planner_tools(),
+            "runtime_context": request.runtime_context,
+            "provider": self._config.provider,
+            "model": self._config.model,
+            "langsmith_run_config": request.langsmith_run_config,
+            "data_zone": self._config.data_zone,
+        }
+        if self._config.provider == "openai":
+            model_payload = _redact_openai_planner_payload(model_payload)
+        raw = self._chat_model.invoke(model_payload)
         content = str(raw.get("content") or "").strip()
         if not content:
             content = "Planner model returned an empty response after reading the current trip context."
