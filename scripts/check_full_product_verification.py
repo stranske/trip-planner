@@ -759,6 +759,7 @@ def _force_planner_fallback_runtime() -> Iterator[None]:
 
 
 def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
+    planner_llm_env = dict(os.environ)
     with (
         tempfile.TemporaryDirectory(prefix="trip-planner-full-product.") as tmpdir,
         _temporary_database_url(f"sqlite:///{Path(tmpdir) / 'full_product.db'}"),
@@ -986,7 +987,7 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
             if map_result.status == "FAIL":
                 raise VerificationFailure(json.dumps(map_result.details, sort_keys=True))
 
-            results.append(classify_planner_llm_prerequisite())
+            results.append(classify_planner_llm_prerequisite(env=planner_llm_env))
 
             tpp_status = tpp_prerequisite_status(live_tpp=live_tpp)
             if tpp_status.status == "READY":
