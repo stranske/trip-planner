@@ -243,6 +243,7 @@ function ActiveTripMap({
         >
           <div className="map-provider-toolbar">
             <span className="map-provider-name">{mapSurface.scope.label}</span>
+            <span className="map-preview-badge">Schematic preview — not a live map</span>
             <span>{mapSurface.visibleRouteSegments.length} shown segment(s)</span>
             <span>{mapSurface.visibleMarkers.length} shown marker(s)</span>
             {mapSurface.visibleFocusCues.length > 0 ? (

@@ -1052,6 +1052,15 @@ a {
   font-weight: 800;
 }
 
+.map-preview-badge {
+  border: 1px solid rgba(19, 33, 44, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #13212c;
+  font-weight: 700;
+  padding: 0.18rem 0.55rem;
+}
+
 .map-provider-canvas {
   position: relative;
   min-height: 340px;

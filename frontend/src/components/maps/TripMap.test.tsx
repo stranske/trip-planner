@@ -156,6 +156,7 @@ const planningLedger: WorkspaceData["planning_ledger"] = {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllEnvs();
 });
 
 function renderTripMap(
@@ -229,9 +230,23 @@ describe("TripMap", () => {
     expect(screen.getByLabelText("Map view confidence")).toHaveTextContent(
       "Regional route review"
     );
+    expect(screen.getByText("Schematic preview — not a live map")).toBeInTheDocument();
     expect(screen.queryByText(/Google Maps JavaScript/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Provider misconfigured/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Provider error/i)).not.toBeInTheDocument();
+  });
+
+  it("labels the keyed provider surface as a schematic preview", () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
+    vi.stubEnv("VITE_GOOGLE_MAPS_PROVIDER_STATE", "ready");
+
+    renderTripMap();
+
+    expect(screen.getByText("Schematic preview — not a live map")).toBeInTheDocument();
+    expect(screen.getByLabelText("Selected route option route drawing")).toHaveClass(
+      "map-route-google-maps-js"
+    );
+    expect(screen.queryByText(/Google Maps JavaScript/i)).not.toBeInTheDocument();
   });
 
   it("surfaces linked planning ledger entries as map focus cues", () => {

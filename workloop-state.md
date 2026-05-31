@@ -1,3 +1,18 @@
+## 2026-05-31T08:01Z - opener lane issue #1261 materializing
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1261` (`Label the workspace map as a non-interactive schematic preview in both provider and fallback modes`).
+- Branch: `codex/issue-1261-schematic-preview-label`, base `origin/main`.
+- Selection notes: cap-health after opener infra repair showed raw cap below limit (`total_opener_owned=4`, `raw_cap_reached=false`, `normal_cap_reached=false`). Existing opener-owned PRs were classified as: PAEM #1847 scoped/non-registry routing blocker; Trend #5353 scoped product/CI decision; Trend #5362 draining; LMS #212 draining with active Gate. High-priority #5344 was scoped this round because it explicitly depends on/cross-links the unresolved #5343 demo-mode guard branch. Older normal candidates were merged, linked, or scoped (#2159 merged #2161, #479 scoped, #5351 linked #5362, #2182 merged #2196, #182 linked #212). `trip-planner#1261` was the oldest unlinked eligible normal-priority implementation issue.
+- Implementation:
+  - Added an always-visible `Schematic preview — not a live map` badge in the `TripMap` map-provider toolbar, shared by the provider-backed and fallback rendering branches.
+  - Added styling for the preview badge without changing provider selection or route rendering behavior.
+  - Extended `TripMap.test.tsx` to assert the preview badge in normal rendering and when `VITE_GOOGLE_MAPS_BROWSER_API_KEY` selects the `google-maps-js` provider branch, while keeping provider diagnostics hidden.
+- Validation:
+  - `npm --prefix frontend test -- src/components/maps/TripMap.test.tsx src/routes/WorkspacePage.test.tsx` -> 53 passed.
+  - `npm --prefix frontend test` -> 103 passed.
+- Next action: open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; keepalive owns CI/review after PR creation.
+
 ## 2026-05-30T16:10Z - opener lane issue #1259 materializing
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
