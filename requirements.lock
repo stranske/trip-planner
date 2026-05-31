@@ -12,8 +12,6 @@ anyio==4.13.0
     #   httpx
     #   openai
     #   starlette
-app-baseline-kit @ git+https://github.com/stranske/Workflows.git@13f94883220bbfb0ca69a4666fb44a49e0ae8172#subdirectory=packages/app-baseline-kit
-    # via trip-planner (pyproject.toml)
 ast-serialize==0.3.0
     # via mypy
 black==26.3.1
@@ -225,3 +223,6 @@ xxhash==3.7.0
     # via langsmith
 zstandard==0.25.0
     # via langsmith
+
+# The following packages were excluded from the output:
+# app-baseline-kit
