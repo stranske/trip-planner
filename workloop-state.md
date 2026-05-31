@@ -1,3 +1,39 @@
+## 2026-05-31T09:25Z - closer fixed PR #1272 test-fixture env isolation
+
+- Automation: `imi-merge-verify-closer` (codex closer lane), neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1263`; PR `#1272`; branch `codex/issue-1263-data-zone-redaction`.
+- Batch context: closed Trend_Model_Project issue `#5351` after merged PR `#5362` received durable provider-comparison PASS/PASS. trip-planner `#1271` stayed async because Netlify header/redirect checks were still pending/unstable; `#1272` was selected as the complex lane because checks were green/clean but one Copilot review thread remained unresolved.
+- Review fix: the shared `tests/app/test_planner_routes.py` client fixture now clears both planner provider env names: `TRIP_PLANNER_PLANNER_MODEL_PROVIDER` and the alias `TRIP_PLANNER_PLANNER_PROVIDER`. This prevents ambient shell/CI state from making fallback-mode planner tests order-dependent.
+- Validation: `python -m pytest tests/app/test_planner_routes.py::test_planner_session_endpoint_bootstraps_trip_scoped_session tests/app/test_planner_routes.py::test_proprietary_zone_blocks_openai_without_authorized_endpoint tests/app/test_planner_routes.py::test_openai_planner_payload_uses_redaction_hook -q` -> 3 passed; `git diff --check` -> clean.
+- Next action after push: re-check PR #1272 review threads and checks. If the Copilot thread is resolved and checks remain green, merge #1272, apply `verify:compare`, then keep issue #1263 open until durable verifier PASS.
+
+## 2026-05-31T09:10Z - opener lane issue #1263 final scoped diff
+
+- Repo: `stranske/trip-planner`; issue `#1263`; PR `#1272`; branch `codex/issue-1263-data-zone-redaction`.
+- Final pushed head: `2470578ea`. Follow-up commit removed the unrelated frontend fetch/AbortSignal fallback from the net PR diff; the final PR changes are limited to planner runtime config, planner redaction hook, full-product readiness reporting, docs, tests, and this state file.
+- PR body updated to remove the stale frontend-runtime bullet and list the actual validation commands.
+- Post-open cap-health at 09:08Z: `total_opener_owned=4`, `raw_cap_reached=false`, #1272 classified `draining` with active Gate evidence. Existing non-drainables remain the known scoped PAEM #1847 routing/owner blocker and Trend #5353 product/CI blocker.
+- Next action: keepalive owns #1272 CI/review; closer can drain #1271 when ready.
+
+## 2026-05-31T09:06Z - opener lane issue #1263 PR opened
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace. Outcome: `new_issue`.
+- Source repo: `stranske/trip-planner`; source issue `#1263` (`Gate the live TPP and OpenAI-planner seams behind an explicit data-zone switch with redaction, defaulting to the deterministic perimeter`).
+- Branch: `codex/issue-1263-data-zone-redaction`; commit `0965cfcc7`; PR `#1272` (https://github.com/stranske/trip-planner/pull/1272), ready-for-review, non-draft.
+- Selection notes: raw opener cap was below limit (`total_opener_owned=3` before opening, `4` after). Existing opener-owned PRs were swept first: PAEM `#1847` remains scoped/non-registry routing/owner blocked; Trend `#5353` remains scoped product/CI blocked; trip-planner `#1271` was repaired this round and classified `draining` with fresh Gate evidence. Approved-queue high trip-planner items were stale/already closed (#1267/#1240, #1242/#1243, #1245, #1247/#1248). Remote high issues were scoped/linked/merged; #1263 was the oldest unlinked eligible normal-priority implementation issue.
+- Implementation:
+  - Added `TRIP_PLANNER_DATA_ZONE` and `TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT` handling to planner runtime config. In `proprietary`, OpenAI planner mode falls back with `proprietary_zone_llm_blocked` unless the authorized endpoint marker is set.
+  - Added an outbound planner prompt redaction seam before OpenAI model invocation and exposed data-zone/LLM status in planner runtime payloads.
+  - Added `planner-llm` readiness reporting in `scripts/check_full_product_verification.py`.
+  - Documented the proprietary-zone OpenAI and live TPP perimeter rules in `README.md` and `docs/live-tpp-execution-reoptimization-epic.md`.
+  - Fixed the frontend health retry timeout path to tolerate the local runtime-smoke fetch/AbortSignal environment.
+- Validation:
+  - `python -m pytest tests/app/test_planner_routes.py::test_proprietary_zone_blocks_openai_without_authorized_endpoint tests/app/test_planner_routes.py::test_openai_planner_payload_uses_redaction_hook tests/app/test_full_product_verification.py::test_planner_llm_check_blocks_openai_in_proprietary_zone_without_marker tests/app/test_full_product_verification.py::test_planner_llm_check_reports_authorized_openai_ready` -> 4 passed.
+  - `make runtime-check` -> passed after `npm --prefix frontend ci` installed missing frontend dependencies in this automation clone.
+  - `git diff --check` -> passed.
+- Post-open repair: initial #1272 Gate/Autofix runs were cancelled and cap-health classified `needs-dispatch-evidence`; `opener-repair-infra-stalls.py` added `agent:retry` and dispatched Gate Followups. Fresh cap-health at 09:06Z classifies #1272 as `draining` with active Gate evidence; raw cap remains below limit (`total_opener_owned=4`, `raw_cap_reached=false`).
+- Next action: keepalive owns #1272 CI/review; opener should move to the next eligible issue on a future round after cap/drain discovery.
+
 ## 2026-05-31T08:01Z - opener lane issue #1261 materializing
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.

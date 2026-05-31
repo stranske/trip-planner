@@ -29,6 +29,9 @@ if str(REPO_ROOT) not in sys.path:
 from fastapi.testclient import TestClient  # noqa: E402
 
 from trip_planner.app.main import create_app  # noqa: E402
+from trip_planner.app.services.planner_runtime_config import (  # noqa: E402
+    build_planner_runtime_config,
+)
 from trip_planner.persistence.db import ensure_database_ready, reset_database_state  # noqa: E402
 
 DEFAULT_TPP_REPO_PATH = REPO_ROOT.parent / "Travel-Plan-Permission"
@@ -347,6 +350,28 @@ def classify_map_prerequisite(env: Mapping[str, str] | None = None) -> CheckResu
         "FAIL",
         {"provider_state": provider_state, "message": "Configured map provider reported an error."},
     )
+
+
+def classify_planner_llm_prerequisite(env: Mapping[str, str] | None = None) -> CheckResult:
+    runtime = build_planner_runtime_config(os.environ if env is None else env)
+    details = {
+        "data_zone": runtime.data_zone,
+        "mode": runtime.mode,
+        "provider": runtime.provider,
+        "model": runtime.model,
+        "llm_status": runtime.llm_status,
+        "fallback_reason": runtime.fallback_reason,
+    }
+    if runtime.llm_status == "blocked":
+        details["remediation"] = (
+            "Set TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT only for an approved no-train "
+            "OpenAI endpoint with the outbound prompt redaction hook enabled, or leave the "
+            "planner in deterministic fallback mode."
+        )
+        return CheckResult("planner-llm", "BLOCKED", details)
+    if runtime.mode == "model":
+        return CheckResult("planner-llm", "READY", details)
+    return CheckResult("planner-llm", "SKIPPED", details)
 
 
 _REMEDIATION_OFF = (
@@ -734,6 +759,7 @@ def _force_planner_fallback_runtime() -> Iterator[None]:
 
 
 def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
+    planner_llm_env = dict(os.environ)
     with (
         tempfile.TemporaryDirectory(prefix="trip-planner-full-product.") as tmpdir,
         _temporary_database_url(f"sqlite:///{Path(tmpdir) / 'full_product.db'}"),
@@ -960,6 +986,8 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
             results.append(map_result)
             if map_result.status == "FAIL":
                 raise VerificationFailure(json.dumps(map_result.details, sort_keys=True))
+
+            results.append(classify_planner_llm_prerequisite(env=planner_llm_env))
 
             tpp_status = tpp_prerequisite_status(live_tpp=live_tpp)
             if tpp_status.status == "READY":
