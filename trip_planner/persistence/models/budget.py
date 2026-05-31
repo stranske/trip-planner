@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column

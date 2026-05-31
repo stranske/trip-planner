@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
+from tests.preferences.fixture_corpus import load_fixture_map
 from trip_planner.candidates import CandidateSeed, CandidateSet
 from trip_planner.contracts import (
     BudgetProtection,
@@ -35,7 +36,6 @@ from trip_planner.options import (
     TransportOption,
 )
 from trip_planner.ranking import LeisureRankingEngine
-from tests.preferences.fixture_corpus import load_fixture_map
 
 # ---------------------------------------------------------------------------
 # Shared fixture builders — mirrors the standard candidate set used in

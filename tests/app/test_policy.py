@@ -3,15 +3,16 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 from urllib import error as urllib_error
+
 import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.policy import _tpp_trip_plan_payload
+from trip_planner.integrations.tpp import client as tpp_client_module
 from trip_planner.persistence.db import reset_database_state
 from trip_planner.persistence.models.trip import PersistedTrip
-from trip_planner.integrations.tpp import client as tpp_client_module
 
 
 def _fixture_path(name: str) -> Path:

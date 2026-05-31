@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from trip_planner.integrations.tpp.services.tpp_result_service import TPPResultService
 from trip_planner.integrations.tpp.client import TPPContractError
+from trip_planner.integrations.tpp.services.tpp_result_service import TPPResultService
 
 
 def test_persist_result_stores_payload_with_exact_structure_preservation() -> None:

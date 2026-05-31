@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from trip_planner.itinerary import ScenarioSearchResult
-from trip_planner.state import PlanningSessionState, PersistedTripRecord
+from trip_planner.state import PersistedTripRecord, PlanningSessionState
 
 from .models import (
     DecisionOption,

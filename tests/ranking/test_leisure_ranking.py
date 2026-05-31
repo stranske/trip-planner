@@ -4,6 +4,7 @@ from typing import Any, cast
 
 import pytest
 
+from tests.preferences.fixture_corpus import build_profile_from_overrides
 from trip_planner.candidates import CandidateSeed, CandidateSet
 from trip_planner.contracts import (
     BudgetProtection,
@@ -31,7 +32,6 @@ from trip_planner.options import (
 )
 from trip_planner.preferences import LeisurePreferenceProfile
 from trip_planner.ranking import LeisureRankingEngine
-from tests.preferences.fixture_corpus import build_profile_from_overrides
 
 RANKING_FIXTURE_NAMES = (
     "depth_oriented_urban_trip.json",

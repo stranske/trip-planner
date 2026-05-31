@@ -1,0 +1,57 @@
+# Keeps docs/reports/baseline-coverage.md fresh for the weekly repo-review
+# evaluator (which reads committed reports under docs/reports/). Runs the
+# baseline suite (regenerating the report) and commits it if it changed.
+#
+# Scheduled weekly, ahead of the evaluator; also runnable on demand. Does NOT
+# gate PRs.
+#
+# baseline_kit lives in stranske/Workflows under packages/app-baseline-kit;
+# installing it pulls pytest-regressions transitively.
+name: baseline-report
+
+on:
+  schedule:
+    - cron: "10 6 * * 1" # Mondays 06:10 UTC, before the weekly review
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: baseline-report-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.ACTIONS_BOT_PAT || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install "app-baseline-kit @ git+https://github.com/stranske/Workflows.git#subdirectory=packages/app-baseline-kit"
+
+      - name: Run baseline suite (regenerates the coverage report)
+        env:
+          BASELINE_REFRESH_REPORT: "1"
+        run: pytest tests/baseline/ -q
+
+      - name: Commit refreshed report if changed
+        run: |
+          if ! git diff --quiet -- docs/reports/baseline-coverage.md; then
+            git config user.name "stranske-bot"
+            git config user.email "bot@stranskemo.com"
+            git add docs/reports/baseline-coverage.md
+            git commit -m "chore(baseline): refresh coverage report [skip ci]"
+            git push
+          else
+            echo "Coverage report already current."
+          fi

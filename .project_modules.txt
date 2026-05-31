@@ -1,0 +1,4 @@
+# app-baseline-kit ships the `baseline_kit` import (declared via app-baseline-kit pin)
+baseline_kit
+# local pytest fixtures imported relatively (from .conftest import ...)
+conftest

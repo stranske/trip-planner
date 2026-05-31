@@ -7,8 +7,8 @@ from typing import Any
 
 from . import schema
 from .evidence import (
-    ContradictionMarker,
     OPTION_KINDS,
+    ContradictionMarker,
     OptionEvidence,
     PreferenceEvidence,
 )

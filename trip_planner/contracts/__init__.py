@@ -5,9 +5,7 @@ from __future__ import annotations
 from .activities import (
     ACTIVITY_FORMATS,
     ACTIVITY_KINDS,
-    AVAILABILITY_STATUSES as ACTIVITY_AVAILABILITY_STATUSES,
     EFFORT_LEVELS,
-    SCHEMA_VERSION as ACTIVITY_SCHEMA_VERSION,
     ActivityBookingTerms,
     ActivityCategory,
     ActivityCostSummary,
@@ -20,9 +18,14 @@ from .activities import (
     ActivityTimingSummary,
     ActivityValueSummary,
 )
+from .activities import (
+    AVAILABILITY_STATUSES as ACTIVITY_AVAILABILITY_STATUSES,
+)
+from .activities import (
+    SCHEMA_VERSION as ACTIVITY_SCHEMA_VERSION,
+)
 from .bundles import (
     BUNDLE_CONTEXTS,
-    SCHEMA_VERSION as BUNDLE_SCHEMA_VERSION,
     BudgetPostureSummary,
     BundleCompositionSummary,
     BundleExplanation,
@@ -34,10 +37,13 @@ from .bundles import (
     RouteCoherenceSummary,
     ScheduleFitSummary,
 )
+from .bundles import (
+    SCHEMA_VERSION as BUNDLE_SCHEMA_VERSION,
+)
 from .destinations import (
     ADJACENCY_KINDS,
-    EXPERIENCE_SENTIMENTS,
     EXPANSION_MODES,
+    EXPERIENCE_SENTIMENTS,
     MOBILITY_MODES,
     OPERATIONAL_NOTE_IMPACTS,
     OPERATIONAL_NOTE_KINDS,
@@ -47,8 +53,8 @@ from .destinations import (
     PLACE_RELATIONSHIP_KINDS,
     PROVENANCE_ROLES,
     SCHEMA_VERSION,
-    SEASONS,
     SEASONAL_IMPACTS,
+    SEASONS,
     TAG_SCOPES,
     AdjacencyKind,
     Destination,

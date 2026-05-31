@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import re
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
-import re
-import subprocess
 
 import pytest
 

@@ -9,14 +9,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from trip_planner.app.main import create_app
-from trip_planner.persistence.db import (
-    ensure_database_ready,
-    get_session_factory,
-    reset_database_state,
-)
-from trip_planner.persistence.models.account import UserAccount
-
 from scripts.seed_demo_data import (
     DEMO_EMAIL,
     DEMO_PASSWORD,
@@ -25,6 +17,13 @@ from scripts.seed_demo_data import (
     main,
     seed_demo_data,
 )
+from trip_planner.app.main import create_app
+from trip_planner.persistence.db import (
+    ensure_database_ready,
+    get_session_factory,
+    reset_database_state,
+)
+from trip_planner.persistence.models.account import UserAccount
 
 
 @pytest.fixture

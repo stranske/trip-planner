@@ -2,19 +2,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from trip_planner.app.schemas.workspace import (
-    PlanningModeUpdateRequest,
+    PlannerDecisionAnswerRequest,
+    PlannerOptionFeedbackRequest,
     PlanningLedgerEntry,
     PlanningLedgerEntryCreateRequest,
     PlanningLedgerEntryUpdateRequest,
+    PlanningModeUpdateRequest,
     PlanningNotebookCreateRequest,
     PlanningNotebookFocus,
     PlanningNotebookFocusRequest,
     PlanningNotebookItem,
-    PlannerDecisionAnswerRequest,
-    PlannerOptionFeedbackRequest,
+    PlanningNotebookUpdateRequest,
     RouteOptionActionRequest,
     ScenarioComparisonSurfaceResponse,
-    PlanningNotebookUpdateRequest,
     WorkspaceResponse,
 )
 from trip_planner.app.services.auth import AuthenticatedUser, require_authenticated_user
@@ -24,11 +24,11 @@ from trip_planner.app.services.workspace import (
     create_planning_ledger_entry,
     create_planning_notebook_item,
     delete_planning_notebook_item,
-    get_workspace_scenario_comparison_payload,
     get_workspace_payload,
+    get_workspace_scenario_comparison_payload,
     set_planning_notebook_focus,
-    submit_workspace_route_option_action,
     submit_workspace_option_feedback,
+    submit_workspace_route_option_action,
     update_planning_ledger_entry,
     update_planning_notebook_item,
     update_workspace_planning_mode,

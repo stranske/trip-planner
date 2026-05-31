@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from trip_planner.app.schemas.proposal import (
-    WorkspaceProposalFollowUpRequest,
     WorkspaceProposalEvaluationRequest,
+    WorkspaceProposalFollowUpRequest,
     WorkspaceProposalResponse,
     WorkspaceProposalSubmissionRequest,
 )
@@ -12,8 +12,8 @@ from trip_planner.app.services.proposal import (
     WorkspaceProposalNotFoundError,
     get_workspace_proposal_payload,
     refresh_workspace_proposal_status,
-    save_workspace_proposal_follow_up,
     save_workspace_proposal_evaluation,
+    save_workspace_proposal_follow_up,
     save_workspace_proposal_submission,
 )
 from trip_planner.integrations.tpp import TPPTransportError

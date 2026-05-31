@@ -4,6 +4,7 @@ from typing import Any, cast
 
 import pytest
 
+from tests.preferences.fixture_corpus import build_profile_from_overrides
 from trip_planner.business import (
     BusinessPlanningObjectives,
     BusinessTravelProfile,
@@ -37,8 +38,11 @@ from trip_planner.options import (
     LodgingOption,
     TransportOption,
 )
-from trip_planner.ranking import BusinessRankingEngine, LeisureRankingEngine, RankedResultSet
-from tests.preferences.fixture_corpus import build_profile_from_overrides
+from trip_planner.ranking import (
+    BusinessRankingEngine,
+    LeisureRankingEngine,
+    RankedResultSet,
+)
 
 
 def _fixture_path(*parts: str) -> Path:

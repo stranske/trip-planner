@@ -8,18 +8,18 @@ from .client import (
     TPPIntegrationClient,
     TPPRuntimeSettings,
     TPPServiceUnavailableError,
-    TPPTransportPolicy,
     TPPTransportError,
+    TPPTransportPolicy,
     tpp_transport_error_from_exception,
 )
 from .contracts import (
+    TPPCorrelationId,
     TPPErrorRecord,
     TPPExecutionStatus,
     TPPOperationRequest,
     TPPRequestEnvelope,
     TPPResponseEnvelope,
     TPPRetryMetadata,
-    TPPCorrelationId,
 )
 from .policy_sync import (
     OrganizationContextSnapshot,
@@ -28,6 +28,12 @@ from .policy_sync import (
     PolicySyncError,
     TPPPolicySyncService,
     summarize_policy_import,
+)
+from .reoptimization import (
+    PolicyReoptimizationContext,
+    PolicyReoptimizationPlan,
+    ReoptimizationPlanningError,
+    TPPReoptimizationService,
 )
 from .results import (
     EvaluationResultIngestionError,
@@ -40,12 +46,6 @@ from .submission import (
     ProposalSubmissionLinkage,
     ProposalSubmissionRecord,
     TPPProposalSubmissionService,
-)
-from .reoptimization import (
-    PolicyReoptimizationContext,
-    PolicyReoptimizationPlan,
-    ReoptimizationPlanningError,
-    TPPReoptimizationService,
 )
 
 __all__ = [

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from math import ceil
 from dataclasses import asdict, dataclass, field, replace
+from math import ceil
 from typing import Any
 
 from . import schema

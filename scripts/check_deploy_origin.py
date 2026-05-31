@@ -7,9 +7,10 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 
-
 README_ORIGIN_PATTERN = re.compile(r"Public synthetic API origin:\s*`(?P<origin>https?://[^`]+)`")
-REDIRECT_PATTERN = re.compile(r"^/api/\*\s+(?P<origin>https?://\S+)/api/:splat\s+200$", re.MULTILINE)
+REDIRECT_PATTERN = re.compile(
+    r"^/api/\*\s+(?P<origin>https?://\S+)/api/:splat\s+200$", re.MULTILINE
+)
 
 
 def _host(origin: str) -> str:
@@ -35,7 +36,9 @@ def main() -> int:
     readme_path = repo_root / "README.md"
     redirects_path = repo_root / "frontend" / "public" / "_redirects"
 
-    readme_origin = _match(README_ORIGIN_PATTERN, readme_path.read_text(encoding="utf-8"), readme_path)
+    readme_origin = _match(
+        README_ORIGIN_PATTERN, readme_path.read_text(encoding="utf-8"), readme_path
+    )
     redirect_origin = _match(
         REDIRECT_PATTERN,
         redirects_path.read_text(encoding="utf-8"),

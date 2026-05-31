@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 from typing import Dict
-
-import tomllib
 
 _OPERATORS = ("==", ">=", "<=", "~=", "!=", ">", "<", "===")
 
 
 def _split_spec(raw: str) -> str:
     entry = raw.strip().strip(",").strip('"')
+    if " @ " in entry:
+        name, _ = entry.split(" @ ", 1)
+        return name.strip().split("[")[0]
     for operator in _OPERATORS:
         if operator in entry:
             name, _ = entry.split(operator, 1)
@@ -26,6 +28,10 @@ def _load_lock_versions(path: Path) -> Dict[str, str]:
         if not stripped or stripped.startswith("#"):
             continue
         if stripped.startswith("--"):
+            continue
+        if " @ " in stripped:
+            name, _ = stripped.split(" @ ", 1)
+            versions[name.strip().lower()] = "<direct-reference>"
             continue
         if "==" not in stripped:
             continue

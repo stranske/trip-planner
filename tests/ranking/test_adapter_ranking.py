@@ -8,14 +8,13 @@ same production path used by the planner service entrypoint.
 
 from __future__ import annotations
 
+from tests.preferences.fixture_corpus import build_profile_from_overrides
 from trip_planner.app.services.inventory import assemble_inventory_bundles_for_trip
 from trip_planner.candidates import CandidateSeed, CandidateSet
 from trip_planner.contracts import ItineraryObjectives
 from trip_planner.itinerary import assemble_itinerary_scenarios
 from trip_planner.options import InventoryBundle
 from trip_planner.ranking import LeisureRankingEngine, RankedResultSet
-
-from tests.preferences.fixture_corpus import build_profile_from_overrides
 
 _TRIP_ID = "trip-test-adapter-ranking"
 _TRIP_MODE = "leisure"

@@ -8,7 +8,12 @@ from trip_planner.app.schemas.trips import (
     TripResponse,
 )
 from trip_planner.app.services.auth import AuthenticatedUser, require_authenticated_user
-from trip_planner.app.services.trips import create_trip, delete_trip, get_trip, list_trips
+from trip_planner.app.services.trips import (
+    create_trip,
+    delete_trip,
+    get_trip,
+    list_trips,
+)
 from trip_planner.persistence.db import get_db_session
 
 router = APIRouter(tags=["trips"])
