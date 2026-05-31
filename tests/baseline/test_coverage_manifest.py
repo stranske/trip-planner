@@ -7,6 +7,8 @@ by an ordering).
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 
 from baseline_kit import CoverageManifest, load_catalog
 
@@ -40,8 +42,9 @@ def test_priority_metrics_covered():
     assert not m.priority_gaps, "Priority metrics with no ordering: " + ", ".join(m.priority_gaps)
 
 
-def test_emit_coverage_report():
+def test_emit_coverage_report(tmp_path: Path):
     m = _build_manifest()
-    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_PATH.write_text(m.to_markdown())
-    assert REPORT_PATH.exists()
+    report_path = REPORT_PATH if os.environ.get("BASELINE_REFRESH_REPORT") == "1" else tmp_path / "baseline-coverage.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(m.to_markdown())
+    assert report_path.exists()

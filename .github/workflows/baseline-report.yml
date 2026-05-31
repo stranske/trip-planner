@@ -5,9 +5,8 @@
 # Scheduled weekly, ahead of the evaluator; also runnable on demand. Does NOT
 # gate PRs.
 #
-# baseline_kit lives in the (private) stranske/Workflows repo under
-# packages/app-baseline-kit; installing it pulls pytest-regressions transitively.
-# Uses AGENTS_AUTOMATION_PAT for the install and a bot PAT to push the report.
+# baseline_kit lives in stranske/Workflows under packages/app-baseline-kit;
+# installing it pulls pytest-regressions transitively.
 name: baseline-report
 
 on:
@@ -38,9 +37,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-          pip install "app-baseline-kit @ git+https://x-access-token:${{ secrets.AGENTS_AUTOMATION_PAT }}@github.com/stranske/Workflows.git#subdirectory=packages/app-baseline-kit"
+          pip install "app-baseline-kit @ git+https://github.com/stranske/Workflows.git#subdirectory=packages/app-baseline-kit"
 
       - name: Run baseline suite (regenerates the coverage report)
+        env:
+          BASELINE_REFRESH_REPORT: "1"
         run: pytest tests/baseline/ -q
 
       - name: Commit refreshed report if changed
