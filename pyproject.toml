@@ -26,6 +26,9 @@ dev = [
     "PyYAML==6.0.3",
     "types-PyYAML==6.0.12.20260510",
     "pytest-httpserver==1.1.5",
+    # Shared app behavior baseline harness (pulls pytest-regressions). Pinned to
+    # the Workflows default branch; move to a tagged ref once the package is versioned.
+    "app-baseline-kit @ git+https://github.com/stranske/Workflows.git#subdirectory=packages/app-baseline-kit",
 ]
 [build-system]
 requires = ["setuptools>=82.0.1"]
