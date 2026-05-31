@@ -84,8 +84,6 @@ extend-exclude = '''
 
 [[tool.mypy.overrides]]
 module = [
-    "baseline_kit",
-    "baseline_kit.*",
     "jsonschema",
     "jinja2",
     "langchain_anthropic",
