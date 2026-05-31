@@ -26,6 +26,11 @@ dev = [
     "PyYAML==6.0.3",
     "types-PyYAML==6.0.12.20260510",
     "pytest-httpserver==1.1.5",
+    # Required by pytest-regressions' num_regression fixture (used by the baseline
+    # golden tests). It is an *optional* dep of pytest-regressions, so a non-numeric
+    # app like trip-planner must declare it explicitly or the fixture errors with
+    # "Numpy library is an optional dependency and must be installed explicitly".
+    "numpy==2.4.6",
     # Shared app behavior baseline harness (pulls pytest-regressions). Pinned to
     # the Workflows default branch; move to a tagged ref once the package is versioned.
     "app-baseline-kit @ git+https://github.com/stranske/Workflows.git#subdirectory=packages/app-baseline-kit",
@@ -88,5 +93,9 @@ module = [
     "langchain_openai",
     "langchain_core.*",
     "tomlkit",
+    # Shared baseline kit ships without a py.typed marker yet; ignore until the
+    # package is published with type information.
+    "baseline_kit",
+    "baseline_kit.*",
 ]
 ignore_missing_imports = true

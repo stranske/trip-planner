@@ -88,6 +88,10 @@ mypy-extensions==1.1.0
     # via
     #   black
     #   mypy
+numpy==2.4.6
+    # via
+    #   trip-planner (pyproject.toml)
+    #   pytest-regressions
 openai==2.33.0
     # via langchain-openai
 orjson==3.11.8 ; platform_python_implementation != 'PyPy'

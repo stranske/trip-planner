@@ -19,6 +19,16 @@ def _split_spec(raw: str) -> str:
     return entry.strip().split("[")[0]
 
 
+def _is_direct_reference(entry: str) -> bool:
+    """True for PEP 508 direct references (e.g. ``pkg @ git+https://...``).
+
+    Such dependencies are pinned by URL (and optionally a commit), not by a
+    ``==`` version in requirements.lock, so they are exempt from the lock
+    version-presence check below.
+    """
+    return " @ " in entry
+
+
 def _load_lock_versions(path: Path) -> Dict[str, str]:
     versions: Dict[str, str] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -40,10 +50,14 @@ def test_all_pyproject_dependencies_are_in_lock() -> None:
 
     declared = set()
     for entry in project.get("dependencies", []):
+        if _is_direct_reference(entry):
+            continue
         declared.add(_split_spec(entry).lower())
 
     for group in project.get("optional-dependencies", {}).values():
         for entry in group:
+            if _is_direct_reference(entry):
+                continue
             declared.add(_split_spec(entry).lower())
 
     lock_versions = _load_lock_versions(Path("requirements.lock"))
