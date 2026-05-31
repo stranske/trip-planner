@@ -1,0 +1,5 @@
+# Modules imported by tests that the dep-sync check should treat as known.
+# baseline_kit is provided by the declared `app-baseline-kit` dependency;
+# conftest is the local test-fixtures module imported via `from .conftest import`.
+baseline_kit
+conftest
