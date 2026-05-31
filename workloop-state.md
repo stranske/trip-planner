@@ -1,3 +1,11 @@
+## 2026-05-31T09:10Z - opener lane issue #1263 final scoped diff
+
+- Repo: `stranske/trip-planner`; issue `#1263`; PR `#1272`; branch `codex/issue-1263-data-zone-redaction`.
+- Final pushed head: `2470578ea`. Follow-up commit removed the unrelated frontend fetch/AbortSignal fallback from the net PR diff; the final PR changes are limited to planner runtime config, planner redaction hook, full-product readiness reporting, docs, tests, and this state file.
+- PR body updated to remove the stale frontend-runtime bullet and list the actual validation commands.
+- Post-open cap-health at 09:08Z: `total_opener_owned=4`, `raw_cap_reached=false`, #1272 classified `draining` with active Gate evidence. Existing non-drainables remain the known scoped PAEM #1847 routing/owner blocker and Trend #5353 product/CI blocker.
+- Next action: keepalive owns #1272 CI/review; closer can drain #1271 when ready.
+
 ## 2026-05-31T09:06Z - opener lane issue #1263 PR opened
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace. Outcome: `new_issue`.
