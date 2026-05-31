@@ -1,3 +1,13 @@
+## 2026-05-31T10:08Z - closer rebased PR #1271 after #1272 main merge
+
+- Automation: `imi-merge-verify-closer` (codex closer lane), neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1262`; PR `#1271`; branch `claude/issue-1262-coverage-floor`.
+- Batch context: closed issue `#1263` after merged PR `#1272` received durable provider-comparison PASS/PASS; emitted `issue_closed` and reset the closer chain once after the sweep.
+- Blocker: PR `#1271` was `DIRTY`/`CONFLICTING` after `#1272` merged to `main`. The only rebase conflict was concurrent prepend history in `workloop-state.md`; the coverage-floor workflow/doc changes themselves applied cleanly.
+- Action: rebased detached automation worktree `~/.codex/automations/imi-merge-verify-closer/worktrees/tp-1271-gatefloor` onto `origin/main` `64de0e715` and kept both workloop entries. The rebased head preserves `.github/workflows/ci.yml` coverage-min `83`, `.github/workflows/pr-00-gate.yml` coverage-min `"83"`, and the CI guide update.
+- Validation: `python` YAML parse for `.github/workflows/ci.yml` and `.github/workflows/pr-00-gate.yml` -> ok; `git diff --check` -> clean.
+- Next action: after push, re-check PR #1271 checks and review threads. If fresh checks are green and threads remain resolved, merge #1271, apply `verify:compare`, and keep issue #1262 open until durable verifier PASS.
+
 ## 2026-05-31T09:25Z - closer fixed PR #1272 test-fixture env isolation
 
 - Automation: `imi-merge-verify-closer` (codex closer lane), neutral Code workspace.
