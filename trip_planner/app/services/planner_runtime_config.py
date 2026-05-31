@@ -9,6 +9,7 @@ from dataclasses import dataclass
 PROPRIETARY_DATA_ZONE = "proprietary"
 SYNTHETIC_DATA_ZONE = "synthetic"
 AUTHORIZED_OPENAI_ENDPOINT_ENV = "TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT"
+AUTHORIZED_MARKERS = frozenset({"1", "true", "yes", "authorized"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +61,7 @@ def build_planner_runtime_config(env: Mapping[str, str]) -> PlannerRuntimeConfig
     data_zone = (env.get("TRIP_PLANNER_DATA_ZONE") or SYNTHETIC_DATA_ZONE).strip().lower()
     if data_zone not in {PROPRIETARY_DATA_ZONE, SYNTHETIC_DATA_ZONE}:
         data_zone = SYNTHETIC_DATA_ZONE
-    authorized_openai_endpoint = env.get(AUTHORIZED_OPENAI_ENDPOINT_ENV, "").strip()
+    authorized_openai_endpoint = _has_explicit_openai_authorization(env)
     fake_enabled = provider == "fake"
     openai_requested = provider == "openai" and bool(model) and bool(openai_api_key)
     openai_blocked_by_zone = (
@@ -104,3 +105,8 @@ def build_planner_runtime_config(env: Mapping[str, str]) -> PlannerRuntimeConfig
         data_zone=data_zone,
         llm_status="blocked" if openai_blocked_by_zone else "deterministic",
     )
+
+
+def _has_explicit_openai_authorization(env: Mapping[str, str]) -> bool:
+    marker = env.get(AUTHORIZED_OPENAI_ENDPOINT_ENV, "").strip().lower()
+    return marker in AUTHORIZED_MARKERS

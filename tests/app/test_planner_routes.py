@@ -214,6 +214,13 @@ def test_proprietary_zone_blocks_openai_without_authorized_endpoint(
     assert runtime["llm_status"] == "blocked"
     assert runtime["fallback_reason"] == "proprietary_zone_llm_blocked"
 
+    monkeypatch.setenv("TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT", "0")
+    still_blocked_response = client.get(f"/api/planner/{trip_id}/session")
+    assert still_blocked_response.status_code == 200
+    still_blocked_runtime = still_blocked_response.json()["runtime"]
+    assert still_blocked_runtime["mode"] == "fallback"
+    assert still_blocked_runtime["llm_status"] == "blocked"
+
     monkeypatch.setenv("TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT", "1")
     authorized_response = client.get(f"/api/planner/{trip_id}/session")
 
