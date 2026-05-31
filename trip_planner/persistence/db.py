@@ -100,12 +100,12 @@ def ensure_database_ready(url: str | None = None) -> None:
     if resolved_url in _MIGRATED_URLS:
         return
 
-    from trip_planner.persistence.models import budget  # noqa: F401
-    from trip_planner.persistence.models import planner_memory  # noqa: F401
-    from trip_planner.persistence.models import planning_ledger  # noqa: F401
     from trip_planner.persistence.models import (  # noqa: F401
-        activity,
         account,
+        activity,
+        budget,  # noqa: F401
+        planner_memory,  # noqa: F401
+        planning_ledger,  # noqa: F401
         policy,
         proposal,
         scenario,

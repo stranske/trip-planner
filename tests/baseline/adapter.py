@@ -47,7 +47,9 @@ def load_option(fixture_name: str):
 
 
 def _amount(money) -> float:
-    return float(getattr(money, "typical_amount", float("nan"))) if money is not None else float("nan")
+    return (
+        float(getattr(money, "typical_amount", float("nan"))) if money is not None else float("nan")
+    )
 
 
 def metrics_for(fixture_name: str) -> dict[str, float]:

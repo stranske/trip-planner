@@ -9,12 +9,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from trip_planner.persistence.models.activity import PersistedPlannerAction
 from trip_planner.persistence.models.planner_memory import (
     PersistedPlannerCheckpoint,
     PersistedPlannerMemoryArtifact,
 )
 from trip_planner.persistence.models.session import PersistedPlanningSessionState
-from trip_planner.persistence.models.activity import PersistedPlannerAction
 
 
 def _truncate(value: str, limit: int) -> str:

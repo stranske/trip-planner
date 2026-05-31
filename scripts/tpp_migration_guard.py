@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
+from pathlib import Path
 from typing import Iterable
 
 _DECISION_RE = re.compile(r"\b(B-[123])\b")

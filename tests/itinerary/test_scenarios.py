@@ -181,9 +181,7 @@ def test_summary_rejects_invalid_scenario_kind() -> None:
 
 
 def test_itinerary_scenario_requires_explanation_records() -> None:
-    with pytest.raises(
-        ValueError, match="explanation_records must contain at least one"
-    ):
+    with pytest.raises(ValueError, match="explanation_records must contain at least one"):
         ItineraryScenario(
             scenario_id="scenario:no-explanation",
             title="Missing explanation route",

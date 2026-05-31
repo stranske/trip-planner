@@ -5,12 +5,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from trip_planner._option_contracts import OPTION_SET_PURPOSES
 from trip_planner._validators import (
     require_non_empty,
     require_non_negative,
     require_strings,
 )
-from trip_planner._option_contracts import OPTION_SET_PURPOSES
 from trip_planner.contracts import MoneyRange
 from trip_planner.ranking import ExplanationRecord
 

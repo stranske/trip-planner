@@ -1,5 +1,5 @@
-import json
 import io
+import json
 import socket
 import threading
 import time
@@ -13,7 +13,6 @@ from urllib import error as urllib_error
 import pytest
 from pytest_httpserver import HTTPServer
 
-from trip_planner.integrations.tpp import client as tpp_client_module
 from trip_planner.integrations.tpp import (
     BaseTPPIntegrationClient,
     HTTPTPPIntegrationClient,
@@ -25,6 +24,7 @@ from trip_planner.integrations.tpp import (
     TPPTransportError,
     TPPTransportPolicy,
 )
+from trip_planner.integrations.tpp import client as tpp_client_module
 
 
 def _local_socket_supported() -> bool:

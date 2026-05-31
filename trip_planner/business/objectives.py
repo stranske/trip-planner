@@ -5,12 +5,13 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from . import schema
 from trip_planner._validators import (
     require_non_empty,
     require_probability,
     require_strings,
 )
+
+from . import schema
 
 CHANNEL_MODES: tuple[str, ...] = ("approved_only", "approved_first", "flexible")
 PLANNING_PATH_MODES: tuple[str, ...] = ("compliant_first", "policy_nearest")

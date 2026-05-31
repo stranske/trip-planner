@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import pytest
 
-from trip_planner.integrations.tpp.services.tpp_proposal_submission_service import (
-    ProposalSubmissionResult,
-    TPPWorkspaceProposalSubmissionService,
+from trip_planner.integrations.tpp.client import (
+    BaseTPPIntegrationClient,
+    TPPContractError,
 )
-from trip_planner.integrations.tpp.client import BaseTPPIntegrationClient
-from trip_planner.integrations.tpp.client import TPPContractError
 from trip_planner.integrations.tpp.contracts import (
     TPPCorrelationId,
     TPPExecutionStatus,
     TPPRequestEnvelope,
     TPPResponseEnvelope,
+)
+from trip_planner.integrations.tpp.services.tpp_proposal_submission_service import (
+    ProposalSubmissionResult,
+    TPPWorkspaceProposalSubmissionService,
 )
 
 

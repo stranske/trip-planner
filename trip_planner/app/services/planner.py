@@ -28,7 +28,6 @@ from trip_planner.app.services.planner_tools import (
     get_cached_workspace_payload,
     list_planner_tools,
 )
-from trip_planner.preferences.autonomy import AutonomyGuardrails
 from trip_planner.app.services.workspace import (
     WORKSPACE_ACTIVITY_LOG_LIMIT,
     _add_planning_ledger_entry,
@@ -51,6 +50,7 @@ from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
     PersistedPlannerAction,
 )
+from trip_planner.preferences.autonomy import AutonomyGuardrails
 from trip_planner.state.sessions import PlanningSessionState
 
 
@@ -338,11 +338,7 @@ def _looks_like_destination_token(token: str, index: int) -> bool:
 
 
 def _dedupe_preserve_order(items: list[str]) -> list[str]:
-    return [
-        item
-        for item in dict.fromkeys(item.strip() for item in items if item.strip())
-        if item
-    ]
+    return [item for item in dict.fromkeys(item.strip() for item in items if item.strip()) if item]
 
 
 def _split_user_clauses(message: str) -> list[str]:
@@ -362,10 +358,7 @@ def _extract_destination_mentions(message: str) -> list[str]:
             continue
         if any(
             word.lower()
-            in _CONSTRAINT_MARKERS
-            + _PREFERENCE_MARKERS
-            + _UNCERTAINTY_MARKERS
-            + _NOTE_MARKERS
+            in _CONSTRAINT_MARKERS + _PREFERENCE_MARKERS + _UNCERTAINTY_MARKERS + _NOTE_MARKERS
             for word in words
         ):
             continue
@@ -395,16 +388,9 @@ def _matching_clauses(message: str, markers: tuple[str, ...]) -> list[str]:
     return _dedupe_preserve_order(matches)
 
 
-def _should_summarize_traveler_message(
-    message: str, summary: dict[str, list[str]]
-) -> bool:
+def _should_summarize_traveler_message(message: str, summary: dict[str, list[str]]) -> bool:
     signal_count = sum(len(items) for items in summary.values())
-    return (
-        len(message.split()) >= 28
-        or "\n" in message
-        or ";" in message
-        or signal_count >= 4
-    )
+    return len(message.split()) >= 28 or "\n" in message or ";" in message or signal_count >= 4
 
 
 def _traveler_input_summary_blocks(message: str) -> list[dict[str, Any]]:
@@ -456,8 +442,7 @@ def _record_traveler_message_ledger_entries(
     lowered = message.lower()
     metadata = (
         structured_blocks[0].get("metadata", {})
-        if structured_blocks
-        and structured_blocks[0].get("kind") == "traveler_input_summary"
+        if structured_blocks and structured_blocks[0].get("kind") == "traveler_input_summary"
         else {}
     )
     for constraint in list(metadata.get("constraints") or [])[:3]:
@@ -523,9 +508,7 @@ def _planner_turn_metadata(
     raw_tokens = [token.strip(".,!?;:()[]{}\"'") for token in message.split()]
     tokens = [token.lower() for token in raw_tokens]
     destination_hits = sum(
-        1
-        for index, token in enumerate(raw_tokens)
-        if _looks_like_destination_token(token, index)
+        1 for index, token in enumerate(raw_tokens) if _looks_like_destination_token(token, index)
     )
     date_hits = sum(1 for marker in _DATE_MARKERS if marker in tokens)
     constraint_hits = sum(1 for marker in _CONSTRAINT_MARKERS if marker in lowered)
@@ -696,9 +679,7 @@ def _notebook_focus_clarification(message: str) -> str | None:
         )
     ):
         return None
-    has_focus_intent = any(
-        marker in lowered for marker in _NOTEBOOK_FOCUS_INTENT_MARKERS
-    )
+    has_focus_intent = any(marker in lowered for marker in _NOTEBOOK_FOCUS_INTENT_MARKERS)
     category, is_ambiguous = _match_notebook_category(lowered)
     if category or not is_ambiguous:
         return None
@@ -749,9 +730,7 @@ def _implicit_notebook_tool_calls(message: str) -> list[dict[str, Any]]:
                 },
             }
         )
-    has_focus_intent = any(
-        marker in lowered for marker in _NOTEBOOK_FOCUS_INTENT_MARKERS
-    )
+    has_focus_intent = any(marker in lowered for marker in _NOTEBOOK_FOCUS_INTENT_MARKERS)
     category, is_ambiguous = _match_notebook_category(lowered)
     if has_focus_intent and category and not is_ambiguous:
         calls.append(
@@ -760,9 +739,7 @@ def _implicit_notebook_tool_calls(message: str) -> list[dict[str, Any]]:
                 "arguments": {"category": category},
             }
         )
-    if "completed" in lowered and any(
-        marker in lowered for marker in ("tasks", "items", "notes")
-    ):
+    if "completed" in lowered and any(marker in lowered for marker in ("tasks", "items", "notes")):
         arguments: dict[str, Any] = {"status": "completed"}
         for category in _NOTEBOOK_COMMAND_CATEGORIES:
             if category in lowered:
@@ -891,9 +868,7 @@ def _planner_response_structured_blocks(
                 items=_dedupe_preserve_order(ledger_items)[:6],
                 metadata={
                     "ledger_entry_ids": [
-                        item
-                        for item in _dedupe_preserve_order(ledger_entry_ids)
-                        if item
+                        item for item in _dedupe_preserve_order(ledger_entry_ids) if item
                     ][:6]
                 },
             )
@@ -903,18 +878,14 @@ def _planner_response_structured_blocks(
         decision_items: list[str] = []
         for decision in decisions[:3]:
             prompt = str(decision.get("prompt") or decision.get("title") or "")
-            choices = ", ".join(
-                str(choice) for choice in list(decision.get("choices") or [])
-            )
+            choices = ", ".join(str(choice) for choice in list(decision.get("choices") or []))
             decision_items.append(f"{prompt} Choices: {choices}" if choices else prompt)
         blocks.append(
             _structured_block(
                 kind="decision",
                 title="Open decisions",
                 items=_dedupe_preserve_order(decision_items),
-                metadata={
-                    "decision_ids": [item.get("decision_id") for item in decisions[:3]]
-                },
+                metadata={"decision_ids": [item.get("decision_id") for item in decisions[:3]]},
             )
         )
 
@@ -929,9 +900,7 @@ def _planner_response_structured_blocks(
                 kind="route_option",
                 title="Route options in view",
                 items=_dedupe_preserve_order(option_items),
-                metadata={
-                    "option_ids": [item.get("option_id") for item in options[:4]]
-                },
+                metadata={"option_ids": [item.get("option_id") for item in options[:4]]},
             )
         )
 
@@ -969,22 +938,16 @@ def _planner_response_structured_blocks(
     context_readiness = runtime_context.get("context_readiness") or {}
     missing_sections = list(context_readiness.get("missing_sections") or [])
     if missing_sections:
-        assumption_items.append(
-            f"Missing workspace context: {', '.join(missing_sections)}"
-        )
+        assumption_items.append(f"Missing workspace context: {', '.join(missing_sections)}")
     blocks.append(
         _structured_block(
             kind="assumption",
             title="Working assumptions",
-            items=_dedupe_preserve_order(
-                [item for item in assumption_items if item.strip(": ")]
-            ),
+            items=_dedupe_preserve_order([item for item in assumption_items if item.strip(": ")]),
         )
     )
 
-    next_action_items = _visible_block_items(
-        metadata, kinds={"next_steps", "next_action"}
-    )
+    next_action_items = _visible_block_items(metadata, kinds={"next_steps", "next_action"})
     next_action_items.extend(
         str(action.get("description") or action.get("label") or "")
         for action in next_step_actions[:3]
@@ -1010,12 +973,9 @@ def _ensure_top_level_planner_blocks(
     normalized_blocks = [
         block
         for block in blocks
-        if str(block.get("kind") or "")
-        not in {"visible_sections", "diagnostic", "debug"}
+        if str(block.get("kind") or "") not in {"visible_sections", "diagnostic", "debug"}
     ]
-    visible_blocks = [
-        block for block in normalized_blocks if not bool(block.get("hidden"))
-    ]
+    visible_blocks = [block for block in normalized_blocks if not bool(block.get("hidden"))]
     hidden_blocks = [block for block in normalized_blocks if bool(block.get("hidden"))]
 
     section_items: list[str] = []
@@ -1045,9 +1005,7 @@ def _ensure_top_level_planner_blocks(
             "routing": metadata.get("debug_routing_details") or {},
             "tool_call_count": len(tool_calls),
             "tool_names": [item.get("tool_name") for item in tool_calls],
-            "hidden_block_kinds": [
-                str(block.get("kind") or "") for block in hidden_blocks
-            ],
+            "hidden_block_kinds": [str(block.get("kind") or "") for block in hidden_blocks],
         },
         hidden=True,
     )
@@ -1095,9 +1053,7 @@ class DeterministicPlannerConversationRunnable:
         outputs = list(panel.get("outputs") or [])
         decisions = list(panel.get("pending_decisions") or [])
         options = list((panel.get("option_set") or {}).get("options") or [])
-        ledger_summary = (request.runtime_context.get("planning_ledger") or {}).get(
-            "summary"
-        ) or {}
+        ledger_summary = (request.runtime_context.get("planning_ledger") or {}).get("summary") or {}
 
         lines = [
             _fallback_content_from_metadata(
@@ -1111,9 +1067,7 @@ class DeterministicPlannerConversationRunnable:
         if decisions:
             active = decisions[0]
             choice_labels = ", ".join(active.get("choices") or [])
-            lines.append(
-                f"Current blocking decision: {active['prompt']} Choices: {choice_labels}."
-            )
+            lines.append(f"Current blocking decision: {active['prompt']} Choices: {choice_labels}.")
             refs.append(active["decision_id"])
         elif options:
             lead = options[0]
@@ -1227,9 +1181,7 @@ class _OpenAIPlannerChatModel:
 
 
 class ModelBackedPlannerConversationRunnable:
-    def __init__(
-        self, config: PlannerRuntimeConfig, chat_model: PlannerChatModel
-    ) -> None:
+    def __init__(self, config: PlannerRuntimeConfig, chat_model: PlannerChatModel) -> None:
         self._config = config
         self._chat_model = chat_model
 
@@ -1249,7 +1201,9 @@ class ModelBackedPlannerConversationRunnable:
         raw = self._chat_model.invoke(model_payload)
         content = str(raw.get("content") or "").strip()
         if not content:
-            content = "Planner model returned an empty response after reading the current trip context."
+            content = (
+                "Planner model returned an empty response after reading the current trip context."
+            )
         requested_tool_calls = [
             {
                 "tool_name": str(item.get("tool_name") or item.get("name") or ""),
@@ -1315,11 +1269,7 @@ def _conversation_messages(
     records = db_session.scalars(
         select(PersistedPlannerAction)
         .where(PersistedPlannerAction.session_state_id == session_state_id)
-        .where(
-            PersistedPlannerAction.action_type.in_(
-                ["planner_user_turn", "planner_response"]
-            )
-        )
+        .where(PersistedPlannerAction.action_type.in_(["planner_user_turn", "planner_response"]))
         .order_by(
             PersistedPlannerAction.created_at.asc(),
             PersistedPlannerAction.planner_action_id.asc(),
@@ -1377,10 +1327,7 @@ def _planner_runtime_context(
     required_sections = {
         "inventory_summary": workspace_payload.get("inventory_summary") or {},
         "scenario_search": workspace_payload.get("scenario_search") or {},
-        "runtime_scenario_comparison": workspace_payload.get(
-            "runtime_scenario_comparison"
-        )
-        or {},
+        "runtime_scenario_comparison": workspace_payload.get("runtime_scenario_comparison") or {},
         "budget_state": workspace_payload.get("budget_state") or {},
         "planner_memory": planner_memory,
     }
@@ -1416,9 +1363,7 @@ def _planner_session_payload(
     resumed_at: str | None = None,
 ) -> dict[str, Any]:
     try:
-        workspace_payload = get_cached_workspace_payload(
-            db_session, user=user, trip_id=trip_id
-        )
+        workspace_payload = get_cached_workspace_payload(db_session, user=user, trip_id=trip_id)
     except ValueError as error:
         raise WorkspacePlannerTripNotFoundError(str(error)) from error
 
@@ -1442,9 +1387,7 @@ def _planner_session_payload(
         "planner_memory": planner_memory,
         "available_tools": list_planner_tools(),
         "activity_log": activity_log,
-        "messages": _conversation_messages(
-            db_session, session_state_id=session_state_id
-        ),
+        "messages": _conversation_messages(db_session, session_state_id=session_state_id),
     }
 
 
@@ -1641,9 +1584,7 @@ def submit_planner_turn(
         executed_tool_calls.append(result.to_dict())
 
     try:
-        workspace_payload = get_cached_workspace_payload(
-            db_session, user=user, trip_id=trip_id
-        )
+        workspace_payload = get_cached_workspace_payload(db_session, user=user, trip_id=trip_id)
     except ValueError as error:
         raise WorkspacePlannerTripNotFoundError(str(error)) from error
     session = PlanningSessionState.from_dict(_serialize_session_record(session_record))
@@ -1757,8 +1698,7 @@ def submit_planner_turn(
             content=reply.content,
             refs=list(
                 dict.fromkeys(
-                    reply.refs
-                    + [ref for item in executed_tool_calls for ref in item["refs"]]
+                    reply.refs + [ref for item in executed_tool_calls for ref in item["refs"]]
                 )
             ),
             tool_calls=executed_tool_calls,

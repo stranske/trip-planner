@@ -4,8 +4,8 @@ from pathlib import Path
 from trip_planner.contracts import (
     ComparisonAxis,
     InventoryBundle,
-    MoneyRange,
     MixedOption,
+    MoneyRange,
     Option,
     OptionCostSummary,
     OptionQualitySummary,

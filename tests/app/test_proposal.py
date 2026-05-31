@@ -3,6 +3,7 @@ import socket
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Literal, cast
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -2113,9 +2114,9 @@ def test_proposal_state_persists_across_create_app_restart(
         assert evaluated.status_code == 200
 
         first_app_view = client_first.get(f"/api/workspace/{trip_id}/proposal").json()
-        first_evaluation_id = first_app_view["proposal_state"]["evaluation"][
-            "evaluation_result"
-        ]["evaluation_id"]
+        first_evaluation_id = first_app_view["proposal_state"]["evaluation"]["evaluation_result"][
+            "evaluation_id"
+        ]
         first_evaluation_status = first_app_view["proposal_state"]["evaluation"][
             "evaluation_result"
         ]["status"]
@@ -2145,21 +2146,16 @@ def test_proposal_state_persists_across_create_app_restart(
         # status, evaluation_id, and the persisted summary must all be
         # identical between the two app instances.
         assert (
-            reloaded_payload["proposal_state"]["proposal"]["proposal_id"]
-            == f"proposal:{trip_id}"
+            reloaded_payload["proposal_state"]["proposal"]["proposal_id"] == f"proposal:{trip_id}"
         )
         assert (
-            reloaded_payload["proposal_state"]["evaluation"]["evaluation_result"][
-                "evaluation_id"
-            ]
+            reloaded_payload["proposal_state"]["evaluation"]["evaluation_result"]["evaluation_id"]
             == first_evaluation_id
         )
         assert (
             reloaded_payload["proposal_state"]["evaluation"]["evaluation_result"]["status"]
             == first_evaluation_status
         )
-        assert (
-            reloaded_payload["proposal_state"]["summary"]["submission_status"] == "deferred"
-        )
+        assert reloaded_payload["proposal_state"]["summary"]["submission_status"] == "deferred"
 
     reset_database_state()

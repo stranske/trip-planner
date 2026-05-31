@@ -38,12 +38,12 @@ from .models import (
     TradeoffDimension,
     TripFrame,
 )
+from .resolution import resolve_leisure_profile
 from .revealed_preference import (
     RevealedPreferenceSignal,
     RevealedPreferenceUpdate,
     build_revealed_preference_update,
 )
-from .resolution import resolve_leisure_profile
 
 __all__ = [
     "Anchor",

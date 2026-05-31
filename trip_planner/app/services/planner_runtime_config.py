@@ -65,9 +65,7 @@ def build_planner_runtime_config(env: Mapping[str, str]) -> PlannerRuntimeConfig
     fake_enabled = provider == "fake"
     openai_requested = provider == "openai" and bool(model) and bool(openai_api_key)
     openai_blocked_by_zone = (
-        data_zone == PROPRIETARY_DATA_ZONE
-        and openai_requested
-        and not authorized_openai_endpoint
+        data_zone == PROPRIETARY_DATA_ZONE and openai_requested and not authorized_openai_endpoint
     )
     openai_enabled = openai_requested and not openai_blocked_by_zone
 

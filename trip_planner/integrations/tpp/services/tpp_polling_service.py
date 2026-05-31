@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
 import time
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from trip_planner.integrations.tpp.client import TPPContractError

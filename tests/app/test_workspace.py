@@ -1,6 +1,6 @@
+import json
 from collections.abc import Iterator
 from datetime import UTC, datetime
-import json
 from pathlib import Path
 from typing import Any
 
@@ -9,15 +9,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from trip_planner.app.main import create_app
+from trip_planner.app.services import proposal as proposal_service
+from trip_planner.app.services import workspace as workspace_service
 from trip_planner.app.services.auth import AuthenticatedUser, create_account
 from trip_planner.app.services.feasibility import (
     build_feasibility_planner_outputs,
     build_feasibility_summary_payload,
 )
-from trip_planner.app.services import proposal as proposal_service
 from trip_planner.app.services.scenarios import _runtime_business_profile
 from trip_planner.app.services.trips import create_trip
-from trip_planner.app.services import workspace as workspace_service
 from trip_planner.app.services.workspace import get_workspace_payload
 from trip_planner.integrations.tpp import TPPTransportError
 from trip_planner.options import InventoryBundle

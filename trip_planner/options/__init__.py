@@ -1,5 +1,43 @@
 """Normalized destination and option-building contracts."""
 
+from .activities import (
+    ACTIVITY_FORMATS,
+    ACTIVITY_KINDS,
+    EFFORT_LEVELS,
+    ActivityBookingTerms,
+    ActivityCategory,
+    ActivityCostSummary,
+    ActivityEffortSummary,
+    ActivityFeasibility,
+    ActivityFitSummary,
+    ActivityOption,
+    ActivityQualitySummary,
+    ActivitySignificanceSummary,
+    ActivityTimingSummary,
+    ActivityValueSummary,
+)
+from .activities import (
+    AVAILABILITY_STATUSES as ACTIVITY_AVAILABILITY_STATUSES,
+)
+from .activities import (
+    SCHEMA_VERSION as ACTIVITY_SCHEMA_VERSION,
+)
+from .bundles import (
+    BUNDLE_CONTEXTS,
+    BudgetPostureSummary,
+    BundleCompositionSummary,
+    BundleExplanation,
+    BundleFeasibility,
+    BundleProvenanceSummary,
+    BundleQualityValueFitSummary,
+    InventoryBundle,
+    MixedOption,
+    RouteCoherenceSummary,
+    ScheduleFitSummary,
+)
+from .bundles import (
+    SCHEMA_VERSION as BUNDLE_SCHEMA_VERSION,
+)
 from .destinations import (
     ADJACENCY_KINDS,
     EXPANSION_MODES,
@@ -13,8 +51,8 @@ from .destinations import (
     PLACE_RELATIONSHIP_KINDS,
     PROVENANCE_ROLES,
     SCHEMA_VERSION,
-    SEASONS,
     SEASONAL_IMPACTS,
+    SEASONS,
     TAG_SCOPES,
     AdjacencyKind,
     Destination,
@@ -26,9 +64,9 @@ from .destinations import (
     NearbyDestinationRef,
     OperationalNote,
     PlaceContext,
+    PlaceContextRole,
     PlaceHierarchyRef,
     PlaceKind,
-    PlaceContextRole,
     PlaceRelationshipKind,
     RegionExpansionRef,
     SeasonalSignal,
@@ -37,7 +75,6 @@ from .lodging import (
     INVENTORY_STATUSES,
     LOCATION_CONTEXTS,
     LODGING_KINDS,
-    SCHEMA_VERSION as LODGING_SCHEMA_VERSION,
     LodgingBookingTerms,
     LodgingCostSummary,
     LodgingFeasibility,
@@ -48,42 +85,12 @@ from .lodging import (
     LodgingRoomSummary,
     LodgingValueSummary,
 )
-from .activities import (
-    ACTIVITY_FORMATS,
-    ACTIVITY_KINDS,
-    AVAILABILITY_STATUSES as ACTIVITY_AVAILABILITY_STATUSES,
-    EFFORT_LEVELS,
-    SCHEMA_VERSION as ACTIVITY_SCHEMA_VERSION,
-    ActivityBookingTerms,
-    ActivityCategory,
-    ActivityCostSummary,
-    ActivityEffortSummary,
-    ActivityFeasibility,
-    ActivityFitSummary,
-    ActivityOption,
-    ActivityQualitySummary,
-    ActivitySignificanceSummary,
-    ActivityTimingSummary,
-    ActivityValueSummary,
-)
-from .bundles import (
-    BUNDLE_CONTEXTS,
-    SCHEMA_VERSION as BUNDLE_SCHEMA_VERSION,
-    BudgetPostureSummary,
-    BundleCompositionSummary,
-    BundleExplanation,
-    BundleFeasibility,
-    BundleProvenanceSummary,
-    BundleQualityValueFitSummary,
-    InventoryBundle,
-    MixedOption,
-    RouteCoherenceSummary,
-    ScheduleFitSummary,
+from .lodging import (
+    SCHEMA_VERSION as LODGING_SCHEMA_VERSION,
 )
 from .transport import (
     AVAILABILITY_STATUSES,
     CLASS_OF_SERVICE,
-    SCHEMA_VERSION as TRANSPORT_SCHEMA_VERSION,
     SEGMENT_MODES,
     TRANSPORT_KINDS,
     TransportBookingTerms,
@@ -96,6 +103,9 @@ from .transport import (
     TransportSegment,
     TransportTimingSummary,
     TransportTransferBurden,
+)
+from .transport import (
+    SCHEMA_VERSION as TRANSPORT_SCHEMA_VERSION,
 )
 
 __all__ = [

@@ -7,8 +7,8 @@ from collections.abc import Iterable
 from trip_planner.business.objectives import (
     BookingChannelObjectives,
     BusinessPlanningObjectives,
-    ComparableRequirementObjectives,
     ComfortFloorObjectives,
+    ComparableRequirementObjectives,
     CostControlObjectives,
     ExceptionPathObjectives,
     JustificationReadinessObjectives,

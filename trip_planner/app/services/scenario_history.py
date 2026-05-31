@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import re
 import secrets
+from datetime import UTC, datetime
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -18,9 +18,9 @@ from trip_planner.persistence.models.scenario import (
 from trip_planner.persistence.models.session import PersistedPlanningSessionState
 from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.state import (
+    SESSION_STATE_SCHEMA_VERSION,
     ActivityLogEvent,
     PlanningSessionState,
-    SESSION_STATE_SCHEMA_VERSION,
     SavedScenarioRecord,
 )
 

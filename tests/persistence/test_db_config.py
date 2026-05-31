@@ -2,7 +2,9 @@ from trip_planner.persistence.db import get_database_url, normalize_database_url
 
 
 def test_normalize_database_url_preserves_sqlite_urls() -> None:
-    assert normalize_database_url("sqlite:////tmp/trip_planner.db") == "sqlite:////tmp/trip_planner.db"
+    assert (
+        normalize_database_url("sqlite:////tmp/trip_planner.db") == "sqlite:////tmp/trip_planner.db"
+    )
 
 
 def test_normalize_database_url_uses_psycopg_driver_for_render_postgres_urls() -> None:

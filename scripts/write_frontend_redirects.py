@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
-
 DEFAULT_API_ORIGIN = "https://trip-planner-api-s40u.onrender.com"
 
 

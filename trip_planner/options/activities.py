@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from trip_planner._option_contracts import MoneyRange
 from trip_planner._validators import (
     require_non_empty,
     require_non_negative,
@@ -12,7 +13,6 @@ from trip_planner._validators import (
     require_probability,
     require_strings,
 )
-from trip_planner._option_contracts import MoneyRange
 from trip_planner.sources import (
     ProvenanceReference,
     QualityValueFitSummary,

@@ -28,16 +28,16 @@ from trip_planner.app.services.inventory import (
     build_inventory_summary_payload,
 )
 from trip_planner.app.services.planner_memory import build_planner_memory_payload
+from trip_planner.app.services.planner_runtime_config import get_planner_runtime_config
 from trip_planner.app.services.policy import get_workspace_policy_payload
 from trip_planner.app.services.proposal import get_workspace_proposal_payload
-from trip_planner.app.services.planner_runtime_config import get_planner_runtime_config
 from trip_planner.app.services.scenarios import (
-    build_scenario_ranking_payload,
     build_scenario_ranking_outputs,
+    build_scenario_ranking_payload,
     build_workspace_scenario_search,
 )
-from trip_planner.contracts.trip import Trip
 from trip_planner.contracts import MoneyRange
+from trip_planner.contracts.trip import Trip
 from trip_planner.itinerary import (
     ItineraryScenario,
     ScenarioSearchResult,
@@ -60,12 +60,12 @@ from trip_planner.persistence.models.session import PersistedPlanningSessionStat
 from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.ranking import ExplanationRecord
 from trip_planner.state import (
+    PLANNING_MODES,
     ActivityLogEvent,
     OptionPresentationRecord,
     PendingDecision,
-    PLANNING_MODES,
-    PersistedTripRecord,
     PersistedTripArtifactRefs,
+    PersistedTripRecord,
     PlanningSessionState,
     SavedScenarioRecord,
     ScenarioComparison,

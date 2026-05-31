@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import json
 import re
+import unicodedata
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-import unicodedata
 
+from tests.preferences.fixture_corpus import load_fixture_map
 from trip_planner.business import (
     ApprovalTargets,
     BusinessTravelProfile,
@@ -48,7 +49,6 @@ from trip_planner.ranking import (
     RankedResult,
     RankedResultSet,
 )
-from tests.preferences.fixture_corpus import load_fixture_map
 
 
 @dataclass(frozen=True, slots=True)

@@ -6,12 +6,12 @@ import pytest
 from trip_planner.options import (
     Destination,
     DestinationGeo,
-    RegionExpansionRef,
     DestinationSourceRef,
     DestinationTag,
     MobilityProfile,
     OperationalNote,
     PlaceContext,
+    RegionExpansionRef,
 )
 
 

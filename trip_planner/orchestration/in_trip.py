@@ -13,8 +13,10 @@ from trip_planner.contracts._validators import (
 )
 from trip_planner.state import (
     ActivityLogEvent,
-    PendingDecision as SessionPendingDecision,
     PlanningSessionState,
+)
+from trip_planner.state import (
+    PendingDecision as SessionPendingDecision,
 )
 
 from .models import (

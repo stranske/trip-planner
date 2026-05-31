@@ -1,6 +1,6 @@
-from pathlib import Path
 import stat
 import time
+from pathlib import Path
 
 import pytest
 

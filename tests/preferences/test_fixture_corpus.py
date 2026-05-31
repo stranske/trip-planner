@@ -1,13 +1,12 @@
 import json
 from pathlib import Path
 
-from trip_planner.preferences.schema import TRADEOFF_DIMENSION_KEYS
-
 from tests.preferences.fixture_corpus import (
     fixture_corpus_path,
     load_fixture_corpus,
     load_fixture_map,
 )
+from trip_planner.preferences.schema import TRADEOFF_DIMENSION_KEYS
 
 
 def test_fixture_corpus_loads_and_instantiates_profiles() -> None:

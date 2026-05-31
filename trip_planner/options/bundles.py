@@ -5,13 +5,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from trip_planner._validators import (
-    require_non_empty,
-    require_non_negative,
-    require_optional_non_empty,
-    require_probability,
-    require_strings,
-)
 from trip_planner._option_contracts import (
     OPTION_SET_PURPOSES,
     MoneyRange,
@@ -19,7 +12,18 @@ from trip_planner._option_contracts import (
     OptionCostSummary,
     OptionQualitySummary,
 )
-from trip_planner.sources.models import QualityValueFitSummary, SourceRecord, SourceTrustSignals
+from trip_planner._validators import (
+    require_non_empty,
+    require_non_negative,
+    require_optional_non_empty,
+    require_probability,
+    require_strings,
+)
+from trip_planner.sources.models import (
+    QualityValueFitSummary,
+    SourceRecord,
+    SourceTrustSignals,
+)
 
 from .activities import ActivityOption
 from .destinations import Destination

@@ -6,8 +6,8 @@ from scripts.check_full_product_verification import (
     CheckResult,
     classify_map_prerequisite,
     classify_planner_llm_prerequisite,
-    run_product_journeys,
     run_frontend_runtime_smoke,
+    run_product_journeys,
     tpp_prerequisite_status,
 )
 

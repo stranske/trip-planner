@@ -1,10 +1,10 @@
 """Persistence models for runtime-backed storage."""
 
+from trip_planner.persistence.models.account import UserAccount
 from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
     PersistedPlannerAction,
 )
-from trip_planner.persistence.models.account import UserAccount
 from trip_planner.persistence.models.budget import (
     PersistedActualSpendEvent,
     PersistedBudgetPlan,

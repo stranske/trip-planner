@@ -33,9 +33,7 @@ from trip_planner.sources import CONFIDENCE_LABELS
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    monkeypatch.setenv(
-        "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'planner.db'}"
-    )
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'planner.db'}")
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_PROVIDER", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
@@ -292,10 +290,7 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
         "diagnostic",
     }.issubset(planner_block_kinds)
     assert (
-        next(block for block in planner_blocks if block["kind"] == "diagnostic")[
-            "hidden"
-        ]
-        is True
+        next(block for block in planner_blocks if block["kind"] == "diagnostic")["hidden"] is True
     )
     assert payload["messages"][1]["refs"]
     assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
@@ -433,9 +428,7 @@ def test_planner_turn_records_adaptive_triage_metadata(
     assert "visible_sections" in structured_kinds
     assert (
         next(
-            block
-            for block in planner_reply["structured_blocks"]
-            if block["kind"] == "diagnostic"
+            block for block in planner_reply["structured_blocks"] if block["kind"] == "diagnostic"
         )["hidden"]
         is True
     )
@@ -613,9 +606,7 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
     assert planner_reply["tool_calls"][0]["tool_name"] == "read_workspace_state"
     assert planner_reply["tool_calls"][0]["status"] == "completed"
     completed_tool_names = {
-        item["tool_name"]
-        for item in planner_reply["tool_calls"]
-        if item["status"] == "completed"
+        item["tool_name"] for item in planner_reply["tool_calls"] if item["status"] == "completed"
     }
     assert completed_tool_names == {
         "read_workspace_state",
@@ -625,10 +616,7 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
         "read_policy_state",
         "read_proposal_state",
     }
-    assert (
-        fake_model.requests[0]["available_tools"][0]["tool_name"]
-        == "read_workspace_state"
-    )
+    assert fake_model.requests[0]["available_tools"][0]["tool_name"] == "read_workspace_state"
     runtime_context = fake_model.requests[0]["runtime_context"]
     assert isinstance(runtime_context, dict)
     assert runtime_context["trip"]["trip_id"] == trip_id
@@ -800,9 +788,7 @@ def test_planner_turn_tool_reads_are_grounded_in_persisted_workspace_state(
 
     response = client.post(
         f"/api/planner/{trip_id}/turns",
-        json={
-            "message": "Ground your recommendation in persisted workspace and approval state."
-        },
+        json={"message": "Ground your recommendation in persisted workspace and approval state."},
     )
 
     assert response.status_code == 200
@@ -830,9 +816,9 @@ def test_planner_turn_tool_reads_are_grounded_in_persisted_workspace_state(
         tool_outputs["read_workspace_state"]["output"]["trip_title"]
         == workspace_payload["trip_record"]["trip"]["title"]
     )
-    assert tool_outputs["read_workspace_state"]["output"][
-        "pending_decision_count"
-    ] == len(workspace_payload["planner_panel_state"]["pending_decisions"])
+    assert tool_outputs["read_workspace_state"]["output"]["pending_decision_count"] == len(
+        workspace_payload["planner_panel_state"]["pending_decisions"]
+    )
     assert (
         tool_outputs["refresh_inventory"]["output"]["bundle_count"]
         == workspace_payload["inventory_summary"]["bundle_count"]
@@ -846,8 +832,7 @@ def test_planner_turn_tool_reads_are_grounded_in_persisted_workspace_state(
         == budget_payload["summary"]["planned_total"]
     )
     assert (
-        tool_outputs["read_policy_state"]["output"]["status"]
-        == policy_payload["summary"]["status"]
+        tool_outputs["read_policy_state"]["output"]["status"] == policy_payload["summary"]["status"]
     )
     assert (
         tool_outputs["read_proposal_state"]["output"]["status"]
@@ -907,16 +892,11 @@ def test_planner_turn_executes_provider_rich_read_only_tools(
     assert first_segment["provider_distance_available"] is False
     assert first_segment["distance_verification_state"] == "duration_estimate_only"
     assert first_segment["unavailable_reason"]
-    assert (
-        first_segment["source_refs"]
-        == geometry_output["place_markers"][0]["source_refs"]
-    )
+    assert first_segment["source_refs"] == geometry_output["place_markers"][0]["source_refs"]
     assert tool_outputs["refresh_route_comparison"]["output"]["scenarios"]
     assert (
         tool_outputs["refresh_route_comparison"]["output"]["lead_scenario_id"]
-        == response.json()["planner_panel_state"]["option_set"]["options"][0][
-            "option_id"
-        ]
+        == response.json()["planner_panel_state"]["option_set"]["options"][0]["option_id"]
     )
     quality_tool_output = tool_outputs["read_source_quality_summary"]
     assert quality_tool_output["status"] in {"completed", "partial"}
@@ -937,9 +917,7 @@ def test_planner_turn_executes_provider_rich_read_only_tools(
             .where(PersistedPlannerAction.trip_id == trip_id)
             .order_by(PersistedPlannerAction.occurred_at.asc())
         ).all()
-        persisted_tool_names = {
-            item["tool_name"] for item in stored[-1].payload["tool_calls"]
-        }
+        persisted_tool_names = {item["tool_name"] for item in stored[-1].payload["tool_calls"]}
         assert persisted_tool_names == set(tool_outputs)
         checkpoint = db_session.get(
             PersistedPlannerCheckpoint,
@@ -959,9 +937,7 @@ def test_planner_turn_reuses_workspace_payload_for_provider_rich_read_only_tools
     original_get_workspace_payload = planner_tools.get_workspace_payload
     workspace_payload_call_count = 0
 
-    def counted_get_workspace_payload(
-        *args: Any, **kwargs: Any
-    ) -> dict[str, Any] | None:
+    def counted_get_workspace_payload(*args: Any, **kwargs: Any) -> dict[str, Any] | None:
         nonlocal workspace_payload_call_count
         workspace_payload_call_count += 1
         return original_get_workspace_payload(*args, **kwargs)
@@ -1014,9 +990,7 @@ def test_planner_turn_reports_sparse_provider_tool_state(client: TestClient) -> 
     planner_reply = response.json()["messages"][-1]
     tool_outputs = {item["tool_name"]: item for item in planner_reply["tool_calls"]}
     assert tool_outputs["read_map_provider_status"]["status"] == "not_available"
-    assert (
-        tool_outputs["read_map_provider_status"]["output"]["route_state"] == "missing"
-    )
+    assert tool_outputs["read_map_provider_status"]["output"]["route_state"] == "missing"
     assert tool_outputs["read_route_geometry"]["status"] == "not_available"
     assert tool_outputs["read_route_geometry"]["output"]["rough_route_geometry"] == []
 
@@ -1062,9 +1036,7 @@ def test_planner_turn_records_malformed_model_tool_arguments_as_visible_error(
         lambda _: FakePlannerChatModel(
             {
                 "content": "The budget tool received malformed arguments.",
-                "tool_calls": [
-                    {"tool_name": "update_budget_plan", "arguments": "not-a-dict"}
-                ],
+                "tool_calls": [{"tool_name": "update_budget_plan", "arguments": "not-a-dict"}],
             }
         )
     )
@@ -1172,10 +1144,7 @@ def test_planner_turn_handles_planning_notebook_commands(client: TestClient) -> 
     notebook_items = workspace.json()["planning_notebook"]["items"]
     assert notebook_items[0]["notebook_item_id"] == notebook_item_id
     assert notebook_items[0]["source"] == "planner"
-    assert (
-        notebook_items[0]["title"]
-        == "Compare fewer evening moves before the next checkpoint."
-    )
+    assert notebook_items[0]["title"] == "Compare fewer evening moves before the next checkpoint."
 
     focused = client.post(
         f"/api/planner/{trip_id}/turns",
@@ -1185,9 +1154,7 @@ def test_planner_turn_handles_planning_notebook_commands(client: TestClient) -> 
     assert focused.status_code == 200, focused.text
     focused_reply = focused.json()["messages"][-1]
     focus_call = next(
-        item
-        for item in focused_reply["tool_calls"]
-        if item["tool_name"] == "set_notebook_focus"
+        item for item in focused_reply["tool_calls"] if item["tool_name"] == "set_notebook_focus"
     )
     assert focus_call["output"] == {"category": "lodging", "notebook_item_id": None}
 
@@ -1217,15 +1184,10 @@ def test_planner_turn_handles_planning_notebook_commands(client: TestClient) -> 
     assert read_completed.status_code == 200, read_completed.text
     read_reply = read_completed.json()["messages"][-1]
     read_call = next(
-        item
-        for item in read_reply["tool_calls"]
-        if item["tool_name"] == "read_planning_notebook"
+        item for item in read_reply["tool_calls"] if item["tool_name"] == "read_planning_notebook"
     )
     assert read_call["output"]["completed_count"] == 1
-    assert (
-        read_call["output"]["items"][0]["title"]
-        == "Compare airport train with taxi transfer."
-    )
+    assert read_call["output"]["items"][0]["title"] == "Compare airport train with taxi transfer."
 
 
 def test_planner_turn_matches_notebook_focus_synonyms_and_clarifies_ambiguity(
@@ -1240,9 +1202,7 @@ def test_planner_turn_matches_notebook_focus_synonyms_and_clarifies_ambiguity(
     assert hotel_focus.status_code == 200, hotel_focus.text
     hotel_reply = hotel_focus.json()["messages"][-1]
     hotel_focus_call = next(
-        item
-        for item in hotel_reply["tool_calls"]
-        if item["tool_name"] == "set_notebook_focus"
+        item for item in hotel_reply["tool_calls"] if item["tool_name"] == "set_notebook_focus"
     )
     assert hotel_focus_call["output"] == {
         "category": "lodging",
@@ -1258,9 +1218,7 @@ def test_planner_turn_matches_notebook_focus_synonyms_and_clarifies_ambiguity(
     assert flight_focus.status_code == 200, flight_focus.text
     flight_reply = flight_focus.json()["messages"][-1]
     flight_focus_call = next(
-        item
-        for item in flight_reply["tool_calls"]
-        if item["tool_name"] == "set_notebook_focus"
+        item for item in flight_reply["tool_calls"] if item["tool_name"] == "set_notebook_focus"
     )
     assert flight_focus_call["output"] == {
         "category": "route",
@@ -1275,15 +1233,10 @@ def test_planner_turn_matches_notebook_focus_synonyms_and_clarifies_ambiguity(
 
     assert ambiguous_focus.status_code == 200, ambiguous_focus.text
     ambiguous_reply = ambiguous_focus.json()["messages"][-1]
-    assert all(
-        item["tool_name"] != "set_notebook_focus"
-        for item in ambiguous_reply["tool_calls"]
-    )
+    assert all(item["tool_name"] != "set_notebook_focus" for item in ambiguous_reply["tool_calls"])
     assert "Which planning area did you mean" in ambiguous_reply["content"]
     question_blocks = [
-        block
-        for block in ambiguous_reply["structured_blocks"]
-        if block["kind"] == "question"
+        block for block in ambiguous_reply["structured_blocks"] if block["kind"] == "question"
     ]
     assert question_blocks
     assert any(
@@ -1371,9 +1324,7 @@ def test_planner_resume_regenerates_memory_from_raw_transcript(
     trip_id = _create_trip(client)
     first_turn = client.post(
         f"/api/planner/{trip_id}/turns",
-        json={
-            "message": "Keep the baseline narrow and summarize the current direction."
-        },
+        json={"message": "Keep the baseline narrow and summarize the current direction."},
     )
     assert first_turn.status_code == 200
 
@@ -1384,9 +1335,7 @@ def test_planner_resume_regenerates_memory_from_raw_transcript(
             )
         )
         db_session.execute(
-            delete(PersistedPlannerCheckpoint).where(
-                PersistedPlannerCheckpoint.trip_id == trip_id
-            )
+            delete(PersistedPlannerCheckpoint).where(PersistedPlannerCheckpoint.trip_id == trip_id)
         )
         session = db_session.get(PersistedPlanningSessionState, f"session:{trip_id}")
         assert session is not None
@@ -1398,9 +1347,7 @@ def test_planner_resume_regenerates_memory_from_raw_transcript(
     assert resumed.status_code == 200
     payload = resumed.json()
     assert payload["planner_memory"]["current_checkpoint_id"].startswith("planner-chk:")
-    assert payload["planner_memory"]["artifacts"][0]["summary"].startswith(
-        "Turn 1 checkpoint"
-    )
+    assert payload["planner_memory"]["artifacts"][0]["summary"].startswith("Turn 1 checkpoint")
 
 
 def test_session_resume_message_triggers_read_notebook_context(
@@ -1449,9 +1396,7 @@ def test_session_resume_message_triggers_read_notebook_context(
     assert resumed.status_code == 200, resumed.text
     reply = resumed.json()["messages"][-1]
     context_call = next(
-        item
-        for item in reply["tool_calls"]
-        if item["tool_name"] == "read_notebook_context"
+        item for item in reply["tool_calls"] if item["tool_name"] == "read_notebook_context"
     )
     assert context_call["status"] == "completed"
     assert set(context_call["output"]["categories"]) == {"lodging", "route"}
@@ -1473,12 +1418,14 @@ def test_read_notebook_context_tool_bounds_items_per_category(
                     "arguments": {
                         "title": f"Activity idea {index}.",
                         "note": (
-                            "Use this long planning detail to confirm the context "
-                            "reader emits bounded recall excerpts. "
-                            + ("museum lunch timing " * 40)
-                        )
-                        if index == 3
-                        else f"Activity note {index}.",
+                            (
+                                "Use this long planning detail to confirm the context "
+                                "reader emits bounded recall excerpts. "
+                                + ("museum lunch timing " * 40)
+                            )
+                            if index == 3
+                            else f"Activity note {index}."
+                        ),
                         "category": "activities",
                     },
                 }
@@ -1488,9 +1435,7 @@ def test_read_notebook_context_tool_bounds_items_per_category(
     )
     assert captured.status_code == 200, captured.text
 
-    assert any(
-        tool["tool_name"] == "read_notebook_context" for tool in list_planner_tools()
-    )
+    assert any(tool["tool_name"] == "read_notebook_context" for tool in list_planner_tools())
 
     with get_session_factory()() as db_session:
         account = db_session.scalar(

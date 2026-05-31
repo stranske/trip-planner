@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 
 from trip_planner._validators import require_non_empty, require_strings
-from trip_planner.business.policy_contracts import PolicyEvaluationResult, TripPlanProposal
+from trip_planner.business.policy_contracts import (
+    PolicyEvaluationResult,
+    TripPlanProposal,
+)
 from trip_planner.state import ScenarioArtifactRefs, ScenarioComparison, ScenarioVersion
 
 REACTION_KINDS: tuple[str, ...] = (

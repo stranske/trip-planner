@@ -14,6 +14,8 @@ from trip_planner.preferences import (
     RevealedPreferenceSignal,
     RevealedPreferenceUpdate,
     build_revealed_preference_update,
+)
+from trip_planner.preferences import (
     schema as preference_schema,
 )
 from trip_planner.preferences.autonomy import AUTONOMY_FEEDBACK_KINDS
@@ -21,9 +23,11 @@ from trip_planner.preferences.models import LeisurePreferenceProfile
 from trip_planner.state import (
     ActivityLogEvent,
     OptionPresentationRecord,
-    PendingDecision as SessionPendingDecision,
     PlanningInteractionState,
     PlanningSessionState,
+)
+from trip_planner.state import (
+    PendingDecision as SessionPendingDecision,
 )
 
 from .models import (

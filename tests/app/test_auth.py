@@ -8,9 +8,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from trip_planner.app.main import create_app
-from trip_planner.persistence.db import get_session_factory
+from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.account import UserAccount
-from trip_planner.persistence.db import reset_database_state
 
 
 @pytest.fixture

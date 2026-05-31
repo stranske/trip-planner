@@ -1,12 +1,12 @@
 from copy import deepcopy
 
-from trip_planner.itinerary import derive_itinerary_objectives
-from trip_planner.preferences import resolve_leisure_profile, TensionFlag
-from trip_planner.preferences.explanations import InteractionActivation
 from tests.preferences.fixture_corpus import (
     build_profile_from_overrides,
     load_fixture_map,
 )
+from trip_planner.itinerary import derive_itinerary_objectives
+from trip_planner.preferences import TensionFlag, resolve_leisure_profile
+from trip_planner.preferences.explanations import InteractionActivation
 
 
 def test_derivation_produces_explainable_objective_bundle() -> None:

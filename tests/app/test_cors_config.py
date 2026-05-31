@@ -1,4 +1,7 @@
-from trip_planner.app.main import get_allowed_cors_origin_regex, get_allowed_cors_origins
+from trip_planner.app.main import (
+    get_allowed_cors_origin_regex,
+    get_allowed_cors_origins,
+)
 
 
 def test_allowed_cors_origins_keep_local_defaults(monkeypatch) -> None:
@@ -36,4 +39,7 @@ def test_allowed_cors_origin_regex_returns_configured_pattern(monkeypatch) -> No
         r" https://deploy-preview-[0-9]+--trip-planner\.netlify\.app ",
     )
 
-    assert get_allowed_cors_origin_regex() == r"https://deploy-preview-[0-9]+--trip-planner\.netlify\.app"
+    assert (
+        get_allowed_cors_origin_regex()
+        == r"https://deploy-preview-[0-9]+--trip-planner\.netlify\.app"
+    )

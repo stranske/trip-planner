@@ -5,20 +5,20 @@ from __future__ import annotations
 
 import argparse
 import copy
-from contextlib import contextmanager
-from dataclasses import dataclass
-from datetime import date, timedelta
 import json
 import os
-from pathlib import Path
-import shutil
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
 import tempfile
 import time
 from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
 from urllib import request as urllib_request
 
@@ -32,7 +32,10 @@ from trip_planner.app.main import create_app  # noqa: E402
 from trip_planner.app.services.planner_runtime_config import (  # noqa: E402
     build_planner_runtime_config,
 )
-from trip_planner.persistence.db import ensure_database_ready, reset_database_state  # noqa: E402
+from trip_planner.persistence.db import (  # noqa: E402
+    ensure_database_ready,
+    reset_database_state,
+)
 
 DEFAULT_TPP_REPO_PATH = REPO_ROOT.parent / "Travel-Plan-Permission"
 TPP_PORT = 8765

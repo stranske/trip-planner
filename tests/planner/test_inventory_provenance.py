@@ -20,18 +20,20 @@ Task coverage (PR #966):
 
 from __future__ import annotations
 
+from tests.preferences.fixture_corpus import build_profile_from_overrides
 from trip_planner.app.services.inventory import (
     PersistedTripSourceInventoryAdapter,
     assemble_inventory_bundles_for_trip,
 )
 from trip_planner.contracts import ItineraryObjectives
-from trip_planner.itinerary import assemble_itinerary_scenarios, evaluate_bundle_feasibility
+from trip_planner.itinerary import (
+    assemble_itinerary_scenarios,
+    evaluate_bundle_feasibility,
+)
 from trip_planner.options import InventoryBundle
 from trip_planner.ranking import LeisureRankingEngine
 from trip_planner.ranking.models import RankedResultSet
 from trip_planner.sources import SourceQuery
-
-from tests.preferences.fixture_corpus import build_profile_from_overrides
 
 _TRIP_ID = "trip-test-provenance-kyoto"
 _TRIP_MODE = "leisure"
