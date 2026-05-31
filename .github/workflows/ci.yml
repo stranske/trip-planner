@@ -31,7 +31,10 @@ jobs:
       format_check: false
       typecheck: true
       coverage: true
-      coverage-min: '8'
+      # Floor set from the measured reusable CI coverage baseline (about 84% on
+      # 2026-05-31), rounded down to 83 for cross-environment headroom.
+      # See docs/CI_SYSTEM_GUIDE.md.
+      coverage-min: '83'
     secrets: inherit
 
   runtime:
