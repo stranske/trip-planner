@@ -102,6 +102,10 @@ packaging==26.2
     #   langchain-core
     #   langsmith
     #   pytest
+pandas==3.0.3
+    # via
+    #   trip-planner (pyproject.toml)
+    #   pytest-regressions
 pathspec==1.1.1
     # via
     #   black
