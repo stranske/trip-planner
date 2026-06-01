@@ -36,6 +36,15 @@ dev = [
 requires = ["setuptools>=82.0.1"]
 build-backend = "setuptools.build_meta"
 
+# Do not emit app-baseline-kit into requirements.lock. It is consumed from the
+# Workflows monorepo via an unpinned `@main` git URL (see [project.optional-
+# dependencies].dev), so freezing a commit SHA in the lock conflicts with that
+# URL the moment Workflows main advances ("conflicting URLs for package
+# app-baseline-kit" -> uv install aborts). Leaving it unpinned lets the editable
+# project install resolve it from main, with no lock to keep refreshed.
+[tool.uv.pip]
+no-emit-package = ["app-baseline-kit"]
+
 [tool.setuptools.packages.find]
 include = ["scripts*", "trip_planner*"]
 
