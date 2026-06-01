@@ -76,6 +76,7 @@ jobs:
       artifact-prefix: "gate-"
       # Enable soft coverage gate for trend tracking and hotspot reporting
       enable-soft-gate: true
+      cache: false
     secrets: inherit
 
   cross-repo-smoke:
