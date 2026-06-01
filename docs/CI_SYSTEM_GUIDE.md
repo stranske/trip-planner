@@ -55,19 +55,6 @@ provides:
 | `reusable-12-ci-docker.yml` | Docker build + smoke test | Projects with Dockerfile |
 | `reusable-18-autofix.yml` | Automated code formatting fixes | All projects (via autofix label) |
 
-> **Coverage floor baseline.** Both `.github/workflows/ci.yml` and the
-> branch-protection-enforced `.github/workflows/pr-00-gate.yml` pass
-> `coverage-min: '83'` to `reusable-10-ci-python.yml`. This reflects the reusable
-> workflow's measured fallback coverage baseline of about **84%** (84.10% in CI on
-> Python 3.12/3.13, 83.98% in local fallback validation on 2026-05-31), set
-> **at or slightly below** the measured baseline (rounded down to **83**) so minor
-> cross-environment variation does not flake the gate while still ratcheting far
-> above the previous placeholder floor of `8`, which was too low to catch real
-> regressions. When the suite grows, re-measure and raise this floor toward the
-> new measured baseline (keeping the small headroom margin); update the literal in
-> **both** this repo's `ci.yml` and `pr-00-gate.yml` so the standalone Python CI
-> and the enforced Gate stay in lockstep, and do not edit the reusable workflow.
-
 ### Agent Automation System
 
 The Workflows repo includes a sophisticated agent automation system:
