@@ -35,6 +35,7 @@ jobs:
       # 2026-05-31), rounded down to 83 for cross-environment headroom.
       # See docs/CI_SYSTEM_GUIDE.md.
       coverage-min: '83'
+      cache: false
     secrets: inherit
 
   runtime:

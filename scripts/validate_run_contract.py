@@ -10,7 +10,8 @@ Role-aware (config/backplane_participants.json ``role``):
   shared fields + the entry's ``required_sections`` + the manifest cross-check).
 - ``consumer``: validate ONLY the satellite schemas the entry lists under
   ``ingests`` (the input is treated as an ingested object, e.g. an
-  evidence-object/v1). A consumer is never failed for not emitting a run.json.
+  evidence-object/v1). An active consumer is failed for a missing declared
+  input, not for failing to emit a producer run envelope.
 
 Opt-in: a repo absent from the registry, or with ``status`` of ``none`` /
 ``candidate``, is a no-op SKIP (success). This is the one deliberate difference
@@ -33,6 +34,12 @@ DEFAULT_ARTIFACT_NAME = "run.json"
 
 # Statuses that mean "the contract does not (yet) apply" -> opt-in skip.
 SKIP_STATUSES = (None, "none", "candidate")
+
+# Statuses where a producer/bridge is ACTIVELY emitting a run envelope, so a
+# MISSING run.json is a real regression rather than a not-yet-wired no-op. The
+# lifecycle is planned -> emitting -> conformant; a "planned" producer has not
+# wired its emitter yet, so an absent envelope is still an opt-in skip for it.
+EMITTING_STATUSES = ("emitting", "conformant")
 
 # Map an ``ingests`` token to the schema file a consumer validates against.
 INGEST_SCHEMA_FILES = {
@@ -217,9 +224,7 @@ def validate_envelope(
             continue
         present = section in envelope and envelope.get(section) is not None
         if not present:
-            report.fail(
-                f"registry requires section '{section}' for {repo} " "(key absent)", section
-            )
+            report.fail(f"registry requires section '{section}' for {repo} (key absent)", section)
         elif section not in SECTIONS_EMPTY_OK and envelope.get(section) in ("", [], {}):
             # cost/latency/data_quality: present-but-empty == not populated.
             report.fail(f"registry requires a populated '{section}' for {repo}", section)
@@ -255,6 +260,34 @@ def validate_envelope(
     return report
 
 
+def missing_envelope_report(registry: dict[str, Any], repo: str, run_json: Path) -> Report:
+    """Decide what a MISSING run envelope means for ``repo``.
+
+    The caller's ``emit-reference-run`` job intentionally produces nothing until
+    a repo wires its emitter ("the conformance gate will skip (opt-in)"), and
+    the registry lifecycle is planned -> emitting -> conformant. So an absent
+    envelope is a clean opt-in SKIP for every repo EXCEPT a participant that has
+    already reached an emitting/conformant status -- for those a vanished input
+    artifact is a genuine regression and must fail. This keeps the opt-in
+    contract honest (a non-participant, candidate, or not-yet-emitting producer
+    is never failed just for lacking an envelope) without silencing a real
+    regression in an active participant.
+    """
+    entry = _find_entry(registry, repo)
+    report = Report(repo=repo, role=entry.get("role", "") if entry else "")
+    if entry is not None and entry.get("status") in EMITTING_STATUSES:
+        report.fail(
+            f"{repo} is an active backplane participant "
+            f"(role={entry.get('role')!r}, status={entry.get('status')!r}) "
+            f"but no run envelope was found "
+            f"at {run_json}",
+            str(run_json),
+        )
+    else:
+        report.skipped = True
+    return report
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_json", type=Path)
@@ -275,25 +308,33 @@ def main(argv: list[str] | None = None) -> int:
     if args.self_smoke:
         return _self_smoke(args.schema_dir, args.registry)
 
+    registry = _load_json(args.registry)
+
     try:
         envelope = _load_json(args.run_json)
+    except FileNotFoundError:
+        # No emitted envelope. Opt-in: this is a no-op SKIP for every repo
+        # except an actively-emitting producer (see missing_envelope_report),
+        # matching the caller stub's "the conformance gate will skip (opt-in)".
+        envelope = None
     except (OSError, json.JSONDecodeError) as exc:
         print(f"ERROR: cannot load run envelope: {exc}", file=sys.stderr)
         return 2
 
-    registry = _load_json(args.registry)
-    manifest = _load_json(args.manifest) if args.manifest else None
-
-    report = validate_envelope(
-        envelope=envelope,
-        schema_dir=args.schema_dir,
-        registry=registry,
-        repo=args.repo,
-        manifest=manifest,
-    )
+    if envelope is None:
+        report = missing_envelope_report(registry, args.repo, args.run_json)
+    else:
+        manifest = _load_json(args.manifest) if args.manifest else None
+        report = validate_envelope(
+            envelope=envelope,
+            schema_dir=args.schema_dir,
+            registry=registry,
+            repo=args.repo,
+            manifest=manifest,
+        )
 
     if report.skipped:
-        print(f"{args.repo}: not a backplane participant (opt-in); skipping")
+        print(f"{args.repo}: not a (yet-emitting) backplane participant (opt-in); skipping")
     elif report.conformant:
         print(f"{args.repo}: run envelope conforms to {RUN_SCHEMA_VERSION}")
     else:
