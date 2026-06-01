@@ -68,6 +68,12 @@ namespace_packages = true
 
 [tool.coverage.run]
 omit = [
+    # Coverage gates track product/runtime code. Repo automation scripts and test
+    # harnesses are exercised separately and should not dilute the app baseline.
+    "scripts/*.py",
+    "scripts/**/*.py",
+    "tests/*.py",
+    "tests/**/*.py",
     # Synced from Workflows repo - tested there
     "scripts/ci_*.py",
     "scripts/sync_*.py",

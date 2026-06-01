@@ -68,9 +68,9 @@ jobs:
     with:
       python-versions: '["3.12", "3.13"]'
       # Keep in lockstep with ci.yml: the Gate is the branch-protection-enforced
-      # check, so its coverage floor must match ci.yml's measured baseline (83),
-      # not the old placeholder 8. See docs/CI_SYSTEM_GUIDE.md.
-      coverage-min: "83"
+      # check, so its product/runtime coverage floor must match the owner-approved
+      # #1262 follow-up target. See docs/CI_SYSTEM_GUIDE.md.
+      coverage-min: "90"
       format_check: false  # Using ruff for formatting
       working-directory: "."
       artifact-prefix: "gate-"
