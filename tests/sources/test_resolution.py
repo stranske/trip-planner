@@ -253,3 +253,117 @@ def test_entity_resolution_status_specific_context_requirements() -> None:
             canonical_entity_id="lodging-canal-house",
             summary="Distinct still needs provenance.",
         )
+
+
+def test_resolution_models_to_dict_round_trip() -> None:
+    candidate = MatchCandidate(
+        candidate_id="candidate-to-dict",
+        entity_scope="lodging",
+        option_kind="lodging",
+        match_strategy="provider_id",
+        confidence=0.95,
+    )
+    conflict = AttributeConflict(
+        conflict_id="conflict-to-dict",
+        attribute_path="lodging.name",
+        reason="source_disagreement",
+        status="selected",
+        values_by_source={"source:a": "Canal House", "source:b": "Canalhouse"},
+        selected_value="Canal House",
+    )
+    provenance = build_provenance("lodging-canal-house", "lodging")
+
+    assert candidate.to_dict()["candidate_id"] == "candidate-to-dict"
+    assert conflict.to_dict()["selected_value"] == "Canal House"
+    assert provenance.to_dict()["canonical_entity_id"] == "lodging-canal-house"
+
+
+@pytest.mark.parametrize(
+    ("builder", "message"),
+    [
+        (
+            lambda: AttributeConflict(
+                conflict_id="conflict-invalid-reason",
+                attribute_path="lodging.name",
+                reason="mismatch",
+                status="preserved",
+                values_by_source={"source:a": "A", "source:b": "B"},
+            ),
+            "reason must be one of",
+        ),
+        (
+            lambda: AttributeConflict(
+                conflict_id="conflict-invalid-status",
+                attribute_path="lodging.name",
+                reason="source_disagreement",
+                status="unknown",
+                values_by_source={"source:a": "A", "source:b": "B"},
+            ),
+            "status must be one of",
+        ),
+        (
+            lambda: MergedEntityProvenance(
+                canonical_entity_id="lodging-canal-house",
+                entity_scope="meal",
+            ),
+            "entity_scope must be one of",
+        ),
+        (
+            lambda: EntityResolution(
+                resolution_id="resolution-invalid-scope",
+                entity_scope="meal",
+                option_kind="lodging",
+                status="match",
+                canonical_entity_id="lodging-canal-house",
+                summary="Invalid scope.",
+                match_candidates=[
+                    MatchCandidate(
+                        candidate_id="candidate-valid",
+                        entity_scope="lodging",
+                        option_kind="lodging",
+                        match_strategy="provider_id",
+                        confidence=0.9,
+                    )
+                ],
+                merged_provenance=build_provenance("lodging-canal-house", "lodging"),
+            ),
+            "entity_scope must be one of",
+        ),
+        (
+            lambda: EntityResolution(
+                resolution_id="resolution-invalid-kind",
+                entity_scope="lodging",
+                option_kind="hotel",
+                status="match",
+                canonical_entity_id="lodging-canal-house",
+                summary="Invalid kind.",
+                match_candidates=[
+                    MatchCandidate(
+                        candidate_id="candidate-valid-2",
+                        entity_scope="lodging",
+                        option_kind="lodging",
+                        match_strategy="provider_id",
+                        confidence=0.9,
+                    )
+                ],
+                merged_provenance=build_provenance("lodging-canal-house", "lodging"),
+            ),
+            "option_kind must be one of",
+        ),
+        (
+            lambda: EntityResolution(
+                resolution_id="resolution-invalid-status",
+                entity_scope="lodging",
+                option_kind="lodging",
+                status="in_review",
+                canonical_entity_id="lodging-canal-house",
+                summary="Invalid status.",
+                merged_provenance=build_provenance("lodging-canal-house", "lodging"),
+            ),
+            "status must be one of",
+        ),
+    ],
+)
+def test_resolution_models_validate_enum_values(builder, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        builder()
