@@ -1,0 +1,3 @@
+# app-baseline-kit dependency
+
+trip-planner is the **reference implementation of Pattern A**, the fleet default. `app-baseline-kit` is declared unpinned at `@main` in `pyproject.toml` (`[project.optional-dependencies].dev`) and excluded from `requirements.lock` via `[tool.uv.pip] no-emit-package = ["app-baseline-kit"]`. This permanently avoids the `uv` "conflicting URLs for package app-baseline-kit" error that occurs when an unpinned pyproject URL and a SHA-pinned lock URL disagree (this repo's CI broke that way after Workflows PR #2204). At test time the package is resolved directly from Workflows `main` HEAD by the editable install; `tests/test_dependency_version_alignment.py` subtracts the no-emit names so it does not flag the now-absent package. No change needed.
