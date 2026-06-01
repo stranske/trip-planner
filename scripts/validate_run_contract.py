@@ -275,8 +275,7 @@ def missing_envelope_report(registry: dict[str, Any], repo: str, run_json: Path)
     """
     entry = _find_entry(registry, repo)
     report = Report(repo=repo, role=entry.get("role", "") if entry else "")
-    is_active_participant = entry is not None and entry.get("status") in EMITTING_STATUSES
-    if is_active_participant:
+    if entry is not None and entry.get("status") in EMITTING_STATUSES:
         report.fail(
             f"{repo} is an active backplane participant "
             f"(role={entry.get('role')!r}, status={entry.get('status')!r}) "
