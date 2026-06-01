@@ -31,10 +31,10 @@ jobs:
       format_check: false
       typecheck: true
       coverage: true
-      # Floor set from the measured reusable CI coverage baseline (about 84% on
-      # 2026-05-31), rounded down to 83 for cross-environment headroom.
+      # Owner-approved follow-up to #1262: product/runtime coverage now excludes
+      # repo automation scripts and test harnesses, and must stay at or above 90.
       # See docs/CI_SYSTEM_GUIDE.md.
-      coverage-min: '83'
+      coverage-min: '90'
       cache: false
     secrets: inherit
 

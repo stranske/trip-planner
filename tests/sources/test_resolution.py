@@ -125,3 +125,131 @@ def test_attribute_conflict_requires_non_empty_string_values() -> None:
                 "source:ota-b": "Rome",
             },
         )
+
+
+def test_match_candidate_validates_resolution_taxonomy_fields() -> None:
+    with pytest.raises(ValueError, match="entity_scope"):
+        MatchCandidate(
+            candidate_id="candidate-invalid-scope",
+            entity_scope="meal",
+            option_kind="lodging",
+            match_strategy="provider_id",
+            confidence=0.9,
+        )
+    with pytest.raises(ValueError, match="option_kind"):
+        MatchCandidate(
+            candidate_id="candidate-invalid-kind",
+            entity_scope="lodging",
+            option_kind="hotel",
+            match_strategy="provider_id",
+            confidence=0.9,
+        )
+    with pytest.raises(ValueError, match="match_strategy"):
+        MatchCandidate(
+            candidate_id="candidate-invalid-strategy",
+            entity_scope="lodging",
+            option_kind="lodging",
+            match_strategy="fuzzy",
+            confidence=0.9,
+        )
+
+
+def test_attribute_conflict_selected_status_requires_selected_value() -> None:
+    with pytest.raises(ValueError, match="selected_value"):
+        AttributeConflict(
+            conflict_id="conflict-missing-selection",
+            attribute_path="lodging.name",
+            reason="source_disagreement",
+            status="selected",
+            values_by_source={"source:a": "Canal House", "source:b": "Canalhouse"},
+        )
+
+
+def test_attribute_conflict_requires_multiple_sources() -> None:
+    with pytest.raises(ValueError, match="at least two source values"):
+        AttributeConflict(
+            conflict_id="conflict-one-source",
+            attribute_path="lodging.name",
+            reason="source_disagreement",
+            status="preserved",
+            values_by_source={"source:a": "Canal House"},
+        )
+
+
+def test_merged_entity_provenance_requires_provenance_references() -> None:
+    with pytest.raises(ValueError, match="ProvenanceReference"):
+        MergedEntityProvenance(
+            canonical_entity_id="lodging-canal-house",
+            entity_scope="lodging",
+            provenance_refs=["not-a-reference"],  # type: ignore[list-item]
+        )
+
+
+def test_entity_resolution_validates_nested_resolution_members() -> None:
+    provenance = build_provenance("lodging-canal-house", "lodging")
+
+    with pytest.raises(ValueError, match="match_candidates"):
+        EntityResolution(
+            resolution_id="resolution-invalid-candidates",
+            entity_scope="lodging",
+            option_kind="lodging",
+            status="match",
+            canonical_entity_id="lodging-canal-house",
+            summary="Invalid nested candidate.",
+            match_candidates=["not-a-candidate"],  # type: ignore[list-item]
+            merged_provenance=provenance,
+        )
+    with pytest.raises(ValueError, match="conflicts"):
+        EntityResolution(
+            resolution_id="resolution-invalid-conflicts",
+            entity_scope="lodging",
+            option_kind="lodging",
+            status="blocked",
+            canonical_entity_id="lodging-canal-house",
+            summary="Invalid nested conflict.",
+            conflicts=["not-a-conflict"],  # type: ignore[list-item]
+            merged_provenance=provenance,
+        )
+    with pytest.raises(ValueError, match="MergedEntityProvenance"):
+        EntityResolution(
+            resolution_id="resolution-invalid-provenance",
+            entity_scope="lodging",
+            option_kind="lodging",
+            status="blocked",
+            canonical_entity_id="lodging-canal-house",
+            summary="Invalid provenance.",
+            merged_provenance="not-provenance",  # type: ignore[arg-type]
+        )
+
+
+def test_entity_resolution_status_specific_context_requirements() -> None:
+    with pytest.raises(ValueError, match="match candidate"):
+        EntityResolution(
+            resolution_id="resolution-match-empty",
+            entity_scope="lodging",
+            option_kind="lodging",
+            status="match",
+            canonical_entity_id="lodging-canal-house",
+            summary="Match without candidate is invalid.",
+            merged_provenance=build_provenance("lodging-canal-house", "lodging"),
+        )
+    with pytest.raises(ValueError, match="explicit conflicts"):
+        EntityResolution(
+            resolution_id="resolution-ambiguous-empty",
+            entity_scope="lodging",
+            option_kind="lodging",
+            status="ambiguous",
+            canonical_entity_id="lodging-canal-house",
+            summary="Ambiguous without conflict is invalid.",
+            review_required=True,
+            merged_provenance=build_provenance("lodging-canal-house", "lodging"),
+        )
+    with pytest.raises(ValueError, match="merged_provenance"):
+        EntityResolution(
+            resolution_id="resolution-distinct-no-provenance",
+            entity_scope="lodging",
+            option_kind="lodging",
+            status="distinct",
+            canonical_entity_id="lodging-canal-house",
+            summary="Distinct still needs provenance.",
+        )

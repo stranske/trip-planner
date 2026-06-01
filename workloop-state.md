@@ -1,3 +1,17 @@
+## 2026-06-01T00:42Z - opener/user follow-up issue #1281 coverage floor 90
+
+- Source repo: `stranske/trip-planner`; source issue `#1281` (`Follow up #1262 by raising enforced coverage floor to 90`); branch `codex/issue-1281-coverage-90`.
+- Decision context: owner chose to do a follow-up after #1262 verifier disagreement and raise the target to `90`, not accept the merged `83` floor.
+- Implementation:
+  - Set `.github/workflows/ci.yml` and `.github/workflows/pr-00-gate.yml` `coverage-min` to `90`.
+  - Clarified coverage scope in `pyproject.toml` so the `--cov=.` reusable workflow measurement tracks product/runtime code and omits repo automation scripts plus test harness files from the denominator.
+  - Updated `docs/CI_SYSTEM_GUIDE.md` to document the #1262 follow-up and 90 target.
+  - Added `tests/preferences/test_product_fixture_corpus.py` for the packaged runtime fixture corpus and expanded `tests/sources/test_resolution.py` validation coverage.
+- Validation:
+  - `uv run pytest tests/preferences/test_product_fixture_corpus.py tests/sources/test_resolution.py -q` -> 25 passed.
+  - `uv run pytest --cov=. --cov-report=term --cov-report=xml:/tmp/trip-planner-1281-coverage.xml --cov-fail-under=90` -> 1078 passed / 1 skipped, coverage 90.00%.
+- Next action: push branch, open ready-for-review PR, then let CI/keepalive verify on GitHub.
+
 ## 2026-05-31T10:08Z - closer rebased PR #1271 after #1272 main merge
 
 - Automation: `imi-merge-verify-closer` (codex closer lane), neutral Code workspace.

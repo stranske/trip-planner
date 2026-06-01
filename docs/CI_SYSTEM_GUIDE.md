@@ -57,16 +57,16 @@ provides:
 
 > **Coverage floor baseline.** Both `.github/workflows/ci.yml` and the
 > branch-protection-enforced `.github/workflows/pr-00-gate.yml` pass
-> `coverage-min: '83'` to `reusable-10-ci-python.yml`. This reflects the reusable
-> workflow's measured fallback coverage baseline of about **84%** (84.10% in CI on
-> Python 3.12/3.13, 83.98% in local fallback validation on 2026-05-31), set
-> **at or slightly below** the measured baseline (rounded down to **83**) so minor
-> cross-environment variation does not flake the gate while still ratcheting far
-> above the previous placeholder floor of `8`, which was too low to catch real
-> regressions. When the suite grows, re-measure and raise this floor toward the
-> new measured baseline (keeping the small headroom margin); update the literal in
-> **both** this repo's `ci.yml` and `pr-00-gate.yml` so the standalone Python CI
-> and the enforced Gate stay in lockstep, and do not edit the reusable workflow.
+> `coverage-min: '90'` to `reusable-10-ci-python.yml`. This is the owner-approved
+> follow-up to issue #1262 after verifier review found that the previous PR mixed
+> two measurements: a local `trip_planner` package run near 89% and the reusable
+> workflow fallback run near 84% because `--cov=.` also counted repo automation
+> scripts. The enforced coverage baseline now tracks product/runtime code by
+> excluding repo automation scripts and test harness files in `[tool.coverage.run]`
+> while still running those tests. The local validation for the #1262 follow-up
+> reached at least **90%** with the reusable workflow's `--cov=.` shape. Keep the
+> literal in **both** this repo's `ci.yml` and `pr-00-gate.yml` in lockstep, and do
+> not edit the reusable workflow.
 
 ### Agent Automation System
 
