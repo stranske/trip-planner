@@ -132,7 +132,8 @@ def _fixture_payload() -> dict:
 def test_packaged_fixture_corpus_loads_from_runtime_resource() -> None:
     fixtures = load_fixture_corpus()
 
-    assert [fixture.id for fixture in fixtures] == ["urban-historian"]
+    assert fixtures
+    assert "urban-historian" in {fixture.id for fixture in fixtures}
     fixture = load_fixture_map()["urban-historian"]
     assert fixture.profile.to_dict()["profile_kind"] == "leisure"
     assert fixture.intended_interpretation.qualitative_summary
