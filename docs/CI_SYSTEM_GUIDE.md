@@ -55,19 +55,6 @@ provides:
 | `reusable-12-ci-docker.yml` | Docker build + smoke test | Projects with Dockerfile |
 | `reusable-18-autofix.yml` | Automated code formatting fixes | All projects (via autofix label) |
 
-> **Coverage floor baseline.** Both `.github/workflows/ci.yml` and the
-> branch-protection-enforced `.github/workflows/pr-00-gate.yml` pass
-> `coverage-min: '90'` to `reusable-10-ci-python.yml`. This is the owner-approved
-> follow-up to issue #1262 after verifier review found that the previous PR mixed
-> two measurements: a local `trip_planner` package run near 89% and the reusable
-> workflow fallback run near 84% because `--cov=.` also counted repo automation
-> scripts. The enforced coverage baseline now tracks product/runtime code by
-> excluding repo automation scripts and test harness files in `[tool.coverage.run]`
-> while still running those tests. The local validation for the #1262 follow-up
-> reached at least **90%** with the reusable workflow's `--cov=.` shape. Keep the
-> literal in **both** this repo's `ci.yml` and `pr-00-gate.yml` in lockstep, and do
-> not edit the reusable workflow.
-
 ### Agent Automation System
 
 The Workflows repo includes a sophisticated agent automation system:
