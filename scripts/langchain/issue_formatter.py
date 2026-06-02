@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from scripts.langchain.checklist_utils import is_placeholder_checklist_text
     from scripts.langchain.injection_guard import check_prompt_injection
     from scripts.langchain.issue_pr_context import (
         ContextOptions,
@@ -28,6 +29,7 @@ try:
     )
     from scripts.langchain.trace_utils import TraceInfo, invoke_with_trace
 except ImportError:  # pragma: no cover - fallback for direct invocation
+    from checklist_utils import is_placeholder_checklist_text
     from injection_guard import check_prompt_injection
     from issue_pr_context import (
         ContextOptions,
@@ -262,12 +264,15 @@ def _normalize_checklist_lines(lines: list[str]) -> list[str]:
             if checkbox:
                 mark = "x" if checkbox.group(1).lower() == "x" else " "
                 text = checkbox.group(2).strip()
-                if text:
+                if text and not is_placeholder_checklist_text(text):
                     cleaned.append(f"{indent}- [{mark}] {text}")
                 continue
-            cleaned.append(f"{indent}- [ ] {remainder.strip()}")
+            text = remainder.strip()
+            if not is_placeholder_checklist_text(text):
+                cleaned.append(f"{indent}- [ ] {text}")
         else:
-            cleaned.append(f"- [ ] {stripped}")
+            if not is_placeholder_checklist_text(stripped):
+                cleaned.append(f"- [ ] {stripped}")
     return cleaned
 
 
