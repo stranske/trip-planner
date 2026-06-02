@@ -876,6 +876,21 @@ def _strip_checkbox(line: str, list_match: re.Match[str] | None = None) -> str:
     return content
 
 
+def _is_placeholder_checklist_text(text: str) -> bool:
+    stripped = text.strip()
+    normalized = stripped.strip("_").strip()
+    return normalized in {
+        "",
+        "---",
+        "Not provided.",
+    } or (
+        stripped.startswith("_")
+        and stripped.endswith("_")
+        and normalized.startswith("Filed from ")
+        and " review" in normalized
+    )
+
+
 def _parse_checklist(lines: list[str]) -> list[str]:
     """Extract checklist items from lines, handling both checkbox and plain list formats."""
     items: list[str] = []
@@ -887,7 +902,7 @@ def _parse_checklist(lines: list[str]) -> list[str]:
         checkbox_match = CHECKBOX_REGEX.match(stripped)
         if checkbox_match:
             value = checkbox_match.group(2).strip()
-            if value and len(value) > 3:
+            if value and len(value) > 3 and not _is_placeholder_checklist_text(value):
                 items.append(value)
             continue
         # Then try list item (with optional checkbox inside)
@@ -895,7 +910,7 @@ def _parse_checklist(lines: list[str]) -> list[str]:
         if list_match:
             # Pass the match to avoid re-matching in _strip_checkbox
             value = _strip_checkbox(line, list_match)
-            if value and len(value) > 3:
+            if value and len(value) > 3 and not _is_placeholder_checklist_text(value):
                 items.append(value)
     return items
 
