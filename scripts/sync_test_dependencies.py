@@ -41,7 +41,7 @@ PYTEST_INI_CONFIGS = (
     (Path("pytest.ini"), ("pytest",)),
     (Path(".pytest.ini"), ("pytest",)),
 )
-PYTEST_FALLBACK_INI_CONFIGS = (
+PYTEST_FALLBACK_INI_CONFIGS: tuple[tuple[Path, tuple[str, ...]], ...] = (
     (Path("tox.ini"), ("pytest",)),
     (Path("setup.cfg"), ("tool:pytest", "pytest")),
 )
