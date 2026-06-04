@@ -102,7 +102,7 @@ packaging==26.2
     #   langchain-core
     #   langsmith
     #   pytest
-pandas==2.3.3
+pandas==3.0.3
     # via trip-planner (pyproject.toml)
 pathspec==1.1.1
     # via
@@ -147,8 +147,6 @@ python-dateutil==2.9.0.post0
     # via pandas
 pytokens==0.4.1
     # via black
-pytz==2026.2
-    # via pandas
 pyyaml==6.0.3
     # via
     #   trip-planner (pyproject.toml)
@@ -205,7 +203,7 @@ typing-inspection==0.4.2
     # via
     #   fastapi
     #   pydantic
-tzdata==2026.2
+tzdata==2026.2 ; sys_platform == 'emscripten' or sys_platform == 'win32'
     # via
     #   pandas
     #   psycopg
