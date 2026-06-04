@@ -172,7 +172,7 @@ sqlalchemy==2.0.50
     # via
     #   trip-planner (pyproject.toml)
     #   alembic
-starlette==1.1.0
+starlette==1.2.1
     # via
     #   trip-planner (pyproject.toml)
     #   fastapi

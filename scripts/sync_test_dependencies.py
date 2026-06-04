@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+import configparser
 import re
+import shlex
 import sys
 import tomllib
 from pathlib import Path
@@ -32,6 +34,18 @@ else:
     TOMLKIT_ERROR = None
 
 PYPROJECT_FILE = Path("pyproject.toml")
+PYTEST_TOML_FILES = (
+    Path("pytest.toml"),
+    Path(".pytest.toml"),
+)
+PYTEST_INI_CONFIGS = (
+    (Path("pytest.ini"), ("pytest",)),
+    (Path(".pytest.ini"), ("pytest",)),
+)
+PYTEST_FALLBACK_INI_CONFIGS = (
+    (Path("tox.ini"), ("pytest",)),
+    (Path("setup.cfg"), ("tool:pytest", "pytest")),
+)
 DEV_EXTRA = "dev"
 
 # Stdlib modules that don't need to be installed. Prefer Python's runtime
@@ -182,7 +196,153 @@ def _detect_local_project_modules() -> set[str]:
             elif item.suffix == ".py":
                 detected.add(item.stem)
 
+    tests_dir = Path("tests")
+    if tests_dir.is_dir():
+        tests_is_package = (tests_dir / "__init__.py").exists()
+        tests_on_pythonpath = _tests_dir_on_pythonpath() if tests_is_package else False
+        for item in tests_dir.iterdir():
+            if item.name.startswith(".") or item.name == "__pycache__":
+                continue
+            if tests_is_package:
+                if item.name == "conftest.py":
+                    detected.add("conftest")
+                elif tests_on_pythonpath and item.is_dir() and (item / "__init__.py").exists():
+                    detected.add(item.name)
+                elif (
+                    tests_on_pythonpath
+                    and item.suffix == ".py"
+                    and not item.name.startswith("test_")
+                    and item.name != "__init__.py"
+                ):
+                    detected.add(item.stem)
+                continue
+            if item.is_dir() and (item / "__init__.py").exists():
+                detected.add(item.name)
+            elif item.suffix == ".py":
+                if item.name == "conftest.py":
+                    detected.add("conftest")
+                elif not item.name.startswith("test_") and item.name != "__init__.py":
+                    detected.add(item.stem)
+
     return detected
+
+
+def _pythonpath_has_tests(pythonpath: Any) -> bool:
+    if isinstance(pythonpath, str):
+        try:
+            entries = shlex.split(pythonpath, posix=False)
+        except ValueError:
+            entries = pythonpath.split()
+    elif isinstance(pythonpath, list):
+        entries = [str(entry) for entry in pythonpath]
+    else:
+        entries = []
+
+    return any(_pythonpath_entry_is_tests_dir(entry) for entry in entries)
+
+
+def _pythonpath_entry_is_tests_dir(entry: str) -> bool:
+    normalized = entry.strip().strip('"').strip("'").replace("\\", "/").rstrip("/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized == "tests" or normalized.endswith("/tests")
+
+
+def _config_root() -> Path:
+    return PYPROJECT_FILE.parent if PYPROJECT_FILE.is_absolute() else Path(".")
+
+
+def _resolve_config_path(path: Path) -> Path:
+    return path if path.is_absolute() else _config_root() / path
+
+
+def _tests_dir_on_pytest_toml_pythonpath(config_file: Path) -> bool:
+    try:
+        with config_file.open("rb") as fh:
+            data = tomllib.load(fh)
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
+
+    if not isinstance(data, dict):
+        return False
+    pytest_options = data.get("pytest")
+    if not isinstance(pytest_options, dict):
+        return False
+
+    return _pythonpath_has_tests(pytest_options.get("pythonpath", []))
+
+
+def _tests_dir_on_pyproject_pythonpath(config_file: Path) -> bool | None:
+    """Return None when pyproject has no usable pytest table or cannot be read."""
+    try:
+        with config_file.open("rb") as fh:
+            data = tomllib.load(fh)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+
+    if not isinstance(data, dict):
+        return None
+    tool = data.get("tool")
+    if not isinstance(tool, dict):
+        return None
+    pytest_config = tool.get("pytest")
+    if not isinstance(pytest_config, dict):
+        return None
+    if _pythonpath_has_tests(pytest_config.get("pythonpath", [])):
+        return True
+    pytest_options = pytest_config.get("ini_options")
+    if isinstance(pytest_options, dict):
+        return _pythonpath_has_tests(pytest_options.get("pythonpath", []))
+
+    return False
+
+
+def _tests_dir_on_ini_pythonpath(config_file: Path, section_names: tuple[str, ...]) -> bool:
+    config = configparser.ConfigParser(interpolation=None)
+    try:
+        read_files = config.read(config_file, encoding="utf-8")
+    except (configparser.Error, OSError, UnicodeDecodeError):
+        return False
+    if not read_files:
+        return False
+
+    for section_name in section_names:
+        if not config.has_option(section_name, "pythonpath"):
+            continue
+        try:
+            pythonpath = config.get(section_name, "pythonpath", raw=True)
+        except configparser.Error:
+            continue
+        if _pythonpath_has_tests(pythonpath):
+            return True
+
+    return False
+
+
+def _tests_dir_on_pythonpath() -> bool:
+    for config_file in PYTEST_TOML_FILES:
+        pytest_toml = _resolve_config_path(config_file)
+        if pytest_toml.exists():
+            return _tests_dir_on_pytest_toml_pythonpath(pytest_toml)
+
+    for config_file, section_names in PYTEST_INI_CONFIGS:
+        resolved_config = _resolve_config_path(config_file)
+        if resolved_config.exists():
+            return _tests_dir_on_ini_pythonpath(resolved_config, section_names)
+
+    pyproject = _resolve_config_path(PYPROJECT_FILE)
+    pyproject_exists = pyproject.exists()
+    if pyproject_exists:
+        pyproject_result = _tests_dir_on_pyproject_pythonpath(pyproject)
+        if pyproject_result is not None:
+            return pyproject_result
+
+    for config_file, section_names in PYTEST_FALLBACK_INI_CONFIGS:
+        resolved_config = _resolve_config_path(config_file)
+        if resolved_config.exists():
+            return _tests_dir_on_ini_pythonpath(resolved_config, section_names)
+
+    return False
 
 
 def _read_local_modules() -> set[str]:
@@ -281,7 +441,7 @@ def extract_imports_from_file(file_path: Path) -> set[str]:
             for alias in node.names:
                 module = alias.name.split(".")[0]
                 imports.add(module)
-        elif isinstance(node, ast.ImportFrom) and node.module:
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
             module = node.module.split(".")[0]
             imports.add(module)
 
