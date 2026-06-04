@@ -27,7 +27,7 @@ dev = [
     "PyYAML==6.0.3",
     "types-PyYAML==6.0.12.20260510",
     "pytest-httpserver==1.1.5",
-    "numpy==2.3.0",
+    "numpy==2.4.6",
     "pandas==3.0.3",
     # Shared app behavior baseline harness (pulls pytest-regressions). Pinned to
     # the Workflows default branch; move to a tagged ref once the package is versioned.
