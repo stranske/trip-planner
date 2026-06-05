@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from importlib import resources
 from typing import Any
 
@@ -28,7 +28,16 @@ class BookingFlag:
     pattern_id: str
 
     def to_dict(self) -> dict[str, str]:
-        return asdict(self)
+        return {
+            "item": self.item,
+            "why": self.why,
+            "deadline_rule": self.deadline_rule,
+            "confidence": self.confidence,
+            "release_pattern": self.release_pattern,
+            "backup": self.backup,
+            "matched_on": self.matched_on,
+            "pattern_id": self.pattern_id,
+        }
 
 
 def scan_trip(trip: dict[str, Any], *, appetite: str = "anchored") -> list[BookingFlag]:
@@ -76,7 +85,7 @@ def _match_pattern(pattern: dict[str, Any], trip: dict[str, Any]) -> list[Bookin
 
 def _transport_candidates(trip: dict[str, Any]) -> list[dict[str, str]]:
     candidates: list[dict[str, str]] = []
-    for item in _iter_nested_dicts(trip):
+    for item in _candidate_items(trip, "transport_segments"):
         mode = _text(item.get("mode") or item.get("transport_mode") or item.get("category"))
         operator = _text(item.get("operator") or item.get("provider") or item.get("carrier"))
         route_text = _joined(
@@ -105,7 +114,7 @@ def _transport_candidates(trip: dict[str, Any]) -> list[dict[str, str]]:
 
 def _poi_candidates(trip: dict[str, Any]) -> list[dict[str, str]]:
     candidates: list[dict[str, str]] = []
-    for item in _iter_nested_dicts(trip):
+    for item in _candidate_items(trip, "pois"):
         name = _text(item.get("name") or item.get("title") or item.get("label"))
         if not name:
             continue
@@ -156,6 +165,13 @@ def _flag_from_pattern(pattern: dict[str, Any], *, matched_on: str) -> BookingFl
         matched_on=matched_on,
         pattern_id=str(pattern["id"]),
     )
+
+
+def _candidate_items(trip: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    declared = trip.get(key)
+    if isinstance(declared, list):
+        return [item for item in declared if isinstance(item, dict)]
+    return _iter_nested_dicts(trip)
 
 
 def _iter_nested_dicts(value: Any) -> list[dict[str, Any]]:

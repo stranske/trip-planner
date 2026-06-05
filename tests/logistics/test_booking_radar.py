@@ -47,3 +47,43 @@ def test_no_release_item_never_promises_release() -> None:
     assert flag.release_pattern == "none"
     assert "release" not in flag.backup.casefold()
     assert "operator" in flag.deadline_rule.casefold()
+
+
+def test_declared_lists_bound_match_surface() -> None:
+    trip = {
+        "transport_segments": [],
+        "pois": [],
+        "inventory_summary": {
+            "bundles": [
+                {
+                    "title": "Glacier Express and Alhambra research notes",
+                    "summary": "Contains text that should not count as a saved transport segment or POI.",
+                }
+            ]
+        },
+    }
+
+    assert scan_trip(trip) == []
+
+
+def test_minimal_appetite_truncates_but_keeps_no_release_flags() -> None:
+    trip = {
+        "transport_segments": [
+            {"mode": "rail", "operator": "Glacier Express", "route": "Zermatt St Moritz"},
+            {"mode": "rail", "operator": "Bernina Express", "route": "Tirano Chur"},
+            {"mode": "rail", "operator": "Eurostar", "route": "London Paris"},
+            {"mode": "rail", "route": "Paris Milan"},
+        ],
+        "pois": [
+            {"name": "Classic Inca Trail trek"},
+            {"name": "Alhambra Nasrid Palaces"},
+            {"name": "The Last Supper"},
+            {"name": "Half Dome"},
+        ],
+    }
+
+    minimal_flags = scan_trip(trip, appetite="minimal")
+    expansive_flags = scan_trip(trip, appetite="expansive")
+
+    assert len(minimal_flags) < len(expansive_flags)
+    assert any(flag.item == "Inca Trail permit" for flag in minimal_flags)

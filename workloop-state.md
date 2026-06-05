@@ -1,19 +1,3 @@
-## 2026-06-05T23:16Z - opener lane issue #1319 booking radar
-
-- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
-- Source repo: `stranske/trip-planner`; source issue `#1319` (`Book-ahead radar v0 -- flag "must-prebook" items from a static knowledge base`).
-- Branch: `codex/issue-1319-booking-radar`, base `origin/main` `1d192c5c3`.
-- Selection notes: raw opener cap was below limit (`total_opener_owned=0`, `raw_cap_reached=false`). Existing high-priority Trend #5343 and LMS #180 remain scoped for owner deployment/evidence blockers; Trend #5422 and TPP #1154 are verifier/follow-up sequencing; approved Inv-Man-Intake queue item duplicated verified-complete issue #518 / PR #519 and was closed as duplicate #531 before selecting this unlinked implementation issue.
-- Implementation: added static `must_prebook.json` logistics knowledge base, deterministic `trip_planner.logistics.booking_radar.scan_trip`, package-data wiring, and read-only `read_booking_radar` planner tool.
-- Validation:
-  - `python -m pytest tests/logistics/test_booking_radar.py tests/app/test_planner_booking_radar_tool.py -q` -> 3 passed.
-  - `python -m ruff check trip_planner/logistics trip_planner/app/services/planner_tools.py tests/logistics/test_booking_radar.py tests/app/test_planner_booking_radar_tool.py` -> passed.
-  - `git diff --check` -> passed.
-  - Deliberate-break gate: temporarily removed the Glacier Express entry from `must_prebook.json`; `tests/logistics/test_booking_radar.py::test_flags_known_scarce_items` failed because the Glacier Express flag disappeared. Restored the entry and reran focused tests green.
-- PR/routing: opened PR #1343 at https://github.com/stranske/trip-planner/pull/1343. PR is open/non-draft, closes #1319, and has `agent:codex`, `agents:keepalive`, `autofix`, and `agent:retry`.
-- Post-open repair: cap-health at 2026-06-05T23:10Z lagged behind live checks and classified #1343 as `needs-dispatch-evidence`. Direct PR checks already showed active CI/Gate/verifier jobs, and `opener-repair-infra-stalls.py` dispatched Gate Followups anyway. Fresh direct `gh pr checks 1343` showed the new Gate path with current CI jobs pending/in progress; cap-health still lagged at 2026-06-05T23:11Z.
-- Next action: keepalive owns PR #1343 CI/review; opener should move to the next eligible issue on a future round after cap/drain discovery.
-
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
