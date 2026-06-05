@@ -1,3 +1,21 @@
+## 2026-06-05T18:05Z - opener lane issue #1317 score bounds
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1317` (`Clamp ranking final_score to [0,1] so scores are comparable`).
+- Branch: `codex/issue-1317-score-bounds`, base `origin/main` `453f1741e`.
+- Selection notes: raw opener cap was below limit (`total_opener_owned=2`, `raw_cap_reached=false`). Trend #5440 remains scoped/non-repairable on the strict-config owner/product decision. trip-planner #1340 has clean/green direct check evidence and is a closer-drain candidate despite stale helper `runner-failed` classification. Scoped high-priority Trend #5343 and LMS #180 remain excluded. #1317 was the oldest unlinked implementation issue outside scoped/linked lanes.
+- Implementation:
+  - Added explicit upper-bound penalties and lower-bound bonuses in business ranking so returned `final_score` remains in `[0,1]` while preserving `ScoreBreakdown` arithmetic.
+  - Added the same unit-interval score-bound handling to leisure ranking.
+  - Added focused regression coverage using existing high-signal business and leisure fixtures that exceeded 1.0 on main.
+- Validation:
+  - `python -m pytest tests/ranking/test_score_bounds.py::test_final_score_within_unit_interval -q` -> 1 passed.
+  - Deliberate-break gate: temporarily disabled the business upper-bound clamp; the named test failed with `AssertionError: assert 1.0459 <= 1.0`. Restored the clamp and reran green.
+  - `python -m ruff check trip_planner/ranking/business.py trip_planner/ranking/leisure.py tests/ranking/test_score_bounds.py` -> passed.
+  - `python -m pytest tests/ranking/ -q` -> 64 passed.
+  - `git diff --check origin/main` -> passed.
+- Next action: open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; keepalive owns CI/review after PR creation.
+
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
