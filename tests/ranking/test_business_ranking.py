@@ -425,6 +425,19 @@ def test_business_ranking_reorders_candidates_by_business_constraints(
     assert results.results[0].score > results.results[1].score
 
 
+def test_business_rank_bundles_rejects_empty_bundle_sequence() -> None:
+    profile, objectives, constraint_set = _objectives_for_scenario("compliant_conference_trip.json")
+
+    with pytest.raises(ValueError, match="bundles must contain at least one InventoryBundle"):
+        BusinessRankingEngine().rank_bundles(
+            profile,
+            objectives,
+            [],
+            trip_id="trip-empty-business",
+            constraint_set=constraint_set,
+        )
+
+
 def test_business_ranking_uses_provided_feasibility_outputs() -> None:
     profile, objectives, constraint_set = _objectives_for_scenario(
         "schedule_sensitive_client_trip.json"

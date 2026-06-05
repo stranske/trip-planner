@@ -1,3 +1,25 @@
+## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1308` (`Extract a shared BaseRankingEngine for leisure and business ranking`).
+- Branch: `codex/issue-1308-base-ranking-engine`, base `origin/main` `035c39da8`.
+- Selection notes: raw opener cap was below limit (`total_opener_owned=1`, `raw_cap_reached=false`). Existing opener-owned Trend PR #5440 remains scoped/non-repairable on the strict-config owner/product decision. High-priority Trend #5343 was freshly scoped because merged PR #5374 already delivered the code and the remaining blocker is owner public demo URL/screenshots/network evidence or waiver. LMS #180 remains scoped. trip-planner #1306 is a tracking epic; #1307 is already served by merged PR #1327. #1308 was the oldest unlinked implementation issue outside scoped blockers.
+- Implementation:
+  - Added `trip_planner/ranking/base.py` with shared `BaseRankingEngine` validators for feasibility outputs, candidate sets, and bundle sequences.
+  - Re-parented `LeisureRankingEngine` and `BusinessRankingEngine` to inherit the shared validators while leaving subclass-specific profile/objective validation, weights, and scoring internals in place.
+  - Reordered ranking package exports so direct base imports do not reintroduce the existing itinerary/ranking partial-initialization cycle.
+  - Added `tests/ranking/test_base_ranking_engine.py` for shared method identity and distinct component-weight sums.
+  - Added empty-bundle regression coverage in the business and leisure ranking suites so the deliberate-break gate proves both engines use the shared guard.
+- Validation:
+  - `python -m pytest tests/ranking/test_base_ranking_engine.py -q` -> 2 passed.
+  - `python -m pytest tests/ranking/test_business_ranking.py tests/ranking/test_leisure_ranking.py -q` -> 27 passed after restoring the deliberate break.
+  - `python -m pytest tests/ranking/ -q` -> 63 passed.
+  - `python -m ruff check trip_planner/ranking tests/ranking/test_base_ranking_engine.py tests/ranking/test_business_ranking.py tests/ranking/test_leisure_ranking.py` -> passed.
+  - `git diff --check` -> passed.
+  - Grep gate: `leisure.py` and `business.py` each have 0 local `def validate_feasibility_outputs`; `base.py` has the single definition.
+  - Deliberate-break gate: temporarily removed the empty-bundle guard from `BaseRankingEngine.validate_bundles`; `python -m pytest tests/ranking/test_business_ranking.py tests/ranking/test_leisure_ranking.py -q` failed the new business and leisure empty-bundle assertions with `results must contain at least one RankedResult`. Restored the guard and reran green.
+- Next action: open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; keepalive owns CI/review after PR creation.
+
 ## 2026-06-05T05:08Z - opener lane issue #1307 ingestion dedupe
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
