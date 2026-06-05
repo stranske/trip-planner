@@ -18,7 +18,12 @@ from trip_planner.app.services.planner_memory import (
     ensure_planner_memory_persisted,
     refresh_planner_memory,
 )
-from trip_planner.app.services.planner_routing import IntentClassifier, route_planner_turn
+from trip_planner.app.services.planner_routing import (
+    TASK_CLASSES,
+    IntentClassifier,
+    IntentResult,
+    route_planner_turn,
+)
 from trip_planner.app.services.planner_runtime_config import (
     PlannerRuntimeConfig,
     build_intent_classifier,
@@ -89,6 +94,7 @@ class _PlannerTurnRuntime:
     runtime_context: dict[str, Any]
     runtime_config: PlannerRuntimeConfig
     intent_classifier: IntentClassifier
+    chat_model: PlannerChatModel | None
     fleet_context: PlannerFleetContext
     activity_log: list[dict[str, Any]]
     executed_tool_calls: list[dict[str, Any]]
@@ -635,6 +641,8 @@ def _planner_turn_metadata(
             "runtime_model": runtime_config.model,
         },
     )
+    if intent_result.task_class not in TASK_CLASSES:
+        intent_result = IntentResult(task_class=task_class, intent=task_class)
     provider_state = "model" if runtime_config.mode == "model" else "fallback"
     routing_decision = route_planner_turn(
         message=message,
@@ -1109,10 +1117,21 @@ def set_intent_classifier_factory_for_tests(
     _INTENT_CLASSIFIER_FACTORY = factory
 
 
-def _intent_classifier(runtime_config: PlannerRuntimeConfig) -> IntentClassifier:
+def _planner_chat_model(runtime_config: PlannerRuntimeConfig) -> PlannerChatModel:
+    factory = _PLANNER_CHAT_MODEL_FACTORY or (
+        lambda config: _OpenAIPlannerChatModel(config)
+    )
+    return factory(runtime_config)
+
+
+def _intent_classifier(
+    runtime_config: PlannerRuntimeConfig,
+    *,
+    chat_model: PlannerChatModel | None = None,
+) -> IntentClassifier:
     if _INTENT_CLASSIFIER_FACTORY is not None:
         return _INTENT_CLASSIFIER_FACTORY(runtime_config)
-    return build_intent_classifier(runtime_config)
+    return build_intent_classifier(runtime_config, model=chat_model)
 
 
 def _redact_openai_planner_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1218,6 +1237,20 @@ class _OpenAIPlannerChatModel:
         self._model = ChatOpenAI(model=config.model, temperature=0)
 
     def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if payload.get("task") == "classify_planner_intent":
+            response = self._model.invoke(
+                [
+                    (
+                        "system",
+                        "Classify the traveler planner intent. Return only JSON with "
+                        "`task_class` and `intent` keys. `task_class` must be one of "
+                        "the supplied allowed_task_classes.",
+                    ),
+                    ("human", json.dumps(payload, default=str)),
+                ]
+            )
+            return {"content": str(response.content)}
+
         tools = [
             {
                 "type": "function",
@@ -1316,13 +1349,17 @@ class ModelBackedPlannerConversationRunnable:
         )
 
 
-def _planner_runnable(config: PlannerRuntimeConfig) -> PlannerConversationRunnable:
+def _planner_runnable(
+    config: PlannerRuntimeConfig,
+    *,
+    chat_model: PlannerChatModel | None = None,
+) -> PlannerConversationRunnable:
     if config.mode != "model":
         return DeterministicPlannerConversationRunnable()
-    factory = _PLANNER_CHAT_MODEL_FACTORY or (
-        lambda runtime_config: _OpenAIPlannerChatModel(runtime_config)
+    return ModelBackedPlannerConversationRunnable(
+        config,
+        chat_model or _planner_chat_model(config),
     )
-    return ModelBackedPlannerConversationRunnable(config, factory(config))
 
 
 def _conversation_id(trip_id: str) -> str:
@@ -1686,7 +1723,8 @@ def _prepare_planner_turn_runtime(
     )
     activity_log = _activity_log(db_session, trip_id=trip_id)
     runtime_config = get_planner_runtime_config()
-    intent_classifier = _intent_classifier(runtime_config)
+    chat_model = _planner_chat_model(runtime_config) if runtime_config.mode == "model" else None
+    intent_classifier = _intent_classifier(runtime_config, chat_model=chat_model)
     fleet_context = PlannerFleetContext(
         run_id=f"planner-turn:{secrets.token_hex(8)}",
         session_id=session.session_state_id,
@@ -1711,6 +1749,7 @@ def _prepare_planner_turn_runtime(
         runtime_context=runtime_context,
         runtime_config=runtime_config,
         intent_classifier=intent_classifier,
+        chat_model=chat_model,
         fleet_context=fleet_context,
         activity_log=activity_log,
         executed_tool_calls=executed_tool_calls,
@@ -1718,7 +1757,7 @@ def _prepare_planner_turn_runtime(
 
 
 def _invoke_planner_runtime(runtime: _PlannerTurnRuntime) -> PlannerConversationReply:
-    runnable = _planner_runnable(runtime.runtime_config)
+    runnable = _planner_runnable(runtime.runtime_config, chat_model=runtime.chat_model)
     langsmith_run_config = build_langsmith_run_config(
         context=runtime.fleet_context,
         metadata=_planner_turn_metadata(

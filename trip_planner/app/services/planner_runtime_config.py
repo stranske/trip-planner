@@ -52,9 +52,13 @@ def get_planner_runtime_config() -> PlannerRuntimeConfig:
     return build_planner_runtime_config(os.environ)
 
 
-def build_intent_classifier(runtime_config: PlannerRuntimeConfig) -> IntentClassifier:
+def build_intent_classifier(
+    runtime_config: PlannerRuntimeConfig,
+    *,
+    model: object | None = None,
+) -> IntentClassifier:
     if runtime_config.model_configured:
-        return ModelIntentClassifier()
+        return ModelIntentClassifier(model)
     return KeywordIntentClassifier()
 
 

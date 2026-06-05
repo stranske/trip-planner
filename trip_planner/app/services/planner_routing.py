@@ -12,6 +12,7 @@ tests. Traveler-facing planner copy does not consume these values.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from collections.abc import Mapping
@@ -192,6 +193,13 @@ class ModelIntentClassifier:
             )
         except Exception:
             return self._fallback.classify(message, context)
+        if isinstance(payload, Mapping) and "content" in payload and "task_class" not in payload:
+            try:
+                decoded = json.loads(str(payload.get("content") or "{}"))
+            except json.JSONDecodeError:
+                decoded = {}
+            if isinstance(decoded, Mapping):
+                payload = decoded
         if not isinstance(payload, Mapping):
             return self._fallback.classify(message, context)
         task_class = str(payload.get("task_class") or "").strip()
