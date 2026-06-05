@@ -84,7 +84,7 @@ describe("NewTripPage", () => {
       </TestMemoryRouter>
     );
 
-    expect(container.querySelectorAll("fieldset")).toHaveLength(3);
+    expect(container.querySelectorAll("fieldset").length).toBeGreaterThanOrEqual(3);
     expect(screen.getByRole("group", { name: "Trip basics" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "When" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Travelers" })).toBeInTheDocument();

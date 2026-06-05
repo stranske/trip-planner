@@ -1,28 +1,3 @@
-## 2026-06-05T14:10Z - opener lane issue #1313 spacing fieldsets
-
-- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
-- Source repo: `stranske/trip-planner`; source issue `#1313` (`Introduce a spacing-token scale and group form inputs with fieldsets`).
-- Branch: `codex/issue-1313-spacing-fieldsets`, base `origin/main` `451ddfdf1`; PR #1337.
-- Selection notes: raw opener cap was below limit (`total_opener_owned=2`, `raw_cap_reached=false`, `normal_cap_reached=false`). Trend PR #5440 remains scoped/non-repairable on the #5389 strict-config product decision. trip-planner PR #1336 had a mechanical keepalive-label gap; opener added `agents:keepalive`, `autofix`, and `agent:retry`, dispatched Gate Followups, and cap-health then classified #1336 as `draining` with fresh active Gate evidence. #1313 was the oldest unlinked implementation candidate outside scoped blockers, tracking epics, and linked/merged lanes.
-- Implementation:
-  - Added `--space-1` through `--space-6` spacing tokens in `frontend/src/styles.css` and migrated `gap`/`margin`/`padding` spacing declarations to those tokens.
-  - Grouped `NewTripPage` inputs into labelled `fieldset` sections: `Trip basics`, `When`, and `Travelers`, preserving all 10 field names and submit handling.
-  - Collapsed `.budget-form` to a single direct rule while preserving its background, radius, grid, gap, and padding styling.
-  - Added `NewTripPage` regression coverage asserting the three labelled fieldsets and all 10 named form controls remain present.
-- Validation:
-  - `npm --prefix frontend ci --cache /private/tmp/codex-npm-cache-trip-1313` -> installed dependencies from lockfile; npm reported existing audit findings (8 moderate, 1 critical).
-  - `npm --prefix frontend test -- NewTripPage` -> 2 passed after restoring the deliberate break.
-  - Deliberate-break gate: temporarily removed the `When` fieldset wrapper; `npm --prefix frontend test -- NewTripPage` failed with `expected ... to have a length of 3 but got 2`. Restored the wrapper and reran green.
-  - Spacing grep gate: `grep -oE '(gap|margin[a-z-]*|padding): *[0-9.]+rem' frontend/src/styles.css | grep -vc 'var(--space' || true` -> `0`.
-  - `.budget-form` grep gate: `grep -c '^\.budget-form *{' frontend/src/styles.css` -> `1`.
-  - `npm --prefix frontend test` -> 16 files passed, 107 tests passed (WorkspacePage deliberate-break stderr is expected by that suite).
-  - `npm exec -- tsc -b` from `frontend/` -> passed.
-  - `git diff --check` -> passed.
-  - Browser preview: Vite served at `http://127.0.0.1:4173`; direct `/trips/new` inspection was blocked by the protected route redirect without a live session/backend, so rendered form verification relied on Vitest.
-- PR/routing: opened PR #1337 at https://github.com/stranske/trip-planner/pull/1337. PR is open/non-draft, closes #1313, and has `agent:codex`, `agents:keepalive`, `autofix`, and `agent:retry`.
-- Post-open health: cap-health at `2026-06-05T14:11:20Z` showed #1337 `draining` with fresh active Gate evidence. It also reclassified #1336 as `needs-dispatch-evidence`; `opener-repair-infra-stalls.py` dispatched Gate Followups, and a direct workflow-dispatch run `27019917861` reached `Evaluate keepalive loop` success and `Mark agent running` in progress, so direct evidence is fresher than the helper's branch-filtered classification. Trend #5440 remains scoped/non-repairable on the #5389 strict-config owner/product decision.
-- Next action: keepalive owns PR #1337 CI/review; opener should move to the next eligible issue on a future round after cap/drain discovery.
-
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
