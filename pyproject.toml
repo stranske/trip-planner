@@ -52,6 +52,7 @@ include = ["scripts*", "trip_planner*"]
 [tool.setuptools.package-data]
 trip_planner = [
     "resources/business/*.json",
+    "resources/logistics/*.json",
     "resources/options/bundles/*.json",
     "resources/preferences/*.json",
 ]
