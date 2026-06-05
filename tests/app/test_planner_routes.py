@@ -338,6 +338,23 @@ def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> 
         assert "first_turn_triage" not in artifact.detail
 
 
+def test_planner_turn_emits_decision_block_for_pending_decisions(
+    client: TestClient,
+) -> None:
+    trip_id = _create_business_trip(client)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Help me choose the approval path before booking."},
+    )
+
+    assert response.status_code == 200
+    planner_blocks = response.json()["messages"][-1]["structured_blocks"]
+    decision_block = next(block for block in planner_blocks if block["kind"] == "decision")
+    assert decision_block["title"] == "Open decisions"
+    assert decision_block["metadata"]["decision_ids"]
+
+
 def test_planner_turn_summarizes_scattered_traveler_input(client: TestClient) -> None:
     trip_id = _create_trip(client)
 

@@ -78,6 +78,19 @@ class PlannerConversationReply:
     turn_metadata: dict[str, Any] | None = None
 
 
+@dataclass(slots=True)
+class _PlannerTurnRuntime:
+    normalized_message: str
+    session: PlanningSessionState
+    occurred_at: str
+    workspace_payload: dict[str, Any]
+    runtime_context: dict[str, Any]
+    runtime_config: PlannerRuntimeConfig
+    fleet_context: PlannerFleetContext
+    activity_log: list[dict[str, Any]]
+    executed_tool_calls: list[dict[str, Any]]
+
+
 class PlannerChatModel(Protocol):
     def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Return planner content and optional tool call requests."""
@@ -798,33 +811,25 @@ def _visible_block_items(
     return _dedupe_preserve_order(items)
 
 
-def _planner_response_structured_blocks(
+def _build_summary_block(
     *,
     content: str,
     metadata: dict[str, Any],
-    panel: dict[str, Any],
-    runtime_context: dict[str, Any],
-    tool_calls: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    blocks: list[dict[str, Any]] = []
-    decisions = list(panel.get("pending_decisions") or [])
-    options = list((panel.get("option_set") or {}).get("options") or [])
-    next_step_actions = list(panel.get("next_step_actions") or [])
-    runtime_comparison = runtime_context.get("runtime_scenario_comparison") or {}
-    scenarios = list(runtime_comparison.get("scenarios") or [])
-    planning_ledger = runtime_context.get("planning_ledger") or {}
-    ledger_summary = planning_ledger.get("summary") or {}
-
+) -> dict[str, Any]:
     summary_items = _visible_block_items(metadata, kinds={"summary", "guidance"})
-    blocks.append(
-        _structured_block(
-            kind="summary",
-            title="Planner summary",
-            body=_first_sentence(content),
-            items=summary_items[:3],
-        )
+    return _structured_block(
+        kind="summary",
+        title="Planner summary",
+        body=_first_sentence(content),
+        items=summary_items[:3],
     )
 
+
+def _build_question_block(
+    *,
+    metadata: dict[str, Any],
+    decisions: list[dict[str, Any]],
+) -> dict[str, Any] | None:
     question_items = _visible_block_items(
         metadata,
         kinds={"clarifying_questions", "question", "questions"},
@@ -834,15 +839,19 @@ def _planner_response_structured_blocks(
         question_items.insert(
             0, str(active_decision.get("prompt") or active_decision.get("title") or "")
         )
-    if question_items:
-        blocks.append(
-            _structured_block(
-                kind="question",
-                title="Questions to settle",
-                items=_dedupe_preserve_order(question_items)[:4],
-            )
-        )
+    if not question_items:
+        return None
+    return _structured_block(
+        kind="question",
+        title="Questions to settle",
+        items=_dedupe_preserve_order(question_items)[:4],
+    )
 
+
+def _build_planning_ledger_block(
+    *,
+    ledger_summary: dict[str, Any],
+) -> dict[str, Any] | None:
     ledger_items: list[str] = []
     ledger_entry_ids: list[str] = []
     for label, key in (
@@ -860,50 +869,57 @@ def _planner_response_structured_blocks(
                 continue
             ledger_items.append(f"{label}: {summary}")
             ledger_entry_ids.append(str(entry.get("ledger_entry_id") or ""))
-    if ledger_items:
-        blocks.append(
-            _structured_block(
-                kind="planning_ledger",
-                title="Planning memory",
-                items=_dedupe_preserve_order(ledger_items)[:6],
-                metadata={
-                    "ledger_entry_ids": [
-                        item for item in _dedupe_preserve_order(ledger_entry_ids) if item
-                    ][:6]
-                },
-            )
-        )
+    if not ledger_items:
+        return None
+    return _structured_block(
+        kind="planning_ledger",
+        title="Planning memory",
+        items=_dedupe_preserve_order(ledger_items)[:6],
+        metadata={
+            "ledger_entry_ids": [
+                item for item in _dedupe_preserve_order(ledger_entry_ids) if item
+            ][:6]
+        },
+    )
 
-    if decisions:
-        decision_items: list[str] = []
-        for decision in decisions[:3]:
-            prompt = str(decision.get("prompt") or decision.get("title") or "")
-            choices = ", ".join(str(choice) for choice in list(decision.get("choices") or []))
-            decision_items.append(f"{prompt} Choices: {choices}" if choices else prompt)
-        blocks.append(
-            _structured_block(
-                kind="decision",
-                title="Open decisions",
-                items=_dedupe_preserve_order(decision_items),
-                metadata={"decision_ids": [item.get("decision_id") for item in decisions[:3]]},
-            )
-        )
 
-    if options:
-        option_items = [
-            f"{option.get('label')}: {option.get('summary')}"
-            for option in options[:4]
-            if option.get("label") or option.get("summary")
-        ]
-        blocks.append(
-            _structured_block(
-                kind="route_option",
-                title="Route options in view",
-                items=_dedupe_preserve_order(option_items),
-                metadata={"option_ids": [item.get("option_id") for item in options[:4]]},
-            )
-        )
+def _build_decision_block(*, decisions: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not decisions:
+        return None
+    decision_items: list[str] = []
+    for decision in decisions[:3]:
+        prompt = str(decision.get("prompt") or decision.get("title") or "")
+        choices = ", ".join(str(choice) for choice in list(decision.get("choices") or []))
+        decision_items.append(f"{prompt} Choices: {choices}" if choices else prompt)
+    return _structured_block(
+        kind="decision",
+        title="Open decisions",
+        items=_dedupe_preserve_order(decision_items),
+        metadata={"decision_ids": [item.get("decision_id") for item in decisions[:3]]},
+    )
 
+
+def _build_route_option_block(*, options: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not options:
+        return None
+    option_items = [
+        f"{option.get('label')}: {option.get('summary')}"
+        for option in options[:4]
+        if option.get("label") or option.get("summary")
+    ]
+    return _structured_block(
+        kind="route_option",
+        title="Route options in view",
+        items=_dedupe_preserve_order(option_items),
+        metadata={"option_ids": [item.get("option_id") for item in options[:4]]},
+    )
+
+
+def _build_comparison_block(
+    *,
+    scenarios: list[dict[str, Any]],
+    options: list[dict[str, Any]],
+) -> dict[str, Any] | None:
     comparison_items: list[str] = []
     if len(scenarios) > 1:
         for scenario in scenarios[:4]:
@@ -922,15 +938,20 @@ def _planner_response_structured_blocks(
             for option in options[:4]
             if option.get("label") or option.get("summary")
         ]
-    if comparison_items:
-        blocks.append(
-            _structured_block(
-                kind="comparison",
-                title="Comparison frame",
-                items=_dedupe_preserve_order(comparison_items),
-            )
-        )
+    if not comparison_items:
+        return None
+    return _structured_block(
+        kind="comparison",
+        title="Comparison frame",
+        items=_dedupe_preserve_order(comparison_items),
+    )
 
+
+def _build_assumption_block(
+    *,
+    metadata: dict[str, Any],
+    runtime_context: dict[str, Any],
+) -> dict[str, Any]:
     assumption_items = [
         f"Planning maturity: {str(metadata.get('plan_maturity') or '').replace('_', ' ')}",
         f"Current work type: {str(metadata.get('task_class') or '').replace('_', ' ')}",
@@ -939,27 +960,61 @@ def _planner_response_structured_blocks(
     missing_sections = list(context_readiness.get("missing_sections") or [])
     if missing_sections:
         assumption_items.append(f"Missing workspace context: {', '.join(missing_sections)}")
-    blocks.append(
-        _structured_block(
-            kind="assumption",
-            title="Working assumptions",
-            items=_dedupe_preserve_order([item for item in assumption_items if item.strip(": ")]),
-        )
+    return _structured_block(
+        kind="assumption",
+        title="Working assumptions",
+        items=_dedupe_preserve_order([item for item in assumption_items if item.strip(": ")]),
     )
 
+
+def _build_next_action_block(
+    *,
+    metadata: dict[str, Any],
+    next_step_actions: list[dict[str, Any]],
+) -> dict[str, Any] | None:
     next_action_items = _visible_block_items(metadata, kinds={"next_steps", "next_action"})
     next_action_items.extend(
         str(action.get("description") or action.get("label") or "")
         for action in next_step_actions[:3]
     )
-    if next_action_items:
-        blocks.append(
-            _structured_block(
-                kind="next_action",
-                title="Next actions",
-                items=_dedupe_preserve_order(next_action_items)[:4],
-            )
-        )
+    if not next_action_items:
+        return None
+    return _structured_block(
+        kind="next_action",
+        title="Next actions",
+        items=_dedupe_preserve_order(next_action_items)[:4],
+    )
+
+
+def _planner_response_structured_blocks(
+    *,
+    content: str,
+    metadata: dict[str, Any],
+    panel: dict[str, Any],
+    runtime_context: dict[str, Any],
+    tool_calls: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    blocks: list[dict[str, Any]] = []
+    decisions = list(panel.get("pending_decisions") or [])
+    options = list((panel.get("option_set") or {}).get("options") or [])
+    next_step_actions = list(panel.get("next_step_actions") or [])
+    runtime_comparison = runtime_context.get("runtime_scenario_comparison") or {}
+    scenarios = list(runtime_comparison.get("scenarios") or [])
+    planning_ledger = runtime_context.get("planning_ledger") or {}
+    ledger_summary = planning_ledger.get("summary") or {}
+
+    for block in (
+        _build_summary_block(content=content, metadata=metadata),
+        _build_question_block(metadata=metadata, decisions=decisions),
+        _build_planning_ledger_block(ledger_summary=ledger_summary),
+        _build_decision_block(decisions=decisions),
+        _build_route_option_block(options=options),
+        _build_comparison_block(scenarios=scenarios, options=options),
+        _build_assumption_block(metadata=metadata, runtime_context=runtime_context),
+        _build_next_action_block(metadata=metadata, next_step_actions=next_step_actions),
+    ):
+        if block is not None:
+            blocks.append(block)
 
     return blocks
 
@@ -1502,14 +1557,14 @@ def resume_planner_session_payload(
     )
 
 
-def submit_planner_turn(
+def _prepare_planner_turn_runtime(
     db_session: Session,
     *,
     user: AuthenticatedUser,
     trip_id: str,
     message: str,
     tool_calls: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
+) -> _PlannerTurnRuntime:
     normalized_message = message.strip()
     if not normalized_message:
         raise ValueError("Planner turn message is required.")
@@ -1595,7 +1650,6 @@ def submit_planner_turn(
     )
     activity_log = _activity_log(db_session, trip_id=trip_id)
     runtime_config = get_planner_runtime_config()
-    runnable = _planner_runnable(runtime_config)
     fleet_context = PlannerFleetContext(
         run_id=f"planner-turn:{secrets.token_hex(8)}",
         session_id=session.session_state_id,
@@ -1612,32 +1666,47 @@ def submit_planner_turn(
         planner_memory=planner_memory,
         activity_log=activity_log,
     )
+    return _PlannerTurnRuntime(
+        normalized_message=normalized_message,
+        session=session,
+        occurred_at=occurred_at,
+        workspace_payload=workspace_payload,
+        runtime_context=runtime_context,
+        runtime_config=runtime_config,
+        fleet_context=fleet_context,
+        activity_log=activity_log,
+        executed_tool_calls=executed_tool_calls,
+    )
+
+
+def _invoke_planner_runtime(runtime: _PlannerTurnRuntime) -> PlannerConversationReply:
+    runnable = _planner_runnable(runtime.runtime_config)
     langsmith_run_config = build_langsmith_run_config(
-        context=fleet_context,
+        context=runtime.fleet_context,
         metadata=_planner_turn_metadata(
-            message=normalized_message,
-            runtime_config=runtime_config,
-            turn_index=len(activity_log),
-            planning_mode=session.selected_planning_mode,
+            message=runtime.normalized_message,
+            runtime_config=runtime.runtime_config,
+            turn_index=len(runtime.activity_log),
+            planning_mode=runtime.session.selected_planning_mode,
         ),
     )
     try:
         reply = runnable.invoke(
             PlannerConversationRequest(
-                trip_id=trip_id,
-                message=normalized_message,
-                planner_panel_state=workspace_payload["planner_panel_state"],
-                session=session,
-                runtime_context=runtime_context,
+                trip_id=runtime.fleet_context.trip_id,
+                message=runtime.normalized_message,
+                planner_panel_state=runtime.workspace_payload["planner_panel_state"],
+                session=runtime.session,
+                runtime_context=runtime.runtime_context,
                 langsmith_run_config=langsmith_run_config,
             )
         )
     except Exception as error:
         reply = _planner_model_error_reply(
-            session_state_id=session.session_state_id,
+            session_state_id=runtime.session.session_state_id,
             error=error,
         )
-    notebook_clarification = _notebook_focus_clarification(normalized_message)
+    notebook_clarification = _notebook_focus_clarification(runtime.normalized_message)
     if notebook_clarification and notebook_clarification not in reply.content:
         reply = PlannerConversationReply(
             content=f"{reply.content} {notebook_clarification}",
@@ -1665,24 +1734,35 @@ def submit_planner_turn(
             requested_tool_calls=reply.requested_tool_calls,
             structured_blocks=reply.structured_blocks,
             turn_metadata=_planner_turn_metadata(
-                message=normalized_message,
-                runtime_config=runtime_config,
-                turn_index=len(activity_log),
-                planning_mode=session.selected_planning_mode,
+                message=runtime.normalized_message,
+                runtime_config=runtime.runtime_config,
+                turn_index=len(runtime.activity_log),
+                planning_mode=runtime.session.selected_planning_mode,
             ),
         )
+    return reply
+
+
+def _assemble_planner_reply(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    runtime: _PlannerTurnRuntime,
+    reply: PlannerConversationReply,
+) -> PlannerConversationReply:
     model_tool_calls = _execute_model_tool_calls(
         db_session,
         user=user,
         trip_id=trip_id,
         tool_calls=reply.requested_tool_calls,
     )
-    executed_tool_calls.extend(model_tool_calls)
+    executed_tool_calls = [*runtime.executed_tool_calls, *model_tool_calls]
     model_runtime_failed = any(
         item.get("tool_name") == "planner_model" and item.get("status") == "error"
         for item in reply.tool_calls
     )
-    if runtime_config.mode == "model" and not model_runtime_failed:
+    if runtime.runtime_config.mode == "model" and not model_runtime_failed:
         grounding_tool_calls = _missing_grounding_tool_calls(executed_tool_calls)
         if grounding_tool_calls:
             executed_tool_calls.extend(
@@ -1714,13 +1794,13 @@ def submit_planner_turn(
             structured_blocks=_planner_response_structured_blocks(
                 content=reply.content,
                 metadata=reply.turn_metadata or {},
-                panel=workspace_payload["planner_panel_state"],
-                runtime_context=runtime_context,
+                panel=runtime.workspace_payload["planner_panel_state"],
+                runtime_context=runtime.runtime_context,
                 tool_calls=reply.tool_calls,
             ),
             turn_metadata=reply.turn_metadata,
         )
-    reply = PlannerConversationReply(
+    return PlannerConversationReply(
         content=reply.content,
         refs=reply.refs,
         tool_calls=reply.tool_calls,
@@ -1733,13 +1813,22 @@ def submit_planner_turn(
         turn_metadata=reply.turn_metadata,
     )
 
+
+def _persist_planner_reply(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    runtime: _PlannerTurnRuntime,
+    reply: PlannerConversationReply,
+) -> dict[str, Any]:
     planner_activity_event_id = f"activity:{trip_id}:{secrets.token_hex(4)}"
     _append_activity_event(
         db_session,
         activity_event_id=planner_activity_event_id,
         trip_id=trip_id,
-        session_state_id=session.session_state_id,
-        occurred_at=occurred_at,
+        session_state_id=runtime.session.session_state_id,
+        occurred_at=runtime.occurred_at,
         event_kind="planner_message",
         summary="Planner conversation service generated the next trip-scoped reply.",
         actor="planner",
@@ -1747,11 +1836,11 @@ def submit_planner_turn(
     )
     fleet_artifact_path = default_fleet_artifact_path()
     fleet_records = build_planner_fleet_records(
-        context=fleet_context,
-        runtime_mode=runtime_config.mode,
+        context=runtime.fleet_context,
+        runtime_mode=runtime.runtime_config.mode,
         turn_metadata=reply.turn_metadata or {},
         tool_calls=reply.tool_calls,
-        context_readiness=runtime_context["context_readiness"],
+        context_readiness=runtime.runtime_context["context_readiness"],
         artifact_ref=str(fleet_artifact_path),
     )
     fleet_write_status = "failed"
@@ -1766,9 +1855,9 @@ def submit_planner_turn(
     _record_planner_action(
         db_session,
         trip_id=trip_id,
-        session_state_id=session.session_state_id,
+        session_state_id=runtime.session.session_state_id,
         activity_event_id=planner_activity_event_id,
-        occurred_at=occurred_at,
+        occurred_at=runtime.occurred_at,
         action_type="planner_response",
         payload={
             "role": "planner",
@@ -1777,20 +1866,20 @@ def submit_planner_turn(
             "tool_calls": reply.tool_calls,
             "structured_blocks": reply.structured_blocks,
             "turn_metadata": reply.turn_metadata,
-            "selected_planning_mode": session.selected_planning_mode,
+            "selected_planning_mode": runtime.session.selected_planning_mode,
             "planning_stage": (
-                workspace_payload["planner_panel_state"]
+                runtime.workspace_payload["planner_panel_state"]
                 .get("planner_behavior", {})
                 .get("trip_stage")
             ),
-            "runtime_mode": runtime_config.mode,
-            "context_readiness": runtime_context["context_readiness"],
+            "runtime_mode": runtime.runtime_config.mode,
+            "context_readiness": runtime.runtime_context["context_readiness"],
             "langsmith_fleet": {
                 "artifact_path": (
                     str(fleet_artifact_path) if fleet_write_status == "written" else ""
                 ),
-                "run_id": fleet_context.run_id,
-                "trace_id": fleet_context.trace_id,
+                "run_id": runtime.fleet_context.run_id,
+                "trace_id": runtime.fleet_context.trace_id,
                 "record_count": fleet_record_count,
                 "write_status": fleet_write_status,
                 "write_error": fleet_write_error,
@@ -1800,9 +1889,41 @@ def submit_planner_turn(
     refresh_planner_memory(
         db_session,
         trip_id=trip_id,
-        session_state_id=session.session_state_id,
-        occurred_at=occurred_at,
+        session_state_id=runtime.session.session_state_id,
+        occurred_at=runtime.occurred_at,
     )
 
     db_session.commit()
     return _planner_session_payload(db_session, user=user, trip_id=trip_id)
+
+
+def submit_planner_turn(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    message: str,
+    tool_calls: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    runtime = _prepare_planner_turn_runtime(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        message=message,
+        tool_calls=tool_calls,
+    )
+    reply = _invoke_planner_runtime(runtime)
+    reply = _assemble_planner_reply(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        runtime=runtime,
+        reply=reply,
+    )
+    return _persist_planner_reply(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        runtime=runtime,
+        reply=reply,
+    )
