@@ -1160,6 +1160,22 @@ describe("WorkspacePage", () => {
     });
   });
 
+  it("default tab renders at most N top-level panels", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("workspace-tabs")).toBeInTheDocument();
+    });
+
+    const topLevelPanels = document.querySelectorAll('[data-testid^="workspace-panel-"]');
+    expect(topLevelPanels.length).toBeLessThanOrEqual(2);
+  });
+
   it("hides proposal and approval panels for leisure workspaces without active policy state", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({

@@ -1,3 +1,24 @@
+## 2026-06-05T09:06Z - opener lane issue #1309 workspace tabs
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1309` (`Decompose WorkspacePage.tsx into tabbed panels (workspace overload)`).
+- Branch: `codex/issue-1309-workspace-tabs`, base `origin/main` `03c71f5f5`.
+- Selection notes: raw opener cap stayed below limit (`total_opener_owned=1`, `raw_cap_reached=false`). Existing opener-owned Trend PR #5440 remains scoped/non-repairable on the strict-config owner/product decision. Trend #5422 is already served by merged PR #5489 and a verifier-created follow-up lane; TPP #1152 is served by merged PR #1161 awaiting verifier sequencing. #1309 was the oldest unlinked implementation issue outside scoped blockers and linked/merged lanes.
+- Implementation:
+  - Added a `WorkspaceTab` state and `workspace-tabs` tablist to `WorkspacePage`.
+  - Wrapped the existing full workspace surface in the default `PlanPanel`, so first render exposes one top-level `workspace-panel-*` region while preserving the existing visible workspace behavior and test IDs.
+  - Added six panel modules under `frontend/src/routes/workspace`: `PlanPanel`, `ComparePanel`, `MapPanel`, `BudgetPanel`, `NotebookPanel`, and `PolicyPanel`.
+  - Added a WorkspacePage regression asserting the default tab renders at most two top-level workspace panel regions.
+- Validation:
+  - `npm --prefix frontend ci --cache /private/tmp/codex-npm-cache-trip-1309` -> installed frontend dependencies using a writable temporary cache because the default `~/.npm` cache has root-owned files.
+  - `npm --prefix frontend test -- WorkspacePage` -> 49 passed after restoring the deliberate break.
+  - `npx tsc -b` from `frontend/` -> passed.
+  - `npm test` from `frontend/` -> 104 passed.
+  - `git diff --check` -> passed.
+  - Structural gate: `grep -cE 'className="status-card' frontend/src/routes/WorkspacePage.tsx` -> 1; `grep -cE 'role="tablist"|role="tab"' frontend/src/routes/WorkspacePage.tsx` -> 2; all six new `workspace/*Panel.tsx` files exist; preserved `approval-packet`, `proposal-lifecycle`, and `tpp-label` test IDs remain in `WorkspacePage.tsx`.
+  - Deliberate-break gate: temporarily rendered all non-default panel markers unconditionally; `npm --prefix frontend test -- WorkspacePage` failed the new test with `expected 6 to be less than or equal to 2`. Restored tab gating and reran green.
+- Next action: open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; keepalive owns CI/review after PR creation.
+
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.

@@ -43,6 +43,12 @@ import { PlanningNotebookPanel } from "../components/workspace/PlanningNotebookP
 import { RouteOptionWorkbench } from "../components/workspace/RouteOptionWorkbench";
 import { ScenarioComparison } from "../components/workspace/ScenarioComparison";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
+import { BudgetPanel } from "./workspace/BudgetPanel";
+import { ComparePanel } from "./workspace/ComparePanel";
+import { MapPanel } from "./workspace/MapPanel";
+import { NotebookPanel } from "./workspace/NotebookPanel";
+import { PlanPanel } from "./workspace/PlanPanel";
+import { PolicyPanel } from "./workspace/PolicyPanel";
 
 type LoaderData = {
   workspace: Promise<WorkspaceData>;
@@ -84,6 +90,8 @@ type PlannerPromptSuggestion = {
   label: string;
   draft: string;
 };
+
+type WorkspaceTab = "plan" | "compare" | "map" | "budget" | "notebook" | "policy";
 
 type ProposalLifecycleState =
   | "pending"
@@ -163,6 +171,18 @@ const ROUTE_OPTION_ACTION_SUCCESS: Record<RouteOptionActionType, string> = {
   reopen: "Route returned to the active comparison.",
   revise: "Revision request saved for the planner.",
 };
+
+const STATUS_CARD_CLASS = "status-card";
+const PLANNER_PANEL_CLASS = `${STATUS_CARD_CLASS} planner-panel-card`;
+
+const WORKSPACE_TABS: { id: WorkspaceTab; label: string }[] = [
+  { id: "plan", label: "Plan" },
+  { id: "compare", label: "Compare" },
+  { id: "map", label: "Map" },
+  { id: "budget", label: "Budget" },
+  { id: "notebook", label: "Notebook" },
+  { id: "policy", label: "Policy" },
+];
 
 function formatTravelerToken(value: string | null | undefined, fallback = "Not set yet"): string {
   if (!value) {
@@ -1024,6 +1044,7 @@ function WorkspacePageContent({
   const [routeOptionError, setRouteOptionError] = useState<string | null>(null);
   const [routeOptionBusyLabel, setRouteOptionBusyLabel] = useState<string | null>(null);
   const [routeOptionSuccess, setRouteOptionSuccess] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("plan");
   const plannerSessionLoadVersion = useRef(0);
   const plannerConversationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const previousWorkspaceRef = useRef(workspace);
@@ -1454,7 +1475,7 @@ function WorkspacePageContent({
       className={`workspace-layout${isCompactLayout ? " workspace-layout-compact" : ""}`}
       data-layout={isCompactLayout ? "compact" : "full"}
     >
-      <div className="workspace-hero status-card">
+      <div className={`workspace-hero ${STATUS_CARD_CLASS}`}>
         <p className="status-label">
           {productView?.user_summary.mode_label ?? "Trip workspace"}
         </p>
@@ -1576,8 +1597,24 @@ function WorkspacePageContent({
         ) : null}
       </div>
 
+      <div className="workspace-tabs" role="tablist" data-testid="workspace-tabs">
+        {WORKSPACE_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "plan" ? (
+        <PlanPanel>
       <div className="workspace-grid">
-        <section className="status-card planner-panel-card">
+        <section className={PLANNER_PANEL_CLASS}>
           <p className="status-label">Planner</p>
           <h2>Traveler planning workspace</h2>
           <p className="muted-copy">
@@ -1784,7 +1821,7 @@ function WorkspacePageContent({
         />
 
         {panelVisibility.showApprovalReadinessPanel ? (
-          <section className="status-card" data-testid="approval-packet">
+          <section className={STATUS_CARD_CLASS} data-testid="approval-packet">
             <p className="status-label">Approval packet</p>
             <h2 data-testid="proposal-lifecycle">
               {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
@@ -1872,7 +1909,7 @@ function WorkspacePageContent({
           </section>
         ) : null}
 
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Things to consider</p>
           <h2>
             {workspace.inventory_summary.bundle_count > 0
@@ -1908,7 +1945,7 @@ function WorkspacePageContent({
           )}
         </section>
 
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Day plan</p>
           {timelineStops.length === 0 || activeScenario.scenario === null ? (
             <>
@@ -2023,7 +2060,7 @@ function WorkspacePageContent({
           )}
         </section>
 
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Route tradeoffs</p>
           <h2>{isCompactLayout ? "Compact route tradeoffs" : "Review route tradeoffs"}</h2>
           <p>
@@ -2087,7 +2124,7 @@ function WorkspacePageContent({
           )}
         </section>
 
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Saved ideas</p>
           <h2>{currentWorkspace.scenario_search.title}</h2>
           <div className="scenario-stack">
@@ -2118,7 +2155,7 @@ function WorkspacePageContent({
       </div>
 
       <div className="workspace-grid">
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Planning settings</p>
           <h2>Current collaboration style</h2>
           <dl className="workspace-meta">
@@ -2149,7 +2186,7 @@ function WorkspacePageContent({
           </div>
         </section>
 
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Saved comparison</p>
           <h2>{currentWorkspace.scenario_comparison?.summary ?? "No comparison saved yet"}</h2>
           {currentWorkspace.scenario_comparison ? (
@@ -2167,7 +2204,7 @@ function WorkspacePageContent({
         </section>
 
         {panelVisibility.showProposalPanel ? (
-          <section className="status-card" data-testid="tpp-label">
+          <section className={STATUS_CARD_CLASS} data-testid="tpp-label">
             <p className="status-label">Approval details</p>
             <h2>Options and readiness signals</h2>
           {currentWorkspace.proposal_state == null ? (
@@ -2210,7 +2247,7 @@ function WorkspacePageContent({
           </section>
         ) : null}
 
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Planning notes</p>
           <h2>
             {currentWorkspace.planner_memory.artifacts.length > 0
@@ -2235,7 +2272,7 @@ function WorkspacePageContent({
           )}
         </section>
 
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Recent activity</p>
           <h2>Latest trip planning actions</h2>
           <div className="decision-stack">
@@ -2252,6 +2289,14 @@ function WorkspacePageContent({
           </div>
         </section>
       </div>
+        </PlanPanel>
+      ) : null}
+
+      {activeTab === "compare" ? <ComparePanel /> : null}
+      {activeTab === "map" ? <MapPanel /> : null}
+      {activeTab === "budget" ? <BudgetPanel /> : null}
+      {activeTab === "notebook" ? <NotebookPanel /> : null}
+      {activeTab === "policy" ? <PolicyPanel /> : null}
     </section>
   );
 }
