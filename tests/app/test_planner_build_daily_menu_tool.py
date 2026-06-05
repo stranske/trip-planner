@@ -116,3 +116,58 @@ def test_build_daily_menu_tool_registered_and_dispatches(
     assert result["output"]["menu_state"] == "ready"
     assert result["output"]["selected_stops"]
     assert result["output"]["selected_stops"][0]["stop_id"] == "act-gion"
+
+
+def test_build_daily_menu_tool_defaults_invalid_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        planner_tools,
+        "get_workspace_payload",
+        lambda *args, **kwargs: _workspace_payload(),
+    )
+    db_session = SimpleNamespace(info={})
+    user = AuthenticatedUser(
+        user_id="user-1",
+        email="planner@example.com",
+        display_name="Planner",
+    )
+
+    result = execute_planner_tool_call(
+        db_session,  # type: ignore[arg-type]
+        user=user,
+        trip_id="trip-kyoto",
+        tool_name="build_daily_menu",
+        arguments={"limit": "12 stops"},
+    ).to_dict()
+
+    assert result["status"] == "completed"
+    assert result["output"]["selected_stops"]
+
+
+def test_planner_menu_digest_normalizes_why_lines() -> None:
+    stop = planner_tools.MenuStop(
+        "act-gion",
+        "Gion district stroll",
+        "district",
+        3,
+        0.82,
+        45,
+        "activity_timing_summary",
+        0,
+        0.1,
+        "editorial-guide",
+        "editorial",
+        "Lantern walk\n  with   narrow lanes\tand evening shops.",
+    )
+    menu = planner_tools.assemble_daily_menu(
+        "trip-kyoto",
+        0,
+        [stop],
+        60,
+        planner_tools.SourceMix(0.2),
+    )
+
+    digest = planner_tools._planner_menu_digest(menu, limit=1)
+
+    assert digest[0]["why"] == "Lantern walk with narrow lanes and evening shops."

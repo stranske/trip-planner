@@ -185,6 +185,7 @@ def calibrate(
     """Greedily fill the day while steering toward the requested commercial mix."""
 
     require_non_negative(time_budget_minutes, "time_budget_minutes")
+    require_non_negative(balance_lambda, "balance_lambda")
     if any(not isinstance(item, MenuStop) for item in candidates):
         raise ValueError("candidates must contain MenuStop instances")
     context = tuple(context_tags)

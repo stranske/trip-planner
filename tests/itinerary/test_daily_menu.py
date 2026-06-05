@@ -4,6 +4,7 @@ from trip_planner.itinerary.daily_menu import (
     MenuStop,
     SourceFeedbackBandit,
     SourceMix,
+    calibrate,
     build_daily_menu,
 )
 
@@ -225,3 +226,13 @@ def test_determinism() -> None:
     b = build_daily_menu("t", 0, candidates, 300, SourceMix(0.4), context_tags=CTX)
     assert a.suggested_selection == b.suggested_selection
     assert a.rollup.realized_commercial_mix == b.rollup.realized_commercial_mix
+
+
+def test_calibrate_rejects_negative_balance_lambda() -> None:
+    candidates = kyoto_day_candidates()
+    try:
+        calibrate(candidates, SourceMix(0.5), 120, balance_lambda=-0.1)
+    except ValueError as exc:
+        assert "balance_lambda" in str(exc)
+    else:
+        raise AssertionError("negative balance_lambda should be rejected")

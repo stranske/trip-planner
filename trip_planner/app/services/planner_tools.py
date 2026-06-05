@@ -506,7 +506,7 @@ def _activity_commerciality(
         value = _probability_from_payload(trust_snapshot, "commerciality")
         if value is not None:
             return value
-    values = [
+    values: list[float | None] = [
         record.trust_signals.commerciality
         for record in source_records.values()
         if record.trust_signals.commerciality is not None
@@ -548,8 +548,9 @@ def _menu_stop_from_activity(
     option_id = str(activity.get("option_id") or "").strip()
     name = str(activity.get("name") or "").strip()
     timing = activity.get("timing_summary") or {}
+    raw_visit_minutes = timing.get("duration_minutes")
     try:
-        visit_minutes = int(timing.get("duration_minutes"))
+        visit_minutes = 0 if raw_visit_minutes is None else int(raw_visit_minutes)
     except (TypeError, ValueError):
         return None
     if not option_id or not name or visit_minutes <= 0:
@@ -612,6 +613,7 @@ def _workspace_menu_stops(
 def _planner_menu_digest(menu: Any, *, limit: int) -> list[dict[str, Any]]:
     digest = []
     for stop in menu.selected_stops()[:limit]:
+        why = " ".join(stop.why_go.split())
         digest.append(
             {
                 "stop_id": stop.stop_id,
@@ -620,10 +622,18 @@ def _planner_menu_digest(menu: Any, *, limit: int) -> list[dict[str, Any]]:
                 "minutes": stop.est_visit_minutes + stop.detour_minutes,
                 "source_id": stop.source_id,
                 "commerciality": stop.commerciality,
-                "why": stop.why_go[:180],
+                "why": why[:180],
             }
         )
     return digest
+
+
+def _bounded_menu_limit(value: Any) -> int:
+    try:
+        parsed = int(value or 12)
+    except (TypeError, ValueError):
+        parsed = 12
+    return max(1, min(12, parsed))
 
 
 def _build_daily_menu(
@@ -674,7 +684,7 @@ def _build_daily_menu(
         SourceMix(mix_target, tolerance=tolerance),
         context_tags=tuple(str(item) for item in arguments.get("context_tags", []) or []),
     )
-    limit = max(1, min(12, int(arguments.get("limit", 12) or 12)))
+    limit = _bounded_menu_limit(arguments.get("limit", 12))
     digest = _planner_menu_digest(menu, limit=limit)
     return PlannerToolResult(
         tool_name="build_daily_menu",
