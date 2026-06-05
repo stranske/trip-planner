@@ -331,6 +331,20 @@ _NON_DESTINATION_CAPITALIZED_TOKENS = {
     "not",
     "please",
 }
+_CLARIFYING_SKIP_AFFORDANCE = (
+    "You can skip any of these and we'll proceed with reasonable defaults."
+)
+_LOW_CONFIDENCE_LABELS = {"sparse", "uncertain"}
+_LOW_CONFIDENCE_UNCERTAINTY_LINE = (
+    "Source coverage is thin, so treat these options as uncertain until more evidence is attached."
+)
+_PLANNER_SYSTEM_PROMPT = (
+    "You are a trip-scoped planner. Use only the listed app tools for "
+    "workspace, inventory, scenario, budget, policy, or proposal facts. "
+    "Do not invent persisted state. Keep answers concise, lead with concrete "
+    "options before discussion, and explicitly state uncertainty when source "
+    "coverage is thin."
+)
 
 
 def _structured_block(
@@ -350,6 +364,10 @@ def _structured_block(
         "metadata": dict(metadata or {}),
         "hidden": hidden,
     }
+
+
+def _bounded_clarifying_items(items: list[str]) -> list[str]:
+    return [*items[:2], _CLARIFYING_SKIP_AFFORDANCE]
 
 
 def _looks_like_destination_token(token: str, index: int) -> bool:
@@ -556,11 +574,13 @@ def _planner_turn_metadata(
             {
                 "kind": "clarifying_questions",
                 "title": "Quick questions",
-                "items": [
-                    "Where are you considering going?",
-                    "When would you like to travel?",
-                    "What would make this trip feel successful?",
-                ],
+                "items": _bounded_clarifying_items(
+                    [
+                        "Where are you considering going?",
+                        "When would you like to travel?",
+                        "What would make this trip feel successful?",
+                    ]
+                ),
             },
         ]
     elif constraint_hits >= 5 or question_hits >= 3 or len(tokens) >= 45:
@@ -622,10 +642,12 @@ def _planner_turn_metadata(
             {
                 "kind": "clarifying_questions",
                 "title": "Targeted questions",
-                "items": [
-                    "What dates or trip length should the planner assume?",
-                    "Which tradeoff matters most: budget, pace, lodging, route, or approvals?",
-                ],
+                "items": _bounded_clarifying_items(
+                    [
+                        "What dates or trip length should the planner assume?",
+                        "Which tradeoff matters most: budget, pace, lodging, route, or approvals?",
+                    ]
+                ),
             },
         ]
 
@@ -854,6 +876,38 @@ def _build_summary_block(
     )
 
 
+def _confidence_label_from_runtime_context(runtime_context: dict[str, Any]) -> str:
+    for value in (
+        runtime_context.get("confidence_label"),
+        (runtime_context.get("source_confidence") or {}).get("confidence_label")
+        if isinstance(runtime_context.get("source_confidence"), dict)
+        else None,
+        (runtime_context.get("source_confidence_summary") or {}).get("confidence_label")
+        if isinstance(runtime_context.get("source_confidence_summary"), dict)
+        else None,
+    ):
+        label = str(value or "").strip().lower()
+        if label:
+            return label
+    return ""
+
+
+def _surface_low_confidence_uncertainty(
+    *,
+    blocks: list[dict[str, Any]],
+    runtime_context: dict[str, Any],
+) -> None:
+    if _confidence_label_from_runtime_context(runtime_context) not in _LOW_CONFIDENCE_LABELS:
+        return
+    for block in blocks:
+        if str(block.get("kind") or "") != "summary":
+            continue
+        items = list(block.get("items") or [])
+        if _LOW_CONFIDENCE_UNCERTAINTY_LINE not in items:
+            block["items"] = [_LOW_CONFIDENCE_UNCERTAINTY_LINE, *items[:2]]
+        return
+
+
 def _build_question_block(
     *,
     metadata: dict[str, Any],
@@ -870,10 +924,13 @@ def _build_question_block(
         )
     if not question_items:
         return None
+    question_items = _dedupe_preserve_order(question_items)
+    if len(question_items) > 4 and _CLARIFYING_SKIP_AFFORDANCE in question_items:
+        question_items.remove(_CLARIFYING_SKIP_AFFORDANCE)
     return _structured_block(
         kind="question",
         title="Questions to settle",
-        items=_dedupe_preserve_order(question_items)[:4],
+        items=question_items[:4],
     )
 
 
@@ -1045,6 +1102,7 @@ def _planner_response_structured_blocks(
         if block is not None:
             blocks.append(block)
 
+    _surface_low_confidence_uncertainty(blocks=blocks, runtime_context=runtime_context)
     return blocks
 
 
@@ -1275,9 +1333,7 @@ class _OpenAIPlannerChatModel:
             [
                 (
                     "system",
-                    "You are a trip-scoped planner. Use only the listed app tools for "
-                    "workspace, inventory, scenario, budget, policy, or proposal facts. "
-                    "Do not invent persisted state.",
+                    _PLANNER_SYSTEM_PROMPT,
                 ),
                 (
                     "human",
