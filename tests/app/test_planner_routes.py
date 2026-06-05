@@ -10,6 +10,7 @@ from sqlalchemy import delete, select
 from trip_planner.app.main import create_app
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.planner import (
+    set_intent_classifier_factory_for_tests,
     set_planner_chat_model_factory_for_tests,
     set_planner_prompt_redactor_for_tests,
 )
@@ -46,6 +47,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     monkeypatch.delenv("LANGSMITH_PROJECT", raising=False)
     monkeypatch.delenv("LANGCHAIN_TRACING_V2", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_LANGSMITH_FLEET_PATH", raising=False)
+    set_intent_classifier_factory_for_tests(None)
     set_planner_chat_model_factory_for_tests(None)
     set_planner_prompt_redactor_for_tests(None)
     reset_database_state()
@@ -63,6 +65,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
         assert signup.status_code == 201
         yield test_client
 
+    set_intent_classifier_factory_for_tests(None)
     set_planner_chat_model_factory_for_tests(None)
     set_planner_prompt_redactor_for_tests(None)
     reset_database_state()

@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Final
+from collections.abc import Mapping
+from typing import Any, Final, Protocol
 
 EFFORT_FAST: Final = "fast"
 EFFORT_STANDARD: Final = "standard"
@@ -33,6 +34,7 @@ TASK_MAJOR_REVISION: Final = "major_revision"
 TASK_POLICY_PREPARATION: Final = "policy_preparation"
 TASK_RESEARCH_TOOL_PASS: Final = "research_tool_pass"
 TASK_FINAL_SUMMARY: Final = "final_summary"
+TASK_DECISION: Final = "decision"
 
 TASK_CLASSES: Final = (
     TASK_QUICK_ACKNOWLEDGEMENT,
@@ -46,6 +48,7 @@ TASK_CLASSES: Final = (
     TASK_POLICY_PREPARATION,
     TASK_RESEARCH_TOOL_PASS,
     TASK_FINAL_SUMMARY,
+    TASK_DECISION,
 )
 
 _BASE_EFFORT_BY_TASK: Final[dict[str, str]] = {
@@ -60,6 +63,7 @@ _BASE_EFFORT_BY_TASK: Final[dict[str, str]] = {
     TASK_POLICY_PREPARATION: EFFORT_DEEP,
     TASK_RESEARCH_TOOL_PASS: EFFORT_DEEP,
     TASK_FINAL_SUMMARY: EFFORT_DEEP,
+    TASK_DECISION: EFFORT_STANDARD,
 }
 
 _ACK_PATTERN = re.compile(
@@ -126,6 +130,75 @@ class RoutingDecision:
             "fallback_reason": self.fallback_reason,
             "reasoning": self.reasoning,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class IntentResult:
+    """Classifier output consumed by planner turn routing."""
+
+    task_class: str
+    intent: str
+
+    def to_payload(self) -> dict[str, str]:
+        return {"task_class": self.task_class, "intent": self.intent}
+
+
+class IntentClassifier(Protocol):
+    """Classify the traveler message before model-effort routing."""
+
+    def classify(self, message: str, context: Mapping[str, Any]) -> IntentResult:
+        """Return the task class and high-level intent for ``message``."""
+
+
+class KeywordIntentClassifier:
+    """Deterministic fallback that preserves existing keyword routing behavior."""
+
+    def classify(self, message: str, context: Mapping[str, Any]) -> IntentResult:
+        base_task_class = str(context.get("base_task_class") or TASK_FIRST_TURN_TRIAGE)
+        task_class = classify_task_class(message, base_task_class=base_task_class)
+        lowered = message.lower()
+        if "decide" in lowered or "decision" in lowered:
+            return IntentResult(task_class=task_class, intent=TASK_DECISION)
+        if "completed" in lowered and any(
+            marker in lowered for marker in ("tasks", "items", "notes")
+        ):
+            return IntentResult(task_class=task_class, intent="completed_notebook_items")
+        return IntentResult(task_class=task_class, intent=task_class)
+
+
+class ModelIntentClassifier:
+    """Model-backed classifier with deterministic keyword fallback."""
+
+    def __init__(
+        self,
+        model: Any | None = None,
+        *,
+        fallback: IntentClassifier | None = None,
+    ) -> None:
+        self._model = model
+        self._fallback = fallback or KeywordIntentClassifier()
+
+    def classify(self, message: str, context: Mapping[str, Any]) -> IntentResult:
+        if self._model is None:
+            return self._fallback.classify(message, context)
+        try:
+            payload = self._model.invoke(
+                {
+                    "task": "classify_planner_intent",
+                    "message": message,
+                    "context": dict(context),
+                    "allowed_task_classes": list(TASK_CLASSES),
+                }
+            )
+        except Exception:
+            return self._fallback.classify(message, context)
+        if not isinstance(payload, Mapping):
+            return self._fallback.classify(message, context)
+        task_class = str(payload.get("task_class") or "").strip()
+        intent = str(payload.get("intent") or task_class or "").strip()
+        if task_class not in TASK_CLASSES:
+            return self._fallback.classify(message, context)
+        return IntentResult(task_class=task_class, intent=intent or task_class)
 
 
 def classify_task_class(message: str, *, base_task_class: str) -> str:

@@ -6,6 +6,12 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from trip_planner.app.services.planner_routing import (
+    IntentClassifier,
+    KeywordIntentClassifier,
+    ModelIntentClassifier,
+)
+
 PROPRIETARY_DATA_ZONE = "proprietary"
 SYNTHETIC_DATA_ZONE = "synthetic"
 AUTHORIZED_OPENAI_ENDPOINT_ENV = "TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT"
@@ -44,6 +50,12 @@ class PlannerRuntimeConfig:
 
 def get_planner_runtime_config() -> PlannerRuntimeConfig:
     return build_planner_runtime_config(os.environ)
+
+
+def build_intent_classifier(runtime_config: PlannerRuntimeConfig) -> IntentClassifier:
+    if runtime_config.model_configured:
+        return ModelIntentClassifier()
+    return KeywordIntentClassifier()
 
 
 def build_planner_runtime_config(env: Mapping[str, str]) -> PlannerRuntimeConfig:

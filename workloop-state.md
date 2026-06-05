@@ -1,3 +1,24 @@
+## 2026-06-05T12:23Z - opener lane issue #1311 intent classifier seam
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1311` (`Replace substring intent detection with a pluggable intent-classifier seam`).
+- Branch: `codex/issue-1311-intent-classifier`, base `origin/main` `98de58b4c`.
+- Selection notes: raw opener cap was below limit. Cap-drain preflight repaired trip-planner PR #1333 by adding `agents:keepalive`/`agent:retry` and dispatching Gate Followups; fresh evidence showed #1333 actively draining. Trend PR #5440 remains scoped/non-repairable on the strict-config owner/product decision. Two normal-priority approved queue entries were stale duplicates and were closed with evidence: Inv-Man-Intake #528 duplicated verified-complete #518/PR #519, and Trend #5511 duplicated existing Monte Carlo CLI docs/tests. After those dispositions, #1311 was the oldest unlinked implementation issue outside scoped blockers.
+- Implementation:
+  - Added `IntentResult`, `IntentClassifier`, `KeywordIntentClassifier`, and `ModelIntentClassifier` to `planner_routing.py`.
+  - Threaded an injectable intent classifier through planner runtime preparation, deterministic/model runnable metadata, LangSmith metadata, persisted turn metadata, and API response schema.
+  - Kept keyword fallback deterministic while exposing classifier-selected `task_class` plus top-level/debug `intent`.
+  - Added `tests/app/test_planner_intent.py::test_injected_classifier_routes_turn` for the non-keyword message `let's lock it in` routing as `decision` via a stub classifier.
+- Validation:
+  - `python -m pytest tests/app/test_planner_intent.py::test_injected_classifier_routes_turn -q` -> 1 passed.
+  - Deliberate-break gate: temporarily bypassed `intent_result.task_class` in `_planner_turn_metadata`; the named test failed with `first_turn_triage != decision`. Restored the seam and reran green.
+  - `python -m pytest tests/app/test_planner_routing.py -q` -> 38 passed.
+  - `python -m pytest tests/app/test_planner_routes.py -q` -> 39 passed.
+  - `python -m pytest tests/app/ -q -k planner` -> 92 passed, 149 deselected.
+  - `python -m ruff check trip_planner/app/services/planner.py trip_planner/app/services/planner_routing.py trip_planner/app/services/planner_runtime_config.py trip_planner/app/schemas/planner.py tests/app/test_planner_intent.py tests/app/test_planner_routes.py` -> passed.
+  - `git diff --check` -> passed.
+- Next action: open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; keepalive owns CI/review after PR creation.
+
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
