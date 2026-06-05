@@ -76,4 +76,32 @@ describe("NewTripPage", () => {
     });
     expect(mockedNavigate).toHaveBeenCalledWith("/workspace/trip-kyoto-123abc");
   });
+
+  it("groups inputs into labelled fieldsets", () => {
+    const { container } = render(
+      <TestMemoryRouter>
+        <NewTripPage />
+      </TestMemoryRouter>
+    );
+
+    expect(container.querySelectorAll("fieldset").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getByRole("group", { name: "Trip basics" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "When" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Travelers" })).toBeInTheDocument();
+
+    for (const fieldName of [
+      "title",
+      "summary",
+      "mode",
+      "primaryRegions",
+      "startDate",
+      "endDate",
+      "durationDays",
+      "travelerKind",
+      "travelerCount",
+      "travelerNotes",
+    ]) {
+      expect(container.querySelector(`[name="${fieldName}"]`)).toBeInTheDocument();
+    }
+  });
 });

@@ -55,55 +55,64 @@ export function NewTripPage() {
           Add the basics now. You can refine routes, notes, budget, and decisions in the planner.
         </p>
         <form className="auth-form" onSubmit={handleSubmit}>
-          <label>
-            Title
-            <input name="title" type="text" required />
-          </label>
-          <label>
-            Summary
-            <input name="summary" type="text" />
-          </label>
-          <label>
-            Mode
-            <select name="mode" defaultValue="leisure">
-              <option value="leisure">Leisure</option>
-              <option value="business">Business</option>
-            </select>
-          </label>
-          <label>
-            Start date
-            <input name="startDate" type="date" />
-          </label>
-          <label>
-            End date
-            <input name="endDate" type="date" />
-          </label>
-          <label>
-            Duration days
-            <input name="durationDays" type="number" min={1} defaultValue={7} />
-          </label>
-          <label>
-            Primary regions
-            <input name="primaryRegions" type="text" placeholder="Kyoto, Osaka" />
-          </label>
-          <label>
-            Traveler party
-            <select name="travelerKind" defaultValue="solo">
-              <option value="solo">Solo</option>
-              <option value="pair">Pair</option>
-              <option value="family">Family</option>
-              <option value="friends">Friends</option>
-              <option value="team">Team</option>
-            </select>
-          </label>
-          <label>
-            Traveler count
-            <input name="travelerCount" type="number" min={1} defaultValue={1} />
-          </label>
-          <label>
-            Traveler notes
-            <input name="travelerNotes" type="text" />
-          </label>
+          <fieldset>
+            <legend>Trip basics</legend>
+            <label>
+              Title
+              <input name="title" type="text" required />
+            </label>
+            <label>
+              Summary
+              <input name="summary" type="text" />
+            </label>
+            <label>
+              Mode
+              <select name="mode" defaultValue="leisure">
+                <option value="leisure">Leisure</option>
+                <option value="business">Business</option>
+              </select>
+            </label>
+            <label>
+              Primary regions
+              <input name="primaryRegions" type="text" placeholder="Kyoto, Osaka" />
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>When</legend>
+            <label>
+              Start date
+              <input name="startDate" type="date" />
+            </label>
+            <label>
+              End date
+              <input name="endDate" type="date" />
+            </label>
+            <label>
+              Duration days
+              <input name="durationDays" type="number" min={1} defaultValue={7} />
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>Travelers</legend>
+            <label>
+              Traveler party
+              <select name="travelerKind" defaultValue="solo">
+                <option value="solo">Solo</option>
+                <option value="pair">Pair</option>
+                <option value="family">Family</option>
+                <option value="friends">Friends</option>
+                <option value="team">Team</option>
+              </select>
+            </label>
+            <label>
+              Traveler count
+              <input name="travelerCount" type="number" min={1} defaultValue={1} />
+            </label>
+            <label>
+              Traveler notes
+              <input name="travelerNotes" type="text" />
+            </label>
+          </fieldset>
           {errorMessage ? (
             <p className="auth-error" role="alert">
               {errorMessage}
