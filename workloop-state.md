@@ -17,7 +17,10 @@
   - Hotspot-shrink gate: `_planner_response_structured_blocks` body is 33 lines and `submit_planner_turn` body is 30 lines.
   - Builder-extraction gate: `grep -cE '^def _build_(summary|question|planning_ledger|decision|route_option|comparison|assumption|next_action)_block' trip_planner/app/services/planner.py` -> 8.
   - Deliberate-break gate: temporarily changed `_build_decision_block` to emit `kind="decision_BROKEN"`; `python -m pytest tests/app/test_planner_routes.py -q` failed with `test_planner_turn_emits_decision_block_for_pending_decisions` raising `StopIteration`. Restored the kind and reran the suite green.
-- Next action: commit, push, open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; keepalive owns CI/review after PR creation.
+- PR/routing: opened PR #1331 at https://github.com/stranske/trip-planner/pull/1331. PR is open/non-draft, closes #1310, and has `agent:codex`, `agents:keepalive`, `autofix`, and post-repair `agent:retry`.
+- Post-open repair: initial cap-health classified #1331 as `needs-dispatch-evidence` after cancelled initial Gate/Gate Followups/Autofix runs. `opener-repair-infra-stalls.py` added `agent:retry` and dispatched Gate Followups. Fresh cap-health at 2026-06-05T10:13:28Z classifies #1331 as `draining` with active Gate/Autofix evidence on the branch.
+- Existing PR drain note: #1330 is clean/green but currently carries `agent:needs-attention` after a Codex keepalive run failed with no output captured; this remains keepalive/closer-side drain work, not a blocker for opening #1310 because raw opener cap is still below 5.
+- Next action: keepalive owns PR #1331 CI/review; closer/keepalive should drain #1330's attention state when scheduled.
 
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
