@@ -1,3 +1,25 @@
+## 2026-06-05T05:08Z - opener lane issue #1307 ingestion dedupe
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1307` (`De-duplicate the four snapshot ingestion pipelines`).
+- Branch: `codex/issue-1307-ingestion-dedupe`, base `origin/main` `19774df45`.
+- Selection notes: raw opener cap was below limit (`total_opener_owned=1`, `raw_cap_reached=false`). Existing opener-owned Trend PR #5440 remains scoped/non-repairable on the strict-config owner/product decision; no cap-drain repair was available. High-priority liveness items #5343 and LMS #180 remained scoped, #5389 remains scoped through PR #5440, Workflows #2228/#2229 are already served by merged PRs, and trip-planner #1306 is a tracking epic. #1307 was the oldest unlinked implementation issue with no existing PR.
+- Implementation:
+  - Moved shared dedup decision record lookup, record-id lookup, per-record resolution lookup, conflict dedupe, and contribution-kind helpers into `trip_planner/ingestion/_common.py`.
+  - Rewired destination, lodging, activity, and transport ingestion pipelines to use the common helpers, removing their duplicate helper definitions.
+  - Converged `_dedupe_conflicts` on tuple-key semantics `(conflict_id, attribute_path, status)` so distinct conflict rows sharing one id are preserved.
+  - Added `tests/ingestion/test_common_dedupe.py` covering the shared tuple-key behavior.
+  - Post-open CI recovery: fixed `scripts/sync_test_dependencies.py` mypy tuple-shape inference by annotating pytest ini config constants as variadic string tuples.
+- Validation:
+  - `python -m pytest tests/ingestion -q` -> 18 passed.
+  - `python -m ruff check trip_planner/ingestion tests/ingestion/test_common_dedupe.py` -> passed.
+  - `python -m mypy --config-file pyproject.toml --exclude .workflows-lib scripts/sync_test_dependencies.py` -> passed after the CI recovery.
+  - Grep gate: all four entity pipeline files returned `0` for local `_records_for_decision`, `_record_ids_for_decision`, `_resolution_for_record`, `_dedupe_conflicts`, and `_contribution_kind` definitions; `_common.py` has exactly one `_dedupe_conflicts`.
+  - Public import gate printed `ingest_destination_snapshot`, `ingest_lodging_snapshot`, `ingest_activity_snapshot`, and `ingest_transport_snapshot`.
+  - `git diff --check` -> passed.
+  - Deliberate-break gate: temporarily replaced shared `_dedupe_conflicts` with conflict-id-only dict logic; `tests/ingestion/test_common_dedupe.py::test_dedupe_conflicts_preserves_distinct_attribute_rows` failed because the distinct refundable row was dropped. Restored tuple-key behavior and reran ingestion suite green.
+- Next action: open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; keepalive owns CI/review after PR creation.
+
 ## 2026-06-01T01:55Z - closer lane PR #1283 review fix pushed
 
 - Repo: `stranske/trip-planner`

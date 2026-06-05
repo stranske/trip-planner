@@ -20,6 +20,10 @@ from trip_planner.sources import (
 from ._common import (
     IngestionSummary,
     IngestionWarning,
+    _dedupe_conflicts,
+    _record_ids_for_decision,
+    _records_for_decision,
+    _resolution_for_record,
     build_provenance_reference,
     make_handoff,
     unresolved_conflicts,
@@ -43,11 +47,18 @@ class LodgingIngestionResult:
         require_non_empty(self.snapshot_id, "snapshot_id")
         if any(not isinstance(item, LodgingOption) for item in self.lodging_options):
             raise ValueError("lodging_options must contain LodgingOption instances")
-        if any(not isinstance(item, AttributeConflict) for item in self.unresolved_conflicts):
-            raise ValueError("unresolved_conflicts must contain AttributeConflict instances")
+        if any(
+            not isinstance(item, AttributeConflict)
+            for item in self.unresolved_conflicts
+        ):
+            raise ValueError(
+                "unresolved_conflicts must contain AttributeConflict instances"
+            )
         if any(not isinstance(item, IngestionWarning) for item in self.warnings):
             raise ValueError("warnings must contain IngestionWarning instances")
-        if self.handoff is not None and not isinstance(self.handoff, NormalizationHandoff):
+        if self.handoff is not None and not isinstance(
+            self.handoff, NormalizationHandoff
+        ):
             raise ValueError("handoff must be a NormalizationHandoff when provided")
         if not isinstance(self.summary, IngestionSummary):
             raise ValueError("summary must be an IngestionSummary")
@@ -71,7 +82,9 @@ def ingest_lodging_snapshot(
     resolutions = resolutions or []
     dedup_decisions = dedup_decisions or []
     warnings = [warning_from_issue(issue) for issue in snapshot.issues]
-    resolution_map = {resolution.resolution_id: resolution for resolution in resolutions}
+    resolution_map = {
+        resolution.resolution_id: resolution for resolution in resolutions
+    }
     emitted_ids: set[str] = set()
     filtered_record_ids: list[str] = []
     low_confidence_option_ids: list[str] = []
@@ -80,15 +93,22 @@ def ingest_lodging_snapshot(
     provenance_refs: list[ProvenanceReference] = []
 
     for decision in dedup_decisions:
-        if decision.entity_scope != "lodging" or decision.option_kind != snapshot.option_kind:
+        if (
+            decision.entity_scope != "lodging"
+            or decision.option_kind != snapshot.option_kind
+        ):
             continue
         record_ids = _record_ids_for_decision(decision, resolution_map)
-        candidate_records = _records_for_decision(snapshot.records, decision, resolution_map)
+        candidate_records = _records_for_decision(
+            snapshot.records, decision, resolution_map
+        )
         preserved_conflicts.extend(unresolved_conflicts(decision.preserved_conflicts))
         if decision.decision == "suppress":
             emitted_ids.update(record_ids)
             filtered_record_ids.extend(
-                record_id for record_id in record_ids if record_id not in filtered_record_ids
+                record_id
+                for record_id in record_ids
+                if record_id not in filtered_record_ids
             )
             continue
         if decision.decision in {"keep_separate", "needs_review"}:
@@ -109,9 +129,14 @@ def ingest_lodging_snapshot(
                     snapshot,
                     _separate_option_id(decision.canonical_entity_id, record),
                 )
-                option.notes.extend([f"dedup_decision:{decision.decision_id}", *decision.notes])
+                option.notes.extend(
+                    [f"dedup_decision:{decision.decision_id}", *decision.notes]
+                )
                 option.feasibility.constraints.extend(
-                    [f"{conflict.attribute_path}:{conflict.reason}" for conflict in unresolved]
+                    [
+                        f"{conflict.attribute_path}:{conflict.reason}"
+                        for conflict in unresolved
+                    ]
                 )
                 record_warnings = record.payload.get("normalization_warnings", [])
                 if record_warnings:
@@ -180,13 +205,21 @@ def ingest_lodging_snapshot(
             [record], snapshot, _canonical_option_id(record, resolution)
         )
         if resolution is not None:
-            option.notes.extend([f"resolution:{resolution.resolution_id}", *resolution.notes])
+            option.notes.extend(
+                [f"resolution:{resolution.resolution_id}", *resolution.notes]
+            )
             unresolved = unresolved_conflicts(resolution.conflicts)
             preserved_conflicts.extend(unresolved)
             option.feasibility.constraints.extend(
-                [f"{conflict.attribute_path}:{conflict.reason}" for conflict in unresolved]
+                [
+                    f"{conflict.attribute_path}:{conflict.reason}"
+                    for conflict in unresolved
+                ]
             )
-            if resolution.review_required or _lowest_match_confidence(resolution) < 0.75:
+            if (
+                resolution.review_required
+                or _lowest_match_confidence(resolution) < 0.75
+            ):
                 low_confidence_option_ids.append(option.option_id)
         record_warnings = record.payload.get("normalization_warnings", [])
         if record_warnings:
@@ -228,7 +261,9 @@ def ingest_lodging_snapshot(
             warning.warning_id for warning in warnings if warning.severity == "error"
         ],
         provenance_refs=provenance_refs,
-        notes=["Lodging ingestion scaffolding emitted normalized options from raw snapshots."],
+        notes=[
+            "Lodging ingestion scaffolding emitted normalized options from raw snapshots."
+        ],
     )
     return LodgingIngestionResult(
         pipeline_id=f"lodging-ingestion:{snapshot.snapshot_id}",
@@ -239,32 +274,6 @@ def ingest_lodging_snapshot(
         handoff=handoff,
         summary=summary,
     )
-
-
-def _records_for_decision(
-    records: list[RawSourceRecord],
-    decision: DeduplicationDecision,
-    resolution_map: dict[str, EntityResolution],
-) -> list[RawSourceRecord]:
-    ordered_ids = _record_ids_for_decision(decision, resolution_map)
-    if not ordered_ids:
-        return []
-    by_id = {record.record_id: record for record in records}
-    return [by_id[record_id] for record_id in ordered_ids if record_id in by_id]
-
-
-def _record_ids_for_decision(
-    decision: DeduplicationDecision,
-    resolution_map: dict[str, EntityResolution],
-) -> list[str]:
-    record_ids: list[str] = []
-    for resolution_id in decision.resolution_ids:
-        resolution = resolution_map.get(resolution_id)
-        if resolution is None:
-            continue
-        for candidate in resolution.match_candidates:
-            record_ids.extend(candidate.source_record_ids)
-    return list(dict.fromkeys(record_ids))
 
 
 def _lodging_option_from_records(
@@ -303,18 +312,9 @@ def _lodging_option_from_records(
     return LodgingOption.from_dict(payload)
 
 
-def _resolution_for_record(
-    record_id: str,
-    resolutions: list[EntityResolution],
-) -> EntityResolution | None:
-    for resolution in resolutions:
-        for candidate in resolution.match_candidates:
-            if record_id in candidate.source_record_ids:
-                return resolution
-    return None
-
-
-def _canonical_option_id(record: RawSourceRecord, resolution: EntityResolution | None) -> str:
+def _canonical_option_id(
+    record: RawSourceRecord, resolution: EntityResolution | None
+) -> str:
     if resolution is not None:
         return resolution.canonical_entity_id
     return f"lodging-{record.provider_entity_id}"
@@ -328,10 +328,3 @@ def _lowest_match_confidence(resolution: EntityResolution) -> float:
     if not resolution.match_candidates:
         return 1.0
     return min(candidate.confidence for candidate in resolution.match_candidates)
-
-
-def _dedupe_conflicts(conflicts: list[AttributeConflict]) -> list[AttributeConflict]:
-    deduped: dict[str, AttributeConflict] = {}
-    for conflict in conflicts:
-        deduped[conflict.conflict_id] = conflict
-    return list(deduped.values())
