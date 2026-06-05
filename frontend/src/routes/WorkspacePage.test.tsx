@@ -1160,6 +1160,43 @@ describe("WorkspacePage", () => {
     });
   });
 
+  it("default tab renders at most N top-level panels and exposes real tab content", async () => {
+    const user = userEvent.setup();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("workspace-tabs")).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("workspace-panel-plan")).toBeInTheDocument();
+    });
+
+    const planTab = screen.getByRole("tab", { name: "Plan" });
+    expect(planTab).toHaveAttribute("aria-controls", "workspace-panel-plan");
+    expect(screen.getByTestId("workspace-panel-plan")).toHaveAttribute(
+      "aria-labelledby",
+      planTab.id
+    );
+    const topLevelPanels = document.querySelectorAll('[data-testid^="workspace-panel-"]');
+    const maxDefaultPanels = 2;
+    expect(topLevelPanels.length).toBeLessThanOrEqual(maxDefaultPanels);
+
+    const compareTab = screen.getByRole("tab", { name: "Compare" });
+    await user.click(compareTab);
+
+    expect(await screen.findByTestId("workspace-panel-compare")).toHaveAttribute(
+      "aria-labelledby",
+      compareTab.id
+    );
+    expect(screen.getByRole("heading", { name: "Compare this workspace with other saved trips" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Compare possible route plans" })).toBeInTheDocument();
+  });
+
   it("hides proposal and approval panels for leisure workspaces without active policy state", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
