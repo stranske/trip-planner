@@ -1074,6 +1074,10 @@ a {
   cursor: pointer;
   font: inherit;
   padding: var(--space-3) var(--space-4);
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
 }
 
 .map-toggle-chip-active {
@@ -1464,6 +1468,25 @@ a {
   .planner-prompt-suggestions button,
   .planner-conversation-form button {
     width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-button,
+  .route-option-actions button,
+  .planner-prompt-suggestions button,
+  .planner-conversation-form button,
+  .map-scope-button,
+  .map-segment-button,
+  .map-toggle-chip {
+    transition: none;
+  }
+
+  .nav-button:disabled,
+  .route-option-actions button:hover,
+  .planner-prompt-suggestions button:hover,
+  .planner-conversation-form button:disabled {
+    transform: none;
   }
 }
 
