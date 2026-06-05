@@ -1,3 +1,19 @@
+## 2026-06-05T16:08Z - opener lane issue #1315 CSS color tokens and motion
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
+- Source repo/issue: `stranske/trip-planner` [#1315](https://github.com/stranske/trip-planner/issues/1315) (`Add interaction motion, promote palette to color tokens, add responsive pass`).
+- Branch/worktree: `codex/issue-1315-css-tokens` from fresh `origin/main` `f341ce287`, worktree `/Users/teacher/.codex/automations/pd-workloop-resume/worktrees/trip-planner-1315-css-tokens`.
+- Selection notes: raw opener cap stayed below 5 (`total_opener_owned=2`, `raw_cap_reached=false`, `non_drainable_cap_blocker=false`). Trend #5440 remains the known scoped/non-repairable owner/product strict-config blocker; trip-planner #1336 is drainable. High-priority LMS #180 was freshly scoped because repo-side implementation is already merged via #186/#188/#235 and only owner Render URL/persistence/smoke evidence or waiver remains. Trend #5422 is already in verifier/follow-up sequencing. #1315 was the oldest unlinked implementation candidate outside scoped/linked lanes.
+- Implementation: added a `--color-*` token layer to `frontend/src/styles.css`, migrated hard-coded hex use sites to `var(--color-*)`, added transitions for nav, route-option, planner suggestion, planner submit, and map toggle controls, and added a real `max-width: 520px` responsive breakpoint for stacked compact controls.
+- Validation:
+  - `npm --prefix frontend ci --cache /private/tmp/codex-npm-cache-trip-1315` -> installed dependencies; npm reported existing audit findings (8 moderate, 1 critical).
+  - `npm --prefix frontend test` -> 16 files passed, 107 tests passed.
+  - `npm exec -- tsc -b` from `frontend/` -> passed.
+  - Grep gates after restore: `grep -cE 'transition|animation' frontend/src/styles.css` -> `5`; `grep -cE '@media' frontend/src/styles.css` -> `4`; `grep -cE -- '--color' frontend/src/styles.css` -> `134`; `grep -cE 'var\(--color' frontend/src/styles.css` -> `105`; literal hex values appear only in the root token definitions.
+  - Deliberate-break gate: temporarily changed one `color: var(--color-ink)` consumer back to `color: #13212c`; `test "$(grep -c 'color: #13212c' frontend/src/styles.css)" = "0"` failed as expected. Restored the token reference and the same guard passed.
+  - `git diff --check` -> passed.
+- Next action: commit, push, open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; keepalive owns CI/review after PR creation.
+
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.

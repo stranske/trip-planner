@@ -5,13 +5,42 @@
   --space-4: 1rem;
   --space-5: 1.5rem;
   --space-6: 2rem;
+  --color-ink: #13212c;
+  --color-ink-strong: #172a3a;
+  --color-ink-muted: #24394a;
+  --color-ink-soft: #365063;
+  --color-ink-subtle: #577186;
+  --color-ink-tertiary: #596979;
+  --color-ink-quiet: #5e6a72;
+  --color-surface: #ffffff;
+  --color-surface-warm: #f7f1e5;
+  --color-surface-cool: #ebf4f2;
+  --color-mint: #e8f2ef;
+  --color-mint-soft: #e9f1ee;
+  --color-mint-deep: #234f48;
+  --color-mint-strong: #25544e;
+  --color-mint-confirm: #25633f;
+  --color-mint-bright: #27675c;
+  --color-mint-ring: #38756b;
+  --color-amber: #845623;
+  --color-amber-soft: #fff5dc;
+  --color-amber-strong: #705016;
+  --color-amber-deep: #5f3714;
+  --color-rose: #912c22;
+  --color-rose-soft: #fce8e4;
+  --color-rose-muted: #8a2f2f;
+  --color-rose-strong: #9b2f2f;
+  --color-rose-deep: #5a2a24;
+  --color-sky: #edf3f8;
+  --color-sky-soft: #edf3f7;
+  --color-cream: #f4eadc;
   font-family: "IBM Plex Sans", "Avenir Next", sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #13212c;
+  color: var(--color-ink);
   background:
     radial-gradient(circle at top left, rgba(243, 173, 84, 0.28), transparent 32%),
-    linear-gradient(180deg, #f7f1e5 0%, #ebf4f2 100%);
+    linear-gradient(180deg, var(--color-surface-warm) 0%, var(--color-surface-cool) 100%);
 }
 
 * {
@@ -59,13 +88,13 @@ a {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   font-size: 0.8rem;
-  color: #845623;
+  color: var(--color-amber);
 }
 
 .lede {
   max-width: 42rem;
   margin: 0;
-  color: #365063;
+  color: var(--color-ink-soft);
 }
 
 .app-header nav a {
@@ -78,8 +107,8 @@ a {
 
 .app-header nav a.active,
 .nav-button {
-  background: #13212c;
-  color: #f7f1e5;
+  background: var(--color-ink);
+  color: var(--color-surface-warm);
 }
 
 .app-header nav {
@@ -92,11 +121,17 @@ a {
   border: 0;
   cursor: pointer;
   font: inherit;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
 }
 
 .nav-button:disabled {
   opacity: 0.7;
   cursor: progress;
+  transform: translateY(1px);
 }
 
 .status-card {
@@ -171,7 +206,7 @@ a {
 }
 
 .planning-ledger-group small {
-  color: #5e6a72;
+  color: var(--color-ink-quiet);
   font-size: 0.78rem;
   text-transform: capitalize;
 }
@@ -198,28 +233,28 @@ a {
 }
 
 .planner-runtime-pill {
-  background: #e8f2ef;
-  color: #25544e;
+  background: var(--color-mint);
+  color: var(--color-mint-strong);
 }
 
 .planner-runtime-pill--ready {
-  background: #e8f2ef;
-  color: #25544e;
+  background: var(--color-mint);
+  color: var(--color-mint-strong);
 }
 
 .planner-runtime-pill--fallback {
-  background: #fff5dc;
-  color: #705016;
+  background: var(--color-amber-soft);
+  color: var(--color-amber-strong);
 }
 
 .planner-runtime-pill--error {
-  background: #fce8e4;
-  color: #912c22;
+  background: var(--color-rose-soft);
+  color: var(--color-rose);
 }
 
 .planner-runtime-mode {
-  background: #edf3f8;
-  color: #365063;
+  background: var(--color-sky);
+  color: var(--color-ink-soft);
 }
 
 .planning-mode-selector {
@@ -258,24 +293,24 @@ a {
 }
 
 .planning-mode-option span {
-  color: #172a3a;
+  color: var(--color-ink-strong);
   font-weight: 800;
 }
 
 .planning-mode-option small {
-  color: #577186;
+  color: var(--color-ink-subtle);
   line-height: 1.35;
 }
 
 .planning-mode-option-active {
-  background: #e8f2ef;
+  background: var(--color-mint);
   border-color: rgba(56, 117, 107, 0.55);
   box-shadow: inset 0 0 0 1px rgba(56, 117, 107, 0.18);
 }
 
 .planning-mode-active-summary {
   margin: var(--space-3) 0 0;
-  color: #365063;
+  color: var(--color-ink-soft);
   font-size: 0.92rem;
 }
 
@@ -296,7 +331,7 @@ a {
 .workspace-hero-emphasis {
   margin: var(--space-4) 0 0;
   max-width: 42rem;
-  color: #365063;
+  color: var(--color-ink-soft);
 }
 
 .workspace-help-disclosure {
@@ -367,7 +402,7 @@ a {
   margin: 0;
   border-radius: 8px;
   background: rgba(19, 33, 44, 0.06);
-  color: #13212c;
+  color: var(--color-ink);
   font-size: 0.78rem;
   line-height: 1.45;
   padding: var(--space-3);
@@ -390,7 +425,7 @@ a {
 
 .workspace-meta dt {
   font-size: 0.85rem;
-  color: #577186;
+  color: var(--color-ink-subtle);
 }
 
 .workspace-meta dd {
@@ -431,7 +466,7 @@ a {
 .scenario-card p,
 .decision-card p {
   margin: 0;
-  color: #365063;
+  color: var(--color-ink-soft);
 }
 
 .timeline-dayband {
@@ -439,8 +474,8 @@ a {
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4);
   border-radius: 16px;
-  background: #13212c;
-  color: #f7f1e5;
+  background: var(--color-ink);
+  color: var(--color-surface-warm);
   font-size: 0.9rem;
 }
 
@@ -488,7 +523,7 @@ a {
   border: 1px solid rgba(56, 117, 107, 0.22);
   border-radius: 8px;
   background: rgba(56, 117, 107, 0.08);
-  color: #234f48;
+  color: var(--color-mint-deep);
   font-weight: 700;
   padding: var(--space-2) var(--space-3);
 }
@@ -584,15 +619,22 @@ a {
   border: 1px solid rgba(19, 33, 44, 0.12);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.76);
-  color: #13212c;
+  color: var(--color-ink);
   cursor: pointer;
   font: inherit;
   font-size: 0.85rem;
   padding: var(--space-2) var(--space-3);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
 }
 
 .route-option-actions button:hover {
   border-color: rgba(56, 117, 107, 0.55);
+  transform: translateY(-1px);
 }
 
 .route-option-actions button:focus-visible {
@@ -606,7 +648,7 @@ a {
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-size: 0.75rem;
-  color: #845623;
+  color: var(--color-amber);
 }
 
 .focus-area-list {
@@ -623,15 +665,15 @@ a {
 }
 
 .muted-copy {
-  color: #577186;
+  color: var(--color-ink-subtle);
 }
 
 .planner-inline-error {
-  color: #912c22;
+  color: var(--color-rose);
 }
 
 .planner-inline-success {
-  color: #25633f;
+  color: var(--color-mint-confirm);
 }
 
 .planner-panel-host .planner-panel {
@@ -669,8 +711,8 @@ a {
   flex: 0 0 auto;
   border-radius: 999px;
   padding: var(--space-2) var(--space-3);
-  background: #13212c;
-  color: #f7f1e5;
+  background: var(--color-ink);
+  color: var(--color-surface-warm);
   font-size: 0.82rem;
   font-weight: 700;
 }
@@ -688,7 +730,7 @@ a {
   border-radius: 999px;
   padding: var(--space-2) var(--space-3);
   background: rgba(255, 255, 255, 0.72);
-  color: #24394a;
+  color: var(--color-ink-muted);
   cursor: pointer;
   font: inherit;
   font-size: 0.82rem;
@@ -696,8 +738,8 @@ a {
 }
 
 .planner-diagnostics-toggle[aria-pressed="true"] {
-  background: #24394a;
-  color: #f7f1e5;
+  background: var(--color-ink-muted);
+  color: var(--color-surface-warm);
 }
 
 .planner-message-list {
@@ -726,7 +768,7 @@ a {
   border-radius: 999px;
   padding: var(--space-1) var(--space-2);
   background: rgba(19, 33, 44, 0.1);
-  color: #24394a;
+  color: var(--color-ink-muted);
   font-size: 0.78rem;
   font-weight: 700;
   text-transform: capitalize;
@@ -743,7 +785,7 @@ a {
 }
 
 .planner-block-source-title {
-  color: #596979;
+  color: var(--color-ink-tertiary);
   font-size: 0.86rem;
   font-weight: 700;
   margin: 0 0 var(--space-1);
@@ -765,7 +807,7 @@ a {
 }
 
 .planner-message-empty {
-  color: #577186;
+  color: var(--color-ink-subtle);
 }
 
 .planner-tool-call-list {
@@ -773,7 +815,7 @@ a {
   gap: var(--space-2);
   margin: var(--space-3) 0 0;
   padding-left: var(--space-4);
-  color: #365063;
+  color: var(--color-ink-soft);
 }
 
 .planner-diagnostics {
@@ -800,7 +842,7 @@ a {
   border-radius: 10px;
   padding: var(--space-3);
   background: rgba(19, 33, 44, 0.08);
-  color: #24394a;
+  color: var(--color-ink-muted);
   font-size: 0.78rem;
   white-space: pre-wrap;
 }
@@ -829,16 +871,22 @@ a {
   border: 1px solid rgba(19, 33, 44, 0.12);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.72);
-  color: #24394a;
+  color: var(--color-ink-muted);
   cursor: pointer;
   font: inherit;
   font-size: 0.85rem;
   font-weight: 700;
   padding: var(--space-2) var(--space-3);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
 }
 
 .planner-prompt-suggestions button:hover {
   border-color: rgba(56, 117, 107, 0.55);
+  transform: translateY(-1px);
 }
 
 .planner-prompt-suggestions button:focus-visible {
@@ -855,7 +903,7 @@ a {
 .planner-conversation-form label {
   display: grid;
   gap: var(--space-2);
-  color: #365063;
+  color: var(--color-ink-soft);
   font-weight: 600;
 }
 
@@ -866,7 +914,7 @@ a {
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.82);
   padding: var(--space-3) var(--space-4);
-  color: #13212c;
+  color: var(--color-ink);
   font: inherit;
 }
 
@@ -880,16 +928,22 @@ a {
   border: 0;
   border-radius: 999px;
   padding: var(--space-3) var(--space-4);
-  background: linear-gradient(135deg, #13212c, #234f48);
-  color: #f7f1e5;
+  background: linear-gradient(135deg, var(--color-ink), var(--color-mint-deep));
+  color: var(--color-surface-warm);
   cursor: pointer;
   font: inherit;
   font-weight: 700;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    filter 160ms ease;
 }
 
 .planner-conversation-form button:disabled {
   cursor: progress;
   opacity: 0.72;
+  filter: saturate(0.82);
+  transform: translateY(1px);
 }
 
 .planner-route-focus {
@@ -909,7 +963,7 @@ a {
 }
 
 .planner-route-focus ul {
-  color: #365063;
+  color: var(--color-ink-soft);
   padding-left: var(--space-4);
 }
 
@@ -942,12 +996,12 @@ a {
 
 .map-provider-pill-live {
   background: rgba(56, 117, 107, 0.16);
-  color: #234f48;
+  color: var(--color-mint-deep);
 }
 
 .map-provider-pill-fallback {
   background: rgba(132, 86, 35, 0.14);
-  color: #845623;
+  color: var(--color-amber);
 }
 
 .map-provider-pill-misconfigured,
@@ -955,22 +1009,22 @@ a {
 .map-provider-pill-loading,
 .map-provider-pill-sparse-route {
   background: rgba(132, 86, 35, 0.14);
-  color: #845623;
+  color: var(--color-amber);
 }
 
 .map-confidence-pill-high {
   background: rgba(56, 117, 107, 0.16);
-  color: #234f48;
+  color: var(--color-mint-deep);
 }
 
 .map-confidence-pill-medium {
   background: rgba(132, 86, 35, 0.14);
-  color: #845623;
+  color: var(--color-amber);
 }
 
 .map-confidence-pill-low {
   background: rgba(155, 47, 47, 0.12);
-  color: #8a2f2f;
+  color: var(--color-rose-muted);
 }
 
 .map-scope-controls,
@@ -986,18 +1040,23 @@ a {
   border: 1px solid rgba(19, 33, 44, 0.12);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.78);
-  color: #13212c;
+  color: var(--color-ink);
   cursor: pointer;
   font: inherit;
   font-weight: 700;
   padding: var(--space-3) var(--space-4);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
 }
 
 .map-scope-button-active,
 .map-segment-button-active {
   border-color: rgba(56, 117, 107, 0.45);
-  background: #234f48;
-  color: #f7f1e5;
+  background: var(--color-mint-deep);
+  color: var(--color-surface-warm);
 }
 
 .map-scenario-toggle {
@@ -1011,15 +1070,15 @@ a {
   border: 0;
   border-radius: 999px;
   background: rgba(19, 33, 44, 0.08);
-  color: #13212c;
+  color: var(--color-ink);
   cursor: pointer;
   font: inherit;
   padding: var(--space-3) var(--space-4);
 }
 
 .map-toggle-chip-active {
-  background: #13212c;
-  color: #f7f1e5;
+  background: var(--color-ink);
+  color: var(--color-surface-warm);
 }
 
 .map-surface {
@@ -1049,12 +1108,12 @@ a {
   flex-wrap: wrap;
   gap: var(--space-3);
   align-items: center;
-  color: #365063;
+  color: var(--color-ink-soft);
   font-size: 0.86rem;
 }
 
 .map-provider-name {
-  color: #13212c;
+  color: var(--color-ink);
   font-weight: 800;
 }
 
@@ -1062,7 +1121,7 @@ a {
   border: 1px solid rgba(19, 33, 44, 0.16);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.72);
-  color: #13212c;
+  color: var(--color-ink);
   font-weight: 700;
   padding: var(--space-1) var(--space-2);
 }
@@ -1076,7 +1135,7 @@ a {
   background:
     linear-gradient(rgba(19, 33, 44, 0.055) 1px, transparent 1px),
     linear-gradient(90deg, rgba(19, 33, 44, 0.055) 1px, transparent 1px),
-    linear-gradient(135deg, #e9f1ee, #f4eadc 54%, #edf3f7);
+    linear-gradient(135deg, var(--color-mint-soft), var(--color-cream) 54%, var(--color-sky-soft));
   background-size: 34px 34px, 34px 34px, auto;
 }
 
@@ -1088,14 +1147,14 @@ a {
 }
 
 .map-route-line {
-  stroke: #27675c;
+  stroke: var(--color-mint-bright);
   stroke-width: 4;
   stroke-linecap: round;
   stroke-dasharray: 1 0;
 }
 
 .map-route-line-warning {
-  stroke: #845623;
+  stroke: var(--color-amber);
   stroke-dasharray: 7 5;
 }
 
@@ -1111,10 +1170,10 @@ a {
   width: 36px;
   height: 36px;
   transform: translate(-50%, -50%);
-  border: 2px solid #ffffff;
+  border: 2px solid var(--color-surface);
   border-radius: 50%;
-  background: #13212c;
-  color: #f7f1e5;
+  background: var(--color-ink);
+  color: var(--color-surface-warm);
   cursor: pointer;
   font: inherit;
   font-weight: 800;
@@ -1122,19 +1181,19 @@ a {
 }
 
 .map-marker-lodging {
-  background: #234f48;
+  background: var(--color-mint-deep);
 }
 
 .map-marker-activity {
-  background: #845623;
+  background: var(--color-amber);
 }
 
 .map-marker-transport {
-  background: #365063;
+  background: var(--color-ink-soft);
 }
 
 .map-marker-policy {
-  background: #9b2f2f;
+  background: var(--color-rose-strong);
 }
 
 .map-marker-selected,
@@ -1187,8 +1246,8 @@ a {
   width: 64px;
   height: 64px;
   border-radius: 8px;
-  background: #13212c;
-  color: #f7f1e5;
+  background: var(--color-ink);
+  color: var(--color-surface-warm);
   font-weight: 700;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
@@ -1208,11 +1267,11 @@ a {
 .map-stop-copy {
   display: grid;
   gap: var(--space-1);
-  color: #365063;
+  color: var(--color-ink-soft);
 }
 
 .map-stop-copy strong {
-  color: #13212c;
+  color: var(--color-ink);
 }
 
 .map-option-marker-list {
@@ -1228,7 +1287,7 @@ a {
   border: 1px solid rgba(19, 33, 44, 0.12);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.74);
-  color: #13212c;
+  color: var(--color-ink);
   cursor: pointer;
   font: inherit;
   padding: var(--space-2) var(--space-3);
@@ -1240,22 +1299,22 @@ a {
   width: 1.45rem;
   height: 1.45rem;
   border-radius: 50%;
-  background: #234f48;
-  color: #f7f1e5;
+  background: var(--color-mint-deep);
+  color: var(--color-surface-warm);
   font-size: 0.78rem;
   font-weight: 800;
 }
 
 .map-option-marker-activity span {
-  background: #845623;
+  background: var(--color-amber);
 }
 
 .map-option-marker-transport span {
-  background: #365063;
+  background: var(--color-ink-soft);
 }
 
 .map-option-marker-policy span {
-  background: #9b2f2f;
+  background: var(--color-rose-strong);
 }
 
 .map-option-marker-selected,
@@ -1272,7 +1331,7 @@ a {
   margin: 0;
   border-radius: 8px;
   background: rgba(132, 86, 35, 0.12);
-  color: #5f3714;
+  color: var(--color-amber-deep);
   padding: var(--space-3) var(--space-3);
   font-weight: 700;
 }
@@ -1286,7 +1345,7 @@ a {
   gap: var(--space-2);
   margin: var(--space-3) 0 0;
   padding-left: var(--space-4);
-  color: #365063;
+  color: var(--color-ink-soft);
 }
 
 .map-ledger-focus-list li {
@@ -1295,7 +1354,7 @@ a {
 
 .map-ledger-focus-list span {
   display: block;
-  color: #13212c;
+  color: var(--color-ink);
   font-weight: 800;
 }
 
@@ -1321,7 +1380,7 @@ a {
 
 .map-anchor-chip-muted {
   background: rgba(19, 33, 44, 0.08);
-  color: #577186;
+  color: var(--color-ink-subtle);
 }
 
 .map-highlight-list {
@@ -1352,7 +1411,7 @@ a {
 
 .map-scenario-rail-card p {
   margin: 0;
-  color: #365063;
+  color: var(--color-ink-soft);
 }
 
 @media (max-width: 820px) {
@@ -1388,6 +1447,26 @@ a {
   }
 }
 
+@media (max-width: 520px) {
+  .app-shell {
+    padding-inline: var(--space-3);
+  }
+
+  .route-option-actions,
+  .planner-prompt-suggestions,
+  .map-scope-controls,
+  .map-segment-selector {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .route-option-actions button,
+  .planner-prompt-suggestions button,
+  .planner-conversation-form button {
+    width: 100%;
+  }
+}
+
 .budget-summary-grid {
   display: grid;
   gap: var(--space-4);
@@ -1408,7 +1487,7 @@ a {
 .budget-summary-grid dt,
 .budget-category-row dt {
   font-size: 0.82rem;
-  color: #577186;
+  color: var(--color-ink-subtle);
 }
 
 .budget-summary-grid dd,
@@ -1443,7 +1522,7 @@ a {
   display: grid;
   gap: var(--space-1);
   font-size: 0.95rem;
-  color: #365063;
+  color: var(--color-ink-soft);
 }
 
 .budget-field input,
@@ -1454,7 +1533,7 @@ a {
   background: rgba(255, 255, 255, 0.76);
   padding: var(--space-3) var(--space-3);
   font: inherit;
-  color: #13212c;
+  color: var(--color-ink);
 }
 
 .budget-field input:focus,
@@ -1469,8 +1548,8 @@ a {
   padding: var(--space-3) var(--space-4);
   font: inherit;
   font-weight: 600;
-  color: #f7f1e5;
-  background: linear-gradient(135deg, #38756b, #234f48);
+  color: var(--color-surface-warm);
+  background: linear-gradient(135deg, var(--color-mint-ring), var(--color-mint-deep));
   cursor: pointer;
 }
 
@@ -1532,7 +1611,7 @@ a {
 }
 
 .auth-form legend {
-  color: #365063;
+  color: var(--color-ink-soft);
   font-weight: 700;
   padding: 0 var(--space-2);
 }
@@ -1565,8 +1644,8 @@ a {
   padding: var(--space-4) var(--space-4);
   font: inherit;
   font-weight: 600;
-  color: #f7f1e5;
-  background: #13212c;
+  color: var(--color-surface-warm);
+  background: var(--color-ink);
   cursor: pointer;
 }
 
@@ -1577,12 +1656,12 @@ a {
 
 .auth-error {
   margin: 0;
-  color: #912c22;
+  color: var(--color-rose);
 }
 
 .auth-switch {
   margin-bottom: 0;
-  color: #365063;
+  color: var(--color-ink-soft);
 }
 
 .trip-grid {
@@ -1614,7 +1693,7 @@ a {
 .trip-delete-confirmation p {
   flex-basis: 100%;
   margin: 0;
-  color: #5a2a24;
+  color: var(--color-rose-deep);
 }
 
 .cta-link {
@@ -1624,8 +1703,8 @@ a {
   justify-content: center;
   padding: var(--space-3) var(--space-4);
   border-radius: 999px;
-  background: #13212c;
-  color: #f7f1e5;
+  background: var(--color-ink);
+  color: var(--color-surface-warm);
   font-weight: 600;
 }
 
@@ -1641,7 +1720,7 @@ a {
   border: 1px solid rgba(19, 33, 44, 0.18);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.72);
-  color: #13212c;
+  color: var(--color-ink);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -1649,7 +1728,7 @@ a {
 
 .danger-button {
   border-color: rgba(145, 44, 34, 0.36);
-  color: #912c22;
+  color: var(--color-rose);
 }
 
 .secondary-button:disabled,
@@ -1673,7 +1752,7 @@ a {
 
 .status-grid dt {
   font-size: 0.85rem;
-  color: #577186;
+  color: var(--color-ink-subtle);
 }
 
 .status-grid dd {
