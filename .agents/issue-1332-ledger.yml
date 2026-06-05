@@ -1,0 +1,329 @@
+version: 1
+issue: 1332
+base: main
+branch: codex/issue-1332
+tasks:
+  - id: task-01
+    title: Create the file `frontend/src/components/workspace/panels/PlannerPanel.tsx`
+      with a basic component structure and TypeScript props interface
+    status: doing
+    started_at: '2026-06-05T11:34:50Z'
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-02
+    title: Move the Planner panel JSX markup from `WorkspacePage.tsx` into the PlannerPanel
+      component
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: Identify and move panel-specific state hooks and handlers used only by
+      Planner into PlannerPanel.tsx
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: Update `WorkspacePage.tsx` to import and render the PlannerPanel component
+      with required props
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: Remove the now-unused Planner JSX and logic from WorkspacePage.tsx
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: Move the Approval Packet and policy panel JSX markup from `WorkspacePage.tsx`
+      into the PolicyPanel component
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: Identify and move panel-specific state hooks and handlers used only by
+      Policy panel into PolicyPanel.tsx
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: Remove the now-unused Policy panel JSX and logic from WorkspacePage.tsx
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: Add an element with `data-testid="approval-packet"` to the extracted Approval
+      Packet render output in `frontend/src/components/workspace/panels/PolicyPanel.tsx`.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: Move the Route Tradeoffs panel JSX markup from `WorkspacePage.tsx` into
+      the RouteTradeoffsPanel component
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: Identify and move panel-specific state hooks and handlers used only by
+      Route Tradeoffs into RouteTradeoffsPanel.tsx
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: Remove the now-unused Route Tradeoffs JSX and logic from WorkspacePage.tsx
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: Define an explicit TypeScript props interface for each extracted panel
+      component and pass all required data and callbacks from `WorkspacePage.tsx`
+      through props.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: Implement a deliberate-break branch in `frontend/src/routes/WorkspacePage.tsx`
+      that throws an intentional error when enabled by a dedicated feature flag or
+      test hook.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: Add a test in WorkspacePage.test.tsx that verifies PlannerPanel renders
+      when WorkspacePage is mounted
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-16
+    title: Add a test in WorkspacePage.test.tsx that verifies required props are passed
+      to at least one extracted panel component
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-17
+    title: Add a test in WorkspacePage.test.tsx that verifies the approval-packet
+      element is present using getByTestId
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-18
+    title: Add a test in WorkspacePage.test.tsx that verifies rendering WorkspacePage
+      throws an error when the deliberate-break flag is enabled
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-19
+    title: Add a test in WorkspacePage.test.tsx that verifies rendering WorkspacePage
+      succeeds without throwing when the deliberate-break flag is disabled or unset
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-20
+    title: Add or update `frontend/src/routes/WorkspacePage.test.tsx` to verify the
+      tab control structure by asserting that the rendered output includes one tablist
+      and multiple tabs.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-21
+    title: Identify state variables and hooks in WorkspacePage.tsx that are exclusively
+      used by PlannerPanel and move them into that component
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-22
+    title: Identify state variables and hooks in WorkspacePage.tsx that are exclusively
+      used by PolicyPanel and move them into that component
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-23
+    title: Identify state variables and hooks in WorkspacePage.tsx that are exclusively
+      used by RouteTradeoffsPanel and move them into that component
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-24
+    title: Remove unused state variables and hooks from WorkspacePage.tsx after panel
+      extraction is complete
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-25
+    title: Verify that shared state required by multiple panels remains in WorkspacePage.tsx
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-26
+    title: '`frontend/src/components/workspace/panels/PlannerPanel.tsx` exists and
+      exports a React component named `PlannerPanel`, and `frontend/src/routes/WorkspacePage.tsx`
+      imports `PlannerPanel` from that file and renders `<PlannerPanel` at least once.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-27
+    title: '`frontend/src/components/workspace/panels/PolicyPanel.tsx` exists and
+      exports a React component named `PolicyPanel`, and `frontend/src/routes/WorkspacePage.tsx`
+      imports `PolicyPanel` from that file and renders `<PolicyPanel` at least once.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-28
+    title: '`frontend/src/components/workspace/panels/RouteTradeoffsPanel.tsx` exists
+      and exports a React component named `RouteTradeoffsPanel`, and `frontend/src/routes/WorkspacePage.tsx`
+      imports `RouteTradeoffsPanel` from that file and renders `<RouteTradeoffsPanel`
+      at least once.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-29
+    title: '`frontend/src/components/workspace/panels/PolicyPanel.tsx` renders at
+      least one element with the exact attribute `data-testid="approval-packet"`.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-30
+    title: Each extracted panel file (`PlannerPanel.tsx`, `PolicyPanel.tsx`, `RouteTradeoffsPanel.tsx`)
+      declares an explicit TypeScript props interface or type for the component props,
+      and the component function is typed to use that interface/type.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-31
+    title: '`frontend/src/routes/WorkspacePage.tsx` passes at least one prop into
+      each extracted panel component instance (`PlannerPanel`, `PolicyPanel`, and
+      `RouteTradeoffsPanel`) rather than rendering them as zero-prop stubs.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-32
+    title: '`frontend/src/routes/WorkspacePage.test.tsx` includes a test that renders
+      `WorkspacePage` and asserts that the approval packet element is present via
+      `getByTestId(''approval-packet'')` or equivalent.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-33
+    title: '`frontend/src/routes/WorkspacePage.test.tsx` includes assertions that
+      `WorkspacePage` renders the extracted panel components'' content, covering Planner,
+      Policy, and Route Tradeoffs panel output.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-34
+    title: '`frontend/src/routes/WorkspacePage.test.tsx` includes at least one test
+      that verifies data or callback props from `WorkspacePage.tsx` reach an extracted
+      panel component, either by mocking the panel component and asserting received
+      props or by asserting behavior driven by those props.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-35
+    title: '`frontend/src/routes/WorkspacePage.tsx` contains a deliberate-break branch
+      that throws an `Error` only when a dedicated feature flag or test hook is enabled.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-36
+    title: '`frontend/src/routes/WorkspacePage.test.tsx` contains one test that verifies
+      rendering `WorkspacePage` throws when the deliberate-break flag/test hook is
+      enabled, and a separate test that verifies normal render does not throw when
+      the flag/test hook is disabled or unset.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-37
+    title: Rendering `WorkspacePage` in tests produces exactly one element with `role="tablist"`
+      and at least two elements with `role="tab"`.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-38
+    title: The total line count of `frontend/src/routes/WorkspacePage.tsx` is reduced
+      by at least 100 lines compared to the pre-refactor version.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-39
+    title: The strings "Planner", "Approval Packet", and "Route Tradeoffs" appear
+      only in import statements and component tags (e.g., `<PlannerPanel`) in WorkspacePage.tsx,
+      not within JSX element hierarchies more than 2 levels deep.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
