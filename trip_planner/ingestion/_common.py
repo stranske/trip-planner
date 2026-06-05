@@ -13,6 +13,8 @@ from trip_planner._validators import (
 from trip_planner.sources import (
     AdapterIssue,
     AttributeConflict,
+    DeduplicationDecision,
+    EntityResolution,
     NormalizationHandoff,
     ProvenanceReference,
     QualityValueFitSummary,
@@ -97,7 +99,9 @@ def build_provenance_reference(
             "freshness_days", payload.get("freshness_days")
         ),
         trust_snapshot=SourceTrustSignals(**trust_payload) if trust_payload else None,
-        quality_value_fit=(QualityValueFitSummary(**quality_payload) if quality_payload else None),
+        quality_value_fit=(
+            QualityValueFitSummary(**quality_payload) if quality_payload else None
+        ),
         notes=payload.get("provenance_notes", []),
     )
 
@@ -114,6 +118,63 @@ def warning_from_issue(issue: AdapterIssue) -> IngestionWarning:
 
 def unresolved_conflicts(conflicts: list[AttributeConflict]) -> list[AttributeConflict]:
     return [conflict for conflict in conflicts if conflict.status != "selected"]
+
+
+def _records_for_decision(
+    records: list[RawSourceRecord],
+    decision: DeduplicationDecision,
+    resolution_map: dict[str, EntityResolution],
+) -> list[RawSourceRecord]:
+    ordered_ids = _record_ids_for_decision(decision, resolution_map)
+    if not ordered_ids:
+        return []
+    by_id = {record.record_id: record for record in records}
+    return [by_id[record_id] for record_id in ordered_ids if record_id in by_id]
+
+
+def _record_ids_for_decision(
+    decision: DeduplicationDecision,
+    resolution_map: dict[str, EntityResolution],
+) -> list[str]:
+    record_ids: list[str] = []
+    for resolution_id in decision.resolution_ids:
+        resolution = resolution_map.get(resolution_id)
+        if resolution is None:
+            continue
+        for candidate in resolution.match_candidates:
+            record_ids.extend(candidate.source_record_ids)
+    return list(dict.fromkeys(record_ids))
+
+
+def _resolution_for_record(
+    record_id: str,
+    resolutions: list[EntityResolution],
+) -> EntityResolution | None:
+    for resolution in resolutions:
+        for candidate in resolution.match_candidates:
+            if record_id in candidate.source_record_ids:
+                return resolution
+    return None
+
+
+def _dedupe_conflicts(conflicts: list[AttributeConflict]) -> list[AttributeConflict]:
+    deduped: list[AttributeConflict] = []
+    seen: set[tuple[str, str, str]] = set()
+    for conflict in conflicts:
+        key = (conflict.conflict_id, conflict.attribute_path, conflict.status)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(conflict)
+    return deduped
+
+
+def _contribution_kind(source_category: str) -> str:
+    if source_category == "official_operational":
+        return "operational"
+    if source_category in {"editorial", "specialist_non_commercial"}:
+        return "editorial"
+    return "inventory"
 
 
 def make_handoff(
