@@ -9,9 +9,11 @@
   - Rewired destination, lodging, activity, and transport ingestion pipelines to use the common helpers, removing their duplicate helper definitions.
   - Converged `_dedupe_conflicts` on tuple-key semantics `(conflict_id, attribute_path, status)` so distinct conflict rows sharing one id are preserved.
   - Added `tests/ingestion/test_common_dedupe.py` covering the shared tuple-key behavior.
+  - Post-open CI recovery: fixed `scripts/sync_test_dependencies.py` mypy tuple-shape inference by annotating pytest ini config constants as variadic string tuples.
 - Validation:
   - `python -m pytest tests/ingestion -q` -> 18 passed.
   - `python -m ruff check trip_planner/ingestion tests/ingestion/test_common_dedupe.py` -> passed.
+  - `python -m mypy --config-file pyproject.toml --exclude .workflows-lib scripts/sync_test_dependencies.py` -> passed after the CI recovery.
   - Grep gate: all four entity pipeline files returned `0` for local `_records_for_decision`, `_record_ids_for_decision`, `_resolution_for_record`, `_dedupe_conflicts`, and `_contribution_kind` definitions; `_common.py` has exactly one `_dedupe_conflicts`.
   - Public import gate printed `ingest_destination_snapshot`, `ingest_lodging_snapshot`, `ingest_activity_snapshot`, and `ingest_transport_snapshot`.
   - `git diff --check` -> passed.
