@@ -1,25 +1,3 @@
-## 2026-06-05T13:13Z - opener lane issue #1312 workspace builders
-
-- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
-- Source repo: `stranske/trip-planner`; source issue `#1312` (`Decompose workspace.py builders (_build_planner_panel_state 451L/36 branches)`).
-- Branch: `codex/issue-1312-workspace-builders`, base `origin/main` `98de58b4c`.
-- Selection notes: raw opener cap was below limit (`total_opener_owned=3` before opening, `raw_cap_reached=false`). High-priority Trend #5343, LMS #180, and Trend #5389 remained scoped. Approved normal-priority Inv-Man #529 was closed as a duplicate of completed issue #518 / merged PR #519; approved normal-priority Trend CLI docs work was already delivered by merged PR #5477. trip-planner #1306 is an epic, #1309/#1311 were already linked to open PRs, and #1312 was the oldest unlinked implementation issue outside scoped blockers.
-- Implementation:
-  - Added `WorkspaceBuildContext` and changed `_build_persisted_trip_workspace` to accept `context: WorkspaceBuildContext` instead of 14 individual optional keyword fields.
-  - Extracted `_build_planner_option_set`, `_build_planner_base_outputs`, `_build_planner_activity_region_outputs`, `_build_planner_pending_decisions`, and `_build_planner_policy_proposal_block` from `_build_planner_panel_state`.
-  - Added `test_build_planner_option_set_returns_option_set_for_scenarios` so the option-set helper is tested below the endpoint level.
-- Validation:
-  - `python -m pytest tests/app/test_workspace.py::test_build_planner_option_set_returns_option_set_for_scenarios -q` -> 1 passed.
-  - Deliberate-break gate: temporarily removed `option_set_id` from `_build_planner_option_set`; the named test failed with `KeyError: 'option_set_id'`. Restored and reran green.
-  - Branch-reduction gate returned `1` for `_build_planner_panel_state` branch keyword count.
-  - Argument-collapse gate returned `1` for `context: WorkspaceBuildContext` and `0` for old optional parameter lines.
-  - `python -m pytest tests/app/test_workspace.py -q` -> 65 passed, 47 warnings.
-  - `python -m ruff check trip_planner/app/services/workspace.py tests/app/test_workspace.py` -> passed.
-  - `git diff --check` -> passed.
-- PR/routing: opened PR #1335 at https://github.com/stranske/trip-planner/pull/1335. PR is open/non-draft, closes #1312, and has `agent:codex`, `agents:keepalive`, `autofix`, and `agent:retry`.
-- Post-open cap-health: final cap-health at 2026-06-05T13:13:00Z shows `total_opener_owned=4`, `raw_cap_reached=false`, `normal_cap_reached=false`, `non_drainable_cap_blocker=false`; #1335 is `draining` with Gate in progress. Existing Trend #5440 remains scoped/non-repairable; trip-planner #1333 and #1334 remain draining/green.
-- Next action: keepalive owns PR #1335 CI/review; opener should continue with cap/drain discovery on the next round.
-
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
