@@ -10,6 +10,7 @@ from trip_planner.app.services.inventory import (
     _build_inventory_assembly_input,
     assemble_inventory_bundles_for_trip,
 )
+from trip_planner.app.services.planner_tools import _commerciality_preference_from_runtime_state
 from trip_planner.sources import (
     CONFIDENCE_LABELS,
     ProvenanceReference,
@@ -507,6 +508,23 @@ def test_scorer_rejects_invalid_commerciality_preference() -> None:
     scorer = SourceQualityScorer()
     with pytest.raises(ValueError, match="commerciality_preference"):
         scorer.score_source(_commercial_booking_source(), commerciality_preference=2.0)
+
+
+@pytest.mark.parametrize(
+    ("runtime_state", "expected"),
+    [
+        ({"commerciality_preference": "0.25"}, 0.25),
+        ({"commerciality_preference": ""}, None),
+        ({"commerciality_preference": "low"}, None),
+        ({"commerciality_preference": ["0.2"]}, None),
+        ({"commerciality_preference": 1.5}, None),
+    ],
+)
+def test_runtime_commerciality_preference_ignores_invalid_payloads(
+    runtime_state: dict[str, object],
+    expected: float | None,
+) -> None:
+    assert _commerciality_preference_from_runtime_state(runtime_state) == expected
 
 
 def test_summary_rejects_invalid_subject_kind() -> None:

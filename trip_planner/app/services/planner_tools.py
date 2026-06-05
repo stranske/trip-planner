@@ -428,8 +428,11 @@ def _commerciality_preference_from_runtime_state(runtime_state: dict[str, Any]) 
         raw_preference = raw_preference.strip()
         if not raw_preference:
             return None
-    preference = float(raw_preference)
-    require_probability(preference, "runtime_state.commerciality_preference")
+    try:
+        preference = float(raw_preference)
+        require_probability(preference, "runtime_state.commerciality_preference")
+    except (TypeError, ValueError):
+        return None
     return preference
 
 
