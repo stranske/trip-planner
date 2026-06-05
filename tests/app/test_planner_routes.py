@@ -10,6 +10,7 @@ from sqlalchemy import delete, select
 from trip_planner.app.main import create_app
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.planner import (
+    set_intent_classifier_factory_for_tests,
     set_planner_chat_model_factory_for_tests,
     set_planner_prompt_redactor_for_tests,
 )
@@ -46,6 +47,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     monkeypatch.delenv("LANGSMITH_PROJECT", raising=False)
     monkeypatch.delenv("LANGCHAIN_TRACING_V2", raising=False)
     monkeypatch.delenv("TRIP_PLANNER_LANGSMITH_FLEET_PATH", raising=False)
+    set_intent_classifier_factory_for_tests(None)
     set_planner_chat_model_factory_for_tests(None)
     set_planner_prompt_redactor_for_tests(None)
     reset_database_state()
@@ -63,6 +65,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
         assert signup.status_code == 201
         yield test_client
 
+    set_intent_classifier_factory_for_tests(None)
     set_planner_chat_model_factory_for_tests(None)
     set_planner_prompt_redactor_for_tests(None)
     reset_database_state()
@@ -76,6 +79,13 @@ class FakePlannerChatModel:
     def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.requests.append(payload)
         return self.response
+
+
+def _planner_model_request(fake_model: FakePlannerChatModel) -> dict[str, Any]:
+    for request in fake_model.requests:
+        if "available_tools" in request:
+            return request
+    raise AssertionError("Planner model request was not captured")
 
 
 class FailingPlannerChatModel:
@@ -261,9 +271,10 @@ def test_openai_planner_payload_uses_redaction_hook(
 
     assert response.status_code == 200
     assert redacted_payloads
-    assert fake_model.requests[0]["message"] == "[redacted traveler prompt]"
-    assert fake_model.requests[0]["data_zone"] == "proprietary"
-    assert "sensitive account context" not in json.dumps(fake_model.requests[0])
+    planner_request = _planner_model_request(fake_model)
+    assert planner_request["message"] == "[redacted traveler prompt]"
+    assert planner_request["data_zone"] == "proprietary"
+    assert "sensitive account context" not in json.dumps(planner_request)
 
 
 def test_planner_turn_persists_user_and_planner_messages(client: TestClient) -> None:
@@ -635,8 +646,9 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
         "read_policy_state",
         "read_proposal_state",
     }
-    assert fake_model.requests[0]["available_tools"][0]["tool_name"] == "read_workspace_state"
-    runtime_context = fake_model.requests[0]["runtime_context"]
+    planner_request = _planner_model_request(fake_model)
+    assert planner_request["available_tools"][0]["tool_name"] == "read_workspace_state"
+    runtime_context = planner_request["runtime_context"]
     assert isinstance(runtime_context, dict)
     assert runtime_context["trip"]["trip_id"] == trip_id
     assert runtime_context["context_readiness"]["status"] == "ready"
@@ -745,7 +757,8 @@ def test_configured_planner_model_receives_langsmith_trace_config(
     )
 
     assert response.status_code == 200
-    langsmith_config = fake_model.requests[0]["langsmith_run_config"]
+    planner_request = _planner_model_request(fake_model)
+    langsmith_config = planner_request["langsmith_run_config"]
     assert langsmith_config["run_name"] == "trip-planner.planner-conversation"
     assert "repo:trip-planner" in langsmith_config["tags"]
     assert langsmith_config["metadata"]["repo"] == "stranske/trip-planner"
@@ -753,7 +766,7 @@ def test_configured_planner_model_receives_langsmith_trace_config(
     assert langsmith_config["metadata"]["trip_id_hash"] != trip_id
     assert langsmith_config["metadata"]["provider"] == "openai"
     assert langsmith_config["metadata"]["model"] == "fake-planner-model"
-    assert "langsmith_run_config" not in fake_model.requests[0]["runtime_context"]
+    assert "langsmith_run_config" not in planner_request["runtime_context"]
     records = [json.loads(line) for line in artifact_path.read_text().splitlines()]
     assert records
     assert records[0]["status"] == "success"

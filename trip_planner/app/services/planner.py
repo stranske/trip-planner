@@ -18,9 +18,15 @@ from trip_planner.app.services.planner_memory import (
     ensure_planner_memory_persisted,
     refresh_planner_memory,
 )
-from trip_planner.app.services.planner_routing import route_planner_turn
+from trip_planner.app.services.planner_routing import (
+    TASK_CLASSES,
+    IntentClassifier,
+    IntentResult,
+    route_planner_turn,
+)
 from trip_planner.app.services.planner_runtime_config import (
     PlannerRuntimeConfig,
+    build_intent_classifier,
     get_planner_runtime_config,
 )
 from trip_planner.app.services.planner_tools import (
@@ -65,6 +71,7 @@ class PlannerConversationRequest:
     planner_panel_state: dict[str, Any]
     session: PlanningSessionState
     runtime_context: dict[str, Any]
+    intent_classifier: IntentClassifier | None = None
     langsmith_run_config: dict[str, Any] | None = None
 
 
@@ -86,6 +93,8 @@ class _PlannerTurnRuntime:
     workspace_payload: dict[str, Any]
     runtime_context: dict[str, Any]
     runtime_config: PlannerRuntimeConfig
+    intent_classifier: IntentClassifier
+    chat_model: PlannerChatModel | None
     fleet_context: PlannerFleetContext
     activity_log: list[dict[str, Any]]
     executed_tool_calls: list[dict[str, Any]]
@@ -98,9 +107,11 @@ class PlannerChatModel(Protocol):
 
 PlannerChatModelFactory = Callable[[PlannerRuntimeConfig], PlannerChatModel]
 PlannerPromptRedactor = Callable[[dict[str, Any]], dict[str, Any]]
+IntentClassifierFactory = Callable[[PlannerRuntimeConfig], IntentClassifier]
 
 _PLANNER_CHAT_MODEL_FACTORY: PlannerChatModelFactory | None = None
 _PLANNER_PROMPT_REDACTOR: PlannerPromptRedactor | None = None
+_INTENT_CLASSIFIER_FACTORY: IntentClassifierFactory | None = None
 _GROUNDING_TOOL_NAMES: tuple[str, ...] = (
     "read_workspace_state",
     "refresh_inventory",
@@ -516,6 +527,7 @@ def _planner_turn_metadata(
     runtime_config: PlannerRuntimeConfig,
     turn_index: int,
     planning_mode: str | None = None,
+    intent_classifier: IntentClassifier | None = None,
 ) -> dict[str, Any]:
     lowered = message.lower()
     raw_tokens = [token.strip(".,!?;:()[]{}\"'") for token in message.split()]
@@ -617,10 +629,24 @@ def _planner_turn_metadata(
             },
         ]
 
+    classifier = intent_classifier or _intent_classifier(runtime_config)
+    intent_result = classifier.classify(
+        message,
+        {
+            "base_task_class": task_class,
+            "planning_mode": planning_mode,
+            "turn_index": turn_index,
+            "runtime_mode": runtime_config.mode,
+            "runtime_provider": runtime_config.provider,
+            "runtime_model": runtime_config.model,
+        },
+    )
+    if intent_result.task_class not in TASK_CLASSES:
+        intent_result = IntentResult(task_class=task_class, intent=task_class)
     provider_state = "model" if runtime_config.mode == "model" else "fallback"
     routing_decision = route_planner_turn(
         message=message,
-        base_task_class=task_class,
+        base_task_class=intent_result.task_class,
         planning_mode=planning_mode,
         provider_state=provider_state,
         fallback_reason=runtime_config.fallback_reason,
@@ -631,6 +657,7 @@ def _planner_turn_metadata(
         "effort_class": routing_decision.effort_class,
         "base_effort_class": routing_decision.base_effort_class,
         "selected_planning_mode": planning_mode,
+        "intent": intent_result.intent,
         "provider_state": provider_state,
         "fallback_reason": routing_decision.fallback_reason,
         "visible_response_blocks": blocks,
@@ -641,6 +668,8 @@ def _planner_turn_metadata(
             "turn_index": turn_index,
             "routing_reasoning": routing_decision.reasoning,
             "base_task_class": task_class,
+            "classifier_task_class": intent_result.task_class,
+            "classifier_intent": intent_result.intent,
             "selected_planning_mode": planning_mode,
             "signals": {
                 "token_count": len(tokens),
@@ -1081,6 +1110,30 @@ def set_planner_prompt_redactor_for_tests(
     _PLANNER_PROMPT_REDACTOR = redactor
 
 
+def set_intent_classifier_factory_for_tests(
+    factory: IntentClassifierFactory | None,
+) -> None:
+    global _INTENT_CLASSIFIER_FACTORY
+    _INTENT_CLASSIFIER_FACTORY = factory
+
+
+def _planner_chat_model(runtime_config: PlannerRuntimeConfig) -> PlannerChatModel:
+    factory = _PLANNER_CHAT_MODEL_FACTORY or (
+        lambda config: _OpenAIPlannerChatModel(config)
+    )
+    return factory(runtime_config)
+
+
+def _intent_classifier(
+    runtime_config: PlannerRuntimeConfig,
+    *,
+    chat_model: PlannerChatModel | None = None,
+) -> IntentClassifier:
+    if _INTENT_CLASSIFIER_FACTORY is not None:
+        return _INTENT_CLASSIFIER_FACTORY(runtime_config)
+    return build_intent_classifier(runtime_config, model=chat_model)
+
+
 def _redact_openai_planner_payload(payload: dict[str, Any]) -> dict[str, Any]:
     redactor = _PLANNER_PROMPT_REDACTOR or (lambda item: item)
     return redactor(payload)
@@ -1104,6 +1157,7 @@ class DeterministicPlannerConversationRunnable:
             runtime_config=get_planner_runtime_config(),
             turn_index=len(request.runtime_context.get("recent_activity") or []),
             planning_mode=request.session.selected_planning_mode,
+            intent_classifier=request.intent_classifier,
         )
         outputs = list(panel.get("outputs") or [])
         decisions = list(panel.get("pending_decisions") or [])
@@ -1183,6 +1237,20 @@ class _OpenAIPlannerChatModel:
         self._model = ChatOpenAI(model=config.model, temperature=0)
 
     def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if payload.get("task") == "classify_planner_intent":
+            response = self._model.invoke(
+                [
+                    (
+                        "system",
+                        "Classify the traveler planner intent. Return only JSON with "
+                        "`task_class` and `intent` keys. `task_class` must be one of "
+                        "the supplied allowed_task_classes.",
+                    ),
+                    ("human", json.dumps(payload, default=str)),
+                ]
+            )
+            return {"content": str(response.content)}
+
         tools = [
             {
                 "type": "function",
@@ -1276,17 +1344,22 @@ class ModelBackedPlannerConversationRunnable:
                 runtime_config=self._config,
                 turn_index=len(request.runtime_context.get("recent_activity") or []),
                 planning_mode=request.session.selected_planning_mode,
+                intent_classifier=request.intent_classifier,
             ),
         )
 
 
-def _planner_runnable(config: PlannerRuntimeConfig) -> PlannerConversationRunnable:
+def _planner_runnable(
+    config: PlannerRuntimeConfig,
+    *,
+    chat_model: PlannerChatModel | None = None,
+) -> PlannerConversationRunnable:
     if config.mode != "model":
         return DeterministicPlannerConversationRunnable()
-    factory = _PLANNER_CHAT_MODEL_FACTORY or (
-        lambda runtime_config: _OpenAIPlannerChatModel(runtime_config)
+    return ModelBackedPlannerConversationRunnable(
+        config,
+        chat_model or _planner_chat_model(config),
     )
-    return ModelBackedPlannerConversationRunnable(config, factory(config))
 
 
 def _conversation_id(trip_id: str) -> str:
@@ -1650,6 +1723,8 @@ def _prepare_planner_turn_runtime(
     )
     activity_log = _activity_log(db_session, trip_id=trip_id)
     runtime_config = get_planner_runtime_config()
+    chat_model = _planner_chat_model(runtime_config) if runtime_config.mode == "model" else None
+    intent_classifier = _intent_classifier(runtime_config, chat_model=chat_model)
     fleet_context = PlannerFleetContext(
         run_id=f"planner-turn:{secrets.token_hex(8)}",
         session_id=session.session_state_id,
@@ -1673,6 +1748,8 @@ def _prepare_planner_turn_runtime(
         workspace_payload=workspace_payload,
         runtime_context=runtime_context,
         runtime_config=runtime_config,
+        intent_classifier=intent_classifier,
+        chat_model=chat_model,
         fleet_context=fleet_context,
         activity_log=activity_log,
         executed_tool_calls=executed_tool_calls,
@@ -1680,7 +1757,7 @@ def _prepare_planner_turn_runtime(
 
 
 def _invoke_planner_runtime(runtime: _PlannerTurnRuntime) -> PlannerConversationReply:
-    runnable = _planner_runnable(runtime.runtime_config)
+    runnable = _planner_runnable(runtime.runtime_config, chat_model=runtime.chat_model)
     langsmith_run_config = build_langsmith_run_config(
         context=runtime.fleet_context,
         metadata=_planner_turn_metadata(
@@ -1688,6 +1765,7 @@ def _invoke_planner_runtime(runtime: _PlannerTurnRuntime) -> PlannerConversation
             runtime_config=runtime.runtime_config,
             turn_index=len(runtime.activity_log),
             planning_mode=runtime.session.selected_planning_mode,
+            intent_classifier=runtime.intent_classifier,
         ),
     )
     try:
@@ -1698,6 +1776,7 @@ def _invoke_planner_runtime(runtime: _PlannerTurnRuntime) -> PlannerConversation
                 planner_panel_state=runtime.workspace_payload["planner_panel_state"],
                 session=runtime.session,
                 runtime_context=runtime.runtime_context,
+                intent_classifier=runtime.intent_classifier,
                 langsmith_run_config=langsmith_run_config,
             )
         )
@@ -1738,6 +1817,7 @@ def _invoke_planner_runtime(runtime: _PlannerTurnRuntime) -> PlannerConversation
                 runtime_config=runtime.runtime_config,
                 turn_index=len(runtime.activity_log),
                 planning_mode=runtime.session.selected_planning_mode,
+                intent_classifier=runtime.intent_classifier,
             ),
         )
     return reply

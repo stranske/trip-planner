@@ -43,6 +43,7 @@ class PlannerTurnMetadata(BaseModel):
     effort_class: str | None = None
     base_effort_class: str | None = None
     selected_planning_mode: str | None = None
+    intent: str | None = None
     provider_state: str | None = None
     fallback_reason: str | None = None
     visible_response_blocks: list[PlannerVisibleResponseBlock] = Field(default_factory=list)
