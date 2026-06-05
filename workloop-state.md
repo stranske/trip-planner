@@ -18,7 +18,9 @@
   - `git diff --check` -> passed.
   - Grep gate: `leisure.py` and `business.py` each have 0 local `def validate_feasibility_outputs`; `base.py` has the single definition.
   - Deliberate-break gate: temporarily removed the empty-bundle guard from `BaseRankingEngine.validate_bundles`; `python -m pytest tests/ranking/test_business_ranking.py tests/ranking/test_leisure_ranking.py -q` failed the new business and leisure empty-bundle assertions with `results must contain at least one RankedResult`. Restored the guard and reran green.
-- Next action: open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; keepalive owns CI/review after PR creation.
+- PR/routing: opened PR #1328 at https://github.com/stranske/trip-planner/pull/1328. PR is open/non-draft, closes #1308, and has `agent:codex`, `agents:keepalive`, `autofix`, and post-repair `agent:retry`.
+- Post-open repair: initial cap-health classified #1328 as `needs-dispatch-evidence`; `opener-repair-infra-stalls.py` added `agent:retry` and dispatched Gate Followups. Fresh cap-health at 2026-06-05T06:10:03Z classifies #1328 as `draining` with active Gate evidence on the branch.
+- Next action: keepalive owns PR #1328 CI/review; opener should move to the next eligible issue on a future round after cap/drain discovery.
 
 ## 2026-06-05T05:08Z - opener lane issue #1307 ingestion dedupe
 
