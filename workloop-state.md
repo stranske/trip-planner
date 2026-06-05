@@ -10,7 +10,9 @@
   - `python -m ruff check trip_planner/logistics trip_planner/app/services/planner_tools.py tests/logistics/test_booking_radar.py tests/app/test_planner_booking_radar_tool.py` -> passed.
   - `git diff --check` -> passed.
   - Deliberate-break gate: temporarily removed the Glacier Express entry from `must_prebook.json`; `tests/logistics/test_booking_radar.py::test_flags_known_scarce_items` failed because the Glacier Express flag disappeared. Restored the entry and reran focused tests green.
-- Next action: open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; keepalive owns CI/review after PR creation.
+- PR/routing: opened PR #1343 at https://github.com/stranske/trip-planner/pull/1343. PR is open/non-draft, closes #1319, and has `agent:codex`, `agents:keepalive`, `autofix`, and `agent:retry`.
+- Post-open repair: cap-health at 2026-06-05T23:10Z lagged behind live checks and classified #1343 as `needs-dispatch-evidence`. Direct PR checks already showed active CI/Gate/verifier jobs, and `opener-repair-infra-stalls.py` dispatched Gate Followups anyway. Fresh direct `gh pr checks 1343` showed the new Gate path with current CI jobs pending/in progress; cap-health still lagged at 2026-06-05T23:11Z.
+- Next action: keepalive owns PR #1343 CI/review; opener should move to the next eligible issue on a future round after cap/drain discovery.
 
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
