@@ -6,10 +6,10 @@ tasks:
   - id: task-01
     title: Create the file `frontend/src/components/workspace/panels/PlannerPanel.tsx`
       with a basic component structure and TypeScript props interface
-    status: doing
+    status: done
     started_at: '2026-06-05T11:34:50Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-06-05T11:35:06Z'
+    commit: b7d07b6756ccc282f1867c561a06651effc626f6
     notes: []
   - id: task-02
     title: Move the Planner panel JSX markup from `WorkspacePage.tsx` into the PlannerPanel
