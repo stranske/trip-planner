@@ -682,6 +682,38 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface(
     assert "runtime scenario" in payload["summary"].lower()
 
 
+def test_build_planner_option_set_returns_option_set_for_scenarios() -> None:
+    option_set = workspace_service._build_planner_option_set(
+        {
+            "trip_id": "trip-unit",
+            "title": "Unit trip",
+            "mode": "leisure",
+            "trip_frame": {"primary_regions": ["Kyoto"]},
+        },
+        {
+            "title": "Runtime scenarios",
+            "explanation": ["Ranked by current workspace context."],
+            "scenarios": [
+                {
+                    "scenario_id": "scenario:unit:1",
+                    "title": "Kyoto food walk",
+                    "rank": 1,
+                    "score": 0.91,
+                    "scenario_summary": {
+                        "headline": "A compact food-focused day.",
+                        "route_sequence": ["Nishiki Market", "Gion"],
+                    },
+                    "unresolved_tradeoffs": [{"summary": "Some backtracking remains."}],
+                }
+            ],
+        },
+    )
+
+    assert option_set["option_set_id"] == "option-set:trip-unit:workspace-panel"
+    assert option_set["purpose"] == "workspace_review"
+    assert option_set["options"][0]["option_id"] == "scenario:unit:1"
+
+
 def test_workspace_endpoint_returns_not_found_for_unknown_trip(
     client: TestClient,
 ) -> None:
@@ -3191,34 +3223,36 @@ def _build_diagnostic_workspace_payload(
     record = _diagnostic_trip_record(mode=mode)
     return workspace_service._build_persisted_trip_workspace(
         record,
-        policy_context=_diagnostic_policy_context(record.trip_id),
-        proposal_context=_diagnostic_proposal_context(record.trip_id),
-        inventory_bundles=[],
-        inventory_summary={
-            "bundle_count": 0,
-            "bundles": [],
-            "notes": [],
-            "runtime_state": {
-                "status": "empty",
-                "title": "No inventory yet",
-                "summary": "No inventory has been assembled yet.",
+        context=workspace_service.WorkspaceBuildContext(
+            policy_context=_diagnostic_policy_context(record.trip_id),
+            proposal_context=_diagnostic_proposal_context(record.trip_id),
+            inventory_bundles=[],
+            inventory_summary={
+                "bundle_count": 0,
+                "bundles": [],
+                "notes": [],
+                "runtime_state": {
+                    "status": "empty",
+                    "title": "No inventory yet",
+                    "summary": "No inventory has been assembled yet.",
+                },
             },
-        },
-        scenario_search={
-            "title": "Diagnostic scenarios",
-            "scenarios": [],
-            "explanation": [],
-            "source_refs": [],
-        },
-        feasibility_summary={
-            "assessment_count": 0,
-            "recommended_bundle_count": 0,
-            "blocking_bundle_count": 0,
-            "attention_bundle_count": 0,
-            "notes": [],
-            "assessments": [],
-        },
-        include_debug=include_debug,
+            scenario_search={
+                "title": "Diagnostic scenarios",
+                "scenarios": [],
+                "explanation": [],
+                "source_refs": [],
+            },
+            feasibility_summary={
+                "assessment_count": 0,
+                "recommended_bundle_count": 0,
+                "blocking_bundle_count": 0,
+                "attention_bundle_count": 0,
+                "notes": [],
+                "assessments": [],
+            },
+            include_debug=include_debug,
+        ),
     )
 
 

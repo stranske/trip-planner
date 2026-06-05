@@ -81,6 +81,24 @@ class WorkspaceFixture:
     scenario_search_variant: str
 
 
+@dataclass(frozen=True, slots=True)
+class WorkspaceBuildContext:
+    session: dict[str, Any] | None = None
+    saved_scenarios: list[dict[str, Any]] | None = None
+    activity_log: list[dict[str, Any]] | None = None
+    planning_ledger: dict[str, Any] | None = None
+    planning_notebook: dict[str, Any] | None = None
+    planner_memory: dict[str, Any] | None = None
+    budget_state: dict[str, Any] | None = None
+    policy_context: dict[str, Any] | None = None
+    proposal_context: dict[str, Any] | None = None
+    inventory_bundles: list[InventoryBundle] | None = None
+    inventory_summary: dict[str, Any] | None = None
+    scenario_search: dict[str, Any] | None = None
+    feasibility_summary: dict[str, Any] | None = None
+    include_debug: bool = True
+
+
 WORKSPACE_ACTIVITY_LOG_LIMIT = 50
 PLANNING_LEDGER_LIMIT = 100
 PLANNING_LEDGER_ITEM_TYPES: tuple[str, ...] = (
@@ -1859,25 +1877,12 @@ def _validate_planning_ledger_supersedes_target(
 def _build_persisted_trip_workspace(
     record: PersistedTrip,
     *,
-    session: dict[str, Any] | None = None,
-    saved_scenarios: list[dict[str, Any]] | None = None,
-    activity_log: list[dict[str, Any]] | None = None,
-    planning_ledger: dict[str, Any] | None = None,
-    planning_notebook: dict[str, Any] | None = None,
-    planner_memory: dict[str, Any] | None = None,
-    budget_state: dict[str, Any] | None = None,
-    policy_context: dict[str, Any] | None = None,
-    proposal_context: dict[str, Any] | None = None,
-    inventory_bundles: list[InventoryBundle] | None = None,
-    inventory_summary: dict[str, Any] | None = None,
-    scenario_search: dict[str, Any] | None = None,
-    feasibility_summary: dict[str, Any] | None = None,
-    include_debug: bool = True,
+    context: WorkspaceBuildContext,
 ) -> dict[str, Any]:
-    resolved_session = session or _default_workspace_session(record).to_dict()
+    resolved_session = context.session or _default_workspace_session(record).to_dict()
     trip_record = _serialize_persisted_trip_record(record)
-    resolved_activity_log = activity_log or []
-    resolved_budget_state = budget_state or {
+    resolved_activity_log = context.activity_log or []
+    resolved_budget_state = context.budget_state or {
         "budget_plan": None,
         "versions": [],
         "spend_events": [],
@@ -1895,7 +1900,7 @@ def _build_persisted_trip_workspace(
             "category_summaries": [],
         },
     }
-    ordered_saved_scenarios = _ordered_saved_scenarios(saved_scenarios or [])
+    ordered_saved_scenarios = _ordered_saved_scenarios(context.saved_scenarios or [])
     inventory_assembly_input = _build_inventory_assembly_input(
         persisted_trip=record,
         trip_id=record.trip_id,
@@ -1912,20 +1917,20 @@ def _build_persisted_trip_workspace(
         allow_fixture_fallback=False,
     )
     resolved_inventory_bundles = (
-        inventory_bundles
-        if inventory_bundles is not None
+        context.inventory_bundles
+        if context.inventory_bundles is not None
         else assemble_inventory_bundles_for_trip(
             assembly_input=inventory_assembly_input,
         )
     )
-    resolved_inventory_summary = inventory_summary or build_inventory_summary_payload(
+    resolved_inventory_summary = context.inventory_summary or build_inventory_summary_payload(
         resolved_inventory_bundles,
         assembly_input=inventory_assembly_input,
     )
     inventory_status = str(
         (resolved_inventory_summary.get("runtime_state") or {}).get("status") or "empty"
     )
-    resolved_scenario_search = scenario_search or (
+    resolved_scenario_search = context.scenario_search or (
         _build_runtime_scenario_search_for_trip(
             record=record,
             inventory_bundles=resolved_inventory_bundles,
@@ -1933,8 +1938,8 @@ def _build_persisted_trip_workspace(
             inventory_status=inventory_status,
         )
     )
-    resolved_feasibility_summary = feasibility_summary or build_feasibility_summary_payload(
-        resolved_inventory_bundles
+    resolved_feasibility_summary = (
+        context.feasibility_summary or build_feasibility_summary_payload(resolved_inventory_bundles)
     )
     runtime_scenario_comparison = _build_runtime_scenario_comparison(
         trip_id=record.trip_id,
@@ -1951,8 +1956,8 @@ def _build_persisted_trip_workspace(
         runtime_scenario_comparison=runtime_scenario_comparison,
     )
 
-    raw_policy_state = (policy_context or {}).get("policy_state")
-    raw_proposal_state = (proposal_context or {}).get("proposal_state")
+    raw_policy_state = (context.policy_context or {}).get("policy_state")
+    raw_proposal_state = (context.proposal_context or {}).get("proposal_state")
     planner_panel_state = _build_planner_panel_state(
         trip=trip_record["trip"],
         scenario_search=resolved_scenario_search,
@@ -1960,8 +1965,8 @@ def _build_persisted_trip_workspace(
         saved_scenarios=ordered_saved_scenarios,
         activity_log=resolved_activity_log,
         feasibility_summary=resolved_feasibility_summary,
-        policy_context=policy_context,
-        proposal_context=proposal_context,
+        policy_context=context.policy_context,
+        proposal_context=context.proposal_context,
     )
 
     payload: dict[str, Any] = {
@@ -1978,9 +1983,9 @@ def _build_persisted_trip_workspace(
         "route_comparison": runtime_scenario_comparison,
         "runtime_scenario_comparison": runtime_scenario_comparison,
         "activity_log": resolved_activity_log,
-        "planning_ledger": planning_ledger or _planning_ledger_state([]),
-        "planning_notebook": planning_notebook or _planning_notebook_state([]),
-        "planner_memory": planner_memory
+        "planning_ledger": context.planning_ledger or _planning_ledger_state([]),
+        "planning_notebook": context.planning_notebook or _planning_notebook_state([]),
+        "planner_memory": context.planner_memory
         or {
             "current_checkpoint_id": resolved_session.get("current_checkpoint_id"),
             "checkpoints": [],
@@ -1994,7 +1999,7 @@ def _build_persisted_trip_workspace(
         "policy_state": raw_policy_state,
         "proposal_state": raw_proposal_state,
     }
-    if not include_debug:
+    if not context.include_debug:
         payload["trip_record"] = _public_workspace_trip_record(trip_record)
         payload["policy_state"] = _public_workspace_policy_state(raw_policy_state)
         payload["proposal_state"] = _public_workspace_proposal_state(raw_proposal_state)
@@ -2003,7 +2008,7 @@ def _build_persisted_trip_workspace(
     payload["view_model"] = _build_workspace_view_model(
         payload,
         trip_mode=record.mode,
-        include_debug=include_debug,
+        include_debug=context.include_debug,
     )
     return payload
 
@@ -2740,23 +2745,19 @@ def _transport_error_code(error_record: dict[str, Any]) -> str | None:
     return None
 
 
-def _build_planner_panel_state(
-    *,
+def _trip_region_summary(trip: dict[str, Any]) -> str:
+    primary_regions = list(trip["trip_frame"].get("primary_regions") or [])
+    return ", ".join(primary_regions[:2]) if primary_regions else "the current trip frame"
+
+
+def _build_planner_option_set(
     trip: dict[str, Any],
     scenario_search: dict[str, Any],
-    session: dict[str, Any],
-    saved_scenarios: list[dict[str, Any]],
-    activity_log: list[dict[str, Any]],
-    feasibility_summary: dict[str, Any],
-    policy_context: dict[str, Any] | None = None,
-    proposal_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     scenarios = list(scenario_search.get("scenarios", []))
-    primary_regions = list(trip["trip_frame"].get("primary_regions") or [])
-    region_summary = ", ".join(primary_regions[:2]) if primary_regions else "the current trip frame"
-
+    region_summary = _trip_region_summary(trip)
     if scenarios:
-        option_set = {
+        return {
             "option_set_id": f"option-set:{trip['trip_id']}:workspace-panel",
             "trip_id": trip["trip_id"],
             "purpose": "workspace_review",
@@ -2797,7 +2798,62 @@ def _build_planner_panel_state(
                 for scenario in scenarios[:3]
             ],
         }
-        outputs = [
+    return {
+        "option_set_id": f"option-set:{trip['trip_id']}:workspace-bootstrap",
+        "trip_id": trip["trip_id"],
+        "purpose": "workspace_bootstrap",
+        "scope": "trip_setup",
+        "title": "Planner workspace bootstrap",
+        "comparison_axes": [
+            {
+                "key": "scope",
+                "label": "Planning scope",
+                "direction": "higher_better",
+            },
+            {
+                "key": "specificity",
+                "label": "Trip specificity",
+                "direction": "higher_better",
+            },
+        ],
+        "explanation": [
+            "This starter panel is seeded from the persisted trip record until ranked planner scenarios exist.",
+            "Later planner issues can replace these bootstrap options with live orchestration outputs.",
+        ],
+        "options": [
+            {
+                "option_id": f"bootstrap:{trip['trip_id']}:keep-frame",
+                "kind": "trip_setup",
+                "label": "Keep the current trip frame narrow",
+                "summary": f"Use {region_summary} as the first planner pass boundary.",
+                "drawbacks": ["You may need another pass if the trip should span more regions."],
+                "explanation": [
+                    "Best when the user wants to start from one durable trip container and iterate later.",
+                ],
+            },
+            {
+                "option_id": f"bootstrap:{trip['trip_id']}:broaden-frame",
+                "kind": "trip_setup",
+                "label": "Broaden the first planner pass",
+                "summary": "Expand regions, dates, or traveler notes before the first ranked scenario run.",
+                "drawbacks": ["A broader scope can delay the first saved scenario comparison."],
+                "explanation": [
+                    "Best when the trip shell is real but still intentionally under-specified.",
+                ],
+            },
+        ],
+    }
+
+
+def _build_planner_base_outputs(
+    trip: dict[str, Any],
+    scenario_search: dict[str, Any],
+    saved_scenarios: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    scenarios = list(scenario_search.get("scenarios", []))
+    region_summary = _trip_region_summary(trip)
+    if scenarios:
+        return [
             {
                 "output_id": f"output:{trip['trip_id']}:workspace-summary",
                 "title": "Workspace scenario feed",
@@ -2811,85 +2867,43 @@ def _build_planner_panel_state(
                 "tags": ["scenarios", trip["mode"]],
             },
         ]
-    else:
-        option_set = {
-            "option_set_id": f"option-set:{trip['trip_id']}:workspace-bootstrap",
-            "trip_id": trip["trip_id"],
-            "purpose": "workspace_bootstrap",
-            "scope": "trip_setup",
-            "title": "Planner workspace bootstrap",
-            "comparison_axes": [
-                {
-                    "key": "scope",
-                    "label": "Planning scope",
-                    "direction": "higher_better",
-                },
-                {
-                    "key": "specificity",
-                    "label": "Trip specificity",
-                    "direction": "higher_better",
-                },
-            ],
-            "explanation": [
-                "This starter panel is seeded from the persisted trip record until ranked planner scenarios exist.",
-                "Later planner issues can replace these bootstrap options with live orchestration outputs.",
-            ],
-            "options": [
-                {
-                    "option_id": f"bootstrap:{trip['trip_id']}:keep-frame",
-                    "kind": "trip_setup",
-                    "label": "Keep the current trip frame narrow",
-                    "summary": f"Use {region_summary} as the first planner pass boundary.",
-                    "drawbacks": [
-                        "You may need another pass if the trip should span more regions."
-                    ],
-                    "explanation": [
-                        "Best when the user wants to start from one durable trip container and iterate later.",
-                    ],
-                },
-                {
-                    "option_id": f"bootstrap:{trip['trip_id']}:broaden-frame",
-                    "kind": "trip_setup",
-                    "label": "Broaden the first planner pass",
-                    "summary": "Expand regions, dates, or traveler notes before the first ranked scenario run.",
-                    "drawbacks": ["A broader scope can delay the first saved scenario comparison."],
-                    "explanation": [
-                        "Best when the trip shell is real but still intentionally under-specified.",
-                    ],
-                },
-            ],
-        }
-        outputs = [
-            {
-                "output_id": f"output:{trip['trip_id']}:bootstrap-ready",
-                "title": "Workspace bootstrap is ready",
-                "body": f"{trip['title']} has enough persisted trip context to mount the planner surface inside the app.",
-                "tags": ["bootstrap", "workspace"],
-            },
-            {
-                "output_id": f"output:{trip['trip_id']}:bootstrap-scenarios",
-                "title": "Saved scenario scaffold is ready",
-                "body": (
-                    f"{len(saved_scenarios)} persisted saved scenario(s) are available for the first "
-                    "workspace comparison pass."
-                    if saved_scenarios
-                    else "Saved scenario scaffolding will appear once the persisted workspace path initializes it."
-                ),
-                "tags": ["bootstrap", "saved-scenarios"],
-            },
-            {
-                "output_id": f"output:{trip['trip_id']}:next-pass",
-                "title": "Next planning pass",
-                "body": "Scenario search, ranking, and persistence issues can now build on a real workspace-mounted planner panel.",
-                "tags": ["handoff", trip["mode"]],
-            },
-        ]
+    return [
+        {
+            "output_id": f"output:{trip['trip_id']}:bootstrap-ready",
+            "title": "Workspace bootstrap is ready",
+            "body": f"{trip['title']} has enough persisted trip context to mount the planner surface inside the app.",
+            "tags": ["bootstrap", "workspace"],
+        },
+        {
+            "output_id": f"output:{trip['trip_id']}:bootstrap-scenarios",
+            "title": "Saved scenario scaffold is ready",
+            "body": (
+                f"{len(saved_scenarios)} persisted saved scenario(s) are available for the first "
+                "workspace comparison pass."
+                if saved_scenarios
+                else "Saved scenario scaffolding will appear once the persisted workspace path initializes it."
+            ),
+            "tags": ["bootstrap", "saved-scenarios"],
+        },
+        {
+            "output_id": f"output:{trip['trip_id']}:next-pass",
+            "title": "Next planning pass",
+            "body": "Scenario search, ranking, and persistence issues can now build on a real workspace-mounted planner panel.",
+            "tags": ["handoff", trip["mode"]],
+        },
+    ]
 
+
+def _apply_session_feedback_to_option_set(
+    option_set: dict[str, Any],
+    session: dict[str, Any],
+) -> dict[str, Any]:
     rejected_option_ids, selected_option_id, fallback_option_ids = _session_feedback_state(
         session,
         option_set["option_set_id"],
     )
-    option_set["options"] = [
+    updated = dict(option_set)
+    updated["options"] = [
         {
             **option,
             "label": (
@@ -2915,8 +2929,11 @@ def _build_planner_panel_state(
         for option in option_set["options"]
         if option["option_id"] not in rejected_option_ids
     ] or option_set["options"]
+    return updated
 
-    mapped_decisions = [
+
+def _build_planner_pending_decisions(session: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
         {
             "decision_id": decision["decision_id"],
             "title": decision["title"],
@@ -2933,7 +2950,16 @@ def _build_planner_panel_state(
         for decision in session.get("pending_decisions", [])
     ]
 
-    outputs = (
+
+def _build_planner_activity_region_outputs(
+    *,
+    trip: dict[str, Any],
+    activity_log: list[dict[str, Any]],
+    feasibility_summary: dict[str, Any],
+    scenario_search: dict[str, Any],
+    base_outputs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return (
         _workspace_activity_outputs(trip["trip_id"], activity_log)
         + build_feasibility_planner_outputs(
             trip_id=trip["trip_id"],
@@ -2943,40 +2969,16 @@ def _build_planner_panel_state(
             trip_id=trip["trip_id"],
             scenario_search=scenario_search,
         )
-        + outputs
+        + base_outputs
     )
 
-    next_step_actions = [
-        {
-            "action_id": f"action:{trip['trip_id']}:review-outputs",
-            "action_kind": "review_outputs",
-            "label": "Review planner outputs",
-            "description": "Read the trip-scoped planner summary before saving or revising the workspace direction.",
-            "emphasis": "secondary",
-            "target_section": "outputs",
-        },
-        {
-            "action_id": f"action:{trip['trip_id']}:compare-options",
-            "action_kind": "compare_options",
-            "label": "Compare planner options",
-            "description": "Inspect the mounted planner options without leaving the workspace route.",
-            "emphasis": "primary",
-            "target_section": "options",
-        },
-    ]
-    if mapped_decisions:
-        next_step_actions.insert(
-            0,
-            {
-                "action_id": f"action:{trip['trip_id']}:answer-decision",
-                "action_kind": "answer_decision",
-                "label": "Answer the current planner decision",
-                "description": "Resolve the active planner question before the next planning checkpoint.",
-                "emphasis": "primary",
-                "target_section": "decisions",
-            },
-        )
 
+def _build_planner_policy_proposal_block(
+    *,
+    trip: dict[str, Any],
+    policy_context: dict[str, Any] | None,
+    proposal_context: dict[str, Any] | None,
+) -> dict[str, Any]:
     proposal_state = (
         dict(proposal_context["proposal_state"])
         if proposal_context is not None and proposal_context.get("proposal_state") is not None
@@ -3003,6 +3005,8 @@ def _build_planner_panel_state(
             if policy_context is not None and policy_context.get("proposal") is not None
             else None
         )
+    outputs: list[dict[str, Any]] = []
+    next_step_actions: list[dict[str, Any]] = []
     if policy_evaluation is not None:
         outputs.append(
             {
@@ -3159,12 +3163,84 @@ def _build_planner_panel_state(
                 },
             )
 
+    return {
+        "proposal": proposal,
+        "policy_evaluation": policy_evaluation,
+        "outputs": outputs,
+        "next_step_actions": next_step_actions,
+    }
+
+
+def _build_planner_panel_state(
+    *,
+    trip: dict[str, Any],
+    scenario_search: dict[str, Any],
+    session: dict[str, Any],
+    saved_scenarios: list[dict[str, Any]],
+    activity_log: list[dict[str, Any]],
+    feasibility_summary: dict[str, Any],
+    policy_context: dict[str, Any] | None = None,
+    proposal_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    scenarios = list(scenario_search.get("scenarios", []))
+    option_set = _apply_session_feedback_to_option_set(
+        _build_planner_option_set(trip, scenario_search),
+        session,
+    )
+    mapped_decisions = _build_planner_pending_decisions(session)
+    base_outputs = _build_planner_base_outputs(trip, scenario_search, saved_scenarios)
+    outputs = _build_planner_activity_region_outputs(
+        trip=trip,
+        activity_log=activity_log,
+        feasibility_summary=feasibility_summary,
+        scenario_search=scenario_search,
+        base_outputs=base_outputs,
+    )
+    policy_proposal_block = _build_planner_policy_proposal_block(
+        trip=trip,
+        policy_context=policy_context,
+        proposal_context=proposal_context,
+    )
+    outputs.extend(policy_proposal_block["outputs"])
+    next_step_actions = [
+        *policy_proposal_block["next_step_actions"],
+        *(
+            [
+                {
+                    "action_id": f"action:{trip['trip_id']}:answer-decision",
+                    "action_kind": "answer_decision",
+                    "label": "Answer the current planner decision",
+                    "description": "Resolve the active planner question before the next planning checkpoint.",
+                    "emphasis": "primary",
+                    "target_section": "decisions",
+                }
+            ]
+            if mapped_decisions
+            else []
+        ),
+        {
+            "action_id": f"action:{trip['trip_id']}:review-outputs",
+            "action_kind": "review_outputs",
+            "label": "Review planner outputs",
+            "description": "Read the trip-scoped planner summary before saving or revising the workspace direction.",
+            "emphasis": "secondary",
+            "target_section": "outputs",
+        },
+        {
+            "action_id": f"action:{trip['trip_id']}:compare-options",
+            "action_kind": "compare_options",
+            "label": "Compare planner options",
+            "description": "Inspect the mounted planner options without leaving the workspace route.",
+            "emphasis": "primary",
+            "target_section": "options",
+        },
+    ]
     runtime_config = get_planner_runtime_config()
     return {
         "trip": trip,
         "option_set": option_set,
-        "proposal": proposal,
-        "policy_evaluation": policy_evaluation,
+        "proposal": policy_proposal_block["proposal"],
+        "policy_evaluation": policy_proposal_block["policy_evaluation"],
         "pending_decisions": mapped_decisions,
         "outputs": outputs,
         "planner_behavior": {
@@ -3383,49 +3459,53 @@ def get_workspace_payload(
     feasibility_summary = build_feasibility_summary_payload(persisted_inventory_bundles)
     return _build_persisted_trip_workspace(
         record,
-        session=(_serialize_session_record(session_record) if session_record is not None else None),
-        saved_scenarios=[
-            {
-                "saved_scenario_id": scenario.saved_scenario_id,
-                "trip_id": scenario.trip_id,
-                "current_version_id": scenario.current_version_id,
-                "versions": list(scenario.versions),
-                "comparisons": list(scenario.comparisons),
-                "tags": list(scenario.tags),
-                "notes": list(scenario.notes),
-            }
-            for scenario in persisted_saved_scenarios
-        ],
-        activity_log=[_serialize_activity_record(item) for item in activity_records],
-        planning_ledger=_planning_ledger_state(
-            [_serialize_ledger_entry(item) for item in ledger_records]
+        context=WorkspaceBuildContext(
+            session=(
+                _serialize_session_record(session_record) if session_record is not None else None
+            ),
+            saved_scenarios=[
+                {
+                    "saved_scenario_id": scenario.saved_scenario_id,
+                    "trip_id": scenario.trip_id,
+                    "current_version_id": scenario.current_version_id,
+                    "versions": list(scenario.versions),
+                    "comparisons": list(scenario.comparisons),
+                    "tags": list(scenario.tags),
+                    "notes": list(scenario.notes),
+                }
+                for scenario in persisted_saved_scenarios
+            ],
+            activity_log=[_serialize_activity_record(item) for item in activity_records],
+            planning_ledger=_planning_ledger_state(
+                [_serialize_ledger_entry(item) for item in ledger_records]
+            ),
+            planning_notebook=_planning_notebook_state(
+                [_serialize_notebook_item(item) for item in notebook_records],
+                focus_category=session_record.notebook_focus_category,
+                focus_item_id=session_record.notebook_focus_item_id,
+            ),
+            planner_memory=build_planner_memory_payload(
+                db_session,
+                trip_id=trip_id,
+                session_state_id=session_record.session_state_id,
+            ),
+            budget_state=load_budget_payload_for_workspace(db_session, record=record),
+            policy_context=(
+                get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
+                if record.mode == "business" or include_debug
+                else None
+            ),
+            proposal_context=(
+                get_workspace_proposal_payload(db_session, user=user, trip_id=trip_id)
+                if record.mode == "business" or include_debug
+                else None
+            ),
+            inventory_bundles=persisted_inventory_bundles,
+            inventory_summary=inventory_summary,
+            scenario_search=runtime_search,
+            feasibility_summary=feasibility_summary,
+            include_debug=include_debug,
         ),
-        planning_notebook=_planning_notebook_state(
-            [_serialize_notebook_item(item) for item in notebook_records],
-            focus_category=session_record.notebook_focus_category,
-            focus_item_id=session_record.notebook_focus_item_id,
-        ),
-        planner_memory=build_planner_memory_payload(
-            db_session,
-            trip_id=trip_id,
-            session_state_id=session_record.session_state_id,
-        ),
-        budget_state=load_budget_payload_for_workspace(db_session, record=record),
-        policy_context=(
-            get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
-            if record.mode == "business" or include_debug
-            else None
-        ),
-        proposal_context=(
-            get_workspace_proposal_payload(db_session, user=user, trip_id=trip_id)
-            if record.mode == "business" or include_debug
-            else None
-        ),
-        inventory_bundles=persisted_inventory_bundles,
-        inventory_summary=inventory_summary,
-        scenario_search=runtime_search,
-        feasibility_summary=feasibility_summary,
-        include_debug=include_debug,
     )
 
 
