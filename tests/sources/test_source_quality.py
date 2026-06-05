@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from trip_planner.app.services.inventory import (
@@ -184,6 +186,23 @@ def _sparse_unknown_source() -> SourceRecord:
     )
 
 
+def _commerciality_probe_source(source_id: str, commerciality: float) -> SourceRecord:
+    return replace(
+        _commercial_booking_source(),
+        source_id=source_id,
+        provider_name="Commerciality Probe",
+        display_name="Commerciality Probe",
+        trust_signals=SourceTrustSignals(
+            freshness_days=2,
+            freshness_confidence=0.9,
+            commerciality=commerciality,
+            editorial_independence=0.5,
+            operational_reliability=0.75,
+            review_consistency=0.6,
+        ),
+    )
+
+
 def test_official_operational_source_scores_very_high() -> None:
     scorer = SourceQualityScorer()
     score = scorer.score_source(
@@ -210,6 +229,46 @@ def test_commercial_inventory_source_scores_high() -> None:
     assert score.confidence_label in {"high", "very_high"}
     assert score.confidence >= 0.65
     assert "commercial" in score.tags
+
+
+def test_commerciality_preference_reorders_toward_non_commercial() -> None:
+    scorer = SourceQualityScorer()
+    non_commercial_source = _commerciality_probe_source("non-commercial-probe", 0.15)
+    commercial_source = _commerciality_probe_source("commercial-probe", 0.85)
+
+    non_commercial_preference_scores = {
+        "non_commercial": scorer.score_source(
+            non_commercial_source,
+            commerciality_preference=0.1,
+            intended_option_kind="lodging",
+        ),
+        "commercial": scorer.score_source(
+            commercial_source,
+            commerciality_preference=0.1,
+            intended_option_kind="lodging",
+        ),
+    }
+    commercial_preference_scores = {
+        "non_commercial": scorer.score_source(
+            non_commercial_source,
+            commerciality_preference=0.9,
+            intended_option_kind="lodging",
+        ),
+        "commercial": scorer.score_source(
+            commercial_source,
+            commerciality_preference=0.9,
+            intended_option_kind="lodging",
+        ),
+    }
+
+    assert (
+        non_commercial_preference_scores["non_commercial"].confidence
+        > non_commercial_preference_scores["commercial"].confidence
+    )
+    assert (
+        commercial_preference_scores["commercial"].confidence
+        > commercial_preference_scores["non_commercial"].confidence
+    )
 
 
 def test_crowd_review_source_scores_moderate() -> None:
@@ -442,6 +501,12 @@ def test_scorer_rejects_invalid_traveler_relevance_hint() -> None:
     scorer = SourceQualityScorer()
     with pytest.raises(ValueError, match="traveler_relevance_hint"):
         scorer.score_source(_commercial_booking_source(), traveler_relevance_hint=2.0)
+
+
+def test_scorer_rejects_invalid_commerciality_preference() -> None:
+    scorer = SourceQualityScorer()
+    with pytest.raises(ValueError, match="commerciality_preference"):
+        scorer.score_source(_commercial_booking_source(), commerciality_preference=2.0)
 
 
 def test_summary_rejects_invalid_subject_kind() -> None:

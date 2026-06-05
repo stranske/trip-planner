@@ -1,3 +1,24 @@
+## 2026-06-05T17:16Z - opener lane issue #1316 commerciality preference
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1316` (`Make source commerciality user-weighted and bidirectional (point-7 P0)`).
+- Branch: `codex/issue-1316-commerciality-preference`, base `origin/main` `e47e64177`.
+- Selection notes: raw opener cap was below limit (`total_opener_owned=2`, `raw_cap_reached=false`). Cap hygiene dispatched Gate Followups for #1339; direct evidence showed #1339 clean/green and ready-for-closer. Trend #5440 remains scoped/non-repairable on the strict-config owner/product decision. High-priority Trend #5343 and LMS #180 remain scoped; Trend #5422 and trip-planner #1309 are already in merged verifier/follow-up sequencing; trip-planner #1314/#1315 are linked to PRs #1338/#1339. #1316 was the oldest unlinked implementation issue outside scoped/linked lanes.
+- Implementation:
+  - Added `commerciality_preference` to `SourceQualityScorer.score_source`, `score_provenance`, `summarize`, and the `summarize_sources` helper.
+  - Replaced the one-directional commerciality boost with a bidirectional preference-alignment term inside provenance strength.
+  - Replaced fixture/runtime inventory hardcoded `commerciality=0.5` and `commerciality=0.7` with category-derived commerciality.
+  - Threaded optional `inventory.runtime_state["commerciality_preference"]` through the source-quality planner tool with probability validation.
+  - Added regression coverage proving non-commercial and commercial preferences reverse otherwise identical source ordering.
+- Validation:
+  - `python -m pytest tests/sources/test_source_quality.py::test_commerciality_preference_reorders_toward_non_commercial -q` -> 1 passed.
+  - Deliberate-break gate: temporarily restored `components.append(0.4 + 0.2 * trust.commerciality)`; the named test failed with `AssertionError: assert 0.7403 > 0.7492`; restored the bidirectional term and reran green.
+  - `python -m pytest tests/sources/test_source_quality.py tests/ranking/test_source_confidence_explanation.py -q` -> 27 passed.
+  - `git grep -nE 'commerciality=0\.(5|7)\b' -- trip_planner/app/services/inventory.py` -> 0 lines via the shell gate; `grep -nE 'commerciality' trip_planner/app/services/inventory.py` shows category-derived assignments.
+  - `python -m ruff check trip_planner/sources/quality.py trip_planner/app/services/inventory.py trip_planner/app/services/planner_tools.py tests/sources/test_source_quality.py` -> passed.
+  - `git diff --check` -> passed.
+- Next action: open a ready-for-review PR with `agent:codex`, `agents:keepalive`, `autofix`, and `agent:retry`; keepalive owns CI/review after PR creation.
+
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.

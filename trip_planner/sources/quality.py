@@ -196,6 +196,7 @@ class SourceQualityScorer:
         record: SourceRecord,
         *,
         traveler_relevance_hint: float | None = None,
+        commerciality_preference: float | None = None,
         intended_option_kind: str | None = None,
     ) -> SourceQualityScore:
         if not isinstance(record, SourceRecord):
@@ -207,6 +208,7 @@ class SourceQualityScorer:
             trust_signals=record.trust_signals,
             quality_summary=record.quality_summary,
             traveler_relevance_hint=traveler_relevance_hint,
+            commerciality_preference=commerciality_preference,
             intended_option_kind=intended_option_kind,
             display_label=record.display_name or record.provider_name,
         )
@@ -216,6 +218,7 @@ class SourceQualityScorer:
         reference: ProvenanceReference,
         *,
         traveler_relevance_hint: float | None = None,
+        commerciality_preference: float | None = None,
         intended_option_kind: str | None = None,
     ) -> SourceQualityScore:
         if not isinstance(reference, ProvenanceReference):
@@ -231,6 +234,7 @@ class SourceQualityScorer:
             trust_signals=trust,
             quality_summary=quality,
             traveler_relevance_hint=traveler_relevance_hint,
+            commerciality_preference=commerciality_preference,
             intended_option_kind=intended_option_kind,
             display_label=reference.source_id,
         )
@@ -241,6 +245,7 @@ class SourceQualityScorer:
         *,
         subject_kind: str = "option",
         traveler_relevance_hint: float | None = None,
+        commerciality_preference: float | None = None,
         intended_option_kind: str | None = None,
     ) -> SourceConfidenceSummary:
         if subject_kind not in schema.PROVENANCE_SUBJECT_KINDS:
@@ -277,6 +282,7 @@ class SourceQualityScorer:
                     self.score_source(
                         entry,
                         traveler_relevance_hint=traveler_relevance_hint,
+                        commerciality_preference=commerciality_preference,
                         intended_option_kind=intended_option_kind,
                     )
                 )
@@ -285,6 +291,7 @@ class SourceQualityScorer:
                     self.score_provenance(
                         entry,
                         traveler_relevance_hint=traveler_relevance_hint,
+                        commerciality_preference=commerciality_preference,
                         intended_option_kind=intended_option_kind,
                     )
                 )
@@ -349,11 +356,14 @@ class SourceQualityScorer:
         trust_signals: SourceTrustSignals,
         quality_summary: QualityValueFitSummary,
         traveler_relevance_hint: float | None,
+        commerciality_preference: float | None,
         intended_option_kind: str | None,
         display_label: str,
     ) -> SourceQualityScore:
         if traveler_relevance_hint is not None:
             require_probability(traveler_relevance_hint, "traveler_relevance_hint")
+        if commerciality_preference is not None:
+            require_probability(commerciality_preference, "commerciality_preference")
         if (
             intended_option_kind is not None
             and intended_option_kind not in schema.SOURCE_OPTION_KINDS
@@ -364,7 +374,13 @@ class SourceQualityScorer:
         channel_fit_score = self._channel_fit_score(
             source_category, supported_option_kinds, intended_option_kind
         )
-        provenance_strength = self._provenance_strength(source_category, trust_signals)
+        provenance_strength = self._provenance_strength(
+            source_category,
+            trust_signals,
+            commerciality_preference=(
+                0.5 if commerciality_preference is None else commerciality_preference
+            ),
+        )
         traveler_relevance = self._traveler_relevance(
             source_category, traveler_relevance_hint, quality_summary
         )
@@ -439,7 +455,13 @@ class SourceQualityScorer:
             return _clamp(category_prior + 0.10)
         return _clamp(category_prior - 0.20)
 
-    def _provenance_strength(self, category: str, trust: SourceTrustSignals) -> float:
+    def _provenance_strength(
+        self,
+        category: str,
+        trust: SourceTrustSignals,
+        *,
+        commerciality_preference: float,
+    ) -> float:
         components: list[float] = []
         if trust.operational_reliability is not None:
             components.append(trust.operational_reliability)
@@ -450,9 +472,10 @@ class SourceQualityScorer:
             # with the other reliability signals.
             components.append(trust.editorial_independence)
         if trust.commerciality is not None:
-            # commerciality is informative but does not penalize: commercial-inventory
-            # sources are expected to be commercial. We scale it lightly toward 0.5.
-            components.append(0.4 + 0.2 * trust.commerciality)
+            preference_alignment = (trust.commerciality - 0.5) * (
+                commerciality_preference - 0.5
+            )
+            components.append(_clamp(0.5 + 0.8 * preference_alignment))
         if not components:
             return _CATEGORY_OPERATIONAL_PRIOR.get(category, 0.55) * 0.7
         return _clamp(fmean(components))
@@ -632,6 +655,7 @@ def summarize_sources(
     *,
     subject_kind: str = "option",
     traveler_relevance_hint: float | None = None,
+    commerciality_preference: float | None = None,
     intended_option_kind: str | None = None,
 ) -> SourceConfidenceSummary:
     """Module-level convenience wrapper around :class:`SourceQualityScorer`.
@@ -645,5 +669,6 @@ def summarize_sources(
         records,
         subject_kind=subject_kind,
         traveler_relevance_hint=traveler_relevance_hint,
+        commerciality_preference=commerciality_preference,
         intended_option_kind=intended_option_kind,
     )
