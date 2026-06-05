@@ -1,9 +1,19 @@
-export function NotebookPanel() {
+import type { ReactNode } from "react";
+
+type NotebookPanelProps = {
+  children: ReactNode;
+  labelledBy: string;
+};
+
+export function NotebookPanel({ children, labelledBy }: NotebookPanelProps) {
   return (
-    <section className="status-card" data-testid="workspace-panel-notebook">
-      <p className="status-label">Notebook</p>
-      <h2>Notebook workspace</h2>
-      <p className="muted-copy">Select the Plan tab to manage planning notebook items.</p>
+    <section
+      id="workspace-panel-notebook"
+      role="tabpanel"
+      aria-labelledby={labelledBy}
+      data-testid="workspace-panel-notebook"
+    >
+      {children}
     </section>
   );
 }

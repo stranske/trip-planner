@@ -1,9 +1,19 @@
-export function ComparePanel() {
+import type { ReactNode } from "react";
+
+type ComparePanelProps = {
+  children: ReactNode;
+  labelledBy: string;
+};
+
+export function ComparePanel({ children, labelledBy }: ComparePanelProps) {
   return (
-    <section className="status-card" data-testid="workspace-panel-compare">
-      <p className="status-label">Compare</p>
-      <h2>Comparison workspace</h2>
-      <p className="muted-copy">Select the Plan tab to review the full comparison surfaces.</p>
+    <section
+      id="workspace-panel-compare"
+      role="tabpanel"
+      aria-labelledby={labelledBy}
+      data-testid="workspace-panel-compare"
+    >
+      {children}
     </section>
   );
 }

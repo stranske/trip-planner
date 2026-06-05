@@ -1,9 +1,19 @@
-export function MapPanel() {
+import type { ReactNode } from "react";
+
+type MapPanelProps = {
+  children: ReactNode;
+  labelledBy: string;
+};
+
+export function MapPanel({ children, labelledBy }: MapPanelProps) {
   return (
-    <section className="status-card" data-testid="workspace-panel-map">
-      <p className="status-label">Map</p>
-      <h2>Map workspace</h2>
-      <p className="muted-copy">Select the Plan tab to review route context and segment focus.</p>
+    <section
+      id="workspace-panel-map"
+      role="tabpanel"
+      aria-labelledby={labelledBy}
+      data-testid="workspace-panel-map"
+    >
+      {children}
     </section>
   );
 }

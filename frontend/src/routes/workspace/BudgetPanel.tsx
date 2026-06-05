@@ -1,9 +1,19 @@
-export function BudgetPanel() {
+import type { ReactNode } from "react";
+
+type BudgetPanelProps = {
+  children: ReactNode;
+  labelledBy: string;
+};
+
+export function BudgetPanel({ children, labelledBy }: BudgetPanelProps) {
   return (
-    <section className="status-card" data-testid="workspace-panel-budget">
-      <p className="status-label">Budget</p>
-      <h2>Budget workspace</h2>
-      <p className="muted-copy">Select the Plan tab to update budget and actual spend details.</p>
+    <section
+      id="workspace-panel-budget"
+      role="tabpanel"
+      aria-labelledby={labelledBy}
+      data-testid="workspace-panel-budget"
+    >
+      {children}
     </section>
   );
 }

@@ -1,9 +1,19 @@
-export function PolicyPanel() {
+import type { ReactNode } from "react";
+
+type PolicyPanelProps = {
+  children: ReactNode;
+  labelledBy: string;
+};
+
+export function PolicyPanel({ children, labelledBy }: PolicyPanelProps) {
   return (
-    <section className="status-card" data-testid="workspace-panel-policy">
-      <p className="status-label">Policy</p>
-      <h2>Policy workspace</h2>
-      <p className="muted-copy">Select the Plan tab to review approval and policy readiness.</p>
+    <section
+      id="workspace-panel-policy"
+      role="tabpanel"
+      aria-labelledby={labelledBy}
+      data-testid="workspace-panel-policy"
+    >
+      {children}
     </section>
   );
 }

@@ -184,6 +184,14 @@ const WORKSPACE_TABS: { id: WorkspaceTab; label: string }[] = [
   { id: "policy", label: "Policy" },
 ];
 
+function workspaceTabButtonId(tabId: WorkspaceTab) {
+  return `workspace-tab-${tabId}`;
+}
+
+function workspaceTabPanelId(tabId: WorkspaceTab) {
+  return `workspace-panel-${tabId}`;
+}
+
 function formatTravelerToken(value: string | null | undefined, fallback = "Not set yet"): string {
   if (!value) {
     return fallback;
@@ -1597,13 +1605,20 @@ function WorkspacePageContent({
         ) : null}
       </div>
 
-      <div className="workspace-tabs" role="tablist" data-testid="workspace-tabs">
+      <div
+        className="workspace-tabs"
+        role="tablist"
+        aria-label="Workspace sections"
+        data-testid="workspace-tabs"
+      >
         {WORKSPACE_TABS.map((tab) => (
           <button
             key={tab.id}
+            id={workspaceTabButtonId(tab.id)}
             type="button"
             role="tab"
             aria-selected={activeTab === tab.id}
+            aria-controls={workspaceTabPanelId(tab.id)}
             onClick={() => setActiveTab(tab.id)}
           >
             {tab.label}
@@ -1612,7 +1627,7 @@ function WorkspacePageContent({
       </div>
 
       {activeTab === "plan" ? (
-        <PlanPanel>
+        <PlanPanel labelledBy={workspaceTabButtonId("plan")}>
       <div className="workspace-grid">
         <section className={PLANNER_PANEL_CLASS}>
           <p className="status-label">Planner</p>
@@ -2292,11 +2307,179 @@ function WorkspacePageContent({
         </PlanPanel>
       ) : null}
 
-      {activeTab === "compare" ? <ComparePanel /> : null}
-      {activeTab === "map" ? <MapPanel /> : null}
-      {activeTab === "budget" ? <BudgetPanel /> : null}
-      {activeTab === "notebook" ? <NotebookPanel /> : null}
-      {activeTab === "policy" ? <PolicyPanel /> : null}
+      {activeTab === "compare" ? (
+        <ComparePanel labelledBy={workspaceTabButtonId("compare")}>
+          <div className="workspace-grid">
+            <ScenarioComparison
+              comparison={routeComparison}
+              savedScenarios={currentWorkspace.saved_scenarios}
+              selectedScenarioId={selectedScenarioId}
+              onSelectScenario={handleScenarioSelection}
+            />
+
+            <RouteOptionWorkbench
+              comparison={routeComparison}
+              selectedScenarioId={selectedScenarioId}
+              busyLabel={routeOptionBusyLabel}
+              successMessage={routeOptionSuccess}
+              errorMessage={routeOptionError}
+              onSelectScenario={handleScenarioSelection}
+              onRouteOptionAction={handleRouteOptionAction}
+            />
+
+            <TripComparison
+              currentTrip={currentWorkspace.trip_record.trip}
+              trips={trips}
+              selectedTripId={selectedTripComparisonId}
+              onSelectTrip={setSelectedTripComparisonId}
+            />
+          </div>
+        </ComparePanel>
+      ) : null}
+      {activeTab === "map" ? (
+        <MapPanel labelledBy={workspaceTabButtonId("map")}>
+          <TripMap
+            comparison={routeComparison}
+            scenarioComparisonSummary={currentWorkspace.scenario_comparison?.summary}
+            scenarioFocusAreas={currentWorkspace.scenario_comparison?.focus_areas ?? []}
+            activeScenarioId={selectedScenarioId}
+            onSelectScenario={handleScenarioSelection}
+            bundles={currentWorkspace.inventory_summary.bundles}
+            feasibilitySummary={currentWorkspace.feasibility_summary}
+            tripPrimaryRegions={trip.trip_frame.primary_regions}
+            tripMode={trip.mode}
+            policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : null}
+            planningLedger={currentWorkspace.planning_ledger}
+            activeScope={selectedMapScope}
+            selectedSegmentId={selectedRouteSegment?.id ?? null}
+            onScopeChange={setSelectedMapScope}
+            onSelectSegment={setSelectedSegmentId}
+            compactLayout={isCompactLayout}
+          />
+        </MapPanel>
+      ) : null}
+      {activeTab === "budget" ? (
+        <BudgetPanel labelledBy={workspaceTabButtonId("budget")}>
+          {panelVisibility.showBudgetPanel ? (
+            <WorkspaceBudgetPanel
+              budgetState={currentWorkspace.budget_state}
+              tripMode={trip.mode}
+              busyLabel={budgetBusyLabel}
+              errorMessage={budgetError}
+              onSaveBudget={handleBudgetSave}
+              onRecordSpend={handleSpendRecord}
+            />
+          ) : (
+            <section className={STATUS_CARD_CLASS}>
+              <p className="status-label">Budget</p>
+              <h2>Budget details are not visible for this workspace</h2>
+              <p className="muted-copy">Budget planning appears when the workspace has budget state to review.</p>
+            </section>
+          )}
+        </BudgetPanel>
+      ) : null}
+      {activeTab === "notebook" ? (
+        <NotebookPanel labelledBy={workspaceTabButtonId("notebook")}>
+          <div className="workspace-grid">
+            {currentWorkspace.planning_notebook ? (
+              <PlanningNotebookPanel
+                notebookState={currentWorkspace.planning_notebook}
+                busyLabel={notebookBusyLabel}
+                successMessage={notebookSuccess}
+                errorMessage={notebookError}
+                onCreateItem={handleNotebookCreate}
+                onCompleteItem={handleNotebookComplete}
+                onReopenItem={handleNotebookReopen}
+                onDeleteItem={handleNotebookDelete}
+                onSetFocus={handleNotebookSetFocus}
+              />
+            ) : null}
+
+            <section className={STATUS_CARD_CLASS}>
+              <p className="status-label">Planning notes</p>
+              <h2>
+                {currentWorkspace.planner_memory.artifacts.length > 0
+                  ? "Planner notes to keep"
+                  : "No planner notes have been saved yet"}
+              </h2>
+              {currentWorkspace.planner_memory.artifacts.length === 0 ? (
+                <p className="muted-copy">
+                  Important summaries and remembered decisions will appear here after the first planner
+                  conversation.
+                </p>
+              ) : (
+                <div className="decision-stack">
+                  {currentWorkspace.planner_memory.artifacts.slice(0, 3).map((artifact) => (
+                    <article key={artifact.memory_artifact_id} className="decision-card">
+                      <h3>{artifact.title}</h3>
+                      <p>{artifact.summary}</p>
+                      <p className="muted-copy">{artifact.detail}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        </NotebookPanel>
+      ) : null}
+      {activeTab === "policy" ? (
+        <PolicyPanel labelledBy={workspaceTabButtonId("policy")}>
+          <div className="workspace-grid">
+            {panelVisibility.showApprovalReadinessPanel ? (
+              <section className={STATUS_CARD_CLASS} data-testid="approval-packet">
+                <p className="status-label">Approval packet</p>
+                <h2 data-testid="proposal-lifecycle">
+                  {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
+                </h2>
+                {currentWorkspace.proposal_state == null ? (
+                  <p className="muted-copy">
+                    Approval packet records have not been saved for this workspace yet.
+                  </p>
+                ) : (
+                  <>
+                    {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
+                    {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
+                    <p>{proposalLifecycle?.summary ?? "Submission stored for later review."}</p>
+                    {shouldShowProposalRefresh(
+                      currentWorkspace.proposal_state,
+                      renderableProposalFollowUp
+                    ) ? (
+                      <button type="button" className="secondary-button" onClick={handleProposalRefresh}>
+                        Refresh live status
+                      </button>
+                    ) : null}
+                  </>
+                )}
+              </section>
+            ) : null}
+
+            {panelVisibility.showProposalPanel ? (
+              <section className={STATUS_CARD_CLASS} data-testid="tpp-label">
+                <p className="status-label">Approval details</p>
+                <h2>Options and readiness signals</h2>
+                {currentWorkspace.proposal_state == null ? (
+                  <p className="muted-copy">Approval-packet details will render here once the packet is saved.</p>
+                ) : (
+                  <div className="decision-stack">
+                    {renderableProposalFollowUp ? (
+                      <article className="decision-card">
+                        <h3>{renderableProposalFollowUp.recommended_label ?? renderableProposalFollowUp.title}</h3>
+                        <p>{renderableProposalFollowUp.summary}</p>
+                      </article>
+                    ) : null}
+                    {(renderableProposalFollowUp?.guidance ?? []).map((guidance) => (
+                      <article key={guidance} className="decision-card">
+                        <h3>Guidance</h3>
+                        <p>{guidance}</p>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            ) : null}
+          </div>
+        </PolicyPanel>
+      ) : null}
     </section>
   );
 }
