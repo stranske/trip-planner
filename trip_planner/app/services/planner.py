@@ -1782,6 +1782,7 @@ def _assemble_planner_reply(
                 )
             ),
             tool_calls=executed_tool_calls,
+            requested_tool_calls=reply.requested_tool_calls,
             structured_blocks=reply.structured_blocks,
             turn_metadata=reply.turn_metadata,
         )

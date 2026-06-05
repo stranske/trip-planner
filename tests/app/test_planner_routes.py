@@ -352,7 +352,9 @@ def test_planner_turn_emits_decision_block_for_pending_decisions(
     planner_blocks = response.json()["messages"][-1]["structured_blocks"]
     decision_block = next(block for block in planner_blocks if block["kind"] == "decision")
     assert decision_block["title"] == "Open decisions"
-    assert decision_block["metadata"]["decision_ids"]
+    decision_ids = decision_block["metadata"]["decision_ids"]
+    assert decision_ids
+    assert all(isinstance(decision_id, str) and decision_id for decision_id in decision_ids)
 
 
 def test_planner_turn_summarizes_scattered_traveler_input(client: TestClient) -> None:

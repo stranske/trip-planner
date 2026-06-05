@@ -1,27 +1,3 @@
-## 2026-06-05T10:11Z - opener lane issue #1310 planner hotspots
-
-- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
-- Source repo: `stranske/trip-planner`; source issue `#1310` (`Refactor planner.py response/turn hotspots (_planner_response_structured_blocks, submit_planner_turn)`).
-- Branch: `codex/issue-1310-planner-hotspots`, base `origin/main` `03c71f5f5`.
-- Selection notes: initial cap-health reported raw opener cap below limit (`total_opener_owned=2`, `raw_cap_reached=false`, `normal_cap_reached=false`). Existing opener PR #1330 was mechanically repaired by adding `agent:retry` and dispatching Gate Followups; fresh cap-health then showed #1330 `draining` with active Gate evidence. Trend PR #5440 remains scoped/non-repairable on the owner/product strict-config decision. Liveness still had unlinked implementation candidates, so #1310 was selected after #1306 tracking epic, already-linked #1152/#1309, and scoped blockers were dispositioned.
-- Implementation:
-  - Extracted the eight `_planner_response_structured_blocks` builders into named helpers: `_build_summary_block`, `_build_question_block`, `_build_planning_ledger_block`, `_build_decision_block`, `_build_route_option_block`, `_build_comparison_block`, `_build_assumption_block`, and `_build_next_action_block`.
-  - Added `_PlannerTurnRuntime` and split `submit_planner_turn` into prepare, invoke, assemble, and persist helpers while preserving the existing persistence/tool/model/block/commit order.
-  - Added `test_planner_turn_emits_decision_block_for_pending_decisions` because the existing route suite did not fail when the extracted decision block kind was deliberately broken.
-- Validation:
-  - `python -m pytest tests/app/ -q -k planner` -> 91 passed, 149 deselected.
-  - `python -m pytest tests/app/test_planner_routes.py -q` -> 39 passed.
-  - `python -m pytest tests/app/ -q` -> 240 passed.
-  - `python -m ruff check trip_planner/app/services/planner.py tests/app/test_planner_routes.py` -> passed.
-  - `git diff --check` -> passed.
-  - Hotspot-shrink gate: `_planner_response_structured_blocks` body is 33 lines and `submit_planner_turn` body is 30 lines.
-  - Builder-extraction gate: `grep -cE '^def _build_(summary|question|planning_ledger|decision|route_option|comparison|assumption|next_action)_block' trip_planner/app/services/planner.py` -> 8.
-  - Deliberate-break gate: temporarily changed `_build_decision_block` to emit `kind="decision_BROKEN"`; `python -m pytest tests/app/test_planner_routes.py -q` failed with `test_planner_turn_emits_decision_block_for_pending_decisions` raising `StopIteration`. Restored the kind and reran the suite green.
-- PR/routing: opened PR #1331 at https://github.com/stranske/trip-planner/pull/1331. PR is open/non-draft, closes #1310, and has `agent:codex`, `agents:keepalive`, `autofix`, and post-repair `agent:retry`.
-- Post-open repair: initial cap-health classified #1331 as `needs-dispatch-evidence` after cancelled initial Gate/Gate Followups/Autofix runs. `opener-repair-infra-stalls.py` added `agent:retry` and dispatched Gate Followups. Fresh cap-health at 2026-06-05T10:13:28Z classifies #1331 as `draining` with active Gate/Autofix evidence on the branch.
-- Existing PR drain note: #1330 is clean/green but currently carries `agent:needs-attention` after a Codex keepalive run failed with no output captured; this remains keepalive/closer-side drain work, not a blocker for opening #1310 because raw opener cap is still below 5.
-- Next action: keepalive owns PR #1331 CI/review; closer/keepalive should drain #1330's attention state when scheduled.
-
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
