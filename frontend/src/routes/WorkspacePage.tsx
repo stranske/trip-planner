@@ -40,6 +40,9 @@ import { PlanningModeSelector } from "../components/planner/PlanningModeSelector
 import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
 import { TripComparison } from "../components/trips/TripComparison";
 import { PlanningNotebookPanel } from "../components/workspace/PlanningNotebookPanel";
+import { PlannerPanel } from "../components/workspace/panels/PlannerPanel";
+import { PolicyPanel as WorkspacePolicyPanel } from "../components/workspace/panels/PolicyPanel";
+import { RouteTradeoffsPanel } from "../components/workspace/panels/RouteTradeoffsPanel";
 import { RouteOptionWorkbench } from "../components/workspace/RouteOptionWorkbench";
 import { ScenarioComparison } from "../components/workspace/ScenarioComparison";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
@@ -48,11 +51,15 @@ import { ComparePanel } from "./workspace/ComparePanel";
 import { MapPanel } from "./workspace/MapPanel";
 import { NotebookPanel } from "./workspace/NotebookPanel";
 import { PlanPanel } from "./workspace/PlanPanel";
-import { PolicyPanel } from "./workspace/PolicyPanel";
+import { PolicyPanel as PolicyTabPanel } from "./workspace/PolicyPanel";
 
 type LoaderData = {
   workspace: Promise<WorkspaceData>;
   trips?: Promise<TripRecord[]>;
+};
+
+type WorkspaceTestWindow = Window & {
+  __TRIP_PLANNER_WORKSPACE_BREAK__?: boolean;
 };
 
 type TimelineStop = {
@@ -173,8 +180,6 @@ const ROUTE_OPTION_ACTION_SUCCESS: Record<RouteOptionActionType, string> = {
 };
 
 const STATUS_CARD_CLASS = "status-card";
-const PLANNER_PANEL_CLASS = `${STATUS_CARD_CLASS} planner-panel-card`;
-
 const WORKSPACE_TABS: { id: WorkspaceTab; label: string }[] = [
   { id: "plan", label: "Plan" },
   { id: "compare", label: "Compare" },
@@ -991,6 +996,12 @@ export function WorkspacePage() {
     () => Promise.all([workspace, trips ?? Promise.resolve([] as TripRecord[])]),
     [workspace, trips]
   );
+  if (
+    typeof window !== "undefined" &&
+    (window as WorkspaceTestWindow).__TRIP_PLANNER_WORKSPACE_BREAK__
+  ) {
+    throw new Error("Workspace deliberate break enabled");
+  }
 
   return (
     <AsyncRouteContent
@@ -1478,6 +1489,13 @@ function WorkspacePageContent({
     }
   }
 
+  if (
+    typeof window !== "undefined" &&
+    (window as WorkspaceTestWindow).__TRIP_PLANNER_WORKSPACE_BREAK__
+  ) {
+    throw new Error("Workspace deliberate break enabled");
+  }
+
   return (
     <section
       className={`workspace-layout${isCompactLayout ? " workspace-layout-compact" : ""}`}
@@ -1629,61 +1647,40 @@ function WorkspacePageContent({
       {activeTab === "plan" ? (
         <PlanPanel labelledBy={workspaceTabButtonId("plan")}>
       <div className="workspace-grid">
-        <section className={PLANNER_PANEL_CLASS}>
-          <p className="status-label">Planner</p>
-          <h2>Traveler planning workspace</h2>
-          <p className="muted-copy">
-            Use your planner to compare options, keep context, and decide the next best trip step.
-          </p>
-          <div className="planner-runtime-row" aria-label="Planner availability">
-            <span
-              className={`planner-runtime-pill planner-runtime-pill--${
-                currentWorkspace.planner_panel_state.planner_behavior.runtime_status ?? "fallback"
-              }`}
-            >
-              {currentWorkspace.planner_panel_state.planner_behavior.runtime_mode === "model"
-                ? "AI-assisted planner"
-                : "Guided planner"}
-            </span>
-            <span className="planner-runtime-mode">
-              {currentWorkspace.planner_panel_state.planner_behavior.runtime_mode === "model"
-                ? "Live assistance"
-                : "Planning guide"}
-            </span>
-          </div>
-          {selectedRuntimeScenario ? (
-            <article className="planner-route-focus" aria-label="Planner route focus">
-              <p className="scenario-kicker">Route focus</p>
-              <h3>{selectedRuntimeScenario.title}</h3>
-              <p>
-                {selectedRouteSegment
-                  ? `${selectedRouteSegment.fromLabel} to ${selectedRouteSegment.toLabel}`
-                  : selectedRuntimeScenario.route_summary}
-              </p>
-              {selectedTimelineNotes.length > 0 ? (
-                <ul>
-                  {selectedTimelineNotes.map((note) => (
-                    <li key={note}>{note}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </article>
-          ) : null}
-          <PlanningModeSelector
-            value={currentWorkspace.session.selected_planning_mode}
-            busy={planningModeBusy}
-            error={planningModeError}
-            onChange={handlePlanningModeChange}
-          />
-          {plannerBusyLabel ? <p className="muted-copy">{plannerBusyLabel}</p> : null}
-          {plannerError ? <p className="planner-inline-error">{plannerError}</p> : null}
-          <PlannerSidePanelSurface
-            key={currentWorkspace.planner_panel_state === workspace.planner_panel_state ? "loader" : "workspace"}
-            state={currentWorkspace.planner_panel_state}
-            onDecisionAnswer={handleDecisionAnswer}
-            onOptionFeedback={handleOptionFeedback}
-          />
-          <section className="planner-conversation-card" aria-label="Planner conversation">
+        <PlannerPanel
+          runtimeMode={currentWorkspace.planner_panel_state.planner_behavior.runtime_mode ?? "fallback"}
+          runtimeStatus={currentWorkspace.planner_panel_state.planner_behavior.runtime_status ?? "fallback"}
+          routeFocus={
+            selectedRuntimeScenario
+              ? {
+                  title: selectedRuntimeScenario.title,
+                  summary: selectedRouteSegment
+                    ? `${selectedRouteSegment.fromLabel} to ${selectedRouteSegment.toLabel}`
+                    : selectedRuntimeScenario.route_summary,
+                }
+              : null
+          }
+          timelineNotes={selectedTimelineNotes}
+          planningModeControl={
+            <PlanningModeSelector
+              value={currentWorkspace.session.selected_planning_mode}
+              busy={planningModeBusy}
+              error={planningModeError}
+              onChange={handlePlanningModeChange}
+            />
+          }
+          busyLabel={plannerBusyLabel}
+          errorMessage={plannerError}
+          plannerSurface={
+            <PlannerSidePanelSurface
+              key={currentWorkspace.planner_panel_state === workspace.planner_panel_state ? "loader" : "workspace"}
+              state={currentWorkspace.planner_panel_state}
+              onDecisionAnswer={handleDecisionAnswer}
+              onOptionFeedback={handleOptionFeedback}
+            />
+          }
+          conversationPanel={
+            <section className="planner-conversation-card" aria-label="Planner conversation">
             <div className="planner-conversation-header">
               <div>
                 <p className="scenario-kicker">Conversation</p>
@@ -1763,7 +1760,8 @@ function WorkspacePageContent({
               </button>
             </form>
           </section>
-        </section>
+          }
+        />
 
         {panelVisibility.showBudgetPanel ? (
           <WorkspaceBudgetPanel
@@ -1836,7 +1834,9 @@ function WorkspacePageContent({
         />
 
         {panelVisibility.showApprovalReadinessPanel ? (
-          <section className={STATUS_CARD_CLASS} data-testid="approval-packet">
+          <WorkspacePolicyPanel
+            approvalPacketContent={
+              <>
             <p className="status-label">Approval packet</p>
             <h2 data-testid="proposal-lifecycle">
               {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
@@ -1921,7 +1921,9 @@ function WorkspacePageContent({
               </div>
             </>
           )}
-          </section>
+              </>
+            }
+          />
         ) : null}
 
         <section className={STATUS_CARD_CLASS}>
@@ -2075,15 +2077,16 @@ function WorkspacePageContent({
           )}
         </section>
 
-        <section className={STATUS_CARD_CLASS}>
-          <p className="status-label">Route tradeoffs</p>
-          <h2>{isCompactLayout ? "Compact route tradeoffs" : "Review route tradeoffs"}</h2>
-          <p>
-            {panelVisibility.showPolicyPosture
-              ? "Cost, route burden, feasibility, and approval posture stay scannable here without forcing you into raw planning notes."
-              : "Cost, route burden, and feasibility stay scannable here without forcing you into raw planning notes."}
-          </p>
-          {routeComparison.scenarios.length > 0 ? (
+        <RouteTradeoffsPanel
+          compactLayout={isCompactLayout}
+          showPolicyPosture={panelVisibility.showPolicyPosture}
+          hasScenarios={routeComparison.scenarios.length > 0}
+          emptyMessage={
+            currentWorkspace.runtime_state.status === "partial"
+              ? "Add a little more trip detail before route comparison can start."
+              : "No route ideas are available yet, so there is nothing to compare."
+          }
+        >
             <div className="scenario-review-grid" aria-label="Scenario review board">
               {routeComparison.scenarios.map((scenario) => {
                 const reviewMetrics = buildScenarioReviewMetrics(
@@ -2130,14 +2133,7 @@ function WorkspacePageContent({
                 );
               })}
             </div>
-          ) : (
-            <p className="muted-copy">
-              {currentWorkspace.runtime_state.status === "partial"
-                ? "Add a little more trip detail before route comparison can start."
-                : "No route ideas are available yet, so there is nothing to compare."}
-            </p>
-          )}
-        </section>
+        </RouteTradeoffsPanel>
 
         <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Saved ideas</p>
@@ -2423,7 +2419,7 @@ function WorkspacePageContent({
         </NotebookPanel>
       ) : null}
       {activeTab === "policy" ? (
-        <PolicyPanel labelledBy={workspaceTabButtonId("policy")}>
+        <PolicyTabPanel labelledBy={workspaceTabButtonId("policy")}>
           <div className="workspace-grid">
             {panelVisibility.showApprovalReadinessPanel ? (
               <section className={STATUS_CARD_CLASS} data-testid="approval-packet">
@@ -2478,7 +2474,7 @@ function WorkspacePageContent({
               </section>
             ) : null}
           </div>
-        </PolicyPanel>
+        </PolicyTabPanel>
       ) : null}
     </section>
   );
