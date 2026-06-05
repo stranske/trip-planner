@@ -1185,6 +1185,24 @@ function WorkspacePageContent({
     currentWorkspace.proposal_state?.proposal_state_id ?? "no-proposal",
     Object.keys(workspaceDebugSections).sort().join("|"),
   ].join(":");
+  const routeTradeoffCards = routeComparison.scenarios.map((scenario) => {
+    const reviewMetrics = buildScenarioReviewMetrics(currentWorkspace, scenario, panelVisibility);
+
+    return {
+      id: scenario.scenario_id,
+      kicker: scenario.recommended_for_selection ? "recommended" : scenario.status,
+      title: scenario.title,
+      summary: scenario.summary,
+      comparisonNote: scenario.comparison_note,
+      highlights: scenario.highlights,
+      isSelected: scenario.scenario_id === selectedScenarioId,
+      metrics: reviewMetrics.map((metric) => ({
+        label: metric.label,
+        value: metric.value,
+        testId: metric.label === "Approval posture" ? "policy-posture" : undefined,
+      })),
+    };
+  });
   function handleScenarioSelection(scenarioId: string) {
     setSelectedScenarioId(scenarioId);
     setSelectedSegmentId(null);
@@ -2080,60 +2098,13 @@ function WorkspacePageContent({
         <RouteTradeoffsPanel
           compactLayout={isCompactLayout}
           showPolicyPosture={panelVisibility.showPolicyPosture}
-          hasScenarios={routeComparison.scenarios.length > 0}
+          scenarios={routeTradeoffCards}
           emptyMessage={
             currentWorkspace.runtime_state.status === "partial"
               ? "Add a little more trip detail before route comparison can start."
               : "No route ideas are available yet, so there is nothing to compare."
           }
-        >
-            <div className="scenario-review-grid" aria-label="Scenario review board">
-              {routeComparison.scenarios.map((scenario) => {
-                const reviewMetrics = buildScenarioReviewMetrics(
-                  currentWorkspace,
-                  scenario,
-                  panelVisibility
-                );
-                const isSelected = scenario.scenario_id === selectedScenarioId;
-
-                return (
-                  <article
-                    key={scenario.scenario_id}
-                    className={`scenario-card scenario-review-card${
-                      isSelected ? " scenario-card-active" : ""
-                    }`}
-                    aria-label={`${scenario.title} review summary`}
-                  >
-                    <p className="scenario-kicker">
-                      {scenario.recommended_for_selection ? "recommended" : scenario.status}
-                    </p>
-                    <h3>{scenario.title}</h3>
-                    <p>{scenario.summary}</p>
-                    <dl className="workspace-meta scenario-review-metrics">
-                      {reviewMetrics.map((metric) => (
-                        <div key={`${scenario.scenario_id}-${metric.label}`}>
-                          <dt>{metric.label}</dt>
-                          <dd
-                            data-testid={
-                              metric.label === "Approval posture" ? "policy-posture" : undefined
-                            }
-                          >
-                            {metric.value}
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                    <p className="muted-copy">{scenario.comparison_note}</p>
-                    <ul className="focus-area-list scenario-highlight-list">
-                      {scenario.highlights.slice(0, 2).map((highlight) => (
-                        <li key={highlight}>{highlight}</li>
-                      ))}
-                    </ul>
-                  </article>
-                );
-              })}
-            </div>
-        </RouteTradeoffsPanel>
+        />
 
         <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Saved ideas</p>
