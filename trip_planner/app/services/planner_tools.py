@@ -25,6 +25,7 @@ from trip_planner.sources import (
     SourceRecord,
     SourceTrustSignals,
 )
+from trip_planner._validators import require_probability
 
 
 @dataclass(frozen=True, slots=True)
@@ -419,6 +420,22 @@ def _read_source_summary(
     )
 
 
+def _commerciality_preference_from_runtime_state(runtime_state: dict[str, Any]) -> float | None:
+    raw_preference = runtime_state.get("commerciality_preference")
+    if raw_preference is None:
+        return None
+    if isinstance(raw_preference, str):
+        raw_preference = raw_preference.strip()
+        if not raw_preference:
+            return None
+    try:
+        preference = float(raw_preference)
+        require_probability(preference, "runtime_state.commerciality_preference")
+    except (TypeError, ValueError):
+        return None
+    return preference
+
+
 def _read_source_quality_summary(
     db_session: Session,
     user: AuthenticatedUser,
@@ -429,6 +446,7 @@ def _read_source_quality_summary(
     payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
     inventory = payload["inventory_summary"]
     runtime_state = inventory.get("runtime_state") or {}
+    commerciality_preference = _commerciality_preference_from_runtime_state(runtime_state)
     scorer = SourceQualityScorer()
     quality_rows = []
     for bundle in _bounded_items(list(inventory.get("bundles") or []), 5):
@@ -442,6 +460,7 @@ def _read_source_quality_summary(
         summary = scorer.summarize(
             source_records,
             subject_kind="option",
+            commerciality_preference=commerciality_preference,
             intended_option_kind=str(bundle.get("bundle_context") or "mixed"),
         )
         row_status = "completed" if summary.contributing_source_count else "missing_source_records"
