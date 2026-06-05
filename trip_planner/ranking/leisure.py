@@ -343,13 +343,48 @@ class LeisureRankingEngine(BaseRankingEngine):
         missing_data_penalties = self._build_missing_data_penalties(profile, assessment)
 
         baseline_score = self.BASELINE_SCORE
-        final_score = _round(
+        accumulated_score = (
             baseline_score
             + sum(item.weighted_impact for item in contributions)
             + sum(item.amount for item in bonuses)
             - sum(item.amount for item in penalties)
             - sum(item.amount for item in missing_data_penalties)
         )
+        if accumulated_score > 1.0:
+            cap_amount = accumulated_score - 1.0
+            penalties = list(penalties) + [
+                ScoreAdjustment(
+                    adjustment_id=f"penalty:{bundle.bundle_id}:score-upper-bound",
+                    label="Score upper-bound cap",
+                    kind="penalty",
+                    amount=cap_amount,
+                    reason_code="score_upper_bound_cap",
+                    summary="Score capped at 1.0 so final_score remains on the unit interval.",
+                    affected_factor_keys=["final_score"],
+                )
+            ]
+            final_score = 1.0
+        elif accumulated_score < 0.0:
+            floor_amount = abs(accumulated_score)
+            bonuses = list(bonuses) + [
+                ScoreAdjustment(
+                    adjustment_id=f"bonus:{bundle.bundle_id}:score-lower-bound",
+                    label="Score lower-bound floor",
+                    kind="bonus",
+                    amount=floor_amount,
+                    reason_code="score_lower_bound_floor",
+                    summary="Score floored at 0.0 so final_score remains on the unit interval.",
+                    affected_factor_keys=["final_score"],
+                )
+            ]
+            final_score = 0.0
+        else:
+            final_score = _round(accumulated_score)
+        breakdown_notes = [
+            "Feasibility output informs ranking friction but does not replace preference or objective fit.",
+        ]
+        if final_score in {0.0, 1.0} and accumulated_score != final_score:
+            breakdown_notes.append("Unit-interval score bound applied to final_score.")
         score_breakdown = ScoreBreakdown(
             baseline_score=baseline_score,
             component_contributions=contributions,
@@ -357,9 +392,7 @@ class LeisureRankingEngine(BaseRankingEngine):
             bonuses=bonuses,
             missing_data_penalties=missing_data_penalties,
             final_score=final_score,
-            notes=[
-                "Feasibility output informs ranking friction but does not replace preference or objective fit.",
-            ],
+            notes=breakdown_notes,
         )
         confidence_summary = self._confidence_summary(profile, assessment)
         unresolved_risks = self._risk_flags(profile, assessment)

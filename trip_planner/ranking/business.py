@@ -289,14 +289,14 @@ class BusinessRankingEngine(BaseRankingEngine):
                 assessment,
                 constraint_set=constraint_set,
             )
+            bonuses: list[ScoreAdjustment] = []
             # Accumulate before rounding so the hard-block cap is exact.
             accumulated_score = self.BASELINE_SCORE
             accumulated_score += sum(item.weighted_impact for item in contributions)
             accumulated_score -= sum(item.amount for item in penalties)
             accumulated_score -= sum(item.amount for item in missing_data_penalties)
 
-            # Hard constraint: disallowed inventory cannot be outweighed by preference.
-            # Add an explicit capping penalty so the ScoreBreakdown arithmetic stays exact.
+            # Add explicit cap/floor adjustments so ScoreBreakdown arithmetic stays exact.
             hard_blocked = self._has_disallowed_inventory(candidate.bundle)
             if hard_blocked and accumulated_score > self.HARD_BLOCK_SCORE_CAP:
                 cap_amount = accumulated_score - self.HARD_BLOCK_SCORE_CAP
@@ -315,6 +315,34 @@ class BusinessRankingEngine(BaseRankingEngine):
                     )
                 ]
                 final_score = self.HARD_BLOCK_SCORE_CAP
+            elif accumulated_score > 1.0:
+                cap_amount = accumulated_score - 1.0
+                penalties = list(penalties) + [
+                    ScoreAdjustment(
+                        adjustment_id=f"penalty:{candidate.bundle.bundle_id}:score-upper-bound",
+                        label="Score upper-bound cap",
+                        kind="penalty",
+                        amount=cap_amount,
+                        reason_code="score_upper_bound_cap",
+                        summary="Score capped at 1.0 so final_score remains on the unit interval.",
+                        affected_factor_keys=["final_score"],
+                    )
+                ]
+                final_score = 1.0
+            elif accumulated_score < 0.0:
+                floor_amount = abs(accumulated_score)
+                bonuses = [
+                    ScoreAdjustment(
+                        adjustment_id=f"bonus:{candidate.bundle.bundle_id}:score-lower-bound",
+                        label="Score lower-bound floor",
+                        kind="bonus",
+                        amount=floor_amount,
+                        reason_code="score_lower_bound_floor",
+                        summary="Score floored at 0.0 so final_score remains on the unit interval.",
+                        affected_factor_keys=["final_score"],
+                    )
+                ]
+                final_score = 0.0
             else:
                 final_score = _round(accumulated_score)
 
@@ -326,10 +354,13 @@ class BusinessRankingEngine(BaseRankingEngine):
                 breakdown_notes.append(
                     f"Hard policy block applied: score capped at {self.HARD_BLOCK_SCORE_CAP}."
                 )
+            if final_score in {0.0, 1.0} and accumulated_score != final_score:
+                breakdown_notes.append("Unit-interval score bound applied to final_score.")
             breakdown = ScoreBreakdown(
                 baseline_score=self.BASELINE_SCORE,
                 component_contributions=contributions,
                 penalties=penalties,
+                bonuses=bonuses,
                 missing_data_penalties=missing_data_penalties,
                 final_score=final_score,
                 notes=breakdown_notes,
