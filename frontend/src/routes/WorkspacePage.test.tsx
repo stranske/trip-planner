@@ -68,6 +68,10 @@ const mockedCreateNotebookItem = vi.mocked(createNotebookItem);
 const mockedUpdateNotebookItem = vi.mocked(updateNotebookItem);
 const mockedDeleteNotebookItem = vi.mocked(deleteNotebookItem);
 const mockedSetNotebookFocus = vi.mocked(setNotebookFocus);
+
+type WorkspaceTestWindow = Window & {
+  __TRIP_PLANNER_WORKSPACE_BREAK__?: boolean;
+};
 const tripComparisonPayload: TripRecord[] = [
   {
     trip_id: "trip-leisure-kyoto-draft",
@@ -796,6 +800,7 @@ describe("WorkspacePage", () => {
 
   afterEach(() => {
     cleanup();
+    delete (window as WorkspaceTestWindow).__TRIP_PLANNER_WORKSPACE_BREAK__;
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     Object.defineProperty(window, "matchMedia", {
@@ -816,6 +821,23 @@ describe("WorkspacePage", () => {
     mockedUpdateNotebookItem.mockReset();
     mockedDeleteNotebookItem.mockReset();
     mockedSetNotebookFocus.mockReset();
+  });
+
+  it("throws only when the workspace deliberate-break hook is enabled", () => {
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
+    (window as WorkspaceTestWindow).__TRIP_PLANNER_WORKSPACE_BREAK__ = true;
+
+    expect(() => renderWorkspacePage()).toThrow("Workspace deliberate break enabled");
+  });
+
+  it("renders normally when the workspace deliberate-break hook is disabled", async () => {
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Traveler planning workspace" })).toBeInTheDocument();
+    });
   });
 
   it("does not render raw runtime/provider/debug labels for default leisure workspaces", async () => {
