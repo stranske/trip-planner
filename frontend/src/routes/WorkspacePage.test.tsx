@@ -1535,7 +1535,16 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(mockedSubmitPlannerTurn).toHaveBeenCalledWith(
         "trip-leisure-kyoto-draft",
-        "Keep Uji, but reduce transfer pressure."
+        "Keep Uji, but reduce transfer pressure.",
+        [
+          {
+            tool_name: "build_daily_menu",
+            arguments: {
+              commercial_target: 0.5,
+              time_budget_minutes: 360,
+            },
+          },
+        ]
       );
     });
     await waitFor(() => {
@@ -1562,6 +1571,47 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Planner diagnostics")).toBeInTheDocument();
     expect(screen.getByText("read_workspace_state: Read the current workspace state.")).toBeInTheDocument();
     expect(screen.getByLabelText("Message the planner")).toHaveValue("");
+  });
+
+  it("posts the selected commercial source mix with planner turns", async () => {
+    const user = userEvent.setup();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        inventory_summary: {
+          ...workspacePayload.inventory_summary,
+          runtime_state: {
+            ...workspacePayload.inventory_summary.runtime_state,
+            commerciality_preference: 0.25,
+          },
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    const slider = await screen.findByLabelText("Commercial source mix target");
+    fireEvent.change(slider, { target: { value: "0.85" } });
+    await user.type(screen.getByLabelText("Message the planner"), "Build a balanced day menu.");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => {
+      expect(mockedSubmitPlannerTurn).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        "Build a balanced day menu.",
+        [
+          {
+            tool_name: "build_daily_menu",
+            arguments: {
+              commercial_target: 0.85,
+              time_budget_minutes: 360,
+            },
+          },
+        ]
+      );
+    });
+    expect(screen.getByText("15% editorial / 85% commercial")).toBeInTheDocument();
   });
 
   it("fills traveler-friendly prompt suggestions into the planner message box", async () => {

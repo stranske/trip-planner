@@ -620,6 +620,7 @@ export type WorkspaceData = {
     status: "ready" | "partial" | "empty";
     title: string;
     summary: string;
+    commerciality_preference?: number;
   };
   feasibility_summary: FeasibilitySummary;
   inventory_summary: {
@@ -639,6 +640,7 @@ export type WorkspaceData = {
       status: "ready" | "partial" | "empty";
       title: string;
       summary: string;
+      commerciality_preference?: number;
     };
   };
   budget_state: BudgetWorkspaceState;
@@ -783,9 +785,15 @@ export async function fetchPlannerSession(tripId: string): Promise<PlannerSessio
   });
 }
 
+export type PlannerToolCallRequest = {
+  tool_name: string;
+  arguments?: Record<string, unknown>;
+};
+
 export async function submitPlannerTurn(
   tripId: string,
-  message: string
+  message: string,
+  toolCalls: PlannerToolCallRequest[] = []
 ): Promise<PlannerSessionResponse> {
   return fetchJson<PlannerSessionResponse>({
     path: `/api/planner/${tripId}/turns`,
@@ -794,7 +802,7 @@ export async function submitPlannerTurn(
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, tool_calls: toolCalls }),
   });
 }
 

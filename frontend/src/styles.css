@@ -946,6 +946,19 @@ a {
   transform: translateY(1px);
 }
 
+.source-mix-control {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  color: var(--color-ink-soft);
+  font-weight: 700;
+}
+
+.source-mix-control input {
+  width: 100%;
+  accent-color: var(--color-mint-deep);
+}
+
 .planner-route-focus {
   border: 1px solid rgba(56, 117, 107, 0.2);
   border-radius: 8px;
