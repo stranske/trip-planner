@@ -2459,9 +2459,11 @@ function WorkspacePageContent({
       ) : null}
       {activeTab === "policy" ? (
         <PolicyTabPanel labelledBy={workspaceTabButtonId("policy")}>
-          <div className="workspace-grid">
-            {panelVisibility.showApprovalReadinessPanel ? (
-              <section className={STATUS_CARD_CLASS} data-testid="approval-packet">
+          <WorkspacePolicyPanel
+            grid
+            approvalPacketContent={
+              panelVisibility.showApprovalReadinessPanel ? (
+                <>
                 <p className="status-label">Approval packet</p>
                 <h2 data-testid="proposal-lifecycle">
                   {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
@@ -2485,11 +2487,12 @@ function WorkspacePageContent({
                     ) : null}
                   </>
                 )}
-              </section>
-            ) : null}
-
-            {panelVisibility.showProposalPanel ? (
-              <section className={STATUS_CARD_CLASS} data-testid="tpp-label">
+                </>
+              ) : null
+            }
+            approvalDetailsContent={
+              panelVisibility.showProposalPanel ? (
+                <>
                 <p className="status-label">Approval details</p>
                 <h2>Options and readiness signals</h2>
                 {currentWorkspace.proposal_state == null ? (
@@ -2510,9 +2513,10 @@ function WorkspacePageContent({
                     ))}
                   </div>
                 )}
-              </section>
-            ) : null}
-          </div>
+                </>
+              ) : null
+            }
+          />
         </PolicyTabPanel>
       ) : null}
     </section>
