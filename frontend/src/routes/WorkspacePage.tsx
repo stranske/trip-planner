@@ -30,6 +30,7 @@ import {
   type RouteOptionActionType,
   type RuntimeScenarioComparison,
   submitPlannerOptionFeedback,
+  type PlannerToolCallRequest,
   type SavedScenarioRecord,
   type WorkspaceData,
 } from "../api/workspace";
@@ -784,6 +785,14 @@ function mergePlannerSessionState(
   };
 }
 
+function sourceMixTargetFromWorkspace(workspace: WorkspaceData): number {
+  const rawPreference =
+    workspace.inventory_summary.runtime_state.commerciality_preference ??
+    workspace.runtime_state.commerciality_preference;
+  const parsed = typeof rawPreference === "number" ? rawPreference : Number(rawPreference);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 0.5;
+}
+
 const hiddenPlannerBlockKinds = new Set(["debug", "tool_call", "tool_trace", "diagnostic"]);
 
 function legacyStructuredBlocks(message: PlannerMessage): PlannerStructuredBlock[] {
@@ -1042,6 +1051,9 @@ function WorkspacePageContent({
   );
   const [plannerSession, setPlannerSession] = useState<PlannerSessionResponse | null>(null);
   const [plannerConversationDraft, setPlannerConversationDraft] = useState("");
+  const [sourceMixTarget, setSourceMixTarget] = useState(() =>
+    sourceMixTargetFromWorkspace(workspace)
+  );
   const [plannerConversationNotice, setPlannerConversationNotice] = useState<string | null>(null);
   const [plannerConversationError, setPlannerConversationError] = useState<string | null>(null);
   const [plannerConversationBusyLabel, setPlannerConversationBusyLabel] = useState<string | null>(
@@ -1072,6 +1084,7 @@ function WorkspacePageContent({
     const previousWorkspace = previousWorkspaceRef.current;
     previousWorkspaceRef.current = workspace;
     setCurrentWorkspace(workspace);
+    setSourceMixTarget(sourceMixTargetFromWorkspace(workspace));
     setSelectedScenarioId(resolveMapScenarioId(workspace));
     setSelectedMapScope("regional");
     setSelectedSegmentId(null);
@@ -1298,8 +1311,17 @@ function WorkspacePageContent({
     setPlannerConversationError(null);
     setPlannerConversationBusyLabel("Sending planner turn...");
     plannerSessionLoadVersion.current += 1;
+    const toolCalls: PlannerToolCallRequest[] = [
+      {
+        tool_name: "build_daily_menu",
+        arguments: {
+          commercial_target: sourceMixTarget,
+          time_budget_minutes: 360,
+        },
+      },
+    ];
     try {
-      const nextPlannerSession = await submitPlannerTurn(trip.trip_id, message);
+      const nextPlannerSession = await submitPlannerTurn(trip.trip_id, message, toolCalls);
       startTransition(() => {
         setPlannerSession(nextPlannerSession);
         setCurrentWorkspace((current) => mergePlannerSessionState(current, nextPlannerSession));
@@ -1319,6 +1341,25 @@ function WorkspacePageContent({
     setPlannerConversationNotice("Draft added. Edit it if needed, then send it to the planner.");
     setPlannerConversationError(null);
     plannerConversationTextareaRef.current?.focus();
+  }
+
+  function handleSourceMixTargetChange(value: number) {
+    const boundedValue = Math.max(0, Math.min(1, value));
+    setSourceMixTarget(boundedValue);
+    setCurrentWorkspace((current) => ({
+      ...current,
+      runtime_state: {
+        ...current.runtime_state,
+        commerciality_preference: boundedValue,
+      },
+      inventory_summary: {
+        ...current.inventory_summary,
+        runtime_state: {
+          ...current.inventory_summary.runtime_state,
+          commerciality_preference: boundedValue,
+        },
+      },
+    }));
   }
 
   async function handleBudgetSave(payload: BudgetPlanUpsertPayload) {
@@ -1978,6 +2019,33 @@ function WorkspacePageContent({
               ))}
             </div>
           )}
+        </section>
+
+        <section className={STATUS_CARD_CLASS}>
+          <p className="status-label">Source mix</p>
+          <h2>Commercial balance</h2>
+          <p>
+            Set the target mix for daily-menu re-ranking before asking the planner for a slate.
+          </p>
+          <label className="source-mix-control">
+            <span>
+              {Math.round((1 - sourceMixTarget) * 100)}% editorial /{" "}
+              {Math.round(sourceMixTarget * 100)}% commercial
+            </span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={sourceMixTarget}
+              aria-label="Commercial source mix target"
+              onChange={(event) => handleSourceMixTargetChange(Number(event.target.value))}
+            />
+          </label>
+          <p className="muted-copy">
+            The target is sent with planner turns as a calibrated menu tool call; source quality
+            scoring stays unchanged.
+          </p>
         </section>
 
         <section className={STATUS_CARD_CLASS}>

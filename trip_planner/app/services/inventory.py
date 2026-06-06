@@ -1012,6 +1012,7 @@ def build_inventory_summary_payload(
             "status": "ready",
             "title": "Runtime inventory is ready",
             "summary": "Persisted trip context is rich enough to assemble comparison-ready inventory bundles.",
+            "commerciality_preference": 0.5,
             "issues": [],
         }
     elif assembly_input is not None and assembly_input.snapshot.issues:

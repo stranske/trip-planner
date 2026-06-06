@@ -1,3 +1,25 @@
+## 2026-06-06T01:09Z - opener lane issue #1320 source mix slider
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1320` (`Wire the commercial↔non-commercial slider to calibrated re-ranking (point-7 P3)`).
+- Branch: `codex/issue-1320-source-mix`, base `origin/main` `0a9b3144d`.
+- Selection notes: raw opener cap was open (`total_opener_owned=0`, `raw_cap_reached=false`) after mandatory cap-health/infra repair. Priority searches found only scoped high-priority Trend #5343 and LMS #180; #1319/#1309/#1332 are verifier/follow-up sequencing; #1306 is an epic. #1320 was the oldest unlinked implementation issue outside scoped/linked lanes.
+- Implementation:
+  - Surfaced `inventory_summary.runtime_state.commerciality_preference` with a ready-state default.
+  - Extended the frontend planner-turn API wrapper to post explicit planner tool calls.
+  - Added a WorkspacePage source-mix slider that keeps local runtime preference state and posts `build_daily_menu` with `commercial_target` plus a bounded time budget when the traveler sends a planner turn.
+  - Added a named calibration regression test proving low vs high source-mix targets change realized commercial mix within tolerance.
+- Validation:
+  - `python -m pytest tests/itinerary/test_source_mix_calibration.py::test_slider_shifts_realized_mix -q` -> 1 passed.
+  - Deliberate-break gate: temporarily made `calibrate()` ignore `mix`; the named test failed with both low/high targets realizing `0.14`. Restored the penalty and reran green.
+  - `python -m pytest tests/app/test_planner_build_daily_menu_tool.py -q` -> 3 passed.
+  - `npm --prefix frontend test -- WorkspacePage` -> 52 passed (expected deliberate-break stderr from existing test).
+  - `npm --prefix frontend test` -> 16 files passed, 108 tests passed (expected deliberate-break stderr from existing test).
+  - `npm exec --cache /private/tmp/codex-npm-cache-trip-1320 -- tsc -b` -> passed.
+  - `python -m ruff check trip_planner/app/services/inventory.py tests/itinerary/test_source_mix_calibration.py tests/app/test_planner_build_daily_menu_tool.py` -> passed.
+  - `git diff --check` -> passed.
+- Next action: open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; keepalive owns async CI/review after PR creation.
+
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
