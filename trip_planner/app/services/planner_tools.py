@@ -24,6 +24,7 @@ from trip_planner.itinerary.daily_menu import (
     SourceMix,
     build_daily_menu as assemble_daily_menu,
 )
+from trip_planner.logistics.booking_radar import BookingFlag, scan_trip
 from trip_planner.sources import (
     QualityValueFitSummary,
     SourceQualityScorer,
@@ -90,6 +91,10 @@ _TOOL_DEFINITIONS: tuple[PlannerToolDefinition, ...] = (
             "Build a deterministic activity menu digest from current workspace activities, "
             "time budget, and commerciality mix."
         ),
+    ),
+    PlannerToolDefinition(
+        tool_name="read_booking_radar",
+        description="Read static advance-booking flags for scarce transport, sight, and permit items.",
     ),
     PlannerToolDefinition(
         tool_name="read_map_provider_status",
@@ -705,6 +710,73 @@ def _build_daily_menu(
             "tier_histogram": menu.rollup.tier_histogram,
             "candidate_count": len(menu.candidates),
             "selected_stops": digest,
+        },
+    )
+
+
+def _booking_radar_trip_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    inventory = payload["inventory_summary"]
+    trip_record = payload.get("trip_record") or {}
+    planner_trip = payload.get("planner_panel_state", {}).get("trip") or {}
+    transport_options: list[dict[str, Any]] = []
+    activity_options: list[dict[str, Any]] = []
+    destinations: list[dict[str, Any]] = []
+    for bundle in inventory.get("bundles") or []:
+        if not isinstance(bundle, dict):
+            continue
+        transport_options.extend(
+            item for item in bundle.get("transport_options", []) if isinstance(item, dict)
+        )
+        activity_options.extend(
+            item for item in bundle.get("activity_options", []) if isinstance(item, dict)
+        )
+        for nested_bundle in bundle.get("bundles") or []:
+            if not isinstance(nested_bundle, dict):
+                continue
+            destinations.extend(
+                item for item in nested_bundle.get("destinations", []) if isinstance(item, dict)
+            )
+    return {
+        "trip": trip_record.get("trip") or planner_trip,
+        "transport_segments": transport_options,
+        "pois": [*activity_options, *destinations],
+        "inventory": inventory,
+    }
+
+
+def _booking_flag_digest(flags: list[BookingFlag], *, limit: int) -> list[dict[str, str]]:
+    return [flag.to_dict() for flag in flags[: max(1, min(limit, 12))]]
+
+
+def _read_booking_radar(
+    db_session: Session,
+    user: AuthenticatedUser,
+    trip_id: str,
+    arguments: dict[str, Any],
+) -> PlannerToolResult:
+    payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
+    appetite = str(arguments.get("appetite") or "anchored")
+    flags = scan_trip(_booking_radar_trip_payload(payload), appetite=appetite)
+    limit = _bounded_menu_limit(arguments.get("limit", 12))
+    digest = _booking_flag_digest(flags, limit=limit)
+    return PlannerToolResult(
+        tool_name="read_booking_radar",
+        status="completed" if digest else "not_available",
+        summary=(
+            f"Read {len(digest)} advance-booking flag(s) for the active trip."
+            if digest
+            else "No static advance-booking flags matched the active trip."
+        ),
+        mutates_state=False,
+        refs=_ref_list(
+            payload["session"]["session_state_id"],
+            *(flag["pattern_id"] for flag in digest),
+        ),
+        output={
+            "radar_state": "ready" if digest else "clear",
+            "appetite": appetite,
+            "flag_count": len(flags),
+            "flags": digest,
         },
     )
 
@@ -1344,6 +1416,7 @@ _TOOL_HANDLERS: dict[str, PlannerToolHandler] = {
     "read_source_summary": _read_source_summary,
     "read_source_quality_summary": _read_source_quality_summary,
     "build_daily_menu": _build_daily_menu,
+    "read_booking_radar": _read_booking_radar,
     "read_map_provider_status": _read_map_provider_status,
     "read_route_geometry": _read_route_geometry,
     "refresh_route_comparison": _refresh_route_comparison,
