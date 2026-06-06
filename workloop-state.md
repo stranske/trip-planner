@@ -2,7 +2,7 @@
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
 - Source repo: `stranske/trip-planner`; source issue `#1320` (`Wire the commercial↔non-commercial slider to calibrated re-ranking (point-7 P3)`).
-- Branch: `codex/issue-1320-source-mix`, base `origin/main` `0a9b3144d`.
+- Branch: `codex/issue-1320-source-mix`, base `origin/main` `0a9b3144d`; PR #1344.
 - Selection notes: raw opener cap was open (`total_opener_owned=0`, `raw_cap_reached=false`) after mandatory cap-health/infra repair. Priority searches found only scoped high-priority Trend #5343 and LMS #180; #1319/#1309/#1332 are verifier/follow-up sequencing; #1306 is an epic. #1320 was the oldest unlinked implementation issue outside scoped/linked lanes.
 - Implementation:
   - Surfaced `inventory_summary.runtime_state.commerciality_preference` with a ready-state default.
@@ -18,7 +18,9 @@
   - `npm exec --cache /private/tmp/codex-npm-cache-trip-1320 -- tsc -b` -> passed.
   - `python -m ruff check trip_planner/app/services/inventory.py tests/itinerary/test_source_mix_calibration.py tests/app/test_planner_build_daily_menu_tool.py` -> passed.
   - `git diff --check` -> passed.
-- Next action: open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; keepalive owns async CI/review after PR creation.
+- PR/routing: opened PR #1344 at https://github.com/stranske/trip-planner/pull/1344. PR is open/non-draft, closes #1320, and has `agent:codex`, `agents:keepalive`, `autofix`, and `agent:retry`.
+- Post-open repair: `opener-repair-infra-stalls.py` dispatched Gate Followups because cap-health lagged on `needs-dispatch-evidence`. Direct `gh pr checks 1344` showed fresh current-head Python CI, Runtime CI, Cross-Repo Smoke, and guard jobs pending/passing after the dispatch, alongside stale cancelled initial workflow rows. Helper cap-health still lagged on the branch-scoped Gate Followups evidence at 2026-06-06T01:11Z.
+- Next action: keepalive owns async CI/review; opener should move to the next eligible issue on a future round after cap/drain discovery.
 
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
