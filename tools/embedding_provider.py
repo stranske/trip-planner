@@ -103,7 +103,7 @@ class EmbeddingProvider(ABC):
         """Return True if this provider is a non-LLM fallback."""
         return False
 
-    def supports_model(self, model: str | None) -> bool:
+    def supports_model(self, model: str | None) -> bool:  # noqa: ARG002
         """Return True if the provider can serve the requested model."""
         return True
 
