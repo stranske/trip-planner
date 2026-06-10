@@ -791,6 +791,109 @@ function stubMatchMedia(matches: boolean) {
   });
 }
 
+function workspaceWithUnequalRouteGeometry(): WorkspaceData {
+  const scenarios = workspacePayload.runtime_scenario_comparison.scenarios.map((scenario) =>
+    scenario.scenario_id === "scenario:trip-leisure-kyoto-draft:1"
+      ? {
+          ...scenario,
+          map_view: {
+            active_scope: "global" as const,
+            active_route_option_id: "route-option:kyoto-uji",
+            selected_segment_id: "route-segment:kyoto-uji",
+            place_markers: [
+              {
+                id: "marker:kyoto-start",
+                source_id: "kyoto-start",
+                label: "Kyoto",
+                description: "Kyoto arrival and hotel base.",
+                source_refs: ["ranked-result:kyoto-spring:1"],
+                route_index: 0,
+                x: 20,
+                y: 50,
+              },
+              {
+                id: "marker:uji",
+                source_id: "uji",
+                label: "Uji",
+                description: "Uji tea and river day.",
+                source_refs: ["ranked-result:kyoto-spring:1"],
+                route_index: 1,
+                x: 55,
+                y: 45,
+              },
+              {
+                id: "marker:kyoto-return",
+                source_id: "kyoto-return",
+                label: "Kyoto",
+                description: "Return to Kyoto for recovery time.",
+                source_refs: ["ranked-result:kyoto-spring:1"],
+                route_index: 2,
+                x: 78,
+                y: 52,
+              },
+            ],
+            rough_route_geometry: [
+              {
+                id: "route-segment:kyoto-uji",
+                from_marker_id: "marker:kyoto-start",
+                to_marker_id: "marker:uji",
+                from_label: "Kyoto",
+                to_label: "Uji",
+                x1: 20,
+                y1: 50,
+                x2: 55,
+                y2: 45,
+                warning: null,
+                duration_minutes: 720,
+                distance_km: 56,
+                confidence: "high" as const,
+                provider_distance_available: true,
+                distance_verification_state: "scenario_distance_available" as const,
+                distance_source: "fixture",
+                source_refs: ["ranked-result:kyoto-spring:1"],
+                unavailable_reason: null,
+              },
+              {
+                id: "route-segment:uji-kyoto",
+                from_marker_id: "marker:uji",
+                to_marker_id: "marker:kyoto-return",
+                from_label: "Uji",
+                to_label: "Kyoto",
+                x1: 55,
+                y1: 45,
+                x2: 78,
+                y2: 52,
+                warning: null,
+                duration_minutes: 120,
+                distance_km: 21,
+                confidence: "high" as const,
+                provider_distance_available: true,
+                distance_verification_state: "scenario_distance_available" as const,
+                distance_source: "fixture",
+                source_refs: ["ranked-result:kyoto-spring:1"],
+                unavailable_reason: null,
+              },
+            ],
+            confidence: {
+              level: "high" as const,
+              summary: "Fixture route geometry includes unequal per-leg timing.",
+            },
+          },
+        }
+      : scenario
+  );
+  const comparison = {
+    ...workspacePayload.runtime_scenario_comparison,
+    scenarios,
+  };
+
+  return {
+    ...workspacePayload,
+    route_comparison: comparison,
+    runtime_scenario_comparison: comparison,
+  };
+}
+
 describe("WorkspacePage", () => {
   beforeEach(() => {
     mockedFetchPlannerSession.mockResolvedValue(plannerSessionPayload);
@@ -1122,7 +1225,7 @@ describe("WorkspacePage", () => {
 
   it("renders timeline structure from persisted trip and scenario state", async () => {
     mockedUseLoaderData.mockReturnValue({
-      workspace: Promise.resolve(workspacePayload),
+      workspace: Promise.resolve(workspaceWithUnequalRouteGeometry()),
       trips: Promise.resolve(tripComparisonPayload),
     });
 
@@ -1157,6 +1260,18 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Destination context")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trip rhythm and day sequence" })).toBeInTheDocument();
     expect(screen.getByLabelText("Timeline summary")).toBeInTheDocument();
+    expect(
+      screen.getByText("Days 1-7 keep this stop visible in the selected route review path.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Days 8-12 keep this stop visible in the selected route review path.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Days 13-14 keep this stop visible in the selected route review path.")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Days 1-5 keep this stop visible in the selected route review path.")
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Review route tradeoffs" })).toBeInTheDocument();
     expect(screen.getByLabelText("Scenario review board")).toBeInTheDocument();
     expect(screen.getAllByText("Approval posture").length).toBeGreaterThan(0);

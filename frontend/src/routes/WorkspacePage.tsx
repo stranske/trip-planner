@@ -71,6 +71,10 @@ type TimelineStop = {
   endDay: number;
 };
 
+type RouteGeometrySegment = NonNullable<
+  RuntimeScenarioComparison["scenarios"][number]["map_view"]
+>["rough_route_geometry"][number];
+
 type RouteSegmentFocus = {
   id: string;
   fromLabel: string;
@@ -262,21 +266,89 @@ function resolveMapScenarioId(workspace: WorkspaceData): string | null {
   return resolveRouteComparison(workspace).lead_scenario_id;
 }
 
-function buildTimelineStops(routeSequence: string[], tripDuration: number | null): TimelineStop[] {
+function allocateDaySpans(duration: number, weights: number[]): number[] {
+  if (weights.length === 0) {
+    return [];
+  }
+  if (duration <= weights.length) {
+    return weights.map((_, index) => (index < duration ? 1 : 0));
+  }
+
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  if (totalWeight <= 0) {
+    return [];
+  }
+
+  const spans = weights.map(() => 1);
+  const distributableDays = duration - weights.length;
+  let remainingDays = distributableDays;
+  const fractional = weights
+    .map((weight, index) => {
+      const exact = (weight / totalWeight) * distributableDays;
+      const whole = Math.floor(exact);
+      spans[index] += whole;
+      remainingDays -= whole;
+      return { index, remainder: exact - whole };
+    })
+    .sort((a, b) => b.remainder - a.remainder);
+
+  for (let index = 0; index < remainingDays; index += 1) {
+    spans[fractional[index % fractional.length].index] += 1;
+  }
+
+  return spans;
+}
+
+function timelineWeightsFromSegments(
+  routeSequence: string[],
+  routeSegments?: RouteGeometrySegment[] | null
+): number[] | null {
+  if (routeSegments == null || routeSegments.length < routeSequence.length - 1) {
+    return null;
+  }
+
+  const legDurations = routeSegments
+    .slice(0, Math.max(0, routeSequence.length - 1))
+    .map((segment) => segment.duration_minutes ?? 0);
+  if (legDurations.some((duration) => duration <= 0)) {
+    return null;
+  }
+
+  return routeSequence.map((_, index) => {
+    const previousLeg = legDurations[index - 1];
+    const nextLeg = legDurations[index];
+    if (previousLeg == null && nextLeg == null) {
+      return 1;
+    }
+    if (previousLeg == null) {
+      return nextLeg;
+    }
+    if (nextLeg == null) {
+      return previousLeg;
+    }
+    return (previousLeg + nextLeg) / 2;
+  });
+}
+
+function buildTimelineStops(
+  routeSequence: string[],
+  tripDuration: number | null,
+  routeSegments?: RouteGeometrySegment[] | null
+): TimelineStop[] {
   if (tripDuration == null || tripDuration <= 0 || routeSequence.length === 0) {
     return [];
   }
   const duration = tripDuration;
-
-  const baseSpan = Math.floor(duration / routeSequence.length);
-  let remainder = duration % routeSequence.length;
+  const weights = timelineWeightsFromSegments(routeSequence, routeSegments) ?? routeSequence.map(() => 1);
+  const spans = allocateDaySpans(duration, weights);
   let nextDay = 1;
 
   return routeSequence.map((stop, index) => {
-    const span = Math.max(1, baseSpan + (remainder > 0 ? 1 : 0));
-    remainder = Math.max(0, remainder - 1);
-    const startDay = nextDay;
-    const endDay = index === routeSequence.length - 1 ? duration : Math.min(duration, startDay + span - 1);
+    const span = spans[index] ?? 0;
+    const startDay = Math.min(duration, nextDay);
+    const endDay = index === routeSequence.length - 1
+      ? duration
+      : Math.min(duration, startDay + Math.max(1, span) - 1);
     nextDay = endDay + 1;
 
     return {
@@ -1163,7 +1235,11 @@ function WorkspacePageContent({
     selectedRuntimeScenario?.route_sequence ??
     activeScenario.scenario?.scenario_summary.route_sequence ??
     [];
-  const timelineStops = buildTimelineStops(timelineRouteSequence, trip.trip_frame.duration_days);
+  const timelineStops = buildTimelineStops(
+    timelineRouteSequence,
+    trip.trip_frame.duration_days,
+    selectedRuntimeScenario?.map_view?.rough_route_geometry
+  );
   const selectedRouteSegment = resolveRouteSegmentFocus(selectedRuntimeScenario, selectedSegmentId);
   const selectedTimelineNotes = timelineFocusNotes(
     currentWorkspace.planning_ledger,

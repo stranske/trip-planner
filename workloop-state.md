@@ -1,3 +1,21 @@
+## 2026-06-10T19:08:46Z
+
+Opener lane: materialized `stranske/trip-planner#1365` on branch `codex/issue-1365-route-geometry-timeline`.
+
+- Scope: wire `map_view.rough_route_geometry` segment `duration_minutes` into workspace timeline stop day ranges, preserving equal-distribution fallback when segment timing is absent or invalid.
+- Implementation:
+  - Added duration-weighted timeline span allocation in `frontend/src/routes/WorkspacePage.tsx`.
+  - Passed the selected runtime scenario's `rough_route_geometry` into `buildTimelineStops`.
+  - Added a WorkspacePage fixture/test proving unequal route-leg durations render unequal day ranges (`Days 1-7`, `Days 8-12`, `Days 13-14`) instead of the previous equal-distribution output.
+  - Updated `docs/design-coverage-map.md` to mark the timeline contract implemented for `#1365`.
+- Validation:
+  - `cd frontend && npm ci`
+  - `cd frontend && npm test -- src/routes/WorkspacePage.test.tsx`
+  - `cd frontend && npx tsc -b`
+  - `git diff --check`
+- Deliberate break: temporarily passed `null` instead of `selectedRuntimeScenario?.map_view?.rough_route_geometry` to `buildTimelineStops`; `npm test -- src/routes/WorkspacePage.test.tsx -t "renders timeline structure"` failed on the new `Days 1-7` assertion. Restored the segment input and reran focused validation green.
+- Next action: commit, push, and open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`.
+
 ## 2026-06-10T18:20:00Z
 
 Opener lane: materialized `stranske/trip-planner#1363` on branch `codex/issue-1363-baseline-ranking-coverage`.
