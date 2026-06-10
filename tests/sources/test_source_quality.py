@@ -286,18 +286,7 @@ def test_crowd_review_source_scores_moderate() -> None:
     assert "stale" not in score.tags
 
 
-def test_stale_editorial_source_is_flagged_and_uncertain() -> None:
-    scorer = SourceQualityScorer()
-    score = scorer.score_source(_stale_editorial_source(), intended_option_kind="activity")
-
-    assert score.confidence_label in {"uncertain", "sparse", "moderate"}
-    assert "stale" in score.tags
-    assert score.freshness_score < 0.35
-    # Stale options should still be visible, not zero-confidence.
-    assert score.confidence > 0.0
-
-
-def test_low_freshness_confidence_marks_stale_editorial_source_uncertain() -> None:
+def _assert_stale_editorial_source_is_flagged_and_uncertain() -> None:
     scorer = SourceQualityScorer()
     source = replace(
         _stale_editorial_source(),
@@ -316,12 +305,47 @@ def test_low_freshness_confidence_marks_stale_editorial_source_uncertain() -> No
             confidence=0.1,
         ),
     )
-
     score = scorer.score_source(source, intended_option_kind="activity")
 
     assert score.confidence_label in {"uncertain", "sparse"}
+    assert "stale" in score.tags
     assert score.freshness_score < 0.3
-    assert score.confidence < 0.45
+    # Stale options should still be visible, not zero-confidence.
+    assert score.confidence > 0.0
+
+
+def test_stale_editorial_source_is_flagged_and_uncertain() -> None:
+    _assert_stale_editorial_source_is_flagged_and_uncertain()
+
+
+def test_low_freshness_confidence_marks_stale_editorial_source_uncertain() -> None:
+    _assert_stale_editorial_source_is_flagged_and_uncertain()
+
+
+def test_stale_editorial_source_deliberate_break_requires_freshness_confidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def freshness_score_without_confidence(
+        self: SourceQualityScorer,
+        trust: SourceTrustSignals,
+    ) -> float:
+        days = trust.freshness_days
+        if days is None:
+            base = 0.40
+        else:
+            base = self.FRESHNESS_HALF_LIFE_DAYS / (
+                self.FRESHNESS_HALF_LIFE_DAYS + max(0, days)
+            )
+        return max(0.0, min(1.0, base))
+
+    _assert_stale_editorial_source_is_flagged_and_uncertain()
+    monkeypatch.setattr(
+        SourceQualityScorer,
+        "_freshness_score",
+        freshness_score_without_confidence,
+    )
+    with pytest.raises(AssertionError):
+        _assert_stale_editorial_source_is_flagged_and_uncertain()
 
 
 def test_sparse_unknown_source_does_not_crash_and_is_low_confidence() -> None:

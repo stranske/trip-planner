@@ -6,17 +6,17 @@
 
 ## Priority parameters
 
-- [x] `cost_total`
-- [x] `cost_base_fare`
-- [x] `cost_taxes_and_fees`
-- [x] `transfer_count`
-- [x] `minimum_connection_minutes`
-- [x] `overall_signal`
+- [x] `anchor_alignment`
+- [x] `quality_floor_fit`
+- [x] `discovery_fit`
+- [x] `freshness_confidence`
+- [x] `commerciality`
+- [x] `fit_signal`
+- [x] `value_signal`
+- [x] `quality_signal`
+- [x] `input_coverage`
+- [x] `scoring_stability`
 - [x] `schedule_fit_signal`
 - [x] `friction_fit_signal`
-- [x] `experiential_fit_signal`
 - [x] `policy_fit_signal`
-- [x] `self_navigation_burden_signal`
-- [x] `baggage_complexity_signal`
-- [x] `schedule_protection_signal`
-- [x] `connection_risk_signal`
+- [x] `overall_signal`
