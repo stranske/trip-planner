@@ -7,10 +7,10 @@ tasks:
     title: Update `docs/reports/baseline-coverage.md` so the exercised-parameter list
       uses the exact ranking-engine code symbol names and reflects at least 10 of
       the 14 parameters referenced by the coverage generator.
-    status: doing
+    status: done
     started_at: '2026-06-10T19:33:37Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-06-10T19:33:49Z'
+    commit: 3b45824aca60cce6518fb672e49e6df2760a3b45
     notes: []
   - id: task-02
     title: Update `tests/baseline/catalog.yaml` so the scenarios and metric entries
