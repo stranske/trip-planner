@@ -166,17 +166,16 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
             raise RuntimeError("OpenAI embeddings requested without OPENAI_API_KEY configured.")
         try:
             from langchain_openai import OpenAIEmbeddings
-            from pydantic import SecretStr
         except ImportError as exc:
             raise RuntimeError(
-                "langchain_openai and pydantic are required for OpenAI embeddings."
+                "langchain_openai and its dependencies are required for OpenAI embeddings."
             ) from exc
 
         try:
-            api_key = SecretStr(os.environ["OPENAI_API_KEY"])
             client = OpenAIEmbeddings(
                 model=resolved_model,
-                api_key=api_key,
+                # Keep a plain str for runtime compatibility across supported langchain_openai versions.
+                api_key=os.environ["OPENAI_API_KEY"],  # type: ignore[arg-type]
             )
             vectors = client.embed_documents(items)
         except Exception as exc:  # pragma: no cover - depends on external SDK errors
