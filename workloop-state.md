@@ -14,7 +14,10 @@ Opener lane: materialized `stranske/trip-planner#1365` on branch `codex/issue-13
   - `cd frontend && npx tsc -b`
   - `git diff --check`
 - Deliberate break: temporarily passed `null` instead of `selectedRuntimeScenario?.map_view?.rough_route_geometry` to `buildTimelineStops`; `npm test -- src/routes/WorkspacePage.test.tsx -t "renders timeline structure"` failed on the new `Days 1-7` assertion. Restored the segment input and reran focused validation green.
-- Next action: commit, push, and open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`.
+- PR: `#1366` (https://github.com/stranske/trip-planner/pull/1366), ready-for-review, non-draft, closing issue `#1365`.
+- Labels verified on PR: `agent:codex`, `agents:keepalive`, `autofix`, `repo-review-approved`, `priority:high`, `codex`, and `codex-automation`.
+- Post-open cap hygiene: cap-health at `2026-06-10T19:10:23Z` reported `total_opener_owned=1`, `raw_cap_reached=false`, `non_drainable_count=0`, and PR `#1366` as `draining` with an active queued Gate run after the latest branch update. Direct `gh pr checks` showed the current Gate/Python/Netlify checks pending, with older failed/cancelled rows from superseded initial runs.
+- Next action: keepalive owns PR `#1366`; opener should move to the next eligible issue on a future round after cap/drain discovery.
 
 ## 2026-06-10T18:20:00Z
 
