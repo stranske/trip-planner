@@ -64,11 +64,11 @@ jsonpatch==1.33
     # via langchain-core
 jsonpointer==3.1.1
     # via jsonpatch
-langchain-core==1.4.0
+langchain-core==1.4.3
     # via
     #   trip-planner (pyproject.toml)
     #   langchain-openai
-langchain-openai==1.2.2
+langchain-openai==1.3.0
     # via trip-planner (pyproject.toml)
 langchain-protocol==0.0.15
     # via langchain-core
@@ -213,7 +213,7 @@ uuid-utils==0.14.1
     # via
     #   langchain-core
     #   langsmith
-uvicorn==0.48.0
+uvicorn==0.49.0
     # via trip-planner (pyproject.toml)
 werkzeug==3.1.8
     # via pytest-httpserver
