@@ -1,8 +1,7 @@
-# Trip-planner scenario catalog -- transport-option deterministic compute.
+# Trip-planner scenario catalog -- deterministic ranking/source-quality compute.
 #
-# Same shape as the TMP catalog, but the "directional" checks here are
-# cross-entity ORDERINGS (one option vs another) rather than control-vs-variant.
-# The shared baseline_kit engine treats both identically (compare two numbers).
+# Same shape as the TMP catalog, but the "directional" checks here are cross-entity
+# ORDERINGS (one option/result vs another) rather than control-vs-variant.
 
 fixtures:
   - coastal_flight.json
@@ -10,51 +9,80 @@ fixtures:
   - island_ferry.json
   - regional_rental_car.json
   - downtown_local_ground.json
+  - tests/fixtures/options/lodging/central_urban_hotel.json
+  - tests/fixtures/options/lodging/vacation_rental.json
+  - tests/fixtures/options/lodging/quiet_outer_area_hotel.json
+  - tests/fixtures/options/lodging/conference_hotel.json
+  - tests/fixtures/ranking/results/leisure_candidate_result.json
+  - tests/fixtures/ranking/results/business_candidate_result.json
 
 # Directional orderings -- each compares `left` vs `right` on a metric.
-# Confirmed against existing tests/options/test_transport.py assertions.
 orderings:
-  - id: car_cheaper_than_flight
-    left: regional_rental_car.json
-    right: coastal_flight.json
-    metric: cost_total
-    direction: less_than
+  - id: leisure_anchor_alignment_stronger_than_business_policy_fit
+    left: tests/fixtures/ranking/results/leisure_candidate_result.json
+    right: tests/fixtures/ranking/results/business_candidate_result.json
+    metric: anchor_alignment
+    direction: greater_than
     enforce: true
-  - id: flight_fewer_transfers_than_rail
-    left: coastal_flight.json
-    right: scenic_rail.json
-    metric: transfer_count
-    direction: less_than
+  - id: leisure_quality_floor_stronger_than_business_fixture
+    left: tests/fixtures/ranking/results/leisure_candidate_result.json
+    right: tests/fixtures/ranking/results/business_candidate_result.json
+    metric: quality_floor_fit
+    direction: greater_than
     enforce: true
-  - id: rail_better_fit_than_flight
+  - id: leisure_discovery_fit_stronger_than_business_fixture
+    left: tests/fixtures/ranking/results/leisure_candidate_result.json
+    right: tests/fixtures/ranking/results/business_candidate_result.json
+    metric: discovery_fit
+    direction: greater_than
+    enforce: true
+  - id: central_inventory_fresher_than_untrusted_rental
+    left: tests/fixtures/options/lodging/central_urban_hotel.json
+    right: tests/fixtures/options/lodging/vacation_rental.json
+    metric: freshness_confidence
+    direction: greater_than
+    enforce: true
+  - id: central_inventory_more_commercial_than_untrusted_rental
+    left: tests/fixtures/options/lodging/central_urban_hotel.json
+    right: tests/fixtures/options/lodging/vacation_rental.json
+    metric: commerciality
+    direction: greater_than
+    enforce: true
+  - id: quiet_hotel_higher_quality_than_rental
+    left: tests/fixtures/options/lodging/quiet_outer_area_hotel.json
+    right: tests/fixtures/options/lodging/vacation_rental.json
+    metric: quality_signal
+    direction: greater_than
+    enforce: true
+  - id: rental_higher_value_than_central_hotel
+    left: tests/fixtures/options/lodging/vacation_rental.json
+    right: tests/fixtures/options/lodging/central_urban_hotel.json
+    metric: value_signal
+    direction: greater_than
+    enforce: true
+  - id: conference_hotel_higher_fit_than_central_hotel
+    left: tests/fixtures/options/lodging/conference_hotel.json
+    right: tests/fixtures/options/lodging/central_urban_hotel.json
+    metric: fit_signal
+    direction: greater_than
+    enforce: true
+  - id: leisure_ranking_higher_input_coverage_than_business_fixture
+    left: tests/fixtures/ranking/results/leisure_candidate_result.json
+    right: tests/fixtures/ranking/results/business_candidate_result.json
+    metric: input_coverage
+    direction: greater_than
+    enforce: true
+  - id: leisure_ranking_higher_scoring_stability_than_business_fixture
+    left: tests/fixtures/ranking/results/leisure_candidate_result.json
+    right: tests/fixtures/ranking/results/business_candidate_result.json
+    metric: scoring_stability
+    direction: greater_than
+    enforce: true
+  - id: rail_better_overall_fit_than_flight
     left: scenic_rail.json
     right: coastal_flight.json
     metric: overall_signal
     direction: greater_than
-    enforce: true
-  - id: ferry_cheaper_than_rail
-    left: island_ferry.json
-    right: scenic_rail.json
-    metric: cost_total
-    direction: less_than
-    enforce: true
-  - id: rail_base_fare_less_than_flight
-    left: scenic_rail.json
-    right: coastal_flight.json
-    metric: cost_base_fare
-    direction: less_than
-    enforce: true
-  - id: rail_taxes_less_than_flight
-    left: scenic_rail.json
-    right: coastal_flight.json
-    metric: cost_taxes_and_fees
-    direction: less_than
-    enforce: true
-  - id: flight_shorter_connection_than_rail
-    left: coastal_flight.json
-    right: scenic_rail.json
-    metric: minimum_connection_minutes
-    direction: less_than
     enforce: true
   - id: flight_better_schedule_fit_than_car
     left: coastal_flight.json
@@ -68,57 +96,27 @@ orderings:
     metric: friction_fit_signal
     direction: greater_than
     enforce: true
-  - id: rail_better_experiential_fit_than_ground
-    left: scenic_rail.json
-    right: downtown_local_ground.json
-    metric: experiential_fit_signal
-    direction: greater_than
-    enforce: true
   - id: ground_better_policy_fit_than_ferry
     left: downtown_local_ground.json
     right: island_ferry.json
     metric: policy_fit_signal
     direction: greater_than
     enforce: true
-  - id: car_higher_self_navigation_burden_than_flight
-    left: regional_rental_car.json
-    right: coastal_flight.json
-    metric: self_navigation_burden_signal
-    direction: greater_than
-    enforce: true
-  - id: ferry_higher_baggage_complexity_than_ground
-    left: island_ferry.json
-    right: downtown_local_ground.json
-    metric: baggage_complexity_signal
-    direction: greater_than
-    enforce: true
-  - id: flight_better_schedule_protection_than_car
-    left: coastal_flight.json
-    right: regional_rental_car.json
-    metric: schedule_protection_signal
-    direction: greater_than
-    enforce: true
-  - id: car_lower_connection_risk_than_rail
-    left: regional_rental_car.json
-    right: scenic_rail.json
-    metric: connection_risk_signal
-    direction: less_than
-    enforce: true
 
 # The must-cover metric dimensions (coverage manifest asserts these appear in
 # at least one ordering).
 priority_metrics:
-  - cost_total
-  - cost_base_fare
-  - cost_taxes_and_fees
-  - transfer_count
-  - minimum_connection_minutes
-  - overall_signal
+  - anchor_alignment
+  - quality_floor_fit
+  - discovery_fit
+  - freshness_confidence
+  - commerciality
+  - fit_signal
+  - value_signal
+  - quality_signal
+  - input_coverage
+  - scoring_stability
   - schedule_fit_signal
   - friction_fit_signal
-  - experiential_fit_signal
   - policy_fit_signal
-  - self_navigation_burden_signal
-  - baggage_complexity_signal
-  - schedule_protection_signal
-  - connection_risk_signal
+  - overall_signal
