@@ -1,3 +1,24 @@
+## 2026-06-10T19:08:46Z
+
+Opener lane: materialized `stranske/trip-planner#1365` on branch `codex/issue-1365-route-geometry-timeline`.
+
+- Scope: wire `map_view.rough_route_geometry` segment `duration_minutes` into workspace timeline stop day ranges, preserving equal-distribution fallback when segment timing is absent or invalid.
+- Implementation:
+  - Added duration-weighted timeline span allocation in `frontend/src/routes/WorkspacePage.tsx`.
+  - Passed the selected runtime scenario's `rough_route_geometry` into `buildTimelineStops`.
+  - Added a WorkspacePage fixture/test proving unequal route-leg durations render unequal day ranges (`Days 1-7`, `Days 8-12`, `Days 13-14`) instead of the previous equal-distribution output.
+  - Updated `docs/design-coverage-map.md` to mark the timeline contract implemented for `#1365`.
+- Validation:
+  - `cd frontend && npm ci`
+  - `cd frontend && npm test -- src/routes/WorkspacePage.test.tsx`
+  - `cd frontend && npx tsc -b`
+  - `git diff --check`
+- Deliberate break: temporarily passed `null` instead of `selectedRuntimeScenario?.map_view?.rough_route_geometry` to `buildTimelineStops`; `npm test -- src/routes/WorkspacePage.test.tsx -t "renders timeline structure"` failed on the new `Days 1-7` assertion. Restored the segment input and reran focused validation green.
+- PR: `#1366` (https://github.com/stranske/trip-planner/pull/1366), ready-for-review, non-draft, closing issue `#1365`.
+- Labels verified on PR: `agent:codex`, `agents:keepalive`, `autofix`, `repo-review-approved`, `priority:high`, `codex`, and `codex-automation`.
+- Post-open cap hygiene: cap-health at `2026-06-10T19:10:23Z` reported `total_opener_owned=1`, `raw_cap_reached=false`, `non_drainable_count=0`, and PR `#1366` as `draining` with an active queued Gate run after the latest branch update. Direct `gh pr checks` showed the current Gate/Python/Netlify checks pending, with older failed/cancelled rows from superseded initial runs.
+- Next action: keepalive owns PR `#1366`; opener should move to the next eligible issue on a future round after cap/drain discovery.
+
 ## 2026-06-10T18:20:00Z
 
 Opener lane: materialized `stranske/trip-planner#1363` on branch `codex/issue-1363-baseline-ranking-coverage`.
