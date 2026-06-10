@@ -297,6 +297,33 @@ def test_stale_editorial_source_is_flagged_and_uncertain() -> None:
     assert score.confidence > 0.0
 
 
+def test_low_freshness_confidence_marks_stale_editorial_source_uncertain() -> None:
+    scorer = SourceQualityScorer()
+    source = replace(
+        _stale_editorial_source(),
+        trust_signals=SourceTrustSignals(
+            freshness_days=90,
+            freshness_confidence=0.1,
+            commerciality=0.95,
+            editorial_independence=0.05,
+            operational_reliability=0.05,
+            review_consistency=0.05,
+        ),
+        quality_summary=QualityValueFitSummary(
+            quality_signal=0.2,
+            value_signal=0.2,
+            fit_signal=0.1,
+            confidence=0.1,
+        ),
+    )
+
+    score = scorer.score_source(source, intended_option_kind="activity")
+
+    assert score.confidence_label in {"uncertain", "sparse"}
+    assert score.freshness_score < 0.3
+    assert score.confidence < 0.45
+
+
 def test_sparse_unknown_source_does_not_crash_and_is_low_confidence() -> None:
     scorer = SourceQualityScorer()
     score = scorer.score_source(_sparse_unknown_source())
