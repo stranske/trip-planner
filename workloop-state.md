@@ -18,7 +18,16 @@ Opener lane: materialized `stranske/trip-planner#1363` on branch `codex/issue-13
 
 - Deliberate break: temporarily changed `SourceQualityScorer._freshness_score` to `return _clamp(base)`; the new low-freshness-confidence test failed on `assert 0.3333 < 0.3`. Restored the scorer and reran targeted tests.
 
-- Next action: push the branch, open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`.
+- PR: `#1364` (https://github.com/stranske/trip-planner/pull/1364),
+  ready-for-review, non-draft, closing issue `#1363`.
+- Labels verified on PR: `agent:codex`, `agents:keepalive`, `autofix`,
+  `repo-review-approved`, `priority:high`, `codex`, and `codex-automation`.
+- Post-open cap hygiene: `opener-repair-infra-stalls.py` added `agent:retry`
+  and dispatched Gate Followups after cap-health observed a skipped evaluator.
+  Fresh direct PR evidence showed CI/Gate/Verifier/Guard runs pending or green;
+  earlier failing Gate rows were cancelled superseded runs.
+- Next action: keepalive owns PR `#1364`; opener should move to the next
+  eligible issue on a future round after cap/drain discovery.
 
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
