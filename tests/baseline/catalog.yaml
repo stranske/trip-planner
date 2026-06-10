@@ -38,10 +38,87 @@ orderings:
     metric: cost_total
     direction: less_than
     enforce: true
+  - id: rail_base_fare_less_than_flight
+    left: scenic_rail.json
+    right: coastal_flight.json
+    metric: cost_base_fare
+    direction: less_than
+    enforce: true
+  - id: rail_taxes_less_than_flight
+    left: scenic_rail.json
+    right: coastal_flight.json
+    metric: cost_taxes_and_fees
+    direction: less_than
+    enforce: true
+  - id: flight_shorter_connection_than_rail
+    left: coastal_flight.json
+    right: scenic_rail.json
+    metric: minimum_connection_minutes
+    direction: less_than
+    enforce: true
+  - id: flight_better_schedule_fit_than_car
+    left: coastal_flight.json
+    right: regional_rental_car.json
+    metric: schedule_fit_signal
+    direction: greater_than
+    enforce: true
+  - id: flight_better_friction_fit_than_car
+    left: coastal_flight.json
+    right: regional_rental_car.json
+    metric: friction_fit_signal
+    direction: greater_than
+    enforce: true
+  - id: rail_better_experiential_fit_than_ground
+    left: scenic_rail.json
+    right: downtown_local_ground.json
+    metric: experiential_fit_signal
+    direction: greater_than
+    enforce: true
+  - id: ground_better_policy_fit_than_ferry
+    left: downtown_local_ground.json
+    right: island_ferry.json
+    metric: policy_fit_signal
+    direction: greater_than
+    enforce: true
+  - id: car_higher_self_navigation_burden_than_flight
+    left: regional_rental_car.json
+    right: coastal_flight.json
+    metric: self_navigation_burden_signal
+    direction: greater_than
+    enforce: true
+  - id: ferry_higher_baggage_complexity_than_ground
+    left: island_ferry.json
+    right: downtown_local_ground.json
+    metric: baggage_complexity_signal
+    direction: greater_than
+    enforce: true
+  - id: flight_better_schedule_protection_than_car
+    left: coastal_flight.json
+    right: regional_rental_car.json
+    metric: schedule_protection_signal
+    direction: greater_than
+    enforce: true
+  - id: car_lower_connection_risk_than_rail
+    left: regional_rental_car.json
+    right: scenic_rail.json
+    metric: connection_risk_signal
+    direction: less_than
+    enforce: true
 
 # The must-cover metric dimensions (coverage manifest asserts these appear in
 # at least one ordering).
 priority_metrics:
   - cost_total
+  - cost_base_fare
+  - cost_taxes_and_fees
   - transfer_count
+  - minimum_connection_minutes
   - overall_signal
+  - schedule_fit_signal
+  - friction_fit_signal
+  - experiential_fit_signal
+  - policy_fit_signal
+  - self_navigation_burden_signal
+  - baggage_complexity_signal
+  - schedule_protection_signal
+  - connection_risk_signal

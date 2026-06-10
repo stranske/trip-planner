@@ -1,3 +1,25 @@
+## 2026-06-10T18:20:00Z
+
+Opener lane: materialized `stranske/trip-planner#1363` on branch `codex/issue-1363-baseline-ranking-coverage`.
+
+
+
+- Scope: expand baseline catalog orderings so all 14 transport ranking input metrics are exercised, refresh `docs/reports/baseline-coverage.md`, and add a source-quality regression case for low freshness confidence.
+
+- Validation:
+
+  - `UV_CACHE_DIR=/tmp/uv-cache-pd-workloop BASELINE_REFRESH_REPORT=1 uv run pytest tests/baseline/test_coverage_manifest.py -q`
+
+  - `UV_CACHE_DIR=/tmp/uv-cache-pd-workloop uv run pytest tests/baseline/ -q`
+
+  - `UV_CACHE_DIR=/tmp/uv-cache-pd-workloop uv run pytest tests/ranking/test_leisure_ranking.py tests/ranking/test_business_ranking.py tests/ranking/test_score_bounds.py -q`
+
+  - `UV_CACHE_DIR=/tmp/uv-cache-pd-workloop uv run pytest tests/sources/test_source_quality.py -q`
+
+- Deliberate break: temporarily changed `SourceQualityScorer._freshness_score` to `return _clamp(base)`; the new low-freshness-confidence test failed on `assert 0.3333 < 0.3`. Restored the scorer and reran targeted tests.
+
+- Next action: push the branch, open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`.
+
 ## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
 
 - Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
