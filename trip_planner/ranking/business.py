@@ -23,6 +23,7 @@ from trip_planner.itinerary import evaluate_bundle_feasibility
 from trip_planner.itinerary.feasibility import FeasibilityAssessment
 from trip_planner.options import InventoryBundle
 
+from .base import BaseRankingEngine
 from .explanations import ExplanationRecord
 from .models import (
     RankedResult,
@@ -118,7 +119,7 @@ class _RankableBusinessCandidate:
     source_refs: list[str]
 
 
-class BusinessRankingEngine:
+class BusinessRankingEngine(BaseRankingEngine):
     """Rank business candidates without replacing policy evaluation or approvals.
 
     Scoring semantics
@@ -178,41 +179,6 @@ class BusinessRankingEngine:
         if constraint_set is not None and not isinstance(constraint_set, PolicyConstraintSet):
             raise ValueError("constraint_set must be a PolicyConstraintSet when provided")
         return constraint_set
-
-    def validate_feasibility_outputs(
-        self,
-        feasibility_outputs: (
-            Mapping[str, FeasibilityAssessment] | Sequence[FeasibilityAssessment] | None
-        ),
-    ) -> dict[str, FeasibilityAssessment]:
-        if feasibility_outputs is None:
-            return {}
-        if isinstance(feasibility_outputs, Mapping):
-            values = dict(feasibility_outputs)
-        elif isinstance(feasibility_outputs, Sequence):
-            values = {item.bundle_id: item for item in feasibility_outputs}
-        else:
-            raise ValueError(
-                "feasibility_outputs must be a mapping, a sequence of FeasibilityAssessment values, or None"
-            )
-        if any(not isinstance(item, FeasibilityAssessment) for item in values.values()):
-            raise ValueError("feasibility_outputs must contain FeasibilityAssessment instances")
-        return values
-
-    def validate_candidate_set(self, candidate_set: CandidateSet) -> CandidateSet:
-        if not isinstance(candidate_set, CandidateSet):
-            raise ValueError("candidate_set must be a CandidateSet")
-        return candidate_set
-
-    def validate_bundles(self, bundles: Sequence[InventoryBundle]) -> list[InventoryBundle]:
-        if isinstance(bundles, (str, bytes)) or not isinstance(bundles, Sequence):
-            raise ValueError("bundles must be a sequence of InventoryBundle instances")
-        bundle_list = list(bundles)
-        if not bundle_list:
-            raise ValueError("bundles must contain at least one InventoryBundle")
-        if any(not isinstance(item, InventoryBundle) for item in bundle_list):
-            raise ValueError("bundles must contain InventoryBundle instances")
-        return bundle_list
 
     def rank_candidate_set(
         self,
@@ -323,14 +289,14 @@ class BusinessRankingEngine:
                 assessment,
                 constraint_set=constraint_set,
             )
+            bonuses: list[ScoreAdjustment] = []
             # Accumulate before rounding so the hard-block cap is exact.
             accumulated_score = self.BASELINE_SCORE
             accumulated_score += sum(item.weighted_impact for item in contributions)
             accumulated_score -= sum(item.amount for item in penalties)
             accumulated_score -= sum(item.amount for item in missing_data_penalties)
 
-            # Hard constraint: disallowed inventory cannot be outweighed by preference.
-            # Add an explicit capping penalty so the ScoreBreakdown arithmetic stays exact.
+            # Add explicit cap/floor adjustments so ScoreBreakdown arithmetic stays exact.
             hard_blocked = self._has_disallowed_inventory(candidate.bundle)
             if hard_blocked and accumulated_score > self.HARD_BLOCK_SCORE_CAP:
                 cap_amount = accumulated_score - self.HARD_BLOCK_SCORE_CAP
@@ -349,6 +315,34 @@ class BusinessRankingEngine:
                     )
                 ]
                 final_score = self.HARD_BLOCK_SCORE_CAP
+            elif accumulated_score > 1.0:
+                cap_amount = accumulated_score - 1.0
+                penalties = list(penalties) + [
+                    ScoreAdjustment(
+                        adjustment_id=f"penalty:{candidate.bundle.bundle_id}:score-upper-bound",
+                        label="Score upper-bound cap",
+                        kind="penalty",
+                        amount=cap_amount,
+                        reason_code="score_upper_bound_cap",
+                        summary="Score capped at 1.0 so final_score remains on the unit interval.",
+                        affected_factor_keys=["final_score"],
+                    )
+                ]
+                final_score = 1.0
+            elif accumulated_score < 0.0:
+                floor_amount = abs(accumulated_score)
+                bonuses = [
+                    ScoreAdjustment(
+                        adjustment_id=f"bonus:{candidate.bundle.bundle_id}:score-lower-bound",
+                        label="Score lower-bound floor",
+                        kind="bonus",
+                        amount=floor_amount,
+                        reason_code="score_lower_bound_floor",
+                        summary="Score floored at 0.0 so final_score remains on the unit interval.",
+                        affected_factor_keys=["final_score"],
+                    )
+                ]
+                final_score = 0.0
             else:
                 final_score = _round(accumulated_score)
 
@@ -360,10 +354,13 @@ class BusinessRankingEngine:
                 breakdown_notes.append(
                     f"Hard policy block applied: score capped at {self.HARD_BLOCK_SCORE_CAP}."
                 )
+            if final_score in {0.0, 1.0} and accumulated_score != final_score:
+                breakdown_notes.append("Unit-interval score bound applied to final_score.")
             breakdown = ScoreBreakdown(
                 baseline_score=self.BASELINE_SCORE,
                 component_contributions=contributions,
                 penalties=penalties,
+                bonuses=bonuses,
                 missing_data_penalties=missing_data_penalties,
                 final_score=final_score,
                 notes=breakdown_notes,

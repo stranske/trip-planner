@@ -1,0 +1,260 @@
+version: 1
+issue: 1367
+base: main
+branch: codex/issue-1367
+tasks:
+  - id: task-01
+    title: Update `docs/reports/baseline-coverage.md` so the exercised-parameter list
+      uses the exact ranking-engine code symbol names and reflects at least 10 of
+      the 14 parameters referenced by the coverage generator.
+    status: done
+    started_at: '2026-06-10T19:33:37Z'
+    finished_at: '2026-06-10T19:33:49Z'
+    commit: 3b45824aca60cce6518fb672e49e6df2760a3b45
+    notes: []
+  - id: task-02
+    title: Update `tests/baseline/catalog.yaml` so the scenarios and metric entries
+      needed by the report generator are explicitly present for all documented exercised
+      parameters, including newly covered ones.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: Add or revise a test in `tests/sources/test_source_quality.py` that constructs
+      or uses a bundle with `freshness_confidence < 0.5` and asserts `SourceQualityScorer`
+      returns `confidence_label` of `'uncertain'` or `'sparse'`.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: Rename the stale-editorial-source deliberate-break test, or add a compatibility
+      wrapper, so the callable pytest target is exactly `tests/sources/test_source_quality.py::test_stale_editorial_source_is_flagged_and_uncertain`.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: Add a regression test in `tests/sources/test_source_quality.py` that monkeypatches/overrides
+      the freshness score path to behave like `return _clamp(base)`, and asserts `test_stale_editorial_source_is_flagged_and_uncertain`
+      fails under the broken behavior while passing under the real implementation.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: '`docs/reports/baseline-coverage.md` contains an exercised-parameter list
+      with at least 10 distinct parameter names, and every listed name exactly matches
+      a ranking/source code symbol referenced by the coverage generator from this
+      set: `anchor_alignment`, `quality_floor_fit`, `discovery_fit`, `freshness_confidence`,
+      `commerciality`, `fit_signal`, `value_signal`, plus other exact generator-recognized
+      symbols until the total is >=10 of 14.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: The generated baseline coverage report marks at least 10 of the 14 coverage-generator
+      parameters as exercised in `docs/reports/baseline-coverage.md`.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: '`tests/baseline/catalog.yaml` contains explicit scenario/metric source
+      entries for every parameter documented as exercised in `docs/reports/baseline-coverage.md`,
+      including newly covered parameters such as `freshness_confidence` if documented.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: Re-running the baseline coverage report generator using `tests/baseline/catalog.yaml`
+      completes without missing-parameter or missing-scenario errors for any parameter
+      documented as exercised in `docs/reports/baseline-coverage.md`.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: '`tests/sources/test_source_quality.py` contains at least one test that
+      constructs or uses a bundle with `freshness_confidence < 0.5` and explicitly
+      asserts that `SourceQualityScorer` returns `confidence_label` equal to `''uncertain''`
+      or `''sparse''`.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: The pytest target `tests/sources/test_source_quality.py::test_stale_editorial_source_is_flagged_and_uncertain`
+      exists as a callable test node and is collected successfully by pytest.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: Under the unmodified implementation, `pytest tests/sources/test_source_quality.py::test_stale_editorial_source_is_flagged_and_uncertain`
+      passes.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: '`tests/sources/test_source_quality.py` includes an automated regression
+      test that temporarily forces the freshness score path to behave like `return
+      _clamp(base)` and asserts that `test_stale_editorial_source_is_flagged_and_uncertain`
+      would fail under that broken behavior.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: 'The automated deliberate-break regression test also asserts the control
+      case: the same stale-editorial scenario passes when the real freshness scoring
+      implementation is used.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: Update `docs/reports/baseline-coverage.md` so the exercised-parameter list
+      uses the exact ranking-engine code symbol names and reflects at least 10 of
+      the 14 parameters referenced by the coverage generator.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-16
+    title: Update the baseline coverage source data in `tests/baseline/catalog.yaml`
+      so the scenarios and metric entries needed by the report generator are explicitly
+      present for all documented parameters, including the newly covered ones.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-17
+    title: Add or revise a source-quality test in `tests/sources/test_source_quality.py`
+      that explicitly asserts a bundle with `freshness_confidence < 0.5` receives
+      a `confidence_label` of `'uncertain'` or `'sparse'` from `SourceQualityScorer`.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-18
+    title: Rename the stale-editorial-source deliberate-break test, or add a compatibility
+      test wrapper, so the callable pytest target is exactly `tests/sources/test_source_quality.py::test_stale_editorial_source_is_flagged_and_uncertain`.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-19
+    title: Add an automated regression test for the deliberate-break gate by monkeypatching
+      or temporarily overriding the freshness score path to behave like `return _clamp(base)`,
+      and assert that `test_stale_editorial_source_is_flagged_and_uncertain` fails
+      under that broken behavior while passing under the real implementation.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-20
+    title: '`docs/reports/baseline-coverage.md` contains an exercised-parameter list
+      with at least 10 distinct parameter names, and every listed name exactly matches
+      a ranking/source code symbol referenced by the coverage generator from this
+      set: `anchor_alignment`, `quality_floor_fit`, `discovery_fit`, `freshness_confidence`,
+      `commerciality`, `fit_signal`, `value_signal`, plus other exact generator-recognized
+      symbols until the total is >=10 of 14.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-21
+    title: The generated baseline coverage report marks at least 10 of the 14 coverage-generator
+      parameters as exercised in `docs/reports/baseline-coverage.md`.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-22
+    title: '`tests/baseline/catalog.yaml` contains explicit scenario/metric source
+      entries for every parameter documented as exercised in `docs/reports/baseline-coverage.md`,
+      including newly covered parameters such as `freshness_confidence` if documented.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-23
+    title: Re-running the baseline coverage report generator using `tests/baseline/catalog.yaml`
+      completes without missing-parameter or missing-scenario errors for any parameter
+      documented as exercised in `docs/reports/baseline-coverage.md`.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-24
+    title: '`tests/sources/test_source_quality.py` contains at least one test that
+      constructs or uses a bundle with `freshness_confidence < 0.5` and explicitly
+      asserts that `SourceQualityScorer` returns `confidence_label` equal to `''uncertain''`
+      or `''sparse''`.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-25
+    title: The pytest target `tests/sources/test_source_quality.py::test_stale_editorial_source_is_flagged_and_uncertain`
+      exists as a callable test node and is collected successfully by pytest.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-26
+    title: Under the unmodified implementation, `pytest tests/sources/test_source_quality.py::test_stale_editorial_source_is_flagged_and_uncertain`
+      passes.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-27
+    title: '`tests/sources/test_source_quality.py` includes an automated regression
+      test that temporarily forces the freshness score path to behave like `return
+      _clamp(base)` and asserts that `test_stale_editorial_source_is_flagged_and_uncertain`
+      would fail under that broken behavior.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-28
+    title: 'The automated deliberate-break regression test also asserts the control
+      case: the same stale-editorial scenario passes when the real freshness scoring
+      implementation is used.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []

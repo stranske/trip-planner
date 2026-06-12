@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from trip_planner.app.services.inventory import (
     _build_inventory_assembly_input,
     assemble_inventory_bundles_for_trip,
 )
+from trip_planner.app.services.planner_tools import _commerciality_preference_from_runtime_state
 from trip_planner.sources import (
     CONFIDENCE_LABELS,
     ProvenanceReference,
@@ -184,6 +187,23 @@ def _sparse_unknown_source() -> SourceRecord:
     )
 
 
+def _commerciality_probe_source(source_id: str, commerciality: float) -> SourceRecord:
+    return replace(
+        _commercial_booking_source(),
+        source_id=source_id,
+        provider_name="Commerciality Probe",
+        display_name="Commerciality Probe",
+        trust_signals=SourceTrustSignals(
+            freshness_days=2,
+            freshness_confidence=0.9,
+            commerciality=commerciality,
+            editorial_independence=0.5,
+            operational_reliability=0.75,
+            review_consistency=0.6,
+        ),
+    )
+
+
 def test_official_operational_source_scores_very_high() -> None:
     scorer = SourceQualityScorer()
     score = scorer.score_source(
@@ -212,6 +232,46 @@ def test_commercial_inventory_source_scores_high() -> None:
     assert "commercial" in score.tags
 
 
+def test_commerciality_preference_reorders_toward_non_commercial() -> None:
+    scorer = SourceQualityScorer()
+    non_commercial_source = _commerciality_probe_source("non-commercial-probe", 0.15)
+    commercial_source = _commerciality_probe_source("commercial-probe", 0.85)
+
+    non_commercial_preference_scores = {
+        "non_commercial": scorer.score_source(
+            non_commercial_source,
+            commerciality_preference=0.1,
+            intended_option_kind="lodging",
+        ),
+        "commercial": scorer.score_source(
+            commercial_source,
+            commerciality_preference=0.1,
+            intended_option_kind="lodging",
+        ),
+    }
+    commercial_preference_scores = {
+        "non_commercial": scorer.score_source(
+            non_commercial_source,
+            commerciality_preference=0.9,
+            intended_option_kind="lodging",
+        ),
+        "commercial": scorer.score_source(
+            commercial_source,
+            commerciality_preference=0.9,
+            intended_option_kind="lodging",
+        ),
+    }
+
+    assert (
+        non_commercial_preference_scores["non_commercial"].confidence
+        > non_commercial_preference_scores["commercial"].confidence
+    )
+    assert (
+        commercial_preference_scores["commercial"].confidence
+        > commercial_preference_scores["non_commercial"].confidence
+    )
+
+
 def test_crowd_review_source_scores_moderate() -> None:
     scorer = SourceQualityScorer()
     score = scorer.score_source(
@@ -226,15 +286,66 @@ def test_crowd_review_source_scores_moderate() -> None:
     assert "stale" not in score.tags
 
 
-def test_stale_editorial_source_is_flagged_and_uncertain() -> None:
+def _assert_stale_editorial_source_is_flagged_and_uncertain() -> None:
     scorer = SourceQualityScorer()
-    score = scorer.score_source(_stale_editorial_source(), intended_option_kind="activity")
+    source = replace(
+        _stale_editorial_source(),
+        trust_signals=SourceTrustSignals(
+            freshness_days=90,
+            freshness_confidence=0.1,
+            commerciality=0.95,
+            editorial_independence=0.05,
+            operational_reliability=0.05,
+            review_consistency=0.05,
+        ),
+        quality_summary=QualityValueFitSummary(
+            quality_signal=0.2,
+            value_signal=0.2,
+            fit_signal=0.1,
+            confidence=0.1,
+        ),
+    )
+    score = scorer.score_source(source, intended_option_kind="activity")
 
-    assert score.confidence_label in {"uncertain", "sparse", "moderate"}
+    assert score.confidence_label in {"uncertain", "sparse"}
     assert "stale" in score.tags
-    assert score.freshness_score < 0.35
+    assert score.freshness_score < 0.3
     # Stale options should still be visible, not zero-confidence.
     assert score.confidence > 0.0
+
+
+def test_stale_editorial_source_is_flagged_and_uncertain() -> None:
+    _assert_stale_editorial_source_is_flagged_and_uncertain()
+
+
+def test_low_freshness_confidence_marks_stale_editorial_source_uncertain() -> None:
+    _assert_stale_editorial_source_is_flagged_and_uncertain()
+
+
+def test_stale_editorial_source_deliberate_break_requires_freshness_confidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def freshness_score_without_confidence(
+        self: SourceQualityScorer,
+        trust: SourceTrustSignals,
+    ) -> float:
+        days = trust.freshness_days
+        if days is None:
+            base = 0.40
+        else:
+            base = self.FRESHNESS_HALF_LIFE_DAYS / (
+                self.FRESHNESS_HALF_LIFE_DAYS + max(0, days)
+            )
+        return max(0.0, min(1.0, base))
+
+    _assert_stale_editorial_source_is_flagged_and_uncertain()
+    monkeypatch.setattr(
+        SourceQualityScorer,
+        "_freshness_score",
+        freshness_score_without_confidence,
+    )
+    with pytest.raises(AssertionError):
+        _assert_stale_editorial_source_is_flagged_and_uncertain()
 
 
 def test_sparse_unknown_source_does_not_crash_and_is_low_confidence() -> None:
@@ -442,6 +553,29 @@ def test_scorer_rejects_invalid_traveler_relevance_hint() -> None:
     scorer = SourceQualityScorer()
     with pytest.raises(ValueError, match="traveler_relevance_hint"):
         scorer.score_source(_commercial_booking_source(), traveler_relevance_hint=2.0)
+
+
+def test_scorer_rejects_invalid_commerciality_preference() -> None:
+    scorer = SourceQualityScorer()
+    with pytest.raises(ValueError, match="commerciality_preference"):
+        scorer.score_source(_commercial_booking_source(), commerciality_preference=2.0)
+
+
+@pytest.mark.parametrize(
+    ("runtime_state", "expected"),
+    [
+        ({"commerciality_preference": "0.25"}, 0.25),
+        ({"commerciality_preference": ""}, None),
+        ({"commerciality_preference": "low"}, None),
+        ({"commerciality_preference": ["0.2"]}, None),
+        ({"commerciality_preference": 1.5}, None),
+    ],
+)
+def test_runtime_commerciality_preference_ignores_invalid_payloads(
+    runtime_state: dict[str, object],
+    expected: float | None,
+) -> None:
+    assert _commerciality_preference_from_runtime_state(runtime_state) == expected
 
 
 def test_summary_rejects_invalid_subject_kind() -> None:

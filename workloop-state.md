@@ -1,3 +1,101 @@
+## 2026-06-10T19:08:46Z
+
+Opener lane: materialized `stranske/trip-planner#1365` on branch `codex/issue-1365-route-geometry-timeline`.
+
+- Scope: wire `map_view.rough_route_geometry` segment `duration_minutes` into workspace timeline stop day ranges, preserving equal-distribution fallback when segment timing is absent or invalid.
+- Implementation:
+  - Added duration-weighted timeline span allocation in `frontend/src/routes/WorkspacePage.tsx`.
+  - Passed the selected runtime scenario's `rough_route_geometry` into `buildTimelineStops`.
+  - Added a WorkspacePage fixture/test proving unequal route-leg durations render unequal day ranges (`Days 1-7`, `Days 8-12`, `Days 13-14`) instead of the previous equal-distribution output.
+  - Updated `docs/design-coverage-map.md` to mark the timeline contract implemented for `#1365`.
+- Validation:
+  - `cd frontend && npm ci`
+  - `cd frontend && npm test -- src/routes/WorkspacePage.test.tsx`
+  - `cd frontend && npx tsc -b`
+  - `git diff --check`
+- Deliberate break: temporarily passed `null` instead of `selectedRuntimeScenario?.map_view?.rough_route_geometry` to `buildTimelineStops`; `npm test -- src/routes/WorkspacePage.test.tsx -t "renders timeline structure"` failed on the new `Days 1-7` assertion. Restored the segment input and reran focused validation green.
+- PR: `#1366` (https://github.com/stranske/trip-planner/pull/1366), ready-for-review, non-draft, closing issue `#1365`.
+- Labels verified on PR: `agent:codex`, `agents:keepalive`, `autofix`, `repo-review-approved`, `priority:high`, `codex`, and `codex-automation`.
+- Post-open cap hygiene: cap-health at `2026-06-10T19:10:23Z` reported `total_opener_owned=1`, `raw_cap_reached=false`, `non_drainable_count=0`, and PR `#1366` as `draining` with an active queued Gate run after the latest branch update. Direct `gh pr checks` showed the current Gate/Python/Netlify checks pending, with older failed/cancelled rows from superseded initial runs.
+- Next action: keepalive owns PR `#1366`; opener should move to the next eligible issue on a future round after cap/drain discovery.
+
+## 2026-06-10T18:20:00Z
+
+Opener lane: materialized `stranske/trip-planner#1363` on branch `codex/issue-1363-baseline-ranking-coverage`.
+
+
+
+- Scope: expand baseline catalog orderings so all 14 transport ranking input metrics are exercised, refresh `docs/reports/baseline-coverage.md`, and add a source-quality regression case for low freshness confidence.
+
+- Validation:
+
+  - `UV_CACHE_DIR=/tmp/uv-cache-pd-workloop BASELINE_REFRESH_REPORT=1 uv run pytest tests/baseline/test_coverage_manifest.py -q`
+
+  - `UV_CACHE_DIR=/tmp/uv-cache-pd-workloop uv run pytest tests/baseline/ -q`
+
+  - `UV_CACHE_DIR=/tmp/uv-cache-pd-workloop uv run pytest tests/ranking/test_leisure_ranking.py tests/ranking/test_business_ranking.py tests/ranking/test_score_bounds.py -q`
+
+  - `UV_CACHE_DIR=/tmp/uv-cache-pd-workloop uv run pytest tests/sources/test_source_quality.py -q`
+
+- Deliberate break: temporarily changed `SourceQualityScorer._freshness_score` to `return _clamp(base)`; the new low-freshness-confidence test failed on `assert 0.3333 < 0.3`. Restored the scorer and reran targeted tests.
+
+- PR: `#1364` (https://github.com/stranske/trip-planner/pull/1364),
+  ready-for-review, non-draft, closing issue `#1363`.
+- Labels verified on PR: `agent:codex`, `agents:keepalive`, `autofix`,
+  `repo-review-approved`, `priority:high`, `codex`, and `codex-automation`.
+- Post-open cap hygiene: `opener-repair-infra-stalls.py` added `agent:retry`
+  and dispatched Gate Followups after cap-health observed a skipped evaluator.
+  Fresh direct PR evidence showed CI/Gate/Verifier/Guard runs pending or green;
+  earlier failing Gate rows were cancelled superseded runs.
+- Next action: keepalive owns PR `#1364`; opener should move to the next
+  eligible issue on a future round after cap/drain discovery.
+
+## 2026-06-05T06:16Z - opener lane issue #1308 base ranking engine
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1308` (`Extract a shared BaseRankingEngine for leisure and business ranking`).
+- Branch: `codex/issue-1308-base-ranking-engine`, base `origin/main` `035c39da8`.
+- Selection notes: raw opener cap was below limit (`total_opener_owned=1`, `raw_cap_reached=false`). Existing opener-owned Trend PR #5440 remains scoped/non-repairable on the strict-config owner/product decision. High-priority Trend #5343 was freshly scoped because merged PR #5374 already delivered the code and the remaining blocker is owner public demo URL/screenshots/network evidence or waiver. LMS #180 remains scoped. trip-planner #1306 is a tracking epic; #1307 is already served by merged PR #1327. #1308 was the oldest unlinked implementation issue outside scoped blockers.
+- Implementation:
+  - Added `trip_planner/ranking/base.py` with shared `BaseRankingEngine` validators for feasibility outputs, candidate sets, and bundle sequences.
+  - Re-parented `LeisureRankingEngine` and `BusinessRankingEngine` to inherit the shared validators while leaving subclass-specific profile/objective validation, weights, and scoring internals in place.
+  - Reordered ranking package exports so direct base imports do not reintroduce the existing itinerary/ranking partial-initialization cycle.
+  - Added `tests/ranking/test_base_ranking_engine.py` for shared method identity and distinct component-weight sums.
+  - Added empty-bundle regression coverage in the business and leisure ranking suites so the deliberate-break gate proves both engines use the shared guard.
+- Validation:
+  - `python -m pytest tests/ranking/test_base_ranking_engine.py -q` -> 2 passed.
+  - `python -m pytest tests/ranking/test_business_ranking.py tests/ranking/test_leisure_ranking.py -q` -> 27 passed after restoring the deliberate break.
+  - `python -m pytest tests/ranking/ -q` -> 63 passed.
+  - `python -m ruff check trip_planner/ranking tests/ranking/test_base_ranking_engine.py tests/ranking/test_business_ranking.py tests/ranking/test_leisure_ranking.py` -> passed.
+  - `git diff --check` -> passed.
+  - Grep gate: `leisure.py` and `business.py` each have 0 local `def validate_feasibility_outputs`; `base.py` has the single definition.
+  - Deliberate-break gate: temporarily removed the empty-bundle guard from `BaseRankingEngine.validate_bundles`; `python -m pytest tests/ranking/test_business_ranking.py tests/ranking/test_leisure_ranking.py -q` failed the new business and leisure empty-bundle assertions with `results must contain at least one RankedResult`. Restored the guard and reran green.
+- PR/routing: opened PR #1328 at https://github.com/stranske/trip-planner/pull/1328. PR is open/non-draft, closes #1308, and has `agent:codex`, `agents:keepalive`, `autofix`, and post-repair `agent:retry`.
+- Post-open repair: initial cap-health classified #1328 as `needs-dispatch-evidence`; `opener-repair-infra-stalls.py` added `agent:retry` and dispatched Gate Followups. Fresh cap-health at 2026-06-05T06:10:03Z classifies #1328 as `draining` with active Gate evidence on the branch.
+- Next action: keepalive owns PR #1328 CI/review; opener should move to the next eligible issue on a future round after cap/drain discovery.
+
+## 2026-06-05T05:08Z - opener lane issue #1307 ingestion dedupe
+
+- Automation: `pd-workloop-resume` (codex opener lane) from the neutral Code workspace.
+- Source repo: `stranske/trip-planner`; source issue `#1307` (`De-duplicate the four snapshot ingestion pipelines`).
+- Branch: `codex/issue-1307-ingestion-dedupe`, base `origin/main` `19774df45`.
+- Selection notes: raw opener cap was below limit (`total_opener_owned=1`, `raw_cap_reached=false`). Existing opener-owned Trend PR #5440 remains scoped/non-repairable on the strict-config owner/product decision; no cap-drain repair was available. High-priority liveness items #5343 and LMS #180 remained scoped, #5389 remains scoped through PR #5440, Workflows #2228/#2229 are already served by merged PRs, and trip-planner #1306 is a tracking epic. #1307 was the oldest unlinked implementation issue with no existing PR.
+- Implementation:
+  - Moved shared dedup decision record lookup, record-id lookup, per-record resolution lookup, conflict dedupe, and contribution-kind helpers into `trip_planner/ingestion/_common.py`.
+  - Rewired destination, lodging, activity, and transport ingestion pipelines to use the common helpers, removing their duplicate helper definitions.
+  - Converged `_dedupe_conflicts` on tuple-key semantics `(conflict_id, attribute_path, status)` so distinct conflict rows sharing one id are preserved.
+  - Added `tests/ingestion/test_common_dedupe.py` covering the shared tuple-key behavior.
+  - Post-open CI recovery: fixed `scripts/sync_test_dependencies.py` mypy tuple-shape inference by annotating pytest ini config constants as variadic string tuples.
+- Validation:
+  - `python -m pytest tests/ingestion -q` -> 18 passed.
+  - `python -m ruff check trip_planner/ingestion tests/ingestion/test_common_dedupe.py` -> passed.
+  - `python -m mypy --config-file pyproject.toml --exclude .workflows-lib scripts/sync_test_dependencies.py` -> passed after the CI recovery.
+  - Grep gate: all four entity pipeline files returned `0` for local `_records_for_decision`, `_record_ids_for_decision`, `_resolution_for_record`, `_dedupe_conflicts`, and `_contribution_kind` definitions; `_common.py` has exactly one `_dedupe_conflicts`.
+  - Public import gate printed `ingest_destination_snapshot`, `ingest_lodging_snapshot`, `ingest_activity_snapshot`, and `ingest_transport_snapshot`.
+  - `git diff --check` -> passed.
+  - Deliberate-break gate: temporarily replaced shared `_dedupe_conflicts` with conflict-id-only dict logic; `tests/ingestion/test_common_dedupe.py::test_dedupe_conflicts_preserves_distinct_attribute_rows` failed because the distinct refundable row was dropped. Restored tuple-key behavior and reran ingestion suite green.
+- Next action: open a ready-for-review PR with `agent:codex`, `agents:keepalive`, and `autofix`; keepalive owns CI/review after PR creation.
+
 ## 2026-06-01T01:55Z - closer lane PR #1283 review fix pushed
 
 - Repo: `stranske/trip-planner`

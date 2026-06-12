@@ -1,13 +1,11 @@
 """Canonical ranking-result contracts shared by later ranking modules."""
 
-from .business import BusinessRankingEngine
 from .explanations import (
     EXPLANATION_RECORD_TYPES,
     EXPLANATION_TARGET_KINDS,
     ExplanationRecord,
     build_source_confidence_explanation,
 )
-from .leisure import LeisureRankingEngine
 from .models import (
     ADJUSTMENT_KINDS,
     RANK_RESULT_KINDS,
@@ -21,12 +19,16 @@ from .models import (
     ScoreConfidenceSummary,
     ScoreContribution,
 )
+from .base import BaseRankingEngine
+from .business import BusinessRankingEngine
+from .leisure import LeisureRankingEngine
 
 __all__ = [
     "ADJUSTMENT_KINDS",
     "EXPLANATION_RECORD_TYPES",
     "EXPLANATION_TARGET_KINDS",
     "BusinessRankingEngine",
+    "BaseRankingEngine",
     "RANK_RESULT_KINDS",
     "RISK_SEVERITIES",
     "SCHEMA_VERSION",

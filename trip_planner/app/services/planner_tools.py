@@ -19,12 +19,19 @@ from trip_planner.app.services.workspace import (
     set_planning_notebook_focus,
     submit_workspace_option_feedback,
 )
+from trip_planner.itinerary.daily_menu import (
+    MenuStop,
+    SourceMix,
+    build_daily_menu as assemble_daily_menu,
+)
+from trip_planner.logistics.booking_radar import BookingFlag, scan_trip
 from trip_planner.sources import (
     QualityValueFitSummary,
     SourceQualityScorer,
     SourceRecord,
     SourceTrustSignals,
 )
+from trip_planner._validators import require_probability
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +84,17 @@ _TOOL_DEFINITIONS: tuple[PlannerToolDefinition, ...] = (
     PlannerToolDefinition(
         tool_name="read_source_quality_summary",
         description="Read source quality scoring state for attached workspace source records.",
+    ),
+    PlannerToolDefinition(
+        tool_name="build_daily_menu",
+        description=(
+            "Build a deterministic activity menu digest from current workspace activities, "
+            "time budget, and commerciality mix."
+        ),
+    ),
+    PlannerToolDefinition(
+        tool_name="read_booking_radar",
+        description="Read static advance-booking flags for scarce transport, sight, and permit items.",
     ),
     PlannerToolDefinition(
         tool_name="read_map_provider_status",
@@ -419,6 +437,350 @@ def _read_source_summary(
     )
 
 
+def _commerciality_preference_from_runtime_state(runtime_state: dict[str, Any]) -> float | None:
+    raw_preference = runtime_state.get("commerciality_preference")
+    if raw_preference is None:
+        return None
+    if isinstance(raw_preference, str):
+        raw_preference = raw_preference.strip()
+        if not raw_preference:
+            return None
+    try:
+        preference = float(raw_preference)
+        require_probability(preference, "runtime_state.commerciality_preference")
+    except (TypeError, ValueError):
+        return None
+    return preference
+
+
+def _probability_from_payload(payload: dict[str, Any], *field_names: str) -> float | None:
+    for field_name in field_names:
+        value = payload.get(field_name)
+        if value is None:
+            continue
+        try:
+            probability = float(value)
+            require_probability(probability, field_name)
+            return probability
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _average_probabilities(values: list[float | None], default: float) -> float:
+    usable = [value for value in values if value is not None]
+    if not usable:
+        return default
+    return round(sum(usable) / len(usable), 3)
+
+
+def _source_records_by_id(bundle: dict[str, Any]) -> dict[str, SourceRecord]:
+    records = [
+        record
+        for record in (
+            _source_record_from_payload(item) for item in bundle.get("source_records", [])
+        )
+        if record is not None
+    ]
+    return {record.source_id: record for record in records}
+
+
+def _activity_source_id(activity: dict[str, Any], source_records: dict[str, SourceRecord]) -> str:
+    for source_ref in activity.get("source_refs") or []:
+        if isinstance(source_ref, dict) and source_ref.get("source_id"):
+            return str(source_ref["source_id"])
+    if source_records:
+        return next(iter(source_records))
+    return "workspace"
+
+
+def _activity_commerciality(
+    activity: dict[str, Any],
+    source_records: dict[str, SourceRecord],
+    source_id: str,
+) -> float:
+    record = source_records.get(source_id)
+    if record is not None and record.trust_signals.commerciality is not None:
+        return record.trust_signals.commerciality
+    for source_ref in activity.get("source_refs") or []:
+        if not isinstance(source_ref, dict):
+            continue
+        if source_ref.get("source_id") and str(source_ref["source_id"]) != source_id:
+            continue
+        trust_snapshot = source_ref.get("trust_snapshot") or {}
+        value = _probability_from_payload(trust_snapshot, "commerciality")
+        if value is not None:
+            return value
+    values: list[float | None] = [
+        record.trust_signals.commerciality
+        for record in source_records.values()
+        if record.trust_signals.commerciality is not None
+    ]
+    return _average_probabilities(values, 0.5)
+
+
+def _activity_priority_score(activity: dict[str, Any], bundle: dict[str, Any]) -> float:
+    significance = activity.get("significance_summary") or {}
+    quality = activity.get("quality_summary") or {}
+    value = activity.get("value_summary") or {}
+    fit = activity.get("fit_summary") or {}
+    bundle_quality = bundle.get("quality_value_fit") or {}
+    return _average_probabilities(
+        [
+            _probability_from_payload(significance, "overall_signal"),
+            _probability_from_payload(significance, "local_icon_signal"),
+            _probability_from_payload(significance, "cultural_signal"),
+            _probability_from_payload(significance, "scenic_signal"),
+            _probability_from_payload(quality, "overall_signal"),
+            _probability_from_payload(value, "overall_signal"),
+            _probability_from_payload(value, "time_value_signal"),
+            _probability_from_payload(value, "uniqueness_signal"),
+            _probability_from_payload(fit, "overall_signal"),
+            _probability_from_payload(fit, "traveler_fit_signal"),
+            _probability_from_payload(bundle_quality, "quality_signal"),
+            _probability_from_payload(bundle_quality, "value_signal"),
+            _probability_from_payload(bundle_quality, "fit_signal"),
+        ],
+        0.5,
+    )
+
+
+def _menu_stop_from_activity(
+    activity: dict[str, Any],
+    bundle: dict[str, Any],
+    detour_minutes_by_stop: dict[str, Any],
+) -> MenuStop | None:
+    option_id = str(activity.get("option_id") or "").strip()
+    name = str(activity.get("name") or "").strip()
+    timing = activity.get("timing_summary") or {}
+    raw_visit_minutes = timing.get("duration_minutes")
+    try:
+        visit_minutes = 0 if raw_visit_minutes is None else int(raw_visit_minutes)
+    except (TypeError, ValueError):
+        return None
+    if not option_id or not name or visit_minutes <= 0:
+        return None
+    source_records = _source_records_by_id(bundle)
+    source_id = _activity_source_id(activity, source_records)
+    score = _activity_priority_score(activity, bundle)
+    significance = activity.get("significance_summary") or {}
+    priority_tier = 3 if significance.get("anchor_worthy") or score >= 0.82 else 2 if score >= 0.62 else 1
+    raw_detour = detour_minutes_by_stop.get(option_id, 0)
+    try:
+        detour_minutes = max(0, int(raw_detour))
+    except (TypeError, ValueError):
+        detour_minutes = 0
+    category = activity.get("category") or {}
+    primary_category = str(category.get("primary") or activity.get("activity_kind") or "activity")
+    source_record = source_records.get(source_id)
+    source_tier = source_record.category if source_record is not None else "workspace"
+    why_go = str(
+        activity.get("summary")
+        or (activity.get("notes") or [""])[0]
+        or f"{primary_category.replace('_', ' ').title()} option from {bundle.get('title', 'workspace')}"
+    )
+    return MenuStop(
+        stop_id=option_id,
+        name=name,
+        category=primary_category,
+        priority_tier=priority_tier,
+        priority_score=score,
+        est_visit_minutes=visit_minutes,
+        visit_minutes_basis="activity_timing_summary",
+        detour_minutes=detour_minutes,
+        commerciality=_activity_commerciality(activity, source_records, source_id),
+        source_id=source_id,
+        source_tier=source_tier,
+        why_go=why_go,
+    )
+
+
+def _workspace_menu_stops(
+    inventory: dict[str, Any],
+    arguments: dict[str, Any],
+) -> list[MenuStop]:
+    detour_minutes_by_stop = arguments.get("detour_minutes_by_stop") or {}
+    if not isinstance(detour_minutes_by_stop, dict):
+        detour_minutes_by_stop = {}
+    stops: list[MenuStop] = []
+    for bundle in inventory.get("bundles") or []:
+        if not isinstance(bundle, dict):
+            continue
+        for activity in bundle.get("activity_options") or []:
+            if not isinstance(activity, dict):
+                continue
+            stop = _menu_stop_from_activity(activity, bundle, detour_minutes_by_stop)
+            if stop is not None:
+                stops.append(stop)
+    return stops
+
+
+def _planner_menu_digest(menu: Any, *, limit: int) -> list[dict[str, Any]]:
+    digest = []
+    for stop in menu.selected_stops()[:limit]:
+        why = " ".join(stop.why_go.split())
+        digest.append(
+            {
+                "stop_id": stop.stop_id,
+                "name": stop.name,
+                "tier": stop.priority_tier,
+                "minutes": stop.est_visit_minutes + stop.detour_minutes,
+                "source_id": stop.source_id,
+                "commerciality": stop.commerciality,
+                "why": why[:180],
+            }
+        )
+    return digest
+
+
+def _bounded_menu_limit(value: Any) -> int:
+    try:
+        parsed = int(value or 12)
+    except (TypeError, ValueError):
+        parsed = 12
+    return max(1, min(12, parsed))
+
+
+def _build_daily_menu(
+    db_session: Session,
+    user: AuthenticatedUser,
+    trip_id: str,
+    arguments: dict[str, Any],
+) -> PlannerToolResult:
+    payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
+    inventory = payload["inventory_summary"]
+    runtime_state = inventory.get("runtime_state") or {}
+    stops = _workspace_menu_stops(inventory, arguments)
+    if not stops:
+        return PlannerToolResult(
+            tool_name="build_daily_menu",
+            status="not_available",
+            summary="No activity options are available for deterministic daily-menu assembly.",
+            mutates_state=False,
+            refs=_ref_list(payload["session"]["session_state_id"]),
+            output={"menu_state": "missing_activity_options", "selected_stops": []},
+        )
+    commercial_target = arguments.get("commercial_target")
+    if commercial_target is None:
+        commercial_target = _commerciality_preference_from_runtime_state(runtime_state)
+    try:
+        mix_target = 0.5 if commercial_target is None else float(commercial_target)
+        require_probability(mix_target, "commercial_target")
+    except (TypeError, ValueError):
+        mix_target = 0.5
+    try:
+        tolerance = float(arguments.get("tolerance", 0.15))
+        require_probability(tolerance, "tolerance")
+    except (TypeError, ValueError):
+        tolerance = 0.15
+    try:
+        time_budget_minutes = int(arguments.get("time_budget_minutes", 360))
+    except (TypeError, ValueError):
+        time_budget_minutes = 360
+    try:
+        day_index = int(arguments.get("day_index", 0))
+    except (TypeError, ValueError):
+        day_index = 0
+    menu = assemble_daily_menu(
+        trip_id,
+        max(0, day_index),
+        stops,
+        max(0, time_budget_minutes),
+        SourceMix(mix_target, tolerance=tolerance),
+        context_tags=tuple(str(item) for item in arguments.get("context_tags", []) or []),
+    )
+    limit = _bounded_menu_limit(arguments.get("limit", 12))
+    digest = _planner_menu_digest(menu, limit=limit)
+    return PlannerToolResult(
+        tool_name="build_daily_menu",
+        status="completed" if digest else "not_available",
+        summary=(
+            f"Built a deterministic day {menu.day_index + 1} menu with "
+            f"{menu.rollup.n_selected} selected stop(s)."
+        ),
+        mutates_state=False,
+        refs=_ref_list(payload["session"]["session_state_id"], *menu.suggested_selection),
+        output={
+            "menu_state": "ready" if digest else "empty_selection",
+            "day_index": menu.day_index,
+            "time_budget_minutes": menu.time_budget_minutes,
+            "commercial_target": menu.mix_target.commercial_target,
+            "realized_commercial_mix": menu.rollup.realized_commercial_mix,
+            "total_minutes": menu.rollup.total_visit_minutes + menu.rollup.total_detour_minutes,
+            "tier_histogram": menu.rollup.tier_histogram,
+            "candidate_count": len(menu.candidates),
+            "selected_stops": digest,
+        },
+    )
+
+
+def _booking_radar_trip_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    inventory = payload["inventory_summary"]
+    trip_record = payload.get("trip_record") or {}
+    planner_trip = payload.get("planner_panel_state", {}).get("trip") or {}
+    transport_options: list[dict[str, Any]] = []
+    activity_options: list[dict[str, Any]] = []
+    destinations: list[dict[str, Any]] = []
+    for bundle in inventory.get("bundles") or []:
+        if not isinstance(bundle, dict):
+            continue
+        transport_options.extend(
+            item for item in bundle.get("transport_options", []) if isinstance(item, dict)
+        )
+        activity_options.extend(
+            item for item in bundle.get("activity_options", []) if isinstance(item, dict)
+        )
+        for nested_bundle in bundle.get("bundles") or []:
+            if not isinstance(nested_bundle, dict):
+                continue
+            destinations.extend(
+                item for item in nested_bundle.get("destinations", []) if isinstance(item, dict)
+            )
+    return {
+        "trip": trip_record.get("trip") or planner_trip,
+        "transport_segments": transport_options,
+        "pois": [*activity_options, *destinations],
+        "inventory": inventory,
+    }
+
+
+def _booking_flag_digest(flags: list[BookingFlag], *, limit: int) -> list[dict[str, str]]:
+    return [flag.to_dict() for flag in flags[: max(1, min(limit, 12))]]
+
+
+def _read_booking_radar(
+    db_session: Session,
+    user: AuthenticatedUser,
+    trip_id: str,
+    arguments: dict[str, Any],
+) -> PlannerToolResult:
+    payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
+    appetite = str(arguments.get("appetite") or "anchored")
+    flags = scan_trip(_booking_radar_trip_payload(payload), appetite=appetite)
+    limit = _bounded_menu_limit(arguments.get("limit", 12))
+    digest = _booking_flag_digest(flags, limit=limit)
+    return PlannerToolResult(
+        tool_name="read_booking_radar",
+        status="completed" if digest else "not_available",
+        summary=(
+            f"Read {len(digest)} advance-booking flag(s) for the active trip."
+            if digest
+            else "No static advance-booking flags matched the active trip."
+        ),
+        mutates_state=False,
+        refs=_ref_list(
+            payload["session"]["session_state_id"],
+            *(flag["pattern_id"] for flag in digest),
+        ),
+        output={
+            "radar_state": "ready" if digest else "clear",
+            "appetite": appetite,
+            "flag_count": len(flags),
+            "flags": digest,
+        },
+    )
+
+
 def _read_source_quality_summary(
     db_session: Session,
     user: AuthenticatedUser,
@@ -429,6 +791,7 @@ def _read_source_quality_summary(
     payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
     inventory = payload["inventory_summary"]
     runtime_state = inventory.get("runtime_state") or {}
+    commerciality_preference = _commerciality_preference_from_runtime_state(runtime_state)
     scorer = SourceQualityScorer()
     quality_rows = []
     for bundle in _bounded_items(list(inventory.get("bundles") or []), 5):
@@ -442,6 +805,7 @@ def _read_source_quality_summary(
         summary = scorer.summarize(
             source_records,
             subject_kind="option",
+            commerciality_preference=commerciality_preference,
             intended_option_kind=str(bundle.get("bundle_context") or "mixed"),
         )
         row_status = "completed" if summary.contributing_source_count else "missing_source_records"
@@ -1051,6 +1415,8 @@ _TOOL_HANDLERS: dict[str, PlannerToolHandler] = {
     "refresh_scenarios": _refresh_scenarios,
     "read_source_summary": _read_source_summary,
     "read_source_quality_summary": _read_source_quality_summary,
+    "build_daily_menu": _build_daily_menu,
+    "read_booking_radar": _read_booking_radar,
     "read_map_provider_status": _read_map_provider_status,
     "read_route_geometry": _read_route_geometry,
     "refresh_route_comparison": _refresh_route_comparison,

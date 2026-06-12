@@ -68,6 +68,10 @@ const mockedCreateNotebookItem = vi.mocked(createNotebookItem);
 const mockedUpdateNotebookItem = vi.mocked(updateNotebookItem);
 const mockedDeleteNotebookItem = vi.mocked(deleteNotebookItem);
 const mockedSetNotebookFocus = vi.mocked(setNotebookFocus);
+
+type WorkspaceTestWindow = Window & {
+  __TRIP_PLANNER_WORKSPACE_BREAK__?: boolean;
+};
 const tripComparisonPayload: TripRecord[] = [
   {
     trip_id: "trip-leisure-kyoto-draft",
@@ -787,6 +791,109 @@ function stubMatchMedia(matches: boolean) {
   });
 }
 
+function workspaceWithUnequalRouteGeometry(): WorkspaceData {
+  const scenarios = workspacePayload.runtime_scenario_comparison.scenarios.map((scenario) =>
+    scenario.scenario_id === "scenario:trip-leisure-kyoto-draft:1"
+      ? {
+          ...scenario,
+          map_view: {
+            active_scope: "global" as const,
+            active_route_option_id: "route-option:kyoto-uji",
+            selected_segment_id: "route-segment:kyoto-uji",
+            place_markers: [
+              {
+                id: "marker:kyoto-start",
+                source_id: "kyoto-start",
+                label: "Kyoto",
+                description: "Kyoto arrival and hotel base.",
+                source_refs: ["ranked-result:kyoto-spring:1"],
+                route_index: 0,
+                x: 20,
+                y: 50,
+              },
+              {
+                id: "marker:uji",
+                source_id: "uji",
+                label: "Uji",
+                description: "Uji tea and river day.",
+                source_refs: ["ranked-result:kyoto-spring:1"],
+                route_index: 1,
+                x: 55,
+                y: 45,
+              },
+              {
+                id: "marker:kyoto-return",
+                source_id: "kyoto-return",
+                label: "Kyoto",
+                description: "Return to Kyoto for recovery time.",
+                source_refs: ["ranked-result:kyoto-spring:1"],
+                route_index: 2,
+                x: 78,
+                y: 52,
+              },
+            ],
+            rough_route_geometry: [
+              {
+                id: "route-segment:kyoto-uji",
+                from_marker_id: "marker:kyoto-start",
+                to_marker_id: "marker:uji",
+                from_label: "Kyoto",
+                to_label: "Uji",
+                x1: 20,
+                y1: 50,
+                x2: 55,
+                y2: 45,
+                warning: null,
+                duration_minutes: 720,
+                distance_km: 56,
+                confidence: "high" as const,
+                provider_distance_available: true,
+                distance_verification_state: "scenario_distance_available" as const,
+                distance_source: "fixture",
+                source_refs: ["ranked-result:kyoto-spring:1"],
+                unavailable_reason: null,
+              },
+              {
+                id: "route-segment:uji-kyoto",
+                from_marker_id: "marker:uji",
+                to_marker_id: "marker:kyoto-return",
+                from_label: "Uji",
+                to_label: "Kyoto",
+                x1: 55,
+                y1: 45,
+                x2: 78,
+                y2: 52,
+                warning: null,
+                duration_minutes: 120,
+                distance_km: 21,
+                confidence: "high" as const,
+                provider_distance_available: true,
+                distance_verification_state: "scenario_distance_available" as const,
+                distance_source: "fixture",
+                source_refs: ["ranked-result:kyoto-spring:1"],
+                unavailable_reason: null,
+              },
+            ],
+            confidence: {
+              level: "high" as const,
+              summary: "Fixture route geometry includes unequal per-leg timing.",
+            },
+          },
+        }
+      : scenario
+  );
+  const comparison = {
+    ...workspacePayload.runtime_scenario_comparison,
+    scenarios,
+  };
+
+  return {
+    ...workspacePayload,
+    route_comparison: comparison,
+    runtime_scenario_comparison: comparison,
+  };
+}
+
 describe("WorkspacePage", () => {
   beforeEach(() => {
     mockedFetchPlannerSession.mockResolvedValue(plannerSessionPayload);
@@ -796,6 +903,7 @@ describe("WorkspacePage", () => {
 
   afterEach(() => {
     cleanup();
+    delete (window as WorkspaceTestWindow).__TRIP_PLANNER_WORKSPACE_BREAK__;
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     Object.defineProperty(window, "matchMedia", {
@@ -816,6 +924,23 @@ describe("WorkspacePage", () => {
     mockedUpdateNotebookItem.mockReset();
     mockedDeleteNotebookItem.mockReset();
     mockedSetNotebookFocus.mockReset();
+  });
+
+  it("throws only when the workspace deliberate-break hook is enabled", () => {
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
+    (window as WorkspaceTestWindow).__TRIP_PLANNER_WORKSPACE_BREAK__ = true;
+
+    expect(() => renderWorkspacePage()).toThrow("Workspace deliberate break enabled");
+  });
+
+  it("renders normally when the workspace deliberate-break hook is disabled", async () => {
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Traveler planning workspace" })).toBeInTheDocument();
+    });
   });
 
   it("does not render raw runtime/provider/debug labels for default leisure workspaces", async () => {
@@ -1100,7 +1225,7 @@ describe("WorkspacePage", () => {
 
   it("renders timeline structure from persisted trip and scenario state", async () => {
     mockedUseLoaderData.mockReturnValue({
-      workspace: Promise.resolve(workspacePayload),
+      workspace: Promise.resolve(workspaceWithUnequalRouteGeometry()),
       trips: Promise.resolve(tripComparisonPayload),
     });
 
@@ -1135,6 +1260,18 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Destination context")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trip rhythm and day sequence" })).toBeInTheDocument();
     expect(screen.getByLabelText("Timeline summary")).toBeInTheDocument();
+    expect(
+      screen.getByText("Days 1-7 keep this stop visible in the selected route review path.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Days 8-12 keep this stop visible in the selected route review path.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Days 13-14 keep this stop visible in the selected route review path.")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Days 1-5 keep this stop visible in the selected route review path.")
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Review route tradeoffs" })).toBeInTheDocument();
     expect(screen.getByLabelText("Scenario review board")).toBeInTheDocument();
     expect(screen.getAllByText("Approval posture").length).toBeGreaterThan(0);
@@ -1158,6 +1295,43 @@ describe("WorkspacePage", () => {
       );
       expect(plannerPanel).toBeTruthy();
     });
+  });
+
+  it("default tab renders at most N top-level panels and exposes real tab content", async () => {
+    const user = userEvent.setup();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("workspace-tabs")).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("workspace-panel-plan")).toBeInTheDocument();
+    });
+
+    const planTab = screen.getByRole("tab", { name: "Plan" });
+    expect(planTab).toHaveAttribute("aria-controls", "workspace-panel-plan");
+    expect(screen.getByTestId("workspace-panel-plan")).toHaveAttribute(
+      "aria-labelledby",
+      planTab.id
+    );
+    const topLevelPanels = document.querySelectorAll('[data-testid^="workspace-panel-"]');
+    const maxDefaultPanels = 2;
+    expect(topLevelPanels.length).toBeLessThanOrEqual(maxDefaultPanels);
+
+    const compareTab = screen.getByRole("tab", { name: "Compare" });
+    await user.click(compareTab);
+
+    expect(await screen.findByTestId("workspace-panel-compare")).toHaveAttribute(
+      "aria-labelledby",
+      compareTab.id
+    );
+    expect(screen.getByRole("heading", { name: "Compare this workspace with other saved trips" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Compare possible route plans" })).toBeInTheDocument();
   });
 
   it("hides proposal and approval panels for leisure workspaces without active policy state", async () => {
@@ -1476,7 +1650,16 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(mockedSubmitPlannerTurn).toHaveBeenCalledWith(
         "trip-leisure-kyoto-draft",
-        "Keep Uji, but reduce transfer pressure."
+        "Keep Uji, but reduce transfer pressure.",
+        [
+          {
+            tool_name: "build_daily_menu",
+            arguments: {
+              commercial_target: 0.5,
+              time_budget_minutes: 360,
+            },
+          },
+        ]
       );
     });
     await waitFor(() => {
@@ -1503,6 +1686,47 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Planner diagnostics")).toBeInTheDocument();
     expect(screen.getByText("read_workspace_state: Read the current workspace state.")).toBeInTheDocument();
     expect(screen.getByLabelText("Message the planner")).toHaveValue("");
+  });
+
+  it("posts the selected commercial source mix with planner turns", async () => {
+    const user = userEvent.setup();
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        inventory_summary: {
+          ...workspacePayload.inventory_summary,
+          runtime_state: {
+            ...workspacePayload.inventory_summary.runtime_state,
+            commerciality_preference: 0.25,
+          },
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    const slider = await screen.findByLabelText("Commercial source mix target");
+    fireEvent.change(slider, { target: { value: "0.85" } });
+    await user.type(screen.getByLabelText("Message the planner"), "Build a balanced day menu.");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => {
+      expect(mockedSubmitPlannerTurn).toHaveBeenCalledWith(
+        "trip-leisure-kyoto-draft",
+        "Build a balanced day menu.",
+        [
+          {
+            tool_name: "build_daily_menu",
+            arguments: {
+              commercial_target: 0.85,
+              time_budget_minutes: 360,
+            },
+          },
+        ]
+      );
+    });
+    expect(screen.getByText("15% editorial / 85% commercial")).toBeInTheDocument();
   });
 
   it("fills traveler-friendly prompt suggestions into the planner message box", async () => {

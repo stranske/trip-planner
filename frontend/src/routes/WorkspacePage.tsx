@@ -30,6 +30,7 @@ import {
   type RouteOptionActionType,
   type RuntimeScenarioComparison,
   submitPlannerOptionFeedback,
+  type PlannerToolCallRequest,
   type SavedScenarioRecord,
   type WorkspaceData,
 } from "../api/workspace";
@@ -40,13 +41,26 @@ import { PlanningModeSelector } from "../components/planner/PlanningModeSelector
 import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
 import { TripComparison } from "../components/trips/TripComparison";
 import { PlanningNotebookPanel } from "../components/workspace/PlanningNotebookPanel";
+import { PlannerPanel } from "../components/workspace/panels/PlannerPanel";
+import { PolicyPanel as WorkspacePolicyPanel } from "../components/workspace/panels/PolicyPanel";
+import { RouteTradeoffsPanel } from "../components/workspace/panels/RouteTradeoffsPanel";
 import { RouteOptionWorkbench } from "../components/workspace/RouteOptionWorkbench";
 import { ScenarioComparison } from "../components/workspace/ScenarioComparison";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
+import { BudgetPanel } from "./workspace/BudgetPanel";
+import { ComparePanel } from "./workspace/ComparePanel";
+import { MapPanel } from "./workspace/MapPanel";
+import { NotebookPanel } from "./workspace/NotebookPanel";
+import { PlanPanel } from "./workspace/PlanPanel";
+import { PolicyPanel as PolicyTabPanel } from "./workspace/PolicyPanel";
 
 type LoaderData = {
   workspace: Promise<WorkspaceData>;
   trips?: Promise<TripRecord[]>;
+};
+
+type WorkspaceTestWindow = Window & {
+  __TRIP_PLANNER_WORKSPACE_BREAK__?: boolean;
 };
 
 type TimelineStop = {
@@ -56,6 +70,10 @@ type TimelineStop = {
   startDay: number;
   endDay: number;
 };
+
+type RouteGeometrySegment = NonNullable<
+  RuntimeScenarioComparison["scenarios"][number]["map_view"]
+>["rough_route_geometry"][number];
 
 type RouteSegmentFocus = {
   id: string;
@@ -84,6 +102,8 @@ type PlannerPromptSuggestion = {
   label: string;
   draft: string;
 };
+
+type WorkspaceTab = "plan" | "compare" | "map" | "budget" | "notebook" | "policy";
 
 type ProposalLifecycleState =
   | "pending"
@@ -164,6 +184,24 @@ const ROUTE_OPTION_ACTION_SUCCESS: Record<RouteOptionActionType, string> = {
   revise: "Revision request saved for the planner.",
 };
 
+const STATUS_CARD_CLASS = "status-card";
+const WORKSPACE_TABS: { id: WorkspaceTab; label: string }[] = [
+  { id: "plan", label: "Plan" },
+  { id: "compare", label: "Compare" },
+  { id: "map", label: "Map" },
+  { id: "budget", label: "Budget" },
+  { id: "notebook", label: "Notebook" },
+  { id: "policy", label: "Policy" },
+];
+
+function workspaceTabButtonId(tabId: WorkspaceTab) {
+  return `workspace-tab-${tabId}`;
+}
+
+function workspaceTabPanelId(tabId: WorkspaceTab) {
+  return `workspace-panel-${tabId}`;
+}
+
 function formatTravelerToken(value: string | null | undefined, fallback = "Not set yet"): string {
   if (!value) {
     return fallback;
@@ -228,21 +266,89 @@ function resolveMapScenarioId(workspace: WorkspaceData): string | null {
   return resolveRouteComparison(workspace).lead_scenario_id;
 }
 
-function buildTimelineStops(routeSequence: string[], tripDuration: number | null): TimelineStop[] {
+function allocateDaySpans(duration: number, weights: number[]): number[] {
+  if (weights.length === 0) {
+    return [];
+  }
+  if (duration <= weights.length) {
+    return weights.map((_, index) => (index < duration ? 1 : 0));
+  }
+
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  if (totalWeight <= 0) {
+    return [];
+  }
+
+  const spans = weights.map(() => 1);
+  const distributableDays = duration - weights.length;
+  let remainingDays = distributableDays;
+  const fractional = weights
+    .map((weight, index) => {
+      const exact = (weight / totalWeight) * distributableDays;
+      const whole = Math.floor(exact);
+      spans[index] += whole;
+      remainingDays -= whole;
+      return { index, remainder: exact - whole };
+    })
+    .sort((a, b) => b.remainder - a.remainder);
+
+  for (let index = 0; index < remainingDays; index += 1) {
+    spans[fractional[index % fractional.length].index] += 1;
+  }
+
+  return spans;
+}
+
+function timelineWeightsFromSegments(
+  routeSequence: string[],
+  routeSegments?: RouteGeometrySegment[] | null
+): number[] | null {
+  if (routeSegments == null || routeSegments.length < routeSequence.length - 1) {
+    return null;
+  }
+
+  const legDurations = routeSegments
+    .slice(0, Math.max(0, routeSequence.length - 1))
+    .map((segment) => segment.duration_minutes ?? 0);
+  if (legDurations.some((duration) => duration <= 0)) {
+    return null;
+  }
+
+  return routeSequence.map((_, index) => {
+    const previousLeg = legDurations[index - 1];
+    const nextLeg = legDurations[index];
+    if (previousLeg == null && nextLeg == null) {
+      return 1;
+    }
+    if (previousLeg == null) {
+      return nextLeg;
+    }
+    if (nextLeg == null) {
+      return previousLeg;
+    }
+    return (previousLeg + nextLeg) / 2;
+  });
+}
+
+function buildTimelineStops(
+  routeSequence: string[],
+  tripDuration: number | null,
+  routeSegments?: RouteGeometrySegment[] | null
+): TimelineStop[] {
   if (tripDuration == null || tripDuration <= 0 || routeSequence.length === 0) {
     return [];
   }
   const duration = tripDuration;
-
-  const baseSpan = Math.floor(duration / routeSequence.length);
-  let remainder = duration % routeSequence.length;
+  const weights = timelineWeightsFromSegments(routeSequence, routeSegments) ?? routeSequence.map(() => 1);
+  const spans = allocateDaySpans(duration, weights);
   let nextDay = 1;
 
   return routeSequence.map((stop, index) => {
-    const span = Math.max(1, baseSpan + (remainder > 0 ? 1 : 0));
-    remainder = Math.max(0, remainder - 1);
-    const startDay = nextDay;
-    const endDay = index === routeSequence.length - 1 ? duration : Math.min(duration, startDay + span - 1);
+    const span = spans[index] ?? 0;
+    const startDay = Math.min(duration, nextDay);
+    const endDay = index === routeSequence.length - 1
+      ? duration
+      : Math.min(duration, startDay + Math.max(1, span) - 1);
     nextDay = endDay + 1;
 
     return {
@@ -751,6 +857,14 @@ function mergePlannerSessionState(
   };
 }
 
+function sourceMixTargetFromWorkspace(workspace: WorkspaceData): number {
+  const rawPreference =
+    workspace.inventory_summary.runtime_state.commerciality_preference ??
+    workspace.runtime_state.commerciality_preference;
+  const parsed = typeof rawPreference === "number" ? rawPreference : Number(rawPreference);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 0.5;
+}
+
 const hiddenPlannerBlockKinds = new Set(["debug", "tool_call", "tool_trace", "diagnostic"]);
 
 function legacyStructuredBlocks(message: PlannerMessage): PlannerStructuredBlock[] {
@@ -963,6 +1077,12 @@ export function WorkspacePage() {
     () => Promise.all([workspace, trips ?? Promise.resolve([] as TripRecord[])]),
     [workspace, trips]
   );
+  if (
+    typeof window !== "undefined" &&
+    (window as WorkspaceTestWindow).__TRIP_PLANNER_WORKSPACE_BREAK__
+  ) {
+    throw new Error("Workspace deliberate break enabled");
+  }
 
   return (
     <AsyncRouteContent
@@ -1003,6 +1123,9 @@ function WorkspacePageContent({
   );
   const [plannerSession, setPlannerSession] = useState<PlannerSessionResponse | null>(null);
   const [plannerConversationDraft, setPlannerConversationDraft] = useState("");
+  const [sourceMixTarget, setSourceMixTarget] = useState(() =>
+    sourceMixTargetFromWorkspace(workspace)
+  );
   const [plannerConversationNotice, setPlannerConversationNotice] = useState<string | null>(null);
   const [plannerConversationError, setPlannerConversationError] = useState<string | null>(null);
   const [plannerConversationBusyLabel, setPlannerConversationBusyLabel] = useState<string | null>(
@@ -1024,6 +1147,7 @@ function WorkspacePageContent({
   const [routeOptionError, setRouteOptionError] = useState<string | null>(null);
   const [routeOptionBusyLabel, setRouteOptionBusyLabel] = useState<string | null>(null);
   const [routeOptionSuccess, setRouteOptionSuccess] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("plan");
   const plannerSessionLoadVersion = useRef(0);
   const plannerConversationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const previousWorkspaceRef = useRef(workspace);
@@ -1032,6 +1156,7 @@ function WorkspacePageContent({
     const previousWorkspace = previousWorkspaceRef.current;
     previousWorkspaceRef.current = workspace;
     setCurrentWorkspace(workspace);
+    setSourceMixTarget(sourceMixTargetFromWorkspace(workspace));
     setSelectedScenarioId(resolveMapScenarioId(workspace));
     setSelectedMapScope("regional");
     setSelectedSegmentId(null);
@@ -1110,7 +1235,11 @@ function WorkspacePageContent({
     selectedRuntimeScenario?.route_sequence ??
     activeScenario.scenario?.scenario_summary.route_sequence ??
     [];
-  const timelineStops = buildTimelineStops(timelineRouteSequence, trip.trip_frame.duration_days);
+  const timelineStops = buildTimelineStops(
+    timelineRouteSequence,
+    trip.trip_frame.duration_days,
+    selectedRuntimeScenario?.map_view?.rough_route_geometry
+  );
   const selectedRouteSegment = resolveRouteSegmentFocus(selectedRuntimeScenario, selectedSegmentId);
   const selectedTimelineNotes = timelineFocusNotes(
     currentWorkspace.planning_ledger,
@@ -1145,6 +1274,24 @@ function WorkspacePageContent({
     currentWorkspace.proposal_state?.proposal_state_id ?? "no-proposal",
     Object.keys(workspaceDebugSections).sort().join("|"),
   ].join(":");
+  const routeTradeoffCards = routeComparison.scenarios.map((scenario) => {
+    const reviewMetrics = buildScenarioReviewMetrics(currentWorkspace, scenario, panelVisibility);
+
+    return {
+      id: scenario.scenario_id,
+      kicker: scenario.recommended_for_selection ? "recommended" : scenario.status,
+      title: scenario.title,
+      summary: scenario.summary,
+      comparisonNote: scenario.comparison_note,
+      highlights: scenario.highlights,
+      isSelected: scenario.scenario_id === selectedScenarioId,
+      metrics: reviewMetrics.map((metric) => ({
+        label: metric.label,
+        value: metric.value,
+        testId: metric.label === "Approval posture" ? "policy-posture" : undefined,
+      })),
+    };
+  });
   function handleScenarioSelection(scenarioId: string) {
     setSelectedScenarioId(scenarioId);
     setSelectedSegmentId(null);
@@ -1240,8 +1387,17 @@ function WorkspacePageContent({
     setPlannerConversationError(null);
     setPlannerConversationBusyLabel("Sending planner turn...");
     plannerSessionLoadVersion.current += 1;
+    const toolCalls: PlannerToolCallRequest[] = [
+      {
+        tool_name: "build_daily_menu",
+        arguments: {
+          commercial_target: sourceMixTarget,
+          time_budget_minutes: 360,
+        },
+      },
+    ];
     try {
-      const nextPlannerSession = await submitPlannerTurn(trip.trip_id, message);
+      const nextPlannerSession = await submitPlannerTurn(trip.trip_id, message, toolCalls);
       startTransition(() => {
         setPlannerSession(nextPlannerSession);
         setCurrentWorkspace((current) => mergePlannerSessionState(current, nextPlannerSession));
@@ -1261,6 +1417,25 @@ function WorkspacePageContent({
     setPlannerConversationNotice("Draft added. Edit it if needed, then send it to the planner.");
     setPlannerConversationError(null);
     plannerConversationTextareaRef.current?.focus();
+  }
+
+  function handleSourceMixTargetChange(value: number) {
+    const boundedValue = Math.max(0, Math.min(1, value));
+    setSourceMixTarget(boundedValue);
+    setCurrentWorkspace((current) => ({
+      ...current,
+      runtime_state: {
+        ...current.runtime_state,
+        commerciality_preference: boundedValue,
+      },
+      inventory_summary: {
+        ...current.inventory_summary,
+        runtime_state: {
+          ...current.inventory_summary.runtime_state,
+          commerciality_preference: boundedValue,
+        },
+      },
+    }));
   }
 
   async function handleBudgetSave(payload: BudgetPlanUpsertPayload) {
@@ -1449,12 +1624,19 @@ function WorkspacePageContent({
     }
   }
 
+  if (
+    typeof window !== "undefined" &&
+    (window as WorkspaceTestWindow).__TRIP_PLANNER_WORKSPACE_BREAK__
+  ) {
+    throw new Error("Workspace deliberate break enabled");
+  }
+
   return (
     <section
       className={`workspace-layout${isCompactLayout ? " workspace-layout-compact" : ""}`}
       data-layout={isCompactLayout ? "compact" : "full"}
     >
-      <div className="workspace-hero status-card">
+      <div className={`workspace-hero ${STATUS_CARD_CLASS}`}>
         <p className="status-label">
           {productView?.user_summary.mode_label ?? "Trip workspace"}
         </p>
@@ -1576,62 +1758,64 @@ function WorkspacePageContent({
         ) : null}
       </div>
 
+      <div
+        className="workspace-tabs"
+        role="tablist"
+        aria-label="Workspace sections"
+        data-testid="workspace-tabs"
+      >
+        {WORKSPACE_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            id={workspaceTabButtonId(tab.id)}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            aria-controls={workspaceTabPanelId(tab.id)}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "plan" ? (
+        <PlanPanel labelledBy={workspaceTabButtonId("plan")}>
       <div className="workspace-grid">
-        <section className="status-card planner-panel-card">
-          <p className="status-label">Planner</p>
-          <h2>Traveler planning workspace</h2>
-          <p className="muted-copy">
-            Use your planner to compare options, keep context, and decide the next best trip step.
-          </p>
-          <div className="planner-runtime-row" aria-label="Planner availability">
-            <span
-              className={`planner-runtime-pill planner-runtime-pill--${
-                currentWorkspace.planner_panel_state.planner_behavior.runtime_status ?? "fallback"
-              }`}
-            >
-              {currentWorkspace.planner_panel_state.planner_behavior.runtime_mode === "model"
-                ? "AI-assisted planner"
-                : "Guided planner"}
-            </span>
-            <span className="planner-runtime-mode">
-              {currentWorkspace.planner_panel_state.planner_behavior.runtime_mode === "model"
-                ? "Live assistance"
-                : "Planning guide"}
-            </span>
-          </div>
-          {selectedRuntimeScenario ? (
-            <article className="planner-route-focus" aria-label="Planner route focus">
-              <p className="scenario-kicker">Route focus</p>
-              <h3>{selectedRuntimeScenario.title}</h3>
-              <p>
-                {selectedRouteSegment
-                  ? `${selectedRouteSegment.fromLabel} to ${selectedRouteSegment.toLabel}`
-                  : selectedRuntimeScenario.route_summary}
-              </p>
-              {selectedTimelineNotes.length > 0 ? (
-                <ul>
-                  {selectedTimelineNotes.map((note) => (
-                    <li key={note}>{note}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </article>
-          ) : null}
-          <PlanningModeSelector
-            value={currentWorkspace.session.selected_planning_mode}
-            busy={planningModeBusy}
-            error={planningModeError}
-            onChange={handlePlanningModeChange}
-          />
-          {plannerBusyLabel ? <p className="muted-copy">{plannerBusyLabel}</p> : null}
-          {plannerError ? <p className="planner-inline-error">{plannerError}</p> : null}
-          <PlannerSidePanelSurface
-            key={currentWorkspace.planner_panel_state === workspace.planner_panel_state ? "loader" : "workspace"}
-            state={currentWorkspace.planner_panel_state}
-            onDecisionAnswer={handleDecisionAnswer}
-            onOptionFeedback={handleOptionFeedback}
-          />
-          <section className="planner-conversation-card" aria-label="Planner conversation">
+        <PlannerPanel
+          runtimeMode={currentWorkspace.planner_panel_state.planner_behavior.runtime_mode ?? "fallback"}
+          runtimeStatus={currentWorkspace.planner_panel_state.planner_behavior.runtime_status ?? "fallback"}
+          routeFocus={
+            selectedRuntimeScenario
+              ? {
+                  title: selectedRuntimeScenario.title,
+                  summary: selectedRouteSegment
+                    ? `${selectedRouteSegment.fromLabel} to ${selectedRouteSegment.toLabel}`
+                    : selectedRuntimeScenario.route_summary,
+                }
+              : null
+          }
+          timelineNotes={selectedTimelineNotes}
+          planningModeControl={
+            <PlanningModeSelector
+              value={currentWorkspace.session.selected_planning_mode}
+              busy={planningModeBusy}
+              error={planningModeError}
+              onChange={handlePlanningModeChange}
+            />
+          }
+          busyLabel={plannerBusyLabel}
+          errorMessage={plannerError}
+          plannerSurface={
+            <PlannerSidePanelSurface
+              key={currentWorkspace.planner_panel_state === workspace.planner_panel_state ? "loader" : "workspace"}
+              state={currentWorkspace.planner_panel_state}
+              onDecisionAnswer={handleDecisionAnswer}
+              onOptionFeedback={handleOptionFeedback}
+            />
+          }
+          conversationPanel={
+            <section className="planner-conversation-card" aria-label="Planner conversation">
             <div className="planner-conversation-header">
               <div>
                 <p className="scenario-kicker">Conversation</p>
@@ -1711,7 +1895,8 @@ function WorkspacePageContent({
               </button>
             </form>
           </section>
-        </section>
+          }
+        />
 
         {panelVisibility.showBudgetPanel ? (
           <WorkspaceBudgetPanel
@@ -1784,7 +1969,9 @@ function WorkspacePageContent({
         />
 
         {panelVisibility.showApprovalReadinessPanel ? (
-          <section className="status-card" data-testid="approval-packet">
+          <WorkspacePolicyPanel
+            approvalPacketContent={
+              <>
             <p className="status-label">Approval packet</p>
             <h2 data-testid="proposal-lifecycle">
               {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
@@ -1869,10 +2056,12 @@ function WorkspacePageContent({
               </div>
             </>
           )}
-          </section>
+              </>
+            }
+          />
         ) : null}
 
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Things to consider</p>
           <h2>
             {workspace.inventory_summary.bundle_count > 0
@@ -1908,7 +2097,34 @@ function WorkspacePageContent({
           )}
         </section>
 
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
+          <p className="status-label">Source mix</p>
+          <h2>Commercial balance</h2>
+          <p>
+            Set the target mix for daily-menu re-ranking before asking the planner for a slate.
+          </p>
+          <label className="source-mix-control">
+            <span>
+              {Math.round((1 - sourceMixTarget) * 100)}% editorial /{" "}
+              {Math.round(sourceMixTarget * 100)}% commercial
+            </span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={sourceMixTarget}
+              aria-label="Commercial source mix target"
+              onChange={(event) => handleSourceMixTargetChange(Number(event.target.value))}
+            />
+          </label>
+          <p className="muted-copy">
+            The target is sent with planner turns as a calibrated menu tool call; source quality
+            scoring stays unchanged.
+          </p>
+        </section>
+
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Day plan</p>
           {timelineStops.length === 0 || activeScenario.scenario === null ? (
             <>
@@ -2023,71 +2239,18 @@ function WorkspacePageContent({
           )}
         </section>
 
-        <section className="status-card">
-          <p className="status-label">Route tradeoffs</p>
-          <h2>{isCompactLayout ? "Compact route tradeoffs" : "Review route tradeoffs"}</h2>
-          <p>
-            {panelVisibility.showPolicyPosture
-              ? "Cost, route burden, feasibility, and approval posture stay scannable here without forcing you into raw planning notes."
-              : "Cost, route burden, and feasibility stay scannable here without forcing you into raw planning notes."}
-          </p>
-          {routeComparison.scenarios.length > 0 ? (
-            <div className="scenario-review-grid" aria-label="Scenario review board">
-              {routeComparison.scenarios.map((scenario) => {
-                const reviewMetrics = buildScenarioReviewMetrics(
-                  currentWorkspace,
-                  scenario,
-                  panelVisibility
-                );
-                const isSelected = scenario.scenario_id === selectedScenarioId;
+        <RouteTradeoffsPanel
+          compactLayout={isCompactLayout}
+          showPolicyPosture={panelVisibility.showPolicyPosture}
+          scenarios={routeTradeoffCards}
+          emptyMessage={
+            currentWorkspace.runtime_state.status === "partial"
+              ? "Add a little more trip detail before route comparison can start."
+              : "No route ideas are available yet, so there is nothing to compare."
+          }
+        />
 
-                return (
-                  <article
-                    key={scenario.scenario_id}
-                    className={`scenario-card scenario-review-card${
-                      isSelected ? " scenario-card-active" : ""
-                    }`}
-                    aria-label={`${scenario.title} review summary`}
-                  >
-                    <p className="scenario-kicker">
-                      {scenario.recommended_for_selection ? "recommended" : scenario.status}
-                    </p>
-                    <h3>{scenario.title}</h3>
-                    <p>{scenario.summary}</p>
-                    <dl className="workspace-meta scenario-review-metrics">
-                      {reviewMetrics.map((metric) => (
-                        <div key={`${scenario.scenario_id}-${metric.label}`}>
-                          <dt>{metric.label}</dt>
-                          <dd
-                            data-testid={
-                              metric.label === "Approval posture" ? "policy-posture" : undefined
-                            }
-                          >
-                            {metric.value}
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                    <p className="muted-copy">{scenario.comparison_note}</p>
-                    <ul className="focus-area-list scenario-highlight-list">
-                      {scenario.highlights.slice(0, 2).map((highlight) => (
-                        <li key={highlight}>{highlight}</li>
-                      ))}
-                    </ul>
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="muted-copy">
-              {currentWorkspace.runtime_state.status === "partial"
-                ? "Add a little more trip detail before route comparison can start."
-                : "No route ideas are available yet, so there is nothing to compare."}
-            </p>
-          )}
-        </section>
-
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Saved ideas</p>
           <h2>{currentWorkspace.scenario_search.title}</h2>
           <div className="scenario-stack">
@@ -2118,7 +2281,7 @@ function WorkspacePageContent({
       </div>
 
       <div className="workspace-grid">
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Planning settings</p>
           <h2>Current collaboration style</h2>
           <dl className="workspace-meta">
@@ -2149,7 +2312,7 @@ function WorkspacePageContent({
           </div>
         </section>
 
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Saved comparison</p>
           <h2>{currentWorkspace.scenario_comparison?.summary ?? "No comparison saved yet"}</h2>
           {currentWorkspace.scenario_comparison ? (
@@ -2167,7 +2330,7 @@ function WorkspacePageContent({
         </section>
 
         {panelVisibility.showProposalPanel ? (
-          <section className="status-card" data-testid="tpp-label">
+          <section className={STATUS_CARD_CLASS} data-testid="tpp-label">
             <p className="status-label">Approval details</p>
             <h2>Options and readiness signals</h2>
           {currentWorkspace.proposal_state == null ? (
@@ -2210,7 +2373,7 @@ function WorkspacePageContent({
           </section>
         ) : null}
 
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Planning notes</p>
           <h2>
             {currentWorkspace.planner_memory.artifacts.length > 0
@@ -2235,7 +2398,7 @@ function WorkspacePageContent({
           )}
         </section>
 
-        <section className="status-card">
+        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Recent activity</p>
           <h2>Latest trip planning actions</h2>
           <div className="decision-stack">
@@ -2252,6 +2415,186 @@ function WorkspacePageContent({
           </div>
         </section>
       </div>
+        </PlanPanel>
+      ) : null}
+
+      {activeTab === "compare" ? (
+        <ComparePanel labelledBy={workspaceTabButtonId("compare")}>
+          <div className="workspace-grid">
+            <ScenarioComparison
+              comparison={routeComparison}
+              savedScenarios={currentWorkspace.saved_scenarios}
+              selectedScenarioId={selectedScenarioId}
+              onSelectScenario={handleScenarioSelection}
+            />
+
+            <RouteOptionWorkbench
+              comparison={routeComparison}
+              selectedScenarioId={selectedScenarioId}
+              busyLabel={routeOptionBusyLabel}
+              successMessage={routeOptionSuccess}
+              errorMessage={routeOptionError}
+              onSelectScenario={handleScenarioSelection}
+              onRouteOptionAction={handleRouteOptionAction}
+            />
+
+            <TripComparison
+              currentTrip={currentWorkspace.trip_record.trip}
+              trips={trips}
+              selectedTripId={selectedTripComparisonId}
+              onSelectTrip={setSelectedTripComparisonId}
+            />
+          </div>
+        </ComparePanel>
+      ) : null}
+      {activeTab === "map" ? (
+        <MapPanel labelledBy={workspaceTabButtonId("map")}>
+          <TripMap
+            comparison={routeComparison}
+            scenarioComparisonSummary={currentWorkspace.scenario_comparison?.summary}
+            scenarioFocusAreas={currentWorkspace.scenario_comparison?.focus_areas ?? []}
+            activeScenarioId={selectedScenarioId}
+            onSelectScenario={handleScenarioSelection}
+            bundles={currentWorkspace.inventory_summary.bundles}
+            feasibilitySummary={currentWorkspace.feasibility_summary}
+            tripPrimaryRegions={trip.trip_frame.primary_regions}
+            tripMode={trip.mode}
+            policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : null}
+            planningLedger={currentWorkspace.planning_ledger}
+            activeScope={selectedMapScope}
+            selectedSegmentId={selectedRouteSegment?.id ?? null}
+            onScopeChange={setSelectedMapScope}
+            onSelectSegment={setSelectedSegmentId}
+            compactLayout={isCompactLayout}
+          />
+        </MapPanel>
+      ) : null}
+      {activeTab === "budget" ? (
+        <BudgetPanel labelledBy={workspaceTabButtonId("budget")}>
+          {panelVisibility.showBudgetPanel ? (
+            <WorkspaceBudgetPanel
+              budgetState={currentWorkspace.budget_state}
+              tripMode={trip.mode}
+              busyLabel={budgetBusyLabel}
+              errorMessage={budgetError}
+              onSaveBudget={handleBudgetSave}
+              onRecordSpend={handleSpendRecord}
+            />
+          ) : (
+            <section className={STATUS_CARD_CLASS}>
+              <p className="status-label">Budget</p>
+              <h2>Budget details are not visible for this workspace</h2>
+              <p className="muted-copy">Budget planning appears when the workspace has budget state to review.</p>
+            </section>
+          )}
+        </BudgetPanel>
+      ) : null}
+      {activeTab === "notebook" ? (
+        <NotebookPanel labelledBy={workspaceTabButtonId("notebook")}>
+          <div className="workspace-grid">
+            {currentWorkspace.planning_notebook ? (
+              <PlanningNotebookPanel
+                notebookState={currentWorkspace.planning_notebook}
+                busyLabel={notebookBusyLabel}
+                successMessage={notebookSuccess}
+                errorMessage={notebookError}
+                onCreateItem={handleNotebookCreate}
+                onCompleteItem={handleNotebookComplete}
+                onReopenItem={handleNotebookReopen}
+                onDeleteItem={handleNotebookDelete}
+                onSetFocus={handleNotebookSetFocus}
+              />
+            ) : null}
+
+            <section className={STATUS_CARD_CLASS}>
+              <p className="status-label">Planning notes</p>
+              <h2>
+                {currentWorkspace.planner_memory.artifacts.length > 0
+                  ? "Planner notes to keep"
+                  : "No planner notes have been saved yet"}
+              </h2>
+              {currentWorkspace.planner_memory.artifacts.length === 0 ? (
+                <p className="muted-copy">
+                  Important summaries and remembered decisions will appear here after the first planner
+                  conversation.
+                </p>
+              ) : (
+                <div className="decision-stack">
+                  {currentWorkspace.planner_memory.artifacts.slice(0, 3).map((artifact) => (
+                    <article key={artifact.memory_artifact_id} className="decision-card">
+                      <h3>{artifact.title}</h3>
+                      <p>{artifact.summary}</p>
+                      <p className="muted-copy">{artifact.detail}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        </NotebookPanel>
+      ) : null}
+      {activeTab === "policy" ? (
+        <PolicyTabPanel labelledBy={workspaceTabButtonId("policy")}>
+          <WorkspacePolicyPanel
+            grid
+            approvalPacketContent={
+              panelVisibility.showApprovalReadinessPanel ? (
+                <>
+                <p className="status-label">Approval packet</p>
+                <h2 data-testid="proposal-lifecycle">
+                  {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
+                </h2>
+                {currentWorkspace.proposal_state == null ? (
+                  <p className="muted-copy">
+                    Approval packet records have not been saved for this workspace yet.
+                  </p>
+                ) : (
+                  <>
+                    {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
+                    {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
+                    <p>{proposalLifecycle?.summary ?? "Submission stored for later review."}</p>
+                    {shouldShowProposalRefresh(
+                      currentWorkspace.proposal_state,
+                      renderableProposalFollowUp
+                    ) ? (
+                      <button type="button" className="secondary-button" onClick={handleProposalRefresh}>
+                        Refresh live status
+                      </button>
+                    ) : null}
+                  </>
+                )}
+                </>
+              ) : null
+            }
+            approvalDetailsContent={
+              panelVisibility.showProposalPanel ? (
+                <>
+                <p className="status-label">Approval details</p>
+                <h2>Options and readiness signals</h2>
+                {currentWorkspace.proposal_state == null ? (
+                  <p className="muted-copy">Approval-packet details will render here once the packet is saved.</p>
+                ) : (
+                  <div className="decision-stack">
+                    {renderableProposalFollowUp ? (
+                      <article className="decision-card">
+                        <h3>{renderableProposalFollowUp.recommended_label ?? renderableProposalFollowUp.title}</h3>
+                        <p>{renderableProposalFollowUp.summary}</p>
+                      </article>
+                    ) : null}
+                    {(renderableProposalFollowUp?.guidance ?? []).map((guidance) => (
+                      <article key={guidance} className="decision-card">
+                        <h3>Guidance</h3>
+                        <p>{guidance}</p>
+                      </article>
+                    ))}
+                  </div>
+                )}
+                </>
+              ) : null
+            }
+          />
+        </PolicyTabPanel>
+      ) : null}
     </section>
   );
 }

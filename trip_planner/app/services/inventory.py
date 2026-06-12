@@ -27,6 +27,20 @@ from trip_planner.sources import (
 
 _BUNDLE_RESOURCE_PACKAGE = "trip_planner.resources.options.bundles"
 
+_CATEGORY_COMMERCIALITY: dict[str, float] = {
+    "official_operational": 0.20,
+    "managed_travel_policy": 0.35,
+    "commercial_inventory": 0.75,
+    "ratings_reviews": 0.45,
+    "editorial": 0.20,
+    "specialist_non_commercial": 0.15,
+}
+
+
+def _commerciality_for_category(category: str) -> float:
+    return _CATEGORY_COMMERCIALITY.get(category, 0.5)
+
+
 _REGION_GEO_DEFAULTS: dict[str, dict[str, Any]] = {
     "austin": {
         "latitude": 30.2672,
@@ -160,7 +174,7 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
             trust_signals=SourceTrustSignals(
                 freshness_days=0,
                 freshness_confidence=0.7,
-                commerciality=0.5,
+                commerciality=_commerciality_for_category("commercial_inventory"),
                 operational_reliability=0.65,
                 notes=["Fixture source freshness is pinned to the bundled fixture capture date."],
             ),
@@ -364,7 +378,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
             trust_signals=SourceTrustSignals(
                 freshness_days=0,
                 freshness_confidence=0.85,
-                commerciality=0.7,
+                commerciality=_commerciality_for_category("commercial_inventory"),
                 operational_reliability=0.76,
                 notes=[
                     "Runtime inventory is generated from current persisted trip context.",
@@ -998,6 +1012,7 @@ def build_inventory_summary_payload(
             "status": "ready",
             "title": "Runtime inventory is ready",
             "summary": "Persisted trip context is rich enough to assemble comparison-ready inventory bundles.",
+            "commerciality_preference": 0.5,
             "issues": [],
         }
     elif assembly_input is not None and assembly_input.snapshot.issues:

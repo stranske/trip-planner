@@ -356,6 +356,16 @@ def test_fixture_profiles_produce_expected_rank_order(fixture_name: str) -> None
     )
 
 
+def test_leisure_rank_bundles_rejects_empty_bundle_sequence() -> None:
+    with pytest.raises(ValueError, match="bundles must contain at least one InventoryBundle"):
+        LeisureRankingEngine().rank_bundles(
+            _profile_from_fixture("depth_oriented_urban_trip.json"),
+            _objectives_from_fixture("depth_oriented_urban_trip.json"),
+            [],
+            trip_id="trip-empty-leisure",
+        )
+
+
 def test_depth_oriented_profile_ranks_urban_culture_first() -> None:
     engine = LeisureRankingEngine()
     ranked = engine.rank_candidate_set(
