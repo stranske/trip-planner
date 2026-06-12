@@ -27,8 +27,8 @@ issues from the audit. See the point-7 epic.
 ## Deferred tracks (this roadmap)
 
 ### 1. The concierge layer — invisible logistics
-Turns the planner from an *advisor* into something that *handles things*. Components (design:
-`audit/.../EFFORTLESS-LOGISTICS-REVIEW-AND-PLAN.md`):
+Turns the planner from an *advisor* into something that *handles things*. Components are drawn from the
+external audit design notes for effortless logistics and capacity release:
 - **Proactive trip-watcher** — monitors each trip's fragile points (sell-out/lottery deadlines, flight
   disruptions, closures, weather) and surfaces the *solved* alternative, not the problem. Converts the
   reactive `trip_planner/orchestration/in_trip.py` seam into a scheduled monitor.
@@ -82,7 +82,6 @@ prompt-cached preamble). *Why deferred:* depends on the watcher + the determinis
   ripple-replan — full versions (v0s of some land near-term).
 
 ## Pointers
-- Engine design + spike: `audit-tripplanner-tpp/phase4-design/DAILY-MENU-DESIGN.md`, `audit-tripplanner-tpp/spike/`
-- Traveler features: `audit-tripplanner-tpp/phase4-design/POINT6-TRAVELER-OPPORTUNITIES.md`
-- Effortless-logistics + capacity-release: `audit-tripplanner-tpp/phase4-design/EFFORTLESS-LOGISTICS-REVIEW-AND-PLAN.md`
+- External audit notes, outside this repository: daily-menu design, traveler-opportunities, and
+  effortless-logistics/capacity-release review notes from the `audit-tripplanner-tpp` review packet.
 - Near-term work: the point-7 epic + linked issues.
