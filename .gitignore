@@ -32,3 +32,4 @@ dist/
 
 # Runtime LangSmith fleet artifacts are regenerated and can contain local trace IDs.
 artifacts/langsmith/
+workloop-state.md
