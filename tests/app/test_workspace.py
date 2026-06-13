@@ -3566,3 +3566,44 @@ def test_workspace_view_model_debug_sections_preserve_raw_payload_shapes() -> No
 
     assert debug_sections["saved_scenarios"]["payload"] == saved_scenarios
     assert debug_sections["activity_log"]["payload"] == activity_log
+
+
+def test_get_workspace_payload_shape_unchanged(client: TestClient) -> None:
+    """Refactor guard for #1371: get_workspace_payload's top-level contract is stable
+    across the seeded leisure and business trips (the fixture-path it now delegates to)."""
+    expected_keys = {
+        "trip_record",
+        "session",
+        "saved_scenarios",
+        "scenario_comparison",
+        "scenario_search",
+        "ranking",
+        "route_comparison",
+        "runtime_scenario_comparison",
+        "activity_log",
+        "planning_ledger",
+        "planning_notebook",
+        "planner_memory",
+        "planner_panel_state",
+        "runtime_state",
+        "feasibility_summary",
+        "inventory_summary",
+        "budget_state",
+        "policy_state",
+        "proposal_state",
+        "view_model",
+    }
+    for trip_id in ("trip-leisure-kyoto-draft", "trip-business-client-summit"):
+        response = client.get(f"/api/workspace/{trip_id}")
+        assert response.status_code == 200, trip_id
+        payload = response.json()
+        assert set(payload.keys()) == expected_keys, trip_id
+        assert payload["view_model"]
+        assert payload["planner_panel_state"]["trip"]["trip_id"] == trip_id
+
+    # Content that flows through the #1371 extracted sub-builders
+    # (_load_persisted_workspace_inputs -> _assemble_persisted_workspace_context):
+    leisure = client.get("/api/workspace/trip-leisure-kyoto-draft").json()
+    assert leisure["scenario_search"]["scenarios"]
+    assert "bundle_count" in leisure["inventory_summary"]
+    assert leisure["runtime_state"]["status"]
