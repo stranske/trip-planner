@@ -3269,115 +3269,115 @@ def _build_planner_panel_state(
     }
 
 
-def get_workspace_payload(
-    db_session: Session,
+@dataclass(slots=True)
+class _PersistedWorkspaceInputs:
+    """Loaded + bootstrapped persisted-workspace state, ready for context assembly."""
+
+    session_record: Any
+    saved_scenarios: Any
+    inventory_bundles: Any
+    inventory_summary: dict[str, Any]
+    scenario_search: dict[str, Any]
+
+
+def _build_fixture_workspace_payload(
     *,
-    user: AuthenticatedUser,
     trip_id: str,
-    include_debug: bool = True,
-) -> dict[str, Any] | None:
-    fixture = _FIXTURES.get(trip_id)
-    if fixture is not None:
-        _db_record = db_session.scalar(
-            select(PersistedTrip)
-            .where(PersistedTrip.trip_id == trip_id)
-            .where(PersistedTrip.user_id == user.user_id)
-        )
-        if _db_record is not None:
-            fixture = None
-    if fixture is not None:
-        trip_record = _load_trip_record(fixture.trip_fixture)
-        saved_scenarios, scenario_comparison = _load_saved_scenarios(fixture.scenarios_fixture)
-        session = _load_session(fixture.session_fixture)
-        _canonicalize_saved_scenario_ids(session, saved_scenarios)
-        inventory_assembly_input = _build_inventory_assembly_input(
-            trip_id=trip_id,
-            trip_mode=trip_record.trip.mode,
-            primary_regions=tuple(trip_record.trip.trip_frame.primary_regions),
-            duration_days=trip_record.trip.trip_frame.duration_days,
-        )
-        inventory_bundles = assemble_inventory_bundles_for_trip(
-            assembly_input=inventory_assembly_input,
-        )
-        scenario_search = _build_scenario_search(
-            trip_id=trip_id,
-            trip_mode=trip_record.trip.mode,
-            bundles=inventory_bundles,
-            trip_title=trip_record.trip.title,
-            primary_regions=tuple(trip_record.trip.trip_frame.primary_regions),
-            duration_days=trip_record.trip.trip_frame.duration_days,
-            traveler_party_kind=trip_record.trip.trip_frame.traveler_party.kind,
-        )
-        feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
-        runtime_scenario_comparison = _build_runtime_scenario_comparison(
-            trip_id=trip_id,
-            trip_title=trip_record.trip.title,
+    include_debug: bool,
+) -> dict[str, Any]:
+    fixture = _FIXTURES[trip_id]
+    trip_record = _load_trip_record(fixture.trip_fixture)
+    saved_scenarios, scenario_comparison = _load_saved_scenarios(fixture.scenarios_fixture)
+    session = _load_session(fixture.session_fixture)
+    _canonicalize_saved_scenario_ids(session, saved_scenarios)
+    inventory_assembly_input = _build_inventory_assembly_input(
+        trip_id=trip_id,
+        trip_mode=trip_record.trip.mode,
+        primary_regions=tuple(trip_record.trip.trip_frame.primary_regions),
+        duration_days=trip_record.trip.trip_frame.duration_days,
+    )
+    inventory_bundles = assemble_inventory_bundles_for_trip(
+        assembly_input=inventory_assembly_input,
+    )
+    scenario_search = _build_scenario_search(
+        trip_id=trip_id,
+        trip_mode=trip_record.trip.mode,
+        bundles=inventory_bundles,
+        trip_title=trip_record.trip.title,
+        primary_regions=tuple(trip_record.trip.trip_frame.primary_regions),
+        duration_days=trip_record.trip.trip_frame.duration_days,
+        traveler_party_kind=trip_record.trip.trip_frame.traveler_party.kind,
+    )
+    feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
+    runtime_scenario_comparison = _build_runtime_scenario_comparison(
+        trip_id=trip_id,
+        trip_title=trip_record.trip.title,
+        scenario_search=scenario_search.to_dict(),
+        session=session.to_dict(),
+    )
+    ranking = build_scenario_ranking_payload(
+        trip_id=trip_id,
+        scenario_search=scenario_search.to_dict(),
+    )
+    inventory_summary = build_inventory_summary_payload(
+        inventory_bundles,
+        assembly_input=inventory_assembly_input,
+    )
+
+    fixture_payload: dict[str, Any] = {
+        "trip_record": trip_record.to_dict(),
+        "session": session.to_dict(),
+        "saved_scenarios": [record.to_dict() for record in saved_scenarios],
+        "scenario_comparison": (scenario_comparison.to_dict() if scenario_comparison else None),
+        "scenario_search": scenario_search.to_dict(),
+        "ranking": ranking,
+        "route_comparison": runtime_scenario_comparison,
+        "runtime_scenario_comparison": runtime_scenario_comparison,
+        "activity_log": [],
+        "planning_ledger": _planning_ledger_state([]),
+        "planning_notebook": _planning_notebook_state([]),
+        "planner_memory": {
+            "current_checkpoint_id": session.current_checkpoint_id,
+            "checkpoints": [],
+            "artifacts": [],
+        },
+        "planner_panel_state": _build_planner_panel_state(
+            trip=trip_record.to_dict()["trip"],
             scenario_search=scenario_search.to_dict(),
             session=session.to_dict(),
-        )
-        ranking = build_scenario_ranking_payload(
+            saved_scenarios=[record.to_dict() for record in saved_scenarios],
+            activity_log=[],
+            feasibility_summary=feasibility_summary,
+            policy_context=None,
+            proposal_context=None,
+        ),
+        "runtime_state": _build_workspace_runtime_state(
+            inventory_summary=inventory_summary,
+            runtime_scenario_comparison=runtime_scenario_comparison,
+        ),
+        "feasibility_summary": feasibility_summary,
+        "inventory_summary": inventory_summary,
+        "budget_state": build_fixture_budget_payload(
             trip_id=trip_id,
-            scenario_search=scenario_search.to_dict(),
-        )
-        inventory_summary = build_inventory_summary_payload(
-            inventory_bundles,
-            assembly_input=inventory_assembly_input,
-        )
-
-        fixture_payload: dict[str, Any] = {
-            "trip_record": trip_record.to_dict(),
-            "session": session.to_dict(),
-            "saved_scenarios": [record.to_dict() for record in saved_scenarios],
-            "scenario_comparison": (scenario_comparison.to_dict() if scenario_comparison else None),
-            "scenario_search": scenario_search.to_dict(),
-            "ranking": ranking,
-            "route_comparison": runtime_scenario_comparison,
-            "runtime_scenario_comparison": runtime_scenario_comparison,
-            "activity_log": [],
-            "planning_ledger": _planning_ledger_state([]),
-            "planning_notebook": _planning_notebook_state([]),
-            "planner_memory": {
-                "current_checkpoint_id": session.current_checkpoint_id,
-                "checkpoints": [],
-                "artifacts": [],
-            },
-            "planner_panel_state": _build_planner_panel_state(
-                trip=trip_record.to_dict()["trip"],
-                scenario_search=scenario_search.to_dict(),
-                session=session.to_dict(),
-                saved_scenarios=[record.to_dict() for record in saved_scenarios],
-                activity_log=[],
-                feasibility_summary=feasibility_summary,
-                policy_context=None,
-                proposal_context=None,
-            ),
-            "runtime_state": _build_workspace_runtime_state(
-                inventory_summary=inventory_summary,
-                runtime_scenario_comparison=runtime_scenario_comparison,
-            ),
-            "feasibility_summary": feasibility_summary,
-            "inventory_summary": inventory_summary,
-            "budget_state": build_fixture_budget_payload(
-                trip_id=trip_id,
-                trip_mode=trip_record.trip.mode,
-            ),
-            "policy_state": None,
-            "proposal_state": None,
-        }
-        fixture_payload["view_model"] = _build_workspace_view_model(
-            fixture_payload,
             trip_mode=trip_record.trip.mode,
-            include_debug=include_debug,
-        )
-        return fixture_payload
-
-    record = db_session.scalar(
-        select(PersistedTrip)
-        .where(PersistedTrip.trip_id == trip_id)
-        .where(PersistedTrip.user_id == user.user_id)
+        ),
+        "policy_state": None,
+        "proposal_state": None,
+    }
+    fixture_payload["view_model"] = _build_workspace_view_model(
+        fixture_payload,
+        trip_mode=trip_record.trip.mode,
+        include_debug=include_debug,
     )
-    if record is None:
-        return None
+    return fixture_payload
+
+
+def _load_persisted_workspace_inputs(
+    db_session: Session,
+    *,
+    record: PersistedTrip,
+    trip_id: str,
+) -> _PersistedWorkspaceInputs | None:
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     persisted_saved_scenarios = list(
         db_session.scalars(
@@ -3438,6 +3438,27 @@ def get_workspace_payload(
                 .order_by(PersistedSavedScenario.updated_at.desc())
             ).all()
         )
+    return _PersistedWorkspaceInputs(
+        session_record=session_record,
+        saved_scenarios=persisted_saved_scenarios,
+        inventory_bundles=persisted_inventory_bundles,
+        inventory_summary=inventory_summary,
+        scenario_search=runtime_search,
+    )
+
+
+def _assemble_persisted_workspace_context(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    record: PersistedTrip,
+    inputs: _PersistedWorkspaceInputs,
+    include_debug: bool,
+) -> WorkspaceBuildContext:
+    session_record = inputs.session_record
+    persisted_saved_scenarios = inputs.saved_scenarios
+    persisted_inventory_bundles = inputs.inventory_bundles
     activity_records = db_session.scalars(
         select(PersistedActivityLogEvent)
         .where(PersistedActivityLogEvent.trip_id == trip_id)
@@ -3457,56 +3478,90 @@ def get_workspace_payload(
         .limit(PLANNING_NOTEBOOK_LIMIT)
     ).all()
     feasibility_summary = build_feasibility_summary_payload(persisted_inventory_bundles)
-    return _build_persisted_trip_workspace(
-        record,
-        context=WorkspaceBuildContext(
-            session=(
-                _serialize_session_record(session_record) if session_record is not None else None
-            ),
-            saved_scenarios=[
-                {
-                    "saved_scenario_id": scenario.saved_scenario_id,
-                    "trip_id": scenario.trip_id,
-                    "current_version_id": scenario.current_version_id,
-                    "versions": list(scenario.versions),
-                    "comparisons": list(scenario.comparisons),
-                    "tags": list(scenario.tags),
-                    "notes": list(scenario.notes),
-                }
-                for scenario in persisted_saved_scenarios
-            ],
-            activity_log=[_serialize_activity_record(item) for item in activity_records],
-            planning_ledger=_planning_ledger_state(
-                [_serialize_ledger_entry(item) for item in ledger_records]
-            ),
-            planning_notebook=_planning_notebook_state(
-                [_serialize_notebook_item(item) for item in notebook_records],
-                focus_category=session_record.notebook_focus_category,
-                focus_item_id=session_record.notebook_focus_item_id,
-            ),
-            planner_memory=build_planner_memory_payload(
-                db_session,
-                trip_id=trip_id,
-                session_state_id=session_record.session_state_id,
-            ),
-            budget_state=load_budget_payload_for_workspace(db_session, record=record),
-            policy_context=(
-                get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
-                if record.mode == "business" or include_debug
-                else None
-            ),
-            proposal_context=(
-                get_workspace_proposal_payload(db_session, user=user, trip_id=trip_id)
-                if record.mode == "business" or include_debug
-                else None
-            ),
-            inventory_bundles=persisted_inventory_bundles,
-            inventory_summary=inventory_summary,
-            scenario_search=runtime_search,
-            feasibility_summary=feasibility_summary,
-            include_debug=include_debug,
+    return WorkspaceBuildContext(
+        session=(
+            _serialize_session_record(session_record) if session_record is not None else None
         ),
+        saved_scenarios=[
+            {
+                "saved_scenario_id": scenario.saved_scenario_id,
+                "trip_id": scenario.trip_id,
+                "current_version_id": scenario.current_version_id,
+                "versions": list(scenario.versions),
+                "comparisons": list(scenario.comparisons),
+                "tags": list(scenario.tags),
+                "notes": list(scenario.notes),
+            }
+            for scenario in persisted_saved_scenarios
+        ],
+        activity_log=[_serialize_activity_record(item) for item in activity_records],
+        planning_ledger=_planning_ledger_state(
+            [_serialize_ledger_entry(item) for item in ledger_records]
+        ),
+        planning_notebook=_planning_notebook_state(
+            [_serialize_notebook_item(item) for item in notebook_records],
+            focus_category=session_record.notebook_focus_category,
+            focus_item_id=session_record.notebook_focus_item_id,
+        ),
+        planner_memory=build_planner_memory_payload(
+            db_session,
+            trip_id=trip_id,
+            session_state_id=session_record.session_state_id,
+        ),
+        budget_state=load_budget_payload_for_workspace(db_session, record=record),
+        policy_context=(
+            get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
+            if record.mode == "business" or include_debug
+            else None
+        ),
+        proposal_context=(
+            get_workspace_proposal_payload(db_session, user=user, trip_id=trip_id)
+            if record.mode == "business" or include_debug
+            else None
+        ),
+        inventory_bundles=persisted_inventory_bundles,
+        inventory_summary=inputs.inventory_summary,
+        scenario_search=inputs.scenario_search,
+        feasibility_summary=feasibility_summary,
+        include_debug=include_debug,
     )
+
+
+def get_workspace_payload(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    include_debug: bool = True,
+) -> dict[str, Any] | None:
+    fixture = _FIXTURES.get(trip_id)
+    if fixture is not None:
+        db_record = db_session.scalar(
+            select(PersistedTrip)
+            .where(PersistedTrip.trip_id == trip_id)
+            .where(PersistedTrip.user_id == user.user_id)
+        )
+        if db_record is None:
+            return _build_fixture_workspace_payload(trip_id=trip_id, include_debug=include_debug)
+    record = db_session.scalar(
+        select(PersistedTrip)
+        .where(PersistedTrip.trip_id == trip_id)
+        .where(PersistedTrip.user_id == user.user_id)
+    )
+    if record is None:
+        return None
+    inputs = _load_persisted_workspace_inputs(db_session, record=record, trip_id=trip_id)
+    if inputs is None:
+        return None
+    context = _assemble_persisted_workspace_context(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        record=record,
+        inputs=inputs,
+        include_debug=include_debug,
+    )
+    return _build_persisted_trip_workspace(record, context=context)
 
 
 def get_workspace_scenario_comparison_payload(
