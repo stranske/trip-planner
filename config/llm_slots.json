@@ -3,12 +3,12 @@
     {
       "name": "slot1",
       "provider": "openai",
-      "model": "gpt-5.2"
+      "model": "gpt-5.4"
     },
     {
       "name": "slot2",
       "provider": "anthropic",
-      "model": "claude-sonnet-4-5-20250929"
+      "model": "claude-sonnet-4-6"
     },
     {
       "name": "slot3",
