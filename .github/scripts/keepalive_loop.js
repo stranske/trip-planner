@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { parseScopeTasksAcceptanceSections } = require('./issue_scope_parser');
-const { createGithubApiCache } = require('./github-api-cache-client');
+const { getGithubApiCache } = require('./github-api-cache-client');
 const { loadKeepaliveState, formatStateComment } = require('./keepalive_state');
 const { resolvePromptMode } = require('./keepalive_prompt_routing');
 const { classifyError, ERROR_CATEGORIES } = require('./error_classifier');
@@ -467,21 +467,8 @@ function resolveDurationMs({ durationMs, startTs }) {
   return Math.max(0, Math.floor(delta));
 }
 
-function getGithubApiCache({ github, core }) {
-  if (github && github.__keepaliveApiCache) {
-    return github.__keepaliveApiCache;
-  }
-  const cache = createGithubApiCache({ core });
-  if (github) {
-    Object.defineProperty(github, '__keepaliveApiCache', {
-      value: cache,
-      enumerable: false,
-      configurable: false,
-      writable: false,
-    });
-  }
-  return cache;
-}
+// getGithubApiCache is now the single shared factory from
+// github-api-cache-client.js (sentinel __githubApiCache).
 
 async function fetchPullRequestCached({ github, context, prNumber, core }) {
   if (!github?.rest?.pulls?.get || !context?.repo?.owner || !context?.repo?.repo) {
@@ -1612,6 +1599,9 @@ function normaliseConfig(config = {}) {
     prompt_mode: promptMode,
     prompt_file: promptFile,
     prompt_scenario: promptScenario,
+    verifier_agent: normalise(cfg.verifier_agent),
+    progress_review_threshold: cfg.progress_review_threshold != null ? toNumber(cfg.progress_review_threshold, 4) : undefined,
+    complete_gate_failure_rounds: cfg.complete_gate_failure_rounds != null ? toNumber(cfg.complete_gate_failure_rounds, 3) : undefined,
   };
 }
 
@@ -2385,7 +2375,23 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     if (hasAgentLabel) {
       try {
         const { resolveAgentRoutingFromLabels } = require('./agent_registry.js');
-        const routing = resolveAgentRoutingFromLabels(routingLabelCandidates.length ? routingLabelCandidates : pr.labels);
+        // agent:auto overrides a co-present concrete agent label (#2268). The
+        // capacity-stuck runbook says to ADD agent:auto alongside the existing
+        // agent:<X>; without this filter, resolveAgentRoutingFromLabels throws on
+        // the auto+concrete combination, the catch below disables keepalive, and
+        // the runbook silently does the opposite of its intent. Dropping the
+        // concrete label here lets auto win and routing stay enabled; the current
+        // agent is tracked in delegation state, not via the label.
+        const candidateLabels = routingLabelCandidates.length ? routingLabelCandidates : pr.labels;
+        const hasAutoLabel = candidateLabels.some(
+          (label) => normalise((typeof label === 'object' ? label.name : label) || '').toLowerCase() === 'agent:auto',
+        );
+        const routingLabels = hasAutoLabel
+          ? candidateLabels.filter(
+            (label) => normalise((typeof label === 'object' ? label.name : label) || '').toLowerCase() === 'agent:auto',
+          )
+          : candidateLabels;
+        const routing = resolveAgentRoutingFromLabels(routingLabels);
         agentType = routing.agentKey;
         agentRoutingMode = routing.mode;
       } catch (error) {
@@ -2397,6 +2403,19 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     }
     const hasHighPrivilege = labels.includes('agent-high-privilege');
     const keepaliveEnabled = config.keepalive_enabled && hasAgentLabel;
+
+    // Operator stop-controls (#2267). The canonical event-driven loop must enforce the
+    // documented pause / human-block guardrails itself — previously they lived only on
+    // the orchestrator path, so `agents:paused` / `needs-human` did not actually stop
+    // the loop from re-dispatching on the next green Gate.
+    //   * agents:paused  — operator pause (canonical spelling; agents:pause accepted as a
+    //                      transitional alias to match reusable-agents-pr-health).
+    //   * needs-human    — hard human-blocker; stays stopped until a human removes it.
+    //   * agents:max-runs:0 — explicit "hold" cap. (K>=1 is already enforced by the
+    //                      per-PR concurrency group `keepalive-<pr>`, cancel-in-progress:false.)
+    const pausedByLabel = labels.includes('agents:paused') || labels.includes('agents:pause');
+    const humanBlocked = labels.includes('needs-human');
+    const runCapZero = labels.includes('agents:max-runs:0');
 
     const sections = parseScopeTasksAcceptanceSections(pr.body || '');
     const normalisedSections = normaliseChecklistSections(sections);
@@ -2620,8 +2639,19 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     const hasDefinitiveConflict = conflictResult.hasConflict &&
       conflictResult.primarySource === 'github-api';
 
+    // Operator stop-controls (#2267) take precedence over every dispatch decision so a
+    // paused or human-blocked PR never re-dispatches an agent, even on a green Gate.
+    if (pausedByLabel) {
+      action = 'skip';
+      reason = 'paused';
+    } else if (humanBlocked) {
+      action = 'skip';
+      reason = 'needs-human';
+    } else if (runCapZero) {
+      action = 'skip';
+      reason = 'run-cap-zero';
     // Conflict resolution takes highest priority ONLY for definitive conflicts
-    if (hasDefinitiveConflict && hasAgentLabel && keepaliveEnabled) {
+    } else if (hasDefinitiveConflict && hasAgentLabel && keepaliveEnabled) {
       action = 'conflict';
       reason = `merge-conflict-${conflictResult.primarySource || 'detected'}`;
     } else if (!hasAgentLabel) {
@@ -3825,8 +3855,11 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
         ? previousState.effectiveness_history
         : [];
 
-      // Build effectiveness entry for this round (only when agent ran)
-      const effectivenessEntry = action === 'run' ? {
+      // Build effectiveness entry for this round. Record `run`, `fix`, and
+      // `conflict` rounds: a stuck agent burns fix/conflict rounds without
+      // commits too, and excluding them hid those stalled rounds from
+      // effectiveness_history so the stall detector under-counted (#2268).
+      const effectivenessEntry = ['run', 'fix', 'conflict'].includes(action) ? {
         iteration: nextIteration,
         agent: agentType,
         commits: agentCommitSha ? 1 : 0,
@@ -4003,6 +4036,47 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
           });
         } catch (error) {
           if (core) core.warning(`Failed to add needs-human label: ${error.message}`);
+        }
+      }
+
+      // #2270 (FO-4/FO-5): when the loop terminal is tasks-complete, apply the
+      // `automerge` label so the completed PR reaches the GUARDED merger (the
+      // bootstrap-guarded belt conveyor / orchestrator automerge sweep in root,
+      // the consumer in-repo guarded merger in agents-81-gate-followups). This
+      // replaces the native auto-merge path removed from the belt worker. It is
+      // the only reliable producer of `automerge` once native auto-merge is gone.
+      // Idempotent: skip the add when the label is already present.
+      if (isSuccessStop) {
+        try {
+          let alreadyLabelled = false;
+          try {
+            const { data: existing } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            alreadyLabelled = (existing || []).some(
+              (label) => normalise(label?.name).toLowerCase() === 'automerge',
+            );
+          } catch (error) {
+            // If we cannot read labels, fall through and attempt the add — the
+            // GitHub API is idempotent for an already-present label anyway.
+            if (core) core.warning(`Unable to inspect labels before automerge add: ${error.message}`);
+          }
+          if (!alreadyLabelled) {
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              labels: ['automerge'],
+            });
+            if (core) core.info(`Applied automerge label on tasks-complete for PR #${prNumber}.`);
+          } else if (core) {
+            core.info(`automerge label already present on PR #${prNumber}; skipping.`);
+          }
+        } catch (error) {
+          if (core) core.warning(`Failed to add automerge label: ${error.message}`);
         }
       }
     } catch (error) {
