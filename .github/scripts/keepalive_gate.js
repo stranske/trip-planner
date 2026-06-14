@@ -1,7 +1,7 @@
 'use strict';
 
-const { paginateWithBackoff, withBackoff } = require('./api-helpers.js');
-const { createGithubApiCache } = require('./github-api-cache-client');
+const { paginateWithBackoff, withBackoff } = require('./github-api-with-retry.js');
+const { getGithubApiCache } = require('./github-api-cache-client');
 const { ensureRateLimitWrapped } = require('./github-rate-limited-wrapper.js');
 
 const KEEPALIVE_LABEL = 'agents:keepalive';
@@ -28,9 +28,7 @@ try {
   ]);
 }
 const ORCHESTRATOR_WORKFLOW_FILE = 'agents-70-orchestrator.yml';
-// Accept both new alias and legacy filename
 const WORKER_WORKFLOW_FILES = [
-  'agents-belt-worker.yml',
   'agents-72-codex-belt-worker.yml',
 ];
 const RECENT_COMPLETED_LOOKBACK_SECONDS = 300; // 5 minutes
@@ -39,22 +37,8 @@ const RECENT_COMPLETED_LOOKBACK_SECONDS = 300; // 5 minutes
 const RATE_LIMIT_MAX_RETRIES = 3;
 const RATE_LIMIT_BASE_DELAY_MS = 2000;
 
-function getGithubApiCache({ github, core }) {
-  if (!github) {
-    return createGithubApiCache({ core });
-  }
-  if (github.__keepaliveGateApiCache) {
-    return github.__keepaliveGateApiCache;
-  }
-  const cache = createGithubApiCache({ core });
-  Object.defineProperty(github, '__keepaliveGateApiCache', {
-    value: cache,
-    enumerable: false,
-    configurable: false,
-    writable: false,
-  });
-  return cache;
-}
+// getGithubApiCache is now the single shared factory from
+// github-api-cache-client.js (sentinel __githubApiCache).
 
 async function fetchPullRequestCached({ github, owner, repo, prNumber, core }) {
   if (!github?.rest?.pulls?.get || !owner || !repo) {
@@ -93,23 +77,6 @@ async function fetchPullRequestCached({ github, owner, repo, prNumber, core }) {
  */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Check if an error is a GitHub rate limit error.
- * @param {Error|unknown} error
- * @returns {boolean}
- */
-function isRateLimitError(error) {
-  if (!error) return false;
-  const message = error instanceof Error ? error.message : String(error);
-  const status = error?.status || error?.response?.status;
-  return (
-    status === 403 ||
-    status === 429 ||
-    /rate\s*limit/i.test(message) ||
-    /secondary\s*rate\s*limit/i.test(message)
-  );
 }
 
 function toInteger(value) {
@@ -775,13 +742,14 @@ async function countActive({
     const label = WORKER_WORKFLOW_FILES.includes(workflowFile) ? 'worker' : 'orchestrator';
     for (const status of statuses) {
       try {
-        const runs = await paginateWithBackoff(github, github.rest.actions.listWorkflowRuns, {
+        const listParams = {
           owner,
           repo,
           workflow_id: workflowFile,
           status,
           per_page: 100,
-        }, { core });
+        };
+        const runs = await paginateWithBackoff(github, github.rest.actions.listWorkflowRuns, listParams, { core });
         for (const run of runs) {
           const runId = Number(run?.id || 0);
           if (!Number.isFinite(runId) || runId <= 0) {
@@ -790,10 +758,6 @@ async function countActive({
           if (runIds.has(runId)) {
             continue;
           }
-          if (!(await runMatchesPr(run))) {
-            continue;
-          }
-
           if (status === 'completed') {
             if (!includeRecentCompleted) {
               continue;
@@ -802,6 +766,9 @@ async function countActive({
             if (completedAt < recentCutoff) {
               continue;
             }
+          }
+          if (!(await runMatchesPr(run))) {
+            continue;
           }
 
           runIds.add(runId);

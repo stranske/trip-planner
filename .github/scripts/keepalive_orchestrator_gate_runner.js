@@ -5,6 +5,7 @@
 const {
   analyseSkipComments,
   isGateReason,
+  SKIP_MARKER,
 } = require('./keepalive_guard_utils.js');
 const { evaluateKeepaliveGate } = require('./keepalive_gate.js');
 const { ensureRateLimitWrapped } = require('./github-rate-limited-wrapper.js');
@@ -272,6 +273,25 @@ async function runKeepaliveGate({ core, github, context, env }) {
     await summary.write();
 
     setOutputs(false, reason);
+
+    if (options.skipCount > 0 && Number.isFinite(options.skipCount)) {
+      const commentBody = [
+        SKIP_MARKER,
+        `<!-- keepalive-skip-count: ${options.skipCount} -->`,
+        line,
+      ].join('\n');
+      try {
+        await github.rest.issues.createComment({
+          owner,
+          repo,
+          issue_number: prNumber,
+          body: commentBody,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        core.warning(`Unable to post skip-count marker comment for PR #${prNumber}: ${message}`);
+      }
+    }
   };
 
   if (!keepaliveEnabled || !trace) {
@@ -335,7 +355,7 @@ async function runKeepaliveGate({ core, github, context, env }) {
   const runCapDetail = (() => {
     const breakdown = preGate.activeBreakdown || {};
     const orchestratorCount = Number(breakdown.orchestrator ?? breakdown['agents-70-orchestrator.yml'] ?? 0);
-    const workerCount = Number(breakdown.worker ?? breakdown['agents-belt-worker.yml'] ?? breakdown['agents-72-codex-belt-worker.yml'] ?? 0);
+    const workerCount = Number(breakdown.worker ?? breakdown['agents-72-codex-belt-worker.yml'] ?? 0);
     const normaliseCount = (value) => (Number.isFinite(value) ? value : 0);
     return `run cap detail: orchestrator=${normaliseCount(orchestratorCount)}, worker=${normaliseCount(workerCount)}`;
   })();
