@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -16,6 +17,8 @@ from trip_planner.app.routes.scenario_history import router as scenario_history_
 from trip_planner.app.routes.trips import router as trips_router
 from trip_planner.app.routes.workspace import router as workspace_router
 from trip_planner.persistence.db import ensure_database_ready
+
+logger = logging.getLogger(__name__)
 
 _LOCAL_CORS_ORIGINS = ("http://127.0.0.1:5173", "http://localhost:5173")
 
@@ -39,7 +42,18 @@ def get_allowed_cors_origin_regex() -> str | None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    ensure_database_ready()
+    # Resilient startup: a transient or expired database must not crash the whole
+    # service. If it did, the health check would fail and every deploy would be
+    # marked failed (the exact failure mode when the managed Postgres expired).
+    # Degrade instead: keep the API up so /api/health passes, and let DB-backed
+    # routes surface their own errors until the database is reachable again.
+    try:
+        ensure_database_ready()
+    except Exception:
+        logger.exception(
+            "Database initialization failed at startup; continuing in degraded "
+            "mode (database-backed routes will error until the database is reachable)."
+        )
     yield
 
 
