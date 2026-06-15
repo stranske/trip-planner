@@ -843,33 +843,29 @@ The Workflows repository includes maintenance workflows that handle sync, update
 
 ---
 
-### `maint-dependabot-auto-label.yml` - Label Dependabot PRs
-**Purpose:** Auto-labels Dependabot PRs by category
+### `maint-auto-label-dep-prs.yml` - Label dependency PRs
+**Purpose:** Auto-labels dependency-bot PRs with `agents:allow-change`
 
-**Trigger:** When Dependabot opens PR
+**Trigger:** When Dependabot or Renovate opens a PR
 
 **Labels Applied:**
-- `dependencies` (all)
-- `python` for Python packages
-- `github-actions` for action updates
-- `security` for security updates
+- `agents:allow-change` (so protected-workflow changes can be reviewed without manual label work)
 
 **Use When:** Automatic, no action needed
 
 ---
 
-### `maint-dependabot-auto-lock.yml` - Lock Dependabot PRs
-**Purpose:** Prevents auto-merge for major version updates
+### `maint-auto-lock-deps.yml` - Auto-lock dependency PRs
+**Purpose:** Keeps `requirements.lock` in sync on dependency-bot PRs
 
-**Trigger:** When Dependabot PR is major version
+**Trigger:** A `dependabot[bot]`/`renovate[bot]` PR changes a lock input (`pyproject.toml`, `requirements.txt`, `tools/requirements-llm.txt`)
 
 **What It Does:**
-- Detects major version bumps
-- Adds `do-not-merge` label
-- Comments with review request
-- Requires manual review
+- Re-runs the `uv pip compile` command recorded in the lock header
+- Commits the refreshed `requirements.lock` back to the PR branch if it changed
+- Workflows-local backstop to the fleet Renovate pip-compile manager
 
-**Use When:** Automatic protection
+**Use When:** Automatic, no action needed
 
 ---
 
