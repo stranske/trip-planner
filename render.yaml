@@ -26,5 +26,8 @@ services:
 
 databases:
   - name: trip-planner-db
-    plan: free
+    # Paid instance: free Render Postgres expires + is deleted after ~30 days,
+    # which suspended this DB and crashed deploys. Upgraded to basic-256mb so the
+    # Blueprint matches the dashboard and a sync can't revert it to free.
+    plan: basic-256mb
     databaseName: trip_planner
