@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useLoaderData } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -896,6 +896,10 @@ function workspaceWithUnequalRouteGeometry(): WorkspaceData {
 
 describe("WorkspacePage", () => {
   beforeEach(() => {
+    // Defensively clear the deliberate-break fault flag before every test. Even if
+    // a prior test somehow leaks it, no later test can render the workspace into
+    // the break hook with a stale `true` value.
+    delete (window as WorkspaceTestWindow).__TRIP_PLANNER_WORKSPACE_BREAK__;
     mockedFetchPlannerSession.mockResolvedValue(plannerSessionPayload);
     mockedSubmitPlannerTurn.mockResolvedValue(plannerSessionPayload);
     mockedSubmitRouteOptionAction.mockResolvedValue(workspacePayload);
@@ -926,11 +930,28 @@ describe("WorkspacePage", () => {
     mockedSetNotebookFocus.mockReset();
   });
 
-  it("throws only when the workspace deliberate-break hook is enabled", () => {
+  it("throws only when the workspace deliberate-break hook is enabled", async () => {
     mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
-    (window as WorkspaceTestWindow).__TRIP_PLANNER_WORKSPACE_BREAK__ = true;
+    const workspaceWindow = window as WorkspaceTestWindow;
+    workspaceWindow.__TRIP_PLANNER_WORKSPACE_BREAK__ = true;
 
-    expect(() => renderWorkspacePage()).toThrow("Workspace deliberate break enabled");
+    try {
+      expect(() => renderWorkspacePage()).toThrow("Workspace deliberate break enabled");
+    } finally {
+      // Clear the fault flag and unmount synchronously, before yielding to the
+      // event loop. React's concurrent error recovery re-renders <WorkspacePage>
+      // on a later task; if that retry lands while the flag is still set it raises
+      // an uncaught "deliberate break" error that vitest attributes to whichever
+      // test happens to be running, intermittently failing the whole suite.
+      delete workspaceWindow.__TRIP_PLANNER_WORKSPACE_BREAK__;
+      cleanup();
+    }
+
+    // Drain any pending recovery render / loader microtasks now that the flag is
+    // cleared, so nothing can re-enter the deliberate-break hook in a later test.
+    await act(async () => {
+      await Promise.resolve();
+    });
   });
 
   it("renders normally when the workspace deliberate-break hook is disabled", async () => {
