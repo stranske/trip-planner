@@ -146,6 +146,7 @@ Issue: "Add user authentication"
 | `agents:optimize` | Issue | Analyze and suggest improvements |
 | `agents:apply-suggestions` | Issue | Apply optimization suggestions |
 | `agents:auto-pilot` | Issue | Full end-to-end automation |
+| `agents:allow-change` | PR | Permission signal for `agents-guard`; automatically applied to dependency-bot PRs by `maint-auto-label-dep-prs.yml` |
 | `agents:capability-check` | Issue | Check if agent can complete |
 | `agents:decompose` | Issue | Break into smaller issues |
 | `agents:dedup` | Issue | Check for duplicates |
