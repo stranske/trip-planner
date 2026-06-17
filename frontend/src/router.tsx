@@ -13,7 +13,7 @@ import {
   fetchTrips,
 } from "./api/trips";
 import { fetchWorkspace } from "./api/workspace";
-import App, { RootErrorBoundary } from "./App";
+import App, { InitialRouteFallback, RootErrorBoundary } from "./App";
 import { ApiClientError } from "./lib/api/errors";
 import { healthLoader, HealthPage } from "./routes/HealthPage";
 import { LoginPage } from "./routes/LoginPage";
@@ -147,6 +147,7 @@ export const appRoutes: RouteObject[] = [
     id: "root",
     element: <App />,
     errorElement: <RootErrorBoundary />,
+    hydrateFallbackElement: <InitialRouteFallback />,
     loader: rootLoader,
     children: [
       {
@@ -192,13 +193,4 @@ export const appRoutes: RouteObject[] = [
   },
 ];
 
-export const APP_ROUTER_FUTURE = {
-  v7_normalizeFormMethod: true,
-  v7_partialHydration: true,
-  v7_relativeSplatPath: true,
-  v7_startTransition: true,
-} as const;
-
-export const router = createBrowserRouter(appRoutes, {
-  future: APP_ROUTER_FUTURE,
-});
+export const router = createBrowserRouter(appRoutes);
