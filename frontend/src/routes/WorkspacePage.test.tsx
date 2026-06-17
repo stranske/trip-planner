@@ -1729,6 +1729,9 @@ describe("WorkspacePage", () => {
 
     const slider = await screen.findByLabelText("Commercial source mix target");
     fireEvent.change(slider, { target: { value: "0.85" } });
+    await waitFor(() => {
+      expect(screen.getByText("15% editorial / 85% commercial")).toBeInTheDocument();
+    });
     await user.type(screen.getByLabelText("Message the planner"), "Build a balanced day menu.");
     await user.click(screen.getByRole("button", { name: "Send message" }));
 
@@ -1747,7 +1750,6 @@ describe("WorkspacePage", () => {
         ]
       );
     });
-    expect(screen.getByText("15% editorial / 85% commercial")).toBeInTheDocument();
   });
 
   it("fills traveler-friendly prompt suggestions into the planner message box", async () => {
