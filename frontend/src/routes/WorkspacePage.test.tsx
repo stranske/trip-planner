@@ -3071,8 +3071,10 @@ describe("WorkspacePage", () => {
       );
     });
 
-    expect(screen.getAllByText("$780.00").length).toBeGreaterThan(0);
-    expect(screen.getByDisplayValue("Baseline budget")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByText("$780.00").length).toBeGreaterThan(0);
+      expect(screen.getByDisplayValue("Baseline budget")).toBeInTheDocument();
+    });
   });
 
   it("records a spend event and surfaces the updated merchant entry", async () => {
@@ -3244,8 +3246,10 @@ describe("WorkspacePage", () => {
       );
     });
 
-    expect(screen.getByText("Kyoto Kitchen")).toBeInTheDocument();
-    expect(screen.getAllByText("$137.50").length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getByText("Kyoto Kitchen")).toBeInTheDocument();
+      expect(screen.getAllByText("$137.50").length).toBeGreaterThan(0);
+    });
   });
 
   it("restores persisted planner feedback after a workspace reload", async () => {
