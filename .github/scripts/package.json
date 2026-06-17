@@ -1,8 +1,8 @@
 {
   "private": true,
   "dependencies": {
-    "@octokit/auth-app": "^6.0.3",
-    "@octokit/rest": "^20.0.2",
+    "@octokit/auth-app": "^8.0.0",
+    "@octokit/rest": "^22.0.0",
     "minimatch": "^10.0.1"
   }
 }
