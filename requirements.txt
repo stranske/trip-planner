@@ -1,4 +1,4 @@
 jinja2
 pytest
-jsonschema>=4.17.3,<4.23.0
+jsonschema>=4.26.0,<4.27.0
 openai
