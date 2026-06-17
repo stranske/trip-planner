@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { LoaderFunctionArgs } from "react-router-dom";
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
@@ -38,33 +39,40 @@ vi.mock("./api/workspace", () => ({
 import { ApiClientError } from "./lib/api/errors";
 import {
   authPageLoader,
+  appRoutes,
   protectedTripDetailLoader,
   protectedTripsLoader,
   protectedWorkspaceLoader,
   rootLoader,
 } from "./router";
 
+function loaderArgs(
+  url: string,
+  params: LoaderFunctionArgs["params"] = {}
+): LoaderFunctionArgs {
+  return {
+    params,
+    request: new Request(url),
+    context: undefined,
+    url: new URL(url),
+    pattern: "",
+  };
+}
+
 describe("router auth loaders", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("opts the app router into the same React Router future flags used by runtime tests", async () => {
+  it("configures the root route with the v7 hydration fallback", async () => {
     vi.resetModules();
     const { createBrowserRouter } = await import("react-router-dom");
     vi.mocked(createBrowserRouter).mockClear();
 
-    const { APP_ROUTER_FUTURE } = await import("./router");
+    await import("./router");
 
-    expect(APP_ROUTER_FUTURE).toEqual({
-      v7_normalizeFormMethod: true,
-      v7_partialHydration: true,
-      v7_relativeSplatPath: true,
-      v7_startTransition: true,
-    });
-    expect(createBrowserRouter).toHaveBeenCalledWith(expect.any(Array), {
-      future: APP_ROUTER_FUTURE,
-    });
+    expect(appRoutes[0]?.hydrateFallbackElement).toBeTruthy();
+    expect(createBrowserRouter).toHaveBeenCalledWith(expect.any(Array));
   });
 
   it("restores the signed-in session during app bootstrap", async () => {
@@ -85,11 +93,7 @@ describe("router auth loaders", () => {
     });
 
     await expect(
-      rootLoader({
-        params: {},
-        request: new Request("http://localhost/"),
-        context: undefined,
-      })
+      rootLoader(loaderArgs("http://localhost/"))
     ).resolves.toEqual({
       session: {
         user: {
@@ -115,11 +119,7 @@ describe("router auth loaders", () => {
     vi.mocked(fetchHealthStatus).mockRejectedValueOnce(startupError);
 
     await expect(
-      rootLoader({
-        params: {},
-        request: new Request("http://localhost/"),
-        context: undefined,
-      })
+      rootLoader(loaderArgs("http://localhost/"))
     ).rejects.toBe(startupError);
 
     expect(fetchCurrentSession).not.toHaveBeenCalled();
@@ -143,11 +143,7 @@ describe("router auth loaders", () => {
     );
 
     await expect(
-      authPageLoader({
-        params: {},
-        request: new Request("http://localhost/login"),
-        context: undefined,
-      })
+      authPageLoader(loaderArgs("http://localhost/login"))
     ).resolves.toBeNull();
   });
 
@@ -171,8 +167,8 @@ describe("router auth loaders", () => {
     const request = new Request("http://localhost/login");
 
     const results = await Promise.allSettled([
-      rootLoader({ params: {}, request, context: undefined }),
-      authPageLoader({ params: {}, request, context: undefined }),
+      rootLoader(loaderArgs(request.url)),
+      authPageLoader(loaderArgs(request.url)),
     ]);
 
     expect(results[0]).toMatchObject({
@@ -213,9 +209,7 @@ describe("router auth loaders", () => {
     let response: Response | undefined;
     try {
       await protectedWorkspaceLoader({
-        params: { tripId: "trip-1" },
-        request: new Request("http://localhost/workspace/trip-1"),
-        context: undefined,
+        ...loaderArgs("http://localhost/workspace/trip-1", { tripId: "trip-1" }),
       });
     } catch (error) {
       response = error as Response;
@@ -245,11 +239,9 @@ describe("router auth loaders", () => {
       },
     });
 
-    const result = await protectedWorkspaceLoader({
-      params: { tripId: "trip-1" },
-      request: new Request("http://localhost/workspace/trip-1"),
-      context: undefined,
-    });
+    const result = await protectedWorkspaceLoader(
+      loaderArgs("http://localhost/workspace/trip-1", { tripId: "trip-1" })
+    );
 
     expect(fetchWorkspace).toHaveBeenCalledWith("trip-1");
     expect(fetchTrips).toHaveBeenCalledTimes(1);
@@ -280,11 +272,7 @@ describe("router auth loaders", () => {
       },
     });
 
-    const result = await protectedTripsLoader({
-      params: {},
-      request: new Request("http://localhost/trips"),
-      context: undefined,
-    });
+    const result = await protectedTripsLoader(loaderArgs("http://localhost/trips"));
 
     expect(fetchTrips).toHaveBeenCalledTimes(1);
     await expect(result.trips).resolves.toEqual([{ trip_id: "trip-1" }]);
@@ -308,11 +296,9 @@ describe("router auth loaders", () => {
       },
     });
 
-    const result = await protectedTripDetailLoader({
-      params: { tripId: "trip-1" },
-      request: new Request("http://localhost/trips/trip-1"),
-      context: undefined,
-    });
+    const result = await protectedTripDetailLoader(
+      loaderArgs("http://localhost/trips/trip-1", { tripId: "trip-1" })
+    );
 
     expect(fetchTrip).toHaveBeenCalledWith("trip-1");
     expect(fetchTripScenarioHistory).toHaveBeenCalledWith("trip-1");
