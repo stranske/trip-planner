@@ -36,7 +36,7 @@ colorama==0.4.6 ; sys_platform == 'win32'
     #   click
     #   pytest
     #   tqdm
-coverage==7.14.0
+coverage==7.14.1
     # via pytest-cov
 distro==1.9.0
     # via openai
@@ -136,7 +136,7 @@ pydantic-core==2.46.3
     # via pydantic
 pygments==2.20.0
     # via pytest
-pytest==9.0.3
+pytest==9.1.0
     # via
     #   trip-planner (pyproject.toml)
     #   app-baseline-kit
@@ -178,7 +178,7 @@ rpds-py==2026.5.1
     # via
     #   jsonschema
     #   referencing
-ruff==0.15.14
+ruff==0.15.17
     # via trip-planner (pyproject.toml)
 six==1.17.0
     # via python-dateutil

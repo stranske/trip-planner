@@ -19,9 +19,9 @@ dependencies = [
 [project.optional-dependencies]
 app = []
 dev = [
-    "ruff>=0.15.14",
+    "ruff>=0.15.17",
     "mypy>=2.1.0",
-    "pytest==9.0.3",
+    "pytest>=9.1.0",
     "pytest-cov==7.1.0",
     "black>=26.5.1",
     "httpx==0.28.1",
