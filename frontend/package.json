@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "scripts": {
     "dev": "vite",
     "prebuild": "python ../scripts/write_frontend_redirects.py && python ../scripts/check_deploy_origin.py",
@@ -22,10 +25,10 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-react": "^6.0.0",
     "jsdom": "^26.1.0",
     "typescript": "^5.9.3",
-    "vite": "^5.4.19",
-    "vitest": "^2.1.9"
+    "vite": "^8.0.0",
+    "vitest": "^4.0.0"
   }
 }
