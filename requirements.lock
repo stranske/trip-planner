@@ -178,7 +178,7 @@ rpds-py==2026.5.1
     # via
     #   jsonschema
     #   referencing
-ruff==0.15.17
+ruff==0.15.18
     # via trip-planner (pyproject.toml)
 six==1.17.0
     # via python-dateutil
