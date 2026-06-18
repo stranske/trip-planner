@@ -48,7 +48,7 @@ jobs:
       classification_rationale: ${{ steps.classify.outputs.classification-rationale || 'path classifier unavailable' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Classify changed paths
         id: classify
@@ -92,7 +92,7 @@ jobs:
     if: ${{ needs.detect.outputs.is_docs_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -129,7 +129,7 @@ jobs:
       description: ${{ steps.summarize.outputs.description }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           sparse-checkout: |
             .github/scripts
