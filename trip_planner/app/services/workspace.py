@@ -2123,6 +2123,7 @@ def _public_workspace_follow_up(follow_up: Any) -> dict[str, Any] | None:
         "notes",
         "selected_alternative",
         "requested_exception",
+        "reoptimization_plan",
     }
     return {key: deepcopy(value) for key, value in follow_up.items() if key in public_keys}
 
@@ -2151,6 +2152,7 @@ def _public_workspace_proposal_state(proposal_state: Any) -> dict[str, Any] | No
         "follow_up_status",
         "follow_up_title",
         "follow_up_summary",
+        "follow_up",
     }
     public_summary = {
         key: deepcopy(value)

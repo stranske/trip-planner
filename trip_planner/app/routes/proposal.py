@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from trip_planner.app.schemas.proposal import (
     WorkspaceProposalEvaluationRequest,
     WorkspaceProposalFollowUpRequest,
+    WorkspaceProposalReoptimizeRequest,
     WorkspaceProposalResponse,
     WorkspaceProposalSubmissionRequest,
 )
@@ -14,6 +15,7 @@ from trip_planner.app.services.proposal import (
     refresh_workspace_proposal_status,
     save_workspace_proposal_evaluation,
     save_workspace_proposal_follow_up,
+    save_workspace_proposal_reoptimize,
     save_workspace_proposal_submission,
 )
 from trip_planner.integrations.tpp import TPPTransportError
@@ -138,6 +140,28 @@ def refresh_workspace_proposal(
         raise HTTPException(status_code=404, detail=str(error)) from error
     except TPPTransportError as error:
         raise HTTPException(status_code=error.status_code, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return WorkspaceProposalResponse.model_validate(result)
+
+
+@router.post("/workspace/{trip_id}/proposal/reoptimize", response_model=WorkspaceProposalResponse)
+def reoptimize_workspace_proposal(
+    trip_id: str,
+    payload: WorkspaceProposalReoptimizeRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> WorkspaceProposalResponse:
+    try:
+        result = save_workspace_proposal_reoptimize(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+            comparable_refs=payload.comparable_refs,
+            justification_refs=payload.justification_refs,
+        )
+    except WorkspaceProposalNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return WorkspaceProposalResponse.model_validate(result)

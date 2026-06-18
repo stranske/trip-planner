@@ -61,6 +61,11 @@ class WorkspaceProposalFollowUpRequest(BaseModel):
     requested_exception: WorkspaceProposalExceptionRequest | None = None
 
 
+class WorkspaceProposalReoptimizeRequest(BaseModel):
+    comparable_refs: dict[str, list[str]] = Field(default_factory=dict)
+    justification_refs: dict[str, list[str]] = Field(default_factory=dict)
+
+
 class WorkspaceProposalResponse(BaseModel):
     proposal_state: dict[str, Any] | None = None
     summary: dict[str, Any] = Field(default_factory=dict)
