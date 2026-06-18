@@ -248,7 +248,7 @@ Issues: `#678` (epic), `#694`–`#697`
 | Budget editing + actual-spend capture (`#694`) | `trip_planner/app/routes/budget.py`, `services/budget.py`, `state/budget.py` | `tests/app/test_budget_routes.py` | ✅ Implemented |
 | Policy constraint sync + approval-readiness display (`#695`) | `trip_planner/app/routes/policy.py`, `services/policy.py` | `tests/app/test_policy.py` | ✅ Implemented |
 | Proposal submission + result ingestion (`#696`) | `trip_planner/app/routes/proposal.py`, `integrations/tpp/submission.py`, `results.py` | `tests/app/test_proposal.py`, `tests/integrations/test_submission.py`, `test_results.py` | ✅ Implemented |
-| Reoptimization + exception-handling after policy results (`#697`) | `trip_planner/integrations/tpp/reoptimization.py` | `tests/integrations/test_reoptimization.py` | 🟡 Partial (seam implemented; live TPP call deferred) |
+| Reoptimization + exception-handling after policy results (`#697`) | `trip_planner/integrations/tpp/reoptimization.py`, `trip_planner/app/routes/proposal.py` | `tests/integrations/test_reoptimization.py`, `tests/app/test_proposal.py` | ✅ Implemented |
 
 ---
 
@@ -264,7 +264,7 @@ Design ref: [`docs/live-tpp-execution-reoptimization-epic.md`](live-tpp-executio
 | Proposal lifecycle + submission | `trip_planner/integrations/tpp/submission.py`, `contracts.py` | `tests/integrations/test_submission.py`, `test_tpp_contracts.py` | ✅ Implemented |
 | Result ingestion | `trip_planner/integrations/tpp/results.py` | `tests/integrations/test_results.py` | ✅ Implemented |
 | Planner-turn-driven approval round-trip (in-process) | `trip_planner/app/services/proposal.py` (calls `HTTPTPPIntegrationClient.submit_proposal` + `fetch_evaluation_result`) | `tests/integrations/test_submission.py`, `test_results.py`, `test_tpp_cross_repo_smoke.py` | ✅ Implemented |
-| Reoptimization seam | `trip_planner/integrations/tpp/reoptimization.py` | `tests/integrations/test_reoptimization.py` | 🟡 Partial (seam only; no live round-trip) |
+| Reoptimization seam | `trip_planner/integrations/tpp/reoptimization.py`, `trip_planner/app/routes/proposal.py` | `tests/integrations/test_reoptimization.py`, `tests/app/test_proposal.py` | ✅ Implemented |
 | Live remote TPP transport | `scripts/check_full_product_verification.py`, `docs/verification-logs/live-tpp-pass-2026-05-14.log` | `tests/integrations/test_tpp_transport_httpserver.py`, `tests/integrations/test_tpp_cross_repo_smoke.py`; live verifier PASS captured 2026-05-14 | ✅ Implemented |
 
 **Verification detail:** The remote TPP call path (`integrations/tpp/client.py`) is wired to a real HTTP transport (`HTTPTPPIntegrationClient` dispatches via `urllib.request.urlopen`) and has now been exercised end-to-end through the full-product verifier. The captured 2026-05-14 run started a sibling `Travel-Plan-Permission` service, then completed policy sync, proposal submission, status poll, and evaluation ingestion with `live-tpp PASS`. Default local and CI runs remain opt-in and report `SKIPPED` when `TPP_BASE_URL` / `TPP_REPO_PATH` plus auth are absent.

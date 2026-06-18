@@ -271,6 +271,96 @@ def test_workspace_proposal_evaluation_derives_reoptimization_follow_up(client: 
     assert follow_up["selected_alternative"]["summary"] == "Use a compliant downtown property"
 
 
+def test_non_compliant_reoptimize_surfaces_plan_in_workspace_reload(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Reoptimization plan workspace",
+            "summary": "Persist reoptimization output after a non-compliant policy result.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    proposal_id = f"proposal:{trip_id}"
+
+    reoptimize_fixture = _load_fixture("reoptimization", "non_compliant_manual_review.json")
+    proposal_payload = reoptimize_fixture["proposal"]
+    proposal_payload["trip_id"] = trip_id
+    proposal_payload["proposal_id"] = proposal_id
+    proposal_payload["source_version"]["trip_id"] = trip_id
+
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = proposal_id
+    submission_fixture["request"]["payload"]["proposal_ref"] = proposal_id
+    submitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": proposal_payload,
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert submitted.status_code == 200
+
+    evaluation_fixture = _load_fixture("results", "non_compliant_evaluation.json")
+    evaluation_fixture["request"]["trip_id"] = trip_id
+    evaluation_fixture["request"]["proposal_id"] = proposal_id
+    result_payload = evaluation_fixture["response"]["result_payload"]
+    result_payload["trip_id"] = trip_id
+    result_payload["proposal_id"] = proposal_id
+    result_payload["proposal_version"] = "proposal-v3"
+    result_payload["evaluation_result"] = reoptimize_fixture["evaluation_result"]
+    result_payload["evaluation_result"]["proposal_id"] = proposal_id
+
+    evaluated = client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation_fixture["request"],
+            "response": evaluation_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert evaluated.status_code == 200
+
+    reoptimized = client.post(
+        f"/api/workspace/{trip_id}/proposal/reoptimize",
+        json={
+            "comparable_refs": reoptimize_fixture["comparable_refs"],
+            "justification_refs": reoptimize_fixture["justification_refs"],
+        },
+    )
+    assert reoptimized.status_code == 200
+    plan = reoptimized.json()["summary"]["follow_up"]["reoptimization_plan"]
+    assert plan["reaction_kind"] in (
+        "rerank",
+        "narrow_candidates",
+        "regenerate_scenario",
+        "manual_review",
+        "create_exception_candidate",
+    )
+    assert plan["candidate_categories"]
+
+    workspace = client.get(f"/api/workspace/{trip_id}")
+    assert workspace.status_code == 200
+    reloaded_plan = workspace.json()["proposal_state"]["summary"]["follow_up"][
+        "reoptimization_plan"
+    ]
+    assert reloaded_plan["reaction_kind"] == plan["reaction_kind"]
+    assert reloaded_plan["candidate_categories"]
+
+
 def test_workspace_proposal_evaluation_derives_exception_follow_up(client: TestClient) -> None:
     created = client.post(
         "/api/trips",

@@ -8,11 +8,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
-from trip_planner.business import ExceptionRequest, TripPlanProposal
+from trip_planner.business import ExceptionRequest, PolicyEvaluationResult, TripPlanProposal
 from trip_planner.integrations.tpp import (
     BaseTPPIntegrationClient,
     EvaluationResultIngestionError,
     HTTPTPPIntegrationClient,
+    PolicyReoptimizationContext,
     TPPConfigurationError,
     TPPContractError,
     TPPCorrelationId,
@@ -23,11 +24,13 @@ from trip_planner.integrations.tpp import (
     TPPRequestEnvelope,
     TPPResponseEnvelope,
     TPPRetryMetadata,
+    TPPReoptimizationService,
     TPPTransportError,
     tpp_transport_error_from_exception,
 )
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
+from trip_planner.state import ScenarioVersion
 
 
 class WorkspaceProposalNotFoundError(ValueError):
@@ -485,6 +488,7 @@ def _derive_follow_up_state(
             "recommended_action",
             "recommended_label",
             "selected_alternative",
+            "reoptimization_plan",
             "notes",
             "updated_at",
         ):
@@ -886,6 +890,10 @@ def save_workspace_proposal_submission(
         evaluation_record={},
         summary={},
     )
+    stored_proposal_payload = proposal.to_dict()
+    if isinstance(proposal_payload.get("source_version"), dict):
+        stored_proposal_payload["source_version"] = dict(proposal_payload["source_version"])
+
     record.owner_profile_id = _owner_profile_id(trip_record)
     record.proposal_id = proposal.proposal_id
     record.proposal_version = submission.linkage.proposal_version
@@ -893,7 +901,7 @@ def save_workspace_proposal_submission(
     record.organization_id = submission.linkage.organization_id
     record.execution_id = submission.execution_id
     record.submission_status = submission.execution_status.state
-    record.proposal_payload = proposal.to_dict()
+    record.proposal_payload = stored_proposal_payload
     record.submission_record = submission.to_dict()
     _reset_evaluation_state(record)
     record.summary = _build_summary(
@@ -1072,6 +1080,67 @@ def save_workspace_proposal_follow_up(
         evaluation_record=dict(existing.evaluation_record),
         proposal_payload=proposal_payload,
         persisted_follow_up=manual_follow_up,
+    )
+
+    trip_record.updated_at = datetime.now(UTC)
+    db_session.commit()
+    db_session.refresh(existing)
+    return {
+        "proposal_state": _serialize_proposal_state(existing),
+        "summary": dict(existing.summary),
+    }
+
+
+def save_workspace_proposal_reoptimize(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    comparable_refs: dict[str, list[str]],
+    justification_refs: dict[str, list[str]],
+) -> dict[str, Any]:
+    trip_record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    if trip_record.mode != "business":
+        raise ValueError("Only business trips can persist proposal lifecycle state.")
+
+    existing = _get_latest_proposal_state(db_session, trip_id=trip_id, user_id=user.user_id)
+    if existing is None:
+        raise WorkspaceProposalNotFoundError(
+            "Proposal reoptimization cannot run before a proposal submission exists."
+        )
+
+    proposal_payload = dict(existing.proposal_payload)
+    evaluation_payload = dict(existing.evaluation_record.get("evaluation_result") or {})
+    if not evaluation_payload:
+        raise ValueError("Proposal reoptimization requires a stored policy evaluation result.")
+    source_version_payload = proposal_payload.get("source_version")
+    if not isinstance(source_version_payload, dict):
+        raise ValueError("Proposal reoptimization requires proposal.source_version context.")
+
+    plan = TPPReoptimizationService().plan_reoptimization(
+        TripPlanProposal.from_dict(proposal_payload),
+        PolicyEvaluationResult.from_dict(evaluation_payload),
+        PolicyReoptimizationContext(
+            source_version=ScenarioVersion.from_dict(source_version_payload),
+            comparable_refs=comparable_refs,
+            justification_refs=justification_refs,
+        ),
+    )
+
+    follow_up = _resolved_follow_up_payload(existing)
+    follow_up["manual"] = True
+    follow_up["reoptimization_plan"] = plan.to_dict()
+    follow_up["status"] = "reoptimized"
+    follow_up["path"] = "reoptimization"
+    follow_up["title"] = follow_up.get("title") or "Reoptimization plan ready"
+    follow_up["summary"] = follow_up.get("summary") or plan.target_title
+    follow_up["updated_at"] = _now_iso()
+
+    existing.summary = _build_summary(
+        submission_record=dict(existing.submission_record),
+        evaluation_record=dict(existing.evaluation_record),
+        proposal_payload=proposal_payload,
+        persisted_follow_up=follow_up,
     )
 
     trip_record.updated_at = datetime.now(UTC)
