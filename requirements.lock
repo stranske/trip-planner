@@ -136,7 +136,7 @@ pydantic-core==2.46.3
     # via pydantic
 pygments==2.20.0
     # via pytest
-pytest==9.1.0
+pytest==9.1.1
     # via
     #   trip-planner (pyproject.toml)
     #   app-baseline-kit
