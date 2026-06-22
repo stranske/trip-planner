@@ -40,6 +40,16 @@ GITHUB_MODELS_BASE_URL = "https://models.inference.ai.azure.com"
 DEFAULT_MODEL = "codex-mini-latest"
 ANTHROPIC_API_KEY_ENV = "CLAUDE_API_STRANSKE"
 SHORT_ANALYSIS_CONFIDENCE_CAP = 0.4
+DEFAULT_OPENAI_ANALYSIS_MODEL = "gpt-5.4"
+DEFAULT_ANTHROPIC_ANALYSIS_MODEL = "claude-sonnet-4-6"
+
+
+def _configured_langchain_model(provider: str, *, fallback: str) -> str:
+    try:
+        from tools.llm_registry import configured_model_for_provider
+    except ImportError:
+        return fallback
+    return configured_model_for_provider(provider, fallback=fallback) or fallback
 
 
 def _setup_langsmith_tracing() -> bool:
@@ -585,16 +595,17 @@ class OpenAIProvider(LLMProvider):
     def _get_client(self):
         """Get LangChain ChatOpenAI client."""
         try:
-            from langchain_openai import ChatOpenAI
+            from tools.langchain_client import build_chat_client
         except ImportError:
-            logger.warning("langchain_openai not installed")
+            logger.warning("LangChain client helper not available")
             return None
 
-        return ChatOpenAI(
-            model="gpt-5.1-codex",  # Purpose-built for analyzing Codex coding sessions
-            api_key=os.environ.get("OPENAI_API_KEY"),
-            temperature=0.1,
-        )
+        model_name = _configured_langchain_model("openai", fallback=DEFAULT_OPENAI_ANALYSIS_MODEL)
+        resolved = build_chat_client(provider="openai", model=model_name)
+        if resolved:
+            self._model_name = resolved.model
+            return resolved.client
+        return None
 
     def analyze_completion(
         self,
@@ -626,7 +637,11 @@ class OpenAIProvider(LLMProvider):
                 confidence=result.confidence,
                 reasoning=result.reasoning,
                 provider_used=self.name,
-                model_name="gpt-5.1-codex",  # Actual model used by OpenAIProvider
+                model_name=getattr(
+                    self,
+                    "_model_name",
+                    _configured_langchain_model("openai", fallback=DEFAULT_OPENAI_ANALYSIS_MODEL),
+                ),
                 raw_confidence=result.raw_confidence,
                 confidence_adjusted=result.confidence_adjusted,
                 quality_warnings=result.quality_warnings,
@@ -651,16 +666,19 @@ class AnthropicProvider(LLMProvider):
 
     def _get_client(self):
         try:
-            from langchain_anthropic import ChatAnthropic
+            from tools.langchain_client import build_chat_client
         except ImportError:
-            logger.warning("langchain_anthropic not installed")
+            logger.warning("LangChain client helper not available")
             return None
 
-        return ChatAnthropic(
-            model="claude-sonnet-4-5-20250929",
-            anthropic_api_key=os.environ.get(ANTHROPIC_API_KEY_ENV),
-            temperature=0.1,
+        model_name = _configured_langchain_model(
+            "anthropic", fallback=DEFAULT_ANTHROPIC_ANALYSIS_MODEL
         )
+        resolved = build_chat_client(provider="anthropic", model=model_name)
+        if resolved:
+            self._model_name = resolved.model
+            return resolved.client
+        return None
 
     def analyze_completion(
         self,
@@ -702,7 +720,13 @@ class AnthropicProvider(LLMProvider):
                 confidence=result.confidence,
                 reasoning=result.reasoning,
                 provider_used=self.name,
-                model_name="claude-sonnet-4-5-20250929",
+                model_name=getattr(
+                    self,
+                    "_model_name",
+                    _configured_langchain_model(
+                        "anthropic", fallback=DEFAULT_ANTHROPIC_ANALYSIS_MODEL
+                    ),
+                ),
                 raw_confidence=result.raw_confidence,
                 confidence_adjusted=result.confidence_adjusted,
                 quality_warnings=result.quality_warnings,
@@ -953,8 +977,8 @@ def get_llm_provider(force_provider: str | None = None) -> LLMProvider:
             Options: "github-models", "openai", "anthropic", "regex-fallback"
 
     Returns a FallbackChainProvider that tries:
-    1. Anthropic claude-sonnet-4-5 (if CLAUDE_API_STRANSKE set) - Best reasoning
-    2. OpenAI gpt-5.1-codex (if OPENAI_API_KEY set) - Purpose-built for code analysis
+    1. Anthropic configured slot model (if CLAUDE_API_STRANSKE set) - Best reasoning
+    2. OpenAI configured slot model (if OPENAI_API_KEY set) - Code analysis
     3. GitHub Models gpt-4.1 (if GITHUB_TOKEN set) - Always available, reliable
     4. Regex fallback (always available) - 30% confidence baseline
     """
@@ -981,8 +1005,8 @@ def get_llm_provider(force_provider: str | None = None) -> LLMProvider:
         return provider
 
     providers = [
-        AnthropicProvider(),  # Primary: claude-sonnet-4-5 for best reasoning
-        OpenAIProvider(),  # Secondary: gpt-5.1-codex for code-optimized analysis
+        AnthropicProvider(),  # Primary: configured Anthropic slot model
+        OpenAIProvider(),  # Secondary: configured OpenAI slot model
         GitHubModelsProvider(),  # Tertiary: gpt-4.1 via GITHUB_TOKEN (always available)
         RegexFallbackProvider(),  # Last resort: 30% confidence pattern matching
     ]
