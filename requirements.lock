@@ -96,7 +96,7 @@ mypy-extensions==1.1.0
     # via
     #   black
     #   mypy
-numpy==2.4.6
+numpy==2.5.0
     # via
     #   trip-planner (pyproject.toml)
     #   pandas
