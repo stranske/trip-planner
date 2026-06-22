@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+import contextlib
 import dataclasses
 import datetime as dt
 import hashlib
@@ -356,11 +357,6 @@ def materialize_orchestrator_skill(
         return None
 
     if plan.pack:
-        materialize_reference_packs(
-            workspace_path,
-            reference_pack_name=plan.pack,
-            token=token,
-        )
         reference_packs = _load_reference_packs_module()
         snapshot = reference_packs.load_reference_packs(workspace_path)
         matching = [
@@ -371,6 +367,13 @@ def materialize_orchestrator_skill(
         if not matching:
             raise ValueError(f"orchestrator skill reference pack not found: {plan.pack}")
         checkout_path = workspace_path / matching[0].checkout_path
+        with contextlib.suppress(FileNotFoundError):
+            shutil.rmtree(checkout_path)
+        materialize_reference_packs(
+            workspace_path,
+            reference_pack_name=plan.pack,
+            token=token,
+        )
     else:
         checkout_path = _materialize_single_checkout_plan(
             workspace_path,
@@ -413,12 +416,19 @@ def assemble_prompt(
         )
 
     if context.get("materialize_orchestrator_skill"):
-        materialize_orchestrator_skill(
+        orchestrator_summary_path = materialize_orchestrator_skill(
             workspace,
             pack_override=context.get("orchestrator_skill_pack") or None,
             enabled_override=context.get("orchestrator_skill_enabled"),
             token=token,
         )
+    else:
+        orchestrator_summary_raw = context.get("orchestrator_skill_summary_path")
+        orchestrator_summary_path = (
+            Path(str(orchestrator_summary_raw)) if orchestrator_summary_raw else None
+        )
+        if orchestrator_summary_path and not orchestrator_summary_path.is_absolute():
+            orchestrator_summary_path = workspace / orchestrator_summary_path
 
     output_file = str(
         context.get("output_file") or _prompt_output_name(provider, context.get("pr_number"))
@@ -448,12 +458,11 @@ def assemble_prompt(
     if reference_summary.is_file():
         parts.extend(["\n\n## Reference Packs\n", _read_text(reference_summary).rstrip()])
 
-    orchestrator_summary = workspace / ".reference" / "ORCHESTRATOR_SKILL.md"
-    if orchestrator_summary.is_file():
+    if orchestrator_summary_path and orchestrator_summary_path.is_file():
         parts.extend(
             [
                 "\n\n## Orchestrator Skill Context\n",
-                _read_text(orchestrator_summary).rstrip(),
+                _read_text(orchestrator_summary_path).rstrip(),
             ]
         )
 
@@ -943,6 +952,7 @@ def _cmd_assemble(args: argparse.Namespace) -> int:
         "materialize_orchestrator_skill": args.materialize_orchestrator_skill,
         "orchestrator_skill_pack": args.orchestrator_skill_pack or None,
         "orchestrator_skill_enabled": _parse_optional_bool(args.orchestrator_skill_enabled),
+        "orchestrator_skill_summary_path": os.environ.get("ORCHESTRATOR_SKILL_SUMMARY_PATH"),
         "github_token": os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"),
     }
     prompt = assemble_prompt(args.reference_pack_name, context, args.provider)
