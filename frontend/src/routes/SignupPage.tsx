@@ -1,11 +1,12 @@
 import { FormEvent, useState, startTransition } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useRevalidator } from "react-router-dom";
 
 import { signup } from "../api/auth";
 import { getErrorMessage } from "../lib/api/errors";
 
 export function SignupPage() {
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -23,6 +24,7 @@ export function SignupPage() {
         password: String(formData.get("password") ?? ""),
       });
       startTransition(() => {
+        revalidator.revalidate();
         navigate("/trips");
       });
     } catch (error) {
