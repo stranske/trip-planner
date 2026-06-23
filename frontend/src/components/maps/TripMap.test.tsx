@@ -227,13 +227,16 @@ describe("TripMap", () => {
   it("keeps provider diagnostics out of the normal traveler map", () => {
     renderTripMap();
 
+    expect(screen.getByRole("heading", { name: "Route sketch for Rail-first route" })).toBeInTheDocument();
     expect(screen.getByLabelText("Map view confidence")).toHaveTextContent(
       "Regional route review"
     );
     expect(screen.getByText("Schematic preview — not a live map")).toBeInTheDocument();
+    expect(screen.getByText("Route sketch mode")).toBeInTheDocument();
     expect(screen.queryByText(/Google Maps JavaScript/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Provider misconfigured/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Provider error/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /route geometry overlay/i })).not.toBeInTheDocument();
   });
 
   it("labels the keyed provider surface as a schematic preview", () => {
@@ -242,10 +245,15 @@ describe("TripMap", () => {
 
     renderTripMap();
 
+    expect(screen.getByRole("heading", { name: "Map for Rail-first route" })).toBeInTheDocument();
     expect(screen.getByText("Schematic preview — not a live map")).toBeInTheDocument();
+    expect(screen.queryByText("Route sketch mode")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Selected route option route drawing")).toHaveClass(
       "map-route-google-maps-js"
     );
+    expect(
+      screen.getByRole("img", { name: "Route geometry overlay for Rail-first route" })
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Google Maps JavaScript/i)).not.toBeInTheDocument();
   });
 

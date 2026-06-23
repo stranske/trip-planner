@@ -1259,7 +1259,7 @@ describe("WorkspacePage", () => {
     const routeContextMap = screen.getByLabelText("Route context map");
 
     expect(screen.getAllByRole("heading", { name: "Kyoto base with Uji day trip" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Map for Kyoto base with Uji day trip" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Route sketch for Kyoto base with Uji day trip" })).toBeInTheDocument();
     expect(within(routeContextMap).getAllByText("Kyoto").length).toBeGreaterThan(0);
     expect(within(routeContextMap).getAllByText("Uji").length).toBeGreaterThan(0);
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
@@ -1903,7 +1903,7 @@ describe("WorkspacePage", () => {
     });
 
     expect(
-      screen.getByRole("heading", { name: "Map for Kyoto base with Uji day trip" })
+      screen.getByRole("heading", { name: "Route sketch for Kyoto base with Uji day trip" })
     ).toBeInTheDocument();
     expect(screen.getAllByText("kyoto -> uji -> kyoto").length).toBeGreaterThan(0);
     expect(screen.getByText("93 / 100 planner score")).toBeInTheDocument();
@@ -1911,7 +1911,7 @@ describe("WorkspacePage", () => {
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 
     expect(
-      screen.getByRole("heading", { name: "Map for Kyoto plus Osaka fallback" })
+      screen.getByRole("heading", { name: "Route sketch for Kyoto plus Osaka fallback" })
     ).toBeInTheDocument();
     expect(screen.getAllByText("kyoto -> osaka -> kyoto").length).toBeGreaterThan(0);
     expect(screen.getByText("88 / 100 planner score")).toBeInTheDocument();
@@ -2003,7 +2003,7 @@ describe("WorkspacePage", () => {
     expect(screen.getAllByText("Moderate travel friction with a clear cultural center of gravity.").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" }));
     expect(
-      screen.getByRole("heading", { name: "Map for Kyoto plus Osaka fallback" })
+      screen.getByRole("heading", { name: "Route sketch for Kyoto plus Osaka fallback" })
     ).toBeInTheDocument();
     expect(screen.getAllByText("Osaka rainy-day fallback").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Higher transfer load to preserve nightlife breadth.").length).toBeGreaterThan(0);
@@ -2295,7 +2295,7 @@ describe("WorkspacePage", () => {
     });
 
     expect(screen.queryByText(/needs at least an origin and destination/)).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Map for Kyoto base with Uji day trip" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Route sketch for Kyoto base with Uji day trip" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("Route context map")).getAllByText("Kyoto").length).toBeGreaterThan(0);
   });
 
