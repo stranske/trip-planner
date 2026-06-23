@@ -1,0 +1,159 @@
+version: 1
+issue: 1462
+base: main
+branch: codex/issue-1462
+tasks:
+  - id: task-01
+    title: Make `design-system/{tokens,components}.css` importable by the Vite frontend,
+      e.g. copy into `frontend/src/styles/` kept in sync with the repo-root vendored
+      copy, or add a build alias
+    status: done
+    started_at: '2026-06-23T16:09:24Z'
+    finished_at: '2026-06-23T16:09:35Z'
+    commit: be391875b14b4d74d800cdcaeb20bede4b2d6ecc
+    notes: []
+  - id: task-02
+    title: Import `design-system/tokens.css` and `components.css` in `frontend/src/main.tsx`
+      and wrap the app root element with `class="ds theme-air"`
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: Update the frontend styles to map the most-visible bespoke styles to the
+      shared tokens
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: 'Identify all color values currently hardcoded in frontend component styles
+      (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: 'Replace hardcoded color values with corresponding design system token
+      variables (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: 'Identify all spacing values currently hardcoded in frontend component
+      styles (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: 'Replace hardcoded spacing values with corresponding design system token
+      variables (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: 'Document which bespoke styles were intentionally preserved (verify: confirm
+      completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: 'why (verify: confirm completion in repo)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: A static/unit check (vitest) verifies `frontend/src/main.tsx` imports both
+      shared stylesheets and the root carries `ds` and `theme-air`
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: Removing a shared CSS import causes the test to fail, and restoring it
+      causes the test to pass
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: The app renders with the shared theme in a screenshot
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-13
+    title: Make `design-system/{tokens,components}.css` importable by the Vite frontend
+      (e.g. copy into `frontend/src/styles/` kept in sync with the repo-root vendored
+      copy, or a build alias).
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-14
+    title: Import both stylesheets in the app entry (`frontend/src/main.tsx`); wrap
+      the app root element in `class="ds theme-air"`.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-15
+    title: Map the most-visible bespoke styles to the shared tokens.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-16
+    title: 'Named test gate: a static/unit check (vitest) asserting the entry imports
+      both shared stylesheets AND the root carries `ds`/`theme-air`.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-17
+    title: '**Deliberate-break -> revert:** remove the CSS import -> the test **FAILS**
+      -> revert -> passes. Capture both runs.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-18
+    title: 'Live: the app renders with the shared theme (screenshot).'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-19
+    title: Update the frontend styles to map the most-visible bespoke styles to the
+      shared tokens (Agent cannot make subjective design decisions about which styles
+      are 'most-visible' or how to prioritize style mapping | Provide specific list
+      of components/files to update (e.g., 'Update Button.tsx, Header.tsx, and Card.tsx
+      to use design system tokens') or provide objective criteria (e.g., 'Replace
+      all hardcoded color hex values with token variables'))
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
