@@ -7,10 +7,10 @@ tasks:
     title: Make `design-system/{tokens,components}.css` importable by the Vite frontend,
       e.g. copy into `frontend/src/styles/` kept in sync with the repo-root vendored
       copy, or add a build alias
-    status: doing
+    status: done
     started_at: '2026-06-23T16:09:24Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-06-23T16:09:35Z'
+    commit: be391875b14b4d74d800cdcaeb20bede4b2d6ecc
     notes: []
   - id: task-02
     title: Import `design-system/tokens.css` and `components.css` in `frontend/src/main.tsx`
