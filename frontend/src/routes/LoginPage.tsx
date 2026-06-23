@@ -1,5 +1,5 @@
 import { FormEvent, useState, startTransition } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useRevalidator, useSearchParams } from "react-router-dom";
 
 import { login } from "../api/auth";
 import { getErrorMessage } from "../lib/api/errors";
@@ -14,6 +14,7 @@ function resolveNextPath(searchParams: URLSearchParams): string {
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const [searchParams] = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -32,6 +33,7 @@ export function LoginPage() {
       });
       const nextPath = resolveNextPath(searchParams);
       startTransition(() => {
+        revalidator.revalidate();
         navigate(nextPath);
       });
     } catch (error) {

@@ -1,5 +1,12 @@
 import { startTransition, useState } from "react";
-import { NavLink, Outlet, useLoaderData, useNavigate, useRouteError } from "react-router-dom";
+import {
+  NavLink,
+  Outlet,
+  useLoaderData,
+  useNavigate,
+  useRevalidator,
+  useRouteError,
+} from "react-router-dom";
 
 import { logout } from "./api/auth";
 import { getErrorMessage } from "./lib/api/errors";
@@ -39,6 +46,7 @@ export function RootErrorBoundary() {
 export default function App() {
   const { session } = useLoaderData() as RootLoaderData;
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   async function handleSignOut() {
@@ -46,6 +54,7 @@ export default function App() {
     try {
       await logout();
       startTransition(() => {
+        revalidator.revalidate();
         navigate("/login");
       });
     } finally {
