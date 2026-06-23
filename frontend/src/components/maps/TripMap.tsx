@@ -169,11 +169,15 @@ function ActiveTripMap({
     mapSurface.routeSegments.find(
       (segment) => segment.id === mapSurface.workspaceView.selectedSegmentId
     ) ?? null;
+  const isFallbackSketch = mapSurface.provider.kind === "fallback";
+  const mapHeading = isFallbackSketch
+    ? `Route sketch for ${activeScenario.title}`
+    : `Map for ${activeScenario.title}`;
 
   return (
     <section className="status-card map-card">
       <p className="status-label">Trip map</p>
-      <h2>Map for {activeScenario.title}</h2>
+      <h2>{mapHeading}</h2>
       <p>{activeScenario.summary}</p>
       <div className="map-provider-banner" aria-label="Map view confidence">
         <span
@@ -247,6 +251,11 @@ function ActiveTripMap({
             <span className="map-preview-badge" aria-label={SCHEMATIC_PREVIEW_BADGE_TEXT}>
               {SCHEMATIC_PREVIEW_BADGE_TEXT}
             </span>
+            {isFallbackSketch ? (
+              <span className="map-preview-badge map-preview-badge-warning">
+                Route sketch mode
+              </span>
+            ) : null}
             <span>{mapSurface.visibleRouteSegments.length} shown segment(s)</span>
             <span>{mapSurface.visibleMarkers.length} shown marker(s)</span>
             {mapSurface.visibleFocusCues.length > 0 ? (
