@@ -93,11 +93,11 @@ describe("App auth header", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Signed in as Traveler/)).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Trips" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Login" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Signup" })).not.toBeInTheDocument();
     });
-    expect(screen.getByRole("link", { name: "Trips" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Login" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Signup" })).not.toBeInTheDocument();
     expect(app.router.state.location.pathname).toBe("/trips");
   });
 
@@ -124,11 +124,11 @@ describe("App auth header", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Signed in as Traveler/)).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Trips" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Login" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Signup" })).not.toBeInTheDocument();
     });
-    expect(screen.getByRole("link", { name: "Trips" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Login" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Signup" })).not.toBeInTheDocument();
     expect(app.router.state.location.pathname).toBe("/trips");
   });
 
@@ -145,10 +145,10 @@ describe("App auth header", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Sign in to continue planning trips/)).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Login" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Signup" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
     });
-    expect(screen.getByRole("link", { name: "Login" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Signup" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
     expect(app.router.state.location.pathname).toBe("/login");
   });
 });

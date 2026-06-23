@@ -11,12 +11,14 @@ vi.mock("../api/auth", () => ({
 
 const mockedLogin = vi.mocked(login);
 const mockedNavigate = vi.fn();
+const mockedRevalidate = vi.fn();
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
     ...actual,
     useNavigate: () => mockedNavigate,
+    useRevalidator: () => ({ revalidate: mockedRevalidate }),
     useSearchParams: () => [new URLSearchParams("next=%2Ftrips"), vi.fn()],
   };
 });
@@ -26,6 +28,7 @@ describe("LoginPage", () => {
     cleanup();
     mockedLogin.mockReset();
     mockedNavigate.mockReset();
+    mockedRevalidate.mockReset();
   });
 
   it("submits credentials and navigates to the requested protected route", async () => {
@@ -53,6 +56,7 @@ describe("LoginPage", () => {
         password: "password123",
       });
     });
+    expect(mockedRevalidate).toHaveBeenCalled();
     expect(mockedNavigate).toHaveBeenCalledWith("/trips");
   });
 

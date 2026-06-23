@@ -11,12 +11,14 @@ vi.mock("../api/auth", () => ({
 
 const mockedSignup = vi.mocked(signup);
 const mockedNavigate = vi.fn();
+const mockedRevalidate = vi.fn();
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
   return {
     ...actual,
     useNavigate: () => mockedNavigate,
+    useRevalidator: () => ({ revalidate: mockedRevalidate }),
   };
 });
 
@@ -25,6 +27,7 @@ describe("SignupPage", () => {
     cleanup();
     mockedSignup.mockReset();
     mockedNavigate.mockReset();
+    mockedRevalidate.mockReset();
   });
 
   it("creates an account and routes into the protected trip list", async () => {
@@ -54,6 +57,7 @@ describe("SignupPage", () => {
         password: "password123",
       });
     });
+    expect(mockedRevalidate).toHaveBeenCalled();
     expect(mockedNavigate).toHaveBeenCalledWith("/trips");
   });
 });
