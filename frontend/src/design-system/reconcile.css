@@ -3,15 +3,15 @@
  *
  * The app keeps its own component CSS (which reads --color-* tokens); this layer
  * re-points the NEUTRAL foundation (surfaces, primary text, muted text) at the
- * shared kit's theme-paper tokens so the fleet's neutral palette is consistent,
+ * shared kit's theme-air tokens so the fleet's neutral palette is consistent,
  * while PRESERVING the app's signature teal brand + amber/rose semantics.
  *
- * Scoped to .theme-paper (the app root carries `class="ds theme-paper"`), so the
+ * Scoped to .theme-air (the app root carries `class="ds theme-air"`), so the
  * kit's class-scoped theme tokens (--bg/--surface/--text/--muted) are in scope and
  * the closer-ancestor rule makes these win over styles.css :root for app elements.
  */
-.theme-paper {
-  /* neutral foundation <- shared kit (warm paper) */
+.theme-air {
+  /* neutral foundation <- shared kit (air) */
   --color-surface: var(--surface);
   --color-surface-warm: var(--bg);
   --color-cream: var(--panel);
