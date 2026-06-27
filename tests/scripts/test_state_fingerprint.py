@@ -44,6 +44,13 @@ def test_compute_fingerprint_changes_when_inputs_change() -> None:
     assert unchanged != changed
 
 
+def test_compute_fingerprint_changes_when_workflow_name_changes() -> None:
+    first = state_fingerprint.compute_fingerprint("wf-a", {"head_sha": "abc"})
+    second = state_fingerprint.compute_fingerprint("wf-b", {"head_sha": "abc"})
+
+    assert first != second
+
+
 def test_compare_fingerprint_first_run_when_no_prior() -> None:
     storage = FakeStorage()
 
@@ -96,7 +103,9 @@ def test_extract_hash_accepts_raw_json_storage_value() -> None:
 
 
 def test_extract_hash_tolerates_malformed_json() -> None:
-    storage = MarkerStorage('<!-- fingerprint:wf:v1 {"hash": -->')
+    storage = MarkerStorage(
+        f'<!-- {state_fingerprint.MARKER_PREFIX}:wf:{state_fingerprint.MARKER_VERSION} {{"hash": -->'
+    )
 
     decision = state_fingerprint.compare_fingerprint("wf", {"head_sha": "abc"}, storage)
 
