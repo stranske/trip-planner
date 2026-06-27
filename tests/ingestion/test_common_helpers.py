@@ -21,16 +21,14 @@ from trip_planner.sources import (
 
 
 def _sample_conflict(*, status: str, conflict_id: str = "conflict-1") -> AttributeConflict:
-    kwargs: dict[str, object] = {
-        "conflict_id": conflict_id,
-        "attribute_path": "booking_terms.refundable",
-        "reason": "source_disagreement",
-        "status": status,
-        "values_by_source": {"source-a": "yes", "source-b": "no"},
-    }
-    if status == "selected":
-        kwargs["selected_value"] = "yes"
-    return AttributeConflict(**kwargs)
+    return AttributeConflict(
+        conflict_id=conflict_id,
+        attribute_path="booking_terms.refundable",
+        reason="source_disagreement",
+        status=status,
+        values_by_source={"source-a": "yes", "source-b": "no"},
+        selected_value="yes" if status == "selected" else "",
+    )
 
 
 def _sample_record(record_id: str) -> RawSourceRecord:
