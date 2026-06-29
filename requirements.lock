@@ -40,7 +40,7 @@ coverage==7.14.3
     # via pytest-cov
 distro==1.9.0
     # via openai
-fastapi==0.138.1
+fastapi==0.138.2
     # via trip-planner (pyproject.toml)
 greenlet==3.5.2 ; platform_machine == 'AMD64' or platform_machine == 'WIN32' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'ppc64le' or platform_machine == 'win32' or platform_machine == 'x86_64'
     # via sqlalchemy
