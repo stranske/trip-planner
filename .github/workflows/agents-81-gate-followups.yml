@@ -1283,6 +1283,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           sparse-checkout: |
+            .github/scripts/error_classifier.js
             .github/scripts/github-api-with-retry.js
             .github/scripts/token_load_balancer.js
           sparse-checkout-cone-mode: false
@@ -1353,6 +1354,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           sparse-checkout: |
+            .github/scripts/error_classifier.js
             .github/scripts/github-api-with-retry.js
             .github/scripts/token_load_balancer.js
           sparse-checkout-cone-mode: false
@@ -1366,10 +1368,25 @@ jobs:
             const fs = require('fs');
             const retryPath = './.github/scripts/github-api-with-retry.js';
             const { createTokenAwareRetry } = fs.existsSync(retryPath)
-              ? require(retryPath)
-              : { createTokenAwareRetry: async () => ({
+                ? require(retryPath)
+                : { createTokenAwareRetry: async () => ({
                   withRetry: (fn) => fn(github),
-                  paginateWithRetry: (method, params) => github.paginate(method, params)
+                  paginateWithRetry: async (method, params) => {
+                    const perPage = params?.per_page || 100;
+                    const items = [];
+                    let page = params?.page || 1;
+                    while (true) {
+                      const response = await method({ ...params, per_page: perPage, page });
+                      const data = response?.data;
+                      const pageItems = Array.isArray(data)
+                        ? data
+                        : Object.values(data || {}).find((value) => Array.isArray(value)) || [];
+                      items.push(...pageItems);
+                      if (pageItems.length < perPage) break;
+                      page += 1;
+                    }
+                    return items;
+                  }
                 }) };
             const { withRetry, paginateWithRetry } = await createTokenAwareRetry({ github, core });
 
@@ -1551,6 +1568,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           sparse-checkout: |
+            .github/scripts/error_classifier.js
             .github/scripts/github-api-with-retry.js
             .github/scripts/runtime_ac_merge_guard.js
             .github/scripts/token_load_balancer.js
@@ -1570,7 +1588,22 @@ jobs:
               : {
                   createTokenAwareRetry: async () => ({
                     withRetry: (fn) => fn(github),
-                    paginateWithRetry: (method, params) => github.paginate(method, params),
+                    paginateWithRetry: async (method, params) => {
+                      const perPage = params?.per_page || 100;
+                      const items = [];
+                      let page = params?.page || 1;
+                      while (true) {
+                        const response = await method({ ...params, per_page: perPage, page });
+                        const data = response?.data;
+                        const pageItems = Array.isArray(data)
+                          ? data
+                          : Object.values(data || {}).find((value) => Array.isArray(value)) || [];
+                        items.push(...pageItems);
+                        if (pageItems.length < perPage) break;
+                        page += 1;
+                      }
+                      return items;
+                    },
                   }),
                 };
             const { withRetry, paginateWithRetry } = await createTokenAwareRetry({ github, core });
