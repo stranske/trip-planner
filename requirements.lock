@@ -232,7 +232,7 @@ uuid-utils==0.16.2
     # via
     #   langchain-core
     #   langsmith
-uvicorn==0.49.0
+uvicorn==0.50.0
     # via trip-planner (pyproject.toml)
 websockets==16.0
     # via langsmith
