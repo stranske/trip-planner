@@ -14,8 +14,8 @@ export type MapProviderLoadState = "ready" | "loading" | "error";
 export type MapSurfaceProvider =
   | {
       kind: "google-maps-js";
-      label: "Google Maps JavaScript adapter";
-      status: "live";
+      label: "Google Maps configured";
+      status: "configured";
       apiKey: string;
       summary: string;
     }
@@ -34,6 +34,8 @@ export type RouteStop = {
   sourceRefs: string[];
   x: number;
   y: number;
+  latitude?: number;
+  longitude?: number;
 };
 
 export type MapMarkerKind = "stop" | "lodging" | "activity" | "transport" | "policy";
@@ -59,6 +61,8 @@ export type MapMarker = {
   detail: string;
   x: number;
   y: number;
+  latitude?: number;
+  longitude?: number;
   emphasized: boolean;
   focusCues: MapFocusCue[];
 };
@@ -301,6 +305,8 @@ function buildRouteStops(activeScenario: TripMapScenario): RouteStop[] {
       sourceRefs: marker.source_refs ?? [],
       x: marker.x * 100,
       y: marker.y * 100,
+      latitude: marker.latitude,
+      longitude: marker.longitude,
     }));
   }
 
@@ -398,6 +404,8 @@ function buildMarkers({
     detail: stop.description,
     x: stop.x,
     y: stop.y,
+    latitude: stop.latitude,
+    longitude: stop.longitude,
     emphasized: index === 0 || index === routeStops.length - 1,
     focusCues: [],
   }));
@@ -926,11 +934,11 @@ export function buildTripMapSurfaceModel({
   } else {
     provider = {
       kind: "google-maps-js",
-      label: "Google Maps JavaScript adapter",
-      status: "live",
+      label: "Google Maps configured",
+      status: "configured",
       apiKey: trimmedApiKey,
       summary:
-        "Google Maps JavaScript is the active presentation adapter; route, marker, and warning state still comes from workspace runtime data.",
+        "Google Maps JavaScript is configured and will be marked live only after the SDK and trip locations load successfully.",
     };
   }
   const visibleMapContent = visibleMapContentFor({

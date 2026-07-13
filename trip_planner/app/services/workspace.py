@@ -26,6 +26,7 @@ from trip_planner.app.services.inventory import (
     _build_inventory_assembly_input,
     assemble_inventory_bundles_for_trip,
     build_inventory_summary_payload,
+    lookup_region_coordinates,
 )
 from trip_planner.app.services.planner_memory import build_planner_memory_payload
 from trip_planner.app.services.planner_runtime_config import get_planner_runtime_config
@@ -913,8 +914,12 @@ def _build_runtime_map_place_markers(
     source_refs: list[str],
 ) -> list[dict[str, Any]]:
     stop_count = len([stop for stop in route_sequence if stop])
-    return [
-        {
+    markers: list[dict[str, Any]] = []
+    for index, stop in enumerate(route_sequence):
+        if not stop:
+            continue
+        coordinates = lookup_region_coordinates(stop)
+        marker = {
             "id": f"route-stop:{index + 1}",
             "source_id": stop,
             "label": _humanize_route_stop(stop),
@@ -926,9 +931,10 @@ def _build_runtime_map_place_markers(
             "route_index": index,
             **_map_coordinate_for_route_index(index, len(route_sequence)),
         }
-        for index, stop in enumerate(route_sequence)
-        if stop
-    ]
+        if coordinates is not None:
+            marker["latitude"], marker["longitude"] = coordinates
+        markers.append(marker)
+    return markers
 
 
 def _build_runtime_map_route_geometry(

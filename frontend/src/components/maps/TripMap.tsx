@@ -7,6 +7,7 @@ import {
   type MapProviderLoadState,
   type MapViewScope,
 } from "./mapSurface";
+import { GoogleMapsProviderMap } from "./GoogleMapsProviderMap";
 
 type InventoryBundle = WorkspaceData["inventory_summary"]["bundles"][number];
 type TripMapScenario = RuntimeScenarioComparison["scenarios"][number];
@@ -124,6 +125,7 @@ function ActiveTripMap({
   const googleMapsApiKey =
     import.meta.env.VITE_GOOGLE_MAPS_BROWSER_API_KEY ||
     import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY;
+  const googleMapsMapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
   const providerLoadState =
     (import.meta.env.VITE_GOOGLE_MAPS_PROVIDER_STATE as MapProviderLoadState | undefined) ?? "ready";
   const mapSurface = buildTripMapSurfaceModel({
@@ -248,9 +250,11 @@ function ActiveTripMap({
         >
           <div className="map-provider-toolbar">
             <span className="map-provider-name">{mapSurface.scope.label}</span>
-            <span className="map-preview-badge" aria-label={SCHEMATIC_PREVIEW_BADGE_TEXT}>
-              {SCHEMATIC_PREVIEW_BADGE_TEXT}
-            </span>
+            {isFallbackSketch ? (
+              <span className="map-preview-badge" aria-label={SCHEMATIC_PREVIEW_BADGE_TEXT}>
+                {SCHEMATIC_PREVIEW_BADGE_TEXT}
+              </span>
+            ) : null}
             {isFallbackSketch ? (
               <span className="map-preview-badge map-preview-badge-warning">
                 Route sketch mode
@@ -263,12 +267,22 @@ function ActiveTripMap({
             ) : null}
           </div>
           {mapSurface.provider.kind === "google-maps-js" ? (
-            <InteractiveProviderMap
+            <GoogleMapsProviderMap
+              apiKey={mapSurface.provider.apiKey}
+              mapId={googleMapsMapId}
               title={activeScenario.title}
               markers={mapSurface.visibleMarkers}
-              selectedMarker={selectedMarker}
-              routeSegments={mapSurface.visibleRouteSegments}
+              routeStops={mapSurface.visibleRouteStops}
+              destinationAnchors={mapSurface.destinationContext}
               onSelectMarker={setSelectedMarkerId}
+              fallback={
+                <FallbackRouteSchematic
+                  markers={mapSurface.visibleMarkers}
+                  selectedMarker={selectedMarker}
+                  routeStops={mapSurface.visibleRouteStops}
+                  onSelectMarker={setSelectedMarkerId}
+                />
+              }
             />
           ) : (
             <FallbackRouteSchematic
@@ -439,59 +453,6 @@ function ActiveTripMap({
         </div>
       </div>
     </section>
-  );
-}
-
-function InteractiveProviderMap({
-  title,
-  markers,
-  selectedMarker,
-  routeSegments,
-  onSelectMarker,
-}: {
-  title: string;
-  markers: MapMarker[];
-  selectedMarker: MapMarker | null;
-  routeSegments: ReturnType<typeof buildTripMapSurfaceModel>["routeSegments"];
-  onSelectMarker: (markerId: string) => void;
-}) {
-  return (
-    <div className="map-provider-canvas" role="group" aria-label={`Interactive map for ${title}`}>
-      <svg
-        className="map-route-geometry"
-        viewBox="0 0 100 100"
-        role="img"
-        aria-label={`Route geometry overlay for ${title}`}
-      >
-        {routeSegments.map((segment) => (
-          <line
-            key={segment.id}
-            x1={segment.x1}
-            y1={segment.y1}
-            x2={segment.x2}
-            y2={segment.y2}
-            className={`map-route-line${segment.warning ? " map-route-line-warning" : ""}${
-              segment.focusCues.length > 0 ? " map-route-line-focused" : ""
-            }`}
-          />
-        ))}
-      </svg>
-      {markers.map((marker) => (
-        <button
-          key={marker.id}
-          type="button"
-          className={`map-marker map-marker-${marker.kind}${
-            selectedMarker?.id === marker.id ? " map-marker-selected" : ""
-          }${marker.emphasized ? " map-marker-emphasized" : ""}`}
-          style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
-          aria-label={markerAccessibleLabel(marker)}
-          aria-pressed={selectedMarker?.id === marker.id}
-          onClick={() => onSelectMarker(marker.id)}
-        >
-          <span>{markerLabel(marker.kind)}</span>
-        </button>
-      ))}
-    </div>
   );
 }
 

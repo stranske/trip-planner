@@ -10,6 +10,7 @@ from trip_planner.app.services.inventory import (
     _build_inventory_assembly_input,
     assemble_inventory_bundles_for_trip,
     build_inventory_summary_payload,
+    lookup_region_coordinates,
 )
 from trip_planner.persistence.db import reset_database_state
 from trip_planner.persistence.models.trip import PersistedTrip
@@ -23,6 +24,18 @@ _FIXTURE_ADAPTER_MARKERS = {
     "PersistedTripInventoryFixtureAdapter",
     "persisted-trip-fixture-inventory",
 }
+
+
+def test_known_region_coordinates_match_specific_route_aliases_first() -> None:
+    assert lookup_region_coordinates("dest-gateway-washington-dc") == (
+        38.8512,
+        -77.0402,
+    )
+    assert lookup_region_coordinates("dest-city-washington-dc") == (
+        38.9072,
+        -77.0369,
+    )
+    assert lookup_region_coordinates("unlisted-place") is None
 
 
 @pytest.fixture

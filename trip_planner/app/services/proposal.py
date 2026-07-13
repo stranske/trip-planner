@@ -142,6 +142,10 @@ def _tpp_trip_plan_payload(
     airfare_cost = costs.get("airfare")
     lodging_cost = costs.get("lodging")
     transportation_mode = "air" if airfare_cost is not None else "mixed"
+    fare_evidence_attached = any(
+        _tpp_expense_category(option.category) == "airfare" and option.justification_refs
+        for option in proposal.selected_options
+    )
 
     return {
         "trip_id": proposal.trip_id,
@@ -162,6 +166,7 @@ def _tpp_trip_plan_payload(
         "expense_breakdown": costs,
         "selected_fare": airfare_cost,
         "flight_cost": airfare_cost,
+        "fare_evidence_attached": fare_evidence_attached,
         "comparable_hotels": comparable_hotels or ([lodging_cost] if lodging_cost else None),
         "selected_providers": selected_providers,
         "validation_results": [],

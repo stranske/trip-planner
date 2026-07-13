@@ -10,7 +10,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from scripts.seed_demo_data import (
+    DEMO_BUSINESS_TITLE,
     DEMO_EMAIL,
+    DEMO_LEISURE_TITLE,
     DEMO_PASSWORD,
     SEED_ENV_FLAG,
     _ensure_demo_user,
@@ -50,9 +52,9 @@ def test_demo_seed_populates_workspace(temp_db: None, monkeypatch: pytest.Monkey
         )
         assert login.status_code == 200, login.text
 
-        response = client.get(f"/api/workspace/{result.leisure_trip_id}")
-        assert response.status_code == 200, response.text
-        payload = response.json()
+        leisure_response = client.get(f"/api/workspace/{result.leisure_trip_id}")
+        assert leisure_response.status_code == 200, leisure_response.text
+        payload = leisure_response.json()
 
         # Ranked scenario comparison must be populated, not a missing-* partial.
         comparison = payload["runtime_scenario_comparison"]
@@ -65,6 +67,27 @@ def test_demo_seed_populates_workspace(temp_db: None, monkeypatch: pytest.Monkey
 
         # Deterministic fallback planner -- no external LLM was invoked.
         assert payload["runtime_state"]["status"] == "ready"
+        leisure_trip = payload["trip_record"]["trip"]
+        assert leisure_trip["title"] == DEMO_LEISURE_TITLE
+        assert leisure_trip["trip_frame"]["primary_regions"] == ["Kyoto", "Osaka"]
+        assert leisure_trip["trip_frame"]["duration_days"] == 7
+        assert any(
+            scenario["title"] == "Kyoto runtime bundle"
+            for scenario in comparison["scenarios"]
+        )
+
+        business_response = client.get(f"/api/workspace/{result.business_trip_id}")
+        assert business_response.status_code == 200, business_response.text
+        business_payload = business_response.json()
+        business_trip = business_payload["trip_record"]["trip"]
+        assert business_trip["title"] == DEMO_BUSINESS_TITLE
+        assert business_trip["trip_frame"]["primary_regions"] == ["Washington DC"]
+        assert business_trip["trip_frame"]["duration_days"] == 3
+        assert business_payload["runtime_scenario_comparison"]["scenarios"]
+        assert any(
+            scenario["title"] == "Washington DC runtime bundle"
+            for scenario in business_payload["runtime_scenario_comparison"]["scenarios"]
+        )
 
 
 def test_demo_seed_is_noop_when_flag_unset(temp_db: None, monkeypatch: pytest.MonkeyPatch) -> None:

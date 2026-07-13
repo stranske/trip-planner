@@ -123,9 +123,17 @@ def _signup(client: TestClient) -> str:
     return response.json()["user"]["user_id"]
 
 
-def _create_trip(client: TestClient, *, mode: str, title: str, region: str) -> str:
+def _create_trip(
+    client: TestClient,
+    *,
+    mode: str,
+    title: str,
+    regions: list[str],
+    duration_days: int,
+    traveler_notes: str,
+) -> str:
     start_date = date.today() + timedelta(days=45)
-    end_date = start_date + timedelta(days=2)
+    end_date = start_date + timedelta(days=duration_days - 1)
     response = client.post(
         "/api/trips",
         json={
@@ -135,18 +143,47 @@ def _create_trip(client: TestClient, *, mode: str, title: str, region: str) -> s
             "trip_frame": {
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
-                "duration_days": 3,
-                "primary_regions": [region],
+                "duration_days": duration_days,
+                "primary_regions": regions,
                 "traveler_party": {
                     "kind": "team" if mode == "business" else "solo",
                     "traveler_count": 3 if mode == "business" else 1,
-                    "notes": "Created by full-product verification.",
+                    "notes": traveler_notes,
                 },
             },
         },
     )
     _require(response.status_code == 201, "trip creation failed", status=response.status_code)
     return response.json()["trip"]["trip_id"]
+
+
+def _assert_trip_scenario_identity(
+    payload: dict[str, Any],
+    *,
+    trip_id: str,
+    mode: str,
+    expected_regions: list[str],
+    expected_lead_title: str,
+) -> None:
+    trip = payload["trip_record"]["trip"]
+    _require(trip["mode"] == mode, "workspace mode did not match canary", trip_id=trip_id)
+    _require(
+        trip["trip_frame"]["primary_regions"] == expected_regions,
+        "workspace destinations did not match canary",
+        trip_id=trip_id,
+        expected_regions=expected_regions,
+        actual_regions=trip["trip_frame"]["primary_regions"],
+    )
+    scenario_titles = [
+        row.get("title") for row in payload["runtime_scenario_comparison"].get("scenarios", [])
+    ]
+    _require(
+        expected_lead_title in scenario_titles,
+        "workspace did not produce a destination-specific lead scenario",
+        trip_id=trip_id,
+        expected_title=expected_lead_title,
+        scenario_titles=scenario_titles,
+    )
 
 
 def _proposal_payload(trip_id: str) -> dict[str, Any]:
@@ -339,8 +376,15 @@ def classify_map_prerequisite(env: Mapping[str, str] | None = None) -> CheckResu
     if provider_state == "ready":
         return CheckResult(
             "map-provider",
-            "PASS",
-            {"provider_state": "provider-backed", "env": "VITE_GOOGLE_MAPS_*"},
+            "READY",
+            {
+                "provider_state": "credential-configured",
+                "env": "VITE_GOOGLE_MAPS_*",
+                "message": (
+                    "A browser API key is configured, but credential presence alone does not "
+                    "prove that the Google Maps SDK loaded or rendered provider-backed content."
+                ),
+            },
         )
     if provider_state == "loading":
         return CheckResult(
@@ -526,6 +570,62 @@ def _resolve_tpp_interpreter(repo_path: Path) -> list[str]:
     )
 
 
+def _run_tpp_workbook_canary(repo_path: Path) -> dict[str, Any]:
+    """Generate and structurally verify TPP's organization workbook without submitting it."""
+
+    fixture_path = repo_path / "tests" / "fixtures" / "washington_dc_business_trip.json"
+    _require(
+        fixture_path.is_file(),
+        "TPP organization workbook fixture is missing",
+        fixture_path=str(fixture_path),
+    )
+    interpreter = _resolve_tpp_interpreter(repo_path)
+    with tempfile.TemporaryDirectory(prefix="tpp-workbook-canary.") as tmpdir:
+        output_path = Path(tmpdir) / "washington-dc-business-trip.xlsx"
+        command = [
+            *interpreter,
+            "-m",
+            "travel_plan_permission.workbook_canary",
+            "--fixture",
+            str(fixture_path),
+            "--output",
+            str(output_path),
+        ]
+        completed = subprocess.run(
+            command,
+            cwd=repo_path,
+            env={**os.environ, "PYTHONPATH": str(repo_path / "src")},
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        _require(
+            completed.returncode == 0,
+            "TPP organization workbook canary failed",
+            command=shlex.join(command),
+            returncode=completed.returncode,
+            stdout_tail=completed.stdout[-1200:],
+            stderr_tail=completed.stderr[-1200:],
+        )
+        lines = [line for line in completed.stdout.splitlines() if line.strip()]
+        _require(bool(lines), "TPP organization workbook canary returned no JSON result")
+        try:
+            details = json.loads(lines[-1])
+        except json.JSONDecodeError as exc:
+            raise VerificationFailure(
+                "TPP organization workbook canary returned invalid JSON",
+                stdout_tail=completed.stdout[-1200:],
+            ) from exc
+        _require(
+            details.get("submission_performed") is False,
+            "TPP organization workbook canary unexpectedly reported submission",
+            details=details,
+        )
+        _require(output_path.is_file(), "TPP organization workbook artifact was not created")
+        return {**details, "repo_path": str(repo_path)}
+
+
 def _tail_file(path: Path, *, line_count: int = 50, max_bytes: int = 64 * 1024) -> str:
     if not path.exists():
         return ""
@@ -568,6 +668,7 @@ def _started_tpp_service(
     base_url = f"http://127.0.0.1:{port}"
     repo_root = Path(repo_path)
     interpreter = _resolve_tpp_interpreter(repo_root)
+    runtime_dir = Path(tempfile.mkdtemp(prefix="tpp-service-runtime."))
     service_env = {
         **os.environ,
         "PYTHONPATH": str(repo_root / "src"),
@@ -575,6 +676,8 @@ def _started_tpp_service(
         "TPP_AUTH_MODE": "static-token",
         "TPP_ACCESS_TOKEN": env["TPP_ACCESS_TOKEN"],
         "TPP_OIDC_PROVIDER": env["TPP_OIDC_PROVIDER"],
+        "TPP_PORTAL_STATE_PATH": str(runtime_dir / "portal-state.sqlite3"),
+        "TPP_AUDIT_STATE_PATH": str(runtime_dir / "audit-state.sqlite3"),
     }
     stdout_file = tempfile.NamedTemporaryFile(prefix="tpp-service-", suffix=".stdout", delete=False)
     stderr_file = tempfile.NamedTemporaryFile(prefix="tpp-service-", suffix=".stderr", delete=False)
@@ -602,6 +705,7 @@ def _started_tpp_service(
         stderr_file.close()
         stdout_path.unlink(missing_ok=True)
         stderr_path.unlink(missing_ok=True)
+        shutil.rmtree(runtime_dir, ignore_errors=True)
         raise
     else:
         stdout_file.close()
@@ -626,6 +730,7 @@ def _started_tpp_service(
         _stop_process(process)
         stdout_path.unlink(missing_ok=True)
         stderr_path.unlink(missing_ok=True)
+        shutil.rmtree(runtime_dir, ignore_errors=True)
 
 
 def _run_live_tpp_journey(client: TestClient, trip_id: str, env: dict[str, str]) -> dict[str, Any]:
@@ -708,6 +813,9 @@ def _run_live_tpp_journey(client: TestClient, trip_id: str, env: dict[str, str])
                 proposal_id=proposal["proposal_id"],
             )
             payload = evaluation_response.json()
+            evaluation_result = dict(
+                payload["proposal_state"]["evaluation"].get("evaluation_result") or {}
+            )
             return {
                 "base_url": base_url,
                 "trip_id": trip_id,
@@ -715,6 +823,7 @@ def _run_live_tpp_journey(client: TestClient, trip_id: str, env: dict[str, str])
                 "execution_id": payload["proposal_state"]["execution_id"],
                 "status_poll": status_response.json()["summary"]["submission_status"],
                 "evaluation_status": payload["summary"]["evaluation_result_status"],
+                "failure_reasons": list(evaluation_result.get("failure_reasons") or []),
             }
         finally:
             for key, value in previous.items():
@@ -736,6 +845,22 @@ def _temporary_database_url(database_url: str) -> Iterator[None]:
             os.environ.pop("TRIP_PLANNER_DATABASE_URL", None)
         else:
             os.environ["TRIP_PLANNER_DATABASE_URL"] = previous_database_url
+
+
+@contextmanager
+def _temporary_fleet_artifact(path: Path) -> Iterator[None]:
+    """Keep canary telemetry off the Dropbox-backed repository artifact."""
+
+    key = "TRIP_PLANNER_LANGSMITH_FLEET_PATH"
+    previous = os.environ.get(key)
+    os.environ[key] = str(path)
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = previous
 
 
 @contextmanager
@@ -766,6 +891,7 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
     with (
         tempfile.TemporaryDirectory(prefix="trip-planner-full-product.") as tmpdir,
         _temporary_database_url(f"sqlite:///{Path(tmpdir) / 'full_product.db'}"),
+        _temporary_fleet_artifact(Path(tmpdir) / "langsmith-fleet.ndjson"),
         _force_planner_fallback_runtime(),
     ):
         reset_database_state()
@@ -778,8 +904,12 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
             leisure_trip_id = _create_trip(
                 client,
                 mode="leisure",
-                title="Full-product leisure verification",
-                region="Seattle",
+                title="Canary Kyoto cultural week",
+                regions=["Kyoto", "Osaka"],
+                duration_days=7,
+                traveler_notes=(
+                    "Overseas leisure canary: culture, food, moderate budget, and low-transfer pacing."
+                ),
             )
             leisure_workspace = client.get(f"/api/workspace/{leisure_trip_id}")
             _require(
@@ -811,6 +941,13 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
             )
             _assert_runtime_inventory(leisure_payload, trip_id=leisure_trip_id)
             _assert_workspace_scenario_context(leisure_payload, trip_id=leisure_trip_id)
+            _assert_trip_scenario_identity(
+                leisure_payload,
+                trip_id=leisure_trip_id,
+                mode="leisure",
+                expected_regions=["Kyoto", "Osaka"],
+                expected_lead_title="Kyoto runtime bundle",
+            )
             planner_runtime = _assert_planner_runtime_response(
                 planner_turn.json(),
                 trip_id=leisure_trip_id,
@@ -830,6 +967,7 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
                         "route_contexts": len(
                             leisure_payload["runtime_scenario_comparison"]["scenarios"]
                         ),
+                        "destination": "Kyoto",
                     },
                 )
             )
@@ -837,8 +975,13 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
             business_trip_id = _create_trip(
                 client,
                 mode="business",
-                title="Full-product business verification",
-                region="Chicago",
+                title="Canary Washington DC client visit",
+                regions=["Washington DC"],
+                duration_days=3,
+                traveler_notes=(
+                    "US business canary: three travelers, economy policy, arrival buffer, "
+                    "central lodging, and explicit budget."
+                ),
             )
             business_workspace = client.get(f"/api/workspace/{business_trip_id}")
             _require(
@@ -850,6 +993,13 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
             business_payload = business_workspace.json()
             _assert_runtime_inventory(business_payload, trip_id=business_trip_id)
             _assert_workspace_scenario_context(business_payload, trip_id=business_trip_id)
+            _assert_trip_scenario_identity(
+                business_payload,
+                trip_id=business_trip_id,
+                mode="business",
+                expected_regions=["Washington DC"],
+                expected_lead_title="Washington DC runtime bundle",
+            )
             policy_request = _prepared_policy_request(business_trip_id)
             imported = client.put(
                 f"/api/workspace/{business_trip_id}/policy",
@@ -981,6 +1131,7 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
                         ],
                         "follow_up_status": evaluation_payload["summary"]["follow_up_status"],
                         "status_poll": refresh_payload["summary"]["submission_status"],
+                        "destination": "Washington DC",
                     },
                 )
             )
@@ -999,7 +1150,34 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
                     business_trip_id,
                     {key: str(value) for key, value in tpp_status.details.items()},
                 )
+                _require(
+                    live_details["evaluation_status"] == "compliant",
+                    "live TPP did not accept the business canary as policy compliant",
+                    trip_id=business_trip_id,
+                    evaluation_status=live_details["evaluation_status"],
+                    failure_reasons=live_details.get("failure_reasons", []),
+                )
                 results.append(CheckResult("live-tpp", "PASS", live_details))
+                local_tpp_path = tpp_status.details.get("TPP_REPO_PATH")
+                if isinstance(local_tpp_path, str) and local_tpp_path:
+                    workbook_details = _run_tpp_workbook_canary(Path(local_tpp_path))
+                    results.append(
+                        CheckResult("organization-workbook", "PASS", workbook_details)
+                    )
+                else:
+                    results.append(
+                        CheckResult(
+                            "organization-workbook",
+                            "SKIPPED",
+                            {
+                                "reason": "remote TPP verification has no local template checkout",
+                                "remediation": (
+                                    "Set TPP_REPO_PATH to run the no-submission organization "
+                                    "workbook canary."
+                                ),
+                            },
+                        )
+                    )
             else:
                 results.append(tpp_status)
                 if live_tpp == "required":

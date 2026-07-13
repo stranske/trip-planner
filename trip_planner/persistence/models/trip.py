@@ -44,6 +44,7 @@ class PersistedTrip(Base):
     itinerary_state_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
     budget_state_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
     policy_state_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    cost_coverage_state: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

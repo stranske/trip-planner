@@ -35,9 +35,11 @@ import {
   type WorkspaceData,
 } from "../api/workspace";
 import { WorkspaceBudgetPanel } from "../components/budget/WorkspaceBudgetPanel";
+import { CostEvidencePanel } from "../components/costs/CostEvidencePanel";
 import { TripMap } from "../components/maps/TripMap";
 import type { MapViewScope } from "../components/maps/mapSurface";
 import { PlanningModeSelector } from "../components/planner/PlanningModeSelector";
+import { TppWorkbookHandoff } from "../components/policy/TppWorkbookHandoff";
 import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
 import { TripComparison } from "../components/trips/TripComparison";
 import { PlanningNotebookPanel } from "../components/workspace/PlanningNotebookPanel";
@@ -49,6 +51,7 @@ import { ScenarioComparison } from "../components/workspace/ScenarioComparison";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
 import { BudgetPanel } from "./workspace/BudgetPanel";
 import { ComparePanel } from "./workspace/ComparePanel";
+import { CostsPanel } from "./workspace/CostsPanel";
 import { MapPanel } from "./workspace/MapPanel";
 import { NotebookPanel } from "./workspace/NotebookPanel";
 import { PlanPanel } from "./workspace/PlanPanel";
@@ -103,7 +106,7 @@ type PlannerPromptSuggestion = {
   draft: string;
 };
 
-type WorkspaceTab = "plan" | "compare" | "map" | "budget" | "notebook" | "policy";
+type WorkspaceTab = "plan" | "compare" | "map" | "costs" | "budget" | "notebook" | "policy";
 
 type ProposalLifecycleState =
   | "pending"
@@ -189,6 +192,7 @@ const WORKSPACE_TABS: { id: WorkspaceTab; label: string }[] = [
   { id: "plan", label: "Plan" },
   { id: "compare", label: "Compare" },
   { id: "map", label: "Map" },
+  { id: "costs", label: "Costs & evidence" },
   { id: "budget", label: "Budget" },
   { id: "notebook", label: "Notebook" },
   { id: "policy", label: "Policy" },
@@ -2469,6 +2473,11 @@ function WorkspacePageContent({
           />
         </MapPanel>
       ) : null}
+      {activeTab === "costs" ? (
+        <CostsPanel labelledBy={workspaceTabButtonId("costs")}>
+          <CostEvidencePanel tripId={trip.trip_id} />
+        </CostsPanel>
+      ) : null}
       {activeTab === "budget" ? (
         <BudgetPanel labelledBy={workspaceTabButtonId("budget")}>
           {panelVisibility.showBudgetPanel ? (
@@ -2535,6 +2544,9 @@ function WorkspacePageContent({
       ) : null}
       {activeTab === "policy" ? (
         <PolicyTabPanel labelledBy={workspaceTabButtonId("policy")}>
+          {trip.mode === "business" ? (
+            <TppWorkbookHandoff trip={trip} scenario={selectedRuntimeScenario} />
+          ) : null}
           <WorkspacePolicyPanel
             grid
             approvalPacketContent={

@@ -900,6 +900,8 @@ describe("WorkspacePage", () => {
     // a prior test somehow leaks it, no later test can render the workspace into
     // the break hook with a stale `true` value.
     delete (window as WorkspaceTestWindow).__TRIP_PLANNER_WORKSPACE_BREAK__;
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "");
+    vi.stubEnv("VITE_GOOGLE_MAPS_EMBED_API_KEY", "");
     mockedFetchPlannerSession.mockResolvedValue(plannerSessionPayload);
     mockedSubmitPlannerTurn.mockResolvedValue(plannerSessionPayload);
     mockedSubmitRouteOptionAction.mockResolvedValue(workspacePayload);
@@ -1935,16 +1937,17 @@ describe("WorkspacePage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByLabelText("Interactive map for Kyoto base with Uji day trip")
+        screen.getByRole("application", {
+          name: "Live Google map for Kyoto base with Uji day trip",
+        })
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText("Route geometry overlay for Kyoto base with Uji day trip")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /stop marker:/ }).length).toBeGreaterThan(0);
     expect(container.querySelector("iframe")).toBeNull();
     expect(screen.queryByTitle(/google maps/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Fallback option markers")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Schematic preview — not a live map")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Schematic preview — not a live map")).not.toBeInTheDocument();
+    expect(screen.getByText("Loading Google Maps…")).toBeInTheDocument();
     expect(screen.getByLabelText("Selected route option route drawing")).toHaveClass(
       "map-route-google-maps-js"
     );
@@ -1954,17 +1957,15 @@ describe("WorkspacePage", () => {
         .length
     ).toBeGreaterThan(0);
     expect(screen.queryByText("Google Maps JavaScript adapter")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /lodging marker: Osaka arrival buffer/ }));
-    expect(screen.getAllByRole("heading", { name: "Osaka arrival buffer" }).length).toBeGreaterThan(0);
-    await user.click(screen.getByRole("button", { name: /activity marker: Kyoto cultural anchor/ }));
-    expect(screen.getAllByRole("heading", { name: "Kyoto cultural anchor" }).length).toBeGreaterThan(0);
-    await user.click(screen.getByRole("button", { name: /policy marker: Route burden warning/ }));
-    expect(screen.getByRole("heading", { name: "Route burden warning" })).toBeInTheDocument();
     expect(screen.getAllByText("Feasibility warning active").length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 
-    expect(screen.getByLabelText("Interactive map for Kyoto plus Osaka fallback")).toBeInTheDocument();
+    expect(
+      screen.getByRole("application", {
+        name: "Live Google map for Kyoto plus Osaka fallback",
+      })
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Osaka").length).toBeGreaterThan(0);
   });
 
@@ -1979,7 +1980,9 @@ describe("WorkspacePage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByLabelText("Interactive map for Kyoto base with Uji day trip")
+        screen.getByRole("application", {
+          name: "Live Google map for Kyoto base with Uji day trip",
+        })
       ).toBeInTheDocument();
     });
 
