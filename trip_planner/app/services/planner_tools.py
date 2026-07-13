@@ -39,6 +39,7 @@ class PlannerToolDefinition:
     tool_name: str
     description: str
     mutates_state: bool = False
+    input_schema: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +117,31 @@ _TOOL_DEFINITIONS: tuple[PlannerToolDefinition, ...] = (
         tool_name="update_budget_plan",
         description="Create or update a bounded budget plan using persisted workspace state.",
         mutates_state=True,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "total_amount": {"type": "number", "exclusiveMinimum": 0},
+                "title": {"type": "string"},
+                "currency": {"type": "string", "minLength": 3, "maxLength": 3},
+                "allocations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "category_key": {"type": "string"},
+                            "planned_amount": {
+                                "type": "number",
+                                "minimum": 0,
+                            },
+                        },
+                        "required": ["category_key", "planned_amount"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["total_amount"],
+            "additionalProperties": False,
+        },
     ),
     PlannerToolDefinition(
         tool_name="read_policy_state",
@@ -139,6 +165,31 @@ _TOOL_DEFINITIONS: tuple[PlannerToolDefinition, ...] = (
         tool_name="capture_notebook_item",
         description="Save a trip-scoped planning notebook item for later planner turns.",
         mutates_state=True,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "note": {"type": "string"},
+                "category": {
+                    "type": "string",
+                    "enum": [
+                        "route",
+                        "lodging",
+                        "activities",
+                        "budget",
+                        "documents",
+                        "policy",
+                        "other",
+                    ],
+                },
+                "priority": {
+                    "type": "string",
+                    "enum": ["low", "normal", "high"],
+                },
+            },
+            "required": ["title"],
+            "additionalProperties": False,
+        },
     ),
     PlannerToolDefinition(
         tool_name="set_notebook_focus",
@@ -168,6 +219,12 @@ def list_planner_tools() -> list[dict[str, Any]]:
             "tool_name": item.tool_name,
             "description": item.description,
             "mutates_state": item.mutates_state,
+            "input_schema": item.input_schema
+            or {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": True,
+            },
         }
         for item in _TOOL_DEFINITIONS
     ]
@@ -291,6 +348,52 @@ def _category_allocations(
                 "flexibility": "flexible",
                 "notes": ["Planner-generated budget allocation."],
             }
+        )
+    return allocations
+
+
+def _requested_category_allocations(
+    *,
+    total_amount: float,
+    currency: str,
+    suggested_categories: list[str],
+    requested: Any,
+) -> list[dict[str, Any]]:
+    if requested is None:
+        return _category_allocations(total_amount, suggested_categories[:4], currency)
+    if not isinstance(requested, list) or not requested:
+        raise ValueError("allocations must be a non-empty list when provided.")
+
+    allocations: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in requested:
+        if not isinstance(item, dict):
+            raise ValueError("Each budget allocation must be an object.")
+        category = str(item.get("category_key") or "").strip()
+        if category not in suggested_categories:
+            raise ValueError(f"Unsupported budget category '{category}'.")
+        if category in seen:
+            raise ValueError(f"Duplicate budget category '{category}'.")
+        planned_amount = round(float(item.get("planned_amount", -1)), 2)
+        if planned_amount < 0:
+            raise ValueError("planned_amount must be greater than or equal to 0.")
+        seen.add(category)
+        allocations.append(
+            {
+                "category_key": category,
+                "label": category.replace("_", " ").title(),
+                "planned_amount": planned_amount,
+                "currency": currency,
+                "flexibility": "flexible",
+                "notes": ["Planner-generated budget allocation."],
+            }
+        )
+
+    allocated_total = round(sum(item["planned_amount"] for item in allocations), 2)
+    if allocated_total != round(total_amount, 2):
+        raise ValueError(
+            "Budget allocations must sum to total_amount; "
+            f"received {allocated_total:.2f} for {total_amount:.2f}."
         )
     return allocations
 
@@ -1035,7 +1138,6 @@ def _update_budget_plan(
     budget_payload = get_workspace_budget_payload(db_session, user=user, trip_id=trip_id)
     workspace_payload = _workspace_payload(db_session, user=user, trip_id=trip_id)
     summary = budget_payload["summary"]
-    categories = list(summary.get("suggested_categories") or [])[:4]
     raw_currency = arguments.get("currency") or summary["currency"] or "USD"
     currency = str(raw_currency).strip().upper()
     if len(currency) != 3 or not currency.isalpha():
@@ -1066,7 +1168,12 @@ def _update_budget_plan(
                 "summary": "Planner-generated budget baseline.",
                 "tags": ["planner-tool"],
                 "notes": ["Created from the explicit planner tool boundary."],
-                "allocations": _category_allocations(total_amount, categories, currency),
+                "allocations": _requested_category_allocations(
+                    total_amount=total_amount,
+                    currency=currency,
+                    suggested_categories=list(summary.get("suggested_categories") or []),
+                    requested=arguments.get("allocations"),
+                ),
             }
         ],
         summary=f"Planner set the working budget to {currency} {total_amount:.2f}.",

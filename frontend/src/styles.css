@@ -1156,6 +1156,30 @@ a {
   background-size: 34px 34px, 34px 34px, auto;
 }
 
+.map-provider-runtime {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.map-provider-live-status {
+  width: fit-content;
+  border: 1px solid rgba(40, 93, 80, 0.3);
+  border-radius: 999px;
+  background: rgba(222, 244, 235, 0.92);
+  color: #174a3f;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: var(--space-1) var(--space-2);
+}
+
+.map-provider-runtime[data-provider-state="loading"] .map-provider-canvas-google {
+  opacity: 0.72;
+}
+
+.map-provider-canvas-google {
+  background: var(--color-surface);
+}
+
 .map-route-geometry {
   position: absolute;
   inset: 0;
@@ -1797,6 +1821,133 @@ a {
   font-weight: 600;
 }
 
+.cost-evidence-workspace,
+.cost-evidence-list {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.cost-evidence-summary {
+  display: flex;
+  gap: var(--space-5);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cost-evidence-summary > div:first-child {
+  max-width: 760px;
+}
+
+.cost-evidence-count {
+  display: grid;
+  min-width: 130px;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border-radius: 18px;
+  background: rgba(56, 117, 107, 0.1);
+  text-align: center;
+}
+
+.cost-evidence-count strong {
+  font-size: 2rem;
+}
+
+.cost-evidence-card {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.cost-evidence-card > p,
+.cost-evidence-card h3,
+.cost-evidence-card h4 {
+  margin: 0;
+}
+
+.cost-evidence-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.cost-evidence-status {
+  flex: none;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(19, 33, 44, 0.08);
+  color: var(--color-ink-soft);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.cost-evidence-status.status-evidenced,
+.cost-evidence-status.status-complete,
+.cost-evidence-status.status-not_applicable {
+  background: rgba(56, 117, 107, 0.12);
+  color: var(--color-mint-deep);
+}
+
+.cost-evidence-assistance {
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--color-mint-ring);
+  background: rgba(56, 117, 107, 0.07);
+  color: var(--color-ink-soft);
+}
+
+.cost-evidence-inputs {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.cost-evidence-inputs label,
+.cost-evidence-traveler-input label {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--color-ink-soft);
+  font-weight: 600;
+}
+
+.cost-evidence-inputs input,
+.cost-evidence-traveler-input textarea {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid rgba(19, 33, 44, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--color-ink);
+  font: inherit;
+}
+
+.cost-evidence-traveler-input,
+.cost-evidence-results {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.cost-evidence-traveler-input textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.cost-evidence-options {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.cost-evidence-options .decision-card {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 @media (max-width: 720px) {
   .app-shell {
     padding-inline: var(--space-4);
@@ -1808,5 +1959,10 @@ a {
 
   .timeline-stop {
     grid-template-columns: 1fr;
+  }
+
+  .cost-evidence-summary {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

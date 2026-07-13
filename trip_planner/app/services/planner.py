@@ -1292,7 +1292,11 @@ class _OpenAIPlannerChatModel:
             raise ValueError("Planner model name is required.")
         from langchain_openai import ChatOpenAI
 
-        self._model = ChatOpenAI(model=config.model, temperature=0)
+        self._model = ChatOpenAI(
+            model=config.model,
+            temperature=0,
+            use_responses_api=True,
+        )
 
     def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
         if payload.get("task") == "classify_planner_intent":
@@ -1309,31 +1313,54 @@ class _OpenAIPlannerChatModel:
             )
             return {"content": str(response.content)}
 
+        completed_tool_results = list(payload.get("completed_tool_results") or [])
+        completed_state_change = any(
+            bool(item.get("mutates_state"))
+            and str(item.get("status") or "") == "completed"
+            for item in completed_tool_results
+            if isinstance(item, dict)
+        )
+        available_tools = list(payload["available_tools"])
+        if completed_tool_results:
+            available_tools = [
+                tool for tool in available_tools if bool(tool.get("mutates_state"))
+            ]
         tools = [
             {
                 "type": "function",
                 "function": {
                     "name": tool["tool_name"],
                     "description": tool["description"],
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": True,
-                    },
+                    "parameters": tool["input_schema"],
                 },
             }
-            for tool in payload["available_tools"]
+            for tool in available_tools
         ]
-        model = self._model.bind_tools(tools)
+        model = self._model if completed_state_change else self._model.bind_tools(tools)
         invoke_kwargs: dict[str, Any] = {}
         langsmith_run_config = payload.get("langsmith_run_config")
         if isinstance(langsmith_run_config, dict):
             invoke_kwargs["config"] = langsmith_run_config
+        system_prompt = _PLANNER_SYSTEM_PROMPT
+        if completed_tool_results:
+            if completed_state_change:
+                system_prompt += (
+                    "\n\nThe application executed the prior read and state-changing tool "
+                    "requests. Review completed_tool_results and return the final "
+                    "traveler-facing answer now."
+                )
+            else:
+                system_prompt += (
+                    "\n\nThe application executed your prior read-only tool requests. "
+                    "Review completed_tool_results. Only state-changing tools remain "
+                    "available; request the safe updates needed by the traveler, or return "
+                    "the final traveler-facing answer if no update is appropriate."
+                )
         response = model.invoke(
             [
                 (
                     "system",
-                    _PLANNER_SYSTEM_PROMPT,
+                    system_prompt,
                 ),
                 (
                     "human",
@@ -1341,6 +1368,7 @@ class _OpenAIPlannerChatModel:
                         {
                             "message": payload["message"],
                             "context": payload["runtime_context"],
+                            "completed_tool_results": completed_tool_results,
                         },
                         default=str,
                     ),
@@ -1356,7 +1384,30 @@ class _OpenAIPlannerChatModel:
                     "arguments": call.get("args") or call.get("arguments") or {},
                 }
             )
-        return {"content": str(response.content), "tool_calls": tool_calls}
+        return {
+            "content": _openai_response_text(response),
+            "tool_calls": tool_calls,
+        }
+
+
+def _openai_response_text(response: Any) -> str:
+    """Extract traveler-visible text without stringifying Responses API blocks."""
+    content = getattr(response, "content", "")
+    if isinstance(content, str):
+        return content.strip()
+    if not isinstance(content, list):
+        return ""
+    text_parts: list[str] = []
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        block_type = str(block.get("type") or "")
+        if block_type not in {"text", "output_text"}:
+            continue
+        text = block.get("text") or block.get("content")
+        if isinstance(text, str) and text.strip():
+            text_parts.append(text.strip())
+    return "\n".join(text_parts)
 
 
 class ModelBackedPlannerConversationRunnable:
@@ -1894,6 +1945,67 @@ def _assemble_planner_reply(
         tool_calls=reply.requested_tool_calls,
     )
     executed_tool_calls = [*runtime.executed_tool_calls, *model_tool_calls]
+    empty_model_response = (
+        reply.content
+        == "Planner model returned an empty response after reading the current trip context."
+    )
+    followup_round = 0
+    pending_tool_calls = list(reply.requested_tool_calls or [])
+    while (
+        empty_model_response
+        and pending_tool_calls
+        and runtime.chat_model is not None
+        and followup_round < 4
+    ):
+        followup_round += 1
+        followup_payload = {
+            "message": runtime.normalized_message,
+            "trip_id": trip_id,
+            "available_tools": list_planner_tools(),
+            "runtime_context": runtime.runtime_context,
+            "provider": runtime.runtime_config.provider,
+            "model": runtime.runtime_config.model,
+            "data_zone": runtime.runtime_config.data_zone,
+            "completed_tool_results": executed_tool_calls,
+        }
+        if runtime.runtime_config.provider == "openai":
+            followup_payload = _redact_openai_planner_payload(followup_payload)
+        try:
+            raw_followup = runtime.chat_model.invoke(followup_payload)
+        except Exception as error:
+            reply = _planner_model_error_reply(
+                session_state_id=runtime.session.session_state_id,
+                error=error,
+            )
+            break
+        followup_content = str(raw_followup.get("content") or "").strip()
+        pending_tool_calls = [
+            {
+                "tool_name": str(item.get("tool_name") or item.get("name") or ""),
+                "arguments": item.get("arguments") or item.get("args") or {},
+            }
+            for item in list(raw_followup.get("tool_calls") or [])
+        ]
+        if pending_tool_calls:
+            executed_tool_calls.extend(
+                _execute_model_tool_calls(
+                    db_session,
+                    user=user,
+                    trip_id=trip_id,
+                    tool_calls=pending_tool_calls,
+                )
+            )
+        empty_model_response = not followup_content
+        if followup_content:
+            reply = PlannerConversationReply(
+                content=followup_content,
+                refs=reply.refs,
+                tool_calls=reply.tool_calls,
+                requested_tool_calls=pending_tool_calls,
+                structured_blocks=reply.structured_blocks,
+                turn_metadata=reply.turn_metadata,
+            )
+            break
     model_runtime_failed = any(
         item.get("tool_name") == "planner_model" and item.get("status") == "error"
         for item in reply.tool_calls

@@ -71,7 +71,7 @@ def test_current_migrations_repair_database_stamped_at_previous_20260510_02(
 
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "20260512_01"
+            "20260712_01"
         )
         assert (
             connection.execute(
@@ -82,5 +82,12 @@ def test_current_migrations_repair_database_stamped_at_previous_20260510_02(
             ).scalar_one()
             == "open_question"
         )
+    assert "cost_coverage_state" in {
+        column["name"] for column in inspector.get_columns("persisted_trips")
+    }
+    if inspector.has_table("user_accounts"):
+        assert "travel_profile_state" in {
+            column["name"] for column in inspector.get_columns("user_accounts")
+        }
 
     reset_database_state()

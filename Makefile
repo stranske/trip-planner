@@ -1,4 +1,4 @@
-.PHONY: test install runtime-backend runtime-frontend runtime-dev runtime-check runtime-smoke runtime-production-check runtime-preview-smoke runtime-full-product-check full-product-check
+.PHONY: test install runtime-backend runtime-frontend runtime-dev runtime-check runtime-smoke runtime-production-check runtime-preview-smoke runtime-full-product-check full-product-check two-trip-ui-canary two-trip-demo
 
 test:
 	python -m pytest
@@ -38,3 +38,9 @@ full-product-check:
 	python scripts/check_full_product_verification.py --live-tpp $(LIVE_TPP)
 
 runtime-full-product-check: full-product-check
+
+two-trip-ui-canary:
+	./scripts/run_two_trip_ui_canary.sh
+
+two-trip-demo:
+	TRIP_PLANNER_SEED_DEMO=1 uv run --extra dev python scripts/seed_demo_data.py

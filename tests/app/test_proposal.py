@@ -1240,6 +1240,7 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
                 "expense_breakdown": {"airfare": 620.0},
                 "selected_fare": 620.0,
                 "flight_cost": 620.0,
+                "fare_evidence_attached": True,
                 "comparable_hotels": None,
                 "selected_providers": {"airfare": "United"},
                 "validation_results": [],

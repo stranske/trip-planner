@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FeasibilitySummary, RuntimeScenarioComparison, WorkspaceData } from "../../api/workspace";
 import { TripMap } from "./TripMap";
@@ -154,6 +154,11 @@ const planningLedger: WorkspaceData["planning_ledger"] = {
   },
 };
 
+beforeEach(() => {
+  vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "");
+  vi.stubEnv("VITE_GOOGLE_MAPS_EMBED_API_KEY", "");
+});
+
 afterEach(() => {
   cleanup();
   vi.unstubAllEnvs();
@@ -239,21 +244,22 @@ describe("TripMap", () => {
     expect(screen.queryByRole("img", { name: /route geometry overlay/i })).not.toBeInTheDocument();
   });
 
-  it("labels the keyed provider surface as a schematic preview", () => {
+  it("mounts the live SDK surface when a browser key is configured", () => {
     vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
     vi.stubEnv("VITE_GOOGLE_MAPS_PROVIDER_STATE", "ready");
 
     renderTripMap();
 
     expect(screen.getByRole("heading", { name: "Map for Rail-first route" })).toBeInTheDocument();
-    expect(screen.getByText("Schematic preview — not a live map")).toBeInTheDocument();
+    expect(screen.queryByText("Schematic preview — not a live map")).not.toBeInTheDocument();
     expect(screen.queryByText("Route sketch mode")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Selected route option route drawing")).toHaveClass(
       "map-route-google-maps-js"
     );
     expect(
-      screen.getByRole("img", { name: "Route geometry overlay for Rail-first route" })
+      screen.getByRole("application", { name: "Live Google map for Rail-first route" })
     ).toBeInTheDocument();
+    expect(screen.getByText("Loading Google Maps…")).toBeInTheDocument();
     expect(screen.queryByText(/Google Maps JavaScript/i)).not.toBeInTheDocument();
   });
 

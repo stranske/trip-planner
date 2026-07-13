@@ -2508,6 +2508,18 @@ def test_runtime_route_options_hold_blocked_scenarios_for_research() -> None:
     assert "make_baseline" not in [action["action_type"] for action in blocked["available_actions"]]
 
 
+def test_runtime_map_markers_include_known_geographic_coordinates() -> None:
+    markers = workspace_service._build_runtime_map_place_markers(
+        ["dest-gateway-washington-dc", "dest-city-washington-dc"],
+        source_refs=["test"],
+    )
+
+    assert [(marker["latitude"], marker["longitude"]) for marker in markers] == [
+        (38.8512, -77.0402),
+        (38.9072, -77.0369),
+    ]
+
+
 def test_workspace_route_option_actions_update_comparison_and_ledger(
     client: TestClient,
 ) -> None:

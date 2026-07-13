@@ -1,5 +1,7 @@
+import json
 import os
 import subprocess
+from pathlib import Path
 
 from scripts import check_full_product_verification as verifier
 from scripts.check_full_product_verification import (
@@ -40,11 +42,13 @@ def test_full_product_local_journeys_cover_runtime_identifiers(monkeypatch) -> N
     assert by_name["local-leisure-journey"].details["trip_id"].startswith("trip-")
     assert by_name["local-leisure-journey"].details["scenario_id"].startswith("scenario:")
     assert by_name["local-leisure-journey"].details["route_contexts"] > 0
+    assert by_name["local-leisure-journey"].details["destination"] == "Kyoto"
     assert by_name["local-leisure-journey"].details["planner_runtime"] in {
         "fallback",
         "model",
     }
     assert by_name["local-business-journey"].details["proposal_id"].startswith("proposal:trip-")
+    assert by_name["local-business-journey"].details["destination"] == "Washington DC"
     assert by_name["local-business-journey"].details["evaluation_status"] == "compliant"
     assert by_name["local-business-journey"].details["follow_up_status"] == "resolved"
     assert by_name["local-business-journey"].details["status_poll"] in {
@@ -53,6 +57,7 @@ def test_full_product_local_journeys_cover_runtime_identifiers(monkeypatch) -> N
         "retry_scheduled",
     }
     assert "TRIP_PLANNER_DATABASE_URL" not in os.environ
+    assert "TRIP_PLANNER_LANGSMITH_FLEET_PATH" not in os.environ
 
 
 def test_map_provider_check_reports_missing_config_as_skipped(monkeypatch) -> None:
@@ -78,6 +83,19 @@ def test_map_provider_check_fails_when_configured_provider_errors(monkeypatch) -
 
     assert check.status == "FAIL"
     assert check.details["provider_state"] == "error"
+
+
+def test_map_provider_check_does_not_treat_credential_presence_as_live_pass() -> None:
+    check = classify_map_prerequisite(
+        env={
+            "VITE_GOOGLE_MAPS_BROWSER_API_KEY": "test-key",
+            "VITE_GOOGLE_MAPS_PROVIDER_STATE": "ready",
+        }
+    )
+
+    assert check.status == "READY"
+    assert check.details["provider_state"] == "credential-configured"
+    assert "does not prove" in check.details["message"]
 
 
 def test_planner_llm_check_blocks_openai_in_proprietary_zone_without_marker() -> None:
@@ -286,6 +304,44 @@ def test_tpp_interpreter_resolution_fails_with_actionable_message(monkeypatch, t
     assert "TPP_BASE_URL" in message
 
 
+def test_tpp_workbook_canary_runs_owned_tpp_module(monkeypatch, tmp_path) -> None:
+    repo_path = tmp_path / "Travel-Plan-Permission"
+    venv_python = repo_path / ".venv" / "bin" / "python"
+    fixture = repo_path / "tests" / "fixtures" / "washington_dc_business_trip.json"
+    venv_python.parent.mkdir(parents=True)
+    fixture.parent.mkdir(parents=True)
+    venv_python.write_text("#!/usr/bin/env python\n", encoding="utf-8")
+    fixture.write_text("{}", encoding="utf-8")
+
+    def fake_run(command, **kwargs):
+        output_path = command[command.index("--output") + 1]
+        Path(output_path).write_bytes(b"workbook")
+        assert command[:3] == [
+            str(venv_python),
+            "-m",
+            "travel_plan_permission.workbook_canary",
+        ]
+        assert kwargs["cwd"] == repo_path
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(
+                {
+                    "artifact": "washington-dc-business-trip.xlsx",
+                    "submission_performed": False,
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(verifier.subprocess, "run", fake_run)
+
+    result = verifier._run_tpp_workbook_canary(repo_path)
+
+    assert result["submission_performed"] is False
+    assert result["repo_path"] == str(repo_path)
+
+
 def test_started_tpp_service_captures_startup_stderr(monkeypatch, tmp_path) -> None:
     repo_path = tmp_path / "Travel-Plan-Permission"
     venv_python = repo_path / ".venv" / "bin" / "python"
@@ -295,6 +351,8 @@ def test_started_tpp_service_captures_startup_stderr(monkeypatch, tmp_path) -> N
     class FakeProcess:
         def __init__(self, *args, **kwargs):
             self.args = args[0]
+            assert kwargs["env"]["TPP_PORTAL_STATE_PATH"].endswith("portal-state.sqlite3")
+            assert kwargs["env"]["TPP_AUDIT_STATE_PATH"].endswith("audit-state.sqlite3")
             kwargs["stderr"].write(b"ModuleNotFoundError: No module named 'jinja2'\n")
             kwargs["stderr"].flush()
 

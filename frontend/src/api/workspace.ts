@@ -278,6 +278,8 @@ export type RuntimeScenarioComparison = {
         route_index: number;
         x: number;
         y: number;
+        latitude?: number;
+        longitude?: number;
       }>;
       rough_route_geometry: Array<{
         id: string;

@@ -10,10 +10,13 @@ from sqlalchemy import delete, select
 from trip_planner.app.main import create_app
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.planner import (
+    _OpenAIPlannerChatModel,
+    _openai_response_text,
     set_intent_classifier_factory_for_tests,
     set_planner_chat_model_factory_for_tests,
     set_planner_prompt_redactor_for_tests,
 )
+from trip_planner.app.services.planner_runtime_config import PlannerRuntimeConfig
 from trip_planner.app.services.planner_tools import (
     execute_planner_tool_call,
     list_planner_tools,
@@ -92,6 +95,64 @@ class FailingPlannerChatModel:
     def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
         del payload
         raise RuntimeError("provider timeout")
+
+
+class SequencedPlannerChatModel:
+    def __init__(self, responses: list[dict[str, Any]]) -> None:
+        self.responses = list(responses)
+        self.requests: list[dict[str, Any]] = []
+
+    def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.requests.append(payload)
+        if payload.get("task") == "classify_planner_intent":
+            return {
+                "content": json.dumps(
+                    {"task_class": "planning_synthesis", "intent": "planning_synthesis"}
+                )
+            }
+        if not self.responses:
+            raise AssertionError("Planner model received an unexpected extra invocation.")
+        return self.responses.pop(0)
+
+
+def test_openai_planner_uses_responses_api_for_tool_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeChatOpenAI:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr("langchain_openai.ChatOpenAI", FakeChatOpenAI)
+
+    _OpenAIPlannerChatModel(
+        PlannerRuntimeConfig(
+            mode="model",
+            provider="openai",
+            model="gpt-test",
+            status="ready",
+            title="Model-backed planner",
+            summary="Planner turns use the configured model.",
+        )
+    )
+
+    assert captured == {
+        "model": "gpt-test",
+        "temperature": 0,
+        "use_responses_api": True,
+    }
+
+
+def test_openai_response_text_ignores_reasoning_and_function_blocks() -> None:
+    class ResponsesMessage:
+        content = [
+            {"type": "reasoning", "summary": []},
+            {"type": "function_call", "name": "read_workspace_state"},
+            {"type": "output_text", "text": "Traveler-facing answer."},
+        ]
+
+    assert _openai_response_text(ResponsesMessage()) == "Traveler-facing answer."
 
 
 def _create_trip(client: TestClient) -> str:
@@ -681,6 +742,77 @@ def test_planner_turn_uses_configured_model_and_persists_requested_tool_trace(
         assert checkpoint is not None
         assert checkpoint.metadata_payload["tool_call_count"] == 6
         assert checkpoint.metadata_payload["selected_planning_mode"] == "collaborative"
+
+
+def test_model_tool_loop_executes_reads_then_bounded_lodging_update(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trip_id = _create_trip(client)
+    model = SequencedPlannerChatModel(
+        [
+            {
+                "content": "",
+                "tool_calls": [{"tool_name": "read_budget_state", "arguments": {}}],
+            },
+            {
+                "content": "",
+                "tool_calls": [
+                    {
+                        "tool_name": "update_budget_plan",
+                        "arguments": {
+                            "total_amount": 774,
+                            "title": "NYC lodging budget",
+                            "currency": "USD",
+                            "allocations": [
+                                {"category_key": "lodging", "planned_amount": 774}
+                            ],
+                        },
+                    }
+                ],
+            },
+            {"content": "Artezen is saved as the $774 lodging plan.", "tool_calls": []},
+        ]
+    )
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_MODEL", "fake-planner-model")
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-test-key")
+    set_planner_chat_model_factory_for_tests(lambda _: model)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Save a $774 lodging-only plan after reading the budget."},
+    )
+
+    assert response.status_code == 200
+    planner_reply = response.json()["messages"][-1]
+    assert planner_reply["content"] == "Artezen is saved as the $774 lodging plan."
+    completed_names = {
+        item["tool_name"]
+        for item in planner_reply["tool_calls"]
+        if item["status"] == "completed"
+    }
+    assert {"read_budget_state", "update_budget_plan"}.issubset(completed_names)
+    workspace = client.get(f"/api/workspace/{trip_id}")
+    category_summaries = workspace.json()["budget_state"]["summary"]["category_summaries"]
+    lodging = next(item for item in category_summaries if item["category_key"] == "lodging")
+    assert lodging["planned_amount"] == 774
+    followups = [
+        request
+        for request in model.requests
+        if request.get("completed_tool_results") is not None
+    ]
+    assert len(followups) == 2
+
+
+def test_planner_tool_catalog_exposes_budget_and_notebook_schemas() -> None:
+    tools = {item["tool_name"]: item for item in list_planner_tools()}
+
+    budget_schema = tools["update_budget_plan"]["input_schema"]
+    assert budget_schema["required"] == ["total_amount"]
+    assert "allocations" in budget_schema["properties"]
+    notebook_schema = tools["capture_notebook_item"]["input_schema"]
+    assert notebook_schema["required"] == ["title"]
 
 
 def test_planner_turn_emits_no_secret_langsmith_fleet_artifact(

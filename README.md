@@ -7,7 +7,7 @@
 
 The runtime baseline now treats the saved trip record as the durable planning container. New scenario, budget, workspace, and policy work should attach to a persisted trip instead of inventing a parallel root object.
 Saved scenarios and trip-level planning history now persist underneath that same trip container, so later comparison and workspace slices should consume those records instead of reintroducing fixture-only storage.
-The shipped full-stack MVP now includes authenticated trip creation, persisted trip and scenario routes, the workspace shell, planner session APIs, stored policy/proposal state, and a provider-backed map adapter seam with bounded fallback rendering. Live external policy transport remains a follow-on integration, so docs and checks in this repo should describe that gap explicitly instead of implying it already ships.
+The shipped full-stack MVP now includes authenticated trip creation, persisted trip and scenario routes, the workspace shell, planner session APIs, stored policy/proposal state, a live Google Maps JavaScript SDK path with bounded fallback rendering, and a review-only browser handoff into a sibling `Travel-Plan-Permission` portal.
 
 ## Current MVP Surfaces
 
@@ -16,9 +16,9 @@ The current runtime already ships these inspectable application surfaces:
 - authenticated sign-up, sign-in, sign-out, and session restore
 - persisted trip creation plus saved trip, scenario-history, and workspace routes
 - planner session APIs and workspace state hydration for the frontend app shell
-- stored proposal and policy posture state that later `Travel-Plan-Permission` work can consume
+- stored proposal and policy posture state plus a business-trip handoff that pre-fills the `Travel-Plan-Permission` workbook workflow
 
-The current runtime ships a Google Maps JavaScript adapter boundary for the workspace map surface, with CI-safe mocked rendering and fallback states for missing config, provider load errors, and sparse route data. Remote `Travel-Plan-Permission` execution remains an explicit follow-on integration, so local runtime checks and product docs should continue to call that out as deferred.
+When a browser API key is configured, the workspace loads Google's JavaScript SDK and renders native markers and a route polyline from saved trip coordinates. Browser geocoding is used only when those coordinates are unavailable. Missing credentials, SDK errors, and unresolved locations retain the schematic route as an explicitly labelled fallback. For business trips, the Policy tab can POST known trip details to the sibling `Travel-Plan-Permission` portal, where the traveler completes organization-specific fields and generates the organization's Excel workbook for review and download. That handoff deliberately cannot submit the request.
 
 ## Persisted Workspace Runtime Behavior
 
@@ -134,8 +134,11 @@ Run the full stack together from the repo root:
 make runtime-dev
 ```
 
-That starts the FastAPI runtime on `http://127.0.0.1:8000` and the Vite app on
-`http://127.0.0.1:5173` with the frontend proxying `/api` requests to the backend.
+That starts the FastAPI runtime on `http://127.0.0.1:8000`, the Vite app on
+`http://127.0.0.1:5173`, and the sibling `Travel-Plan-Permission` portal on
+`http://127.0.0.1:8766`. The frontend proxies `/api` requests to the backend and
+receives the TPP portal origin through `VITE_TPP_PORTAL_URL`. Set `TPP_REPO_PATH`
+or `TPP_BASE_URL` when the sibling checkout or portal uses a different location.
 
 Validate the runtime surfaces from the repo root:
 
@@ -155,6 +158,20 @@ For a full-product verification lane that first runs the backend/frontend runtim
 make full-product-check
 ```
 
+To prove the same flow through the actual browser UI, creating a Washington DC
+business trip and a Kyoto/Osaka leisure trip through the public forms and then
+opening each rendered scenario comparison, run:
+
+```bash
+make two-trip-ui-canary
+```
+
+This uses an isolated temporary database, performs no booking or purchase, and
+writes passing/failing browser evidence under the artifact directory printed by
+the command. To leave equivalent synthetic trips in your normal local app so
+you can explore them after the test, run `make two-trip-demo`, start the app with
+`make runtime-dev`, and sign in with the documented demo credentials below.
+
 `make runtime-full-product-check` is available as an equivalent runtime-prefixed alias.
 Use `python scripts/check_full_product_verification.py --skip-frontend-smoke` only when you need to isolate the product-journey assertions from frontend/runtime smoke prerequisites.
 
@@ -171,7 +188,7 @@ The verification path covers:
 - a smoke test that runs the frontend client against a live backend process
 - a separate full-product check for fresh leisure and business product journeys
 
-These checks validate the local full-stack MVP that already exists in this repo. They exercise the map adapter and fallback seam with mocked provider state. They do not prove live Google Maps rendering or remote Travel-Plan-Permission transport.
+These checks validate the local full-stack MVP that already exists in this repo. Unit tests exercise SDK loading, geocoding, native map construction, fallback behavior, and the scoped TPP handoff. Use the browser canary with a configured browser key to prove Google's live SDK path; the local business-trip flow proves TPP review and workbook generation without submitting anything externally.
 The production-focused testing plan in [docs/local-testing-plan.md](docs/local-testing-plan.md) adds the critical auth, trip, workspace, policy, proposal, and preview-verification journeys on top of that baseline.
 
 ## Demo Deploy (data-zoned)
@@ -211,8 +228,10 @@ seeded workspace (the script prints the exact `/workspace/<trip_id>` URLs):
 - email: `demo@trip-planner.local`
 - password: `demo-trip-planner-2026`
 
-Each `/workspace/<trip_id>` immediately shows ranked scenarios and the
-(schematic) map card. Do **not** run this seed against a production deployment;
+The seeded workspaces are a Washington DC client visit and a Kyoto/Osaka
+cultural week. Each immediately shows ranked scenarios and uses the live Google
+map when a browser key is configured, with the route sketch retained as a
+fallback. Do **not** run this seed against a production deployment;
 it exists for local and non-production evaluation only.
 
 ## Persistent Deployment
@@ -257,8 +276,10 @@ Use these env vars only when you are intentionally exercising an integration sea
 
 - `VITE_API_BASE_URL`: overrides the frontend API base URL when you are not using the local Vite proxy.
 - `VITE_GOOGLE_MAPS_BROWSER_API_KEY`: primary key for enabling the Google Maps JavaScript adapter path in the workspace.
+- `VITE_GOOGLE_MAPS_MAP_ID`: optional production map ID for advanced markers. Local development uses Google's demo map ID when this is unset.
 - `VITE_GOOGLE_MAPS_EMBED_API_KEY`: legacy key name still accepted as a compatibility fallback when `VITE_GOOGLE_MAPS_BROWSER_API_KEY` is not set.
 - `VITE_GOOGLE_MAPS_PROVIDER_STATE`: optional local/test override for the map adapter load state (`ready`, `loading`, or `error`).
+- `VITE_TPP_PORTAL_URL`: browser-visible TPP origin used by the business Policy-tab handoff. `make runtime-dev` supplies the sibling portal origin automatically.
 - `TRIP_PLANNER_DATA_ZONE`: explicit data-zone switch for integration seams. Use `synthetic` for local/demo data (the default) or `proprietary` for real traveler/company data inside the perimeter.
 - `TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT`: marker for an approved no-train OpenAI endpoint. In `TRIP_PLANNER_DATA_ZONE=proprietary`, the planner refuses the OpenAI path and stays in deterministic fallback unless this marker is set. The outbound planner prompt redaction hook still runs before model invocation when the OpenAI path is enabled.
 - `TPP_BASE_URL`, `TPP_ACCESS_TOKEN`, `TPP_OIDC_PROVIDER`: enable the live `Travel-Plan-Permission` transport client. If they are unset, the repo should continue to present stored-policy and passive/local TPP seams rather than implying a real remote policy round-trip. In `TRIP_PLANNER_DATA_ZONE=proprietary`, `TPP_BASE_URL` must point only at an in-perimeter service.
@@ -288,8 +309,10 @@ one service do not suppress a different host.
 
 That distinction matters for docs and verification messaging:
 
+Local verification checks are useful. They do not prove live Google Maps rendering or remote Travel-Plan-Permission transport.
+
 - missing local prerequisites such as `.venv` or `frontend/node_modules` are setup failures
 - missing live integration env vars are not setup failures for the shipped MVP
 - missing Google Maps configuration or a provider load error should preserve route context through the fallback map instead of blanking the workspace
 - fallback map behavior is intentionally bounded: route-context overlays, markers, route summaries, and detail panels stay visible, but live provider-only interactions do not
-- live remote `Travel-Plan-Permission` execution remains deferred unless you deliberately configure that seam
+- the TPP browser handoff is intentionally review-only: it can create a local draft and workbook but cannot submit a request or make an approval decision

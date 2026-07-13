@@ -51,8 +51,8 @@ DEMO_PASSWORD = "demo-trip-planner-2026"  # synthetic; >= 8 chars
 DEMO_DISPLAY_NAME = "Demo Tester"
 
 #: Stable titles let the seed stay idempotent across re-runs.
-DEMO_LEISURE_TITLE = "Demo leisure getaway (synthetic)"
-DEMO_BUSINESS_TITLE = "Demo business summit (synthetic)"
+DEMO_LEISURE_TITLE = "Demo Kyoto cultural week (synthetic)"
+DEMO_BUSINESS_TITLE = "Demo Washington DC client visit (synthetic)"
 
 
 @dataclass(frozen=True)
@@ -110,6 +110,9 @@ def _ensure_trip(
     primary_regions: list[str],
     traveler_kind: str,
     traveler_count: int,
+    duration_days: int,
+    start_offset_days: int,
+    traveler_notes: str,
 ) -> str:
     """Create the demo trip if absent; otherwise reuse it (idempotent).
 
@@ -122,8 +125,8 @@ def _ensure_trip(
         return existing_by_title[title]
 
     # Future, deterministic-relative dates keep the demo trip "upcoming".
-    start = date.today() + timedelta(days=45)
-    end = start + timedelta(days=3)
+    start = date.today() + timedelta(days=start_offset_days)
+    end = start + timedelta(days=duration_days - 1)
     created = create_trip(
         db_session,
         user=user,
@@ -132,11 +135,11 @@ def _ensure_trip(
         mode=mode,
         start_date=start.isoformat(),
         end_date=end.isoformat(),
-        duration_days=(end - start).days,
+        duration_days=duration_days,
         primary_regions=primary_regions,
         traveler_kind=traveler_kind,
         traveler_count=traveler_count,
-        traveler_notes="Synthetic demo data -- safe to delete.",
+        traveler_notes=traveler_notes,
     )
     return created["trip_id"]
 
@@ -168,22 +171,34 @@ def seed_demo_data(*, force: bool = False) -> DemoSeedResult | None:
             user=user,
             existing_by_title=existing_by_title,
             title=DEMO_LEISURE_TITLE,
-            summary="A relaxed multi-day city break to explore the workspace.",
+            summary="Seven days of Kyoto culture, food, and low-transfer neighborhood exploration.",
             mode="leisure",
-            primary_regions=["Chicago"],
+            primary_regions=["Kyoto", "Osaka"],
             traveler_kind="solo",
             traveler_count=1,
+            duration_days=7,
+            start_offset_days=90,
+            traveler_notes=(
+                "Synthetic overseas leisure canary: moderate budget, cultural sites, food, "
+                "and simple transfers. Safe to delete."
+            ),
         )
         business_trip_id = _ensure_trip(
             session,
             user=user,
             existing_by_title=existing_by_title,
             title=DEMO_BUSINESS_TITLE,
-            summary="A short business summit with a small travelling team.",
+            summary="A three-person Washington DC client meeting with an arrival buffer.",
             mode="business",
-            primary_regions=["Chicago"],
+            primary_regions=["Washington DC"],
             traveler_kind="team",
             traveler_count=3,
+            duration_days=3,
+            start_offset_days=75,
+            traveler_notes=(
+                "Synthetic US business canary: economy travel, central lodging, explicit "
+                "budget, and manager-review posture. Safe to delete."
+            ),
         )
     finally:
         session.close()

@@ -62,6 +62,12 @@ _REGION_GEO_DEFAULTS: dict[str, dict[str, Any]] = {
         "country_code": "JP",
         "time_zone": "Asia/Tokyo",
     },
+    "gateway-kyoto": {
+        "latitude": 34.4342,
+        "longitude": 135.244,
+        "country_code": "JP",
+        "time_zone": "Asia/Tokyo",
+    },
     "lisbon": {
         "latitude": 38.7223,
         "longitude": -9.1393,
@@ -81,7 +87,44 @@ _REGION_GEO_DEFAULTS: dict[str, dict[str, Any]] = {
         "country_code": "JP",
         "time_zone": "Asia/Tokyo",
     },
+    "osaka": {
+        "latitude": 34.6937,
+        "longitude": 135.5023,
+        "country_code": "JP",
+        "time_zone": "Asia/Tokyo",
+    },
+    "uji": {
+        "latitude": 34.8845,
+        "longitude": 135.7997,
+        "country_code": "JP",
+        "time_zone": "Asia/Tokyo",
+    },
+    "gateway-washington-dc": {
+        "latitude": 38.8512,
+        "longitude": -77.0402,
+        "country_code": "US",
+        "region_code": "DC",
+        "time_zone": "America/New_York",
+    },
+    "washington-dc": {
+        "latitude": 38.9072,
+        "longitude": -77.0369,
+        "country_code": "US",
+        "region_code": "DC",
+        "time_zone": "America/New_York",
+    },
 }
+
+
+def lookup_region_coordinates(value: str) -> tuple[float, float] | None:
+    """Return a known regional centroid for map rendering without a geocoding call."""
+
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    matches = [key for key in _REGION_GEO_DEFAULTS if key in slug]
+    if not matches:
+        return None
+    geo = _REGION_GEO_DEFAULTS[max(matches, key=len)]
+    return float(geo["latitude"]), float(geo["longitude"])
 
 
 @dataclass(frozen=True)
