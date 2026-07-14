@@ -1,9 +1,19 @@
 {
   "version": "1.0.0",
-  "last_updated": "2026-06-29",
+  "last_updated": "2026-07-10",
   "review_interval_days": 60,
-  "review_by": "2026-08-28",
+  "review_by": "2026-09-08",
+  "purpose": "Auxiliary judge/evaluator catalog plus explicit coding-worker IDs required for execution-profile validation. Trial worker entries intentionally carry no quality or cost claims.",
   "models": [
+    {
+      "model_id": "gpt-5.5",
+      "provider": "openai",
+      "api": "chat",
+      "quality": { "T1": 0.96, "T2": 0.96, "T3": 0.96, "T4": 0.96, "T5": 0.96 },
+      "cost_score": 0.18,
+      "speed_score": 0.58,
+      "notes": "Coding-worker execution profile default. Listed here so execution profile validation can reject typos before dispatch."
+    },
     {
       "model_id": "gpt-5.4",
       "provider": "openai",
@@ -12,6 +22,33 @@
       "cost_score": 0.25,
       "speed_score": 0.64,
       "notes": "Current flagship verifier default. Highest-quality general evaluator."
+    },
+    {
+      "model_id": "gpt-5.6-sol",
+      "provider": "openai",
+      "api": "chat",
+      "worker_profile": true,
+      "lifecycle": "trial",
+      "quality": {},
+      "notes": "Coding-worker trial profile gpt-5.6-sol; do not use as evaluator evidence. Worker requested/selected identity must be recorded separately from verifier telemetry."
+    },
+    {
+      "model_id": "gpt-5.6-terra",
+      "provider": "openai",
+      "api": "chat",
+      "worker_profile": true,
+      "lifecycle": "trial",
+      "quality": {},
+      "notes": "Coding-worker trial profile gpt-5.6-terra; do not use as evaluator evidence. Worker requested/selected identity must be recorded separately from verifier telemetry."
+    },
+    {
+      "model_id": "gpt-5.6-luna",
+      "provider": "openai",
+      "api": "chat",
+      "worker_profile": true,
+      "lifecycle": "trial",
+      "quality": {},
+      "notes": "Coding-worker trial profile gpt-5.6-luna; do not use as evaluator evidence. Worker requested/selected identity must be recorded separately from verifier telemetry."
     },
     {
       "model_id": "gpt-5.1",
