@@ -5,6 +5,76 @@ default_agent: codex
 # Shared keepalive marker prefix (agent-agnostic)
 keepalive_marker_prefix: agent-keepalive
 
+# Dedicated instrumentation-only contract for the Sol/Terra/Luna plumbing
+# canary. The reusable workflow ref is replaced with the exact commit containing
+# this runner before merge. Trial profiles are rejected by ordinary agent and
+# Keepalive execution. The lane cannot fall back, mutate source, invoke an
+# evaluator, or claim provider-resolved identity.
+model_profile_trial_contract:
+  mode: read-only
+  artifact_schema: workflows.model-profile-trial-result/v2
+  identity_authority: workflows-read-only-trial-artifact/v2
+  collector_identity_authority: github-actions-api/workflows-read-only-trial-artifact/v2
+  runner_ref: stranske/Workflows/.github/workflows/reusable-model-profile-trial.yml@822e323eefba3edb640e0bd9c922caec6fffee65
+  cli_version: 0.144.1
+  runtime_fallback_allowed: false
+  auxiliary_evaluator_allowed: false
+  provider_resolved_identity: unavailable
+  capacity_pool_mapping:
+    orchestrator: codex-subscription
+    workflows: codex-standard
+
+execution_profiles:
+  codex-default:
+    agent: codex
+    model: gpt-5.5
+    fallback_model: gpt-5.4
+    runner: reusable-codex-run
+    capacity_pool: codex-standard
+    safety: standard
+    lifecycle: active
+  codex-fast:
+    agent: codex
+    model: gpt-5.4
+    fallback_model: gpt-5.5
+    runner: reusable-codex-run
+    capacity_pool: codex-standard
+    safety: standard
+    lifecycle: active
+  codex-5.6-sol-high:
+    agent: codex
+    model: gpt-5.6-sol
+    fallback_model: gpt-5.5
+    runner: reusable-model-profile-trial
+    runner_ref: stranske/Workflows/.github/workflows/reusable-model-profile-trial.yml@822e323eefba3edb640e0bd9c922caec6fffee65
+    capacity_pool: codex-standard
+    safety: read-only
+    lifecycle: trial
+    reasoning_effort: high
+    permission_mode: read-only
+  codex-5.6-terra-high:
+    agent: codex
+    model: gpt-5.6-terra
+    fallback_model: gpt-5.5
+    runner: reusable-model-profile-trial
+    runner_ref: stranske/Workflows/.github/workflows/reusable-model-profile-trial.yml@822e323eefba3edb640e0bd9c922caec6fffee65
+    capacity_pool: codex-standard
+    safety: read-only
+    lifecycle: trial
+    reasoning_effort: high
+    permission_mode: read-only
+  codex-5.6-luna-high:
+    agent: codex
+    model: gpt-5.6-luna
+    fallback_model: gpt-5.5
+    runner: reusable-model-profile-trial
+    runner_ref: stranske/Workflows/.github/workflows/reusable-model-profile-trial.yml@822e323eefba3edb640e0bd9c922caec6fffee65
+    capacity_pool: codex-standard
+    safety: read-only
+    lifecycle: trial
+    reasoning_effort: high
+    permission_mode: read-only
+
 agents:
   codex:
     runner_workflow: .github/workflows/reusable-codex-run.yml
