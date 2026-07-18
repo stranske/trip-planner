@@ -21,6 +21,7 @@ from tools.llm_registry import (
     ModelRegistryEntry,
     SlotDefinition,
     apply_slot_env_overrides,
+    configured_model_for_provider,
     default_slots,
     is_model_blocked,
     load_model_registry,
@@ -228,6 +229,11 @@ def build_chat_client(
     selected_provider, provider_explicit = _resolve_provider(provider, force_openai=force_openai)
     if provider_explicit and selected_provider is None:
         return None
+    if selected_provider and not selected_model:
+        selected_model = configured_model_for_provider(selected_provider)
+    if selected_provider and not selected_model:
+        logger.warning("No reviewed model is configured for provider %s", selected_provider)
+        return None
     if selected_provider and _is_model_blocked(selected_provider, selected_model):
         logger.warning("Refusing blocked LLM model: %s/%s", selected_provider, selected_model)
         return None
@@ -287,6 +293,8 @@ def build_chat_client(
             logger.warning("Skipping blocked LLM model override: %s/%s", slot.provider, slot_model)
             used_override = True
             slot_model = slot.model
+        if not slot_model:
+            continue
         if _is_model_blocked(slot.provider, slot_model):
             logger.warning("Skipping blocked LLM model: %s/%s", slot.provider, slot_model)
             continue
@@ -499,6 +507,8 @@ def build_chat_clients(
     for idx, slot in enumerate(candidate_slots):
         slot_model = model_overrides[idx] if idx < len(model_overrides) else None
         slot_model = slot_model or slot.model
+        if not slot_model:
+            continue
         if _is_model_blocked(slot.provider, slot_model, registry=registry):
             logger.warning("Skipping blocked LLM model override: %s/%s", slot.provider, slot_model)
             continue
