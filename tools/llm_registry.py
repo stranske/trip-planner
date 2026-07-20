@@ -431,9 +431,9 @@ def resolve_slots(
     env_slot_prefix: str = "LANGCHAIN_SLOT",
 ) -> list[SlotDefinition]:
     slots = load_slot_config(github_default_model=github_default_model)
-    # Preserve an explicit runtime override as an emergency bootstrap when the
-    # registry file is unavailable. Empty models are never invoked directly;
-    # langchain_client skips them when the override cannot serve that provider.
+    # Preserve an explicit runtime override only when no default slot allowlist
+    # is available. A present slot config that resolves to no usable slots fails
+    # closed rather than broadening execution to the environment model.
     if (
         not slots
         and not os.environ.get(ENV_SLOT_CONFIG)
