@@ -15,6 +15,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
+try:
+    # Package import for tests and callers that import this checker.
+    from tools.llm_registry import DEFAULT_SELECTION_PROFILE
+except ModuleNotFoundError:  # pragma: no cover - exercised by the CI script entrypoint.
+    # Direct execution (`python tools/check_model_registry_freshness.py`) puts
+    # tools/, rather than the repository root, on sys.path.
+    from llm_registry import DEFAULT_SELECTION_PROFILE
+
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_REGISTRY_PATH = _REPO_ROOT / "config" / "model_registry.json"
 DEFAULT_SLOTS_PATH = _REPO_ROOT / "config" / "llm_slots.json"
@@ -319,29 +327,19 @@ def evaluate(
             continue
         if explicit_model:
             model = model_by_key.get((provider, explicit_model))
-            # Explicit-profile pins must match their reviewed decision.  A
-            # legacy pin without a profile is also valid at runtime when the
-            # pin is a current, unblocked catalog model.
-            effective_profile = profile or "verifier-balanced"
+            # A legacy pin without a profile may be honored only while it
+            # points at a current, unblocked model. Otherwise runtime falls
+            # back to the reviewed default selection.
+            effective_profile = profile or DEFAULT_SELECTION_PROFILE
             selected = selection_by_key.get((effective_profile, provider))
-            legacy_pin_is_current = bool(
-                not profile
-                and model is not None
-                and not model.get("blocked")
-                and str(model.get("lifecycle", "")).strip().lower() == "current"
-            )
-            if (
-                selected
-                and selected.get("model_id") != explicit_model
-                and not legacy_pin_is_current
-            ):
+            if not selected:
                 findings.append(
                     _finding(
-                        "selection_override",
-                        f"slot {name!r} pins {provider}/{explicit_model} instead of reviewed "
-                        f"selection {selected.get('model_id')} for {effective_profile}.",
+                        "missing_selection",
+                        f"slot {name!r} has no selection for {effective_profile}/{provider}.",
                     )
                 )
+                continue
             if model is None:
                 findings.append(
                     _finding(
@@ -350,6 +348,30 @@ def evaluate(
                     )
                 )
             elif model.get("blocked"):
+                findings.append(
+                    _finding(
+                        "blocked_pin",
+                        f"slot {name!r} pins blocked model {provider}/{explicit_model}.",
+                    )
+                )
+            if selected.get("model_id") != explicit_model:
+                if not profile:
+                    continue
+                findings.append(
+                    _finding(
+                        "selection_override",
+                        f"slot {name!r} pins {provider}/{explicit_model} instead of reviewed "
+                        f"selection {selected.get('model_id')} for {effective_profile}.",
+                    )
+                )
+            if profile and model is None:
+                findings.append(
+                    _finding(
+                        "unknown_pin",
+                        f"slot {name!r} pins absent model {provider}/{explicit_model}.",
+                    )
+                )
+            elif profile and model.get("blocked"):
                 findings.append(
                     _finding(
                         "blocked_pin",
