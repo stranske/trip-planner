@@ -319,22 +319,22 @@ def evaluate(
             continue
         if explicit_model:
             model = model_by_key.get((provider, explicit_model))
-            # Explicit-profile pins must match their reviewed decision.  A
-            # legacy pin without a profile is also valid at runtime when the
-            # pin is a current, unblocked catalog model.
+            # A legacy pin without a profile is advisory: runtime resolves a
+            # reviewed default selection and ignores stale bundled model pins.
+            # It still needs that fallback selection to be usable.
             effective_profile = profile or "verifier-balanced"
             selected = selection_by_key.get((effective_profile, provider))
-            legacy_pin_is_current = bool(
-                not profile
-                and model is not None
-                and not model.get("blocked")
-                and str(model.get("lifecycle", "")).strip().lower() == "current"
-            )
-            if (
-                selected
-                and selected.get("model_id") != explicit_model
-                and not legacy_pin_is_current
-            ):
+            if not selected:
+                findings.append(
+                    _finding(
+                        "missing_selection",
+                        f"slot {name!r} has no selection for {effective_profile}/{provider}.",
+                    )
+                )
+                continue
+            if selected and selected.get("model_id") != explicit_model:
+                if not profile:
+                    continue
                 findings.append(
                     _finding(
                         "selection_override",
@@ -342,14 +342,14 @@ def evaluate(
                         f"selection {selected.get('model_id')} for {effective_profile}.",
                     )
                 )
-            if model is None:
+            if profile and model is None:
                 findings.append(
                     _finding(
                         "unknown_pin",
                         f"slot {name!r} pins absent model {provider}/{explicit_model}.",
                     )
                 )
-            elif model.get("blocked"):
+            elif profile and model.get("blocked"):
                 findings.append(
                     _finding(
                         "blocked_pin",
