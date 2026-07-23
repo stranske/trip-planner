@@ -16,6 +16,14 @@ from pathlib import Path
 from typing import Any
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Direct execution puts tools/, rather than the repository root, on sys.path.
+# Always import through the package so type checking sees one symbol definition.
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from tools.llm_registry import DEFAULT_SELECTION_PROFILE  # noqa: E402
+
 DEFAULT_REGISTRY_PATH = _REPO_ROOT / "config" / "model_registry.json"
 DEFAULT_SLOTS_PATH = _REPO_ROOT / "config" / "llm_slots.json"
 DEFAULT_POLICY_PATH = _REPO_ROOT / "config" / "model_selection_policy.json"
@@ -239,8 +247,13 @@ def evaluate(
                 )
             )
 
-        evidence_ids = raw.get("evidence_ids")
-        if not isinstance(evidence_ids, list) or not evidence_ids:
+        raw_evidence_ids = raw.get("evidence_ids")
+        evidence_ids = (
+            [item.strip() for item in raw_evidence_ids if isinstance(item, str) and item.strip()]
+            if isinstance(raw_evidence_ids, list)
+            else []
+        )
+        if not evidence_ids:
             findings.append(
                 _finding(
                     "missing_evidence",
@@ -319,29 +332,21 @@ def evaluate(
             continue
         if explicit_model:
             model = model_by_key.get((provider, explicit_model))
-            # Explicit-profile pins must match their reviewed decision.  A
-            # legacy pin without a profile is also valid at runtime when the
-            # pin is a current, unblocked catalog model.
-            effective_profile = profile or "verifier-balanced"
+            effective_profile = profile or DEFAULT_SELECTION_PROFILE
             selected = selection_by_key.get((effective_profile, provider))
-            legacy_pin_is_current = bool(
-                not profile
-                and model is not None
-                and not model.get("blocked")
-                and str(model.get("lifecycle", "")).strip().lower() == "current"
-            )
-            if (
-                selected
-                and selected.get("model_id") != explicit_model
-                and not legacy_pin_is_current
-            ):
+            if not selected:
                 findings.append(
                     _finding(
-                        "selection_override",
-                        f"slot {name!r} pins {provider}/{explicit_model} instead of reviewed "
-                        f"selection {selected.get('model_id')} for {effective_profile}.",
+                        "missing_selection",
+                        f"slot {name!r} has no selection for {effective_profile}/{provider}.",
                     )
                 )
+                continue
+            # Unprofiled pins predate the reviewed-selection contract. They are
+            # advisory while consumers migrate to profiles, so runtime uses the
+            # reviewed default selection regardless of the legacy pin value.
+            if not profile:
+                continue
             if model is None:
                 findings.append(
                     _finding(
@@ -354,6 +359,14 @@ def evaluate(
                     _finding(
                         "blocked_pin",
                         f"slot {name!r} pins blocked model {provider}/{explicit_model}.",
+                    )
+                )
+            if selected.get("model_id") != explicit_model:
+                findings.append(
+                    _finding(
+                        "selection_override",
+                        f"slot {name!r} pins {provider}/{explicit_model} instead of reviewed "
+                        f"selection {selected.get('model_id')} for {effective_profile}.",
                     )
                 )
             continue
