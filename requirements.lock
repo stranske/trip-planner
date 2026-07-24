@@ -203,7 +203,7 @@ tiktoken==0.13.0
     # via langchain-openai
 tqdm==4.68.4
     # via openai
-types-pyyaml==6.0.12.20260518
+types-pyyaml==6.0.12.20260724
     # via trip-planner (pyproject.toml)
 typing-extensions==4.16.0
     # via
