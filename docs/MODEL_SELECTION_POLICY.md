@@ -64,6 +64,25 @@ records. Do not hand-enter aggregate rates or recommendation rankings.
 An approved evidence record uses `kind: workload-benchmark` and
 `status: passed`. The freshness gate rejects an approved decision without it.
 
+### Advisory vs. blocking findings
+
+`tools/check_model_registry_freshness.py` separates its findings into two
+classes, and by default only one of them fails the gate:
+
+- **Blocking (structural):** a malformed registry, a selection or slot that
+  points at an absent or blocked model, or an *approved* selection with no
+  passing workload-benchmark evidence. These mean work could be wrong, so they
+  fail the gate (exit 1).
+- **Advisory (cadence):** a review whose `review_by` date has simply passed
+  (`review_overdue`, `provisional_overdue`, `selection_review_overdue`). A due
+  review is not a danger signal — the provisional incumbents remain a valid
+  runtime baseline — so it never fails the default gate and never blocks
+  unrelated work. It is surfaced instead by the `maint-77` scheduled run, which
+  opens a non-blocking tracking issue.
+
+Pass `--strict` to fail on *any* finding (used where a PR itself edits model
+configuration and should be proven fresh before merging).
+
 ## Incumbents and Candidates
 
 The existing OpenAI, Anthropic, and GitHub Models verifier choices are recorded
@@ -71,6 +90,19 @@ as provisional incumbents. They remain the runtime baseline while the pilot is
 assembled and run; catalog discovery can add candidates but cannot change a
 selection. A replacement requires paired workload evidence that passes every
 quality gate and an explicit approval update.
+
+### Prepared promotions and rollbacks
+
+`tools/prepare_model_promotion.py` (run by `maint-86`) can *prepare* a selection
+change from a passing benchmark, but never applies one on its own. It only
+prepares a candidate that is the **same family** as the incumbent (e.g. openai
+`gpt-5.x`, anthropic `claude-<line>`), **passed every quality gate** (including
+paired non-inferiority), and costs **≤** the incumbent per accepted review.
+Cross-family swaps are never auto-prepared. It writes the registry mutation
+(recording the prior selection in `selection_history`) and opens a PR; merging
+that PR is the human approval this policy requires — `human_approval_required`
+stays true. The inverse path prepares a rollback to the prior selection when the
+active model shows a failed workload-benchmark (a quality-gate breach).
 
 ## Catalog Discovery
 
