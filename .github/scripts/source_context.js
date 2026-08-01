@@ -50,6 +50,8 @@ const CHECKBOX_SOURCE_PATTERNS = Object.freeze([
 ]);
 
 const NO_AUTOMATION_CHECKBOX_PATTERN = /\bdo\s+not\s+automate\b|\bhuman[- ]only\b/i;
+const DEPENDENCY_REPAIR_PROMOTION_PATTERN =
+  /<!--\s*dependency-repair-promotion:v1\s+(\{[^\n]*\})\s*-->/;
 
 function cleanString(value) {
   return String(value || '').trim();
@@ -281,6 +283,34 @@ function parseWorkflowSourceBlock(body) {
   return result;
 }
 
+function parseDependencyRepairPromotionSource(body) {
+  const match = String(body || '').match(DEPENDENCY_REPAIR_PROMOTION_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  try {
+    const metadata = JSON.parse(match[1]);
+    const sourcePr = Number(metadata?.source_pr);
+    const validShas = [
+      metadata?.source_base_sha,
+      metadata?.source_head_sha,
+      metadata?.promotion_base_sha,
+    ].every((value) => /^[0-9a-f]{40}$/i.test(String(value || '')));
+    if (!Number.isInteger(sourcePr) || sourcePr <= 0 || !validShas) {
+      return null;
+    }
+    return {
+      source_pr: sourcePr,
+      source_base_sha: metadata.source_base_sha,
+      source_head_sha: metadata.source_head_sha,
+      promotion_base_sha: metadata.promotion_base_sha,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function sourceTypeFromCheckedTemplate(body) {
   const sectionLines = workflowSourceSectionLines(body);
   if (!sectionLines.length) {
@@ -355,7 +385,20 @@ function inferredSourceType(pull = {}) {
 function resolvePrSourceContext(pull = {}) {
   const body = String(pull?.body || '');
   const block = parseWorkflowSourceBlock(body);
-  const issueNumber = extractIssueNumberFromPull(pull);
+  const dependencyRepairPromotion = parseDependencyRepairPromotionSource(body);
+  const labels = labelNames(pull).map((label) => label.toLowerCase());
+  // The marker is supplied in untrusted PR text. Promotion labels are applied
+  // by the controlled promotion workflow after it has established provenance.
+  const trustedDependencyRepairPromotion = Boolean(
+    dependencyRepairPromotion &&
+      labels.includes('dependency:repair-promotion') &&
+      (labels.includes('workflow:source-dependabot') ||
+        labels.includes('workflow_source_dependabot')),
+  );
+  const extractedIssueNumber = extractIssueNumberFromPull(pull);
+  // Promotion provenance is authoritative: a coincidental issue reference must
+  // not route the PR through issue-body synchronization.
+  const issueNumber = trustedDependencyRepairPromotion ? null : extractedIssueNumber;
   const noAutomation = hasNoAutomationWorkflowContext(pull);
 
   const markerType = normalizeSourceType(parseHtmlMarker(body, 'workflow-source'));
@@ -363,7 +406,9 @@ function resolvePrSourceContext(pull = {}) {
   const checkboxType = sourceTypeFromCheckedTemplate(body);
   const labelType = sourceTypeFromLabels(pull);
   const inferredType = inferredSourceType(pull);
-  const detectedSourceType = issueNumber
+  const detectedSourceType = trustedDependencyRepairPromotion
+    ? SOURCE_TYPES.DEPENDABOT
+    : issueNumber
     ? SOURCE_TYPES.GITHUB_ISSUE
     : [markerType, blockType, checkboxType, labelType, inferredType].find((type) => type !== SOURCE_TYPES.UNKNOWN)
       || SOURCE_TYPES.UNKNOWN;
@@ -372,6 +417,9 @@ function resolvePrSourceContext(pull = {}) {
     : detectedSourceType;
 
   const sourceRef =
+    (trustedDependencyRepairPromotion
+      ? `dependency-pr:#${dependencyRepairPromotion.source_pr}`
+      : '') ||
     cleanString(parseHtmlMarker(body, 'workflow-source-ref')) ||
     cleanString(block.source_ref || block.ref || block.reference) ||
     (issueNumber ? `#${issueNumber}` : '');
@@ -392,6 +440,7 @@ function resolvePrSourceContext(pull = {}) {
     isValid: VALID_SOURCE_TYPES.has(sourceType),
     isExplicit: Boolean(
       issueNumber ||
+        trustedDependencyRepairPromotion ||
         markerType !== SOURCE_TYPES.UNKNOWN ||
         blockType !== SOURCE_TYPES.UNKNOWN ||
         checkboxType !== SOURCE_TYPES.UNKNOWN ||
@@ -433,6 +482,7 @@ module.exports = {
   extractIssueNumbersFromText,
   extractIssueNumberFromPull,
   parseWorkflowSourceBlock,
+  parseDependencyRepairPromotionSource,
   sourceTypeFromCheckedTemplate,
   sourceTypeFromLabels,
   hasNoAutomationWorkflowContext,

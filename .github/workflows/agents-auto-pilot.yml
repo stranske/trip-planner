@@ -216,7 +216,7 @@ jobs:
       - name: Set up Python
         id: setup-python
         if: steps.check_enabled.outputs.enabled == 'true'
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.14'
 
@@ -2576,6 +2576,37 @@ jobs:
                     core.info(`(agent:${decision.currentAgent} label not present: ${labelErr?.message})`);
                   }
                 }
+                // A stalled belt item may still carry agent:auto from an earlier
+                // keepalive handoff. Auto and explicit routing labels are mutually
+                // exclusive, so remove the former before assigning the next agent.
+                try {
+                  await withRetry((client) => client.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issueNumber,
+                    name: 'agent:auto',
+                  }));
+                } catch (labelErr) {
+                  core.info(`(agent:auto label not present: ${labelErr?.message})`);
+                }
+                if (decision.triedMarker) {
+                  try {
+                    await withRetry((client) => client.rest.issues.getLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: decision.triedMarker,
+                    }));
+                  } catch (labelErr) {
+                    if (labelErr?.status !== 404) throw labelErr;
+                    await withRetry((client) => client.rest.issues.createLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: decision.triedMarker,
+                      color: '1d76db',
+                      description: 'Records an agent already tried during bounded stall rotation',
+                    }));
+                  }
+                }
                 await withRetry((client) => client.rest.issues.addLabels({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
@@ -3195,6 +3226,11 @@ jobs:
           ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
           STEP_COUNT: ${{ steps.cycles.outputs.count }}
           MAX_STALL_RETRIES: '5'
+          HAS_CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON != '' }}
+          HAS_CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+          HAS_CLAUDE_AUTH_JSON: ${{ secrets.CLAUDE_AUTH_JSON != '' }}
+          HAS_CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY != '' }}
+          HAS_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY != '' }}
         with:
           script: |
             const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
@@ -3255,7 +3291,10 @@ jobs:
               // still stalled, so we escalate. Any error falls through to needs-human.
               let handedOff = false;
               try {
-                const { eligibleAgents } = require('./.github/scripts/agent_stall_rotation.js');
+                const {
+                  eligibleAgents,
+                  currentAgentFromLabels,
+                } = require('./.github/scripts/agent_stall_rotation.js');
                 const { loadAgentRegistry } = require('./.github/scripts/agent_registry.js');
                 const { data: rotIssue } = await withRetry((client) => client.rest.issues.get({
                   owner: context.repo.owner,
@@ -3266,13 +3305,87 @@ jobs:
                   .map((l) => (typeof l === 'string' ? l : l && l.name))
                   .filter(Boolean);
                 const hasAuto = rotLabels.some((l) => String(l).trim().toLowerCase() === 'agent:auto');
+                const rotationRegistry = loadAgentRegistry();
+                // Derive the credential surface from the registry. The Actions API
+                // exposes secret names (not values), so newly registered keepalive
+                // agents are considered without another provider-specific edit here.
+                const requiredSecretNames = [...new Set(
+                  Object.values(rotationRegistry.agents || {})
+                    .filter((config) => config?.capabilities?.pr_keepalive === true)
+                    .flatMap((config) => config.required_secrets || [])
+                )];
+                const availableSecrets = Object.fromEntries(
+                  requiredSecretNames.map((name) => [name, process.env[`HAS_${name}`] === 'true'])
+                );
+                try {
+                  const repoSecrets = await withRetry((client) =>
+                    client.paginate(client.rest.actions.listRepoSecrets, {
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      per_page: 100,
+                    })
+                  );
+                  for (const secret of repoSecrets) {
+                    if (Object.hasOwn(availableSecrets, secret.name)) {
+                      availableSecrets[secret.name] = true;
+                    }
+                  }
+                } catch (secretLookupError) {
+                  core.warning(
+                    `Could not list repository secret names; using exported availability flags: ` +
+                    `${secretLookupError?.message || secretLookupError}`
+                  );
+                }
                 const keepaliveAgents = eligibleAgents({
-                  registry: loadAgentRegistry(),
+                  registry: rotationRegistry,
                   capability: 'pr_keepalive',
+                  secrets: availableSecrets,
                 });
-                if (!hasAuto && keepaliveAgents.length > 1) {
+                const currentAgent = currentAgentFromLabels(
+                  rotLabels,
+                  Object.keys(rotationRegistry.agents || {})
+                ) || rotationRegistry.default_agent || '';
+                const hasAlternative = keepaliveAgents.some((agent) => agent !== currentAgent);
+                if (!hasAuto && hasAlternative) {
                   // Add agent:auto to the issue AND the PR so the keepalive delegation
                   // policy picks an alternative agent on its next round.
+                  const { data: repoInfo } = await withRetry((client) => client.rest.repos.get({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                  }));
+                  let dispatchedWorkflow = '';
+                  const dispatchFailures = [];
+                  for (const workflowId of [
+                    'agents-81-gate-followups.yml',
+                    'agents-keepalive-loop.yml',
+                  ]) {
+                    try {
+                      await withRetry((client) => client.rest.actions.createWorkflowDispatch({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        workflow_id: workflowId,
+                        ref: repoInfo.default_branch || 'main',
+                        inputs: {
+                          pr_number: String(prNumber),
+                          force_retry: 'true',
+                        },
+                      }));
+                      dispatchedWorkflow = workflowId;
+                      break;
+                    } catch (dispatchError) {
+                      dispatchFailures.push(
+                        `${workflowId}: ${dispatchError?.message || dispatchError}`
+                      );
+                      if (dispatchError?.status !== 404) break;
+                    }
+                  }
+                  if (!dispatchedWorkflow) {
+                    throw new Error(
+                      `No keepalive handoff workflow could be dispatched: ${dispatchFailures.join('; ')}`
+                    );
+                  }
+                  // Switch routing only after a dispatch succeeds, so a transient
+                  // dispatch failure leaves the existing concrete route retryable.
                   await withRetry((client) => client.rest.issues.addLabels({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
@@ -3303,7 +3416,9 @@ jobs:
                       `(eligible: ${keepaliveAgents.join(', ')}).\n\n` +
                       `\`needs-human\` is withheld until delegation has also been exhausted.`,
                   }));
-                  core.info(`Monitor-pr stall handed off to delegation policy (agent:auto added)`);
+                  core.info(
+                    `Monitor-pr stall handed off via ${dispatchedWorkflow} (agent:auto added)`
+                  );
                   handedOff = true;
                 }
               } catch (rotationErr) {
