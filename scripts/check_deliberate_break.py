@@ -32,6 +32,7 @@ ASSERTION_DIFF_RE = re.compile(
     r"\b(assert|expect\(|pytest\.raises\(|assert\.)\b",
 )
 DEFAULT_TIMEOUT_SECONDS = 120
+PYTEST_RUNTIME_DEPENDENCIES = ("pyyaml==6.0.3",)
 
 
 @dataclass(frozen=True)
@@ -128,6 +129,33 @@ def parse_deliberate_break_spec(markdown: str) -> DeliberateBreakSpec | None:
 
 def _pytest_command(test_id: str) -> tuple[str, ...]:
     return (sys.executable, "-m", "pytest", test_id, "-q")
+
+
+def _ensure_pytest_runtime_deps() -> None:
+    """Install lightweight deps Gate test-quality may not preinstall.
+
+    Gate's test-quality job installs only ``pytest``. Deliberate-break may still
+    collect tests that import PyYAML (for example via ``sync_manifest_compiler``).
+    Installing here avoids editing ``pr-00-gate.yml``, which forces an
+    Actions ``action_required`` approval wait on workflow-touching PRs.
+    """
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--upgrade",
+                *PYTEST_RUNTIME_DEPENDENCIES,
+            ],
+            check=True,
+            text=True,
+            capture_output=True,
+            timeout=DEFAULT_TIMEOUT_SECONDS,
+        )
 
 
 def _run(
@@ -244,6 +272,37 @@ def verify_spec(
                     changed_assertions=tampered,
                 )
 
+    except subprocess.TimeoutExpired as exc:
+        return _json_result(
+            VERDICT_BROKEN,
+            reason="command-timeout",
+            command=list(exc.cmd) if isinstance(exc.cmd, (tuple, list)) else str(exc.cmd),
+            timeout=exc.timeout,
+        )
+
+    try:
+        _ensure_pytest_runtime_deps()
+    except subprocess.TimeoutExpired as exc:
+        return _json_result(
+            VERDICT_BROKEN,
+            reason="command-timeout",
+            command=list(exc.cmd) if isinstance(exc.cmd, (tuple, list)) else str(exc.cmd),
+            timeout=exc.timeout,
+        )
+    except subprocess.CalledProcessError as exc:
+        return _json_result(
+            VERDICT_BROKEN,
+            reason="dependency-install-failed",
+            detail=exc.stderr or str(exc),
+        )
+    except OSError as exc:
+        return _json_result(
+            VERDICT_BROKEN,
+            reason="dependency-install-unavailable",
+            detail=str(exc),
+        )
+
+    try:
         head_run = _run(spec.command, repo)
     except subprocess.TimeoutExpired as exc:
         return _json_result(
