@@ -703,7 +703,10 @@ def _coerce_response_content(content: object) -> str:
     text = _text_from_response_content(content)
     if text is not None:
         return text
-    return json.dumps(content, default=str)
+    try:
+        return json.dumps(content, default=str)
+    except (TypeError, ValueError):
+        return str(content)
 
 
 def _parse_llm_response(
