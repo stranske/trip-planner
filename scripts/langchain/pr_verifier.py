@@ -680,11 +680,16 @@ def _text_from_response_content(content: object) -> str | None:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        text_blocks = [
-            block["text"]
-            for block in content
-            if isinstance(block, dict) and isinstance(block.get("text"), str)
-        ]
+        text_blocks: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                text = block
+            elif isinstance(block, dict):
+                text = block.get("text")
+            else:
+                text = getattr(block, "text", None)
+            if isinstance(text, str):
+                text_blocks.append(text)
         if any(block and not block.isspace() for block in text_blocks):
             # Concatenate without a separator: a provider may split one JSON
             # document across blocks, and an inserted newline inside a string

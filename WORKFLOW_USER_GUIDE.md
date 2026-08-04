@@ -1125,6 +1125,11 @@ The Workflows repository includes maintenance workflows that handle sync, update
 
 **Result:** Freshness evidence only; it never creates a competing update issue or PR
 
+**Consumer note:** Maint 50 is not synced into consumer repositories. Older
+consumer-local documentation may still describe a legacy
+`maint-50-tool-version-check.yml`; treat those references as historical unless
+that workflow actually exists in the consumer checkout.
+
 ---
 
 ### `maint-52-validate-workflows.yml` - Workflow Validation
