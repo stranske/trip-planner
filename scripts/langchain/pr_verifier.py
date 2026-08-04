@@ -675,12 +675,39 @@ def _fallback_evaluation(
     )
 
 
+def _text_from_response_content(content: object) -> str | None:
+    """Return provider text, or None when the payload carries no text blocks."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        text_blocks = [
+            block["text"]
+            for block in content
+            if isinstance(block, dict) and isinstance(block.get("text"), str)
+        ]
+        if text_blocks:
+            # Concatenate without a separator: a provider may split one JSON
+            # document across blocks, and an inserted newline inside a string
+            # literal would make the reassembled payload invalid JSON.
+            return "".join(text_blocks)
+    return None
+
+
+def _coerce_response_content(content: object) -> str:
+    """Return text from provider response blocks without losing a safe fallback."""
+    text = _text_from_response_content(content)
+    if text is not None:
+        return text
+    return json.dumps(content, default=str)
+
+
 def _parse_llm_response(
-    content: str, provider: str, *, client: object | None = None
+    content: object, provider: str, *, client: object | None = None
 ) -> EvaluationResult:
+    content_text = _coerce_response_content(content)
     repair = _build_verifier_repair_callback(client) if client is not None else None
     parsed = parse_structured_output(
-        content,
+        content_text,
         EvaluationPayload,
         repair=repair,
         max_repair_attempts=SCHEMA_REPAIR_POLICY.max_attempts,
@@ -704,7 +731,7 @@ def _parse_llm_response(
             summary=None,
             provider_used=provider,
             used_llm=True,
-            raw_content=content,
+            raw_content=content_text,
             error=error,
         )
 
@@ -717,7 +744,7 @@ def _parse_llm_response(
         summary=payload.summary,
         provider_used=provider,
         used_llm=True,
-        raw_content=parsed.raw_content or content,
+        raw_content=parsed.raw_content or content_text,
     )
 
 
@@ -725,11 +752,21 @@ def _build_verifier_repair_callback(client: object) -> Callable[[str, str, str],
     repair = build_repair_callback(client)
 
     def _repair(schema_json: str, validation_errors: str, raw_response: str) -> str | None:
-        return repair(
+        repaired = repair(
             schema_json,
             validation_errors,
             _cap_prompt_text(raw_response, EVAL_SCHEMA_REPAIR_BUDGET_TOKENS),
         )
+        if not repaired:
+            return None
+        # The repair path must be stricter than the parse path. A reply of only
+        # thinking/metadata blocks, or of empty text blocks, is still truthy, and
+        # serializing it would hand the parser block metadata dressed up as a
+        # repair attempt — burning the one retry on noise.
+        text = _text_from_response_content(repaired)
+        if text is None or not text.strip():
+            return None
+        return text
 
     return _repair
 
