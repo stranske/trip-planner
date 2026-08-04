@@ -179,7 +179,7 @@ def evaluate_benchmark(payload: dict[str, Any], policy: dict[str, Any]) -> dict[
     unknown_overrides = sorted(set(raw_overrides) - set(required_categories))
     if unknown_overrides:
         raise ValueError(
-            "minimum_cases_per_category_overrides names categories that are not "
+            "approval_stage.minimum_cases_per_category_overrides names categories that are not "
             f"required: {unknown_overrides}"
         )
     noninferiority_margin = float(gates["paired_success_noninferiority_margin"])

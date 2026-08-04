@@ -685,7 +685,7 @@ def _text_from_response_content(content: object) -> str | None:
             for block in content
             if isinstance(block, dict) and isinstance(block.get("text"), str)
         ]
-        if any(block.strip() for block in text_blocks):
+        if any(block and not block.isspace() for block in text_blocks):
             # Concatenate without a separator: a provider may split one JSON
             # document across blocks, and an inserted newline inside a string
             # literal would make the reassembled payload invalid JSON.
