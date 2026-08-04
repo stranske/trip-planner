@@ -13,11 +13,13 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from importlib import import_module, metadata
 from io import BytesIO
 from pathlib import Path
+
+from packaging.version import InvalidVersion, Version
 
 VERDICT_PASS = "PASS"
 VERDICT_HOLLOW = "FAIL_HOLLOW"
@@ -33,9 +35,11 @@ ASSERTION_DIFF_RE = re.compile(
     r"\b(assert|expect\(|pytest\.raises\(|assert\.)\b",
 )
 DEFAULT_TIMEOUT_SECONDS = 120
-# Keep this pin aligned with the PyYAML entry in requirements.lock.
+# This bootstrap pin is maintained in Workflows; consumers receive the resolved value.
 PYYAML_VERSION = "6.0.3"
 PYTEST_RUNTIME_DEPENDENCIES = (f"pyyaml=={PYYAML_VERSION}",)
+PYYAML_PROBE_SENTINEL = "__gate_pyyaml_import_ok__"
+PYYAML_PROBE_CODE = f"import yaml; print({PYYAML_PROBE_SENTINEL!r})"
 
 
 @dataclass(frozen=True)
@@ -46,8 +50,31 @@ class DeliberateBreakSpec:
     command: tuple[str, ...]
 
 
+class RuntimeDependencyError(Exception):
+    """Wrap failures raised specifically while repairing runtime dependencies."""
+
+    def __init__(self, error: Exception) -> None:
+        super().__init__(str(error))
+        self.error = error
+
+
+class CommandUnavailableError(Exception):
+    """Wrap OS failures raised while launching the deliberate-break command."""
+
+    def __init__(self, error: OSError) -> None:
+        super().__init__(str(error))
+        self.error = error
+
+
 def _json_result(verdict: str, **fields: object) -> dict[str, object]:
     return {"verdict": verdict, **fields}
+
+
+def _subprocess_output_text(value: str | bytes | None) -> str | None:
+    """Normalize captured subprocess output for JSON result payloads."""
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return value
 
 
 def _write_github_output(**fields: str) -> None:
@@ -134,6 +161,16 @@ def _pytest_command(test_id: str) -> tuple[str, ...]:
     return (sys.executable, "-m", "pytest", test_id, "-q")
 
 
+def _supported_pyyaml_version(installed_version: str | None) -> bool:
+    """Return whether an installed PyYAML version satisfies the bootstrap floor."""
+    if installed_version is None:
+        return False
+    try:
+        return Version(installed_version) >= Version(PYYAML_VERSION)
+    except InvalidVersion:
+        return False
+
+
 def _ensure_pytest_runtime_deps() -> None:
     """Install lightweight dependencies that Gate test-quality may not preinstall.
 
@@ -147,7 +184,7 @@ def _ensure_pytest_runtime_deps() -> None:
     except metadata.PackageNotFoundError:
         installed_version = None
     import_error: Exception | None = None
-    if installed_version == PYYAML_VERSION:
+    if _supported_pyyaml_version(installed_version):
         try:
             import_module("yaml")
         except Exception as exc:
@@ -156,7 +193,15 @@ def _ensure_pytest_runtime_deps() -> None:
             import_error = exc
         else:
             return
-    if installed_version != PYYAML_VERSION or import_error is not None:
+    if not _supported_pyyaml_version(installed_version) or import_error is not None:
+        # Local and custom environments are user-owned; dependency repair may
+        # mutate the active interpreter only in GitHub Actions.
+        if os.environ.get("GITHUB_ACTIONS") != "true":
+            error = ImportError(
+                f"PyYAML >= {PYYAML_VERSION} is required; install "
+                f"{PYTEST_RUNTIME_DEPENDENCIES[0]} in the active environment"
+            )
+            raise error from import_error
         command = [
             sys.executable,
             "-m",
@@ -181,6 +226,34 @@ def _ensure_pytest_runtime_deps() -> None:
             raise error from (import_error or retry_error)
 
 
+def _pyyaml_runtime_needs_repair() -> bool:
+    """Return whether the active PyYAML runtime is missing, stale, or unusable."""
+    try:
+        installed_version = metadata.version("PyYAML")
+    except metadata.PackageNotFoundError:
+        return True
+    if not _supported_pyyaml_version(installed_version):
+        return True
+    try:
+        import_module("yaml")
+    except Exception:
+        return True
+    return False
+
+
+def _uses_pytest_runtime(command: tuple[str, ...]) -> bool:
+    """Return whether a command runs pytest in the active Python environment."""
+    if not command:
+        return False
+    executable = shutil.which(command[0]) or command[0]
+    probe = _python_module_pytest_probe(command, 0)
+    return (
+        Path(executable).resolve() == Path(sys.executable).resolve()
+        and probe is not None
+        and not _python_probe_changes_import_context(probe)
+    )
+
+
 def _run(
     command: tuple[str, ...],
     cwd: Path,
@@ -199,6 +272,434 @@ def _run(
         capture_output=True,
         env=env,
         timeout=timeout,
+    )
+
+
+UV_RUN_VALUE_OPTIONS = frozenset(
+    {
+        "-C",
+        "-P",
+        "-f",
+        "-i",
+        "-p",
+        "-w",
+        "--allow-insecure-host",
+        "--cache-dir",
+        "--color",
+        "--config-file",
+        "--config-setting",
+        "--config-settings-package",
+        "--default-index",
+        "--directory",
+        "--env-file",
+        "--exclude-newer",
+        "--exclude-newer-package",
+        "--extra",
+        "--extra-index-url",
+        "--find-links",
+        "--fork-strategy",
+        "--group",
+        "--index",
+        "--index-strategy",
+        "--index-url",
+        "--keyring-provider",
+        "--link-mode",
+        "--no-binary-package",
+        "--no-build-isolation-package",
+        "--no-build-package",
+        "--no-extra",
+        "--no-group",
+        "--no-sources-package",
+        "--only-group",
+        "--package",
+        "--prerelease",
+        "--project",
+        "--python",
+        "--python-platform",
+        "--refresh-package",
+        "--reinstall-package",
+        "--resolution",
+        "--upgrade-package",
+        "--with",
+        "--with-editable",
+        "--with-requirements",
+    }
+)
+
+
+def _uv_run_pytest_prefix(command: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Return ``uv run`` plus options when its command operand is pytest."""
+    if len(command) < 3 or Path(command[0]).name != "uv" or command[1] != "run":
+        return None
+    index = 2
+    while index < len(command) and command[index].startswith("-"):
+        option = command[index]
+        if option == "--":
+            index += 1
+            break
+        index += 2 if option in UV_RUN_VALUE_OPTIONS else 1
+    if index >= len(command) or Path(command[index]).name != "pytest":
+        return None
+    return command[:index]
+
+
+def _uv_module_pytest_prefix(command: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Return uv options preceding ``-m pytest`` or ``--module pytest``."""
+    if len(command) < 4 or Path(command[0]).name != "uv" or command[1] != "run":
+        return None
+    index = 2
+    while index < len(command) and command[index].startswith("-"):
+        option = command[index]
+        if option in {"-m", "--module"}:
+            if index + 1 < len(command) and command[index + 1] == "pytest":
+                return command[:index]
+            return None
+        if option == "--":
+            return None
+        index += 2 if option in UV_RUN_VALUE_OPTIONS else 1
+    return None
+
+
+PYTHON_VALUE_OPTIONS = frozenset({"-W", "-X", "--check-hash-based-pycs"})
+PYTHON_TERMINATING_OPTIONS = frozenset({"-", "--", "-?", "-V", "-VV", "-h", "--help", "--version"})
+PYTHON_COMPACT_FLAGS = frozenset("bBdEIiOPqRstuvx")
+PYTHON_IMPORT_CONTEXT_FLAGS = frozenset("EIPsS")
+
+
+def _python_probe_changes_import_context(probe: tuple[str, ...]) -> bool:
+    """Return whether a probe uses flags that can change module visibility."""
+    for option in probe[1:]:
+        if option == "-c":
+            break
+        if not option.startswith("-") or option.startswith("--"):
+            continue
+        for character in option[1:]:
+            if character in PYTHON_IMPORT_CONTEXT_FLAGS:
+                return True
+            if character in {"W", "X"}:
+                break
+    return False
+
+
+def _drop_interactive_python_flags(options: tuple[str, ...]) -> tuple[str, ...]:
+    """Omit lowercase ``-i`` from probe argv.
+
+    Interactive mode forces a prompt after ``-c`` scripts. An import-time
+    traceback followed by EOF then exits 0, so PyYAML probe return codes
+    become unreliable when ``i`` is preserved from the original launcher.
+    Uppercase ``-I`` (isolated mode) is kept.
+    """
+    cleaned: list[str] = []
+    for option in options:
+        if option == "-i":
+            continue
+        if option.startswith("-") and not option.startswith("--") and len(option) > 1:
+            body = option[1:]
+            kept: list[str] = []
+            for position, character in enumerate(body):
+                if character == "i":
+                    continue
+                kept.append(character)
+                if character in {"W", "X"}:
+                    kept.append(body[position + 1 :])
+                    break
+            cleaned_body = "".join(kept)
+            if not cleaned_body:
+                continue
+            cleaned.append(f"-{cleaned_body}")
+            continue
+        cleaned.append(option)
+    return tuple(cleaned)
+
+
+def _python_module_pytest_probe(
+    command: tuple[str, ...],
+    python_index: int,
+) -> tuple[str, ...] | None:
+    """Replace Python's program selector only when it is exactly ``-m pytest``."""
+    index = python_index + 1
+    while index < len(command):
+        option = command[index]
+        if option == "-m":
+            if index + 1 < len(command) and command[index + 1] == "pytest":
+                return (
+                    *command[: python_index + 1],
+                    *_drop_interactive_python_flags(command[python_index + 1 : index]),
+                    "-c",
+                    PYYAML_PROBE_CODE,
+                )
+            return None
+        if (
+            option == "-c"
+            or option in PYTHON_TERMINATING_OPTIONS
+            or option.startswith("--help-")
+            or not option.startswith("-")
+        ):
+            return None
+        if option in PYTHON_VALUE_OPTIONS:
+            if option == "--check-hash-based-pycs" and (
+                index + 1 >= len(command)
+                or command[index + 1] not in {"always", "default", "never"}
+            ):
+                return None
+            index += 2
+            continue
+        if option.startswith("--"):
+            return None
+        if option.startswith("-") and not option.startswith("--"):
+            compact = option[1:]
+            for position, character in enumerate(compact):
+                if character in PYTHON_COMPACT_FLAGS:
+                    continue
+                if character in {"V", "h", "?"}:
+                    return None
+                if character in {"W", "X"}:
+                    index += 2 if position + 1 == len(compact) else 1
+                    break
+                if character in {"c", "m"}:
+                    selector_value = compact[position + 1 :]
+                    if character == "m" and (
+                        selector_value == "pytest"
+                        or (
+                            not selector_value
+                            and index + 1 < len(command)
+                            and command[index + 1] == "pytest"
+                        )
+                    ):
+                        prefix = compact[:position].replace("i", "")
+                        preserved = (f"-{prefix}",) if prefix else ()
+                        return (
+                            *command[: python_index + 1],
+                            *_drop_interactive_python_flags(command[python_index + 1 : index]),
+                            *preserved,
+                            "-c",
+                            PYYAML_PROBE_CODE,
+                        )
+                    return None
+                return None
+            else:
+                index += 1
+            continue
+        index += 1
+    return None
+
+
+def _uv_python_module_probe(command: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Build a probe for ``uv run [options] python [flags] -m pytest``."""
+    if len(command) < 4 or Path(command[0]).name != "uv" or command[1] != "run":
+        return None
+    index = 2
+    while index < len(command) and command[index].startswith("-"):
+        option = command[index]
+        if option in {"-m", "--module"}:
+            return None
+        if option == "--":
+            index += 1
+            break
+        index += 2 if option in UV_RUN_VALUE_OPTIONS else 1
+    if index >= len(command) or not re.fullmatch(
+        r"python(?:\d+(?:\.\d+)*)?", Path(command[index]).name
+    ):
+        return None
+    return _python_module_pytest_probe(command, index)
+
+
+def _python_shebang_launcher(
+    executable: Path,
+    resolve_name: Callable[[str], str | None],
+) -> tuple[str, ...] | None:
+    """Return a verified Python shebang launcher, preserving interpreter flags."""
+    try:
+        shebang = executable.read_text(encoding="utf-8").splitlines()[0]
+    except (OSError, UnicodeError, IndexError):
+        return None
+    if not shebang.startswith("#!"):
+        return None
+    try:
+        launcher = shlex.split(shebang[2:].strip())
+    except ValueError:
+        return None
+    if not launcher:
+        return None
+    if Path(launcher[0]).name == "env":
+        env_args = launcher[1:]
+        if env_args[:1] == ["-S"]:
+            env_args = env_args[1:]
+        if not env_args or not re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", Path(env_args[0]).name):
+            return None
+        resolved = resolve_name(env_args[0])
+        if not resolved:
+            return None
+        return (resolved, *env_args[1:])
+    if re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", Path(launcher[0]).name):
+        return tuple(launcher)
+    return None
+
+
+def _uv_pytest_python_launcher(uv_run_prefix: tuple[str, ...], cwd: Path) -> tuple[str, ...] | None:
+    """Resolve the Python shebang launcher used by ``uv run pytest``."""
+    located = _run((*uv_run_prefix, "which", "pytest"), cwd)
+    if located.returncode != 0 or not located.stdout.strip():
+        return None
+
+    def resolve_name(name: str) -> str | None:
+        resolved = _run((*uv_run_prefix, "which", name), cwd)
+        if resolved.returncode != 0 or not resolved.stdout.strip():
+            return None
+        return resolved.stdout.strip().splitlines()[-1]
+
+    pytest_path = Path(located.stdout.strip().splitlines()[-1])
+    return _python_shebang_launcher(pytest_path, resolve_name)
+
+
+def _pyyaml_probe_command(command: tuple[str, ...], cwd: Path) -> tuple[str, ...] | None:
+    """Return a read-only PyYAML import probe for the pytest launcher's runtime."""
+    if uv_prefix := _uv_module_pytest_prefix(command):
+        return (*uv_prefix, "python", "-c", PYYAML_PROBE_CODE)
+    if probe := _uv_python_module_probe(command):
+        return probe
+    if command and re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", Path(command[0]).name):
+        return _python_module_pytest_probe(command, 0)
+    if (uv_prefix := _uv_run_pytest_prefix(command)) and (
+        launcher := _uv_pytest_python_launcher(uv_prefix, cwd)
+    ):
+        return (*launcher, "-c", PYYAML_PROBE_CODE)
+    if command and Path(command[0]).name == "pytest":
+        pytest_path = shutil.which(command[0])
+        if pytest_path and (launcher := _python_shebang_launcher(Path(pytest_path), shutil.which)):
+            return (*launcher, "-c", PYYAML_PROBE_CODE)
+    return None
+
+
+def _pyyaml_probe_succeeds(command: tuple[str, ...], cwd: Path) -> bool:
+    """Check PyYAML in the same subprocess context as the pytest command."""
+    probe_command = _pyyaml_probe_command(command, cwd)
+    if probe_command is None:
+        return False
+    probe = _run(probe_command, cwd)
+    return probe.returncode == 0 and PYYAML_PROBE_SENTINEL in probe.stdout
+
+
+def _run_with_runtime_deps(
+    command: tuple[str, ...],
+    cwd: Path,
+) -> subprocess.CompletedProcess[str]:
+    """Preflight PyYAML in managed pytest runtimes and repair YAML-triggered failures."""
+    managed_runtime = _uses_pytest_runtime(command)
+    managed_runtime_needs_repair = False
+    if managed_runtime:
+        try:
+            managed_runtime_needs_repair = (
+                _pyyaml_runtime_needs_repair() or not _pyyaml_probe_succeeds(command, cwd)
+            )
+        except OSError as exc:
+            raise CommandUnavailableError(exc) from exc
+    if managed_runtime_needs_repair:
+        try:
+            _ensure_pytest_runtime_deps()
+        except (
+            subprocess.TimeoutExpired,
+            subprocess.CalledProcessError,
+            ImportError,
+            OSError,
+        ) as exc:
+            raise RuntimeDependencyError(exc) from exc
+        try:
+            probe_succeeded = _pyyaml_probe_succeeds(command, cwd)
+        except OSError as exc:
+            raise CommandUnavailableError(exc) from exc
+        if not probe_succeeded:
+            error = ImportError("PyYAML is unavailable in the managed pytest command environment")
+            raise RuntimeDependencyError(error) from error
+    try:
+        completed = _run(command, cwd)
+    except OSError as exc:
+        raise CommandUnavailableError(exc) from exc
+    if completed.returncode == 0:
+        return completed
+
+    output = f"{completed.stdout}\n{completed.stderr}".lower()
+    missing_pyyaml = any(
+        marker in output
+        for marker in (
+            "no module named 'yaml'",
+            'no module named "yaml"',
+            "modulenotfounderror: yaml",
+            "importerror: yaml",
+        )
+    )
+    yaml_traceback = bool(re.search(r"(?:^|[/\\])yaml[/\\][^\n]*", output, re.MULTILINE))
+    if yaml_traceback and not missing_pyyaml:
+        if managed_runtime:
+            try:
+                missing_pyyaml = _pyyaml_runtime_needs_repair() or not _pyyaml_probe_succeeds(
+                    command, cwd
+                )
+            except OSError as exc:
+                raise CommandUnavailableError(exc) from exc
+        elif probe_command := _pyyaml_probe_command(command, cwd):
+            try:
+                probe = _run(probe_command, cwd)
+            except OSError as exc:
+                raise CommandUnavailableError(exc) from exc
+            missing_pyyaml = probe.returncode != 0 or PYYAML_PROBE_SENTINEL not in probe.stdout
+    if not missing_pyyaml:
+        return completed
+
+    if not managed_runtime:
+        error = ImportError(
+            "PyYAML failed inside a wrapped or custom deliberate-break command; "
+            "automatic repair is disabled because the wrapper may use a different "
+            "Python environment"
+        )
+        raise RuntimeDependencyError(error) from error
+
+    try:
+        _ensure_pytest_runtime_deps()
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, ImportError, OSError) as exc:
+        raise RuntimeDependencyError(exc) from exc
+    try:
+        probe_succeeded = _pyyaml_probe_succeeds(command, cwd)
+    except OSError as exc:
+        raise CommandUnavailableError(exc) from exc
+    if not probe_succeeded:
+        error = ImportError("PyYAML remained unavailable in the managed pytest command environment")
+        raise RuntimeDependencyError(error) from error
+    try:
+        return _run(command, cwd)
+    except OSError as exc:
+        raise CommandUnavailableError(exc) from exc
+
+
+def _runtime_dependency_error_result(error: Exception) -> dict[str, object]:
+    """Map dependency-repair failures consistently for head and base runs."""
+    if isinstance(error, subprocess.TimeoutExpired):
+        return _json_result(
+            VERDICT_BROKEN,
+            reason="command-timeout",
+            command=list(error.cmd) if isinstance(error.cmd, (tuple, list)) else str(error.cmd),
+            timeout=error.timeout,
+        )
+    if isinstance(error, subprocess.CalledProcessError):
+        return _json_result(
+            VERDICT_BROKEN,
+            reason="dependency-install-failed",
+            command=list(error.cmd) if isinstance(error.cmd, (tuple, list)) else str(error.cmd),
+            returncode=error.returncode,
+            stdout=error.stdout,
+            stderr=error.stderr,
+        )
+    if isinstance(error, ImportError):
+        return _json_result(
+            VERDICT_BROKEN,
+            reason="dependency-import-failed",
+            detail=str(error),
+            cause=str(error.__cause__) if error.__cause__ is not None else None,
+        )
+    return _json_result(
+        VERDICT_BROKEN,
+        reason="dependency-install-unavailable",
+        detail=str(error),
     )
 
 
@@ -313,7 +814,7 @@ def verify_spec(
         )
 
     try:
-        _ensure_pytest_runtime_deps()
+        head_run = _run_with_runtime_deps(spec.command, repo)
     except subprocess.TimeoutExpired as exc:
         return _json_result(
             VERDICT_BROKEN,
@@ -321,37 +822,14 @@ def verify_spec(
             command=list(exc.cmd) if isinstance(exc.cmd, (tuple, list)) else str(exc.cmd),
             timeout=exc.timeout,
         )
-    except subprocess.CalledProcessError as exc:
+    except RuntimeDependencyError as wrapped:
+        return _runtime_dependency_error_result(wrapped.error)
+    except CommandUnavailableError as wrapped:
         return _json_result(
             VERDICT_BROKEN,
-            reason="dependency-install-failed",
-            command=list(exc.cmd) if isinstance(exc.cmd, (tuple, list)) else str(exc.cmd),
-            returncode=exc.returncode,
-            stdout=exc.stdout,
-            stderr=exc.stderr,
-        )
-    except ImportError as exc:
-        return _json_result(
-            VERDICT_BROKEN,
-            reason="dependency-import-failed",
-            detail=str(exc),
-            cause=str(exc.__cause__) if exc.__cause__ is not None else None,
-        )
-    except OSError as exc:
-        return _json_result(
-            VERDICT_BROKEN,
-            reason="dependency-install-unavailable",
-            detail=str(exc),
-        )
-
-    try:
-        head_run = _run(spec.command, repo)
-    except subprocess.TimeoutExpired as exc:
-        return _json_result(
-            VERDICT_BROKEN,
-            reason="command-timeout",
-            command=list(exc.cmd) if isinstance(exc.cmd, (tuple, list)) else str(exc.cmd),
-            timeout=exc.timeout,
+            reason="command-unavailable",
+            command=list(spec.command),
+            detail=str(wrapped.error),
         )
 
     if head_run.returncode != 0:
@@ -371,7 +849,7 @@ def verify_spec(
             base_test = base_dir / spec.test_file
             base_test.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(test_path, base_test)
-            base_run = _run(spec.command, base_dir)
+            base_run = _run_with_runtime_deps(spec.command, base_dir)
     except subprocess.TimeoutExpired as exc:
         return _json_result(
             VERDICT_BROKEN,
@@ -383,6 +861,30 @@ def verify_spec(
         return _json_result(
             VERDICT_BROKEN,
             reason="archive-extract-failed",
+            detail=str(exc),
+        )
+    except RuntimeDependencyError as wrapped:
+        return _runtime_dependency_error_result(wrapped.error)
+    except CommandUnavailableError as wrapped:
+        return _json_result(
+            VERDICT_BROKEN,
+            reason="command-unavailable",
+            command=list(spec.command),
+            detail=str(wrapped.error),
+        )
+    except subprocess.CalledProcessError as exc:
+        return _json_result(
+            VERDICT_BROKEN,
+            reason="archive-command-failed",
+            command=list(exc.cmd) if isinstance(exc.cmd, (tuple, list)) else str(exc.cmd),
+            returncode=exc.returncode,
+            stdout=_subprocess_output_text(exc.stdout),
+            stderr=_subprocess_output_text(exc.stderr),
+        )
+    except OSError as exc:
+        return _json_result(
+            VERDICT_BROKEN,
+            reason="base-setup-failed",
             detail=str(exc),
         )
 
