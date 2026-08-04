@@ -165,7 +165,11 @@ def evaluate_benchmark(payload: dict[str, Any], policy: dict[str, Any]) -> dict[
     category_floors: dict[str, int] = {}
     for category in required_categories:
         floor = raw_overrides.get(category, minimum_per_category)
-        floor = int(floor)
+        if type(floor) is not int:
+            raise ValueError(
+                "minimum_cases_per_category_overrides values must be integers "
+                f"(got {floor!r} for {category!r})"
+            )
         if floor < 1:
             raise ValueError(
                 "minimum_cases_per_category_overrides values must be >= 1 "

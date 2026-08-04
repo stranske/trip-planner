@@ -15,6 +15,7 @@ import tarfile
 import tempfile
 from collections.abc import Iterator
 from dataclasses import dataclass
+from importlib import metadata
 from io import BytesIO
 from pathlib import Path
 
@@ -32,7 +33,8 @@ ASSERTION_DIFF_RE = re.compile(
     r"\b(assert|expect\(|pytest\.raises\(|assert\.)\b",
 )
 DEFAULT_TIMEOUT_SECONDS = 120
-PYTEST_RUNTIME_DEPENDENCIES = ("pyyaml==6.0.3",)
+PYTEST_RUNTIME_VERSION = "6.0.3"
+PYTEST_RUNTIME_DEPENDENCIES = (f"pyyaml=={PYTEST_RUNTIME_VERSION}",)
 
 
 @dataclass(frozen=True)
@@ -140,8 +142,10 @@ def _ensure_pytest_runtime_deps() -> None:
     Actions ``action_required`` approval wait on workflow-touching PRs.
     """
     try:
-        import yaml  # noqa: F401
-    except ImportError:
+        installed_version = metadata.version("PyYAML")
+    except metadata.PackageNotFoundError:
+        installed_version = None
+    if installed_version != PYTEST_RUNTIME_VERSION:
         subprocess.run(
             [
                 sys.executable,
