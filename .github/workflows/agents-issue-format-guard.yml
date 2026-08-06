@@ -1,0 +1,158 @@
+name: Agents Issue Format Guard
+
+on:
+  issues:
+    types: [opened, edited, reopened, labeled, unlabeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue to (re)check"
+        required: true
+        type: string
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue-format-guard-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: >-
+      github.event_name != 'issues' ||
+      github.event.action == 'opened' || github.event.action == 'edited' ||
+      github.event.action == 'reopened' ||
+      ((github.event.action == 'labeled' || github.event.action == 'unlabeled') &&
+      (github.event.label.name == 'agents:auto-pilot-pause' ||
+      github.event.label.name == 'needs-human' ||
+      github.event.label.name == 'tracker:durable' || github.event.label.name == 'wontfix'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve issue
+        id: issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --json number,body,labels,state,author > issue.json
+          jq -r '.body // ""' issue.json > body.md
+          exempt=false
+          held=false
+          if jq -e '[.labels[].name] | any(. == "tracker:durable" or . == "wontfix")' issue.json >/dev/null; then exempt=true; fi
+          if jq -e '[.labels[].name] | any(. == "agents:auto-pilot-pause" or . == "needs-human")' issue.json >/dev/null; then held=true; fi
+          if jq -er '.author.login // ""' issue.json | grep -qiE '(\[bot\]|^renovate$|^dependabot$)'; then exempt=true; fi
+          if grep -qiE 'do not dispatch|not a (repo|cloud) coding task' body.md; then exempt=true; fi
+          {
+            echo "number=$NUMBER"
+            echo "exempt=$exempt"
+            echo "held=$held"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Validate against AGENT_ISSUE_FORMAT
+        id: validate
+        if: steps.issue.outputs.exempt != 'true'
+        run: |
+          set +e
+          if [[ ! -f .github/scripts/issue_format.py ]]; then
+            echo "validator absent — skipping while this repo is mid-sync"
+            echo "rc=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python3 .github/scripts/issue_format.py body.md > report.md
+          rc=$?
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          cat report.md || true
+          if [[ "$rc" -ne 0 && "$rc" -ne 1 ]]; then
+            exit "$rc"
+          fi
+
+      - name: Invalidate stale format completion after an invalid edit
+        if: >-
+          steps.issue.outputs.exempt != 'true' && github.event.action == 'edited' &&
+          steps.validate.outputs.rc == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.issue.outputs.number }}
+        run: |
+          set -euo pipefail
+          if gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json labels \
+              --jq '.labels[].name' | grep -qx 'agents:formatted'; then
+            gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --remove-label "agents:formatted"
+            echo "Invalid issue edit — cleared agents:formatted before rerouting."
+          fi
+
+      - name: Route non-conforming issue to the optimizer
+        if: steps.issue.outputs.exempt != 'true' && steps.issue.outputs.held != 'true' && steps.validate.outputs.rc == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.issue.outputs.number }}
+        run: |
+          set -euo pipefail
+          if gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json labels \
+              --jq '[.labels[].name] | any(. == "agents:auto-pilot-pause" or . == "needs-human")' | grep -qx true; then
+            echo "Issue is now held — skipping optimizer dispatch."
+            exit 0
+          fi
+          fingerprint="$(sha256sum body.md | cut -c1-12)"
+          if ! gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json comments \
+              --jq '.comments[].body' | grep -qF "format-guard:$fingerprint"; then
+            {
+              cat report.md
+              echo
+              echo "Dispatching the Agents Issue Optimizer format phase."
+              echo
+              echo "<!-- format-guard:$fingerprint -->"
+            } | gh issue comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file -
+          fi
+          if gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json labels \
+              --jq '.labels[].name' | grep -qx 'agents:formatted'; then
+            gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --remove-label "agents:formatted" \
+              || echo "::warning::could not remove agents:formatted"
+          fi
+          gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "agents:format" \
+            || echo "::warning::could not apply agents:format (label missing in this repo?)"
+          # GITHUB_TOKEN label edits do not start issues:labeled workflows; dispatch is explicit.
+          gh workflow run agents-issue-optimizer.yml --repo "$GITHUB_REPOSITORY" \
+            -f issue_number="$NUMBER" -f phase=format
+
+      - name: Restore format completion after an unheld revalidation
+        if: >-
+          steps.issue.outputs.exempt != 'true' && steps.validate.outputs.rc == '0' &&
+          github.event.action == 'unlabeled' &&
+          (github.event.label.name == 'agents:auto-pilot-pause' || github.event.label.name == 'needs-human')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.issue.outputs.number }}
+        run: |
+          set -euo pipefail
+          if gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json labels \
+              --jq '[.labels[].name] | any(. == "agents:auto-pilot-pause" or . == "needs-human")' | grep -qx true; then
+            echo "Issue remains held — leaving agents:formatted cleared."
+            exit 0
+          fi
+          gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "agents:formatted" \
+            || echo "::warning::could not apply agents:formatted (label missing in this repo?)"
+          echo "Unheld issue revalidated — restored agents:formatted."
+
+      - name: Clear the stale format trigger
+        if: steps.issue.outputs.exempt != 'true' && steps.issue.outputs.held != 'true' && steps.validate.outputs.rc == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ steps.issue.outputs.number }}
+        run: |
+          set -euo pipefail
+          if gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json labels \
+              --jq '.labels[].name' | grep -qx 'agents:format'; then
+            gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --remove-label "agents:format"
+            echo "Conforms now — cleared agents:format."
+          fi
