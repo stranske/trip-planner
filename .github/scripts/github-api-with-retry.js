@@ -428,7 +428,7 @@ async function withRetry(fn, options = {}) {
           ? 'rate limit'
           : 'transient error';
 
-      console.log(
+      console.error(
         `${retryReason} (attempt ${attempt + 1}/${maxRetries + 1}). ` +
         `Retrying in ${Math.round(actualDelay / 1000)}s...`
       );
