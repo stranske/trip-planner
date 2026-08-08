@@ -103,7 +103,10 @@ def _headings(body: str) -> list[tuple[str, int, int]]:
 
 def _find(body: str, aliases: tuple[str, ...]) -> int | None:
     for text, idx, _ in _headings(body):
-        if any(text == alias or text.startswith(f"{alias} (") for alias in aliases):
+        if any(
+            text == alias or text.startswith((f"{alias} (", f"{alias} -", f"{alias} /"))
+            for alias in aliases
+        ):
             return idx
     return None
 
