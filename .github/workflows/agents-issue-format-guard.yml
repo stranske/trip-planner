@@ -16,8 +16,15 @@ permissions:
   issues: write
 
 concurrency:
-  group: issue-format-guard-${{ github.event.issue.number || inputs.issue_number }}
-  cancel-in-progress: true
+  # Event inputs are null for issue events, so retain the manual fallback
+  # without making normal issue-triggered runs depend on the dispatch-only
+  # `inputs` context.
+  group: >-
+    issue-format-guard-${{
+    github.event.issue.number || github.event.inputs.issue_number ||
+    github.run_id }}
+  # A skipped label event must never cancel an in-flight opened/edited check.
+  cancel-in-progress: false
 
 jobs:
   check:
@@ -39,7 +46,7 @@ jobs:
         id: issue
         env:
           GH_TOKEN: ${{ github.token }}
-          NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+          NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
         run: |
           set -euo pipefail
           gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" \
@@ -47,6 +54,14 @@ jobs:
           jq -r '.body // ""' issue.json > body.md
           exempt=false
           held=false
+          # A closed issue has nothing left to format. Routing one to the optimizer
+          # produces a body edit, that edit re-fires this guard, and the pair loops
+          # against work that is already delivered — see Fine-Art-Archive#464, which
+          # kept formatting for 17.5 hours after it was closed.
+          if [[ "$(jq -r '.state // "" | ascii_downcase' issue.json)" == "closed" ]]; then
+            echo "Issue is closed — nothing to format."
+            exempt=true
+          fi
           if jq -e '[.labels[].name] | any(. == "tracker:durable" or . == "wontfix")' issue.json >/dev/null; then exempt=true; fi
           if jq -e '[.labels[].name] | any(. == "agents:auto-pilot-pause" or . == "needs-human")' issue.json >/dev/null; then held=true; fi
           if jq -er '.author.login // ""' issue.json | grep -qiE '(\[bot\]|^renovate$|^dependabot$)'; then exempt=true; fi
@@ -55,7 +70,16 @@ jobs:
             echo "number=$NUMBER"
             echo "exempt=$exempt"
             echo "held=$held"
+            echo "state=$(jq -r '.state' issue.json)"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Setup API client
+        if: steps.issue.outputs.exempt != 'true' && steps.issue.outputs.held != 'true'
+        uses: ./.github/actions/setup-api-client
+        with:
+          # This guard only reads issue comments with the workflow token. Do not
+          # expose the repository-wide secret bundle to the composite action.
+          github_token: ${{ github.token }}
 
       - name: Validate against AGENT_ISSUE_FORMAT
         id: validate
@@ -89,12 +113,36 @@ jobs:
 
       - name: Invalidate stale format completion after an invalid issue change
         if: >-
-          steps.issue.outputs.exempt != 'true' && steps.validate.outputs.rc == '1'
+          steps.issue.outputs.exempt != 'true' && steps.issue.outputs.state == 'OPEN' &&
+          steps.validate.outputs.rc == '1'
         env:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ steps.issue.outputs.number }}
         run: |
           set -euo pipefail
+          live_issue="$(mktemp)"
+          live_body="$(mktemp)"
+          error_file="$(mktemp)"
+          trap 'rm -f "$live_issue" "$live_body" "$error_file"' EXIT
+          gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json body,state > "$live_issue"
+          if [[ "$(jq -r '.state' "$live_issue")" != "OPEN" ]]; then
+            echo "Issue is now closed — preserving agents:formatted."
+            exit 0
+          fi
+          jq -r '.body // ""' "$live_issue" > "$live_body"
+          set +e
+          python3 .github/scripts/issue_format.py "$live_body" > /dev/null 2> "$error_file"
+          live_rc=$?
+          set -e
+          if [[ "$live_rc" -eq 0 ]]; then
+            echo "Live body now conforms — preserving agents:formatted."
+            exit 0
+          fi
+          if [[ "$live_rc" -ne 1 || -s "$error_file" ]]; then
+            echo "::error::issue-format validator failed unexpectedly during label revalidation"
+            cat "$error_file" >&2
+            exit "$live_rc"
+          fi
           if gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json labels \
               --jq '.labels[].name' | grep -qx 'agents:formatted'; then
             if gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --remove-label "agents:formatted"; then
@@ -105,38 +153,189 @@ jobs:
           fi
 
       - name: Route non-conforming issue to the optimizer
-        if: steps.issue.outputs.exempt != 'true' && steps.issue.outputs.held != 'true' && steps.validate.outputs.rc == '1'
+        if: steps.issue.outputs.exempt != 'true' && steps.issue.outputs.held != 'true' && steps.issue.outputs.state == 'OPEN' && steps.validate.outputs.rc == '1'
         env:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ steps.issue.outputs.number }}
         run: |
           set -euo pipefail
-          if gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json labels \
-              --jq '[.labels[].name] | any(. == "agents:auto-pilot-pause" or . == "needs-human")' | grep -qx true; then
+          # Re-fetch before side effects: cancel-in-progress is false so a queued
+          # older run must not dispatch against a body a newer edit already fixed.
+          gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --json number,body,labels,state,author > live.json
+          jq -r '.body // ""' live.json > body.md
+          if [[ "$(jq -r '.state' live.json)" != "OPEN" ]]; then
+            echo "Issue is now closed — skipping optimizer dispatch."
+            exit 0
+          fi
+          if jq -e '[.labels[].name] | any(. == "agents:auto-pilot-pause" or . == "needs-human")' live.json >/dev/null; then
             echo "Issue is now held — skipping optimizer dispatch."
             exit 0
           fi
-          fingerprint="$(sha256sum body.md | cut -c1-12)"
-          if ! gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json comments \
-              --jq '.comments[].body' | grep -qF "format-guard:$fingerprint"; then
-            {
-              cat report.md
-              echo
-              echo "Dispatching the Agents Issue Optimizer format phase."
-              echo
-              echo "<!-- format-guard:$fingerprint -->"
-            } | gh issue comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file -
+          if [[ -f .github/scripts/issue_format.py ]]; then
+            error_file="$(mktemp)"
+            set +e
+            python3 .github/scripts/issue_format.py body.md > report.md 2> "$error_file"
+            revalidate_rc=$?
+            set -e
+            if [[ "$revalidate_rc" -eq 0 ]]; then
+              echo "Live body now conforms — skipping optimizer dispatch."
+              rm -f "$error_file"
+              exit 0
+            fi
+            # Exit 1 is used for both non-conformance and Python crashes; stderr
+            # distinguishes a validator runtime error (fail closed) from a normal
+            # non-conforming body (continue to fingerprint/optimizer).
+            if [[ "$revalidate_rc" -eq 1 && -s "$error_file" ]]; then
+              echo "::error::issue-format validator failed unexpectedly during revalidation"
+              cat "$error_file" >&2
+              rm -f "$error_file"
+              exit 1
+            fi
+            if [[ "$revalidate_rc" -ne 1 ]]; then
+              echo "::error::issue-format validator failed unexpectedly during revalidation (exit $revalidate_rc)"
+              cat "$error_file" >&2
+              rm -f "$error_file"
+              exit "$revalidate_rc"
+            fi
+            rm -f "$error_file"
           fi
-          if gh issue view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json labels \
-              --jq '.labels[].name' | grep -qx 'agents:formatted'; then
+          fingerprint="$(sha256sum body.md | cut -c1-12)"
+          marker="<!-- format-guard:$fingerprint -->"
+          retry_marker_prefix="<!-- format-guard:$fingerprint:attempt:"
+          # Only trust exact HTML markers authored by github-actions[bot]
+          # (immutable account id 41898282 when the REST payload includes user.id).
+          marker_state="$(
+          FORMAT_GUARD_MARKER="$marker" \
+          FORMAT_GUARD_RETRY_PREFIX="$retry_marker_prefix" \
+          node - <<'NODE'
+          (async () => {
+            const { Octokit } = require('@octokit/rest');
+            const { createTokenAwareRetry } = require('./.github/scripts/github-api-with-retry.js');
+            const github = new Octokit({ auth: process.env.GH_TOKEN });
+            const core = { info: () => {}, warning: console.warn, debug: () => {} };
+            const { paginateWithRetry } = await createTokenAwareRetry({
+              github,
+              core,
+              env: process.env,
+              task: 'issue-format-guard',
+              capabilities: ['issues:read'],
+            });
+            const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
+            const comments = await paginateWithRetry(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number: Number(process.env.NUMBER), per_page: 100 }
+            );
+            const isCurrentAttemptMarker = (body) =>
+              body.includes(process.env.FORMAT_GUARD_MARKER)
+              || body.includes(process.env.FORMAT_GUARD_RETRY_PREFIX);
+            const trusted = comments.some((comment) =>
+              comment.user?.login === 'github-actions[bot]'
+              && (comment.user?.id == null || comment.user.id === 41898282)
+              && isCurrentAttemptMarker(comment.body || '')
+            );
+            const attempts = comments.filter((comment) =>
+              comment.user?.login === 'github-actions[bot]'
+              && (comment.user?.id == null || comment.user.id === 41898282)
+              && isCurrentAttemptMarker(comment.body || '')
+            ).length;
+            process.stdout.write(JSON.stringify({ attempts, trusted }));
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          )"
+          trusted_marker="$(jq -r '.trusted' <<<"$marker_state")"
+          format_guard_attempts="$(jq -r '.attempts' <<<"$marker_state")"
+          max_format_guard_attempts=3
+          format_guard_next_attempt=$((format_guard_attempts + 1))
+          attempt_marker="${retry_marker_prefix}${format_guard_next_attempt} -->"
+          if [[ "$format_guard_attempts" -ge "$max_format_guard_attempts" ]]; then
+            echo "Format guard exhausted $format_guard_attempts optimizer attempts; pausing issue."
+            gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" \
+              --add-label "agents:auto-pilot-pause" --remove-label "agents:format"
+            gh issue comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body \
+              "<!-- format-guard:attempt-cap -->
+              Automated formatting stopped after $format_guard_attempts optimizer attempts. Fix the issue body manually, then remove agents:auto-pilot-pause before retrying."
+            exit 0
+          fi
+          has_format_label=false
+          if jq -e '[.labels[].name] | any(. == "agents:format")' live.json >/dev/null; then
+            has_format_label=true
+          fi
+          # The marker is written only after dispatch succeeds.  Keep the label as
+          # the in-flight lease: a repeated guard run must not enqueue another
+          # optimizer while that lease is still present.  If the label was removed,
+          # retry the dispatch because the earlier handoff no longer owns the work.
+          dispatch=true
+          if [[ "$trusted_marker" == true && "$has_format_label" == true ]]; then
+            echo "Identical invalid body is already routed and in flight; skipping duplicate dispatch."
+            dispatch=false
+          elif [[ "$trusted_marker" == true ]]; then
+            echo "Prior format-guard marker present but agents:format is absent — retrying optimizer dispatch."
+          fi
+          if jq -e '[.labels[].name] | any(. == "agents:formatted")' live.json >/dev/null; then
             gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --remove-label "agents:formatted" \
               || echo "::warning::could not remove agents:formatted"
           fi
-          gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "agents:format" \
-            || echo "::warning::could not apply agents:format (label missing in this repo?)"
+          if [[ "$dispatch" != true ]]; then
+            exit 0
+          fi
+          # Acquiring the label is the handoff lease. Do not dispatch without it:
+          # otherwise a trusted marker alone could repeat the optimizer dispatch.
+          if ! gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "agents:format"; then
+            echo "::error::could not acquire agents:format lease; refusing optimizer dispatch"
+            exit 1
+          fi
           # GITHUB_TOKEN label edits do not start issues:labeled workflows; dispatch is explicit.
-          gh workflow run agents-issue-optimizer.yml --repo "$GITHUB_REPOSITORY" \
-            -f issue_number="$NUMBER" -f phase=format
+          # Persist the completion marker only after a successful workflow_dispatch so a
+          # failed run remains retryable on the next guard pass.
+          # Capture the attempt clock before dispatch: gh workflow run can exit non-zero
+          # after GitHub has already accepted the request.
+          dispatch_attempted_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if ! gh workflow run agents-issue-optimizer.yml --repo "$GITHUB_REPOSITORY" \
+              -f issue_number="$NUMBER" -f phase=format; then
+            accepted=false
+            for _try in 1 2 3 4 5; do
+              sleep 2
+              # shellcheck disable=SC2016
+              match_count=$(gh run list --repo "$GITHUB_REPOSITORY" \
+                --workflow=agents-issue-optimizer.yml \
+                --event workflow_dispatch \
+                --limit 20 \
+                --json createdAt,displayTitle \
+                | jq --arg since "$dispatch_attempted_at" --arg issue "#$NUMBER" \
+                  '[.[] | select(.createdAt >= $since and (.displayTitle | endswith($issue)))] | length')
+              if [[ "${match_count:-0}" -gt 0 ]]; then
+                accepted=true
+                break
+              fi
+            done
+            if [[ "$accepted" == true ]]; then
+              {
+                cat report.md
+                echo
+                echo "Optimizer dispatch was accepted despite a CLI error; preserving the format lease."
+                echo
+                echo "$attempt_marker"
+              } | gh issue comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file -
+              echo "::warning::optimizer dispatch CLI failed but a matching run was accepted; preserving agents:format lease"
+              echo "::error::optimizer dispatch status ambiguous; recorded the accepted attempt for the retry cap"
+              exit 1
+            fi
+            gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --remove-label "agents:format" \
+              || echo "::warning::could not release failed agents:format lease"
+            echo "::error::optimizer dispatch failed; no completion marker written so later runs can retry"
+            exit 1
+          fi
+          {
+            cat report.md
+            echo
+            echo "Dispatched the Agents Issue Optimizer format phase (attempt $format_guard_next_attempt of $max_format_guard_attempts)."
+            echo
+            echo "$attempt_marker"
+          } | gh issue comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file -
 
       - name: Restore format completion after an unheld revalidation
         if: >-

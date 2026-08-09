@@ -10,8 +10,6 @@ filed with no label and no Tasks/Acceptance block is invisible to the entire
 pipeline — nothing validates it, nothing optimises it, nothing claims it. Local
 automation that files *findings* rather than *work orders* therefore produces
 issues no agent can ever pick up: good evidence, permanently unactionable.
-(Observed in Fine-Art-Archive #406-409: four well-evidenced audit findings, zero
-labels, no Tasks section between them.)
 
 Used at both ends:
   * `agents-issue-format-guard.yml` validates every issue on open/edit and, on
@@ -63,14 +61,92 @@ RECOMMENDED: dict[str, tuple[str, ...]] = {
 GATE = re.compile(
     r"(tests?/[\w./-]+\.py(::[\w:\[\]-]+)?"
     r"|\btest_[\w]+"
-    r"|\bpytest\b|\bnpm test\b|\bmake test\b"
+    r"|\bpytest\b|\b(?:python(?:3)?\s+-m\s+(?:unittest|pytest)\b)"
+    r"|\bnode\s+--test\b|\b(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:test|vitest|jest|playwright)\b"
+    r"|\b(?:make|just|cargo|go|dotnet)\s+(?:test|check)\b"
     r"|\bgh workflow run\b|\bgh run\b"
     r"|\bcurl\b|\bHTTP [1-5]\d\d\b"
     r"|\b(?:API|endpoint|request|response)\s+(?:returns?|responds with)\s+[1-5]\d\d(?:\s+status)?\b"
     r"|\bsmoke\b|\bverif\w*)",
     re.I,
 )
-BANNED_ADJECTIVES = ("clean", "nice", "good", "fast", "better", "intuitive", "polished")
+BANNED_ADJECTIVES = (
+    "clean",
+    "nice",
+    "good",
+    "fast",
+    "better",
+    "intuitive",
+    "polished",
+    "performant",
+)
+_TASK_CATEGORY = r"(?:file|function|class|method|path|config(?:uration)?|key|job|workflow|command)"
+_TASK_EXTENSION = (
+    r"py|js|jsx|ts|tsx|yml|yaml|json|toml|md|sh|go|rs|java|kt|rb|php|css|html|sql|"
+    r"xml|txt|ini|cfg|conf|lock|gradle|swift|c|cc|cpp|h|hpp|cs|fs|r|jl"
+)
+_TASK_KNOWN_BASENAME = (
+    r"(?:Dockerfile|Makefile|Justfile|Procfile|Gemfile|Rakefile|"
+    r"Cargo\.toml|pyproject\.toml|package\.json|go\.mod|go\.sum|pom\.xml|"
+    r"build\.gradle|CMakeLists\.txt|README(?:\.(?:md|rst|txt))?|"
+    r"LICENSE(?:\.(?:md|txt))?|\.gitignore|\.editorconfig)"
+)
+_TASK_COMMAND = (
+    r"(?:python(?:3)?|pytest|npm|pnpm|yarn|make|just|cargo|go|dotnet|gh|curl|"
+    r"node|vitest|jest|playwright)"
+)
+
+
+def _concrete_span(span: str) -> bool:
+    """Return True when a backticked/unquoted token names a real work target."""
+    span = span.strip()
+    if not span:
+        return False
+    if re.fullmatch(_TASK_CATEGORY, span, re.I):
+        return False
+    # Bare lowercase English words (`bugs`, `later`) are not actionable targets.
+    if re.fullmatch(r"[a-z]{2,24}", span):
+        return False
+    if "/" in span or span.startswith("."):
+        return True
+    if re.fullmatch(_TASK_KNOWN_BASENAME, span, re.I):
+        return True
+    if re.fullmatch(rf"[\w.-]+\.(?:{_TASK_EXTENSION})", span, re.I):
+        return True
+    if "_" in span or "." in span:
+        return True
+    # Multi-segment PascalCase or lowerCamelCase symbols (e.g. IssueFormatter,
+    # calculateDiscount). A capitalized interior segment distinguishes them from
+    # generic lowercase prose.
+    return re.fullmatch(r"[A-Za-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]+", span) is not None
+
+
+def _task_has_concrete_target(item: str) -> bool:
+    """True when a task checkbox names a file, path, symbol, config, job, or command."""
+    # Category word must be followed by a concrete identifier (not "file handling").
+    for match in re.finditer(rf"\b{_TASK_CATEGORY}\s+(`[^`]+`|[^\s]+)", item, re.I):
+        token = match.group(1)
+        span = token[1:-1] if token.startswith("`") and token.endswith("`") else token.strip("'\"")
+        if _concrete_span(span):
+            return True
+    for match in re.finditer(r"`([^`]+)`", item):
+        if _concrete_span(match.group(1)):
+            return True
+    for token in re.findall(r"\b[A-Za-z][A-Za-z0-9_]*\b", item):
+        # Unquoted: only unambiguous lowerCamelCase (calculateDiscount).
+        # Brand/prose capitals (GitHub, JavaScript, OpenAI) must not satisfy.
+        if not re.fullmatch(r"[a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]+", token):
+            continue
+        if _concrete_span(token):
+            return True
+    if re.search(rf"(?:^|[\s])({_TASK_KNOWN_BASENAME})\b", item, re.I):
+        return True
+    if re.search(rf"(?:^|[\s])([\w.-]+\.(?:{_TASK_EXTENSION}))\b", item, re.I):
+        return True
+    # Unquoted path with a directory separator (src/main.go, .github/workflows/x.yml).
+    if re.search(r"(?:^|[\s])((?:\./)?[\w.-]+(?:/[\w./-]+)+)", item):
+        return True
+    return re.search(rf"\b{_TASK_COMMAND}\b", item, re.I) is not None
 
 
 def _headings(body: str) -> list[tuple[str, int, int]]:
@@ -165,12 +241,18 @@ def validate(body: str) -> Report:
             report.missing_recommended.append(name)
 
     tasks_at = _find(body, REQUIRED["Tasks"])
-    if tasks_at is not None and not re.search(
-        r"^\s*[-*]\s*\[[ xX]\]", _section_text(body, tasks_at), re.M
-    ):
-        report.problems.append(
-            "`Tasks` has no checkbox items (`- [ ] …`); agents track progress by them."
+    if tasks_at is not None:
+        task_items = re.findall(
+            r"^\s*[-*]\s*\[[ xX]\]\s*(.+)$", _section_text(body, tasks_at), re.M
         )
+        if not task_items:
+            report.problems.append(
+                "`Tasks` has no checkbox items (`- [ ] …`); agents track progress by them."
+            )
+        elif any(not _task_has_concrete_target(item) for item in task_items):
+            report.problems.append(
+                "`Tasks` must name a concrete file, symbol, path, config key, job, or command."
+            )
 
     acceptance_at = _find(body, REQUIRED["Acceptance Criteria"])
     if acceptance_at is not None:
