@@ -1,5 +1,13 @@
 name: Agents Issue Optimizer
 
+# The recursion guard below correlates prior runs by issue number via `displayTitle`.
+# workflow_dispatch runs otherwise display the bare workflow name, so the guard matched
+# nothing and reported 0 for an issue it was re-running every minute. Pin the issue
+# number into the run name so both trigger types are correlatable.
+run-name: >-
+  Agents Issue Optimizer #${{
+  github.event.issue.number || inputs.issue_number }}
+
 on:
   issues:
     types: [labeled]
@@ -17,6 +25,13 @@ on:
           - analyze
           - apply
           - format
+
+concurrency:
+  group: >-
+    agents-issue-optimizer-${{
+    github.repository }}-${{
+    github.event.issue.number || github.event.inputs.issue_number || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   optimize_issue:
@@ -126,6 +141,7 @@ jobs:
           repository: stranske/Workflows
           path: workflows-scripts
           sparse-checkout: |
+            .github/scripts/issue_format.py
             config
             scripts/langchain
             tools
@@ -163,14 +179,17 @@ jobs:
             '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
             || date -u -v-1H '+%Y-%m-%dT%H:%M:%SZ')
 
+          # `gh run list` defaults to 20 runs, which a tight loop exhausts inside the
+          # window; ask for enough history to actually see the recursion.
           # shellcheck disable=SC2016
           count=$(gh run list \
             --workflow=agents-issue-optimizer.yml \
+            --limit 100 \
             --json conclusion,createdAt,displayTitle \
             | jq --arg cutoff "$one_hour_ago" \
               --arg issue "#$ISSUE_NUMBER" \
               '[.[] | select(.createdAt > $cutoff
-              and (.displayTitle | contains($issue)))
+              and (.displayTitle | endswith($issue)))
               ] | length')
 
           echo "Optimizer runs for issue #$ISSUE_NUMBER in last hour: $count"
@@ -340,7 +359,8 @@ jobs:
           });
           NODE
 
-          python - <<'PY' || true
+          set +e
+          python - <<'PY'
           import json
           import sys
           sys.path.insert(0, 'workflows-scripts/scripts/langchain')
@@ -350,33 +370,38 @@ jobs:
               issue = json.load(f)
           with open('/tmp/open_issues.json', encoding='utf-8') as f:
               open_issues = json.load(f)
-            with open('/tmp/dedup_comments.json', encoding='utf-8') as f:
-                comments = json.load(f)
+          with open('/tmp/dedup_comments.json', encoding='utf-8') as f:
+              comments = json.load(f)
 
-            marker = issue_dedup.SIMILAR_ISSUES_MARKER
-            for comment in comments or []:
-                body = (comment or {}).get('body') or ''
-                if marker in body:
-                    raise SystemExit(0)
+          marker = issue_dedup.SIMILAR_ISSUES_MARKER
+          for comment in comments or []:
+              body = (comment or {}).get('body') or ''
+              if marker in body:
+                  raise SystemExit(0)
 
           # Conservative defaults; can be tuned later.
           threshold = 0.82
-            store = issue_dedup.build_issue_vector_store(open_issues)
-            if store is None:
-                raise SystemExit(0)
+          store = issue_dedup.build_issue_vector_store(open_issues)
+          if store is None:
+              raise SystemExit(0)
 
-            title = (issue.get('title') or '').strip()
-            body = (issue.get('body') or '').strip()
-            query = f"{title}\n{body}".strip() if body else title
-            if not query:
-                raise SystemExit(0)
+          title = (issue.get('title') or '').strip()
+          body = (issue.get('body') or '').strip()
+          query = f"{title}\n{body}".strip() if body else title
+          if not query:
+              raise SystemExit(0)
 
-            matches = issue_dedup.find_similar_issues(store, query, threshold=threshold, k=5)
-            comment = issue_dedup.format_similar_issues_comment(matches, max_items=5)
-            if comment:
-                with open('/tmp/dedup_comment.md', 'w', encoding='utf-8') as out:
-                    out.write(comment)
+          matches = issue_dedup.find_similar_issues(store, query, threshold=threshold, k=5)
+          comment = issue_dedup.format_similar_issues_comment(matches, max_items=5)
+          if comment:
+              with open('/tmp/dedup_comment.md', 'w', encoding='utf-8') as out:
+                  out.write(comment)
           PY
+          dedup_rc=$?
+          set -e
+          if [[ $dedup_rc -ne 0 ]]; then
+            echo "::warning::issue dedup python exited with $dedup_rc; continuing without similar-issues comment"
+          fi
 
           if [[ -f /tmp/dedup_comment.md ]]; then
             gh issue comment "${ISSUE_NUMBER}" --body-file /tmp/dedup_comment.md || true
@@ -466,6 +491,9 @@ jobs:
           print('Suggestions applied successfully')
           " || exit 1
 
+          # Keep agents:formatted truthful for apply-phase output too.
+          python workflows-scripts/.github/scripts/issue_format.py /tmp/updated_body.md
+
           # Update issue body
           gh issue edit "${ISSUE_NUMBER}" --body-file /tmp/updated_body.md
 
@@ -503,6 +531,11 @@ jobs:
               f.write(formatted)
           print('Issue formatted successfully')
           " || exit 1
+
+          # Keep the format-result label truthful: the generated issue must
+          # pass the canonical Workflows validator before it can be marked
+          # agents:formatted below.
+          python workflows-scripts/.github/scripts/issue_format.py /tmp/formatted_body.md
 
           # Update issue body with formatted version
           gh issue edit "${ISSUE_NUMBER}" --body-file /tmp/formatted_body.md
@@ -550,3 +583,14 @@ jobs:
             body="${body//RUN_URL_PLACEHOLDER/${RUN_URL}}"
             gh issue comment "${ISSUE_NUMBER}" --body "$body" || true
           fi
+
+      - name: Release failed format lease
+        if: (failure() || cancelled()) && steps.check.outputs.should_run == 'true' && steps.check.outputs.phase == 'format'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token || github.token }}
+          ISSUE_NUMBER: ${{ steps.check.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          # A guard retry may proceed only after the failed format run releases its lease.
+          gh issue edit "$ISSUE_NUMBER" --remove-label "agents:format" \
+            || echo "::warning::could not release failed agents:format lease"
