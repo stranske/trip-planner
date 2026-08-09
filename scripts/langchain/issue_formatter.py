@@ -10,10 +10,12 @@ Run with:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +47,20 @@ except ImportError:  # pragma: no cover - fallback for direct invocation
 # Maximum issue body size to prevent OpenAI rate limit errors (30k TPM limit)
 # ~4 chars per token, so 50k chars ≈ 12.5k tokens, leaving headroom for prompt + output
 MAX_ISSUE_BODY_SIZE = 50000
+
+
+@lru_cache(maxsize=1)
+def _issue_format_validator() -> Any:
+    """Load the fleet's single issue-format definition without forking it."""
+    validator_path = Path(__file__).resolve().parents[2] / ".github/scripts/issue_format.py"
+    spec = importlib.util.spec_from_file_location("_fleet_issue_format", validator_path)
+    if spec is None or spec.loader is None:  # pragma: no cover - repository invariant
+        raise RuntimeError(f"Cannot load canonical issue-format validator: {validator_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
 
 # Workflow tags written into the reuse marker. Tagging every stage of the
 # auto-pilot format -> optimize -> apply chain lets any stage detect a body it (or
@@ -151,6 +167,19 @@ SECTION_TITLES = {
 
 LIST_ITEM_REGEX = re.compile(r"^(\s*)([-*+]|\d+[.)]|[A-Za-z][.)])\s+(.*)$")
 CHECKBOX_REGEX = re.compile(r"^\[([ xX])\]\s*(.*)$")
+VERIFY_HINT_REGEX = re.compile(r"\(verify:\s*([^\n)]+)\)", re.IGNORECASE)
+SAFE_VERIFY_COMMAND_RE = re.compile(
+    r"^(?:"
+    r"(?:python(?:3)?\s+-m\s+)?pytest\b"
+    r"|node\s+--test\b"
+    r"|(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:test|vitest|jest|playwright)\b"
+    r"|(?:make|just|cargo|go|dotnet)\s+(?:test|check)\b"
+    r"|gh\s+(?:workflow\s+run|run)\b"
+    r"|curl\s+\S+"
+    r")",
+    re.IGNORECASE,
+)
+SHELL_METACHARACTERS_RE = re.compile(r"[;&|`$<>\n\r]")
 
 
 def _context_token_budget() -> int:
@@ -355,6 +384,30 @@ def _format_issue_fallback(issue_body: str) -> str:
     impl_text = join_or_placeholder(impl_lines, "_Not provided._")
     tasks_text = join_or_placeholder(tasks_lines, "- [ ] _Not provided._")
     acceptance_text = join_or_placeholder(acceptance_lines, "- [ ] _Not provided._")
+    try:
+        validator = _issue_format_validator()
+    except (ImportError, OSError, RuntimeError, SyntaxError):
+        # Consumer checkouts can be mid-sync or missing the canonical validator.
+        # Keep the pre-validator fallback usable instead of failing the formatter.
+        validator = None
+    gate = getattr(validator, "GATE", None) if validator is not None else None
+    if gate is not None and not gate.search(acceptance_text):
+        verify_hint = VERIFY_HINT_REGEX.search(tasks_text)
+        if verify_hint:
+            command = verify_hint.group(1).strip().strip("`")
+            if command.startswith("pytest "):
+                command = f"python3 -m {command}"
+            if (
+                SAFE_VERIFY_COMMAND_RE.match(command)
+                and not SHELL_METACHARACTERS_RE.search(command)
+                and gate.search(command)
+            ):
+                if is_placeholder_checklist_text(acceptance_text) or re.fullmatch(
+                    r"- \[ \] _Not provided\._", acceptance_text.strip()
+                ):
+                    acceptance_text = ""
+                criterion = f"- [ ] Run `{command}` and capture the command output in PR validation evidence."
+                acceptance_text = "\n".join(part for part in (acceptance_text, criterion) if part)
 
     parts = [
         "## Why",
@@ -387,8 +440,12 @@ def _format_issue_fallback(issue_body: str) -> str:
 def _formatted_output_valid(text: str) -> bool:
     if not text:
         return False
-    required = ["## Tasks", "## Acceptance Criteria"]
-    return all(section in text for section in required)
+    try:
+        return bool(_issue_format_validator().validate(text).ok)
+    except (ImportError, OSError, RuntimeError, SyntaxError):
+        # Preserve the former heading-only behavior until the copy-synced
+        # validator becomes available again.
+        return all(section in text for section in ("## Tasks", "## Acceptance Criteria"))
 
 
 def _select_code_fence(text: str) -> str:
@@ -398,25 +455,40 @@ def _select_code_fence(text: str) -> str:
 
 
 ORIGINAL_ISSUE_SUMMARY = "<summary>Original Issue</summary>"
-# Matches an Original-Issue <details> block (and trailing whitespace) so it can
-# be replaced rather than nested. Non-greedy body, anchored to the closing tag.
-_ORIGINAL_ISSUE_BLOCK_RE = re.compile(
-    r"<details>\s*<summary>Original Issue</summary>.*?</details>[ \t]*\n?",
-    re.DOTALL | re.IGNORECASE,
+_ORIGINAL_ISSUE_OPEN_RE = re.compile(
+    r"<details\b[^>]*>\s*<summary>Original Issue</summary>", re.IGNORECASE
 )
+_DETAILS_TAG_RE = re.compile(r"</?details\b[^>]*>", re.IGNORECASE)
 # Captures the verbatim text fenced inside an Original-Issue block, so an
 # already-embedded original can be recovered (and re-embedded once) instead of
 # being wrapped again.
 _ORIGINAL_ISSUE_INNER_RE = re.compile(
-    r"<details>\s*<summary>Original Issue</summary>\s*"
+    r"<details\b[^>]*>\s*<summary>Original Issue</summary>\s*"
     r"(?P<fence>`{3,})text\n(?P<inner>.*?)\n(?P=fence)\s*</details>",
     re.DOTALL | re.IGNORECASE,
 )
 
 
 def _strip_original_issue_blocks(text: str) -> str:
-    """Remove any embedded Original-Issue <details> block(s) from ``text``."""
-    return _ORIGINAL_ISSUE_BLOCK_RE.sub("", text).rstrip()
+    """Remove complete embedded Original-Issue blocks, including nested details."""
+    kept: list[str] = []
+    cursor = 0
+    while match := _ORIGINAL_ISSUE_OPEN_RE.search(text, cursor):
+        kept.append(text[cursor : match.start()])
+        depth = 1
+        end = match.end()
+        for tag in _DETAILS_TAG_RE.finditer(text, match.end()):
+            depth += -1 if tag.group(0).startswith("</") else 1
+            if depth == 0:
+                end = tag.end()
+                break
+        else:
+            # Leave malformed markup intact rather than silently discarding it.
+            kept.append(text[match.start() :])
+            return "".join(kept).rstrip()
+        cursor = end
+    kept.append(text[cursor:])
+    return "".join(kept).rstrip()
 
 
 def _innermost_original_issue(text: str) -> str | None:
@@ -592,20 +664,24 @@ def _reuse_already_formatted(issue_body: str, workflow: str) -> dict[str, Any] |
     """
     reused = reuse_formatted_body({"body": issue_body}, workflow)
     if reused is not None:
+        body = _with_reuse_marker(reused)
         return {
-            "formatted_body": _with_reuse_marker(reused),
+            "formatted_body": body,
             "provider_used": None,
             "used_llm": False,
             "skipped": "reused_marker",
             "validation_audit": None,
+            "needs_refinement": not _formatted_output_valid(body),
         }
     if already_conformant(issue_body):
+        body = _with_reuse_marker(issue_body)
         return {
-            "formatted_body": _with_reuse_marker(issue_body),
+            "formatted_body": body,
             "provider_used": None,
             "used_llm": False,
             "skipped": "already_conformant",
             "validation_audit": None,
+            "needs_refinement": not _formatted_output_valid(body),
         }
     return None
 
@@ -697,6 +773,7 @@ def format_issue_body(issue_body: str, *, use_llm: bool = True) -> dict[str, Any
                         "provider_used": provider,
                         "used_llm": True,
                         "validation_audit": audit,
+                        "needs_refinement": not _formatted_output_valid(formatted),
                     }
                     result.update(trace.as_dict())
                     return result
@@ -711,11 +788,13 @@ def format_issue_body(issue_body: str, *, use_llm: bool = True) -> dict[str, Any
     formatted, audit = _validate_and_refine_tasks(formatted, use_llm=use_llm)
     formatted = _append_raw_issue_section(formatted, issue_body)
     formatted = _with_reuse_marker(formatted)
+    needs_refinement = not _formatted_output_valid(formatted)
     return {
         "formatted_body": formatted,
         "provider_used": None,
         "used_llm": False,
         "validation_audit": audit,
+        "needs_refinement": needs_refinement,
     }
 
 
@@ -755,6 +834,7 @@ def main() -> None:
             "provider_used": result.get("provider_used"),
             "used_llm": result.get("used_llm", False),
             "labels": build_label_transition(),
+            "needs_refinement": result.get("needs_refinement", False),
         }
         if result.get("guard_blocked"):
             payload["guard_blocked"] = True
