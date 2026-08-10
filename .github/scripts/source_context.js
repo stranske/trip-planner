@@ -368,16 +368,25 @@ function inferredSourceType(pull = {}) {
   if (author.startsWith('dependabot') || branch.startsWith('dependabot/')) {
     return SOURCE_TYPES.DEPENDABOT;
   }
-  if (
-    branch.startsWith('sync/') ||
-    branch.startsWith('sync-') ||
-    labels.includes('campaign:sync-dependabot') ||
-    /\bsync\b/.test(title)
-  ) {
+  if (branch.startsWith('sync/') || branch.startsWith('sync-')) {
+    return SOURCE_TYPES.SYNC_CAMPAIGN;
+  }
+  if (labels.includes('campaign:sync-dependabot')) {
+    return SOURCE_TYPES.SYNC_CAMPAIGN;
+  }
+  if (author === 'github-actions[bot]' || author === 'github-actions') {
+    return SOURCE_TYPES.AUTOMATION_RUN;
+  }
+  if (/\bsync\b/.test(title)) {
     return SOURCE_TYPES.SYNC_CAMPAIGN;
   }
   if (/review[-/ ]follow/.test(branch) || /\breview\s+follow[- ]?up\b/.test(title)) {
     return SOURCE_TYPES.REVIEW_FOLLOWUP;
+  }
+  if ([
+    'feat/', 'fix/', 'docs/', 'audit/', 'chore/', 'refactor/', 'perf/', 'test/',
+  ].some((prefix) => branch.startsWith(prefix))) {
+    return SOURCE_TYPES.LOCAL_REQUEST;
   }
   return SOURCE_TYPES.UNKNOWN;
 }
