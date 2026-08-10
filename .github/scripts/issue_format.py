@@ -92,14 +92,16 @@ _TASK_KNOWN_BASENAME = (
     r"LICENSE(?:\.(?:md|txt))?|\.gitignore|\.editorconfig)"
 )
 _TASK_COMMAND = (
-    r"(?:python(?:3)?|pytest|npm|pnpm|yarn|make|just|cargo|go|dotnet|gh|curl|"
-    r"node|vitest|jest|playwright)"
+    r"(?:python(?:3)?\s+-m\s+(?:pytest|unittest)\b|pytest\b|node\s+--test\b|"
+    r"(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:test|vitest|jest|playwright)\b|"
+    r"(?:make|just|cargo|go|dotnet)\s+(?:test|check)\b|"
+    r"gh\s+(?:workflow\s+run|run)\s+\S+|curl\s+\S+)"
 )
 
 
 def _concrete_span(span: str) -> bool:
     """Return True when a backticked/unquoted token names a real work target."""
-    span = span.strip()
+    span = span.strip().rstrip(".,;:!?")
     if not span:
         return False
     if re.fullmatch(_TASK_CATEGORY, span, re.I):
@@ -146,7 +148,9 @@ def _task_has_concrete_target(item: str) -> bool:
     # Unquoted path with a directory separator (src/main.go, .github/workflows/x.yml).
     if re.search(r"(?:^|[\s])((?:\./)?[\w.-]+(?:/[\w./-]+)+)", item):
         return True
-    return re.search(rf"\b{_TASK_COMMAND}\b", item, re.I) is not None
+    # Command names in prose ("make the UI better", "go improve it") are not
+    # concrete targets. Require a command-shaped invocation instead.
+    return re.search(rf"(?:^|[\s`]){_TASK_COMMAND}", item, re.I) is not None
 
 
 def _headings(body: str) -> list[tuple[str, int, int]]:
@@ -193,6 +197,33 @@ def _section_text(body: str, start: int) -> str:
     following = [idx for _, idx, level in _headings(body) if idx > start and level <= start_level]
     end = following[0] if following else len(lines)
     return "\n".join(lines[start + 1 : end])
+
+
+def _without_fenced_code(text: str) -> str:
+    """Remove Markdown fences so examples cannot satisfy issue requirements."""
+    kept: list[str] = []
+    fence: tuple[str, int] | None = None
+    for line in text.splitlines():
+        match = re.match(r"\s{0,3}(`{3,}|~{3,})", line)
+        if match:
+            marker = match.group(1)
+            if fence is None:
+                fence = (marker[0], len(marker))
+            elif (
+                marker[0] == fence[0]
+                and len(marker) >= fence[1]
+                and re.fullmatch(
+                    rf"\s{{0,3}}(?:`{{{fence[1]},}}|~{{{fence[1]},}})\s*",
+                    line,
+                )
+            ):
+                # Closing fences are marker-only (optional whitespace); trailing
+                # content such as a language tag must not end the fence.
+                fence = None
+            continue
+        if fence is None:
+            kept.append(line)
+    return "\n".join(kept)
 
 
 @dataclass
@@ -243,7 +274,9 @@ def validate(body: str) -> Report:
     tasks_at = _find(body, REQUIRED["Tasks"])
     if tasks_at is not None:
         task_items = re.findall(
-            r"^\s*[-*]\s*\[[ xX]\]\s*(.+)$", _section_text(body, tasks_at), re.M
+            r"^\s*[-*]\s*\[[ xX]\]\s*(.+)$",
+            _without_fenced_code(_section_text(body, tasks_at)),
+            re.M,
         )
         if not task_items:
             report.problems.append(
@@ -257,12 +290,22 @@ def validate(body: str) -> Report:
     acceptance_at = _find(body, REQUIRED["Acceptance Criteria"])
     if acceptance_at is not None:
         acceptance = _section_text(body, acceptance_at)
-        if not GATE.search(acceptance):
+        acceptance_prose = _without_fenced_code(acceptance)
+        if not GATE.search(acceptance_prose):
             report.problems.append(
                 "`Acceptance Criteria` names no test, runnable command or observable "
                 "verification gate — Definition of Ready / Quality Bar §2 requires one."
             )
-        hits = [word for word in BANNED_ADJECTIVES if re.search(rf"\b{word}\b", acceptance, re.I)]
+        prose = re.sub(r"(?<!`)`(?!`)[^`\n]*`", "", acceptance_prose)
+        # Only discard tokens that are demonstrably file paths.  A broad
+        # slash-separated-word pattern would also erase subjective prose such
+        # as "fast/performant" before the adjective check sees it.
+        prose = re.sub(
+            r"(?<![\w/])(?:[\w.-]+/)+[\w.-]+\.[A-Za-z0-9]{1,10}\b",
+            "",
+            prose,
+        )
+        hits = [word for word in BANNED_ADJECTIVES if re.search(rf"\b{word}\b", prose, re.I)]
         if hits:
             report.problems.append(
                 "`Acceptance Criteria` uses subjective wording ("
