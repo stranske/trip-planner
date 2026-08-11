@@ -208,11 +208,39 @@ class ValidationResult:
 # ---------------------------------------------------------------------------
 
 
+_PATH_REFERENCE_PATTERNS = (
+    # Absolute paths such as /etc/nginx.conf or /path/to/Dockerfile
+    r"(?<![\w])/[\w./-]+",
+    # Dot-prefixed paths such as .github/workflows/ci.yml
+    r"(?<![\w])\.[\w.-]+(?:/[\w.-]+)+",
+    # Relative paths with a dotted extension
+    r"(?<![\w/])(?:[\w.-]+/)+[\w.-]+\.[A-Za-z0-9]{1,10}\b",
+    # Standalone dotted filenames such as quality.md
+    r"(?<![\w/])[\w.-]+\.[A-Za-z0-9]{1,10}\b",
+    # Multi-segment extensionless paths such as tests/fast/test_api
+    r"(?<![\w/])(?:[\w.-]+/){2,}[\w.-]+\b",
+    # Two-segment extensionless paths with filename-like basenames
+    r"(?<![\w/])(?:[\w.-]+/)[A-Z][\w.-]*\b",
+    r"(?<![\w/])(?:[\w.-]+/)[\w.-]*_[\w.-]+\b",
+)
+
+
+def _strip_path_references(task: str) -> str:
+    """Remove concrete file/directory references before subjective-word checks."""
+    text = task
+    for pattern in _PATH_REFERENCE_PATTERNS:
+        text = re.sub(pattern, " ", text)
+    return text.lower()
+
+
 def _has_subjective_without_measurable(task: str) -> bool:
     """Check if task has subjective language without measurable verification."""
     # Paths are concrete references, not prose. A path such as
     # ``tests/fast/test_api.py`` must not be rejected for its components.
-    lowered = re.sub(r"(?<!\w)[\w.-]+(?:/[\w.-]+)+(?!\w)", " ", task.lower())
+    # Only strip path-shaped text.  A broad slash-separated-word pattern also
+    # removes ordinary subjective prose such as "clean/intuitive" before the
+    # warning check can see it.
+    lowered = _strip_path_references(task)
     has_subjective = any(word in lowered for word in SUBJECTIVE_WORDS)
     has_measurable = any(word in lowered for word in MEASURABLE_WORDS)
     return has_subjective and not has_measurable

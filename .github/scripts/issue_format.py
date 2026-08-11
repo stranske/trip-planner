@@ -44,9 +44,11 @@ Pure stdlib on purpose — it must run on a bare runner with no install step.
 
 from __future__ import annotations
 
+import contextlib
 import re
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 
 REQUIRED: dict[str, tuple[str, ...]] = {
     "Tasks": ("tasks", "task list", "implementation"),
@@ -163,6 +165,160 @@ def _task_has_concrete_target(item: str) -> bool:
     return re.search(rf"(?:^|[\s`]){_TASK_COMMAND}", item, re.I) is not None
 
 
+# --- Addressability ---------------------------------------------------------
+#
+# A perfectly-formatted issue can still be impossible to action, because format
+# and addressability are different axes. Fine-Art-Archive #406-409 are the
+# reference case: every required section present, `agents:formatted` awarded,
+# and every one of the six paths #409 instructs an agent to modify exists only
+# in a local workspace that is not on GitHub. A lane cloned the repo, could not
+# find `scripts/automation_audit.py`, and stalled — `agents:tried-codex` ->
+# `needs-human` -> `agents:auto-pilot-pause`.
+#
+# `_task_has_concrete_target` already requires a task to NAME a file; this asks
+# the next question — does that file exist in the repo the issue was filed
+# against?
+#
+# The gate is deliberately asymmetric. Naming a file that does not exist yet is
+# normal and correct ("create `src/foo.py`"), so unresolved paths alone never
+# fail. What fails is an issue that cites several paths and resolves NONE of
+# them, which means it describes some other tree. That also aligns with the
+# format's own requirement that `Why` cite current evidence at `file:line`: an
+# issue with no resolvable path has no current evidence in this repo.
+_PATH_SPAN = re.compile(r"`([^`\n]+)`")
+_UNQUOTED_PATH = re.compile(
+    r"(?<![\w./-])((?:\./)?(?:[\w.-]+/)+[\w.-]+|[\w.-]+\.[A-Za-z0-9]+)(?![\w./-])"
+)
+_LINE_SUFFIX = re.compile(r":\d+(?:-\d+)?$")
+_NODE_SUFFIX = re.compile(r"::.+$")  # pytest node ids: tests/x.py::test_y
+# Self-referential boilerplate. The format contract tells authors to cite it, so
+# nearly every body mentions it — and it lives in every repo, which means
+# counting it as evidence would let one boilerplate line defeat the whole gate.
+# Measured on Fine-Art-Archive #409: this was the ONLY path that resolved.
+_NOT_EVIDENCE = frozenset(
+    {
+        "docs/AGENT_ISSUE_FORMAT.md",
+        "AGENT_ISSUE_FORMAT.md",
+    }
+)
+_PATHISH_EXT = (
+    ".py",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".sh",
+    ".rb",
+    ".go",
+    ".rs",
+    ".java",
+    ".yml",
+    ".yaml",
+    ".json",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".md",
+    ".sql",
+    ".html",
+    ".css",
+    ".xml",
+    ".txt",
+    ".lock",
+    ".env",
+)
+# Below this many citations the sample is too small to conclude "wrong repo" —
+# a single path in a prose aside must not fail an otherwise sound issue.
+_MIN_CITATIONS_TO_JUDGE = 3
+
+
+def _normalise_cited_path(raw: str) -> str | None:
+    """Return a safe repo-relative citation, or None for non-path text."""
+    candidate = _NODE_SUFFIX.sub("", raw.strip())
+    candidate = _LINE_SUFFIX.sub("", candidate)
+    if candidate.startswith("./"):
+        candidate = candidate[2:]
+    if not candidate or " " in candidate:
+        return None
+    if candidate.startswith("/") or any(part == ".." for part in candidate.split("/")):
+        return None
+    if candidate in _NOT_EVIDENCE:
+        return None
+    if "://" in candidate or candidate.startswith(("-", "@", "#", "$")):
+        return None
+    if any(ch in candidate for ch in "*?<>|"):  # globs and placeholders
+        return None
+    if "/" not in candidate and not candidate.endswith(_PATHISH_EXT):
+        return None
+    return candidate
+
+
+def _task_items(body: str) -> list[str]:
+    return re.findall(r"^\s*[-*]\s*\[[ xX]\]\s*(.+)$", body or "", re.M)
+
+
+def _candidate_spans(text: str) -> list[str]:
+    """Extract quoted and contract-accepted unquoted path candidates."""
+    return _PATH_SPAN.findall(text) + _UNQUOTED_PATH.findall(text)
+
+
+def _cited_paths(body: str) -> list[str]:
+    """Safe repo-relative citations, including unquoted task paths."""
+    seen: dict[str, None] = {}
+    for raw in _PATH_SPAN.findall(body or ""):
+        if candidate := _normalise_cited_path(raw):
+            seen.setdefault(candidate, None)
+    for item in _task_items(body):
+        for raw in _UNQUOTED_PATH.findall(item):
+            if candidate := _normalise_cited_path(raw):
+                seen.setdefault(candidate, None)
+    return list(seen)
+
+
+def _created_paths(body: str) -> set[str]:
+    """Paths explicitly created by a task are not pre-existing evidence."""
+    created: set[str] = set()
+    for item in _task_items(body):
+        if not re.match(r"(?:create|add|introduce|scaffold|generate|write)\b", item, re.I):
+            continue
+        for raw in _candidate_spans(item):
+            if candidate := _normalise_cited_path(raw):
+                created.add(candidate)
+    return created
+
+
+def _search_roots(repo_root: Path) -> list[Path]:
+    """`repo_root` plus the conventional source roots, and packages under them.
+
+    Issues routinely cite a path relative to the package rather than the repo —
+    `collect/quality.py` for `src/fine_art_archive/collect/quality.py`. Treating
+    those as missing would fill the advisory with false alarms and, worse, make
+    `resolved` undercount, which is what the failure rule keys on.
+    """
+    roots = [repo_root]
+    for name in ("src", "lib", "app", "packages"):
+        base = repo_root / name
+        if not base.is_dir():
+            continue
+        roots.append(base)
+        # One level deeper covers the src/<package>/ layout. Bounded so a large
+        # monorepo cannot turn this into a directory walk.
+        with contextlib.suppress(OSError):
+            roots.extend(sorted(p for p in base.iterdir() if p.is_dir())[:12])
+    return roots
+
+
+def _resolve_citations(body: str, repo_root: Path) -> tuple[list[str], list[str]]:
+    """Split cited paths into (resolved, unresolved) against `repo_root`."""
+    roots = _search_roots(repo_root)
+    resolved: list[str] = []
+    unresolved: list[str] = []
+    for candidate in _cited_paths(body):
+        found = any((root / candidate).exists() for root in roots)
+        (resolved if found else unresolved).append(candidate)
+    return resolved, unresolved
+
+
 def _headings(body: str) -> list[tuple[str, int, int]]:
     """Return markdown headings outside fenced code blocks with line indexes."""
     out: list[tuple[str, int, int]] = []
@@ -242,9 +398,10 @@ class Report:
     missing_required: list[str] = field(default_factory=list)
     missing_recommended: list[str] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
+    advisories: list[str] = field(default_factory=list)
 
     def as_markdown(self) -> str:
-        if self.ok and not self.missing_recommended:
+        if self.ok and not self.missing_recommended and not self.advisories:
             return "Issue body conforms to `docs/AGENT_ISSUE_FORMAT.md`."
         if self.ok:
             out = ["Issue body is agent-processable with advisories.", ""]
@@ -259,6 +416,9 @@ class Report:
                 + ", ".join(f"`{section}`" for section in self.missing_required)
             )
         out.extend(f"- {problem}" for problem in self.problems)
+        if self.advisories:
+            out.extend(["", "_Advisory:_"])
+            out.extend(f"- {advisory}" for advisory in self.advisories)
         if self.missing_recommended:
             out.extend(
                 [
@@ -270,8 +430,13 @@ class Report:
         return "\n".join(out)
 
 
-def validate(body: str) -> Report:
-    """Check an issue body; every structural format problem is non-conforming."""
+def validate(body: str, repo_root: Path | None = None) -> Report:
+    """Check an issue body; every structural format problem is non-conforming.
+
+    `repo_root`, when given, additionally checks that the paths the body cites
+    actually exist there — see the Addressability block above. It is optional so
+    the validator stays a pure body check for callers that have no checkout.
+    """
     report = Report()
     body = body or ""
     for name, aliases in REQUIRED.items():
@@ -322,6 +487,26 @@ def validate(body: str) -> Report:
                 + ", ".join(sorted(hits))
                 + "); replace with a measurable check."
             )
+    if repo_root is not None:
+        resolved, unresolved = _resolve_citations(body, repo_root)
+        unresolved_evidence = [path for path in unresolved if path not in _created_paths(body)]
+        cited = len(resolved) + len(unresolved_evidence)
+        if cited >= _MIN_CITATIONS_TO_JUDGE and not resolved:
+            report.problems.append(
+                f"None of the {cited} paths this issue cites exist in this repository "
+                f"({', '.join(f'`{p}`' for p in unresolved_evidence[:6])}"
+                + (", …" if cited > 6 else "")
+                + "). An agent cloning this repo has nothing to act on. File it "
+                "against the repo that holds the code, or cite the evidence here."
+            )
+        elif unresolved:
+            report.advisories.append(
+                f"{len(unresolved)} cited path(s) do not exist yet: "
+                + ", ".join(f"`{p}`" for p in unresolved[:6])
+                + (", …" if len(unresolved) > 6 else "")
+                + " — expected when a task creates them; check for typos otherwise."
+            )
+
     report.ok = not report.missing_required and not report.problems
     return report
 
@@ -333,7 +518,10 @@ def main(argv: list[str] | None = None) -> int:
             body = issue_file.read()
     else:
         body = sys.stdin.read()
-    report = validate(body)
+    # CI runs this after `actions/checkout`, so the working directory IS the
+    # repo the issue was filed against — which is exactly what addressability
+    # must be judged against.
+    report = validate(body, repo_root=Path.cwd())
     print(report.as_markdown())
     return 0 if report.ok else 1
 
