@@ -94,6 +94,12 @@ def _require_string_field(value: Any, field_name: str) -> str:
     return value
 
 
+def _optional_bool(value: Any, *, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    return default
+
+
 def _parse_timestamp(value: str, field_name: str) -> datetime:
     require_non_empty(value, field_name)
     try:
@@ -340,7 +346,10 @@ class TPPPolicySyncService:
             contract_version=_require_string_field(
                 context_payload.get("contract_version"), "organization_context.contract_version"
             ),
-            compatible_with_planner_cache=context_payload.get("compatible_with_planner_cache"),
+            compatible_with_planner_cache=_optional_bool(
+                context_payload.get("compatible_with_planner_cache"),
+                default=True,
+            ),
             booking_requirements=_require_policy_requirements(
                 context_payload.get("booking_requirements"),
                 "organization_context.booking_requirements",

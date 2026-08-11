@@ -432,11 +432,11 @@ def _normalize_organization_context_payload(record: PersistedPolicyState) -> dic
             "compatible_with_planner_cache", True
         ),
         "booking_requirements": _normalize_policy_requirements(
-            organization_context.get("booking_requirements"),
+            organization_context.get("booking_requirements") or [],
             field_name="organization_context.booking_requirements",
         ),
         "blocking_issues": _normalize_policy_requirements(
-            organization_context.get("blocking_issues"),
+            organization_context.get("blocking_issues") or [],
             field_name="organization_context.blocking_issues",
         ),
         "approved_channels": _normalize_string_list(organization_context.get("approved_channels")),
