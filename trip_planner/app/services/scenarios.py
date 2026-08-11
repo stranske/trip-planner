@@ -5,10 +5,10 @@ import re
 import unicodedata
 from copy import deepcopy
 from dataclasses import dataclass
-from pathlib import Path
+from importlib import resources
 from typing import Any
 
-from tests.preferences.fixture_corpus import load_fixture_map
+from trip_planner.preferences.fixture_corpus import load_fixture_map
 from trip_planner.business import (
     ApprovalTargets,
     BusinessTravelProfile,
@@ -108,16 +108,16 @@ _RUNTIME_TRADEOFF_SALIENCE = 0.35
 _RUNTIME_TRADEOFF_STABILITY = 0.4
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+_BUSINESS_RESOURCE_PACKAGE = "trip_planner.resources.business"
 
 
-def _load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _business_fixture_dir() -> Path:
-    return _repo_root() / "tests" / "fixtures" / "business"
+def _load_business_fixture_json(name: str) -> dict[str, Any]:
+    payload = (
+        resources.files(_BUSINESS_RESOURCE_PACKAGE)
+        .joinpath(name)
+        .read_text(encoding="utf-8")
+    )
+    return json.loads(payload)
 
 
 def _default_scenario_title(
@@ -411,9 +411,9 @@ def build_workspace_scenario_search(
                 fixture_seed.business_constraint_fixture or _DEFAULT_BUSINESS_CONSTRAINT_FIXTURE
             )
             business_profile = BusinessTravelProfile.from_dict(
-                _load_json(_business_fixture_dir() / business_profile_fixture)
+                _load_business_fixture_json(business_profile_fixture)
             )
-            constraint_payload = _load_json(_business_fixture_dir() / business_constraint_fixture)
+            constraint_payload = _load_business_fixture_json(business_constraint_fixture)
             constraint_set = PolicyConstraintSet(**constraint_payload["constraint_set"])
             ranking_title = fixture_seed.title
         else:
