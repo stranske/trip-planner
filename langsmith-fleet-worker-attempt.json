@@ -1,0 +1,16 @@
+{
+  "agent": "codex",
+  "cli_version": "0.144.1",
+  "emitted_at": "2026-08-11T15:05:57.810320Z",
+  "execution_profile": "codex-default",
+  "fallback_models": [
+    "gpt-5.5"
+  ],
+  "operation_role": "worker",
+  "pr_number": "1682",
+  "requested_model": "gpt-5.6-terra",
+  "runner": "reusable-codex-run",
+  "schema": "langsmith-fleet/v1",
+  "selected_model": "gpt-5.6-terra",
+  "selection_reason": "input"
+}

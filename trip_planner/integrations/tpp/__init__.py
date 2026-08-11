@@ -26,6 +26,7 @@ from .policy_sync import (
     PolicyConstraintImport,
     PolicyFreshness,
     PolicySyncError,
+    TPPPolicyRequirement,
     TPPPolicySyncService,
     summarize_policy_import,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "PersistedEvaluationResult",
     "PolicyConstraintImport",
     "PolicyFreshness",
+    "TPPPolicyRequirement",
     "PolicyReoptimizationContext",
     "PolicyReoptimizationPlan",
     "PolicySyncError",

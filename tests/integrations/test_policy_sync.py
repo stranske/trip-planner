@@ -48,11 +48,40 @@ def test_import_standard_policy_sync_snapshot() -> None:
         "lodging": 2,
     }
     assert imported.constraint_set.required_booking_channels == ["Navan", "Concur"]
+    assert imported.organization_context.policy_status == "pass"
+    assert imported.organization_context.contract_version == "2026-04-11"
+    assert imported.organization_context.booking_requirements[0].code == "approved_booking_channel"
     assert summary["is_stale"] is False
     assert summary["documentation_rules"] == [
         "retain_receipts",
         "attach_comparables",
     ]
+    assert summary["policy_status"] == "pass"
+    assert summary["compatible_with_planner_cache"] is True
+    assert summary["blocking_issues"] == []
+
+
+def test_policy_sync_rejects_unsupported_contract_version() -> None:
+    fixture = _load_fixture("standard_policy_sync.json")
+    fixture["response"]["result_payload"]["organization_context"]["contract_version"] = "1999-01-01"
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    response = TPPResponseEnvelope.from_dict(fixture["response"])
+
+    with pytest.raises(ValueError, match="Unsupported TPP policy contract version"):
+        TPPPolicySyncService(FakeTPPPolicyClient(response)).import_policy_constraints(request)
+
+
+@pytest.mark.parametrize("value", ["false", 0])
+def test_policy_sync_rejects_malformed_cache_compatibility_values(value: object) -> None:
+    fixture = _load_fixture("standard_policy_sync.json")
+    fixture["response"]["result_payload"]["organization_context"][
+        "compatible_with_planner_cache"
+    ] = value
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    response = TPPResponseEnvelope.from_dict(fixture["response"])
+
+    with pytest.raises(ValueError, match="compatible_with_planner_cache must be a boolean"):
+        TPPPolicySyncService(FakeTPPPolicyClient(response)).import_policy_constraints(request)
 
 
 def test_import_stricter_org_policy_preserves_limits_and_triggers() -> None:

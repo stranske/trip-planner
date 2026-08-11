@@ -75,6 +75,17 @@
       },
       "organization_context": {
         "organization_id": "org-acme",
+        "policy_status": "pass",
+        "contract_version": "2026-04-11",
+        "compatible_with_planner_cache": true,
+        "booking_requirements": [
+          {
+            "code": "approved_booking_channel",
+            "summary": "Book through an approved channel.",
+            "severity": "warning"
+          }
+        ],
+        "blocking_issues": [],
         "approved_channels": [
           "Navan",
           "Concur"
