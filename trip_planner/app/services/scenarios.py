@@ -508,8 +508,7 @@ def build_scenario_ranking_outputs(
                         tradeoff["summary"]
                         for tradeoff in scenario.get("unresolved_tradeoffs", [])[:2]
                     ],
-                ]
-                or ["No unresolved tradeoffs are currently surfaced."],
+                ],
             }
         )
 

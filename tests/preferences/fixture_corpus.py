@@ -50,7 +50,7 @@ def load_fixture_corpus(path: Path | None = None) -> list[TravelerFixture]:
         )
     fixtures = payload.get("fixtures", [])
     if not isinstance(fixtures, list):
-        raise ValueError("fixtures must be a list")
+        raise TypeError("fixtures must be a list")
     fixture_objects = [_build_fixture(index, entry) for index, entry in enumerate(fixtures)]
     fixture_ids = [fixture.id for fixture in fixture_objects]
     if len(set(fixture_ids)) != len(fixture_ids):

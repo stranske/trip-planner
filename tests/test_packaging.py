@@ -64,6 +64,7 @@ def test_app_imports_from_installed_wheel_without_tests_package() -> None:
         result = subprocess.run(
             [str(venv_python), "-c", "import trip_planner.app.main"],
             cwd=tmp,
+            check=False,
             capture_output=True,
             text=True,
         )
