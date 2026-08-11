@@ -1923,7 +1923,7 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("7 transfer checkpoint(s)")).toBeInTheDocument();
   });
 
-  it("renders the Google Maps JavaScript provider path when configured", async () => {
+  it("does not treat configured environment state as observed provider readiness", async () => {
     vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
     vi.stubEnv("VITE_GOOGLE_MAPS_PROVIDER_STATE", "ready");
     const user = userEvent.setup();
@@ -1935,23 +1935,21 @@ describe("WorkspacePage", () => {
     const { container } = renderWorkspacePage();
 
     await waitFor(() => {
-      expect(
-        screen.getByLabelText("Interactive map for Kyoto base with Uji day trip")
-      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Fallback option markers")).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText("Route geometry overlay for Kyoto base with Uji day trip")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /stop marker:/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText("Interactive map for Kyoto base with Uji day trip")).not.toBeInTheDocument();
+    expect(screen.getByText("Schematic preview — not a live map")).toBeInTheDocument();
     expect(container.querySelector("iframe")).toBeNull();
     expect(screen.queryByTitle(/google maps/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Fallback option markers")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Fallback option markers")).toBeInTheDocument();
     expect(screen.getByLabelText("Selected route option route drawing")).toHaveClass(
-      "map-route-google-maps-js"
+      "map-route-fallback"
     );
     expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Regional route review");
-    expect(screen.queryByLabelText("Schematic preview — not a live map")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Schematic preview — not a live map")).toBeInTheDocument();
     expect(
-      screen.getAllByText("High confidence: the route has enough map detail for close review.")
+      screen.getAllByText("Medium confidence: this is an approximate sketch from the current route stops.")
         .length
     ).toBeGreaterThan(0);
     expect(screen.queryByText("Google Maps JavaScript adapter")).not.toBeInTheDocument();
@@ -1965,7 +1963,7 @@ describe("WorkspacePage", () => {
 
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 
-    expect(screen.getByLabelText("Interactive map for Kyoto plus Osaka fallback")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Route sketch for Kyoto plus Osaka fallback" })).toBeInTheDocument();
     expect(screen.getAllByText("Osaka").length).toBeGreaterThan(0);
   });
 
@@ -1979,9 +1977,7 @@ describe("WorkspacePage", () => {
     renderWorkspacePage();
 
     await waitFor(() => {
-      expect(
-        screen.getByLabelText("Interactive map for Kyoto base with Uji day trip")
-      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Fallback option markers")).toBeInTheDocument();
     });
 
     expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Regional route review");

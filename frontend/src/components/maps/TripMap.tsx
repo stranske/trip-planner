@@ -24,6 +24,7 @@ export function TripMap({
   tripMode,
   policyPosture,
   planningLedger,
+  providerLoadState,
   activeScope,
   selectedSegmentId,
   onScopeChange,
@@ -41,6 +42,8 @@ export function TripMap({
   tripMode: string;
   policyPosture: string | null;
   planningLedger?: WorkspaceData["planning_ledger"];
+  /** Observed SDK lifecycle state; configuration alone must not mark the map live. */
+  providerLoadState?: MapProviderLoadState;
   activeScope: MapViewScope;
   selectedSegmentId: string | null;
   onScopeChange: (scope: MapViewScope) => void;
@@ -77,6 +80,7 @@ export function TripMap({
       tripMode={tripMode}
       policyPosture={policyPosture}
       planningLedger={planningLedger}
+      providerLoadState={providerLoadState}
       activeScope={activeScope}
       selectedSegmentId={selectedSegmentId}
       onScopeChange={onScopeChange}
@@ -98,6 +102,7 @@ function ActiveTripMap({
   tripMode,
   policyPosture,
   planningLedger,
+  providerLoadState = "pending",
   activeScope,
   selectedSegmentId,
   onScopeChange,
@@ -115,6 +120,7 @@ function ActiveTripMap({
   tripMode: string;
   policyPosture: string | null;
   planningLedger?: WorkspaceData["planning_ledger"];
+  providerLoadState?: MapProviderLoadState;
   activeScope: MapViewScope;
   selectedSegmentId: string | null;
   onScopeChange: (scope: MapViewScope) => void;
@@ -124,9 +130,6 @@ function ActiveTripMap({
   const googleMapsApiKey =
     import.meta.env.VITE_GOOGLE_MAPS_BROWSER_API_KEY ||
     import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY;
-  const providerLoadState =
-    (import.meta.env.VITE_GOOGLE_MAPS_PROVIDER_STATE as MapProviderLoadState | undefined) ??
-    "pending";
   const mapSurface = buildTripMapSurfaceModel({
     activeScenario,
     bundles,

@@ -327,7 +327,8 @@ function buildRouteStops(activeScenario: TripMapScenario): RouteStop[] {
 function buildRouteSegments(
   activeScenario: TripMapScenario,
   routeStops: RouteStop[],
-  routeWarning: string | null
+  routeWarning: string | null,
+  providerReady: boolean
 ): RouteSegment[] {
   const providerSegments = activeScenario.map_view?.rough_route_geometry ?? [];
   if (providerSegments.length > 0) {
@@ -336,23 +337,26 @@ function buildRouteSegments(
       .filter(
         (segment) => stopById.has(segment.from_marker_id) && stopById.has(segment.to_marker_id)
       )
-      .map((segment) => ({
-        id: segment.id,
-        fromStopId: segment.from_marker_id,
-        toStopId: segment.to_marker_id,
-        fromLabel: segment.from_label,
-        toLabel: segment.to_label,
-        x1: segment.x1 * 100,
-        y1: segment.y1 * 100,
-        x2: segment.x2 * 100,
-        y2: segment.y2 * 100,
-        warning: segment.warning ?? routeWarning,
-        durationMinutes: segment.duration_minutes ?? null,
-        distanceKm: segment.distance_km ?? null,
-        confidence: segment.confidence ?? activeScenario.map_view?.confidence.level ?? "medium",
-        unavailableReason: segment.unavailable_reason ?? null,
-        focusCues: [],
-      }));
+      .map((segment) => {
+        const confidence = segment.confidence ?? activeScenario.map_view?.confidence.level ?? "medium";
+        return {
+          id: segment.id,
+          fromStopId: segment.from_marker_id,
+          toStopId: segment.to_marker_id,
+          fromLabel: segment.from_label,
+          toLabel: segment.to_label,
+          x1: segment.x1 * 100,
+          y1: segment.y1 * 100,
+          x2: segment.x2 * 100,
+          y2: segment.y2 * 100,
+          warning: segment.warning ?? routeWarning,
+          durationMinutes: segment.duration_minutes ?? null,
+          distanceKm: segment.distance_km ?? null,
+          confidence: !providerReady && confidence === "high" ? "medium" : confidence,
+          unavailableReason: segment.unavailable_reason ?? null,
+          focusCues: [],
+        };
+      });
   }
 
   return routeStops.slice(0, -1).map((stop, index) => {
@@ -870,9 +874,10 @@ export function buildTripMapSurfaceModel({
     )
   );
   const trimmedApiKey = googleMapsApiKey?.trim() ?? "";
+  const providerReady = trimmedApiKey !== "" && providerLoadState === "ready";
   const routeWarning = deriveRouteWarning(activeScenario, feasibilitySummary);
   const resolvedPolicyPosture = tripMode === "leisure" ? null : policyPosture;
-  const routeSegments = buildRouteSegments(activeScenario, routeStops, routeWarning);
+  const routeSegments = buildRouteSegments(activeScenario, routeStops, routeWarning, providerReady);
   const baseMarkers = buildMarkers({
     activeScenario,
     bundles,

@@ -162,7 +162,8 @@ afterEach(() => {
 function renderTripMap(
   onSelectScenario = vi.fn(),
   ledger?: WorkspaceData["planning_ledger"],
-  onSelectSegment = vi.fn()
+  onSelectSegment = vi.fn(),
+  providerLoadState?: "pending" | "loading" | "ready" | "error"
 ) {
   function Harness() {
     const [activeScope, setActiveScope] = useState<"global" | "regional" | "local">("regional");
@@ -180,6 +181,7 @@ function renderTripMap(
         tripMode="business"
         policyPosture="No approval packet yet"
         planningLedger={ledger}
+        providerLoadState={providerLoadState}
         activeScope={activeScope}
         selectedSegmentId={selectedSegmentId}
         onScopeChange={setActiveScope}
@@ -256,9 +258,8 @@ describe("TripMap", () => {
 
   it("mounts the provider-backed surface when readiness is observed", () => {
     vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
-    vi.stubEnv("VITE_GOOGLE_MAPS_PROVIDER_STATE", "ready");
 
-    renderTripMap();
+    renderTripMap(vi.fn(), undefined, vi.fn(), "ready");
 
     expect(screen.getByRole("heading", { name: "Map for Rail-first route" })).toBeInTheDocument();
     expect(screen.queryByText("Schematic preview — not a live map")).not.toBeInTheDocument();

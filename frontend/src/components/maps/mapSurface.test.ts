@@ -306,6 +306,7 @@ describe("mapSurface", () => {
         assessments: [],
       },
       googleMapsApiKey: "test-key",
+      providerLoadState: "ready",
       activeScope: "local",
       selectedSegmentId: "segment:uji-nara",
     });
@@ -757,6 +758,7 @@ describe("mapSurface", () => {
     expect(model.provider.status).toBe("configured");
     expect(model.provider.label).toBe("Google Maps configured");
     expect(model.workspaceView.confidence.level).toBe("medium");
+    expect(model.routeSegments.map((segment) => segment.confidence)).not.toContain("high");
   });
 
   it("high confidence requires observed provider", () => {
