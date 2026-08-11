@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from importlib import resources
 from typing import Any
 
-from trip_planner.preferences.fixture_corpus import load_fixture_map
 from trip_planner.business import (
     ApprovalTargets,
     BusinessTravelProfile,
@@ -43,6 +42,7 @@ from trip_planner.preferences import (
     resolve_leisure_profile,
 )
 from trip_planner.preferences import schema as leisure_schema
+from trip_planner.preferences.fixture_corpus import load_fixture_map
 from trip_planner.ranking import (
     BusinessRankingEngine,
     LeisureRankingEngine,
@@ -112,11 +112,7 @@ _BUSINESS_RESOURCE_PACKAGE = "trip_planner.resources.business"
 
 
 def _load_business_fixture_json(name: str) -> dict[str, Any]:
-    payload = (
-        resources.files(_BUSINESS_RESOURCE_PACKAGE)
-        .joinpath(name)
-        .read_text(encoding="utf-8")
-    )
+    payload = resources.files(_BUSINESS_RESOURCE_PACKAGE).joinpath(name).read_text(encoding="utf-8")
     return json.loads(payload)
 
 

@@ -32,7 +32,7 @@ def _default_stage_sensitivity() -> dict[str, float]:
     return {stage: 0.0 for stage in schema.PLANNING_STAGES}
 
 
-def _default_anchor_groups() -> dict[str, list["Anchor"]]:
+def _default_anchor_groups() -> dict[str, list[Anchor]]:
     return {group: [] for group in schema.ANCHOR_GROUPS}
 
 

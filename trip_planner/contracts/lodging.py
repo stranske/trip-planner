@@ -20,6 +20,7 @@ __all__ = [
     "INVENTORY_STATUSES",
     "LOCATION_CONTEXTS",
     "LODGING_KINDS",
+    "SCHEMA_VERSION",
     "LodgingBookingTerms",
     "LodgingCostSummary",
     "LodgingFeasibility",
@@ -29,5 +30,4 @@ __all__ = [
     "LodgingQualitySummary",
     "LodgingRoomSummary",
     "LodgingValueSummary",
-    "SCHEMA_VERSION",
 ]

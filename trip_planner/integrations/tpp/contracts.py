@@ -55,7 +55,7 @@ class TPPCorrelationId:
         return asdict(self)
 
     @classmethod
-    def from_value(cls, value: str | dict[str, Any]) -> "TPPCorrelationId":
+    def from_value(cls, value: str | dict[str, Any]) -> TPPCorrelationId:
         if isinstance(value, str):
             return cls(value=value)
         if isinstance(value, dict):
@@ -163,7 +163,7 @@ class TPPRequestEnvelope:
         return payload
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "TPPRequestEnvelope":
+    def from_dict(cls, payload: dict[str, Any]) -> TPPRequestEnvelope:
         request = _require_mapping(payload, "payload")
         return cls(
             operation=request["operation"],
@@ -235,7 +235,7 @@ class TPPResponseEnvelope:
         return payload
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "TPPResponseEnvelope":
+    def from_dict(cls, payload: dict[str, Any]) -> TPPResponseEnvelope:
         response = _require_mapping(payload, "payload")
         return cls(
             operation=response["operation"],

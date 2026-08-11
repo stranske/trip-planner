@@ -167,7 +167,7 @@ class InTripTriggerEvent:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "InTripTriggerEvent":
+    def from_dict(cls, payload: dict[str, Any]) -> InTripTriggerEvent:
         return cls(
             trigger_event_id=payload["trigger_event_id"],
             trip_id=payload["trip_id"],
@@ -228,7 +228,7 @@ class ReplanningRequest:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "ReplanningRequest":
+    def from_dict(cls, payload: dict[str, Any]) -> ReplanningRequest:
         return cls(
             request_id=payload["request_id"],
             trip_id=payload["trip_id"],
@@ -283,7 +283,7 @@ class InTripRevisionOutput:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "InTripRevisionOutput":
+    def from_dict(cls, payload: dict[str, Any]) -> InTripRevisionOutput:
         return cls(
             revision_output_id=payload["revision_output_id"],
             trip_id=payload["trip_id"],

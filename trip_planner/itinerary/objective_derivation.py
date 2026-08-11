@@ -87,8 +87,7 @@ def _target_base_count(
     if interaction_biases.get("compress_route_before_downgrading_lodging", 0.0) >= 0.9:
         max_value = max(min_value, min(max_value, 3))
     duration_cap = max(2, duration_days // 2)
-    if min_value > duration_cap:
-        min_value = duration_cap
+    min_value = min(min_value, duration_cap)
     if max_value > duration_cap:
         max_value = max(min_value, duration_cap)
     return CountRange(min_value=min_value, max_value=max_value)
@@ -316,10 +315,8 @@ def _build_explanations(resolved: ResolvedLeisureProfile) -> list[str]:
         dimension = resolved.profile.tradeoff_dimensions[key]
         evidence_code = resolved.explanation.dimension_explanations[key].explanation_code
         explanations.append(
-            (
-                f"{key}: value={dimension.value:.2f}, confidence={dimension.confidence:.2f}, "
-                f"salience={dimension.salience:.2f}, evidence_code={evidence_code}"
-            )
+            f"{key}: value={dimension.value:.2f}, confidence={dimension.confidence:.2f}, "
+            f"salience={dimension.salience:.2f}, evidence_code={evidence_code}"
         )
     for tension in sorted(resolved.profile.tension_flags, key=lambda t: t.id):
         explanations.append(f"tension:{tension.id}:{tension.description}")

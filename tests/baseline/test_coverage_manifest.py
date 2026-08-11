@@ -44,7 +44,11 @@ def test_priority_metrics_covered():
 
 def test_emit_coverage_report(tmp_path: Path):
     m = _build_manifest()
-    report_path = REPORT_PATH if os.environ.get("BASELINE_REFRESH_REPORT") == "1" else tmp_path / "baseline-coverage.md"
+    report_path = (
+        REPORT_PATH
+        if os.environ.get("BASELINE_REFRESH_REPORT") == "1"
+        else tmp_path / "baseline-coverage.md"
+    )
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(m.to_markdown())
     assert report_path.exists()

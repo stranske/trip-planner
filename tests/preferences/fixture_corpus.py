@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 from trip_planner.preferences.fixture_corpus import (
     IntendedInterpretation,

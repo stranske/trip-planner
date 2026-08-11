@@ -259,12 +259,10 @@ class LLMProvider(ABC):
     @abstractmethod
     def name(self) -> str:
         """Provider name for logging."""
-        pass
 
     @abstractmethod
     def is_available(self) -> bool:
         """Check if this provider can be used."""
-        pass
 
     @abstractmethod
     def analyze_completion(
@@ -286,7 +284,6 @@ class LLMProvider(ABC):
         Returns:
             CompletionAnalysis with task status breakdown
         """
-        pass
 
     def supports_quality_context(self) -> bool:
         """Return True if analyze_completion accepts a quality_context parameter."""

@@ -43,7 +43,9 @@ def test_app_imports_from_installed_wheel_without_tests_package() -> None:
             text=True,
         )
         wheels = [wheel for wheel in wheel_dir.glob("trip_planner-*.whl")]
-        assert len(wheels) == 1, f"expected one trip_planner wheel, found: {list(wheel_dir.glob('*.whl'))}"
+        assert (
+            len(wheels) == 1
+        ), f"expected one trip_planner wheel, found: {list(wheel_dir.glob('*.whl'))}"
 
         subprocess.run(
             [sys.executable, "-m", "venv", str(venv_dir)],

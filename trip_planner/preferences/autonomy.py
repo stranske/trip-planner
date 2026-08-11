@@ -169,7 +169,7 @@ class PlanningAutonomyProfile:
             explanation_density=explanation_density,
         )
 
-    def apply_feedback(self, feedback: AutonomyFeedback) -> "PlanningAutonomyProfile":
+    def apply_feedback(self, feedback: AutonomyFeedback) -> PlanningAutonomyProfile:
         updated = replace(
             self,
             stage_preferences={

@@ -461,7 +461,7 @@ def test_http_transport_classifies_connection_timeout_unauthorized_and_invalid_r
 ) -> None:
     cases: list[tuple[_FakeHTTPResponse | Exception, str]] = [
         (urllib_error.URLError(ConnectionRefusedError("refused")), "connection_error"),
-        (socket.timeout("slow response"), "timeout"),
+        (TimeoutError("slow response"), "timeout"),
         (_FakeHTTPResponse(401, {"detail": "bad token"}), "unauthorized"),
         (_FakeHTTPResponse(200, "not-json"), "invalid_response"),
     ]
@@ -508,7 +508,7 @@ def test_transport_error_rejects_unknown_error_code() -> None:
 @pytest.mark.parametrize(
     ("exc", "expected_code"),
     [
-        (urllib_error.URLError(socket.timeout("timed out")), "timeout"),
+        (urllib_error.URLError(TimeoutError("timed out")), "timeout"),
         (urllib_error.URLError(ConnectionRefusedError("connection refused")), "connection_error"),
         (
             urllib_error.HTTPError(

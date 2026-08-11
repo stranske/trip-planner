@@ -1,6 +1,7 @@
 import json
 
 import pytest
+
 from scripts import state_fingerprint
 
 

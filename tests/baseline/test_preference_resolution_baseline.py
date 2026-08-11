@@ -49,9 +49,7 @@ def test_evidence_raises_confidence_over_no_evidence(fid):
     fixture = _CORPUS[fid]
     _, _, resolved = _resolve_dominant(fixture)
     no_evidence = resolve_dimension_evidence(_NO_EVIDENCE_DIM, 0.4, fixture.evidence)
-    assert evaluate_direction(
-        "greater_than", resolved.confidence, no_evidence.confidence
-    ), (
+    assert evaluate_direction("greater_than", resolved.confidence, no_evidence.confidence), (
         f"{fid}: evidence-backed confidence {resolved.confidence:.4f} should exceed "
         f"no-evidence confidence {no_evidence.confidence:.4f}"
     )
@@ -75,8 +73,7 @@ def test_resolution_invariants(fid):
         ),
         InvariantResult(
             f"{fid}_behavior_support_finite",
-            math.isfinite(r.recent_behavior_support)
-            and math.isfinite(r.older_behavior_support),
+            math.isfinite(r.recent_behavior_support) and math.isfinite(r.older_behavior_support),
             detail=f"recent={r.recent_behavior_support} older={r.older_behavior_support}",
         ),
         InvariantResult(

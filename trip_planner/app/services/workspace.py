@@ -1363,7 +1363,7 @@ def _serialize_session_record(record: PersistedPlanningSessionState) -> dict[str
 
 
 def _bootstrap_saved_scenario_id(*, trip_id: str, label: str) -> str:
-    token = hashlib.sha1(f"{trip_id}:{label}".encode("utf-8")).hexdigest()[:10]
+    token = hashlib.sha1(f"{trip_id}:{label}".encode()).hexdigest()[:10]
     return f"saved-scenario:{label}-{token}"
 
 
@@ -1938,8 +1938,8 @@ def _build_persisted_trip_workspace(
             inventory_status=inventory_status,
         )
     )
-    resolved_feasibility_summary = (
-        context.feasibility_summary or build_feasibility_summary_payload(resolved_inventory_bundles)
+    resolved_feasibility_summary = context.feasibility_summary or build_feasibility_summary_payload(
+        resolved_inventory_bundles
     )
     runtime_scenario_comparison = _build_runtime_scenario_comparison(
         trip_id=record.trip_id,
@@ -3481,9 +3481,7 @@ def _assemble_persisted_workspace_context(
     ).all()
     feasibility_summary = build_feasibility_summary_payload(persisted_inventory_bundles)
     return WorkspaceBuildContext(
-        session=(
-            _serialize_session_record(session_record) if session_record is not None else None
-        ),
+        session=(_serialize_session_record(session_record) if session_record is not None else None),
         saved_scenarios=[
             {
                 "saved_scenario_id": scenario.saved_scenario_id,

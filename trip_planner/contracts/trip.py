@@ -42,7 +42,7 @@ class TravelerPartySummary:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "TravelerPartySummary":
+    def from_dict(cls, payload: dict[str, Any]) -> TravelerPartySummary:
         return cls(**payload)
 
 
@@ -69,7 +69,7 @@ class TripFrameSummary:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "TripFrameSummary":
+    def from_dict(cls, payload: dict[str, Any]) -> TripFrameSummary:
         return cls(
             start_date=payload.get("start_date"),
             end_date=payload.get("end_date"),
@@ -94,7 +94,7 @@ class ProfileRefs:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "ProfileRefs":
+    def from_dict(cls, payload: dict[str, Any]) -> ProfileRefs:
         return cls(
             leisure_profile_id=payload.get("leisure_profile_id"),
             business_profile_id=payload.get("business_profile_id"),
@@ -127,7 +127,7 @@ class TripArtifactRefs:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "TripArtifactRefs":
+    def from_dict(cls, payload: dict[str, Any]) -> TripArtifactRefs:
         return cls(
             objective_id=payload.get("objective_id"),
             option_set_ids=_payload_list(payload, "option_set_ids", []),
@@ -179,7 +179,7 @@ class Trip:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "Trip":
+    def from_dict(cls, payload: dict[str, Any]) -> Trip:
         return cls(
             trip_id=payload["trip_id"],
             user_id=payload["user_id"],

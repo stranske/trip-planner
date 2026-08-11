@@ -51,7 +51,7 @@ class PersistedTrip(Base):
         onupdate=_utcnow,
     )
 
-    user: Mapped["UserAccount"] = relationship(back_populates="trips")
+    user: Mapped[UserAccount] = relationship(back_populates="trips")
 
     def profile_refs_payload(self) -> dict[str, str | None]:
         return {

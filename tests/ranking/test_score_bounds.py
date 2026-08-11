@@ -14,20 +14,28 @@ def test_final_score_within_unit_interval() -> None:
     business_profile, business_objectives, constraint_set = _objectives_for_scenario(
         "compliant_conference_trip.json"
     )
-    business_result = BusinessRankingEngine().rank_bundles(
-        business_profile,
-        business_objectives,
-        [_compliant_conference_bundle()],
-        trip_id="trip-score-bound-business",
-        constraint_set=constraint_set,
-    ).results[0]
+    business_result = (
+        BusinessRankingEngine()
+        .rank_bundles(
+            business_profile,
+            business_objectives,
+            [_compliant_conference_bundle()],
+            trip_id="trip-score-bound-business",
+            constraint_set=constraint_set,
+        )
+        .results[0]
+    )
 
-    leisure_result = LeisureRankingEngine().rank_bundles(
-        _profile_from_fixture("depth_oriented_urban_trip.json"),
-        _objectives_from_fixture("depth_oriented_urban_trip.json"),
-        [_urban_culture_bundle()],
-        trip_id="trip-score-bound-leisure",
-    ).results[0]
+    leisure_result = (
+        LeisureRankingEngine()
+        .rank_bundles(
+            _profile_from_fixture("depth_oriented_urban_trip.json"),
+            _objectives_from_fixture("depth_oriented_urban_trip.json"),
+            [_urban_culture_bundle()],
+            trip_id="trip-score-bound-leisure",
+        )
+        .results[0]
+    )
 
     for result in (business_result, leisure_result):
         assert 0.0 <= result.score <= 1.0

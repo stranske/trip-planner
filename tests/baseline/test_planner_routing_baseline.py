@@ -29,9 +29,7 @@ from trip_planner.app.services.planner_routing import (
 _EFFORT_RANK = {cls: rank for rank, cls in enumerate(("fast", "standard", "deep"))}
 
 
-def _route(
-    message: str, *, mode: str = "collaborative", base: str = TASK_FIRST_TURN_TRIAGE
-):
+def _route(message: str, *, mode: str = "collaborative", base: str = TASK_FIRST_TURN_TRIAGE):
     return route_planner_turn(
         message=message,
         base_task_class=base,
@@ -82,24 +80,20 @@ def test_routing_effort_orderings(scen):
     name, left_key, right_key, direction = scen
     left = _EFFORT_RANK[_route(_SCENARIOS[left_key]).effort_class]
     right = _EFFORT_RANK[_route(_SCENARIOS[right_key]).effort_class]
-    assert evaluate_direction(direction, left, right), (
-        f"{name}: rank({left_key})={left} !{direction} rank({right_key})={right}"
-    )
+    assert evaluate_direction(
+        direction, left, right
+    ), f"{name}: rank({left_key})={left} !{direction} rank({right_key})={right}"
 
 
 def test_planning_mode_biases_standard_band_only():
     # A clarifying question carries a base ``standard`` effort. Delegated mode
     # lifts the standard band to deep (autonomous synthesis); in-trip mode drops
     # it to fast (quick response). The two must straddle the standard baseline.
-    delegated = _EFFORT_RANK[
-        _route(_SCENARIOS["clarifying"], mode="delegated").effort_class
-    ]
-    in_trip = _EFFORT_RANK[
-        _route(_SCENARIOS["clarifying"], mode="in-trip").effort_class
-    ]
-    assert evaluate_direction("greater_than", delegated, in_trip), (
-        f"delegated rank={delegated} should exceed in-trip rank={in_trip}"
-    )
+    delegated = _EFFORT_RANK[_route(_SCENARIOS["clarifying"], mode="delegated").effort_class]
+    in_trip = _EFFORT_RANK[_route(_SCENARIOS["clarifying"], mode="in-trip").effort_class]
+    assert evaluate_direction(
+        "greater_than", delegated, in_trip
+    ), f"delegated rank={delegated} should exceed in-trip rank={in_trip}"
 
 
 def test_routing_invariants():

@@ -10,7 +10,9 @@ from trip_planner.app.services.planner import (
     _planner_turn_metadata,
 )
 from trip_planner.app.services.planner_routing import IntentResult
-from trip_planner.app.services.planner_runtime_config import build_planner_runtime_config
+from trip_planner.app.services.planner_runtime_config import (
+    build_planner_runtime_config,
+)
 
 
 class BaseTaskClassifier:
@@ -71,10 +73,6 @@ def test_low_confidence_surfaces_uncertainty() -> None:
         tool_calls=[],
     )
 
-    text = " ".join(
-        item
-        for block in blocks
-        for item in list(block.get("items") or [])
-    ).lower()
+    text = " ".join(item for block in blocks for item in list(block.get("items") or [])).lower()
     assert "source coverage is thin" in text
     assert "uncertain" in text

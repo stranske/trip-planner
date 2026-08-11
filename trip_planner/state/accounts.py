@@ -58,7 +58,7 @@ class RegionalDefaults:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "RegionalDefaults":
+    def from_dict(cls, payload: dict[str, Any]) -> RegionalDefaults:
         return cls(**payload)
 
 
@@ -78,7 +78,7 @@ class NotificationPreference:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "NotificationPreference":
+    def from_dict(cls, payload: dict[str, Any]) -> NotificationPreference:
         return cls(**payload)
 
 
@@ -123,7 +123,7 @@ class AccountPreferenceRecord:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "AccountPreferenceRecord":
+    def from_dict(cls, payload: dict[str, Any]) -> AccountPreferenceRecord:
         return cls(
             default_traveler_profile_id=payload.get("default_traveler_profile_id"),
             default_interaction_style=payload.get(
@@ -190,7 +190,7 @@ class TravelerProfile:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "TravelerProfile":
+    def from_dict(cls, payload: dict[str, Any]) -> TravelerProfile:
         supported_modes = _payload_list(payload, "supported_modes", ["leisure"])
         default_origin_airports = _payload_list(payload, "default_origin_airports", [])
         traveler_tags = _payload_list(payload, "traveler_tags", [])
@@ -255,7 +255,7 @@ class User:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "User":
+    def from_dict(cls, payload: dict[str, Any]) -> User:
         raw_traveler_profiles = _payload_list(payload, "traveler_profiles", [])
         traveler_profiles: list[TravelerProfile] = []
         for index, item in enumerate(raw_traveler_profiles):

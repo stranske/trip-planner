@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from trip_planner.itinerary.daily_menu import SourceMix, build_daily_menu
 from tests.itinerary.test_daily_menu import CTX, kyoto_day_candidates
+from trip_planner.itinerary.daily_menu import SourceMix, build_daily_menu
 
 
 def test_slider_shifts_realized_mix() -> None:

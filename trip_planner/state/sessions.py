@@ -113,7 +113,7 @@ class PlanningInteractionState:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PlanningInteractionState":
+    def from_dict(cls, payload: dict[str, Any]) -> PlanningInteractionState:
         return cls(
             interaction_style=payload.get("interaction_style", "guided"),
             initiative_level=payload.get("initiative_level", "balanced"),
@@ -172,7 +172,7 @@ class OptionPresentationRecord:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "OptionPresentationRecord":
+    def from_dict(cls, payload: dict[str, Any]) -> OptionPresentationRecord:
         return cls(
             presentation_id=payload["presentation_id"],
             option_set_id=payload["option_set_id"],
@@ -223,7 +223,7 @@ class PendingDecision:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PendingDecision":
+    def from_dict(cls, payload: dict[str, Any]) -> PendingDecision:
         return cls(
             decision_id=payload["decision_id"],
             prompt=payload["prompt"],
@@ -309,7 +309,7 @@ class PlanningSessionState:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PlanningSessionState":
+    def from_dict(cls, payload: dict[str, Any]) -> PlanningSessionState:
         return cls(
             session_state_id=payload["session_state_id"],
             trip_id=payload["trip_id"],
@@ -393,7 +393,7 @@ class ActivityLogEvent:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "ActivityLogEvent":
+    def from_dict(cls, payload: dict[str, Any]) -> ActivityLogEvent:
         return cls(
             activity_event_id=payload["activity_event_id"],
             trip_id=payload["trip_id"],

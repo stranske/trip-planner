@@ -36,11 +36,11 @@ class UserAccount(Base):
         default=_utcnow,
         onupdate=_utcnow,
     )
-    sessions: Mapped[list["AuthSession"]] = relationship(
+    sessions: Mapped[list[AuthSession]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
     )
-    trips: Mapped[list["PersistedTrip"]] = relationship(
+    trips: Mapped[list[PersistedTrip]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
     )

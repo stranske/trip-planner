@@ -57,8 +57,7 @@ def _write_github_outputs(result: verdict_policy.VerdictPolicyResult, output_pat
     outputs = _build_github_outputs(result)
 
     with open(output_path, "a", encoding="utf-8") as handle:
-        for key, value in outputs.items():
-            handle.write(f"{key}={value}\n")
+        handle.writelines(f"{key}={value}\n" for key, value in outputs.items())
 
 
 def main(argv: list[str] | None = None) -> int:

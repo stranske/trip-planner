@@ -45,11 +45,7 @@ def scan_trip(trip: dict[str, Any], *, appetite: str = "anchored") -> list[Booki
 
     if not isinstance(trip, dict):
         raise ValueError("trip must be a dictionary")
-    matches = [
-        flag
-        for pattern in _load_patterns()
-        for flag in _match_pattern(pattern, trip)
-    ]
+    matches = [flag for pattern in _load_patterns() for flag in _match_pattern(pattern, trip)]
     deduped = _dedupe(matches)
     deduped.sort(key=_flag_sort_key)
     return _apply_appetite_limit(deduped, appetite)
@@ -201,7 +197,9 @@ def _flag_sort_key(flag: BookingFlag) -> tuple[int, int, str]:
 
 def _apply_appetite_limit(flags: list[BookingFlag], appetite: str) -> list[BookingFlag]:
     limit = _APPETITE_LIMITS.get(str(appetite or "anchored").strip().lower(), 6)
-    required = [flag for flag in flags if flag.release_pattern == "none" or flag.confidence == "high"]
+    required = [
+        flag for flag in flags if flag.release_pattern == "none" or flag.confidence == "high"
+    ]
     selected: list[BookingFlag] = []
     for flag in [*required, *flags]:
         if flag not in selected:

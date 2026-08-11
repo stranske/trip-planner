@@ -7,7 +7,10 @@ import pytest
 
 from trip_planner.app.services import planner_tools
 from trip_planner.app.services.auth import AuthenticatedUser
-from trip_planner.app.services.planner_tools import execute_planner_tool_call, list_planner_tools
+from trip_planner.app.services.planner_tools import (
+    execute_planner_tool_call,
+    list_planner_tools,
+)
 
 
 def _activity(

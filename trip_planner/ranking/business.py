@@ -545,9 +545,11 @@ class BusinessRankingEngine(BaseRankingEngine):
             required_channels.update(constraint_set.required_booking_channels)
         channel_hits: list[float] = []
         for transport in bundle.transport_options:
-            if transport.policy_summary.approved_booking_channel is True:
-                channel_hits.append(1.0)
-            elif required_channels and transport.booking_terms.booking_channel in required_channels:
+            if (
+                transport.policy_summary.approved_booking_channel is True
+                or required_channels
+                and transport.booking_terms.booking_channel in required_channels
+            ):
                 channel_hits.append(1.0)
             elif required_channels and any(
                 channel in required_channels

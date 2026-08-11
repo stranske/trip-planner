@@ -45,7 +45,7 @@ class PolicySimulationCase:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PolicySimulationCase":
+    def from_dict(cls, payload: dict[str, Any]) -> PolicySimulationCase:
         notes = payload.get("notes", [])
         if not isinstance(notes, list):
             raise ValueError("notes must be provided as a list")
@@ -83,7 +83,7 @@ class PolicyEvaluationSimulator:
             raise ValueError("case_id values must be unique")
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PolicyEvaluationSimulator":
+    def from_dict(cls, payload: dict[str, Any]) -> PolicyEvaluationSimulator:
         cases_payload = payload["cases"]
         if not isinstance(cases_payload, list):
             raise ValueError("cases must be a list of case payloads")
@@ -91,7 +91,7 @@ class PolicyEvaluationSimulator:
         return cls(cases)
 
     @classmethod
-    def from_json_file(cls, path: str | Path) -> "PolicyEvaluationSimulator":
+    def from_json_file(cls, path: str | Path) -> PolicyEvaluationSimulator:
         import json
 
         payload = json.loads(Path(path).read_text(encoding="utf-8"))

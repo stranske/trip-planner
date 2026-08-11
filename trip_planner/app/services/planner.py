@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import re
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -879,12 +880,16 @@ def _build_summary_block(
 def _confidence_label_from_runtime_context(runtime_context: dict[str, Any]) -> str:
     for value in (
         runtime_context.get("confidence_label"),
-        (runtime_context.get("source_confidence") or {}).get("confidence_label")
-        if isinstance(runtime_context.get("source_confidence"), dict)
-        else None,
-        (runtime_context.get("source_confidence_summary") or {}).get("confidence_label")
-        if isinstance(runtime_context.get("source_confidence_summary"), dict)
-        else None,
+        (
+            (runtime_context.get("source_confidence") or {}).get("confidence_label")
+            if isinstance(runtime_context.get("source_confidence"), dict)
+            else None
+        ),
+        (
+            (runtime_context.get("source_confidence_summary") or {}).get("confidence_label")
+            if isinstance(runtime_context.get("source_confidence_summary"), dict)
+            else None
+        ),
     ):
         label = str(value or "").strip().lower()
         if label:
@@ -962,9 +967,9 @@ def _build_planning_ledger_block(
         title="Planning memory",
         items=_dedupe_preserve_order(ledger_items)[:6],
         metadata={
-            "ledger_entry_ids": [
-                item for item in _dedupe_preserve_order(ledger_entry_ids) if item
-            ][:6]
+            "ledger_entry_ids": [item for item in _dedupe_preserve_order(ledger_entry_ids) if item][
+                :6
+            ]
         },
     )
 
@@ -1012,11 +1017,9 @@ def _build_comparison_block(
             metrics = scenario.get("metrics") or {}
             route_summary = scenario.get("route_summary") or "route details pending"
             comparison_items.append(
-                (
-                    f"{scenario.get('title')}: {route_summary}; "
-                    f"{metrics.get('travel_minutes', 'pending')} travel minutes; "
-                    f"{metrics.get('transfers', 'pending')} transfers."
-                )
+                f"{scenario.get('title')}: {route_summary}; "
+                f"{metrics.get('travel_minutes', 'pending')} travel minutes; "
+                f"{metrics.get('transfers', 'pending')} transfers."
             )
     elif len(options) > 1:
         comparison_items = [
@@ -1176,9 +1179,7 @@ def set_intent_classifier_factory_for_tests(
 
 
 def _planner_chat_model(runtime_config: PlannerRuntimeConfig) -> PlannerChatModel:
-    factory = _PLANNER_CHAT_MODEL_FACTORY or (
-        lambda config: _OpenAIPlannerChatModel(config)
-    )
+    factory = _PLANNER_CHAT_MODEL_FACTORY or (lambda config: _OpenAIPlannerChatModel(config))
     return factory(runtime_config)
 
 

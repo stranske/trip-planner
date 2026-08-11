@@ -11,8 +11,9 @@ import socket
 import threading
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, ClassVar, Literal, Protocol
+from typing import Any, ClassVar, Literal, Protocol
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
@@ -195,7 +196,7 @@ class TPPTransportPolicy:
             )
 
     @classmethod
-    def from_env(cls) -> "TPPTransportPolicy":
+    def from_env(cls) -> TPPTransportPolicy:
         default_read_timeout = _env_float("TPP_TIMEOUT_SECONDS", 15.0)
         return cls(
             connect_timeout_seconds=_env_float("TPP_TRANSPORT_CONNECT_TIMEOUT_SECONDS", 5.0),
@@ -383,7 +384,7 @@ class TPPRuntimeSettings:
     timeout_seconds: float = 10.0
 
     @classmethod
-    def from_env(cls) -> "TPPRuntimeSettings":
+    def from_env(cls) -> TPPRuntimeSettings:
         base_url = os.getenv("TPP_BASE_URL", "").strip()
         access_token = os.getenv("TPP_ACCESS_TOKEN", "").strip()
         oidc_provider = os.getenv("TPP_OIDC_PROVIDER", "").strip()
@@ -588,13 +589,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 if delay > 0:
                     self._sleep(delay)
                 continue
-            except (
-                urllib_error.URLError,
-                TimeoutError,
-                socket.timeout,
-                ConnectionError,
-                OSError,
-            ) as exc:
+            except (urllib_error.URLError, TimeoutError, ConnectionError, OSError) as exc:
                 transport_error = tpp_transport_error_from_exception(
                     exc,
                     operation=method,
@@ -668,13 +663,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 status_code=exc.code,
                 body_excerpt=raw_body,
             ) from exc
-        except (
-            urllib_error.URLError,
-            TimeoutError,
-            socket.timeout,
-            ConnectionError,
-            OSError,
-        ) as exc:
+        except (urllib_error.URLError, TimeoutError, ConnectionError, OSError) as exc:
             transport_error = tpp_transport_error_from_exception(
                 exc, operation="request", path=path
             )

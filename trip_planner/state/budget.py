@@ -92,7 +92,7 @@ class BudgetCategoryAllocation:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "BudgetCategoryAllocation":
+    def from_dict(cls, payload: dict[str, Any]) -> BudgetCategoryAllocation:
         return cls(
             category_key=payload["category_key"],
             label=payload["label"],
@@ -143,7 +143,7 @@ class BudgetScenario:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "BudgetScenario":
+    def from_dict(cls, payload: dict[str, Any]) -> BudgetScenario:
         return cls(
             scenario_budget_id=payload["scenario_budget_id"],
             trip_id=payload["trip_id"],
@@ -218,7 +218,7 @@ class BudgetPlan:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "BudgetPlan":
+    def from_dict(cls, payload: dict[str, Any]) -> BudgetPlan:
         return cls(
             budget_plan_id=payload["budget_plan_id"],
             trip_id=payload["trip_id"],
@@ -278,7 +278,7 @@ class ActualSpendEvent:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "ActualSpendEvent":
+    def from_dict(cls, payload: dict[str, Any]) -> ActualSpendEvent:
         return cls(
             spend_event_id=payload["spend_event_id"],
             trip_id=payload["trip_id"],

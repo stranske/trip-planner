@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping, MutableMapping
+from collections.abc import Mapping, MutableMapping
+from typing import Any
 
 from trip_planner.integrations.tpp.services.workspace_state import persist_tpp_result
 from trip_planner.integrations.tpp.validation import validate_succeeded_response

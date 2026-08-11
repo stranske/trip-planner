@@ -26,9 +26,9 @@ from .snapshots import (
 )
 
 __all__ = [
+    "CONFIDENCE_LABELS",
     "AdapterIssue",
     "AttributeConflict",
-    "CONFIDENCE_LABELS",
     "DeduplicationDecision",
     "EntityResolution",
     "MatchCandidate",
@@ -42,8 +42,8 @@ __all__ = [
     "SourceConfidenceSummary",
     "SourceQualityScore",
     "SourceQualityScorer",
-    "SourceRecord",
     "SourceQuery",
+    "SourceRecord",
     "SourceTrustSignals",
     "summarize_sources",
 ]
