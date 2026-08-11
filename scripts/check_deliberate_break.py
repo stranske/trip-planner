@@ -123,7 +123,7 @@ def _explicit_marker(section: str) -> DeliberateBreakSpec | None:
     return None
 
 
-def _fallback_marker(section: str) -> DeliberateBreakSpec | None:
+def _fallback_marker(section: str, markdown: str = "") -> DeliberateBreakSpec | None:
     named_line = next(
         (line for line in section.splitlines() if "named test:" in line.lower()),
         "",
@@ -140,20 +140,71 @@ def _fallback_marker(section: str) -> DeliberateBreakSpec | None:
         return None
 
     test_file_match = re.search(r"`([^`]*(?:test|tests)[^`]*\.py)`", named_line)
-    test_name_match = re.search(r"\bwith\s+`?([A-Za-z_][A-Za-z0-9_]*)`?", named_line)
-    break_file_match = re.search(r"`([^`]+)`", break_line)
-    if not test_file_match or not test_name_match or not break_file_match:
+    test_name_match = (
+        re.search(r"\btest\s+`([^`]+)`", named_line)
+        or re.search(r"\bwith\s+`([^`]+)`", named_line)
+        or re.search(r"\bwith\s+`?([A-Za-z_][A-Za-z0-9_]*)`?", named_line)
+    )
+    break_file = _infer_break_file(break_line, named_line, markdown)
+    if not test_file_match or not test_name_match or not break_file:
         return None
 
     test_file = test_file_match.group(1)
     test_id = f"{test_file}::{test_name_match.group(1)}"
-    break_file = break_file_match.group(1)
     return DeliberateBreakSpec(test_id, test_file, break_file, _pytest_command(test_id))
+
+
+def _infer_break_file(break_line: str, named_line: str, markdown: str) -> str | None:
+    """Pick a revert target from acceptance wording, skipping label-like backticks."""
+
+    def _candidate_paths(text: str) -> list[str]:
+        paths: list[str] = []
+        for path in re.findall(r"`([^`]+)`", text):
+            normalized = path.strip().rstrip(":")
+            if not normalized:
+                continue
+            if re.fullmatch(r"[A-Za-z][\w-]*:\s*.+", normalized):
+                continue
+            if re.search(r"\s", normalized):
+                continue
+            path_only = normalized.split(":", 1)[0]
+            if "/" in path_only or path_only.endswith((".py", ".yml", ".yaml", ".js")):
+                paths.append(path_only)
+        return paths
+
+    # Prefer the file explicitly described as being reverted. A deliberate-break
+    # line may name the test command before its actual mutation target.
+    for revert_match in re.finditer(
+        r"\brevert(?:ing|ed)?\b[^`]{0,120}`([^`]+)`", break_line, re.IGNORECASE
+    ):
+        revert_paths = _candidate_paths(f"`{revert_match.group(1)}`")
+        if revert_paths:
+            return revert_paths[0]
+
+    # The deliberate-break line is the explicit experiment target. Only fall
+    # back to other acceptance prose when it does not name a path itself.
+    break_paths = _candidate_paths(break_line)
+    if break_paths:
+        return break_paths[0]
+
+    ordered_paths: list[str] = []
+    for text in (named_line, markdown):
+        ordered_paths.extend(_candidate_paths(text))
+
+    workflow_paths = [
+        path
+        for path in ordered_paths
+        if ".github/workflows/" in path or path.endswith((".yml", ".yaml"))
+    ]
+    if workflow_paths:
+        return workflow_paths[0]
+
+    return ordered_paths[0] if ordered_paths else None
 
 
 def parse_deliberate_break_spec(markdown: str) -> DeliberateBreakSpec | None:
     section = _acceptance_criteria(markdown)
-    return _explicit_marker(section) or _fallback_marker(section)
+    return _explicit_marker(section) or _fallback_marker(section, markdown)
 
 
 def _pytest_command(test_id: str) -> tuple[str, ...]:
