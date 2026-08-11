@@ -450,7 +450,9 @@ def _formatted_output_valid(text: str) -> bool:
     if not text:
         return False
     try:
-        return bool(_issue_format_validator().validate(text).ok)
+        workspace = os.environ.get("GITHUB_WORKSPACE", "").strip()
+        repo_root = Path(workspace).resolve() if workspace else Path.cwd().resolve()
+        return bool(_issue_format_validator().validate(text, repo_root=repo_root).ok)
     except (ImportError, OSError, RuntimeError, SyntaxError):
         # Preserve the former heading-only behavior until the copy-synced
         # validator becomes available again.

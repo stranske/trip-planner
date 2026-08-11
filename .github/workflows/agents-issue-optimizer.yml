@@ -88,6 +88,16 @@ jobs:
             return 0
           }
 
+          release_format_lease_after_skip() {
+            local issue_number="$1"
+            if jq -e '[.labels[].name] | any(. == "agents:format")' \
+                /tmp/format-eligibility.json >/dev/null; then
+              gh issue edit "$issue_number" --repo "$GITHUB_REPOSITORY" \
+                --remove-label "agents:format"
+              echo "Released agents:format lease after eligibility skip."
+            fi
+          }
+
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             should_run=true
             if [[ "$DISPATCH_PHASE" == "format" ]]; then
@@ -98,6 +108,7 @@ jobs:
                 if [[ "$eligibility_rc" -eq 2 ]]; then
                   exit 1
                 fi
+                release_format_lease_after_skip "$DISPATCH_ISSUE_NUMBER"
                 should_run=false
               fi
             fi
@@ -146,6 +157,7 @@ jobs:
               if [[ "$eligibility_rc" -eq 2 ]]; then
                 exit 1
               fi
+              release_format_lease_after_skip "$EVENT_ISSUE_NUMBER"
               echo "should_run=false" >> "$GITHUB_OUTPUT"
             fi
           else
