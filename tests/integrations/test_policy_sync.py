@@ -58,6 +58,7 @@ def test_import_standard_policy_sync_snapshot() -> None:
     ]
     assert summary["policy_status"] == "pass"
     assert summary["compatible_with_planner_cache"] is True
+    assert summary["blocking_issues"] == []
 
 
 def test_policy_sync_rejects_unsupported_contract_version() -> None:

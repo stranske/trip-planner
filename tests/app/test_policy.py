@@ -11,7 +11,8 @@ from trip_planner.app.main import create_app
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.policy import _tpp_trip_plan_payload
 from trip_planner.integrations.tpp import client as tpp_client_module
-from trip_planner.persistence.db import reset_database_state
+from trip_planner.persistence.db import get_session_factory, reset_database_state
+from trip_planner.persistence.models.policy import PersistedPolicyState
 from trip_planner.persistence.models.trip import PersistedTrip
 
 
@@ -196,6 +197,61 @@ def test_workspace_policy_import_maps_tpp_failure_to_blocking_reasons(client: Te
         "severity": "blocking",
         "related_category": "policy_sync",
     }
+
+
+def test_workspace_policy_invalid_persisted_blocking_issue_is_unavailable(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Invalid stored policy",
+            "summary": "Keep malformed persisted policy details visible.",
+            "mode": "business",
+            "trip_frame": {"duration_days": 2, "primary_regions": ["Chicago"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = _load_fixture("standard_policy_sync.json")
+    imported = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={"request": fixture["request"], "response": fixture["response"]},
+    )
+    assert imported.status_code == 200
+
+    with get_session_factory()() as db_session:
+        state = db_session.get(PersistedPolicyState, f"policy-state:{trip_id}")
+        assert state is not None
+        state.organization_context = {
+            **state.organization_context,
+            "blocking_issues": [
+                {
+                    "code": "BUD-001",
+                    "summary": "Malformed persisted severity should remain visible.",
+                    "severity": "critical",
+                }
+            ],
+        }
+        db_session.commit()
+
+    response = client.get(f"/api/workspace/{trip_id}/policy")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["policy_evaluation"]["status"] == "policy_unavailable"
+    assert payload["policy_evaluation"]["failure_reasons"] == [
+        {
+            "code": "invalid_persisted_policy_state",
+            "message": (
+                "Stored TPP policy requirements are invalid and cannot be used for compliance "
+                "evaluation: organization_context.blocking_issues[0] is invalid: severity must be "
+                "'warning' or 'blocking'"
+            ),
+            "severity": "blocking",
+            "related_category": "policy_sync",
+        }
+    ]
+    assert payload["summary"]["status"] == "policy_state_invalid"
 
 
 def test_workspace_policy_import_preserves_cached_state_when_tpp_rejects_cache(

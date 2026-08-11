@@ -422,6 +422,9 @@ def summarize_policy_import(
         "booking_requirements": [
             requirement.to_dict() for requirement in imported.organization_context.booking_requirements
         ],
+        "blocking_issues": [
+            requirement.to_dict() for requirement in imported.organization_context.blocking_issues
+        ],
         "approved_channels": list(imported.organization_context.approved_channels),
         "approval_triggers": list(imported.organization_context.approval_triggers),
         "documentation_rules": list(imported.constraint_set.documentation_rules),

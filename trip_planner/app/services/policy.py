@@ -37,6 +37,10 @@ class WorkspacePolicyNotFoundError(ValueError):
     """Raised when workspace policy state or trip ownership is missing."""
 
 
+class PersistedPolicyStateValidationError(ValueError):
+    """Raised when stored policy JSON can no longer satisfy the policy contract."""
+
+
 def _isoformat(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
@@ -161,6 +165,7 @@ def _summarize_policy_import(imported: PolicyConstraintImport) -> dict[str, Any]
         "contract_version": org.contract_version,
         "compatible_with_planner_cache": org.compatible_with_planner_cache,
         "booking_requirements": [requirement.to_dict() for requirement in org.booking_requirements],
+        "blocking_issues": [requirement.to_dict() for requirement in org.blocking_issues],
         "sync_status": freshness.status,
         "is_stale": stale,
         "required_booking_channels": list(constraint_set.required_booking_channels),
@@ -357,22 +362,30 @@ def _normalize_string_list(payload: object) -> list[str]:
     return [value for value in payload if isinstance(value, str) and value]
 
 
-def _normalize_policy_requirements(payload: object) -> list[TPPPolicyRequirement]:
+def _normalize_policy_requirements(
+    payload: object, *, field_name: str
+) -> list[TPPPolicyRequirement]:
     if not isinstance(payload, list):
-        return []
+        raise PersistedPolicyStateValidationError(f"{field_name} must be provided as a list")
     requirements: list[TPPPolicyRequirement] = []
-    for item in payload:
+    for index, item in enumerate(payload):
         if not isinstance(item, dict):
-            continue
+            raise PersistedPolicyStateValidationError(
+                f"{field_name}[{index}] must be provided as a mapping"
+            )
         code = item.get("code")
         summary = item.get("summary")
         severity = item.get("severity")
         if not isinstance(code, str) or not isinstance(summary, str) or not isinstance(severity, str):
-            continue
+            raise PersistedPolicyStateValidationError(
+                f"{field_name}[{index}] must include string code, summary, and severity values"
+            )
         try:
             requirements.append(TPPPolicyRequirement(code=code, summary=summary, severity=severity))
-        except ValueError:
-            continue
+        except ValueError as error:
+            raise PersistedPolicyStateValidationError(
+                f"{field_name}[{index}] is invalid: {error}"
+            ) from error
     return requirements
 
 
@@ -419,10 +432,12 @@ def _normalize_organization_context_payload(record: PersistedPolicyState) -> dic
             "compatible_with_planner_cache", True
         ),
         "booking_requirements": _normalize_policy_requirements(
-            organization_context.get("booking_requirements")
+            organization_context.get("booking_requirements"),
+            field_name="organization_context.booking_requirements",
         ),
         "blocking_issues": _normalize_policy_requirements(
-            organization_context.get("blocking_issues")
+            organization_context.get("blocking_issues"),
+            field_name="organization_context.blocking_issues",
         ),
         "approved_channels": _normalize_string_list(organization_context.get("approved_channels")),
         "comparable_requirements": comparable_requirements,
@@ -489,16 +504,23 @@ def _build_workspace_policy_payload(
     trip_record: PersistedTrip,
     policy_record: PersistedPolicyState,
 ) -> dict[str, Any]:
-    imported = PolicyConstraintImport(
-        constraint_set=PolicyConstraintSet(**_normalize_constraint_set_payload(policy_record)),
-        organization_context=OrganizationContextSnapshot(
-            **_normalize_organization_context_payload(policy_record)
-        ),
-        freshness=PolicyFreshness(**_normalize_freshness_payload(policy_record)),
-        source_request_id=policy_record.source_request_id,
-        source_correlation_id=policy_record.source_correlation_id,
-        raw_payload=_normalize_json_object(policy_record.raw_payload),
-    )
+    try:
+        imported = PolicyConstraintImport(
+            constraint_set=PolicyConstraintSet(**_normalize_constraint_set_payload(policy_record)),
+            organization_context=OrganizationContextSnapshot(
+                **_normalize_organization_context_payload(policy_record)
+            ),
+            freshness=PolicyFreshness(**_normalize_freshness_payload(policy_record)),
+            source_request_id=policy_record.source_request_id,
+            source_correlation_id=policy_record.source_correlation_id,
+            raw_payload=_normalize_json_object(policy_record.raw_payload),
+        )
+    except PersistedPolicyStateValidationError as error:
+        return _invalid_policy_state_payload(
+            trip_record=trip_record,
+            policy_record=policy_record,
+            error=error,
+        )
     proposal = _proposal_from_import(trip_record, imported)
     policy_evaluation = _policy_evaluation_from_import(trip_record, imported)
     return {
@@ -506,6 +528,52 @@ def _build_workspace_policy_payload(
         "proposal": proposal.to_dict(),
         "policy_evaluation": policy_evaluation.to_dict(),
         "summary": _summarize_policy_import(imported),
+    }
+
+
+def _invalid_policy_state_payload(
+    *,
+    trip_record: PersistedTrip,
+    policy_record: PersistedPolicyState,
+    error: PersistedPolicyStateValidationError,
+) -> dict[str, Any]:
+    """Expose invalid stored policy data as an explicit unavailable evaluation."""
+
+    failure = PolicyFailureReason(
+        code="invalid_persisted_policy_state",
+        message=(
+            "Stored TPP policy requirements are invalid and cannot be used for compliance "
+            f"evaluation: {error}"
+        ),
+        severity="blocking",
+        related_category="policy_sync",
+    )
+    evaluation = PolicyEvaluationResult(
+        evaluation_id=f"policy-eval:{trip_record.trip_id}:{policy_record.policy_id}",
+        proposal_id=f"proposal-preview:{trip_record.trip_id}",
+        status="policy_unavailable",
+        failure_reasons=[failure],
+        exception_guidance=["Refresh the policy import before preparing a final approval packet."],
+        notes=["The stored policy state failed validation and was not silently degraded."],
+        compliance_score=0.0,
+    )
+    return {
+        "policy_state": {
+            "policy_state_id": policy_record.policy_state_id,
+            "policy_id": policy_record.policy_id,
+            "organization_id": policy_record.organization_id,
+            "policy_version": policy_record.policy_version,
+            "sync_status": policy_record.sync_status,
+            "organization_context": _normalize_json_object(policy_record.organization_context),
+        },
+        "proposal": None,
+        "policy_evaluation": evaluation.to_dict(),
+        "summary": {
+            "policy_id": policy_record.policy_id,
+            "organization_id": policy_record.organization_id,
+            "status": "policy_state_invalid",
+            "validation_error": str(error),
+        },
     }
 
 
