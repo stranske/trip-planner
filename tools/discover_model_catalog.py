@@ -41,7 +41,7 @@ def _request_json(url: str, headers: dict[str, str]) -> Any:
     if url not in CATALOG_URLS:
         raise ValueError(f"unsupported catalog URL: {url}")
     request = Request(url, headers=headers)
-    with urlopen(request, timeout=30) as response:
+    with urlopen(request, timeout=30) as response:  # noqa: S310 - validated static catalog URL
         return json.load(response)
 
 
