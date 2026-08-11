@@ -20,6 +20,7 @@ POLICY_EVALUATION_STATUSES: tuple[str, ...] = (
     "compliant",
     "non_compliant",
     "exception_required",
+    "policy_unavailable",
 )
 FAILURE_SEVERITIES: tuple[str, ...] = ("warning", "blocking")
 

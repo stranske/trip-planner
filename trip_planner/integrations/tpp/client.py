@@ -896,6 +896,18 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             for item in payload.get("approval_triggers") or []
             if isinstance(item, dict) and str(item.get("code") or item.get("summary") or "").strip()
         ]
+        booking_requirements = self._adapt_policy_requirements(
+            payload.get("booking_requirements"),
+            field_name="booking_requirements",
+        )
+        blocking_issues = self._adapt_policy_requirements(
+            [
+                item
+                for item in payload.get("approval_triggers") or []
+                if isinstance(item, dict) and item.get("blocking") is True
+            ],
+            field_name="approval_triggers",
+        )
         freshness = str(payload.get("freshness") or "current").strip() or "current"
         result_payload = {
             "constraint_set": {
@@ -913,17 +925,18 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             },
             "organization_context": {
                 "organization_id": organization_id,
+                "policy_status": str(payload.get("policy_status") or "").strip(),
+                "contract_version": str(versioning.get("contract_version") or "").strip(),
+                "compatible_with_planner_cache": versioning.get("compatible_with_planner_cache"),
+                "booking_requirements": booking_requirements,
+                "blocking_issues": blocking_issues,
                 "approved_channels": [],
                 "comparable_requirements": {},
                 "documentation_rules": documentation_rules,
                 "approval_triggers": approval_triggers,
                 "comfort_preferences": {},
                 "class_of_service_limits": {},
-                "metadata": {
-                    "policy_status": str(payload.get("policy_status") or ""),
-                    "contract_version": str(versioning.get("contract_version") or ""),
-                    "etag": str(versioning.get("etag") or ""),
-                },
+                "metadata": {"etag": str(versioning.get("etag") or "")},
             },
             "freshness": {
                 "snapshot_version": str(versioning.get("etag") or policy_version),
@@ -951,6 +964,24 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 "received_at": payload.get("generated_at"),
             }
         )
+
+    @staticmethod
+    def _adapt_policy_requirements(value: Any, *, field_name: str) -> list[dict[str, str]]:
+        if not isinstance(value, list):
+            raise TPPContractError(f"TPP {field_name} must be a list.")
+        requirements: list[dict[str, str]] = []
+        for index, item in enumerate(value):
+            if not isinstance(item, dict):
+                raise TPPContractError(f"TPP {field_name}[{index}] must be an object.")
+            code = str(item.get("code") or "").strip()
+            summary = str(item.get("summary") or "").strip()
+            if not code or not summary:
+                raise TPPContractError(
+                    f"TPP {field_name}[{index}] must include non-empty code and summary."
+                )
+            severity = "blocking" if item.get("blocking") is True or item.get("severity") == "error" else "warning"
+            requirements.append({"code": code, "summary": summary, "severity": severity})
+        return requirements
 
     def _submit_proposal(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         payload = self._request_json(

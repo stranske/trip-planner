@@ -72,6 +72,17 @@
       },
       "organization_context": {
         "organization_id": "org-strict",
+        "policy_status": "pass",
+        "contract_version": "2026-04-11",
+        "compatible_with_planner_cache": true,
+        "booking_requirements": [
+          {
+            "code": "concur_only",
+            "summary": "Book through Concur.",
+            "severity": "blocking"
+          }
+        ],
+        "blocking_issues": [],
         "approved_channels": [
           "Concur"
         ],

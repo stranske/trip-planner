@@ -148,6 +148,8 @@ def test_workspace_policy_import_persists_constraint_set_and_readiness(client: T
     assert payload["policy_state"]["trip_id"] == trip_id
     assert payload["policy_state"]["policy_id"] == "policy-standard-2026-02"
     assert payload["summary"]["required_booking_channels"] == ["Navan", "Concur"]
+    assert payload["summary"]["policy_status"] == "pass"
+    assert payload["summary"]["booking_requirements"][0]["code"] == "approved_booking_channel"
     assert payload["policy_evaluation"]["status"] == "compliant"
     assert payload["proposal"]["constraint_set_id"] == "policy-standard-2026-02"
 
@@ -156,6 +158,80 @@ def test_workspace_policy_import_persists_constraint_set_and_readiness(client: T
     reloaded_payload = reloaded.json()
     assert reloaded_payload["policy_state"]["policy_state_id"] == f"policy-state:{trip_id}"
     assert "Persisted policy storage is limited" in reloaded_payload["policy_state"]["notes"][-2]
+
+
+def test_workspace_policy_import_maps_tpp_failure_to_blocking_reasons(client: TestClient) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Denied policy import",
+            "summary": "Keep TPP denial reasons visible in the workspace.",
+            "mode": "business",
+            "trip_frame": {"duration_days": 2, "primary_regions": ["Chicago"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = _load_fixture("standard_policy_sync.json")
+    context = fixture["response"]["result_payload"]["organization_context"]
+    context["policy_status"] = "fail"
+    context["blocking_issues"] = [
+        {
+            "code": "BUD-001",
+            "summary": "Trip cost exceeds the approved budget cap.",
+            "severity": "blocking",
+        }
+    ]
+
+    imported = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={"request": fixture["request"], "response": fixture["response"]},
+    )
+
+    assert imported.status_code == 200
+    evaluation = imported.json()["policy_evaluation"]
+    assert evaluation["status"] == "non_compliant"
+    assert evaluation["failure_reasons"][0] == {
+        "code": "BUD-001",
+        "message": "Trip cost exceeds the approved budget cap.",
+        "severity": "blocking",
+        "related_category": "policy_sync",
+    }
+
+
+def test_workspace_policy_import_preserves_cached_state_when_tpp_rejects_cache(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Cache compatibility import",
+            "summary": "Do not replace a policy cache with an incompatible snapshot.",
+            "mode": "business",
+            "trip_frame": {"duration_days": 2, "primary_regions": ["Chicago"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = _load_fixture("standard_policy_sync.json")
+    seeded = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={"request": fixture["request"], "response": fixture["response"]},
+    )
+    assert seeded.status_code == 200
+    fixture["response"]["result_payload"]["constraint_set"]["policy_id"] = "policy-new"
+    fixture["response"]["result_payload"]["organization_context"][
+        "compatible_with_planner_cache"
+    ] = False
+
+    incompatible = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={"request": fixture["request"], "response": fixture["response"]},
+    )
+
+    assert incompatible.status_code == 200
+    payload = incompatible.json()
+    assert payload["policy_state"]["policy_id"] == "policy-standard-2026-02"
+    assert payload["summary"]["status"] == "cache_incompatible"
+    assert payload["policy_evaluation"]["status"] == "policy_unavailable"
 
 
 def test_workspace_policy_import_rejects_leisure_trip(client: TestClient) -> None:

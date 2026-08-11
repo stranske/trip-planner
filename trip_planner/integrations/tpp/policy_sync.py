@@ -18,6 +18,8 @@ from .client import TPPIntegrationClient
 from .contracts import TPPRequestEnvelope, TPPResponseEnvelope
 
 POLICY_SYNC_STATES: tuple[str, ...] = ("current", "stale", "invalidated")
+TPP_POLICY_STATUSES: tuple[str, ...] = ("pass", "fail")
+SUPPORTED_TPP_POLICY_CONTRACT_VERSIONS: tuple[str, ...] = ("2026-04-11",)
 
 
 def _require_mapping(value: Any, field_name: str) -> dict[str, Any]:
@@ -44,6 +46,45 @@ def _optional_string_list(value: Any, field_name: str) -> list[str]:
     if value is None:
         return []
     return _require_string_list(value, field_name)
+
+
+@dataclass(slots=True)
+class TPPPolicyRequirement:
+    """A planner-facing rule received from the TPP policy snapshot."""
+
+    code: str
+    summary: str
+    severity: str
+
+    def __post_init__(self) -> None:
+        require_non_empty(self.code, "code")
+        require_non_empty(self.summary, "summary")
+        if self.severity not in {"warning", "blocking"}:
+            raise ValueError("severity must be 'warning' or 'blocking'")
+
+    def to_dict(self) -> dict[str, str]:
+        return asdict(self)
+
+
+def _require_policy_requirements(value: Any, field_name: str) -> list[TPPPolicyRequirement]:
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be provided as a list")
+    requirements: list[TPPPolicyRequirement] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise ValueError(f"{field_name}[{index}] must be provided as a mapping")
+        requirements.append(
+            TPPPolicyRequirement(
+                code=_require_string_field(item.get("code"), f"{field_name}[{index}].code"),
+                summary=_require_string_field(
+                    item.get("summary"), f"{field_name}[{index}].summary"
+                ),
+                severity=_require_string_field(
+                    item.get("severity"), f"{field_name}[{index}].severity"
+                ),
+            )
+        )
+    return requirements
 
 
 def _require_string_field(value: Any, field_name: str) -> str:
@@ -124,6 +165,11 @@ class PolicyFreshness:
 @dataclass(slots=True)
 class OrganizationContextSnapshot:
     organization_id: str
+    policy_status: str
+    contract_version: str
+    compatible_with_planner_cache: bool
+    booking_requirements: list[TPPPolicyRequirement]
+    blocking_issues: list[TPPPolicyRequirement]
     approved_channels: list[str] = field(default_factory=list)
     comparable_requirements: dict[str, int] = field(default_factory=dict)
     documentation_rules: list[str] = field(default_factory=list)
@@ -134,6 +180,20 @@ class OrganizationContextSnapshot:
 
     def __post_init__(self) -> None:
         require_non_empty(self.organization_id, "organization_id")
+        if self.policy_status not in TPP_POLICY_STATUSES:
+            raise ValueError(f"policy_status must be one of {TPP_POLICY_STATUSES}")
+        if self.contract_version not in SUPPORTED_TPP_POLICY_CONTRACT_VERSIONS:
+            raise ValueError(
+                "Unsupported TPP policy contract version "
+                f"{self.contract_version!r}; expected one of "
+                f"{SUPPORTED_TPP_POLICY_CONTRACT_VERSIONS}"
+            )
+        if not isinstance(self.compatible_with_planner_cache, bool):
+            raise ValueError("compatible_with_planner_cache must be a boolean")
+        if any(not isinstance(item, TPPPolicyRequirement) for item in self.booking_requirements):
+            raise ValueError("booking_requirements must contain TPPPolicyRequirement instances")
+        if any(not isinstance(item, TPPPolicyRequirement) for item in self.blocking_issues):
+            raise ValueError("blocking_issues must contain TPPPolicyRequirement instances")
         require_strings(self.approved_channels, "approved_channels")
         require_strings(self.documentation_rules, "documentation_rules")
         require_strings(self.approval_triggers, "approval_triggers")
@@ -274,6 +334,21 @@ class TPPPolicySyncService:
 
         organization_context = OrganizationContextSnapshot(
             organization_id=organization_id,
+            policy_status=_require_string_field(
+                context_payload.get("policy_status"), "organization_context.policy_status"
+            ),
+            contract_version=_require_string_field(
+                context_payload.get("contract_version"), "organization_context.contract_version"
+            ),
+            compatible_with_planner_cache=context_payload.get("compatible_with_planner_cache"),
+            booking_requirements=_require_policy_requirements(
+                context_payload.get("booking_requirements"),
+                "organization_context.booking_requirements",
+            ),
+            blocking_issues=_require_policy_requirements(
+                context_payload.get("blocking_issues"),
+                "organization_context.blocking_issues",
+            ),
             approved_channels=_optional_string_list(
                 context_payload.get("approved_channels")
                 or constraint_payload.get("required_booking_channels"),
@@ -341,6 +416,12 @@ def summarize_policy_import(
         "organization_id": imported.organization_id,
         "policy_id": imported.constraint_set.policy_id,
         "policy_version": imported.constraint_set.policy_version,
+        "policy_status": imported.organization_context.policy_status,
+        "contract_version": imported.organization_context.contract_version,
+        "compatible_with_planner_cache": imported.organization_context.compatible_with_planner_cache,
+        "booking_requirements": [
+            requirement.to_dict() for requirement in imported.organization_context.booking_requirements
+        ],
         "approved_channels": list(imported.organization_context.approved_channels),
         "approval_triggers": list(imported.organization_context.approval_triggers),
         "documentation_rules": list(imported.constraint_set.documentation_rules),
