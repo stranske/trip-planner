@@ -82,7 +82,10 @@ BANNED_ADJECTIVES = (
     "polished",
     "performant",
 )
-_TASK_CATEGORY = r"(?:file|function|class|method|path|config(?:uration)?|key|job|workflow|command)"
+_TASK_CATEGORY = (
+    r"(?:file|function|class|component|method|path|config(?:uration)?|key|job|workflow|command)"
+)
+_TASK_TRAILING_SYMBOL_CATEGORY = r"(?:function|class|component|method|job|workflow)"
 _TASK_EXTENSION = (
     r"py|js|jsx|ts|tsx|yml|yaml|json|toml|md|sh|go|rs|java|kt|rb|php|css|html|sql|"
     r"xml|txt|ini|cfg|conf|lock|gradle|swift|c|cc|cpp|h|hpp|cs|fs|r|jl"
@@ -142,6 +145,15 @@ def _task_has_concrete_target(item: str) -> bool:
         ):
             return True
         if _concrete_span(span):
+            return True
+    # Natural prose often names a PascalCase symbol before its category (for
+    # example, "UserForm component"). The category makes this use specific;
+    # generic capitalized product words without that context remain rejected.
+    for match in re.finditer(
+        rf"\b([A-Z][A-Za-z0-9]*[A-Z][A-Za-z0-9]+)\s+{_TASK_TRAILING_SYMBOL_CATEGORY}\b",
+        item,
+    ):
+        if _concrete_span(match.group(1)):
             return True
     for match in re.finditer(r"`([^`]+)`", item):
         if _concrete_span(match.group(1)):
