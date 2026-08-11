@@ -284,7 +284,7 @@ class RankedResult:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "RankedResult":
+    def from_dict(cls, payload: dict[str, Any]) -> RankedResult:
         target_option_payload = payload.get("target_option")
         return cls(
             result_id=payload["result_id"],
@@ -393,7 +393,7 @@ class RankedResultSet:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "RankedResultSet":
+    def from_dict(cls, payload: dict[str, Any]) -> RankedResultSet:
         return cls(
             result_set_id=payload["result_set_id"],
             trip_id=payload["trip_id"],

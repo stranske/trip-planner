@@ -6,8 +6,8 @@ import json
 import os
 import re
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 _DECISION_RE = re.compile(r"\b(B-[123])\b")
 _CHOICE_HINT_RE = re.compile(

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from sqlalchemy.orm import Session
 
+from trip_planner._validators import require_probability
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.budget import (
     get_workspace_budget_payload,
@@ -22,6 +24,8 @@ from trip_planner.app.services.workspace import (
 from trip_planner.itinerary.daily_menu import (
     MenuStop,
     SourceMix,
+)
+from trip_planner.itinerary.daily_menu import (
     build_daily_menu as assemble_daily_menu,
 )
 from trip_planner.logistics.booking_radar import BookingFlag, scan_trip
@@ -31,7 +35,6 @@ from trip_planner.sources import (
     SourceRecord,
     SourceTrustSignals,
 )
-from trip_planner._validators import require_probability
 
 
 @dataclass(frozen=True, slots=True)
@@ -564,7 +567,9 @@ def _menu_stop_from_activity(
     source_id = _activity_source_id(activity, source_records)
     score = _activity_priority_score(activity, bundle)
     significance = activity.get("significance_summary") or {}
-    priority_tier = 3 if significance.get("anchor_worthy") or score >= 0.82 else 2 if score >= 0.62 else 1
+    priority_tier = (
+        3 if significance.get("anchor_worthy") or score >= 0.82 else 2 if score >= 0.62 else 1
+    )
     raw_detour = detour_minutes_by_stop.get(option_id, 0)
     try:
         detour_minutes = max(0, int(raw_detour))

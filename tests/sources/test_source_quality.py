@@ -10,7 +10,9 @@ from trip_planner.app.services.inventory import (
     _build_inventory_assembly_input,
     assemble_inventory_bundles_for_trip,
 )
-from trip_planner.app.services.planner_tools import _commerciality_preference_from_runtime_state
+from trip_planner.app.services.planner_tools import (
+    _commerciality_preference_from_runtime_state,
+)
 from trip_planner.sources import (
     CONFIDENCE_LABELS,
     ProvenanceReference,
@@ -333,9 +335,7 @@ def test_stale_editorial_source_deliberate_break_requires_freshness_confidence(
         if days is None:
             base = 0.40
         else:
-            base = self.FRESHNESS_HALF_LIFE_DAYS / (
-                self.FRESHNESS_HALF_LIFE_DAYS + max(0, days)
-            )
+            base = self.FRESHNESS_HALF_LIFE_DAYS / (self.FRESHNESS_HALF_LIFE_DAYS + max(0, days))
         return max(0.0, min(1.0, base))
 
     _assert_stale_editorial_source_is_flagged_and_uncertain()

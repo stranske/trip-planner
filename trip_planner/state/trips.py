@@ -85,7 +85,7 @@ class PersistedTripArtifactRefs:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PersistedTripArtifactRefs":
+    def from_dict(cls, payload: dict[str, Any]) -> PersistedTripArtifactRefs:
         return cls(
             objective_id=payload.get("objective_id"),
             option_set_ids=_payload_list(payload, "option_set_ids", []),
@@ -122,7 +122,7 @@ class TripLifecycle:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "TripLifecycle":
+    def from_dict(cls, payload: dict[str, Any]) -> TripLifecycle:
         return cls(
             created_at=payload["created_at"],
             updated_at=payload["updated_at"],
@@ -153,7 +153,7 @@ class TripStatusChange:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "TripStatusChange":
+    def from_dict(cls, payload: dict[str, Any]) -> TripStatusChange:
         return cls(
             to_status=payload["to_status"],
             changed_at=payload["changed_at"],
@@ -218,7 +218,7 @@ class PersistedTripRecord:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PersistedTripRecord":
+    def from_dict(cls, payload: dict[str, Any]) -> PersistedTripRecord:
         return cls(
             trip=Trip.from_dict(payload["trip"]),
             owner_profile_id=payload["owner_profile_id"],

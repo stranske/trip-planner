@@ -236,7 +236,7 @@ class TripPlanProposal:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "TripPlanProposal":
+    def from_dict(cls, payload: dict[str, Any]) -> TripPlanProposal:
         selected_options = _require_list_field(payload, "selected_options")
         comparables = _optional_list_field(payload, "comparables")
         justifications = _optional_list_field(payload, "justifications")
@@ -365,7 +365,7 @@ class PolicyEvaluationResult:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PolicyEvaluationResult":
+    def from_dict(cls, payload: dict[str, Any]) -> PolicyEvaluationResult:
         approval_requirements = _optional_list_field(payload, "approval_requirements")
         failure_reasons = _optional_list_field(payload, "failure_reasons")
         preferred_alternatives = _optional_list_field(payload, "preferred_alternatives")

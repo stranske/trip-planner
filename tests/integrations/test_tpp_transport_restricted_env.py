@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import socket
 from email.message import Message
 from urllib import error as urllib_error
 
@@ -21,7 +20,7 @@ class _FakeHTTPResponse:
         self.status = status
         self._body = body
 
-    def __enter__(self) -> "_FakeHTTPResponse":
+    def __enter__(self) -> _FakeHTTPResponse:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -83,7 +82,7 @@ def _client(*, policy: TPPTransportPolicy | None = None) -> HTTPTPPIntegrationCl
             "unknown",
         ),
         (urllib_error.URLError(ConnectionRefusedError("connection refused")), "connection_error"),
-        (urllib_error.URLError(socket.timeout("timed out")), "timeout"),
+        (urllib_error.URLError(TimeoutError("timed out")), "timeout"),
     ],
 )
 def test_transport_error_code_mapping_without_socket_bind(

@@ -108,7 +108,7 @@ class ScenarioArtifactRefs:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "ScenarioArtifactRefs":
+    def from_dict(cls, payload: dict[str, Any]) -> ScenarioArtifactRefs:
         return cls(
             objective_id=payload.get("objective_id"),
             scenario_search_id=payload.get("scenario_search_id"),
@@ -170,7 +170,7 @@ class ScenarioVersion:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "ScenarioVersion":
+    def from_dict(cls, payload: dict[str, Any]) -> ScenarioVersion:
         if "snapshot_refs" not in payload:
             raise ValueError("snapshot_refs is required")
         return cls(
@@ -220,7 +220,7 @@ class ScenarioComparison:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "ScenarioComparison":
+    def from_dict(cls, payload: dict[str, Any]) -> ScenarioComparison:
         return cls(
             comparison_id=payload["comparison_id"],
             trip_id=payload["trip_id"],
@@ -281,7 +281,7 @@ class SavedScenarioRecord:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "SavedScenarioRecord":
+    def from_dict(cls, payload: dict[str, Any]) -> SavedScenarioRecord:
         return cls(
             saved_scenario_id=payload["saved_scenario_id"],
             trip_id=payload["trip_id"],
@@ -328,7 +328,7 @@ class ScenarioCheckpoint:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "ScenarioCheckpoint":
+    def from_dict(cls, payload: dict[str, Any]) -> ScenarioCheckpoint:
         return cls(
             checkpoint_id=payload["checkpoint_id"],
             trip_id=payload["trip_id"],

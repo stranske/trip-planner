@@ -104,7 +104,7 @@ class TestMatch:
 
     def test_extracts_readme_origin(self, tmp_path: Path) -> None:
         readme_path = tmp_path / "README.md"
-        readme_content = 'Public synthetic API origin: `https://api.example.com`'
+        readme_content = "Public synthetic API origin: `https://api.example.com`"
         readme_path.write_text(readme_content, encoding="utf-8")
 
         result = cdo._match(cdo.README_ORIGIN_PATTERN, readme_content, readme_path)
@@ -112,7 +112,7 @@ class TestMatch:
 
     def test_extracts_readme_origin_strips_trailing_slash(self, tmp_path: Path) -> None:
         readme_path = tmp_path / "README.md"
-        readme_content = 'Public synthetic API origin: `https://api.example.com/`'
+        readme_content = "Public synthetic API origin: `https://api.example.com/`"
         readme_path.write_text(readme_content, encoding="utf-8")
 
         result = cdo._match(cdo.README_ORIGIN_PATTERN, readme_content, readme_path)
@@ -171,9 +171,7 @@ class TestMain:
 
         assert capsys.readouterr().out.strip() == "Deploy API origin aligned: api.example.com"
 
-    def test_drift_failure_path(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_drift_failure_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         script_path = _write_repo_layout(
             tmp_path,
             readme_origin="https://api.example.com",

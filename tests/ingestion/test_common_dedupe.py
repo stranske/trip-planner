@@ -30,8 +30,7 @@ def test_dedupe_conflicts_preserves_distinct_attribute_rows() -> None:
     deduped = _dedupe_conflicts(conflicts)
 
     assert [
-        (conflict.conflict_id, conflict.attribute_path, conflict.status)
-        for conflict in deduped
+        (conflict.conflict_id, conflict.attribute_path, conflict.status) for conflict in deduped
     ] == [
         ("conflict-shared", "booking_terms.refundable", "needs_review"),
         ("conflict-shared", "booking_terms.deposit", "needs_review"),

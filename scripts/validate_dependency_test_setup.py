@@ -12,10 +12,9 @@ Run this script to verify:
 import re
 import sys
 from pathlib import Path
-from typing import List, Tuple
 
 
-def check_lock_file_completeness() -> Tuple[bool, List[str]]:
+def check_lock_file_completeness() -> tuple[bool, list[str]]:
     """Verify lock file includes all optional dependencies."""
     issues = []
 
@@ -49,7 +48,7 @@ def check_lock_file_completeness() -> Tuple[bool, List[str]]:
     return len(issues) == 0, issues
 
 
-def check_for_hardcoded_versions() -> Tuple[bool, List[str]]:
+def check_for_hardcoded_versions() -> tuple[bool, list[str]]:
     """Check for hardcoded version numbers in tests."""
     issues = []
     test_files = list(Path("tests").rglob("*.py"))
@@ -89,7 +88,7 @@ def check_for_hardcoded_versions() -> Tuple[bool, List[str]]:
     return len(issues) == 0, issues
 
 
-def check_metadata_serialization() -> Tuple[bool, List[str]]:
+def check_metadata_serialization() -> tuple[bool, list[str]]:
     """Check that metadata is properly serialized to dicts, not Pydantic objects."""
     issues = []
 
@@ -127,7 +126,7 @@ def check_metadata_serialization() -> Tuple[bool, List[str]]:
     return len(issues) == 0, issues
 
 
-def check_test_expectations() -> Tuple[bool, List[str]]:
+def check_test_expectations() -> tuple[bool, list[str]]:
     """Verify tests expect dicts, not Pydantic objects."""
     issues = []
     test_files = [

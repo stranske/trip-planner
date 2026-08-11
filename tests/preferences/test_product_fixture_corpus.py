@@ -1,6 +1,6 @@
 import pytest
 
-import trip_planner.preferences.fixture_corpus as fixture_corpus
+from trip_planner.preferences import fixture_corpus
 from trip_planner.preferences.fixture_corpus import (
     _build_fixture,
     build_evidence_record,
@@ -192,7 +192,9 @@ def test_build_fixture_applies_nested_profile_and_evidence_overrides() -> None:
     assert fixture.profile.hybrid_factors["rest"].tradeoff_role == "rhythm"
     assert fixture.profile.interaction_rules[0].id == "rail-rest"
     assert fixture.profile.tension_flags[0].id == "pace-tension"
-    assert fixture.profile.conditional_overrides == [{"when": "rain", "prefer": "indoor alternates"}]
+    assert fixture.profile.conditional_overrides == [
+        {"when": "rain", "prefer": "indoor alternates"}
+    ]
     assert fixture.profile.evidence_summary.sources["questionnaire"] == ["rail", "rest"]
     assert fixture.evidence[0].option_evidence is not None
     assert fixture.evidence[0].option_evidence.option_id == "rail-loop"
@@ -228,9 +230,7 @@ def test_build_evidence_record_uses_baseline_defaults_without_optional_payloads(
         ({"anchors": {"unknown": []}}, "anchor group"),
     ],
 )
-def test_profile_override_validation_rejects_unknown_keys(
-    overrides: dict, message: str
-) -> None:
+def test_profile_override_validation_rejects_unknown_keys(overrides: dict, message: str) -> None:
     with pytest.raises(ValueError, match=message):
         build_profile_from_overrides(overrides)
 
@@ -245,16 +245,12 @@ def test_profile_override_validation_rejects_unknown_keys(
         ),
         (lambda payload: payload.update({"raw_inputs": "brief"}), "raw_inputs"),
         (
-            lambda payload: payload["intended_interpretation"].update(
-                {"qualitative_summary": ""}
-            ),
+            lambda payload: payload["intended_interpretation"].update({"qualitative_summary": ""}),
             "qualitative_summary",
         ),
     ],
 )
-def test_build_fixture_validation_rejects_malformed_payloads(
-    payload_update, message: str
-) -> None:
+def test_build_fixture_validation_rejects_malformed_payloads(payload_update, message: str) -> None:
     payload = _fixture_payload()
     payload_update(payload)
 

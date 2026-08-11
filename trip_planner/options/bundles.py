@@ -420,7 +420,7 @@ class InventoryBundle:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "InventoryBundle":
+    def from_dict(cls, payload: dict[str, Any]) -> InventoryBundle:
         return cls(
             bundle_id=payload["bundle_id"],
             title=payload["title"],
@@ -646,7 +646,7 @@ class MixedOption:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "MixedOption":
+    def from_dict(cls, payload: dict[str, Any]) -> MixedOption:
         budget_payload = _optional_mapping_field(payload, "budget_posture")
         return cls(
             option_id=payload["option_id"],

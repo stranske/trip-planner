@@ -187,7 +187,7 @@ class DimensionEvidenceRecord:
         age_days = (cutoff - observed).days
         return age_days > max_age_days
 
-    def conflicts_with(self, other: "DimensionEvidenceRecord") -> bool:
+    def conflicts_with(self, other: DimensionEvidenceRecord) -> bool:
         return (
             self.dimension == other.dimension
             and self.value != 0.0

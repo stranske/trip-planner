@@ -73,7 +73,7 @@ class DecisionOption:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "DecisionOption":
+    def from_dict(cls, payload: dict[str, Any]) -> DecisionOption:
         return cls(
             choice_id=payload["choice_id"],
             label=payload["label"],
@@ -117,7 +117,7 @@ class PendingDecision:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PendingDecision":
+    def from_dict(cls, payload: dict[str, Any]) -> PendingDecision:
         return cls(
             decision_id=payload["decision_id"],
             prompt=payload["prompt"],
@@ -165,7 +165,7 @@ class PlannerAction:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PlannerAction":
+    def from_dict(cls, payload: dict[str, Any]) -> PlannerAction:
         return cls(
             action_id=payload["action_id"],
             action_kind=payload["action_kind"],
@@ -207,7 +207,7 @@ class PlannerOutput:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PlannerOutput":
+    def from_dict(cls, payload: dict[str, Any]) -> PlannerOutput:
         return cls(
             output_id=payload["output_id"],
             output_kind=payload["output_kind"],
@@ -249,7 +249,7 @@ class WorkflowTransition:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "WorkflowTransition":
+    def from_dict(cls, payload: dict[str, Any]) -> WorkflowTransition:
         return cls(
             from_stage=payload["from_stage"],
             to_stage=payload["to_stage"],
@@ -281,7 +281,7 @@ class NextStepSummary:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "NextStepSummary":
+    def from_dict(cls, payload: dict[str, Any]) -> NextStepSummary:
         return cls(
             headline=payload["headline"],
             recommended_action_id=payload.get("recommended_action_id"),
@@ -340,7 +340,7 @@ class WorkflowStateSnapshot:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "WorkflowStateSnapshot":
+    def from_dict(cls, payload: dict[str, Any]) -> WorkflowStateSnapshot:
         return cls(
             workflow_state_id=payload["workflow_state_id"],
             trip_id=payload["trip_id"],
@@ -464,7 +464,7 @@ class PlannerTurn:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PlannerTurn":
+    def from_dict(cls, payload: dict[str, Any]) -> PlannerTurn:
         return cls(
             turn_id=payload["turn_id"],
             trip_id=payload["trip_id"],

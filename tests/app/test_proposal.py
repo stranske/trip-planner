@@ -1,5 +1,4 @@
 import json
-import socket
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Literal, cast
@@ -1342,7 +1341,7 @@ def test_workspace_proposal_submission_persists_stored_policy_when_live_tpp_time
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
     monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
     monkeypatch.setenv("TPP_TRANSPORT_MAX_ATTEMPTS", "1")
-    _install_fake_http(monkeypatch, [socket.timeout("slow response")])
+    _install_fake_http(monkeypatch, [TimeoutError("slow response")])
 
     created = client.post(
         "/api/trips",
@@ -1488,7 +1487,7 @@ def test_workspace_proposal_evaluation_persists_stored_policy_when_live_tpp_time
 
     def _raise_timeout(self, request):
         del self, request
-        raise socket.timeout("evaluation read timeout")
+        raise TimeoutError("evaluation read timeout")
 
     monkeypatch.setattr(
         tpp_client_module.HTTPTPPIntegrationClient,

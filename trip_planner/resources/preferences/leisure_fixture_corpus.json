@@ -2,6 +2,193 @@
   "schema_version": "0.1.0",
   "fixtures": [
     {
+      "id": "scenic-rail-nomad",
+      "fixture_kind": "archetype",
+      "summary": "High-mobility traveler who wants overland movement and scenic rail to be a core part of the trip rather than dead time.",
+      "tags": ["mobility", "rail", "nature", "discovery"],
+      "raw_inputs": {
+        "trip_brief": "I can handle frequent moves if the route itself is part of the experience. I would rather cross a region by rail than fly over it.",
+        "stated_constraints": ["trip length around 30 days", "prefers shoulder season weather"],
+        "planning_style_notes": ["comfortable booking independent rail segments", "wants a route with narrative flow"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 30,
+          "traveler_party": "solo",
+          "season_window": ["September", "October"],
+          "trip_stage": "first_visit",
+          "regions_in_scope": ["Japan", "South Korea"],
+          "special_themes": ["rail travel", "landscape transitions"]
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.45,
+          "spending_priorities": {
+            "transport_experience": 0.85,
+            "lodging_location": 0.65
+          },
+          "splurge_allowed": true,
+          "splurge_style": "pay for scenic rail or ferry legs that materially improve the route"
+        },
+        "anchors": {
+          "mode_anchors": [
+            {
+              "type": "mode",
+              "label": "Long-form rail segments",
+              "strength": 0.92,
+              "flexibility": 0.18,
+              "notes": "Route should privilege trains over flights when feasible."
+            }
+          ],
+          "regional_adjacency_preferences": [
+            {
+              "type": "region",
+              "label": "Contiguous overland progression",
+              "strength": 0.78,
+              "flexibility": 0.34,
+              "notes": "Avoid backtracking unless a major payoff exists."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "movement_vs_friction": {
+            "value": -0.82,
+            "confidence": 0.88,
+            "salience": 0.9,
+            "stability": 0.82
+          },
+          "nature_vs_culture": {
+            "value": -0.42,
+            "confidence": 0.72,
+            "salience": 0.58,
+            "stability": 0.68
+          },
+          "structure_vs_elasticity": {
+            "value": 0.18,
+            "confidence": 0.62,
+            "salience": 0.46,
+            "stability": 0.44
+          },
+          "self_reliance_vs_convenience": {
+            "value": -0.72,
+            "confidence": 0.78,
+            "salience": 0.74,
+            "stability": 0.76
+          },
+          "scenic_transit_vs_destination_time": {
+            "value": -0.9,
+            "confidence": 0.94,
+            "salience": 0.96,
+            "stability": 0.88
+          },
+          "route_coherence_vs_eclectic_contrast": {
+            "value": -0.68,
+            "confidence": 0.8,
+            "salience": 0.8,
+            "stability": 0.78
+          },
+          "iconic_vs_discovery": {
+            "value": 0.36,
+            "confidence": 0.64,
+            "salience": 0.56,
+            "stability": 0.48
+          }
+        },
+        "hybrid_factors": {
+          "route_modes": {
+            "mode": "both",
+            "salience": 0.9,
+            "anchor_strength": 0.86,
+            "tradeoff_role": "route_design",
+            "notes": "Rail and ferry are part of the identity of the trip.",
+            "preferences": {
+              "rail": 0.96,
+              "ferry": 0.62,
+              "car_rental": 0.18
+            }
+          },
+          "rest": {
+            "mode": "tradeoff",
+            "salience": 0.42,
+            "tradeoff_role": "rhythm",
+            "preferences": {
+              "buffer_days": 0.35
+            }
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "rail_nomad_movement_x_scenic",
+            "dimensions": ["movement_vs_friction", "scenic_transit_vs_destination_time"],
+            "activation": {
+              "all_of": [
+                {"dimension": "movement_vs_friction", "max_value": -0.6},
+                {"dimension": "scenic_transit_vs_destination_time", "max_value": -0.7}
+              ]
+            },
+            "effect": {
+              "prioritize": ["rail corridors", "overnight trains", "ferry links"],
+              "deprioritize": ["short-haul flights"]
+            },
+            "strength": 0.88,
+            "priority": 0.82
+          }
+        ],
+        "evidence_summary": {
+          "sources": {
+            "direct_statements": ["Traveler says transit is part of the trip."],
+            "revealed_preferences": ["Traveler picks overland bundles over direct flights."]
+          },
+          "confidence_notes": ["High signal because both stated and option-choice evidence align."]
+        }
+      },
+      "evidence": [
+        {
+          "id": "scenic-rail-nomad-ev-1",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["movement_vs_friction", "scenic_transit_vs_destination_time"],
+          "affected_hybrid_factors": ["route_modes"],
+          "sequence": 1,
+          "confidence_hint": 0.84,
+          "salience_hint": 0.9,
+          "note": "Traveler wants the route itself to be a major part of the trip."
+        },
+        {
+          "id": "scenic-rail-nomad-ev-2",
+          "evidence_type": "option_selection",
+          "source_type": "option_menu",
+          "affected_dimensions": ["route_coherence_vs_eclectic_contrast"],
+          "affected_hybrid_factors": ["route_modes"],
+          "sequence": 2,
+          "confidence_hint": 0.88,
+          "salience_hint": 0.82,
+          "note": "Selected a coherent rail chain instead of a cheaper disconnected flight package.",
+          "option_evidence": {
+            "option_set_id": "rail-route-options",
+            "option_id": "rail-corridor",
+            "option_kind": "mixed_bundle",
+            "presented_option_ids": ["rail-corridor", "flight-hopper", "car-loop"],
+            "comparison_label": "regional route bundle"
+          }
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "This traveler is not merely tolerant of movement; they actively want scenic transit and coherent overland flow.",
+        "dominant_dimensions": [
+          "movement_vs_friction",
+          "scenic_transit_vs_destination_time",
+          "route_coherence_vs_eclectic_contrast"
+        ],
+        "expected_tensions": [
+          "May accept more moves than average, but still benefits from route logic that avoids wasteful backtracking."
+        ],
+        "planning_implications": [
+          "Offer route bundles where the transit segments are a feature rather than a penalty.",
+          "Use flights only when they protect a materially better overland structure."
+        ]
+      }
+    },
+    {
       "id": "urban-historian",
       "fixture_kind": "archetype",
       "summary": "Depth-oriented city traveler who values historic layers, museums, and urban walking more than broad destination coverage.",
@@ -9,10 +196,7 @@
       "raw_inputs": {
         "trip_brief": "I would rather spend five dense days in one great city than race through four capitals. I care about museums, neighborhoods, and historic texture.",
         "stated_constraints": ["trip length around 21 days"],
-        "planning_style_notes": [
-          "comfortable with transit-rich cities",
-          "prefers a researched daily structure"
-        ]
+        "planning_style_notes": ["comfortable with transit-rich cities", "prefers a researched daily structure"]
       },
       "profile_overrides": {
         "trip_frame": {
@@ -44,19 +228,51 @@
           ]
         },
         "tradeoff_dimensions": {
-          "movement_vs_friction": {"value": 0.46, "confidence": 0.7, "salience": 0.68, "stability": 0.72},
-          "nature_vs_culture": {"value": 0.86, "confidence": 0.9, "salience": 0.92, "stability": 0.86},
-          "structure_vs_elasticity": {"value": -0.58, "confidence": 0.72, "salience": 0.74, "stability": 0.78},
-          "breadth_vs_depth": {"value": 0.84, "confidence": 0.9, "salience": 0.94, "stability": 0.88},
-          "historic_vs_contemporary": {"value": -0.88, "confidence": 0.94, "salience": 0.9, "stability": 0.86},
-          "iconic_vs_discovery": {"value": -0.38, "confidence": 0.68, "salience": 0.58, "stability": 0.64}
+          "movement_vs_friction": {
+            "value": 0.46,
+            "confidence": 0.7,
+            "salience": 0.68,
+            "stability": 0.72
+          },
+          "nature_vs_culture": {
+            "value": 0.86,
+            "confidence": 0.9,
+            "salience": 0.92,
+            "stability": 0.86
+          },
+          "structure_vs_elasticity": {
+            "value": -0.58,
+            "confidence": 0.72,
+            "salience": 0.74,
+            "stability": 0.78
+          },
+          "breadth_vs_depth": {
+            "value": 0.84,
+            "confidence": 0.9,
+            "salience": 0.94,
+            "stability": 0.88
+          },
+          "historic_vs_contemporary": {
+            "value": -0.88,
+            "confidence": 0.94,
+            "salience": 0.9,
+            "stability": 0.86
+          },
+          "iconic_vs_discovery": {
+            "value": -0.38,
+            "confidence": 0.68,
+            "salience": 0.58,
+            "stability": 0.64
+          }
         },
         "hybrid_factors": {
           "food": {
             "mode": "tradeoff",
             "salience": 0.52,
             "tradeoff_role": "cost",
-            "preferences": {"destination_meals": 0.64}
+            "preferences": {
+              "destination_meals": 0.64
+            }
           }
         },
         "interaction_rules": [
@@ -70,11 +286,7 @@
               ]
             },
             "effect": {
-              "prioritize": [
-                "longer stays in heritage-rich cities",
-                "walkable districts",
-                "museum clusters"
-              ]
+              "prioritize": ["longer stays in heritage-rich cities", "walkable districts", "museum clusters"]
             },
             "strength": 0.86,
             "priority": 0.84
@@ -86,11 +298,7 @@
           "id": "urban-historian-ev-1",
           "evidence_type": "direct_statement",
           "source_type": "user_message",
-          "affected_dimensions": [
-            "breadth_vs_depth",
-            "nature_vs_culture",
-            "historic_vs_contemporary"
-          ],
+          "affected_dimensions": ["breadth_vs_depth", "nature_vs_culture", "historic_vs_contemporary"],
           "sequence": 1,
           "confidence_hint": 0.9,
           "salience_hint": 0.94,
@@ -120,6 +328,1538 @@
         "planning_implications": [
           "Use fewer bases with denser local cultural menus.",
           "Prefer neighborhood and museum clustering over broader regional coverage."
+        ]
+      }
+    },
+    {
+      "id": "food-splurger",
+      "fixture_kind": "archetype",
+      "summary": "Traveler with moderate overall budget discipline who will pay for standout meals and market experiences if the value is obvious.",
+      "tags": ["food", "budget", "value", "urban"],
+      "raw_inputs": {
+        "trip_brief": "I do not need luxury hotels, but I do want the option to spend real money on meals that feel special or locally important.",
+        "stated_constraints": ["trip length around 18 days"],
+        "planning_style_notes": ["wants side-by-side options to judge value", "likes mixing splurges with simpler days"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 18,
+          "traveler_party": "pair",
+          "season_window": ["March", "April"],
+          "trip_stage": "mixed",
+          "regions_in_scope": ["Mexico City", "Oaxaca", "Puebla"],
+          "special_themes": ["food", "markets", "restaurants"]
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.58,
+          "spending_priorities": {
+            "food": 0.94,
+            "lodging_location": 0.62,
+            "transport_simplicity": 0.56
+          },
+          "quality_floors": {
+            "lodging": "clean, central, and quiet"
+          },
+          "splurge_allowed": true,
+          "splurge_style": "selectively splurge on destination-defining meals and cooking experiences"
+        },
+        "tradeoff_dimensions": {
+          "nature_vs_culture": {
+            "value": 0.62,
+            "confidence": 0.7,
+            "salience": 0.62,
+            "stability": 0.68
+          },
+          "structure_vs_elasticity": {
+            "value": -0.14,
+            "confidence": 0.56,
+            "salience": 0.5,
+            "stability": 0.44
+          },
+          "scenic_transit_vs_destination_time": {
+            "value": 0.42,
+            "confidence": 0.66,
+            "salience": 0.58,
+            "stability": 0.6
+          },
+          "iconic_vs_discovery": {
+            "value": 0.24,
+            "confidence": 0.58,
+            "salience": 0.5,
+            "stability": 0.42
+          }
+        },
+        "hybrid_factors": {
+          "food": {
+            "mode": "both",
+            "salience": 0.96,
+            "anchor_strength": 0.72,
+            "tradeoff_role": "cost",
+            "notes": "Food is a planning driver rather than just a supporting factor.",
+            "preferences": {
+              "fine_dining": 0.82,
+              "markets": 0.88,
+              "casual_local": 0.76
+            }
+          },
+          "rest": {
+            "mode": "tradeoff",
+            "salience": 0.4,
+            "tradeoff_role": "rhythm",
+            "preferences": {
+              "late_start_days": 0.52
+            }
+          }
+        },
+        "anchors": {
+          "experience_anchors": [
+            {
+              "type": "experience",
+              "label": "Destination-defining meals",
+              "strength": 0.78,
+              "flexibility": 0.42,
+              "notes": "Not every dinner, but some meals should be major events."
+            }
+          ]
+        }
+      },
+      "evidence": [
+        {
+          "id": "food-splurger-ev-1",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_hybrid_factors": ["food"],
+          "sequence": 1,
+          "confidence_hint": 0.88,
+          "salience_hint": 0.94,
+          "note": "Traveler frames food as a major reason for choosing destinations."
+        },
+        {
+          "id": "food-splurger-ev-2",
+          "evidence_type": "scenario_reaction",
+          "source_type": "scenario_prompt",
+          "affected_hybrid_factors": ["food"],
+          "affected_dimensions": ["scenic_transit_vs_destination_time"],
+          "sequence": 2,
+          "confidence_hint": 0.78,
+          "salience_hint": 0.76,
+          "note": "Traveler chooses shorter transit and higher meal budget over a scenic detour."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "Food is one of the few elements that can override otherwise moderate budget discipline.",
+        "dominant_dimensions": [
+          "scenic_transit_vs_destination_time"
+        ],
+        "expected_tensions": [
+          "The planner should protect food-value opportunities without silently upgrading lodging or transit across the board."
+        ],
+        "planning_implications": [
+          "Present 2-3 concrete restaurant and food-experience options to calibrate revealed value preference.",
+          "Protect splurge budget for meals while keeping other categories disciplined."
+        ]
+      }
+    },
+    {
+      "id": "discovery-wanderer",
+      "fixture_kind": "archetype",
+      "summary": "Traveler who values exploratory wandering, contemporary life, and locally textured discovery over heavily curated landmark lists.",
+      "tags": ["discovery", "wandering", "contemporary", "elastic"],
+      "raw_inputs": {
+        "trip_brief": "I like neighborhoods where I can walk with only a loose direction and keep stumbling into places that look interesting.",
+        "stated_constraints": ["trip length around 24 days"],
+        "planning_style_notes": ["does not want every day tightly scripted", "still benefits from strong wandering zones"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 24,
+          "traveler_party": "solo",
+          "season_window": ["October"],
+          "trip_stage": "mixed",
+          "regions_in_scope": ["Taiwan", "Japan"],
+          "special_themes": ["street life", "wandering", "contemporary neighborhoods"]
+        },
+        "tradeoff_dimensions": {
+          "structure_vs_elasticity": {
+            "value": 0.86,
+            "confidence": 0.88,
+            "salience": 0.92,
+            "stability": 0.82
+          },
+          "breadth_vs_depth": {
+            "value": 0.26,
+            "confidence": 0.56,
+            "salience": 0.5,
+            "stability": 0.42
+          },
+          "historic_vs_contemporary": {
+            "value": 0.68,
+            "confidence": 0.76,
+            "salience": 0.72,
+            "stability": 0.7
+          },
+          "social_energy_vs_solitude": {
+            "value": 0.42,
+            "confidence": 0.68,
+            "salience": 0.58,
+            "stability": 0.6
+          },
+          "iconic_vs_discovery": {
+            "value": 0.88,
+            "confidence": 0.92,
+            "salience": 0.94,
+            "stability": 0.86
+          },
+          "route_coherence_vs_eclectic_contrast": {
+            "value": 0.34,
+            "confidence": 0.56,
+            "salience": 0.48,
+            "stability": 0.44
+          }
+        },
+        "hybrid_factors": {
+          "music": {
+            "mode": "tradeoff",
+            "salience": 0.38,
+            "tradeoff_role": "atmosphere",
+            "preferences": {
+              "small_venues": 0.58
+            }
+          },
+          "rest": {
+            "mode": "tradeoff",
+            "salience": 0.52,
+            "tradeoff_role": "rhythm",
+            "preferences": {
+              "open_afternoons": 0.68
+            }
+          }
+        },
+        "anchors": {
+          "experience_anchors": [
+            {
+              "type": "experience",
+              "label": "Strong wandering districts",
+              "strength": 0.72,
+              "flexibility": 0.46,
+              "notes": "The planner should suggest places to wander toward rather than only fixed bookings."
+            }
+          ]
+        }
+      },
+      "evidence": [
+        {
+          "id": "discovery-wanderer-ev-1",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["structure_vs_elasticity", "iconic_vs_discovery", "historic_vs_contemporary"],
+          "sequence": 1,
+          "confidence_hint": 0.9,
+          "salience_hint": 0.92,
+          "note": "Traveler asks for neighborhoods and streets, not a checklist of sights."
+        },
+        {
+          "id": "discovery-wanderer-ev-2",
+          "evidence_type": "scenario_reaction",
+          "source_type": "scenario_prompt",
+          "affected_dimensions": ["social_energy_vs_solitude"],
+          "sequence": 2,
+          "confidence_hint": 0.62,
+          "salience_hint": 0.52,
+          "note": "Traveler likes lively streets but still wants solo movement freedom."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "This profile needs strong discovery scaffolding without heavy over-structuring.",
+        "dominant_dimensions": [
+          "structure_vs_elasticity",
+          "historic_vs_contemporary",
+          "iconic_vs_discovery"
+        ],
+        "expected_tensions": [
+          "The traveler still needs some directional guidance so wandering does not become aimless or low-value."
+        ],
+        "planning_implications": [
+          "Surface wandering zones, neighborhoods, and loose thematic routes.",
+          "Avoid turning every day into a reservation-driven plan."
+        ]
+      }
+    },
+    {
+      "id": "social-recovery-balancer",
+      "fixture_kind": "archetype",
+      "summary": "Traveler who enjoys lively atmospheres and social contact but burns out if every day is packed or every night is late.",
+      "tags": ["social", "recovery", "rhythm", "cities"],
+      "raw_inputs": {
+        "trip_brief": "I like cafes, bars, street life, and a sense that things are happening, but I hit a wall if the trip is intense every day.",
+        "stated_constraints": ["trip length around 16 days"],
+        "planning_style_notes": ["wants recovery blocks built into the trip", "likes a social environment more than a nonstop schedule"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 16,
+          "traveler_party": "friends",
+          "season_window": ["May"],
+          "trip_stage": "mixed",
+          "regions_in_scope": ["Spain", "Portugal"],
+          "special_themes": ["street life", "food", "night atmosphere"]
+        },
+        "tradeoff_dimensions": {
+          "recovery_vs_intensity": {
+            "value": -0.82,
+            "confidence": 0.9,
+            "salience": 0.94,
+            "stability": 0.86
+          },
+          "structure_vs_elasticity": {
+            "value": 0.22,
+            "confidence": 0.58,
+            "salience": 0.54,
+            "stability": 0.44
+          },
+          "social_energy_vs_solitude": {
+            "value": -0.74,
+            "confidence": 0.86,
+            "salience": 0.92,
+            "stability": 0.84
+          }
+        },
+        "hybrid_factors": {
+          "rest": {
+            "mode": "both",
+            "salience": 0.88,
+            "anchor_strength": 0.54,
+            "tradeoff_role": "rhythm",
+            "preferences": {
+              "slow_mornings_after_late_nights": 0.84,
+              "low_commitment_days": 0.72
+            }
+          },
+          "food": {
+            "mode": "tradeoff",
+            "salience": 0.48,
+            "tradeoff_role": "cost",
+            "preferences": {
+              "social_dining": 0.58
+            }
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "social_x_recovery_guardrail",
+            "dimensions": ["social_energy_vs_solitude", "recovery_vs_intensity"],
+            "activation": {
+              "all_of": [
+                {"dimension": "social_energy_vs_solitude", "max_value": -0.55},
+                {"dimension": "recovery_vs_intensity", "max_value": -0.55}
+              ]
+            },
+            "effect": {
+              "prioritize": ["late/early rhythm balancing", "restorative base days"],
+              "avoid": ["stacking demanding nights back to back"]
+            },
+            "strength": 0.92,
+            "priority": 0.9
+          }
+        ],
+        "tension_flags": [
+          {
+            "id": "social-energy-recovery-conflict",
+            "severity": 0.78,
+            "description": "Traveler wants lively environments but needs rhythm-protective recovery blocks."
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": "social-recovery-balancer-ev-1",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["social_energy_vs_solitude", "recovery_vs_intensity"],
+          "affected_hybrid_factors": ["rest"],
+          "sequence": 1,
+          "confidence_hint": 0.9,
+          "salience_hint": 0.94,
+          "note": "Traveler wants street energy but explicitly describes burnout risk."
+        },
+        {
+          "id": "social-recovery-balancer-ev-2",
+          "evidence_type": "trip_revision",
+          "source_type": "trip_revision",
+          "affected_hybrid_factors": ["rest"],
+          "sequence": 2,
+          "confidence_hint": 0.76,
+          "salience_hint": 0.82,
+          "note": "Traveler asks to remove one packed evening after seeing the draft."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "The planner should not misread social appetite as intensity tolerance.",
+        "dominant_dimensions": [
+          "recovery_vs_intensity",
+          "social_energy_vs_solitude"
+        ],
+        "expected_tensions": [
+          "High-social-energy days need explicit recovery design, not just optimistic pacing."
+        ],
+        "planning_implications": [
+          "Protect easy mornings, flexible afternoons, or lighter transfer days after big social blocks.",
+          "Prefer places with ambient social life over plans that require constant high-energy participation."
+        ]
+      }
+    },
+    {
+      "id": "comfort-floor-traveler",
+      "fixture_kind": "archetype",
+      "summary": "Traveler with a meaningful comfort floor who still wants real exploration, but not at the cost of sleep, safety, or booking simplicity.",
+      "tags": ["comfort", "lodging", "convenience", "quality"],
+      "raw_inputs": {
+        "trip_brief": "I do not need luxury for its own sake, but I do need a quiet, clean room, easy arrivals, and logistics that do not feel chaotic.",
+        "stated_constraints": ["trip length around 14 days"],
+        "planning_style_notes": ["willing to pay for smoother logistics", "does not want heroic transfers"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 14,
+          "traveler_party": "pair",
+          "season_window": ["June"],
+          "trip_stage": "repeat_visit",
+          "regions_in_scope": ["United Kingdom"],
+          "special_themes": ["comfortable city breaks", "walkable bases"]
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.52,
+          "spending_priorities": {
+            "lodging_quality": 0.82,
+            "transport_simplicity": 0.74
+          },
+          "quality_floors": {
+            "lodging": "quiet private room in a central area",
+            "transfer_reliability": "avoid risky late-night arrivals"
+          },
+          "splurge_allowed": true,
+          "splurge_style": "spend to avoid disruption and poor sleep"
+        },
+        "anchors": {
+          "quality_floor_anchors": [
+            {
+              "type": "quality_floor",
+              "label": "Quiet central lodging",
+              "strength": 0.88,
+              "flexibility": 0.2,
+              "notes": "A poor room can drag down the whole trip."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "movement_vs_friction": {
+            "value": 0.62,
+            "confidence": 0.76,
+            "salience": 0.72,
+            "stability": 0.8
+          },
+          "recovery_vs_intensity": {
+            "value": -0.42,
+            "confidence": 0.68,
+            "salience": 0.66,
+            "stability": 0.74
+          },
+          "self_reliance_vs_convenience": {
+            "value": 0.86,
+            "confidence": 0.92,
+            "salience": 0.94,
+            "stability": 0.88
+          },
+          "route_coherence_vs_eclectic_contrast": {
+            "value": -0.36,
+            "confidence": 0.58,
+            "salience": 0.54,
+            "stability": 0.66
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "comfort_floor_budget_guardrail",
+            "dimensions": ["self_reliance_vs_convenience"],
+            "activation": {
+              "all_of": [
+                {"dimension": "self_reliance_vs_convenience", "min_value": 0.7}
+              ]
+            },
+            "effect": {
+              "enforce_quality_floors": ["lodging", "transfer_reliability"]
+            },
+            "strength": 0.84,
+            "priority": 0.86
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": "comfort-floor-traveler-ev-1",
+          "evidence_type": "hard_constraint_declaration",
+          "source_type": "structured_input",
+          "anchor_groups": ["quality_floor_anchors"],
+          "sequence": 1,
+          "confidence_hint": 0.92,
+          "salience_hint": 0.92,
+          "note": "Traveler sets a hard lodging quality floor."
+        },
+        {
+          "id": "comfort-floor-traveler-ev-2",
+          "evidence_type": "option_selection",
+          "source_type": "option_menu",
+          "affected_dimensions": ["self_reliance_vs_convenience"],
+          "sequence": 2,
+          "confidence_hint": 0.82,
+          "salience_hint": 0.86,
+          "note": "Traveler chooses a smoother but slightly more expensive transfer package.",
+          "option_evidence": {
+            "option_set_id": "arrival-options",
+            "option_id": "direct-transfer",
+            "option_kind": "transport",
+            "presented_option_ids": ["direct-transfer", "late-connection", "budget-bus"],
+            "comparison_label": "arrival transfer options"
+          }
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "This traveler needs the planner to respect comfort floors as real constraints rather than optional upgrades.",
+        "dominant_dimensions": [
+          "self_reliance_vs_convenience",
+          "movement_vs_friction"
+        ],
+        "expected_tensions": [
+          "Budget discipline still matters, but not enough to justify noisy or fragile logistics."
+        ],
+        "planning_implications": [
+          "Carry quality-floor checks into option filtering before ranking.",
+          "Offer a narrower but cleaner option set rather than a long list of false economy choices."
+        ]
+      }
+    },
+    {
+      "id": "route-coherence-first",
+      "fixture_kind": "archetype",
+      "summary": "Traveler who strongly prefers route logic and geographic coherence over eclectic contrast, even when multiple regions look attractive on paper.",
+      "tags": ["route", "coherence", "planning", "transport"],
+      "raw_inputs": {
+        "trip_brief": "I dislike trips that bounce around just because individual cities are interesting. I want the route to make sense on a map.",
+        "stated_constraints": ["trip length around 20 days"],
+        "planning_style_notes": ["cares about map logic", "happy to skip good places that break the route"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 20,
+          "traveler_party": "solo",
+          "season_window": ["September"],
+          "trip_stage": "first_visit",
+          "regions_in_scope": ["Argentina", "Uruguay"],
+          "special_themes": ["route logic", "regional progression"]
+        },
+        "anchors": {
+          "regional_adjacency_preferences": [
+            {
+              "type": "adjacency",
+              "label": "Contiguous regional progression",
+              "strength": 0.86,
+              "flexibility": 0.24,
+              "notes": "Avoids scattershot route shapes."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "movement_vs_friction": {
+            "value": -0.26,
+            "confidence": 0.56,
+            "salience": 0.5,
+            "stability": 0.58
+          },
+          "route_coherence_vs_eclectic_contrast": {
+            "value": -0.92,
+            "confidence": 0.94,
+            "salience": 0.96,
+            "stability": 0.9
+          },
+          "scenic_transit_vs_destination_time": {
+            "value": -0.22,
+            "confidence": 0.52,
+            "salience": 0.46,
+            "stability": 0.52
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "route-coherence-first-ev-1",
+          "evidence_type": "anchor_declaration",
+          "source_type": "structured_input",
+          "anchor_groups": ["regional_adjacency_preferences"],
+          "sequence": 1,
+          "confidence_hint": 0.92,
+          "salience_hint": 0.94,
+          "note": "Traveler names geographic coherence as a trip-defining rule."
+        },
+        {
+          "id": "route-coherence-first-ev-2",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["route_coherence_vs_eclectic_contrast"],
+          "sequence": 2,
+          "confidence_hint": 0.92,
+          "salience_hint": 0.94,
+          "note": "Traveler explicitly cares about geographic logic."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "This profile should bias toward elegant routes with fewer discontinuities, even if the candidate list becomes narrower.",
+        "dominant_dimensions": [
+          "route_coherence_vs_eclectic_contrast"
+        ],
+        "expected_tensions": [
+          "May give up individually attractive destinations to preserve route quality."
+        ],
+        "planning_implications": [
+          "Score route shape early instead of only ranking destinations independently.",
+          "Use adjacency and backtracking penalties aggressively."
+        ]
+      }
+    },
+    {
+      "id": "breadth-under-recovery-pressure",
+      "fixture_kind": "tension_case",
+      "summary": "Traveler wants to see a lot over a limited window but also knows they fatigue quickly when transfers and busy days pile up.",
+      "tags": ["tension", "breadth", "recovery", "pace"],
+      "raw_inputs": {
+        "trip_brief": "I want to cover a lot because I may not be back soon, but I also do badly when every few days are packed and I need time to reset.",
+        "stated_constraints": ["trip length around 19 days"],
+        "planning_style_notes": ["anxious about missing out", "wants pacing help"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 19,
+          "traveler_party": "solo",
+          "season_window": ["November"],
+          "trip_stage": "first_visit",
+          "regions_in_scope": ["Vietnam"],
+          "special_themes": ["first long independent trip", "fear of missing out"]
+        },
+        "tradeoff_dimensions": {
+          "recovery_vs_intensity": {
+            "value": -0.76,
+            "confidence": 0.84,
+            "salience": 0.92,
+            "stability": 0.74
+          },
+          "breadth_vs_depth": {
+            "value": -0.82,
+            "confidence": 0.86,
+            "salience": 0.94,
+            "stability": 0.64
+          },
+          "movement_vs_friction": {
+            "value": -0.18,
+            "confidence": 0.54,
+            "salience": 0.66,
+            "stability": 0.42
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "breadth_x_recovery_tradeoff",
+            "dimensions": ["breadth_vs_depth", "recovery_vs_intensity"],
+            "activation": {
+              "all_of": [
+                {"dimension": "breadth_vs_depth", "max_value": -0.6},
+                {"dimension": "recovery_vs_intensity", "max_value": -0.6}
+              ]
+            },
+            "effect": {
+              "prioritize": ["clustered breadth", "fewer lodging changes", "intentional buffer days"]
+            },
+            "strength": 0.94,
+            "priority": 0.94
+          }
+        ],
+        "tension_flags": [
+          {
+            "id": "breadth-recovery-conflict",
+            "severity": 0.9,
+            "description": "Traveler wants coverage that exceeds their sustainable pace without route discipline."
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": "breadth-under-recovery-pressure-ev-1",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["breadth_vs_depth", "recovery_vs_intensity"],
+          "sequence": 1,
+          "confidence_hint": 0.9,
+          "salience_hint": 0.94,
+          "note": "Traveler describes strong FOMO alongside a need for reset time."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "The engine should not average these values into a mushy middle; it should surface a genuine pacing tension.",
+        "dominant_dimensions": [
+          "breadth_vs_depth",
+          "recovery_vs_intensity"
+        ],
+        "expected_tensions": [
+          "Breadth desires are real, but route clustering and recovery blocks are mandatory."
+        ],
+        "planning_implications": [
+          "Offer clustered variants that trade breadth against move density transparently.",
+          "Make the opportunity cost of extra stops explicit."
+        ]
+      }
+    },
+    {
+      "id": "elastic-discovery-with-fixed-anchors",
+      "fixture_kind": "tension_case",
+      "summary": "Traveler wants open-ended discovery but has enough fixed places and calendar anchors that the trip cannot simply drift.",
+      "tags": ["tension", "anchors", "elasticity", "discovery"],
+      "raw_inputs": {
+        "trip_brief": "I want the trip to feel open and exploratory, but I also know there are a few places and events I really do not want to miss.",
+        "stated_constraints": ["trip length around 22 days"],
+        "planning_style_notes": ["likes flexibility", "still committed to several specific stops"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 22,
+          "traveler_party": "pair",
+          "season_window": ["October"],
+          "trip_stage": "mixed",
+          "regions_in_scope": ["Turkey"],
+          "special_themes": ["wandering", "anchor cities", "festival dates"]
+        },
+        "hard_constraints": {
+          "must_include_places": ["Istanbul", "Cappadocia"],
+          "must_protect_experiences": ["concert in Istanbul"]
+        },
+        "anchors": {
+          "place_anchors": [
+            {
+              "type": "place",
+              "label": "Istanbul",
+              "strength": 0.96,
+              "flexibility": 0.08,
+              "notes": "Non-negotiable anchor."
+            },
+            {
+              "type": "place",
+              "label": "Cappadocia",
+              "strength": 0.84,
+              "flexibility": 0.18,
+              "notes": "Important anchor but timing is somewhat flexible."
+            }
+          ],
+          "calendar_anchors": [
+            {
+              "type": "calendar",
+              "label": "Istanbul concert date",
+              "strength": 0.98,
+              "flexibility": 0.02,
+              "notes": "Fixed calendar event."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "structure_vs_elasticity": {
+            "value": 0.72,
+            "confidence": 0.82,
+            "salience": 0.88,
+            "stability": 0.62
+          },
+          "iconic_vs_discovery": {
+            "value": 0.74,
+            "confidence": 0.78,
+            "salience": 0.82,
+            "stability": 0.6
+          }
+        },
+        "tension_flags": [
+          {
+            "id": "elasticity-anchor-conflict",
+            "severity": 0.82,
+            "description": "Traveler wants flexible discovery inside a trip that has several immovable anchor commitments."
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": "elastic-discovery-with-fixed-anchors-ev-1",
+          "evidence_type": "anchor_declaration",
+          "source_type": "structured_input",
+          "anchor_groups": ["place_anchors", "calendar_anchors"],
+          "sequence": 1,
+          "confidence_hint": 0.96,
+          "salience_hint": 0.96,
+          "note": "Traveler names specific cities and a fixed event date."
+        },
+        {
+          "id": "elastic-discovery-with-fixed-anchors-ev-2",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["structure_vs_elasticity", "iconic_vs_discovery"],
+          "sequence": 2,
+          "confidence_hint": 0.82,
+          "salience_hint": 0.84,
+          "note": "Traveler still wants much of the trip to feel unstructured and exploratory."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "The planner should preserve elasticity in the spaces between anchors, not pretend the trip can stay fully open-ended.",
+        "dominant_dimensions": [
+          "structure_vs_elasticity",
+          "iconic_vs_discovery"
+        ],
+        "expected_tensions": [
+          "Discovery remains important, but anchor commitments should shape the route skeleton first."
+        ],
+        "planning_implications": [
+          "Build around fixed anchors, then allocate elastic days and wandering zones around them.",
+          "Do not oversell full spontaneity where calendar commitments make it impossible."
+        ]
+      }
+    },
+    {
+      "id": "budget-focused",
+      "fixture_kind": "archetype",
+      "summary": "Cost-disciplined traveler who optimizes every category for value and accepts friction, logistics self-reliance, and lower comfort floors in exchange for budget efficiency.",
+      "tags": ["budget", "value", "self-reliance", "efficiency"],
+      "raw_inputs": {
+        "trip_brief": "I want to see as much as possible without spending more than I need to. I am comfortable booking my own trains, staying in simple places, and doing research myself.",
+        "stated_constraints": ["trip length around 20 days", "total budget under 2800"],
+        "planning_style_notes": ["wants cheapest viable option not just average option", "happy to trade convenience for savings"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 20,
+          "traveler_party": "solo",
+          "season_window": ["October", "November"],
+          "trip_stage": "first_visit",
+          "regions_in_scope": ["Portugal", "Spain"],
+          "special_themes": ["budget travel", "local transport", "self-guided"]
+        },
+        "hard_constraints": {
+          "budget_ceiling": 2800.0
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.92,
+          "spending_priorities": {
+            "transport_experience": 0.38,
+            "lodging_location": 0.48,
+            "food": 0.54
+          },
+          "quality_floors": {
+            "lodging": "clean, safe, and reasonably located"
+          },
+          "splurge_allowed": false,
+          "splurge_style": null
+        },
+        "tradeoff_dimensions": {
+          "self_reliance_vs_convenience": {
+            "value": 0.78,
+            "confidence": 0.9,
+            "salience": 0.94,
+            "stability": 0.86
+          },
+          "movement_vs_friction": {
+            "value": 0.54,
+            "confidence": 0.76,
+            "salience": 0.72,
+            "stability": 0.7
+          },
+          "structure_vs_elasticity": {
+            "value": -0.22,
+            "confidence": 0.54,
+            "salience": 0.48,
+            "stability": 0.42
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "budget_focused_value_guardrail",
+            "dimensions": ["self_reliance_vs_convenience"],
+            "activation": {
+              "all_of": [
+                {"dimension": "self_reliance_vs_convenience", "min_value": 0.65}
+              ]
+            },
+            "effect": {
+              "deprioritize": ["convenience upgrades", "guided tours", "airport transfers"],
+              "prioritize": ["public transport", "self-booked accommodation", "local markets"]
+            },
+            "strength": 0.88,
+            "priority": 0.84
+          }
+        ],
+        "evidence_summary": {
+          "sources": {
+            "direct_statements": ["Traveler explicitly references a hard budget ceiling and comfort with doing logistics themselves."],
+            "revealed_preferences": ["Traveler selects cheaper self-managed options over packaged alternatives."]
+          },
+          "confidence_notes": ["High signal because both stated constraint and option-choice evidence align on cost discipline."]
+        }
+      },
+      "evidence": [
+        {
+          "id": "budget-focused-ev-1",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["self_reliance_vs_convenience", "movement_vs_friction"],
+          "sequence": 1,
+          "confidence_hint": 0.92,
+          "salience_hint": 0.94,
+          "note": "Traveler names budget ceiling and comfort with self-managed logistics."
+        },
+        {
+          "id": "budget-focused-ev-2",
+          "evidence_type": "option_selection",
+          "source_type": "option_menu",
+          "affected_dimensions": ["self_reliance_vs_convenience"],
+          "sequence": 2,
+          "confidence_hint": 0.86,
+          "salience_hint": 0.88,
+          "note": "Traveler selects independent public transport over guided package at roughly half the cost.",
+          "option_evidence": {
+            "option_set_id": "intercity-transport-options",
+            "option_id": "local-bus-and-train",
+            "option_kind": "transport",
+            "presented_option_ids": ["local-bus-and-train", "private-transfer", "guided-day-trip"],
+            "comparison_label": "intercity travel options"
+          }
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "This traveler treats budget discipline as a first-order constraint rather than a secondary preference. Value efficiency should guide every category, not just lodging.",
+        "dominant_dimensions": [
+          "self_reliance_vs_convenience",
+          "movement_vs_friction"
+        ],
+        "expected_tensions": [
+          "Budget ceiling may force route contraction or longer transit legs that reduce overall experience quality."
+        ],
+        "planning_implications": [
+          "Present cheapest viable option prominently, not just middle-of-range options.",
+          "Do not silently upgrade any category without surfacing the cost delta.",
+          "Prefer self-bookable options over convenience packages unless the price gap is small."
+        ]
+      }
+    },
+    {
+      "id": "schedule-sensitive",
+      "fixture_kind": "archetype",
+      "summary": "Traveler with fixed calendar anchors and a low tolerance for timing uncertainty, who needs every transition and commitment protected from schedule drift.",
+      "tags": ["schedule", "calendar", "structured", "reliability"],
+      "raw_inputs": {
+        "trip_brief": "I have a limited window and a few things I absolutely cannot miss. I do not like arriving late, rearranging at the last minute, or having contingency days eaten by delays.",
+        "stated_constraints": ["trip length exactly 14 days", "fixed departure and return dates", "event commitment on day 4"],
+        "planning_style_notes": ["wants buffer built into transition days", "needs the plan to stay on track without heroic adjustment"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 14,
+          "traveler_party": "pair",
+          "season_window": ["March"],
+          "trip_stage": "first_visit",
+          "regions_in_scope": ["Netherlands", "Belgium"],
+          "special_themes": ["calendar-constrained", "event travel", "reliable logistics"]
+        },
+        "hard_constraints": {
+          "date_window": {"start": "2026-03-10", "end": "2026-03-24"},
+          "must_protect_experiences": ["concert in Amsterdam on day 4"]
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.6,
+          "spending_priorities": {
+            "transport_simplicity": 0.86,
+            "lodging_location": 0.72
+          },
+          "splurge_allowed": true,
+          "splurge_style": "pay for timing reliability and direct connections that protect calendar commitments"
+        },
+        "anchors": {
+          "calendar_anchors": [
+            {
+              "type": "calendar",
+              "label": "Amsterdam concert day 4",
+              "strength": 0.98,
+              "flexibility": 0.02,
+              "notes": "Fixed calendar commitment. All route planning must protect this date."
+            }
+          ],
+          "mode_anchors": [
+            {
+              "type": "mode",
+              "label": "Direct or simple connections",
+              "strength": 0.76,
+              "flexibility": 0.36,
+              "notes": "Avoid connection chains with tight transfer windows."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "structure_vs_elasticity": {
+            "value": -0.88,
+            "confidence": 0.92,
+            "salience": 0.96,
+            "stability": 0.9
+          },
+          "movement_vs_friction": {
+            "value": 0.46,
+            "confidence": 0.72,
+            "salience": 0.68,
+            "stability": 0.74
+          },
+          "self_reliance_vs_convenience": {
+            "value": -0.56,
+            "confidence": 0.78,
+            "salience": 0.76,
+            "stability": 0.8
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "schedule_sensitive_anchor_protection",
+            "dimensions": ["structure_vs_elasticity", "self_reliance_vs_convenience"],
+            "activation": {
+              "all_of": [
+                {"dimension": "structure_vs_elasticity", "max_value": -0.7}
+              ]
+            },
+            "effect": {
+              "prioritize": ["direct connections", "buffer-padded transfers", "early arrival windows"],
+              "deprioritize": ["open-ended days before fixed commitments", "tight connection chains"]
+            },
+            "strength": 0.94,
+            "priority": 0.92
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": "schedule-sensitive-ev-1",
+          "evidence_type": "hard_constraint_declaration",
+          "source_type": "structured_input",
+          "anchor_groups": ["calendar_anchors"],
+          "sequence": 1,
+          "confidence_hint": 0.96,
+          "salience_hint": 0.96,
+          "note": "Traveler names fixed date window and a must-protect event on day 4."
+        },
+        {
+          "id": "schedule-sensitive-ev-2",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["structure_vs_elasticity", "self_reliance_vs_convenience"],
+          "sequence": 2,
+          "confidence_hint": 0.88,
+          "salience_hint": 0.92,
+          "note": "Traveler says they dislike last-minute rearrangement and want the plan to stay on track."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "Reliability and schedule integrity are load-bearing for this traveler. The planner should protect fixed commitments as hard anchors before assembling any flexible content.",
+        "dominant_dimensions": [
+          "structure_vs_elasticity",
+          "self_reliance_vs_convenience"
+        ],
+        "expected_tensions": [
+          "Tight date windows reduce room to recover from delays, so transition padding and simple logistics matter more than optimal routing."
+        ],
+        "planning_implications": [
+          "Lock calendar anchors first and build all other content around them.",
+          "Prefer direct or simple connections over cheaper chains with tight windows.",
+          "Flag any transition day that touches a fixed commitment as schedule-sensitive in the plan."
+        ]
+      }
+    },
+    {
+      "id": "accessibility-aware",
+      "fixture_kind": "archetype",
+      "summary": "Traveler with mobility constraints who needs step-free access, accessible rooms, and logistics that do not assume full ambulatory independence.",
+      "tags": ["accessibility", "mobility", "lodging", "logistics"],
+      "raw_inputs": {
+        "trip_brief": "I use a wheelchair and need rooms and venues that are genuinely accessible, not just technically compliant on paper. I also need arrivals that do not involve stairs or heroic workarounds.",
+        "stated_constraints": ["trip length around 16 days", "step-free access required throughout"],
+        "planning_style_notes": ["has had bad experiences with nominally accessible rooms that were not actually usable", "wants accessibility verified not just listed"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 16,
+          "traveler_party": "pair",
+          "season_window": ["May", "June"],
+          "trip_stage": "first_visit",
+          "regions_in_scope": ["France", "Belgium"],
+          "special_themes": ["accessibility", "urban exploration", "verified access"]
+        },
+        "hard_constraints": {
+          "mobility_constraints": ["wheelchair user", "step-free access required throughout"],
+          "lodging_constraints": ["wheelchair accessible room", "roll-in shower or accessible bathroom", "elevator required if above ground floor"]
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.62,
+          "spending_priorities": {
+            "lodging_quality": 0.88,
+            "transport_simplicity": 0.82
+          },
+          "quality_floors": {
+            "lodging": "wheelchair accessible room with verified step-free bathroom",
+            "transport": "step-free boarding confirmed"
+          },
+          "splurge_allowed": true,
+          "splurge_style": "pay extra to ensure genuine accessibility rather than nominal compliance"
+        },
+        "anchors": {
+          "quality_floor_anchors": [
+            {
+              "type": "quality_floor",
+              "label": "Verified step-free lodging",
+              "strength": 0.96,
+              "flexibility": 0.06,
+              "notes": "Accessibility is a hard requirement, not a preference."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "self_reliance_vs_convenience": {
+            "value": -0.62,
+            "confidence": 0.86,
+            "salience": 0.92,
+            "stability": 0.88
+          },
+          "movement_vs_friction": {
+            "value": 0.66,
+            "confidence": 0.84,
+            "salience": 0.88,
+            "stability": 0.84
+          },
+          "recovery_vs_intensity": {
+            "value": -0.52,
+            "confidence": 0.72,
+            "salience": 0.74,
+            "stability": 0.76
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "accessibility_quality_floor_enforcement",
+            "dimensions": ["self_reliance_vs_convenience", "movement_vs_friction"],
+            "activation": {
+              "all_of": [
+                {"dimension": "self_reliance_vs_convenience", "max_value": -0.45}
+              ]
+            },
+            "effect": {
+              "enforce_quality_floors": ["lodging", "transport"],
+              "deprioritize": ["options without verified accessibility data"]
+            },
+            "strength": 0.96,
+            "priority": 0.96
+          }
+        ],
+        "evidence_summary": {
+          "sources": {
+            "direct_statements": ["Traveler names mobility constraints explicitly and highlights past failures with nominal accessibility."]
+          },
+          "confidence_notes": ["Accessibility requirements are hard constraints not open to budget negotiation."]
+        }
+      },
+      "evidence": [
+        {
+          "id": "accessibility-aware-ev-1",
+          "evidence_type": "hard_constraint_declaration",
+          "source_type": "structured_input",
+          "anchor_groups": ["quality_floor_anchors"],
+          "sequence": 1,
+          "confidence_hint": 0.96,
+          "salience_hint": 0.96,
+          "note": "Traveler declares wheelchair use and step-free requirement as non-negotiable."
+        },
+        {
+          "id": "accessibility-aware-ev-2",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["self_reliance_vs_convenience", "movement_vs_friction"],
+          "sequence": 2,
+          "confidence_hint": 0.88,
+          "salience_hint": 0.9,
+          "note": "Traveler describes past bad experiences with options that were listed as accessible but were not usable."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "Accessibility requirements are hard constraints that must be verified before an option can be considered at all. Budget flexibility exists to guarantee access, not to trade it away.",
+        "dominant_dimensions": [
+          "movement_vs_friction"
+        ],
+        "expected_tensions": [
+          "Verified accessible options may be fewer, more expensive, or less centrally located, requiring route trade-offs."
+        ],
+        "planning_implications": [
+          "Filter all options by verified accessibility data before ranking.",
+          "Do not offer nominally accessible options without confirming specifics.",
+          "Budget flexibility should go to accessibility assurance first, not comfort upgrades."
+        ]
+      }
+    },
+    {
+      "id": "family-leisure",
+      "fixture_kind": "archetype",
+      "summary": "Family traveler with young children who needs recovery-friendly pacing, stable logistics, and accommodations that work for a group with mixed energy levels.",
+      "tags": ["family", "children", "recovery", "structure"],
+      "raw_inputs": {
+        "trip_brief": "We are travelling with two kids under ten. We need flexibility for bad days, rooms that fit a family, and a pace that does not destroy everyone by day four.",
+        "stated_constraints": ["trip length around 14 days", "traveling with children aged 6 and 9"],
+        "planning_style_notes": ["needs escape hatches when kids hit a wall", "wants a mix of engaging activities and low-key base time", "does not want to move lodging more than twice"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 14,
+          "traveler_party": "family",
+          "season_window": ["July"],
+          "trip_stage": "first_visit",
+          "regions_in_scope": ["Croatia", "Slovenia"],
+          "special_themes": ["family travel", "child-friendly pacing", "stable bases"]
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.66,
+          "spending_priorities": {
+            "lodging_quality": 0.82,
+            "transport_simplicity": 0.76
+          },
+          "quality_floors": {
+            "lodging": "family room or connecting rooms with space for children"
+          },
+          "splurge_allowed": true,
+          "splurge_style": "spend to protect family sleep quality and avoid logistics that stress children"
+        },
+        "anchors": {
+          "quality_floor_anchors": [
+            {
+              "type": "quality_floor",
+              "label": "Family-suitable lodging",
+              "strength": 0.88,
+              "flexibility": 0.22,
+              "notes": "Room must fit the full family. Double rooms shared with children are not acceptable."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "recovery_vs_intensity": {
+            "value": -0.68,
+            "confidence": 0.88,
+            "salience": 0.94,
+            "stability": 0.82
+          },
+          "movement_vs_friction": {
+            "value": 0.72,
+            "confidence": 0.84,
+            "salience": 0.88,
+            "stability": 0.82
+          },
+          "structure_vs_elasticity": {
+            "value": -0.52,
+            "confidence": 0.76,
+            "salience": 0.78,
+            "stability": 0.72
+          },
+          "breadth_vs_depth": {
+            "value": 0.46,
+            "confidence": 0.64,
+            "salience": 0.58,
+            "stability": 0.52
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "family_recovery_pacing_guardrail",
+            "dimensions": ["recovery_vs_intensity", "movement_vs_friction"],
+            "activation": {
+              "all_of": [
+                {"dimension": "recovery_vs_intensity", "max_value": -0.5},
+                {"dimension": "movement_vs_friction", "min_value": 0.5}
+              ]
+            },
+            "effect": {
+              "prioritize": ["stable bases", "half-day or rest-day options", "low-move itineraries"],
+              "deprioritize": ["multi-city sprint routes", "tight transfer chains with children"]
+            },
+            "strength": 0.9,
+            "priority": 0.88
+          }
+        ],
+        "tension_flags": [
+          {
+            "id": "family-pacing-breadth-conflict",
+            "severity": 0.62,
+            "description": "Family wants to experience multiple areas but children's energy limits daily intensity and move density."
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": "family-leisure-ev-1",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["recovery_vs_intensity", "movement_vs_friction", "structure_vs_elasticity"],
+          "sequence": 1,
+          "confidence_hint": 0.9,
+          "salience_hint": 0.94,
+          "note": "Traveler names children's energy limits and need to avoid pace that exhausts the family."
+        },
+        {
+          "id": "family-leisure-ev-2",
+          "evidence_type": "hard_constraint_declaration",
+          "source_type": "structured_input",
+          "anchor_groups": ["quality_floor_anchors"],
+          "sequence": 2,
+          "confidence_hint": 0.88,
+          "salience_hint": 0.88,
+          "note": "Traveler sets lodging requirement for family-sized rooms and limits moves to two bases."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "Family pacing and stable logistics dominate this profile. Recovery and friction reduction are protective constraints, not preferences to be balanced against coverage ambitions.",
+        "dominant_dimensions": [
+          "recovery_vs_intensity",
+          "movement_vs_friction",
+          "structure_vs_elasticity"
+        ],
+        "expected_tensions": [
+          "Desire to show children diverse places competes with the energy and logistics ceiling imposed by travelling with young children."
+        ],
+        "planning_implications": [
+          "Build in regular low-demand half-days or base days.",
+          "Keep lodging moves to a minimum and prefer longer stays in family-suitable accommodation.",
+          "Surface child-friendly activity options alongside adult-oriented alternatives for each day."
+        ]
+      }
+    },
+    {
+      "id": "business-policy-constrained",
+      "fixture_kind": "archetype",
+      "summary": "Frequent traveler who extends business trips with personal days but must stay within policy-like budget and schedule discipline for the whole trip.",
+      "tags": ["business", "policy", "budget", "structure"],
+      "raw_inputs": {
+        "trip_brief": "I am adding personal days to a business trip. I cannot go over a fixed total budget and my calendar has hard windows. I want the leisure days to feel like real travel, not just filler.",
+        "stated_constraints": ["trip length 10 days total with 4 work days fixed", "hard budget ceiling from company policy extended to personal portion"],
+        "planning_style_notes": ["comfortable with reliable logistics", "does not want to deal with uncertainty on work days", "leisure portion should not bleed into work commitments"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 10,
+          "traveler_party": "solo",
+          "season_window": ["February", "March"],
+          "trip_stage": "repeat_visit",
+          "regions_in_scope": ["Germany", "Austria"],
+          "special_themes": ["bleisure travel", "policy-constrained budget", "structured leisure window"]
+        },
+        "hard_constraints": {
+          "budget_ceiling": 3200.0,
+          "must_protect_experiences": ["work commitments days 1-4"]
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.86,
+          "spending_priorities": {
+            "transport_simplicity": 0.8,
+            "lodging_location": 0.74,
+            "food": 0.52
+          },
+          "quality_floors": {
+            "lodging": "business-grade: quiet, reliable internet, central"
+          },
+          "splurge_allowed": false,
+          "splurge_style": null
+        },
+        "anchors": {
+          "calendar_anchors": [
+            {
+              "type": "calendar",
+              "label": "Work commitment days 1-4",
+              "strength": 1.0,
+              "flexibility": 0.0,
+              "notes": "Work days are completely fixed. Leisure must be scheduled around them."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "structure_vs_elasticity": {
+            "value": -0.74,
+            "confidence": 0.88,
+            "salience": 0.92,
+            "stability": 0.88
+          },
+          "self_reliance_vs_convenience": {
+            "value": -0.44,
+            "confidence": 0.74,
+            "salience": 0.76,
+            "stability": 0.8
+          },
+          "movement_vs_friction": {
+            "value": 0.34,
+            "confidence": 0.64,
+            "salience": 0.62,
+            "stability": 0.72
+          },
+          "iconic_vs_discovery": {
+            "value": -0.28,
+            "confidence": 0.56,
+            "salience": 0.5,
+            "stability": 0.54
+          }
+        },
+        "interaction_rules": [
+          {
+            "id": "policy_budget_and_calendar_guardrail",
+            "dimensions": ["structure_vs_elasticity", "self_reliance_vs_convenience"],
+            "activation": {
+              "all_of": [
+                {"dimension": "structure_vs_elasticity", "max_value": -0.6}
+              ]
+            },
+            "effect": {
+              "prioritize": ["direct connections on work days", "predictable lodging near work venues"],
+              "deprioritize": ["spontaneous detours that could conflict with work schedule"]
+            },
+            "strength": 0.9,
+            "priority": 0.9
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": "business-policy-constrained-ev-1",
+          "evidence_type": "hard_constraint_declaration",
+          "source_type": "structured_input",
+          "anchor_groups": ["calendar_anchors"],
+          "sequence": 1,
+          "confidence_hint": 0.94,
+          "salience_hint": 0.94,
+          "note": "Traveler names fixed work days and a hard budget ceiling from company policy."
+        },
+        {
+          "id": "business-policy-constrained-ev-2",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["structure_vs_elasticity", "self_reliance_vs_convenience"],
+          "sequence": 2,
+          "confidence_hint": 0.82,
+          "salience_hint": 0.86,
+          "note": "Traveler wants leisure days to feel real but cannot let them drift into work windows."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "The work calendar and budget ceiling are absolute constraints. Leisure planning fills the remaining window and should feel substantive, not residual.",
+        "dominant_dimensions": [
+          "structure_vs_elasticity"
+        ],
+        "expected_tensions": [
+          "The leisure window is short enough that any plan which overreaches risks bleeding into work commitments or busting the budget."
+        ],
+        "planning_implications": [
+          "Design leisure content inside a clearly bounded window, not as additions that compress work time.",
+          "Keep all options within policy-level cost discipline even for the personal days.",
+          "Surface high-value compact options rather than expansive multi-day plans."
+        ]
+      }
+    },
+    {
+      "id": "quality-floors-under-budget-pressure",
+      "fixture_kind": "tension_case",
+      "summary": "Traveler has strict lodging and comfort minimums but also a real budget ceiling that makes those standards costly to maintain everywhere.",
+      "tags": ["tension", "budget", "quality", "lodging"],
+      "raw_inputs": {
+        "trip_brief": "I cannot do bad rooms, chaotic late arrivals, or very poor locations, but I also do not have the budget to do that perfectly in every stop.",
+        "stated_constraints": ["trip length around 17 days", "budget ceiling matters"],
+        "planning_style_notes": ["wants realistic tradeoffs surfaced early", "prefers fewer better bases over many weak ones"]
+      },
+      "profile_overrides": {
+        "trip_frame": {
+          "duration_days": 17,
+          "traveler_party": "pair",
+          "season_window": ["July"],
+          "trip_stage": "mixed",
+          "regions_in_scope": ["France"],
+          "special_themes": ["city and countryside mix", "lodging tradeoffs"]
+        },
+        "hard_constraints": {
+          "budget_ceiling": 5200.0
+        },
+        "budget_model": {
+          "total_budget_sensitivity": 0.78,
+          "spending_priorities": {
+            "lodging_quality": 0.9,
+            "lodging_location": 0.8
+          },
+          "quality_floors": {
+            "lodging": "quiet private room within practical distance of core sights"
+          },
+          "splurge_allowed": false
+        },
+        "anchors": {
+          "quality_floor_anchors": [
+            {
+              "type": "quality_floor",
+              "label": "Quiet and well-located lodging",
+              "strength": 0.94,
+              "flexibility": 0.12,
+              "notes": "Comfort floor is strong, but budget is not loose."
+            }
+          ]
+        },
+        "tradeoff_dimensions": {
+          "self_reliance_vs_convenience": {
+            "value": 0.54,
+            "confidence": 0.68,
+            "salience": 0.66,
+            "stability": 0.72
+          }
+        },
+        "tension_flags": [
+          {
+            "id": "quality-floor-budget-conflict",
+            "severity": 0.9,
+            "description": "Quality floors and budget ceiling pull against each other, especially in expensive hubs."
+          }
+        ]
+      },
+      "evidence": [
+        {
+          "id": "quality-floors-under-budget-pressure-ev-1",
+          "evidence_type": "hard_constraint_declaration",
+          "source_type": "structured_input",
+          "anchor_groups": ["quality_floor_anchors"],
+          "sequence": 1,
+          "confidence_hint": 0.94,
+          "salience_hint": 0.94,
+          "note": "Traveler sets firm lodging minimums."
+        },
+        {
+          "id": "quality-floors-under-budget-pressure-ev-2",
+          "evidence_type": "direct_statement",
+          "source_type": "user_message",
+          "affected_dimensions": ["self_reliance_vs_convenience"],
+          "sequence": 2,
+          "confidence_hint": 0.62,
+          "salience_hint": 0.58,
+          "note": "Traveler can accept some convenience tradeoffs, but not full comfort collapse."
+        }
+      ],
+      "intended_interpretation": {
+        "qualitative_summary": "The planner should convert this into route and lodging strategy decisions, not pretend everything can stay high-quality everywhere.",
+        "dominant_dimensions": [
+          "self_reliance_vs_convenience"
+        ],
+        "expected_tensions": [
+          "Quality floors are real, but route breadth or top-season timing may need to contract to preserve them."
+        ],
+        "planning_implications": [
+          "Offer fewer-base and shoulder-value scenarios rather than simply cheaper downgraded rooms.",
+          "Show quality tradeoffs explicitly when the budget ceiling binds."
         ]
       }
     }

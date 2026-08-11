@@ -1444,9 +1444,9 @@ def _generate_with_llm(
     verdict: str,
     needs_human_reason: str,
     reasoning_client: Any,
-    reasoning_model: str,  # noqa: ARG001 - kept for API compatibility
+    reasoning_model: str,
     standard_client: Any,
-    standard_model: str,  # noqa: ARG001 - kept for API compatibility
+    standard_model: str,
 ) -> FollowupIssue:
     """Generate follow-up issue using multi-round LLM interaction.
 

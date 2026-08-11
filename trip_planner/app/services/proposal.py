@@ -8,7 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
-from trip_planner.business import ExceptionRequest, PolicyEvaluationResult, TripPlanProposal
+from trip_planner.business import (
+    ExceptionRequest,
+    PolicyEvaluationResult,
+    TripPlanProposal,
+)
 from trip_planner.integrations.tpp import (
     BaseTPPIntegrationClient,
     EvaluationResultIngestionError,
@@ -21,10 +25,10 @@ from trip_planner.integrations.tpp import (
     TPPEvaluationResultIngestionService,
     TPPExecutionStatus,
     TPPProposalSubmissionService,
+    TPPReoptimizationService,
     TPPRequestEnvelope,
     TPPResponseEnvelope,
     TPPRetryMetadata,
-    TPPReoptimizationService,
     TPPTransportError,
     tpp_transport_error_from_exception,
 )

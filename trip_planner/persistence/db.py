@@ -103,9 +103,9 @@ def ensure_database_ready(url: str | None = None) -> None:
     from trip_planner.persistence.models import (  # noqa: F401
         account,
         activity,
-        budget,  # noqa: F401
-        planner_memory,  # noqa: F401
-        planning_ledger,  # noqa: F401
+        budget,
+        planner_memory,
+        planning_ledger,
         policy,
         proposal,
         scenario,

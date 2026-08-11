@@ -24,6 +24,7 @@ __all__ = [
     "ACTIVITY_KINDS",
     "AVAILABILITY_STATUSES",
     "EFFORT_LEVELS",
+    "SCHEMA_VERSION",
     "ActivityBookingTerms",
     "ActivityCategory",
     "ActivityCostSummary",
@@ -35,5 +36,4 @@ __all__ = [
     "ActivitySignificanceSummary",
     "ActivityTimingSummary",
     "ActivityValueSummary",
-    "SCHEMA_VERSION",
 ]

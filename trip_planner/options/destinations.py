@@ -427,7 +427,7 @@ class Destination:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "Destination":
+    def from_dict(cls, payload: dict[str, Any]) -> Destination:
         return cls(
             destination_id=payload["destination_id"],
             place_kind=payload["place_kind"],
@@ -507,7 +507,7 @@ class PlaceContext:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PlaceContext":
+    def from_dict(cls, payload: dict[str, Any]) -> PlaceContext:
         return cls(
             context_id=payload["context_id"],
             destination_id=payload["destination_id"],
@@ -539,7 +539,7 @@ class PlaceContext:
         tag_keys: list[str] | None = None,
         source_ref_ids: list[str] | None = None,
         notes: list[str] | None = None,
-    ) -> "PlaceContext":
+    ) -> PlaceContext:
         if not isinstance(destination, Destination):
             raise ValueError("destination must be a Destination")
 

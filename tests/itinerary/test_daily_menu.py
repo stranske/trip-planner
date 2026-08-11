@@ -4,8 +4,8 @@ from trip_planner.itinerary.daily_menu import (
     MenuStop,
     SourceFeedbackBandit,
     SourceMix,
-    calibrate,
     build_daily_menu,
+    calibrate,
 )
 
 CTX = ("kyoto", "stage:planning")
@@ -187,8 +187,12 @@ def test_selection_favors_efficient_high_value_stops() -> None:
 
 
 def test_feedback_flips_a_contested_slot() -> None:
-    local = MenuStop("A", "Local pick", "walk", 2, 0.80, 55, "editorial", 0, 0.20, "indie_blog", "yellow")
-    operator = MenuStop("B", "Operator pick", "tour", 2, 0.80, 55, "editorial", 0, 0.20, "bigco", "yellow")
+    local = MenuStop(
+        "A", "Local pick", "walk", 2, 0.80, 55, "editorial", 0, 0.20, "indie_blog", "yellow"
+    )
+    operator = MenuStop(
+        "B", "Operator pick", "tour", 2, 0.80, 55, "editorial", 0, 0.20, "bigco", "yellow"
+    )
     candidates = [operator, local]
 
     base = build_daily_menu("t", 0, candidates, 55, SourceMix(0.2), context_tags=CTX)

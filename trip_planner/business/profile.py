@@ -270,7 +270,7 @@ class BusinessTravelProfile:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "BusinessTravelProfile":
+    def from_dict(cls, payload: dict[str, Any]) -> BusinessTravelProfile:
         return cls(
             traveler_context=TravelerContext(**payload["traveler_context"]),
             trip_purpose=TripPurpose(

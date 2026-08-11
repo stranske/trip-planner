@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any, Final, Protocol
 
 EFFORT_FAST: Final = "fast"

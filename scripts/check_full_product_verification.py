@@ -29,13 +29,8 @@ if str(REPO_ROOT) not in sys.path:
 from fastapi.testclient import TestClient  # noqa: E402
 
 from trip_planner.app.main import create_app  # noqa: E402
-from trip_planner.app.services.planner_runtime_config import (  # noqa: E402
-    build_planner_runtime_config,
-)
-from trip_planner.persistence.db import (  # noqa: E402
-    ensure_database_ready,
-    reset_database_state,
-)
+from trip_planner.app.services.planner_runtime_config import build_planner_runtime_config  # noqa: E402
+from trip_planner.persistence.db import ensure_database_ready, reset_database_state  # noqa: E402
 
 DEFAULT_TPP_REPO_PATH = REPO_ROOT.parent / "Travel-Plan-Permission"
 TPP_PORT = 8765

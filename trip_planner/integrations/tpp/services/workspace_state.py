@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, MutableMapping
 from copy import deepcopy
-from typing import Any, Mapping, MutableMapping
+from typing import Any
 
 
 def persist_tpp_proposal_id(workspace_state: MutableMapping[str, Any], proposal_id: str) -> None:

@@ -394,7 +394,7 @@ class TransportOption:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "TransportOption":
+    def from_dict(cls, payload: dict[str, Any]) -> TransportOption:
         cost_payload = _optional_mapping_field(payload, "cost_summary")
         return cls(
             option_id=payload["option_id"],

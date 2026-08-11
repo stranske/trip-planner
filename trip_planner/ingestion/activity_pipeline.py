@@ -48,18 +48,11 @@ class ActivityIngestionResult:
         require_non_empty(self.snapshot_id, "snapshot_id")
         if any(not isinstance(item, ActivityOption) for item in self.activity_options):
             raise ValueError("activity_options must contain ActivityOption instances")
-        if any(
-            not isinstance(item, AttributeConflict)
-            for item in self.unresolved_conflicts
-        ):
-            raise ValueError(
-                "unresolved_conflicts must contain AttributeConflict instances"
-            )
+        if any(not isinstance(item, AttributeConflict) for item in self.unresolved_conflicts):
+            raise ValueError("unresolved_conflicts must contain AttributeConflict instances")
         if any(not isinstance(item, IngestionWarning) for item in self.warnings):
             raise ValueError("warnings must contain IngestionWarning instances")
-        if self.handoff is not None and not isinstance(
-            self.handoff, NormalizationHandoff
-        ):
+        if self.handoff is not None and not isinstance(self.handoff, NormalizationHandoff):
             raise ValueError("handoff must be a NormalizationHandoff when provided")
         if not isinstance(self.summary, IngestionSummary):
             raise ValueError("summary must be an IngestionSummary")
@@ -83,9 +76,7 @@ def ingest_activity_snapshot(
     resolutions = resolutions or []
     dedup_decisions = dedup_decisions or []
     warnings = [warning_from_issue(issue) for issue in snapshot.issues]
-    resolution_map = {
-        resolution.resolution_id: resolution for resolution in resolutions
-    }
+    resolution_map = {resolution.resolution_id: resolution for resolution in resolutions}
     emitted_ids: set[str] = set()
     filtered_record_ids: list[str] = []
     low_confidence_option_ids: list[str] = []
@@ -94,10 +85,7 @@ def ingest_activity_snapshot(
     provenance_refs: list[ProvenanceReference] = []
 
     for decision in dedup_decisions:
-        if (
-            decision.entity_scope != "activity"
-            or decision.option_kind != snapshot.option_kind
-        ):
+        if decision.entity_scope != "activity" or decision.option_kind != snapshot.option_kind:
             continue
         record_ids = _record_ids_for_decision(decision, resolution_map)
         records = _records_for_decision(snapshot.records, decision, resolution_map)
@@ -105,9 +93,7 @@ def ingest_activity_snapshot(
         if decision.decision == "suppress":
             emitted_ids.update(record_ids)
             filtered_record_ids.extend(
-                record_id
-                for record_id in record_ids
-                if record_id not in filtered_record_ids
+                record_id for record_id in record_ids if record_id not in filtered_record_ids
             )
             continue
         if decision.decision in {"keep_separate", "needs_review"}:
@@ -128,14 +114,9 @@ def ingest_activity_snapshot(
                     snapshot,
                     _separate_option_id(decision.canonical_entity_id, record),
                 )
-                option.notes.extend(
-                    [f"dedup_decision:{decision.decision_id}", *decision.notes]
-                )
+                option.notes.extend([f"dedup_decision:{decision.decision_id}", *decision.notes])
                 option.feasibility.constraints.extend(
-                    [
-                        f"{conflict.attribute_path}:{conflict.reason}"
-                        for conflict in unresolved
-                    ]
+                    [f"{conflict.attribute_path}:{conflict.reason}" for conflict in unresolved]
                 )
                 record_warnings = record.payload.get("normalization_warnings", [])
                 if record_warnings:
@@ -167,9 +148,7 @@ def ingest_activity_snapshot(
                 )
             )
             continue
-        option = _activity_option_from_records(
-            records, snapshot, decision.canonical_entity_id
-        )
+        option = _activity_option_from_records(records, snapshot, decision.canonical_entity_id)
         option.notes.extend([f"dedup_decision:{decision.decision_id}", *decision.notes])
         option.feasibility.constraints.extend(
             [
@@ -204,21 +183,13 @@ def ingest_activity_snapshot(
             [record], snapshot, _canonical_option_id(record, resolution)
         )
         if resolution is not None:
-            option.notes.extend(
-                [f"resolution:{resolution.resolution_id}", *resolution.notes]
-            )
+            option.notes.extend([f"resolution:{resolution.resolution_id}", *resolution.notes])
             unresolved = unresolved_conflicts(resolution.conflicts)
             preserved_conflicts.extend(unresolved)
             option.feasibility.constraints.extend(
-                [
-                    f"{conflict.attribute_path}:{conflict.reason}"
-                    for conflict in unresolved
-                ]
+                [f"{conflict.attribute_path}:{conflict.reason}" for conflict in unresolved]
             )
-            if (
-                resolution.review_required
-                or _lowest_match_confidence(resolution) < 0.75
-            ):
+            if resolution.review_required or _lowest_match_confidence(resolution) < 0.75:
                 low_confidence_option_ids.append(option.option_id)
         record_warnings = record.payload.get("normalization_warnings", [])
         if record_warnings:
@@ -324,9 +295,7 @@ def _activity_option_from_records(
     return ActivityOption.from_dict(payload)
 
 
-def _canonical_option_id(
-    record: RawSourceRecord, resolution: EntityResolution | None
-) -> str:
+def _canonical_option_id(record: RawSourceRecord, resolution: EntityResolution | None) -> str:
     if resolution is not None:
         return resolution.canonical_entity_id
     payload_option_id = record.payload.get("option_id")

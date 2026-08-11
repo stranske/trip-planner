@@ -472,9 +472,7 @@ class SourceQualityScorer:
             # with the other reliability signals.
             components.append(trust.editorial_independence)
         if trust.commerciality is not None:
-            preference_alignment = (trust.commerciality - 0.5) * (
-                commerciality_preference - 0.5
-            )
+            preference_alignment = (trust.commerciality - 0.5) * (commerciality_preference - 0.5)
             components.append(_clamp(0.5 + 0.8 * preference_alignment))
         if not components:
             return _CATEGORY_OPERATIONAL_PRIOR.get(category, 0.55) * 0.7
