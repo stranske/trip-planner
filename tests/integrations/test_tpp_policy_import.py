@@ -34,7 +34,7 @@ def workspace_client(
     )
     reset_database_state()
     with TestClient(create_app()) as client:
-        client.post(
+        signup = client.post(
             "/api/auth/signup",
             json={
                 "email": "policy-import@example.test",
@@ -42,6 +42,7 @@ def workspace_client(
                 "display_name": "TPP policy import",
             },
         )
+        assert signup.status_code == 201, signup.text
         yield client
     reset_database_state()
 
@@ -63,6 +64,7 @@ def test_failing_policy_status_is_not_compliant(workspace_client: TestClient) ->
             },
         },
     )
+    assert trip.status_code == 201, trip.text
     trip_id = trip.json()["trip"]["trip_id"]
     fixture = _load_policy_fixture("standard_policy_sync.json")
     response = fixture["response"]
