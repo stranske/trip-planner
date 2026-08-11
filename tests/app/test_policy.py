@@ -254,6 +254,55 @@ def test_workspace_policy_invalid_persisted_blocking_issue_is_unavailable(
     assert payload["summary"]["status"] == "policy_state_invalid"
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "expected_error"),
+    [
+        (
+            "blocking_issues",
+            False,
+            "organization_context.blocking_issues must be provided as a list",
+        ),
+        (
+            "compatible_with_planner_cache",
+            "false",
+            "compatible_with_planner_cache must be a boolean",
+        ),
+    ],
+)
+def test_workspace_policy_invalid_persisted_context_is_unavailable(
+    client: TestClient, field: str, value: object, expected_error: str
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Invalid stored policy context",
+            "summary": "Reject malformed persisted policy fields.",
+            "mode": "business",
+            "trip_frame": {"duration_days": 2, "primary_regions": ["Chicago"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = _load_fixture("standard_policy_sync.json")
+    imported = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={"request": fixture["request"], "response": fixture["response"]},
+    )
+    assert imported.status_code == 200
+
+    with get_session_factory()() as db_session:
+        state = db_session.get(PersistedPolicyState, f"policy-state:{trip_id}")
+        assert state is not None
+        state.organization_context = {**state.organization_context, field: value}
+        db_session.commit()
+
+    response = client.get(f"/api/workspace/{trip_id}/policy")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["policy_evaluation"]["status"] == "policy_unavailable"
+    assert payload["summary"]["validation_error"] == expected_error
+
+
 def test_workspace_policy_import_preserves_cached_state_when_tpp_rejects_cache(
     client: TestClient,
 ) -> None:

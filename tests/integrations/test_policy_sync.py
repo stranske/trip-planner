@@ -71,6 +71,19 @@ def test_policy_sync_rejects_unsupported_contract_version() -> None:
         TPPPolicySyncService(FakeTPPPolicyClient(response)).import_policy_constraints(request)
 
 
+@pytest.mark.parametrize("value", ["false", 0])
+def test_policy_sync_rejects_malformed_cache_compatibility_values(value: object) -> None:
+    fixture = _load_fixture("standard_policy_sync.json")
+    fixture["response"]["result_payload"]["organization_context"][
+        "compatible_with_planner_cache"
+    ] = value
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    response = TPPResponseEnvelope.from_dict(fixture["response"])
+
+    with pytest.raises(ValueError, match="compatible_with_planner_cache must be a boolean"):
+        TPPPolicySyncService(FakeTPPPolicyClient(response)).import_policy_constraints(request)
+
+
 def test_import_stricter_org_policy_preserves_limits_and_triggers() -> None:
     fixture = _load_fixture("strict_policy_sync.json")
     request = TPPRequestEnvelope.from_dict(fixture["request"])

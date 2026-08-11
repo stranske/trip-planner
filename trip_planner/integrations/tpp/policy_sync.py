@@ -95,9 +95,11 @@ def _require_string_field(value: Any, field_name: str) -> str:
 
 
 def _optional_bool(value: Any, *, default: bool) -> bool:
+    if value is None:
+        return default
     if isinstance(value, bool):
         return value
-    return default
+    raise ValueError("compatible_with_planner_cache must be a boolean")
 
 
 def _parse_timestamp(value: str, field_name: str) -> datetime:

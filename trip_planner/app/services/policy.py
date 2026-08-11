@@ -389,6 +389,15 @@ def _normalize_policy_requirements(
     return requirements
 
 
+def _optional_policy_requirements_payload(
+    organization_context: dict[str, Any], key: str
+) -> object:
+    """Default only absent persisted requirements; preserve malformed values for validation."""
+
+    value = organization_context.get(key)
+    return [] if value is None else value
+
+
 def _normalize_constraint_set_payload(record: PersistedPolicyState) -> dict[str, Any]:
     constraint_set = _normalize_json_object(record.constraint_set)
     return {
@@ -432,11 +441,11 @@ def _normalize_organization_context_payload(record: PersistedPolicyState) -> dic
             "compatible_with_planner_cache", True
         ),
         "booking_requirements": _normalize_policy_requirements(
-            organization_context.get("booking_requirements") or [],
+            _optional_policy_requirements_payload(organization_context, "booking_requirements"),
             field_name="organization_context.booking_requirements",
         ),
         "blocking_issues": _normalize_policy_requirements(
-            organization_context.get("blocking_issues") or [],
+            _optional_policy_requirements_payload(organization_context, "blocking_issues"),
             field_name="organization_context.blocking_issues",
         ),
         "approved_channels": _normalize_string_list(organization_context.get("approved_channels")),
@@ -515,11 +524,11 @@ def _build_workspace_policy_payload(
             source_correlation_id=policy_record.source_correlation_id,
             raw_payload=_normalize_json_object(policy_record.raw_payload),
         )
-    except PersistedPolicyStateValidationError as error:
+    except ValueError as error:
         return _invalid_policy_state_payload(
             trip_record=trip_record,
             policy_record=policy_record,
-            error=error,
+            error=PersistedPolicyStateValidationError(str(error)),
         )
     proposal = _proposal_from_import(trip_record, imported)
     policy_evaluation = _policy_evaluation_from_import(trip_record, imported)
