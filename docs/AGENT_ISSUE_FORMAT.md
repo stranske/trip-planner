@@ -150,7 +150,8 @@ A qualifying criterion names one of:
 
 - a specific test path / test id (e.g.
   `tests/test_verdict_policy.py::test_select_verdict_worst_policy`), **or**
-- a specific runnable command and its expected observable result (e.g.
+- a specific runnable command written in normal Acceptance Criteria prose (not
+  inside a Markdown fenced code block) and its expected observable result (e.g.
   `gh workflow run selftest-ci.yml` → the run log shows a non-zero collected
   count for the named test files), **or**
 - a documented live-verification step tied to behavior a human or agent can
@@ -166,7 +167,9 @@ intuitive / polished) are rejected — replace with a measurable check.
 > Acceptance Criteria block references **no** test, smoke test, or verification
 > gate at all (a conservative string check for a test path/id, a runner command
 > like `pytest` / `gh workflow run` / `npm test` / `curl`, or a `smoke` /
-> `verif` token). An acceptance section of pure adjectives will not pass.
+> `verif` token). The qualifying gate must appear in normal Acceptance Criteria
+> prose, not inside a Markdown fenced code block. An acceptance section of pure
+> adjectives will not pass.
 
 #### The deliberate-break pattern (recommended worked form)
 
