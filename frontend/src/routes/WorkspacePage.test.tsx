@@ -1925,6 +1925,7 @@ describe("WorkspacePage", () => {
 
   it("renders the Google Maps JavaScript provider path when configured", async () => {
     vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
+    vi.stubEnv("VITE_GOOGLE_MAPS_PROVIDER_STATE", "ready");
     const user = userEvent.setup();
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve(workspacePayload),
@@ -1944,11 +1945,11 @@ describe("WorkspacePage", () => {
     expect(container.querySelector("iframe")).toBeNull();
     expect(screen.queryByTitle(/google maps/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Fallback option markers")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Schematic preview — not a live map")).toBeInTheDocument();
     expect(screen.getByLabelText("Selected route option route drawing")).toHaveClass(
       "map-route-google-maps-js"
     );
     expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Regional route review");
+    expect(screen.queryByLabelText("Schematic preview — not a live map")).not.toBeInTheDocument();
     expect(
       screen.getAllByText("High confidence: the route has enough map detail for close review.")
         .length

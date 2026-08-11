@@ -9,20 +9,26 @@ type InventoryBundle = WorkspaceData["inventory_summary"]["bundles"][number];
 type PlanningLedgerState = NonNullable<WorkspaceData["planning_ledger"]>;
 type PlanningLedgerEntry = PlanningLedgerState["entries"][number];
 
-export type MapProviderLoadState = "ready" | "loading" | "error";
+export type MapProviderLoadState = "pending" | "loading" | "ready" | "error";
 
 export type MapSurfaceProvider =
   | {
       kind: "google-maps-js";
-      label: "Google Maps JavaScript adapter";
-      status: "live";
+      label: "Google Maps configured";
+      status: "configured";
       apiKey: string;
       summary: string;
     }
   | {
       kind: "fallback";
       label: string;
-      status: "fallback" | "misconfigured" | "provider-error" | "loading" | "sparse-route";
+      status:
+        | "fallback"
+        | "configured"
+        | "misconfigured"
+        | "provider-error"
+        | "loading"
+        | "sparse-route";
       summary: string;
     };
 
@@ -793,9 +799,11 @@ function visibleFocusCuesFor({
 function deriveMapConfidence({
   routeState,
   provider,
+  providerLoadState,
 }: {
   routeState: "ready" | "sparse";
   provider: MapSurfaceProvider;
+  providerLoadState: MapProviderLoadState;
 }): MapWorkspaceView["confidence"] {
   if (routeState === "sparse") {
     return {
@@ -803,15 +811,18 @@ function deriveMapConfidence({
       summary: "Low confidence: the route needs more stops before the map can show its shape.",
     };
   }
-  if (provider.kind === "fallback") {
+  if (
+    provider.kind === "google-maps-js" &&
+    providerLoadState === "ready"
+  ) {
     return {
-      level: "medium",
-      summary: "Medium confidence: this is an approximate sketch from the current route stops.",
+      level: "high",
+      summary: "High confidence: the route has enough map detail for close review.",
     };
   }
   return {
-    level: "high",
-    summary: "High confidence: the route has enough map detail for close review.",
+    level: "medium",
+    summary: "Medium confidence: this is an approximate sketch from the current route stops.",
   };
 }
 
@@ -825,7 +836,7 @@ export function buildTripMapSurfaceModel({
   tripMode = null,
   policyPosture = null,
   googleMapsApiKey,
-  providerLoadState = "ready",
+  providerLoadState = "pending",
   activeScope = "regional",
   selectedSegmentId,
   planningLedger,
@@ -923,14 +934,22 @@ export function buildTripMapSurfaceModel({
       summary:
         "Google Maps JavaScript is loading; the workspace keeps route context visible until the adapter is ready.",
     };
+  } else if (providerLoadState !== "ready") {
+    provider = {
+      kind: "fallback",
+      label: "Google Maps configured",
+      status: "configured",
+      summary:
+        "Google Maps JavaScript is configured and will be marked live only after the SDK and trip locations load successfully.",
+    };
   } else {
     provider = {
       kind: "google-maps-js",
-      label: "Google Maps JavaScript adapter",
-      status: "live",
+      label: "Google Maps configured",
+      status: "configured",
       apiKey: trimmedApiKey,
       summary:
-        "Google Maps JavaScript is the active presentation adapter; route, marker, and warning state still comes from workspace runtime data.",
+        "Google Maps JavaScript is configured and will be marked live only after the SDK and trip locations load successfully.",
     };
   }
   const visibleMapContent = visibleMapContentFor({
@@ -956,7 +975,7 @@ export function buildTripMapSurfaceModel({
     placeMarkers: visibleMapContent.markers,
     roughRouteGeometry: visibleMapContent.routeSegments,
     focusCues: visibleFocusCues,
-    confidence: deriveMapConfidence({ routeState, provider }),
+    confidence: deriveMapConfidence({ routeState, provider, providerLoadState }),
     diagnostics: {
       provider,
       routeState,

@@ -125,7 +125,8 @@ function ActiveTripMap({
     import.meta.env.VITE_GOOGLE_MAPS_BROWSER_API_KEY ||
     import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY;
   const providerLoadState =
-    (import.meta.env.VITE_GOOGLE_MAPS_PROVIDER_STATE as MapProviderLoadState | undefined) ?? "ready";
+    (import.meta.env.VITE_GOOGLE_MAPS_PROVIDER_STATE as MapProviderLoadState | undefined) ??
+    "pending";
   const mapSurface = buildTripMapSurfaceModel({
     activeScenario,
     bundles,
@@ -248,9 +249,11 @@ function ActiveTripMap({
         >
           <div className="map-provider-toolbar">
             <span className="map-provider-name">{mapSurface.scope.label}</span>
-            <span className="map-preview-badge" aria-label={SCHEMATIC_PREVIEW_BADGE_TEXT}>
-              {SCHEMATIC_PREVIEW_BADGE_TEXT}
-            </span>
+            {isFallbackSketch ? (
+              <span className="map-preview-badge" aria-label={SCHEMATIC_PREVIEW_BADGE_TEXT}>
+                {SCHEMATIC_PREVIEW_BADGE_TEXT}
+              </span>
+            ) : null}
             {isFallbackSketch ? (
               <span className="map-preview-badge map-preview-badge-warning">
                 Route sketch mode

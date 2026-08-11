@@ -111,6 +111,7 @@ describe("mapSurface", () => {
       tripMode: "business",
       policyPosture: "Approval-ready",
       googleMapsApiKey: "test-key",
+      providerLoadState: "ready",
     });
 
     expect(model.provider.kind).toBe("google-maps-js");
@@ -742,5 +743,39 @@ describe("mapSurface", () => {
 
     const bundleMarkers = model.markers.filter((marker) => marker.id.startsWith("bundle-bundle-1-"));
     expect(bundleMarkers.map((marker) => marker.kind)).toEqual(["lodging", "activity", "transport"]);
+  });
+
+  it("api key alone does not report a live provider", () => {
+    const model = buildTripMapSurfaceModel({
+      activeScenario: kyotoBaselineScenario,
+      bundles: [kyotoAnchorBundle],
+      feasibilitySummary: routeAttentionFeasibility,
+      googleMapsApiKey: "test-key",
+    });
+
+    expect(model.provider.kind).toBe("fallback");
+    expect(model.provider.status).toBe("configured");
+    expect(model.provider.label).toBe("Google Maps configured");
+    expect(model.workspaceView.confidence.level).toBe("medium");
+  });
+
+  it("high confidence requires observed provider", () => {
+    const configuredOnly = buildTripMapSurfaceModel({
+      activeScenario: kyotoBaselineScenario,
+      bundles: [kyotoAnchorBundle],
+      feasibilitySummary: routeAttentionFeasibility,
+      googleMapsApiKey: "test-key",
+    });
+    const observedReady = buildTripMapSurfaceModel({
+      activeScenario: kyotoBaselineScenario,
+      bundles: [kyotoAnchorBundle],
+      feasibilitySummary: routeAttentionFeasibility,
+      googleMapsApiKey: "test-key",
+      providerLoadState: "ready",
+    });
+
+    expect(configuredOnly.workspaceView.confidence.level).toBe("medium");
+    expect(observedReady.provider.kind).toBe("google-maps-js");
+    expect(observedReady.workspaceView.confidence.level).toBe("high");
   });
 });
