@@ -9,20 +9,26 @@ type InventoryBundle = WorkspaceData["inventory_summary"]["bundles"][number];
 type PlanningLedgerState = NonNullable<WorkspaceData["planning_ledger"]>;
 type PlanningLedgerEntry = PlanningLedgerState["entries"][number];
 
-export type MapProviderLoadState = "ready" | "loading" | "error";
+export type MapProviderLoadState = "pending" | "loading" | "ready" | "error";
 
 export type MapSurfaceProvider =
   | {
       kind: "google-maps-js";
-      label: "Google Maps JavaScript adapter";
-      status: "live";
+      label: "Google Maps configured";
+      status: "configured";
       apiKey: string;
       summary: string;
     }
   | {
       kind: "fallback";
       label: string;
-      status: "fallback" | "misconfigured" | "provider-error" | "loading" | "sparse-route";
+      status:
+        | "fallback"
+        | "configured"
+        | "misconfigured"
+        | "provider-error"
+        | "loading"
+        | "sparse-route";
       summary: string;
     };
 
@@ -321,7 +327,8 @@ function buildRouteStops(activeScenario: TripMapScenario): RouteStop[] {
 function buildRouteSegments(
   activeScenario: TripMapScenario,
   routeStops: RouteStop[],
-  routeWarning: string | null
+  routeWarning: string | null,
+  providerReady: boolean
 ): RouteSegment[] {
   const providerSegments = activeScenario.map_view?.rough_route_geometry ?? [];
   if (providerSegments.length > 0) {
@@ -330,23 +337,26 @@ function buildRouteSegments(
       .filter(
         (segment) => stopById.has(segment.from_marker_id) && stopById.has(segment.to_marker_id)
       )
-      .map((segment) => ({
-        id: segment.id,
-        fromStopId: segment.from_marker_id,
-        toStopId: segment.to_marker_id,
-        fromLabel: segment.from_label,
-        toLabel: segment.to_label,
-        x1: segment.x1 * 100,
-        y1: segment.y1 * 100,
-        x2: segment.x2 * 100,
-        y2: segment.y2 * 100,
-        warning: segment.warning ?? routeWarning,
-        durationMinutes: segment.duration_minutes ?? null,
-        distanceKm: segment.distance_km ?? null,
-        confidence: segment.confidence ?? activeScenario.map_view?.confidence.level ?? "medium",
-        unavailableReason: segment.unavailable_reason ?? null,
-        focusCues: [],
-      }));
+      .map((segment) => {
+        const confidence = segment.confidence ?? activeScenario.map_view?.confidence.level ?? "medium";
+        return {
+          id: segment.id,
+          fromStopId: segment.from_marker_id,
+          toStopId: segment.to_marker_id,
+          fromLabel: segment.from_label,
+          toLabel: segment.to_label,
+          x1: segment.x1 * 100,
+          y1: segment.y1 * 100,
+          x2: segment.x2 * 100,
+          y2: segment.y2 * 100,
+          warning: segment.warning ?? routeWarning,
+          durationMinutes: segment.duration_minutes ?? null,
+          distanceKm: segment.distance_km ?? null,
+          confidence: !providerReady && confidence === "high" ? "medium" : confidence,
+          unavailableReason: segment.unavailable_reason ?? null,
+          focusCues: [],
+        };
+      });
   }
 
   return routeStops.slice(0, -1).map((stop, index) => {
@@ -793,9 +803,11 @@ function visibleFocusCuesFor({
 function deriveMapConfidence({
   routeState,
   provider,
+  providerLoadState,
 }: {
   routeState: "ready" | "sparse";
   provider: MapSurfaceProvider;
+  providerLoadState: MapProviderLoadState;
 }): MapWorkspaceView["confidence"] {
   if (routeState === "sparse") {
     return {
@@ -803,15 +815,18 @@ function deriveMapConfidence({
       summary: "Low confidence: the route needs more stops before the map can show its shape.",
     };
   }
-  if (provider.kind === "fallback") {
+  if (
+    provider.kind === "google-maps-js" &&
+    providerLoadState === "ready"
+  ) {
     return {
-      level: "medium",
-      summary: "Medium confidence: this is an approximate sketch from the current route stops.",
+      level: "high",
+      summary: "High confidence: the route has enough map detail for close review.",
     };
   }
   return {
-    level: "high",
-    summary: "High confidence: the route has enough map detail for close review.",
+    level: "medium",
+    summary: "Medium confidence: this is an approximate sketch from the current route stops.",
   };
 }
 
@@ -825,7 +840,7 @@ export function buildTripMapSurfaceModel({
   tripMode = null,
   policyPosture = null,
   googleMapsApiKey,
-  providerLoadState = "ready",
+  providerLoadState = "pending",
   activeScope = "regional",
   selectedSegmentId,
   planningLedger,
@@ -859,9 +874,10 @@ export function buildTripMapSurfaceModel({
     )
   );
   const trimmedApiKey = googleMapsApiKey?.trim() ?? "";
+  const providerReady = trimmedApiKey !== "" && providerLoadState === "ready";
   const routeWarning = deriveRouteWarning(activeScenario, feasibilitySummary);
   const resolvedPolicyPosture = tripMode === "leisure" ? null : policyPosture;
-  const routeSegments = buildRouteSegments(activeScenario, routeStops, routeWarning);
+  const routeSegments = buildRouteSegments(activeScenario, routeStops, routeWarning, providerReady);
   const baseMarkers = buildMarkers({
     activeScenario,
     bundles,
@@ -923,14 +939,22 @@ export function buildTripMapSurfaceModel({
       summary:
         "Google Maps JavaScript is loading; the workspace keeps route context visible until the adapter is ready.",
     };
+  } else if (providerLoadState !== "ready") {
+    provider = {
+      kind: "fallback",
+      label: "Google Maps configured",
+      status: "configured",
+      summary:
+        "Google Maps JavaScript is configured and will be marked live only after the SDK and trip locations load successfully.",
+    };
   } else {
     provider = {
       kind: "google-maps-js",
-      label: "Google Maps JavaScript adapter",
-      status: "live",
+      label: "Google Maps configured",
+      status: "configured",
       apiKey: trimmedApiKey,
       summary:
-        "Google Maps JavaScript is the active presentation adapter; route, marker, and warning state still comes from workspace runtime data.",
+        "Google Maps JavaScript is configured and will be marked live only after the SDK and trip locations load successfully.",
     };
   }
   const visibleMapContent = visibleMapContentFor({
@@ -956,7 +980,7 @@ export function buildTripMapSurfaceModel({
     placeMarkers: visibleMapContent.markers,
     roughRouteGeometry: visibleMapContent.routeSegments,
     focusCues: visibleFocusCues,
-    confidence: deriveMapConfidence({ routeState, provider }),
+    confidence: deriveMapConfidence({ routeState, provider, providerLoadState }),
     diagnostics: {
       provider,
       routeState,

@@ -162,7 +162,8 @@ afterEach(() => {
 function renderTripMap(
   onSelectScenario = vi.fn(),
   ledger?: WorkspaceData["planning_ledger"],
-  onSelectSegment = vi.fn()
+  onSelectSegment = vi.fn(),
+  providerLoadState?: "pending" | "loading" | "ready" | "error"
 ) {
   function Harness() {
     const [activeScope, setActiveScope] = useState<"global" | "regional" | "local">("regional");
@@ -180,6 +181,7 @@ function renderTripMap(
         tripMode="business"
         policyPosture="No approval packet yet"
         planningLedger={ledger}
+        providerLoadState={providerLoadState}
         activeScope={activeScope}
         selectedSegmentId={selectedSegmentId}
         onScopeChange={setActiveScope}
@@ -239,14 +241,28 @@ describe("TripMap", () => {
     expect(screen.queryByRole("img", { name: /route geometry overlay/i })).not.toBeInTheDocument();
   });
 
-  it("labels the keyed provider surface as a schematic preview", () => {
+  it("labels the keyed provider surface as a schematic preview when readiness is unproven", () => {
     vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
-    vi.stubEnv("VITE_GOOGLE_MAPS_PROVIDER_STATE", "ready");
 
     renderTripMap();
 
-    expect(screen.getByRole("heading", { name: "Map for Rail-first route" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Route sketch for Rail-first route" })).toBeInTheDocument();
     expect(screen.getByText("Schematic preview — not a live map")).toBeInTheDocument();
+    expect(screen.getByText("Route sketch mode")).toBeInTheDocument();
+    expect(screen.getByLabelText("Selected route option route drawing")).toHaveClass("map-route-fallback");
+    expect(screen.queryByText(/Google Maps JavaScript/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("High confidence: the route has enough map detail for close review.")
+    ).not.toBeInTheDocument();
+  });
+
+  it("mounts the provider-backed surface when readiness is observed", () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_API_KEY", "test-key");
+
+    renderTripMap(vi.fn(), undefined, vi.fn(), "ready");
+
+    expect(screen.getByRole("heading", { name: "Map for Rail-first route" })).toBeInTheDocument();
+    expect(screen.queryByText("Schematic preview — not a live map")).not.toBeInTheDocument();
     expect(screen.queryByText("Route sketch mode")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Selected route option route drawing")).toHaveClass(
       "map-route-google-maps-js"
