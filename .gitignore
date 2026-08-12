@@ -34,3 +34,13 @@ dist/
 artifacts/langsmith/
 workloop-state.md
 .gitnexus
+
+# Local runtime data is created outside the repository by default, but never track
+# an explicitly configured SQLite database or generated scratch payload.
+.tmp/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
