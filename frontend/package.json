@@ -12,7 +12,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run --exclude src/smoke/**",
-    "test:smoke": "vitest run src/smoke/runtime.smoke.test.ts"
+    "test:smoke": "vitest run src/smoke/runtime.smoke.test.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "react": "^19.0.0",
