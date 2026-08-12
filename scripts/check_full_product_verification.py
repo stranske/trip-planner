@@ -34,6 +34,7 @@ from trip_planner.persistence.db import ensure_database_ready, reset_database_st
 
 DEFAULT_TPP_REPO_PATH = REPO_ROOT.parent / "Travel-Plan-Permission"
 TPP_PORT = 8765
+EXPECTED_BUSINESS_EVALUATION_STATUS = "compliant"
 
 
 class VerificationFailure(AssertionError):
@@ -54,6 +55,67 @@ class CheckResult:
 def _require(condition: bool, message: str, **details: Any) -> None:
     if not condition:
         raise VerificationFailure(message, **details)
+
+
+def _assert_business_verification_outcomes(
+    local_details: Mapping[str, Any],
+    *,
+    expected_evaluation_status: str,
+    live_details: Mapping[str, Any] | None = None,
+    require_status_poll: bool = True,
+) -> None:
+    """Assert the business journey's semantic, not merely transport, contract."""
+
+    local_status = local_details["evaluation_status"]
+    _require(
+        local_status == expected_evaluation_status,
+        "local business evaluation did not match the expected outcome",
+        expected_evaluation_status=expected_evaluation_status,
+        actual_evaluation_status=local_status,
+        trip_id=local_details.get("trip_id"),
+        proposal_id=local_details.get("proposal_id"),
+    )
+    if require_status_poll:
+        _require(
+            local_details["status_poll"] != "failed",
+            "local business proposal status poll reported failure",
+            status_poll=local_details["status_poll"],
+            trip_id=local_details.get("trip_id"),
+            proposal_id=local_details.get("proposal_id"),
+        )
+    if live_details is None:
+        return
+
+    live_status = live_details["evaluation_status"]
+    _require(
+        live_details["status_poll"] != "failed",
+        "live TPP proposal status poll reported failure",
+        status_poll=live_details["status_poll"],
+        trip_id=live_details.get("trip_id"),
+        proposal_id=live_details.get("proposal_id"),
+    )
+    _require(
+        local_details["proposal_id"] == live_details["proposal_id"],
+        "local and live policy checks used different proposals",
+        local_proposal_id=local_details["proposal_id"],
+        live_proposal_id=live_details["proposal_id"],
+    )
+    _require(
+        local_status == live_status,
+        "local and live policy evaluation statuses disagree",
+        local_evaluation_status=local_status,
+        live_evaluation_status=live_status,
+        trip_id=local_details.get("trip_id"),
+        proposal_id=local_details["proposal_id"],
+    )
+    _require(
+        live_status == expected_evaluation_status,
+        "live TPP evaluation did not match the expected outcome",
+        expected_evaluation_status=expected_evaluation_status,
+        actual_evaluation_status=live_status,
+        trip_id=live_details.get("trip_id"),
+        proposal_id=live_details.get("proposal_id"),
+    )
 
 
 def _fixture(*parts: str) -> dict[str, Any]:
@@ -756,7 +818,11 @@ def _force_planner_fallback_runtime() -> Iterator[None]:
                 os.environ[key] = value
 
 
-def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
+def run_product_journeys(
+    *,
+    live_tpp: str,
+    expected_business_evaluation_status: str = EXPECTED_BUSINESS_EVALUATION_STATUS,
+) -> list[CheckResult]:
     planner_llm_env = dict(os.environ)
     with (
         tempfile.TemporaryDirectory(prefix="trip-planner-full-product.") as tmpdir,
@@ -905,8 +971,8 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
             refresh_payload = refresh.json()
             _require(
                 refresh_payload["summary"]["submission_status"]
-                in {"deferred", "failed", "retry_scheduled"},
-                "local proposal status poll did not preserve workspace-visible submission state",
+                in {"deferred", "failed", "retry_scheduled", "succeeded"},
+                "local proposal status poll did not preserve a recognizable state",
                 trip_id=business_trip_id,
                 proposal_id=proposal["proposal_id"],
                 summary=refresh_payload["summary"],
@@ -961,24 +1027,20 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
                 proposal_id=proposal["proposal_id"],
                 follow_up=reloaded_proposal["summary"].get("follow_up"),
             )
-            results.append(
-                CheckResult(
-                    "local-business-journey",
-                    "PASS",
-                    {
-                        "trip_id": business_trip_id,
-                        "proposal_id": proposal["proposal_id"],
-                        "evaluation_status": evaluation_payload["summary"][
-                            "evaluation_result_status"
-                        ],
-                        "planning_mode": reloaded_business_workspace.json()["session"][
-                            "selected_planning_mode"
-                        ],
-                        "follow_up_status": evaluation_payload["summary"]["follow_up_status"],
-                        "status_poll": refresh_payload["summary"]["submission_status"],
-                    },
-                )
+            local_business_details = {
+                "trip_id": business_trip_id,
+                "proposal_id": proposal["proposal_id"],
+                "evaluation_status": evaluation_payload["summary"]["evaluation_result_status"],
+                "planning_mode": reloaded_business_workspace.json()["session"]["selected_planning_mode"],
+                "follow_up_status": evaluation_payload["summary"]["follow_up_status"],
+                "status_poll": refresh_payload["summary"]["submission_status"],
+            }
+            _assert_business_verification_outcomes(
+                local_business_details,
+                expected_evaluation_status=expected_business_evaluation_status,
+                require_status_poll=live_tpp != "off",
             )
+            results.append(CheckResult("local-business-journey", "PASS", local_business_details))
 
             map_result = classify_map_prerequisite()
             results.append(map_result)
@@ -993,6 +1055,11 @@ def run_product_journeys(*, live_tpp: str) -> list[CheckResult]:
                     client,
                     business_trip_id,
                     {key: str(value) for key, value in tpp_status.details.items()},
+                )
+                _assert_business_verification_outcomes(
+                    local_business_details,
+                    expected_evaluation_status=expected_business_evaluation_status,
+                    live_details=live_details,
                 )
                 results.append(CheckResult("live-tpp", "PASS", live_details))
             else:
@@ -1015,6 +1082,9 @@ def _print_results(results: list[CheckResult]) -> None:
             f"- {result.status} {result.name}: "
             f"{json.dumps(result.details, sort_keys=True)}{remediation}"
         )
+    for result in results:
+        if result.status == "SKIPPED":
+            print(f"- WARNING uncovered surface: {result.name}")
 
 
 def main(argv: list[str] | None = None) -> int:

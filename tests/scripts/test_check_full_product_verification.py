@@ -364,3 +364,50 @@ def test_resolve_tpp_interpreter_fails_fast_when_no_venv_or_uv(monkeypatch, tmp_
     message = str(exc_info.value)
     assert str(repo_path / ".venv" / "bin" / "python") in message
     assert f"uv run --directory {repo_path} python" in message
+
+
+def _business_details(
+    *, evaluation_status: str = "compliant", status_poll: str = "deferred"
+) -> dict[str, str]:
+    return {
+        "trip_id": "trip-business",
+        "proposal_id": "proposal:trip-business",
+        "evaluation_status": evaluation_status,
+        "status_poll": status_poll,
+    }
+
+
+def test_verifier_fails_when_local_and_live_verdicts_disagree() -> None:
+    with pytest.raises(verifier.VerificationFailure, match="statuses disagree"):
+        verifier._assert_business_verification_outcomes(
+            _business_details(),
+            expected_evaluation_status="compliant",
+            live_details=_business_details(evaluation_status="non_compliant"),
+        )
+
+
+def test_verifier_fails_on_failed_status_poll() -> None:
+    with pytest.raises(verifier.VerificationFailure, match="status poll reported failure"):
+        verifier._assert_business_verification_outcomes(
+            _business_details(status_poll="failed"),
+            expected_evaluation_status="compliant",
+        )
+
+
+def test_verifier_requires_the_declared_expected_business_outcome() -> None:
+    with pytest.raises(verifier.VerificationFailure, match="expected outcome"):
+        verifier._assert_business_verification_outcomes(
+            _business_details(evaluation_status="non_compliant"),
+            expected_evaluation_status="compliant",
+        )
+
+
+def test_verifier_summary_marks_skipped_surfaces_as_uncovered(capsys) -> None:
+    verifier._print_results(
+        [
+            verifier.CheckResult("local-business-journey", "PASS", _business_details()),
+            verifier.CheckResult("planner-llm", "SKIPPED", {"reason": "not configured"}),
+        ]
+    )
+
+    assert "WARNING uncovered surface: planner-llm" in capsys.readouterr().out
