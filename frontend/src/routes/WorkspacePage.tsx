@@ -1980,132 +1980,6 @@ function WorkspacePageContent({
         </section>
 
         <section className={STATUS_CARD_CLASS}>
-          <p className="status-label">Day plan</p>
-          {timelineStops.length === 0 || activeScenario.scenario === null ? (
-            <>
-              <h2>Day plan is not ready yet</h2>
-              <p>
-                Choose or build a route idea before reviewing day-by-day pacing.
-              </p>
-              <p className="muted-copy">
-                Ask the planner to compare routes or draft a first sequence of stops.
-              </p>
-            </>
-          ) : (
-            <>
-              <h2>{isCompactLayout ? "Compact day-by-day review" : "Trip rhythm and day sequence"}</h2>
-              <p>{selectedRuntimeScenario?.summary ?? activeScenario.scenario.scenario_summary.headline}</p>
-              <div className="timeline-summary-grid" aria-label="Timeline summary">
-                <article className="timeline-summary-card">
-                  <p className="scenario-kicker">Duration</p>
-                  <h3>
-                    {trip.trip_frame.duration_days == null
-                      ? "Trip length pending"
-                      : `${trip.trip_frame.duration_days} days planned`}
-                  </h3>
-                  <p>Dates: {formatDateRange(trip.trip_frame.start_date, trip.trip_frame.end_date)}</p>
-                </article>
-                <article className="timeline-summary-card">
-                  <p className="scenario-kicker">Route shape</p>
-                  <h3>{timelineStops.length} review checkpoints</h3>
-                  <p>
-                    {selectedRuntimeScenario?.route_summary ??
-                      activeScenario.scenario.scenario_summary.route_sequence.join(" -> ")}
-                  </p>
-                </article>
-                <article className="timeline-summary-card">
-                  <p className="scenario-kicker">Segment focus</p>
-                  <h3>
-                    {selectedRouteSegment
-                      ? `${selectedRouteSegment.fromLabel} to ${selectedRouteSegment.toLabel}`
-                      : "No segment selected"}
-                  </h3>
-                  <p>
-                    {selectedRouteSegment?.durationMinutes != null
-                      ? `${selectedRouteSegment.durationMinutes} minutes in the selected route option.`
-                      : "Segment timing will appear when route geometry is available."}
-                  </p>
-                </article>
-                <article className="timeline-summary-card">
-                  <p className="scenario-kicker">Pacing</p>
-                  <h3>
-                    {selectedRuntimeScenario == null
-                      ? "Planner score pending"
-                      : `${formatScenarioScore(selectedRuntimeScenario.metrics.score)} planner score`}
-                  </h3>
-                  <p>
-                    {panelVisibility.showPolicyPosture
-                      ? `${scenarioPolicyPosture} approval posture for the current workspace.`
-                      : "Pacing and route burden stay visible without approval details."}
-                  </p>
-                </article>
-                <article className="timeline-summary-card">
-                  <p className="scenario-kicker">Options</p>
-                  <h3>
-                    {selectedRuntimeScenario == null
-                      ? "Option count pending"
-                      : `${selectedRuntimeScenario.option_count} mapped options`}
-                  </h3>
-                  <p>
-                    {selectedRuntimeScenario?.comparison_note ??
-                      "Details update as route ideas become clearer."}
-                  </p>
-                </article>
-              </div>
-              {selectedTimelineNotes.length > 0 ? (
-                <div className="timeline-focus-notes" aria-label="Timeline linked planning notes">
-                  {selectedTimelineNotes.map((note) => (
-                    <span key={note}>{note}</span>
-                  ))}
-                </div>
-              ) : null}
-              <ol className="timeline-list" aria-label="Trip timeline sequence">
-                {timelineStops.map((stop) => {
-                  const isSegmentFocus =
-                    selectedRouteSegment != null &&
-                    (stop.routeIndex === selectedRouteSegment.fromIndex ||
-                      stop.routeIndex === selectedRouteSegment.toIndex);
-                  return (
-                  <li
-                    key={stop.key}
-                    className={`timeline-stop${isSegmentFocus ? " timeline-stop-focused" : ""}`}
-                  >
-                    <div className="timeline-dayband">
-                      <span>Day {stop.startDay}</span>
-                      <span>Day {stop.endDay}</span>
-                    </div>
-                    <div>
-                      <h3>{stop.label}</h3>
-                      <p>
-                        Days {stop.startDay}-{stop.endDay} keep this stop visible in the selected
-                        route review path.
-                      </p>
-                      {isSegmentFocus ? (
-                        <p className="muted-copy">
-                          Highlighted for the selected segment-level review.
-                        </p>
-                      ) : null}
-                    </div>
-                  </li>
-                  );
-                })}
-              </ol>
-            </>
-          )}
-        </section>
-
-        <RouteTradeoffsPanel
-          compactLayout={isCompactLayout}
-          showPolicyPosture={panelVisibility.showPolicyPosture}
-          scenarios={routeTradeoffCards}
-          emptyMessage={
-            currentWorkspace.runtime_state.status === "partial"
-              ? "Add a little more trip detail before route comparison can start."
-              : "No route ideas are available yet, so there is nothing to compare."
-          }
-        />
-
-        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Saved ideas</p>
           <h2>{currentWorkspace.scenario_search.title}</h2>
           <div className="scenario-stack">
@@ -2248,6 +2122,17 @@ function WorkspacePageContent({
       {activeTab === "compare" ? (
         <ComparePanel labelledBy={workspaceTabButtonId("compare")}>
           <div className="workspace-grid">
+            <RouteTradeoffsPanel
+              compactLayout={isCompactLayout}
+              showPolicyPosture={panelVisibility.showPolicyPosture}
+              scenarios={routeTradeoffCards}
+              emptyMessage={
+                currentWorkspace.runtime_state.status === "partial"
+                  ? "Add a little more trip detail before route comparison can start."
+                  : "No route ideas are available yet, so there is nothing to compare."
+              }
+            />
+
             <ScenarioComparison
               comparison={routeComparison}
               savedScenarios={currentWorkspace.saved_scenarios}
@@ -2276,24 +2161,141 @@ function WorkspacePageContent({
       ) : null}
       {activeTab === "map" ? (
         <MapPanel labelledBy={workspaceTabButtonId("map")}>
-          <TripMap
-            comparison={routeComparison}
-            scenarioComparisonSummary={currentWorkspace.scenario_comparison?.summary}
-            scenarioFocusAreas={currentWorkspace.scenario_comparison?.focus_areas ?? []}
-            activeScenarioId={selectedScenarioId}
-            onSelectScenario={handleScenarioSelection}
-            bundles={currentWorkspace.inventory_summary.bundles}
-            feasibilitySummary={currentWorkspace.feasibility_summary}
-            tripPrimaryRegions={trip.trip_frame.primary_regions}
-            tripMode={trip.mode}
-            policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : null}
-            planningLedger={currentWorkspace.planning_ledger}
-            activeScope={selectedMapScope}
-            selectedSegmentId={selectedRouteSegment?.id ?? null}
-            onScopeChange={setSelectedMapScope}
-            onSelectSegment={setSelectedSegmentId}
-            compactLayout={isCompactLayout}
-          />
+          <div className="workspace-grid">
+            <TripMap
+              comparison={routeComparison}
+              scenarioComparisonSummary={currentWorkspace.scenario_comparison?.summary}
+              scenarioFocusAreas={currentWorkspace.scenario_comparison?.focus_areas ?? []}
+              activeScenarioId={selectedScenarioId}
+              onSelectScenario={handleScenarioSelection}
+              bundles={currentWorkspace.inventory_summary.bundles}
+              feasibilitySummary={currentWorkspace.feasibility_summary}
+              tripPrimaryRegions={trip.trip_frame.primary_regions}
+              tripMode={trip.mode}
+              policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : null}
+              planningLedger={currentWorkspace.planning_ledger}
+              activeScope={selectedMapScope}
+              selectedSegmentId={selectedRouteSegment?.id ?? null}
+              onScopeChange={setSelectedMapScope}
+              onSelectSegment={setSelectedSegmentId}
+              compactLayout={isCompactLayout}
+            />
+
+            <section className={STATUS_CARD_CLASS}>
+              <p className="status-label">Day plan</p>
+              {timelineStops.length === 0 || activeScenario.scenario === null ? (
+                <>
+                  <h2>Day plan is not ready yet</h2>
+                  <p>
+                    Choose or build a route idea before reviewing day-by-day pacing.
+                  </p>
+                  <p className="muted-copy">
+                    Ask the planner to compare routes or draft a first sequence of stops.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2>{isCompactLayout ? "Compact day-by-day review" : "Trip rhythm and day sequence"}</h2>
+                  <p>{selectedRuntimeScenario?.summary ?? activeScenario.scenario.scenario_summary.headline}</p>
+                  <div className="timeline-summary-grid" aria-label="Timeline summary">
+                    <article className="timeline-summary-card">
+                      <p className="scenario-kicker">Duration</p>
+                      <h3>
+                        {trip.trip_frame.duration_days == null
+                          ? "Trip length pending"
+                          : `${trip.trip_frame.duration_days} days planned`}
+                      </h3>
+                      <p>Dates: {formatDateRange(trip.trip_frame.start_date, trip.trip_frame.end_date)}</p>
+                    </article>
+                    <article className="timeline-summary-card">
+                      <p className="scenario-kicker">Route shape</p>
+                      <h3>{timelineStops.length} review checkpoints</h3>
+                      <p>
+                        {selectedRuntimeScenario?.route_summary ??
+                          activeScenario.scenario.scenario_summary.route_sequence.join(" -> ")}
+                      </p>
+                    </article>
+                    <article className="timeline-summary-card">
+                      <p className="scenario-kicker">Segment focus</p>
+                      <h3>
+                        {selectedRouteSegment
+                          ? `${selectedRouteSegment.fromLabel} to ${selectedRouteSegment.toLabel}`
+                          : "No segment selected"}
+                      </h3>
+                      <p>
+                        {selectedRouteSegment?.durationMinutes != null
+                          ? `${selectedRouteSegment.durationMinutes} minutes in the selected route option.`
+                          : "Segment timing will appear when route geometry is available."}
+                      </p>
+                    </article>
+                    <article className="timeline-summary-card">
+                      <p className="scenario-kicker">Pacing</p>
+                      <h3>
+                        {selectedRuntimeScenario == null
+                          ? "Planner score pending"
+                          : `${formatScenarioScore(selectedRuntimeScenario.metrics.score)} planner score`}
+                      </h3>
+                      <p>
+                        {panelVisibility.showPolicyPosture
+                          ? `${scenarioPolicyPosture} approval posture for the current workspace.`
+                          : "Pacing and route burden stay visible without approval details."}
+                      </p>
+                    </article>
+                    <article className="timeline-summary-card">
+                      <p className="scenario-kicker">Options</p>
+                      <h3>
+                        {selectedRuntimeScenario == null
+                          ? "Option count pending"
+                          : `${selectedRuntimeScenario.option_count} mapped options`}
+                      </h3>
+                      <p>
+                        {selectedRuntimeScenario?.comparison_note ??
+                          "Details update as route ideas become clearer."}
+                      </p>
+                    </article>
+                  </div>
+                  {selectedTimelineNotes.length > 0 ? (
+                    <div className="timeline-focus-notes" aria-label="Timeline linked planning notes">
+                      {selectedTimelineNotes.map((note) => (
+                        <span key={note}>{note}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <ol className="timeline-list" aria-label="Trip timeline sequence">
+                    {timelineStops.map((stop) => {
+                      const isSegmentFocus =
+                        selectedRouteSegment != null &&
+                        (stop.routeIndex === selectedRouteSegment.fromIndex ||
+                          stop.routeIndex === selectedRouteSegment.toIndex);
+                      return (
+                      <li
+                        key={stop.key}
+                        className={`timeline-stop${isSegmentFocus ? " timeline-stop-focused" : ""}`}
+                      >
+                        <div className="timeline-dayband">
+                          <span>Day {stop.startDay}</span>
+                          <span>Day {stop.endDay}</span>
+                        </div>
+                        <div>
+                          <h3>{stop.label}</h3>
+                          <p>
+                            Days {stop.startDay}-{stop.endDay} keep this stop visible in the selected
+                            route review path.
+                          </p>
+                          {isSegmentFocus ? (
+                            <p className="muted-copy">
+                              Highlighted for the selected segment-level review.
+                            </p>
+                          ) : null}
+                        </div>
+                      </li>
+                      );
+                    })}
+                  </ol>
+                </>
+              )}
+            </section>
+          </div>
         </MapPanel>
       ) : null}
       {activeTab === "budget" ? (
