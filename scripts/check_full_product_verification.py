@@ -34,7 +34,7 @@ from trip_planner.persistence.db import ensure_database_ready, reset_database_st
 
 DEFAULT_TPP_REPO_PATH = REPO_ROOT.parent / "Travel-Plan-Permission"
 TPP_PORT = 8765
-EXPECTED_BUSINESS_EVALUATION_STATUS = "compliant"
+EXPECTED_BUSINESS_EVALUATION_STATUS = "non_compliant"
 
 
 class VerificationFailure(AssertionError):
@@ -275,9 +275,13 @@ def _prepared_submission_request(trip_id: str, proposal_id: str) -> dict[str, An
 
 
 def _prepared_evaluation_request(
-    trip_id: str, proposal_id: str, execution_id: str
+    trip_id: str,
+    proposal_id: str,
+    execution_id: str,
+    *,
+    fixture_name: str = "approved_evaluation.json",
 ) -> dict[str, Any]:
-    request_payload = copy.deepcopy(_fixture("results", "approved_evaluation.json")["request"])
+    request_payload = copy.deepcopy(_fixture("results", fixture_name)["request"])
     request_payload["trip_id"] = trip_id
     request_payload["proposal_id"] = proposal_id
     request_payload["payload"]["execution_id"] = execution_id
@@ -288,8 +292,10 @@ def _prepared_evaluation_response(
     trip_id: str,
     proposal_id: str,
     execution_id: str,
+    *,
+    fixture_name: str = "approved_evaluation.json",
 ) -> dict[str, Any]:
-    response_payload = copy.deepcopy(_fixture("results", "approved_evaluation.json")["response"])
+    response_payload = copy.deepcopy(_fixture("results", fixture_name)["response"])
     result_payload = response_payload["result_payload"]
     result_payload["execution_id"] = execution_id
     result_payload["trip_id"] = trip_id
@@ -687,14 +693,7 @@ def _started_tpp_service(
 
 def _run_live_tpp_journey(client: TestClient, trip_id: str, env: dict[str, str]) -> dict[str, Any]:
     with _started_tpp_service(env) as (base_url, _process):
-        tpp_env = {
-            "TPP_BASE_URL": base_url,
-            "TPP_ACCESS_TOKEN": env["TPP_ACCESS_TOKEN"],
-            "TPP_OIDC_PROVIDER": env["TPP_OIDC_PROVIDER"],
-        }
-        previous = {key: os.environ.get(key) for key in tpp_env}
-        os.environ.update(tpp_env)
-        try:
+        with _temporary_tpp_client_environment(base_url, env):
             policy_request = _prepared_policy_request(trip_id)
             policy_response = client.put(
                 f"/api/workspace/{trip_id}/policy",
@@ -773,12 +772,6 @@ def _run_live_tpp_journey(client: TestClient, trip_id: str, env: dict[str, str])
                 "status_poll": status_response.json()["summary"]["submission_status"],
                 "evaluation_status": payload["summary"]["evaluation_result_status"],
             }
-        finally:
-            for key, value in previous.items():
-                if value is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = value
 
 
 @contextmanager
@@ -793,6 +786,27 @@ def _temporary_database_url(database_url: str) -> Iterator[None]:
             os.environ.pop("TRIP_PLANNER_DATABASE_URL", None)
         else:
             os.environ["TRIP_PLANNER_DATABASE_URL"] = previous_database_url
+
+
+@contextmanager
+def _temporary_tpp_client_environment(base_url: str, env: Mapping[str, str]) -> Iterator[None]:
+    """Route a planner request to the live TPP process for one verification step."""
+
+    tpp_env = {
+        "TPP_BASE_URL": base_url,
+        "TPP_ACCESS_TOKEN": env["TPP_ACCESS_TOKEN"],
+        "TPP_OIDC_PROVIDER": env["TPP_OIDC_PROVIDER"],
+    }
+    previous = {key: os.environ.get(key) for key in tpp_env}
+    os.environ.update(tpp_env)
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 @contextmanager
@@ -833,6 +847,7 @@ def run_product_journeys(
         ensure_database_ready()
         app = create_app()
         results: list[CheckResult] = []
+        tpp_status = tpp_prerequisite_status(live_tpp=live_tpp)
 
         with TestClient(app) as client:
             user_id = _signup(client)
@@ -957,7 +972,13 @@ def run_product_journeys(
             )
             execution_id = submitted.json()["proposal_state"]["execution_id"]
 
-            refresh = client.post(f"/api/workspace/{business_trip_id}/proposal/refresh")
+            if tpp_status.status == "READY":
+                live_tpp_env = {key: str(value) for key, value in tpp_status.details.items()}
+                with _started_tpp_service(live_tpp_env) as (base_url, _process):
+                    with _temporary_tpp_client_environment(base_url, live_tpp_env):
+                        refresh = client.post(f"/api/workspace/{business_trip_id}/proposal/refresh")
+            else:
+                refresh = client.post(f"/api/workspace/{business_trip_id}/proposal/refresh")
             _require(
                 refresh.status_code == 200,
                 "local proposal status poll failed",
@@ -981,11 +1002,13 @@ def run_product_journeys(
                 business_trip_id,
                 proposal["proposal_id"],
                 execution_id,
+                fixture_name="non_compliant_evaluation.json",
             )
             evaluation_response = _prepared_evaluation_response(
                 business_trip_id,
                 proposal["proposal_id"],
                 execution_id,
+                fixture_name="non_compliant_evaluation.json",
             )
             evaluated = client.put(
                 f"/api/workspace/{business_trip_id}/proposal/evaluation",
@@ -1006,11 +1029,14 @@ def run_product_journeys(
                 route=f"/api/workspace/{business_trip_id}/proposal/evaluation",
             )
             evaluation_payload = evaluated.json()
+            expected_approval_ready = expected_business_evaluation_status == "compliant"
             _require(
-                evaluation_payload["summary"]["approval_ready"] is True,
-                "business evaluation did not produce approval-ready follow-up state",
+                evaluation_payload["summary"]["approval_ready"] is expected_approval_ready,
+                "business evaluation approval state did not match the expected outcome",
                 trip_id=business_trip_id,
                 proposal_id=proposal["proposal_id"],
+                expected_evaluation_status=expected_business_evaluation_status,
+                approval_ready=evaluation_payload["summary"]["approval_ready"],
             )
             reloaded_business_workspace = client.get(f"/api/workspace/{business_trip_id}")
             _require(
@@ -1020,11 +1046,16 @@ def run_product_journeys(
                 trip_id=business_trip_id,
             )
             reloaded_proposal = reloaded_business_workspace.json()["proposal_state"]
+            expected_follow_up_status = (
+                "resolved" if expected_business_evaluation_status == "compliant" else "reoptimization_required"
+            )
             _require(
-                reloaded_proposal["summary"]["follow_up_status"] == "resolved",
-                "business workspace did not expose reloaded follow-up state",
+                reloaded_proposal["summary"]["follow_up_status"] == expected_follow_up_status,
+                "business workspace follow-up state did not match the expected outcome",
                 trip_id=business_trip_id,
                 proposal_id=proposal["proposal_id"],
+                expected_evaluation_status=expected_business_evaluation_status,
+                expected_follow_up_status=expected_follow_up_status,
                 follow_up=reloaded_proposal["summary"].get("follow_up"),
             )
             local_business_details = {
@@ -1049,7 +1080,6 @@ def run_product_journeys(
 
             results.append(classify_planner_llm_prerequisite(env=planner_llm_env))
 
-            tpp_status = tpp_prerequisite_status(live_tpp=live_tpp)
             if tpp_status.status == "READY":
                 live_details = _run_live_tpp_journey(
                     client,
