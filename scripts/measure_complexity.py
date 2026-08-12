@@ -35,7 +35,7 @@ class FunctionMetric:
 def _nodes_in_function_scope(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> list[ast.AST]:
-    pending = list(node.body)
+    pending: list[ast.AST] = list(node.body)
     nodes: list[ast.AST] = []
     nested_scopes = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
     while pending:
@@ -72,7 +72,7 @@ def measure_file(path: Path) -> list[FunctionMetric]:
                     path=path,
                     name=node.name,
                     start_line=node.lineno,
-                    end_line=node.end_lineno,
+                    end_line=node.end_lineno if node.end_lineno is not None else node.lineno,
                     complexity=_complexity(node),
                 )
             )
