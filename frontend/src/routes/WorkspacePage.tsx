@@ -1661,6 +1661,10 @@ function WorkspacePageContent({
     }
   }
 
+  function handlePrepareApprovalPacket() {
+    setActiveTab("plan");
+  }
+
   if (
     typeof window !== "undefined" &&
     (window as WorkspaceTestWindow).__TRIP_PLANNER_WORKSPACE_BREAK__
@@ -2401,13 +2405,23 @@ function WorkspacePageContent({
                   {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
                 </h2>
                 {currentWorkspace.proposal_state == null ? (
-                  <p className="muted-copy">
-                    Approval packet records have not been saved for this workspace yet.
-                  </p>
+                  <>
+                    <p className="muted-copy">
+                      Approval packet records have not been saved for this workspace yet.
+                    </p>
+                    <p className="muted-copy">
+                      Start in Plan to prepare the trip details that policy review needs.
+                    </p>
+                    <button type="button" onClick={handlePrepareApprovalPacket}>
+                      Prepare approval packet
+                    </button>
+                  </>
                 ) : (
                   <>
-                    {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
-                    {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
+                    <div aria-live="polite" role="status">
+                      {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
+                      {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
+                    </div>
                     <dl className="workspace-meta">
                       <div>
                         <dt>Approval readiness</dt>
@@ -2440,9 +2454,9 @@ function WorkspacePageContent({
                     {shouldShowProposalRefresh(
                       currentWorkspace.proposal_state,
                       renderableProposalFollowUp
-                    ) ? (
+                    ) || proposalLifecycle?.state === "failed" ? (
                       <button type="button" className="secondary-button" onClick={handleProposalRefresh}>
-                        Refresh live status
+                        {proposalLifecycle?.state === "failed" ? "Retry policy check" : "Refresh live status"}
                       </button>
                     ) : null}
                   </>

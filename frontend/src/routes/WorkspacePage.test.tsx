@@ -2610,6 +2610,28 @@ describe("WorkspacePage", () => {
     expect(screen.queryByRole("button", { name: "Refresh live status" })).not.toBeInTheDocument();
   });
 
+  it("offers a direct path to prepare an approval packet when none exists", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        trip_record: {
+          ...workspacePayload.trip_record,
+          trip: tripComparisonPayload[1],
+        },
+        proposal_state: null,
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await selectWorkspaceTab("Policy");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Prepare approval packet" }));
+
+    expect(screen.getByRole("tab", { name: "Plan" })).toHaveAttribute("aria-selected", "true");
+  });
+
   it("surfaces a deferred execution state while the remote verdict is queued", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
@@ -2890,6 +2912,7 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Needs policy retry")).toBeInTheDocument();
     expect(screen.getByText("TPP gateway returned a 502 response for the proposal submission.")).toBeInTheDocument();
     expect(screen.getByText("Review the live transport failure")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry policy check" })).toBeInTheDocument();
   });
 
   it("surfaces reoptimization follow-up guidance for non-compliant policy results", async () => {
