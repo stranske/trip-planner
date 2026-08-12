@@ -1145,6 +1145,7 @@ function WorkspacePageContent({
   const [notebookSuccess, setNotebookSuccess] = useState<string | null>(null);
   const [proposalError, setProposalError] = useState<string | null>(null);
   const [proposalBusyLabel, setProposalBusyLabel] = useState<string | null>(null);
+  const [proposalStatusMessage, setProposalStatusMessage] = useState<string | null>(null);
   const [routeOptionError, setRouteOptionError] = useState<string | null>(null);
   const [routeOptionBusyLabel, setRouteOptionBusyLabel] = useState<string | null>(null);
   const [routeOptionSuccess, setRouteOptionSuccess] = useState<string | null>(null);
@@ -1158,6 +1159,7 @@ function WorkspacePageContent({
     policy: null,
   });
   const plannerSessionLoadVersion = useRef(0);
+  const proposalRefreshVersion = useRef(0);
   const plannerConversationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const previousWorkspaceRef = useRef(workspace);
   const isCompactLayout = useCompactWorkspaceLayout();
@@ -1644,21 +1646,55 @@ function WorkspacePageContent({
   }
 
   async function handleProposalRefresh() {
+    const refreshVersion = proposalRefreshVersion.current + 1;
+    proposalRefreshVersion.current = refreshVersion;
     setProposalError(null);
+    setProposalStatusMessage(null);
     setProposalBusyLabel("Refreshing live policy status...");
     try {
       const nextProposalState = await refreshWorkspaceProposalStatus(trip.trip_id);
+      if (refreshVersion !== proposalRefreshVersion.current) {
+        return;
+      }
+      if (nextProposalState == null) {
+        startTransition(() => {
+          setCurrentWorkspace((current) => ({
+            ...current,
+            proposal_state: null,
+          }));
+        });
+        setProposalStatusMessage("Policy status refreshed: no approval packet is currently saved.");
+        return;
+      }
+      const nextLifecycle = deriveProposalLifecyclePresentation(
+        nextProposalState,
+        nextProposalState.follow_up
+      );
       startTransition(() => {
         setCurrentWorkspace((current) => ({
           ...current,
           proposal_state: nextProposalState,
         }));
       });
+      setProposalStatusMessage(
+        nextLifecycle.state === "failed"
+          ? `Policy refresh completed with a policy failure: ${nextLifecycle.summary}`
+          : `Policy status refreshed: ${nextLifecycle.summary}`
+      );
     } catch (error) {
-      setProposalError(error instanceof Error ? error.message : "Proposal status refresh failed.");
+      if (refreshVersion === proposalRefreshVersion.current) {
+        setProposalError(error instanceof Error ? error.message : "Proposal status refresh failed.");
+      }
     } finally {
-      setProposalBusyLabel(null);
+      if (refreshVersion === proposalRefreshVersion.current) {
+        setProposalBusyLabel(null);
+      }
     }
+  }
+
+  function handlePrepareApprovalPacket() {
+    setActiveTab("plan");
+    workspaceTabRefs.current.plan?.focus();
   }
 
   if (
@@ -2401,13 +2437,24 @@ function WorkspacePageContent({
                   {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
                 </h2>
                 {currentWorkspace.proposal_state == null ? (
-                  <p className="muted-copy">
-                    Approval packet records have not been saved for this workspace yet.
-                  </p>
+                  <>
+                    <p className="muted-copy">
+                      Approval packet records have not been saved for this workspace yet.
+                    </p>
+                    <p className="muted-copy">
+                      Start in Plan to prepare the trip details that policy review needs.
+                    </p>
+                    <button type="button" onClick={handlePrepareApprovalPacket}>
+                      Prepare approval packet
+                    </button>
+                  </>
                 ) : (
                   <>
-                    {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
-                    {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
+                    <div aria-live="polite" role="status">
+                      {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
+                      {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
+                      {proposalStatusMessage ? <p className="muted-copy">{proposalStatusMessage}</p> : null}
+                    </div>
                     <dl className="workspace-meta">
                       <div>
                         <dt>Approval readiness</dt>
@@ -2440,9 +2487,14 @@ function WorkspacePageContent({
                     {shouldShowProposalRefresh(
                       currentWorkspace.proposal_state,
                       renderableProposalFollowUp
-                    ) ? (
-                      <button type="button" className="secondary-button" onClick={handleProposalRefresh}>
-                        Refresh live status
+                    ) || proposalLifecycle?.state === "failed" ? (
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={Boolean(proposalBusyLabel)}
+                        onClick={handleProposalRefresh}
+                      >
+                        {proposalLifecycle?.state === "failed" ? "Retry policy check" : "Refresh live status"}
                       </button>
                     ) : null}
                   </>
