@@ -495,7 +495,10 @@ function GoogleMapsProviderMap({
   const [providerSurfaceState, setProviderSurfaceState] =
     useState<MapProviderLoadState>("pending");
   const routeKey = routeSegments
-    .map((segment) => `${segment.id}:${segment.fromLabel}:${segment.toLabel}`)
+    .map(
+      (segment) =>
+        `${segment.id}:${segment.fromLabel}:${segment.toLabel}:${segment.warning ?? ""}`
+    )
     .join("|");
 
   useEffect(() => {
@@ -625,7 +628,11 @@ function GoogleMapsProviderMap({
           minHeight: showLiveCanvas ? undefined : "12rem",
         }}
         data-provider-surface={
-          providerSurfaceState === "ready" ? "rendered" : "loading"
+          providerSurfaceState === "ready"
+            ? "rendered"
+            : providerSurfaceState === "error"
+              ? "error"
+              : "loading"
         }
       />
       {showLiveCanvas ? null : children}
