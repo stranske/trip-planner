@@ -126,7 +126,10 @@ Repo dependency layout:
 - Python tooling installs into the active `.venv` from the repo root.
 - Application JavaScript dependencies install under `frontend/node_modules`.
 - Do not create or commit `node_modules/` anywhere in the repo; use `npm ci` to install from the lock file.
-- `TRIP_PLANNER_DATABASE_URL` is optional for local work; if unset, the backend falls back to the default SQLite path under the repo.
+- `TRIP_PLANNER_DATABASE_URL` is optional for local work; if unset, the backend
+  stores SQLite data at `~/.trip-planner/trip_planner.db`, outside the checkout.
+  `TRIP_PLANNER_DATABASE_URL` remains the supported override for isolated local
+  databases and production Postgres.
 
 Run the full stack together from the repo root:
 
@@ -204,6 +207,11 @@ proprietary data and no external LLM** are involved.
 ```bash
 TRIP_PLANNER_SEED_DEMO=1 python scripts/seed_demo_data.py
 ```
+
+The demo seed uses the same local SQLite database unless
+`TRIP_PLANNER_DATABASE_URL` is set. It never writes a database into the
+repository, so running the command from the repository root leaves `git status`
+clean.
 
 Then sign in at `/login` with the documented demo credentials and open either
 seeded workspace (the script prints the exact `/workspace/<trip_id>` URLs):

@@ -13,7 +13,7 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-_DEFAULT_SQLITE_PATH = Path(__file__).resolve().parents[2] / ".tmp" / "trip_planner.db"
+_DEFAULT_SQLITE_PATH = Path.home() / ".trip-planner" / "trip_planner.db"
 _ENGINE_CACHE: dict[str, Engine] = {}
 _SESSION_FACTORY_CACHE: dict[str, sessionmaker[Session]] = {}
 _MIGRATED_URLS: set[str] = set()

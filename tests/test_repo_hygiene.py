@@ -33,6 +33,20 @@ def _all_tracked_files() -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
+def test_no_tracked_database_binaries() -> None:
+    """Runtime databases must stay out of version control."""
+    tracked = [
+        path
+        for path in _all_tracked_files()
+        if path.endswith((".db", ".sqlite", ".sqlite3"))
+    ]
+    assert not tracked, (
+        "Found tracked SQLite database binaries. Remove them with "
+        "`git rm --cached <path>` and keep database artifacts ignored.\n"
+        f"Offending paths: {', '.join(tracked)}"
+    )
+
+
 def test_no_node_modules_tracked_anywhere() -> None:
     """node_modules/ must never be tracked in git anywhere in the repo.
 
