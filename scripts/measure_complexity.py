@@ -32,15 +32,30 @@ class FunctionMetric:
     complexity: int
 
 
-def _complexity(node: ast.AST) -> int:
+def _nodes_in_function_scope(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[ast.AST]:
+    pending = list(node.body)
+    nodes: list[ast.AST] = []
+    nested_scopes = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+    while pending:
+        child = pending.pop()
+        if isinstance(child, nested_scopes):
+            continue
+        nodes.append(child)
+        pending.extend(ast.iter_child_nodes(child))
+    return nodes
+
+
+def _complexity(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
     decisions = 1
-    for child in ast.walk(node):
+    for child in _nodes_in_function_scope(node):
         if isinstance(child, _DECISION_NODES):
             decisions += 1
         elif isinstance(child, ast.BoolOp):
             decisions += len(child.values) - 1
         elif isinstance(child, ast.comprehension):
-            decisions += len(child.ifs)
+            decisions += 1 + len(child.ifs)
         elif isinstance(child, ast.Match):
             decisions += max(0, len(child.cases) - 1)
     return decisions

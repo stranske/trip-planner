@@ -24,6 +24,26 @@ def test_measure_complexity_counts_boolean_and_branch_decisions(tmp_path: Path) 
     assert metric.complexity == 3
 
 
+def test_measure_complexity_excludes_nested_scopes_and_counts_generators(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "sample.py"
+    source.write_text(
+        "def guarded(items):\n"
+        "    def nested(value):\n"
+        "        if value:\n"
+        "            return value\n"
+        "        return 0\n"
+        "    return [item for item in items for _ in range(2) if item]\n",
+        encoding="utf-8",
+    )
+
+    metric = measure_file(source)[0]
+
+    assert metric.name == "guarded"
+    assert metric.complexity == 4
+
+
 def test_changed_function_guard_selects_only_functions_touched_by_diff(
     tmp_path: Path,
 ) -> None:
