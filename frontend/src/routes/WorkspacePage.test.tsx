@@ -930,6 +930,23 @@ describe("WorkspacePage", () => {
     mockedSetNotebookFocus.mockReset();
   });
 
+  it("does not render a panel from two tabs", async () => {
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Plan" })).toHaveAttribute("aria-selected", "true");
+    });
+    expect(screen.queryByRole("heading", { name: "Budget vs actual" })).not.toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("tab", { name: "Budget" }));
+    expect(screen.getByRole("heading", { name: "Budget vs actual" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Plan" }));
+    expect(screen.queryByRole("heading", { name: "Budget vs actual" })).not.toBeInTheDocument();
+  });
+
   it("throws only when the workspace deliberate-break hook is enabled", async () => {
     mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
     const workspaceWindow = window as WorkspaceTestWindow;

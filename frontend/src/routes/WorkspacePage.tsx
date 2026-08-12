@@ -1912,169 +1912,9 @@ function WorkspacePageContent({
           }
         />
 
-        {panelVisibility.showBudgetPanel ? (
-          <WorkspaceBudgetPanel
-            budgetState={currentWorkspace.budget_state}
-            tripMode={trip.mode}
-            busyLabel={budgetBusyLabel}
-            errorMessage={budgetError}
-            onSaveBudget={handleBudgetSave}
-            onRecordSpend={handleSpendRecord}
-          />
-        ) : null}
-
-        <TripMap
-          comparison={routeComparison}
-          scenarioComparisonSummary={currentWorkspace.scenario_comparison?.summary}
-          scenarioFocusAreas={currentWorkspace.scenario_comparison?.focus_areas ?? []}
-          activeScenarioId={selectedScenarioId}
-          onSelectScenario={handleScenarioSelection}
-          bundles={currentWorkspace.inventory_summary.bundles}
-          feasibilitySummary={currentWorkspace.feasibility_summary}
-          tripPrimaryRegions={trip.trip_frame.primary_regions}
-          tripMode={trip.mode}
-          policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : null}
-          planningLedger={currentWorkspace.planning_ledger}
-          activeScope={selectedMapScope}
-          selectedSegmentId={selectedRouteSegment?.id ?? null}
-          onScopeChange={setSelectedMapScope}
-          onSelectSegment={setSelectedSegmentId}
-          compactLayout={isCompactLayout}
-        />
-
-        <ScenarioComparison
-          comparison={routeComparison}
-          savedScenarios={currentWorkspace.saved_scenarios}
-          selectedScenarioId={selectedScenarioId}
-          onSelectScenario={handleScenarioSelection}
-        />
-
-        <RouteOptionWorkbench
-          comparison={routeComparison}
-          selectedScenarioId={selectedScenarioId}
-          busyLabel={routeOptionBusyLabel}
-          successMessage={routeOptionSuccess}
-          errorMessage={routeOptionError}
-          onSelectScenario={handleScenarioSelection}
-          onRouteOptionAction={handleRouteOptionAction}
-        />
-
+        <details className="workspace-plan-disclosure">
+          <summary>Planning details</summary>
         <PlanningLedgerPanel ledger={currentWorkspace.planning_ledger} />
-
-        {currentWorkspace.planning_notebook ? (
-          <PlanningNotebookPanel
-            notebookState={currentWorkspace.planning_notebook}
-            busyLabel={notebookBusyLabel}
-            successMessage={notebookSuccess}
-            errorMessage={notebookError}
-            onCreateItem={handleNotebookCreate}
-            onCompleteItem={handleNotebookComplete}
-            onReopenItem={handleNotebookReopen}
-            onDeleteItem={handleNotebookDelete}
-            onSetFocus={handleNotebookSetFocus}
-          />
-        ) : null}
-
-        <TripComparison
-          currentTrip={currentWorkspace.trip_record.trip}
-          trips={trips}
-          selectedTripId={selectedTripComparisonId}
-          onSelectTrip={setSelectedTripComparisonId}
-        />
-
-        {panelVisibility.showApprovalReadinessPanel ? (
-          <WorkspacePolicyPanel
-            approvalPacketContent={
-              <>
-            <p className="status-label">Approval packet</p>
-            <h2 data-testid="proposal-lifecycle">
-              {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
-            </h2>
-          {currentWorkspace.proposal_state == null ? (
-            <p className="muted-copy">
-              Approval packet records have not been saved for this workspace yet.
-            </p>
-          ) : (
-            <>
-              {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
-              {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
-              <dl className="workspace-meta">
-                <div>
-                  <dt>Approval readiness</dt>
-                  <dd>
-                    {currentWorkspace.view_model?.policy_presentation.approval_status_label ??
-                      proposalLifecycle?.readinessLabel ??
-                      "Waiting for policy review"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Packet status</dt>
-                  <dd>{currentWorkspace.proposal_state.summary.submission_status ?? "unknown"}</dd>
-                </div>
-                <div>
-                  <dt>Comparables</dt>
-                  <dd>{currentWorkspace.proposal_state.summary.comparable_count ?? 0}</dd>
-                </div>
-                <div>
-                  <dt>Next step</dt>
-                  <dd>
-                    {currentWorkspace.view_model?.policy_presentation.next_step_label ??
-                      formatFollowUpStatus(
-                        renderableProposalFollowUp?.status ??
-                          currentWorkspace.proposal_state.summary.follow_up_status
-                      )}
-                  </dd>
-                </div>
-              </dl>
-              <p>{proposalLifecycle?.summary ?? "Submission stored for later review."}</p>
-              {shouldShowProposalRefresh(
-                currentWorkspace.proposal_state,
-                renderableProposalFollowUp
-              ) ? (
-                <button type="button" className="secondary-button" onClick={handleProposalRefresh}>
-                  Refresh live status
-                </button>
-              ) : null}
-              {renderableProposalFollowUp ? (
-                <article className="decision-card">
-                  <h3>{renderableProposalFollowUp.recommended_label ?? renderableProposalFollowUp.title}</h3>
-                  <p>{renderableProposalFollowUp.summary}</p>
-                  {renderableProposalFollowUp.guidance &&
-                  renderableProposalFollowUp.guidance.length > 0 ? (
-                    <p className="muted-copy">{renderableProposalFollowUp.guidance[0]}</p>
-                  ) : null}
-                </article>
-              ) : proposalLifecycle?.state === "running" || proposalLifecycle?.state === "deferred" ? (
-                <article className="decision-card">
-                  <h3>Keep the workspace open for remote results</h3>
-                  <p>
-                    Reloading the workspace preserves the latest stored execution state, so you can safely return
-                    after the remote policy service posts a new verdict.
-                  </p>
-                </article>
-              ) : proposalLifecycle?.state === "failed" ? (
-                <article className="decision-card">
-                  <h3>Review the live transport failure</h3>
-                  <p>
-                    Validate the remote TPP configuration and retry posture before asking travelers to treat this
-                    workspace as approval-ready.
-                  </p>
-                </article>
-              ) : null}
-              <div className="decision-stack">
-                {(currentWorkspace.proposal_state.summary.highlights ?? []).map((highlight) => (
-                  <article key={highlight} className="decision-card">
-                    <p>{highlight}</p>
-                  </article>
-                ))}
-              </div>
-            </>
-          )}
-              </>
-            }
-          />
-        ) : null}
-
         <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Things to consider</p>
           <h2>
@@ -2292,8 +2132,11 @@ function WorkspacePageContent({
             ) : null}
           </div>
         </section>
+        </details>
       </div>
 
+      <details className="workspace-plan-disclosure">
+        <summary>More planning context</summary>
       <div className="workspace-grid">
         <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Planning settings</p>
@@ -2419,7 +2262,7 @@ function WorkspacePageContent({
             {currentWorkspace.activity_log.length === 0 ? (
               <p className="muted-copy">Planner actions will appear here after the first decision or feedback event.</p>
             ) : (
-              currentWorkspace.activity_log.slice(0, 4).map((entry) => (
+              currentWorkspace.activity_log.slice(0, 2).map((entry) => (
                 <article key={entry.activity_event_id} className="decision-card">
                   <h3>{entry.event_kind.replace(/_/g, " ")}</h3>
                   <p>{entry.summary}</p>
@@ -2429,6 +2272,7 @@ function WorkspacePageContent({
           </div>
         </section>
       </div>
+      </details>
         </PlanPanel>
       ) : null}
 
