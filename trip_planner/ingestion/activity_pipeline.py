@@ -22,6 +22,7 @@ from ._common import (
     IngestionWarning,
     _contribution_kind,
     _dedupe_conflicts,
+    _lowest_match_confidence,
     _record_ids_for_decision,
     _records_for_decision,
     _resolution_for_record,
@@ -306,12 +307,6 @@ def _canonical_option_id(record: RawSourceRecord, resolution: EntityResolution |
 
 def _separate_option_id(canonical_entity_id: str, record: RawSourceRecord) -> str:
     return f"{canonical_entity_id}-{record.record_id}"
-
-
-def _lowest_match_confidence(resolution: EntityResolution) -> float:
-    if not resolution.match_candidates:
-        return 0.0
-    return min(candidate.confidence for candidate in resolution.match_candidates)
 
 
 def _merge_string_lists(*lists: Any) -> list[str]:
