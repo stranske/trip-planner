@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from trip_planner.app.routes.errors import public_http_error
 from trip_planner.app.schemas.proposal import (
     WorkspaceProposalEvaluationRequest,
     WorkspaceProposalFollowUpRequest,
@@ -33,7 +34,11 @@ def read_workspace_proposal(
     try:
         payload = get_workspace_proposal_payload(db_session, user=user, trip_id=trip_id)
     except WorkspaceProposalNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=404,
+            message="The requested workspace proposal was not found.",
+        ) from error
     return WorkspaceProposalResponse.model_validate(payload)
 
 
@@ -56,11 +61,23 @@ def save_workspace_proposal(
             scenario_id=payload.scenario_id,
         )
     except WorkspaceProposalNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=404,
+            message="The requested workspace proposal was not found.",
+        ) from error
     except TPPTransportError as error:
-        raise HTTPException(status_code=error.status_code, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=error.status_code,
+            message="The proposal service could not complete the request.",
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=400,
+            message="The workspace proposal request was invalid.",
+        ) from error
     return WorkspaceProposalResponse.model_validate(result)
 
 
@@ -82,11 +99,23 @@ def save_workspace_proposal_result(
             scenario_id=payload.scenario_id,
         )
     except WorkspaceProposalNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=404,
+            message="The requested workspace proposal was not found.",
+        ) from error
     except TPPTransportError as error:
-        raise HTTPException(status_code=error.status_code, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=error.status_code,
+            message="The proposal service could not complete the request.",
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=400,
+            message="The workspace proposal request was invalid.",
+        ) from error
     return WorkspaceProposalResponse.model_validate(result)
 
 
@@ -118,9 +147,17 @@ def save_workspace_proposal_follow_up_state(
             ),
         )
     except WorkspaceProposalNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=404,
+            message="The requested workspace proposal was not found.",
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=400,
+            message="The workspace proposal request was invalid.",
+        ) from error
     return WorkspaceProposalResponse.model_validate(result)
 
 
@@ -137,11 +174,23 @@ def refresh_workspace_proposal(
             trip_id=trip_id,
         )
     except WorkspaceProposalNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=404,
+            message="The requested workspace proposal was not found.",
+        ) from error
     except TPPTransportError as error:
-        raise HTTPException(status_code=error.status_code, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=error.status_code,
+            message="The proposal service could not complete the request.",
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=400,
+            message="The workspace proposal request was invalid.",
+        ) from error
     return WorkspaceProposalResponse.model_validate(result)
 
 
@@ -161,7 +210,15 @@ def reoptimize_workspace_proposal(
             justification_refs=payload.justification_refs,
         )
     except WorkspaceProposalNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=404,
+            message="The requested workspace proposal was not found.",
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=400,
+            message="The workspace proposal request was invalid.",
+        ) from error
     return WorkspaceProposalResponse.model_validate(result)

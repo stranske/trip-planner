@@ -92,6 +92,7 @@ class TPPTransportError(RuntimeError):
         ] = "unknown",
         status_code: int = 502,
         retryable: bool = False,
+        reference_id: str | None = None,
     ) -> None:
         if error_code not in self.VALID_ERROR_CODES:
             raise ValueError(
@@ -102,6 +103,7 @@ class TPPTransportError(RuntimeError):
         self.error_code = error_code
         self.status_code = status_code
         self.retryable = retryable
+        self.reference_id = reference_id
 
 
 class TPPConfigurationError(TPPTransportError):

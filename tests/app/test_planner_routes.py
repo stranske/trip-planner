@@ -1290,7 +1290,7 @@ def test_planner_turn_rejects_invalid_tool_calls(client: TestClient) -> None:
     )
 
     assert response.status_code == 400
-    assert "not supported" in response.json()["detail"]
+    assert response.json()["detail"].startswith("The planner request was invalid.")
 
 
 def test_planner_turn_normalizes_lowercase_budget_currency(client: TestClient) -> None:

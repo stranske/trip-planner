@@ -208,9 +208,7 @@ def test_budget_spend_routes_reject_non_finite_amounts_without_mutating_state(
         },
     )
     spend_event_id = recorded.json()["spend_events"][0]["spend_event_id"]
-    original_event = client.get(
-        f"/api/workspace/{trip_id}/budget"
-    ).json()["spend_events"][0]
+    original_event = client.get(f"/api/workspace/{trip_id}/budget").json()["spend_events"][0]
     rejected_update = client.patch(
         f"/api/workspace/{trip_id}/budget/spend-events/{spend_event_id}",
         content=json.dumps(
@@ -225,8 +223,7 @@ def test_budget_spend_routes_reject_non_finite_amounts_without_mutating_state(
     )
     assert rejected_update.status_code == 422
     assert (
-        client.get(f"/api/workspace/{trip_id}/budget").json()["spend_events"][0]
-        == original_event
+        client.get(f"/api/workspace/{trip_id}/budget").json()["spend_events"][0] == original_event
     )
 
 
@@ -345,7 +342,7 @@ def test_workspace_budget_spend_event_rejects_currency_drift(client: TestClient)
     )
 
     assert recorded.status_code == 400
-    assert recorded.json()["detail"] == "currency must match the persisted budget plan currency"
+    assert recorded.json()["detail"].startswith("The workspace budget request was invalid.")
 
 
 def test_workspace_budget_spend_event_updates_session_timestamp(client: TestClient) -> None:

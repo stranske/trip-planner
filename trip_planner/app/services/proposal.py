@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -35,6 +36,8 @@ from trip_planner.integrations.tpp import (
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.state import ScenarioVersion
+
+logger = logging.getLogger(__name__)
 
 
 class WorkspaceProposalNotFoundError(ValueError):
@@ -388,11 +391,18 @@ def _resolve_evaluation_response(
             operation="fetch_evaluation_result",
         )
         if transport_error is None:
+            reference_id = uuid4().hex
+            logger.exception(
+                "TPP evaluation transport failed unexpectedly (reference_id=%s)",
+                reference_id,
+            )
             transport_error = TPPTransportError(
-                f"TPP fetch_evaluation_result transport failed unexpectedly: {exc}.",
+                "TPP fetch_evaluation_result transport failed unexpectedly. "
+                f"Reference ID: {reference_id}.",
                 error_code="unknown",
                 status_code=502,
                 retryable=False,
+                reference_id=reference_id,
             )
         raise transport_error from exc
 
