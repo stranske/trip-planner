@@ -404,8 +404,9 @@ def test_verifier_fails_on_failed_live_status_poll() -> None:
         )
 
 
-def test_temporary_tpp_client_environment_restores_missing_keys() -> None:
+def test_temporary_tpp_client_environment_restores_missing_keys(monkeypatch) -> None:
     for key in ("TPP_BASE_URL", "TPP_ACCESS_TOKEN", "TPP_OIDC_PROVIDER"):
+        monkeypatch.delenv(key, raising=False)
         assert key not in os.environ
 
     with verifier._temporary_tpp_client_environment(
@@ -423,9 +424,10 @@ def test_temporary_tpp_client_environment_restores_missing_keys() -> None:
         assert key not in os.environ
 
 
-def test_temporary_tpp_client_environment_restores_prior_values_on_exception() -> None:
-    os.environ["TPP_BASE_URL"] = "http://prior.example"
-    os.environ["TPP_ACCESS_TOKEN"] = "prior-token"
+def test_temporary_tpp_client_environment_restores_prior_values_on_exception(monkeypatch) -> None:
+    monkeypatch.setenv("TPP_BASE_URL", "http://prior.example")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "prior-token")
+    monkeypatch.delenv("TPP_OIDC_PROVIDER", raising=False)
 
     with pytest.raises(RuntimeError):
         with verifier._temporary_tpp_client_environment(
@@ -442,8 +444,6 @@ def test_temporary_tpp_client_environment_restores_prior_values_on_exception() -
     assert os.environ["TPP_BASE_URL"] == "http://prior.example"
     assert os.environ["TPP_ACCESS_TOKEN"] == "prior-token"
     assert "TPP_OIDC_PROVIDER" not in os.environ
-    os.environ.pop("TPP_BASE_URL", None)
-    os.environ.pop("TPP_ACCESS_TOKEN", None)
 
 
 def test_evaluation_fixture_name_maps_expected_status() -> None:
