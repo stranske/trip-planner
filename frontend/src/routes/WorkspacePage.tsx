@@ -1132,6 +1132,7 @@ function WorkspacePageContent({
     null
   );
   const [showPlannerDiagnostics, setShowPlannerDiagnostics] = useState(false);
+  const [showAllActivity, setShowAllActivity] = useState(false);
   const [plannerError, setPlannerError] = useState<string | null>(null);
   const [plannerBusyLabel, setPlannerBusyLabel] = useState<string | null>(null);
   const [planningModeBusy, setPlanningModeBusy] = useState(false);
@@ -1912,169 +1913,9 @@ function WorkspacePageContent({
           }
         />
 
-        {panelVisibility.showBudgetPanel ? (
-          <WorkspaceBudgetPanel
-            budgetState={currentWorkspace.budget_state}
-            tripMode={trip.mode}
-            busyLabel={budgetBusyLabel}
-            errorMessage={budgetError}
-            onSaveBudget={handleBudgetSave}
-            onRecordSpend={handleSpendRecord}
-          />
-        ) : null}
-
-        <TripMap
-          comparison={routeComparison}
-          scenarioComparisonSummary={currentWorkspace.scenario_comparison?.summary}
-          scenarioFocusAreas={currentWorkspace.scenario_comparison?.focus_areas ?? []}
-          activeScenarioId={selectedScenarioId}
-          onSelectScenario={handleScenarioSelection}
-          bundles={currentWorkspace.inventory_summary.bundles}
-          feasibilitySummary={currentWorkspace.feasibility_summary}
-          tripPrimaryRegions={trip.trip_frame.primary_regions}
-          tripMode={trip.mode}
-          policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : null}
-          planningLedger={currentWorkspace.planning_ledger}
-          activeScope={selectedMapScope}
-          selectedSegmentId={selectedRouteSegment?.id ?? null}
-          onScopeChange={setSelectedMapScope}
-          onSelectSegment={setSelectedSegmentId}
-          compactLayout={isCompactLayout}
-        />
-
-        <ScenarioComparison
-          comparison={routeComparison}
-          savedScenarios={currentWorkspace.saved_scenarios}
-          selectedScenarioId={selectedScenarioId}
-          onSelectScenario={handleScenarioSelection}
-        />
-
-        <RouteOptionWorkbench
-          comparison={routeComparison}
-          selectedScenarioId={selectedScenarioId}
-          busyLabel={routeOptionBusyLabel}
-          successMessage={routeOptionSuccess}
-          errorMessage={routeOptionError}
-          onSelectScenario={handleScenarioSelection}
-          onRouteOptionAction={handleRouteOptionAction}
-        />
-
+        <details className="workspace-plan-disclosure">
+          <summary>Planning details</summary>
         <PlanningLedgerPanel ledger={currentWorkspace.planning_ledger} />
-
-        {currentWorkspace.planning_notebook ? (
-          <PlanningNotebookPanel
-            notebookState={currentWorkspace.planning_notebook}
-            busyLabel={notebookBusyLabel}
-            successMessage={notebookSuccess}
-            errorMessage={notebookError}
-            onCreateItem={handleNotebookCreate}
-            onCompleteItem={handleNotebookComplete}
-            onReopenItem={handleNotebookReopen}
-            onDeleteItem={handleNotebookDelete}
-            onSetFocus={handleNotebookSetFocus}
-          />
-        ) : null}
-
-        <TripComparison
-          currentTrip={currentWorkspace.trip_record.trip}
-          trips={trips}
-          selectedTripId={selectedTripComparisonId}
-          onSelectTrip={setSelectedTripComparisonId}
-        />
-
-        {panelVisibility.showApprovalReadinessPanel ? (
-          <WorkspacePolicyPanel
-            approvalPacketContent={
-              <>
-            <p className="status-label">Approval packet</p>
-            <h2 data-testid="proposal-lifecycle">
-              {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
-            </h2>
-          {currentWorkspace.proposal_state == null ? (
-            <p className="muted-copy">
-              Approval packet records have not been saved for this workspace yet.
-            </p>
-          ) : (
-            <>
-              {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
-              {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
-              <dl className="workspace-meta">
-                <div>
-                  <dt>Approval readiness</dt>
-                  <dd>
-                    {currentWorkspace.view_model?.policy_presentation.approval_status_label ??
-                      proposalLifecycle?.readinessLabel ??
-                      "Waiting for policy review"}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Packet status</dt>
-                  <dd>{currentWorkspace.proposal_state.summary.submission_status ?? "unknown"}</dd>
-                </div>
-                <div>
-                  <dt>Comparables</dt>
-                  <dd>{currentWorkspace.proposal_state.summary.comparable_count ?? 0}</dd>
-                </div>
-                <div>
-                  <dt>Next step</dt>
-                  <dd>
-                    {currentWorkspace.view_model?.policy_presentation.next_step_label ??
-                      formatFollowUpStatus(
-                        renderableProposalFollowUp?.status ??
-                          currentWorkspace.proposal_state.summary.follow_up_status
-                      )}
-                  </dd>
-                </div>
-              </dl>
-              <p>{proposalLifecycle?.summary ?? "Submission stored for later review."}</p>
-              {shouldShowProposalRefresh(
-                currentWorkspace.proposal_state,
-                renderableProposalFollowUp
-              ) ? (
-                <button type="button" className="secondary-button" onClick={handleProposalRefresh}>
-                  Refresh live status
-                </button>
-              ) : null}
-              {renderableProposalFollowUp ? (
-                <article className="decision-card">
-                  <h3>{renderableProposalFollowUp.recommended_label ?? renderableProposalFollowUp.title}</h3>
-                  <p>{renderableProposalFollowUp.summary}</p>
-                  {renderableProposalFollowUp.guidance &&
-                  renderableProposalFollowUp.guidance.length > 0 ? (
-                    <p className="muted-copy">{renderableProposalFollowUp.guidance[0]}</p>
-                  ) : null}
-                </article>
-              ) : proposalLifecycle?.state === "running" || proposalLifecycle?.state === "deferred" ? (
-                <article className="decision-card">
-                  <h3>Keep the workspace open for remote results</h3>
-                  <p>
-                    Reloading the workspace preserves the latest stored execution state, so you can safely return
-                    after the remote policy service posts a new verdict.
-                  </p>
-                </article>
-              ) : proposalLifecycle?.state === "failed" ? (
-                <article className="decision-card">
-                  <h3>Review the live transport failure</h3>
-                  <p>
-                    Validate the remote TPP configuration and retry posture before asking travelers to treat this
-                    workspace as approval-ready.
-                  </p>
-                </article>
-              ) : null}
-              <div className="decision-stack">
-                {(currentWorkspace.proposal_state.summary.highlights ?? []).map((highlight) => (
-                  <article key={highlight} className="decision-card">
-                    <p>{highlight}</p>
-                  </article>
-                ))}
-              </div>
-            </>
-          )}
-              </>
-            }
-          />
-        ) : null}
-
         <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Things to consider</p>
           <h2>
@@ -2139,132 +1980,6 @@ function WorkspacePageContent({
         </section>
 
         <section className={STATUS_CARD_CLASS}>
-          <p className="status-label">Day plan</p>
-          {timelineStops.length === 0 || activeScenario.scenario === null ? (
-            <>
-              <h2>Day plan is not ready yet</h2>
-              <p>
-                Choose or build a route idea before reviewing day-by-day pacing.
-              </p>
-              <p className="muted-copy">
-                Ask the planner to compare routes or draft a first sequence of stops.
-              </p>
-            </>
-          ) : (
-            <>
-              <h2>{isCompactLayout ? "Compact day-by-day review" : "Trip rhythm and day sequence"}</h2>
-              <p>{selectedRuntimeScenario?.summary ?? activeScenario.scenario.scenario_summary.headline}</p>
-              <div className="timeline-summary-grid" aria-label="Timeline summary">
-                <article className="timeline-summary-card">
-                  <p className="scenario-kicker">Duration</p>
-                  <h3>
-                    {trip.trip_frame.duration_days == null
-                      ? "Trip length pending"
-                      : `${trip.trip_frame.duration_days} days planned`}
-                  </h3>
-                  <p>Dates: {formatDateRange(trip.trip_frame.start_date, trip.trip_frame.end_date)}</p>
-                </article>
-                <article className="timeline-summary-card">
-                  <p className="scenario-kicker">Route shape</p>
-                  <h3>{timelineStops.length} review checkpoints</h3>
-                  <p>
-                    {selectedRuntimeScenario?.route_summary ??
-                      activeScenario.scenario.scenario_summary.route_sequence.join(" -> ")}
-                  </p>
-                </article>
-                <article className="timeline-summary-card">
-                  <p className="scenario-kicker">Segment focus</p>
-                  <h3>
-                    {selectedRouteSegment
-                      ? `${selectedRouteSegment.fromLabel} to ${selectedRouteSegment.toLabel}`
-                      : "No segment selected"}
-                  </h3>
-                  <p>
-                    {selectedRouteSegment?.durationMinutes != null
-                      ? `${selectedRouteSegment.durationMinutes} minutes in the selected route option.`
-                      : "Segment timing will appear when route geometry is available."}
-                  </p>
-                </article>
-                <article className="timeline-summary-card">
-                  <p className="scenario-kicker">Pacing</p>
-                  <h3>
-                    {selectedRuntimeScenario == null
-                      ? "Planner score pending"
-                      : `${formatScenarioScore(selectedRuntimeScenario.metrics.score)} planner score`}
-                  </h3>
-                  <p>
-                    {panelVisibility.showPolicyPosture
-                      ? `${scenarioPolicyPosture} approval posture for the current workspace.`
-                      : "Pacing and route burden stay visible without approval details."}
-                  </p>
-                </article>
-                <article className="timeline-summary-card">
-                  <p className="scenario-kicker">Options</p>
-                  <h3>
-                    {selectedRuntimeScenario == null
-                      ? "Option count pending"
-                      : `${selectedRuntimeScenario.option_count} mapped options`}
-                  </h3>
-                  <p>
-                    {selectedRuntimeScenario?.comparison_note ??
-                      "Details update as route ideas become clearer."}
-                  </p>
-                </article>
-              </div>
-              {selectedTimelineNotes.length > 0 ? (
-                <div className="timeline-focus-notes" aria-label="Timeline linked planning notes">
-                  {selectedTimelineNotes.map((note) => (
-                    <span key={note}>{note}</span>
-                  ))}
-                </div>
-              ) : null}
-              <ol className="timeline-list" aria-label="Trip timeline sequence">
-                {timelineStops.map((stop) => {
-                  const isSegmentFocus =
-                    selectedRouteSegment != null &&
-                    (stop.routeIndex === selectedRouteSegment.fromIndex ||
-                      stop.routeIndex === selectedRouteSegment.toIndex);
-                  return (
-                  <li
-                    key={stop.key}
-                    className={`timeline-stop${isSegmentFocus ? " timeline-stop-focused" : ""}`}
-                  >
-                    <div className="timeline-dayband">
-                      <span>Day {stop.startDay}</span>
-                      <span>Day {stop.endDay}</span>
-                    </div>
-                    <div>
-                      <h3>{stop.label}</h3>
-                      <p>
-                        Days {stop.startDay}-{stop.endDay} keep this stop visible in the selected
-                        route review path.
-                      </p>
-                      {isSegmentFocus ? (
-                        <p className="muted-copy">
-                          Highlighted for the selected segment-level review.
-                        </p>
-                      ) : null}
-                    </div>
-                  </li>
-                  );
-                })}
-              </ol>
-            </>
-          )}
-        </section>
-
-        <RouteTradeoffsPanel
-          compactLayout={isCompactLayout}
-          showPolicyPosture={panelVisibility.showPolicyPosture}
-          scenarios={routeTradeoffCards}
-          emptyMessage={
-            currentWorkspace.runtime_state.status === "partial"
-              ? "Add a little more trip detail before route comparison can start."
-              : "No route ideas are available yet, so there is nothing to compare."
-          }
-        />
-
-        <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Saved ideas</p>
           <h2>{currentWorkspace.scenario_search.title}</h2>
           <div className="scenario-stack">
@@ -2292,8 +2007,11 @@ function WorkspacePageContent({
             ) : null}
           </div>
         </section>
+        </details>
       </div>
 
+      <details className="workspace-plan-disclosure">
+        <summary>More planning context</summary>
       <div className="workspace-grid">
         <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Planning settings</p>
@@ -2343,50 +2061,6 @@ function WorkspacePageContent({
           )}
         </section>
 
-        {panelVisibility.showProposalPanel ? (
-          <section className={STATUS_CARD_CLASS} data-testid="tpp-label">
-            <p className="status-label">Approval details</p>
-            <h2>Options and readiness signals</h2>
-          {currentWorkspace.proposal_state == null ? (
-            <p className="muted-copy">Approval-packet details will render here once the packet is saved.</p>
-          ) : (
-            <div className="decision-stack">
-              {renderableProposalFollowUp ? (
-                <article className="decision-card">
-                  <h3>{renderableProposalFollowUp.recommended_label ?? renderableProposalFollowUp.title}</h3>
-                  <p>{renderableProposalFollowUp.summary}</p>
-                  {renderableProposalFollowUp.selected_alternative?.summary ? (
-                    <p className="muted-copy">
-                      Selected alternative: {renderableProposalFollowUp.selected_alternative.summary}
-                    </p>
-                  ) : null}
-                  {renderableProposalFollowUp.requested_exception?.reason ? (
-                    <p className="muted-copy">
-                      Exception rationale: {renderableProposalFollowUp.requested_exception.reason}
-                    </p>
-                  ) : null}
-                </article>
-              ) : null}
-              {(renderableProposalFollowUp?.guidance ?? []).map((guidance) => (
-                <article key={guidance} className="decision-card">
-                  <h3>Guidance</h3>
-                  <p>{guidance}</p>
-                </article>
-              ))}
-              {(renderableProposalFollowUp?.alternatives ?? []).map((alternative) => (
-                <article
-                  key={`${alternative.category}-${alternative.summary}`}
-                  className="decision-card"
-                >
-                  <h3>{alternative.summary}</h3>
-                  <p>{alternative.rationale}</p>
-                </article>
-              ))}
-            </div>
-          )}
-          </section>
-        ) : null}
-
         <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Planning notes</p>
           <h2>
@@ -2419,22 +2093,46 @@ function WorkspacePageContent({
             {currentWorkspace.activity_log.length === 0 ? (
               <p className="muted-copy">Planner actions will appear here after the first decision or feedback event.</p>
             ) : (
-              currentWorkspace.activity_log.slice(0, 4).map((entry) => (
+              currentWorkspace.activity_log
+                .slice(0, showAllActivity ? undefined : 2)
+                .map((entry) => (
                 <article key={entry.activity_event_id} className="decision-card">
                   <h3>{entry.event_kind.replace(/_/g, " ")}</h3>
                   <p>{entry.summary}</p>
                 </article>
-              ))
+                ))
             )}
           </div>
+          {currentWorkspace.activity_log.length > 2 ? (
+            <button
+              type="button"
+              className="secondary-button"
+              aria-expanded={showAllActivity}
+              onClick={() => setShowAllActivity((current) => !current)}
+            >
+              {showAllActivity ? "Show recent activity" : "View all activity"}
+            </button>
+          ) : null}
         </section>
       </div>
+      </details>
         </PlanPanel>
       ) : null}
 
       {activeTab === "compare" ? (
         <ComparePanel labelledBy={workspaceTabButtonId("compare")}>
           <div className="workspace-grid">
+            <RouteTradeoffsPanel
+              compactLayout={isCompactLayout}
+              showPolicyPosture={panelVisibility.showPolicyPosture}
+              scenarios={routeTradeoffCards}
+              emptyMessage={
+                currentWorkspace.runtime_state.status === "partial"
+                  ? "Add a little more trip detail before route comparison can start."
+                  : "No route ideas are available yet, so there is nothing to compare."
+              }
+            />
+
             <ScenarioComparison
               comparison={routeComparison}
               savedScenarios={currentWorkspace.saved_scenarios}
@@ -2463,24 +2161,141 @@ function WorkspacePageContent({
       ) : null}
       {activeTab === "map" ? (
         <MapPanel labelledBy={workspaceTabButtonId("map")}>
-          <TripMap
-            comparison={routeComparison}
-            scenarioComparisonSummary={currentWorkspace.scenario_comparison?.summary}
-            scenarioFocusAreas={currentWorkspace.scenario_comparison?.focus_areas ?? []}
-            activeScenarioId={selectedScenarioId}
-            onSelectScenario={handleScenarioSelection}
-            bundles={currentWorkspace.inventory_summary.bundles}
-            feasibilitySummary={currentWorkspace.feasibility_summary}
-            tripPrimaryRegions={trip.trip_frame.primary_regions}
-            tripMode={trip.mode}
-            policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : null}
-            planningLedger={currentWorkspace.planning_ledger}
-            activeScope={selectedMapScope}
-            selectedSegmentId={selectedRouteSegment?.id ?? null}
-            onScopeChange={setSelectedMapScope}
-            onSelectSegment={setSelectedSegmentId}
-            compactLayout={isCompactLayout}
-          />
+          <div className="workspace-grid">
+            <TripMap
+              comparison={routeComparison}
+              scenarioComparisonSummary={currentWorkspace.scenario_comparison?.summary}
+              scenarioFocusAreas={currentWorkspace.scenario_comparison?.focus_areas ?? []}
+              activeScenarioId={selectedScenarioId}
+              onSelectScenario={handleScenarioSelection}
+              bundles={currentWorkspace.inventory_summary.bundles}
+              feasibilitySummary={currentWorkspace.feasibility_summary}
+              tripPrimaryRegions={trip.trip_frame.primary_regions}
+              tripMode={trip.mode}
+              policyPosture={panelVisibility.showPolicyPosture ? scenarioPolicyPosture : null}
+              planningLedger={currentWorkspace.planning_ledger}
+              activeScope={selectedMapScope}
+              selectedSegmentId={selectedRouteSegment?.id ?? null}
+              onScopeChange={setSelectedMapScope}
+              onSelectSegment={setSelectedSegmentId}
+              compactLayout={isCompactLayout}
+            />
+
+            <section className={STATUS_CARD_CLASS}>
+              <p className="status-label">Day plan</p>
+              {timelineStops.length === 0 || activeScenario.scenario === null ? (
+                <>
+                  <h2>Day plan is not ready yet</h2>
+                  <p>
+                    Choose or build a route idea before reviewing day-by-day pacing.
+                  </p>
+                  <p className="muted-copy">
+                    Ask the planner to compare routes or draft a first sequence of stops.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2>{isCompactLayout ? "Compact day-by-day review" : "Trip rhythm and day sequence"}</h2>
+                  <p>{selectedRuntimeScenario?.summary ?? activeScenario.scenario.scenario_summary.headline}</p>
+                  <div className="timeline-summary-grid" aria-label="Timeline summary">
+                    <article className="timeline-summary-card">
+                      <p className="scenario-kicker">Duration</p>
+                      <h3>
+                        {trip.trip_frame.duration_days == null
+                          ? "Trip length pending"
+                          : `${trip.trip_frame.duration_days} days planned`}
+                      </h3>
+                      <p>Dates: {formatDateRange(trip.trip_frame.start_date, trip.trip_frame.end_date)}</p>
+                    </article>
+                    <article className="timeline-summary-card">
+                      <p className="scenario-kicker">Route shape</p>
+                      <h3>{timelineStops.length} review checkpoints</h3>
+                      <p>
+                        {selectedRuntimeScenario?.route_summary ??
+                          activeScenario.scenario.scenario_summary.route_sequence.join(" -> ")}
+                      </p>
+                    </article>
+                    <article className="timeline-summary-card">
+                      <p className="scenario-kicker">Segment focus</p>
+                      <h3>
+                        {selectedRouteSegment
+                          ? `${selectedRouteSegment.fromLabel} to ${selectedRouteSegment.toLabel}`
+                          : "No segment selected"}
+                      </h3>
+                      <p>
+                        {selectedRouteSegment?.durationMinutes != null
+                          ? `${selectedRouteSegment.durationMinutes} minutes in the selected route option.`
+                          : "Segment timing will appear when route geometry is available."}
+                      </p>
+                    </article>
+                    <article className="timeline-summary-card">
+                      <p className="scenario-kicker">Pacing</p>
+                      <h3>
+                        {selectedRuntimeScenario == null
+                          ? "Planner score pending"
+                          : `${formatScenarioScore(selectedRuntimeScenario.metrics.score)} planner score`}
+                      </h3>
+                      <p>
+                        {panelVisibility.showPolicyPosture
+                          ? `${scenarioPolicyPosture} approval posture for the current workspace.`
+                          : "Pacing and route burden stay visible without approval details."}
+                      </p>
+                    </article>
+                    <article className="timeline-summary-card">
+                      <p className="scenario-kicker">Options</p>
+                      <h3>
+                        {selectedRuntimeScenario == null
+                          ? "Option count pending"
+                          : `${selectedRuntimeScenario.option_count} mapped options`}
+                      </h3>
+                      <p>
+                        {selectedRuntimeScenario?.comparison_note ??
+                          "Details update as route ideas become clearer."}
+                      </p>
+                    </article>
+                  </div>
+                  {selectedTimelineNotes.length > 0 ? (
+                    <div className="timeline-focus-notes" aria-label="Timeline linked planning notes">
+                      {selectedTimelineNotes.map((note) => (
+                        <span key={note}>{note}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <ol className="timeline-list" aria-label="Trip timeline sequence">
+                    {timelineStops.map((stop) => {
+                      const isSegmentFocus =
+                        selectedRouteSegment != null &&
+                        (stop.routeIndex === selectedRouteSegment.fromIndex ||
+                          stop.routeIndex === selectedRouteSegment.toIndex);
+                      return (
+                      <li
+                        key={stop.key}
+                        className={`timeline-stop${isSegmentFocus ? " timeline-stop-focused" : ""}`}
+                      >
+                        <div className="timeline-dayband">
+                          <span>Day {stop.startDay}</span>
+                          <span>Day {stop.endDay}</span>
+                        </div>
+                        <div>
+                          <h3>{stop.label}</h3>
+                          <p>
+                            Days {stop.startDay}-{stop.endDay} keep this stop visible in the selected
+                            route review path.
+                          </p>
+                          {isSegmentFocus ? (
+                            <p className="muted-copy">
+                              Highlighted for the selected segment-level review.
+                            </p>
+                          ) : null}
+                        </div>
+                      </li>
+                      );
+                    })}
+                  </ol>
+                </>
+              )}
+            </section>
+          </div>
         </MapPanel>
       ) : null}
       {activeTab === "budget" ? (
@@ -2566,6 +2381,34 @@ function WorkspacePageContent({
                   <>
                     {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
                     {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
+                    <dl className="workspace-meta">
+                      <div>
+                        <dt>Approval readiness</dt>
+                        <dd>
+                          {currentWorkspace.view_model?.policy_presentation.approval_status_label ??
+                            proposalLifecycle?.readinessLabel ??
+                            "Waiting for policy review"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Packet status</dt>
+                        <dd>{currentWorkspace.proposal_state.summary.submission_status ?? "unknown"}</dd>
+                      </div>
+                      <div>
+                        <dt>Comparables</dt>
+                        <dd>{currentWorkspace.proposal_state.summary.comparable_count ?? 0}</dd>
+                      </div>
+                      <div>
+                        <dt>Next step</dt>
+                        <dd>
+                          {currentWorkspace.view_model?.policy_presentation.next_step_label ??
+                            formatFollowUpStatus(
+                              renderableProposalFollowUp?.status ??
+                                currentWorkspace.proposal_state.summary.follow_up_status
+                            )}
+                        </dd>
+                      </div>
+                    </dl>
                     <p>{proposalLifecycle?.summary ?? "Submission stored for later review."}</p>
                     {shouldShowProposalRefresh(
                       currentWorkspace.proposal_state,
@@ -2593,12 +2436,51 @@ function WorkspacePageContent({
                       <article className="decision-card">
                         <h3>{renderableProposalFollowUp.recommended_label ?? renderableProposalFollowUp.title}</h3>
                         <p>{renderableProposalFollowUp.summary}</p>
+                        {renderableProposalFollowUp.guidance?.length ? (
+                          <p className="muted-copy">{renderableProposalFollowUp.guidance[0]}</p>
+                        ) : null}
+                        {renderableProposalFollowUp.selected_alternative?.summary ? (
+                          <p className="muted-copy">
+                            Selected alternative: {renderableProposalFollowUp.selected_alternative.summary}
+                          </p>
+                        ) : null}
+                        {renderableProposalFollowUp.requested_exception?.reason ? (
+                          <p className="muted-copy">
+                            Exception rationale: {renderableProposalFollowUp.requested_exception.reason}
+                          </p>
+                        ) : null}
+                      </article>
+                    ) : null}
+                    {proposalLifecycle?.state === "running" || proposalLifecycle?.state === "deferred" ? (
+                      <article className="decision-card">
+                        <h3>Keep the workspace open for remote results</h3>
+                        <p>
+                          Reloading the workspace preserves the latest stored execution state, so you can safely return
+                          after the remote policy service posts a new verdict.
+                        </p>
+                      </article>
+                    ) : proposalLifecycle?.state === "failed" ? (
+                      <article className="decision-card">
+                        <h3>Review the live transport failure</h3>
+                        <p>
+                          Validate the remote TPP configuration and retry posture before asking travelers to treat this
+                          workspace as approval-ready.
+                        </p>
                       </article>
                     ) : null}
                     {(renderableProposalFollowUp?.guidance ?? []).map((guidance) => (
                       <article key={guidance} className="decision-card">
                         <h3>Guidance</h3>
                         <p>{guidance}</p>
+                      </article>
+                    ))}
+                    {(renderableProposalFollowUp?.alternatives ?? []).map((alternative) => (
+                      <article
+                        key={`${alternative.category}-${alternative.summary}`}
+                        className="decision-card"
+                      >
+                        <h3>{alternative.summary}</h3>
+                        <p>{alternative.rationale}</p>
                       </article>
                     ))}
                   </div>
