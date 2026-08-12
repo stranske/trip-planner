@@ -155,6 +155,22 @@ def _resolution_for_record(
     return None
 
 
+def _lowest_match_confidence(resolution: EntityResolution) -> float:
+    """Return the least candidate confidence with explicit empty-set semantics.
+
+    A ``distinct`` resolution records a confirmed non-match, so an empty candidate
+    set is fully confident.  An empty ``ambiguous`` resolution remains unproven and
+    must be treated as low confidence.  ``match`` resolutions are contractually
+    required to include candidates; returning ``0.0`` is the safe fallback if an
+    invalid instance reaches this helper.
+    """
+    if resolution.match_candidates:
+        return min(candidate.confidence for candidate in resolution.match_candidates)
+    if resolution.status == "distinct":
+        return 1.0
+    return 0.0
+
+
 def _dedupe_conflicts(conflicts: list[AttributeConflict]) -> list[AttributeConflict]:
     deduped: list[AttributeConflict] = []
     seen: set[tuple[str, str, str]] = set()
