@@ -1132,6 +1132,7 @@ function WorkspacePageContent({
     null
   );
   const [showPlannerDiagnostics, setShowPlannerDiagnostics] = useState(false);
+  const [showAllActivity, setShowAllActivity] = useState(false);
   const [plannerError, setPlannerError] = useState<string | null>(null);
   const [plannerBusyLabel, setPlannerBusyLabel] = useState<string | null>(null);
   const [planningModeBusy, setPlanningModeBusy] = useState(false);
@@ -2186,50 +2187,6 @@ function WorkspacePageContent({
           )}
         </section>
 
-        {panelVisibility.showProposalPanel ? (
-          <section className={STATUS_CARD_CLASS} data-testid="tpp-label">
-            <p className="status-label">Approval details</p>
-            <h2>Options and readiness signals</h2>
-          {currentWorkspace.proposal_state == null ? (
-            <p className="muted-copy">Approval-packet details will render here once the packet is saved.</p>
-          ) : (
-            <div className="decision-stack">
-              {renderableProposalFollowUp ? (
-                <article className="decision-card">
-                  <h3>{renderableProposalFollowUp.recommended_label ?? renderableProposalFollowUp.title}</h3>
-                  <p>{renderableProposalFollowUp.summary}</p>
-                  {renderableProposalFollowUp.selected_alternative?.summary ? (
-                    <p className="muted-copy">
-                      Selected alternative: {renderableProposalFollowUp.selected_alternative.summary}
-                    </p>
-                  ) : null}
-                  {renderableProposalFollowUp.requested_exception?.reason ? (
-                    <p className="muted-copy">
-                      Exception rationale: {renderableProposalFollowUp.requested_exception.reason}
-                    </p>
-                  ) : null}
-                </article>
-              ) : null}
-              {(renderableProposalFollowUp?.guidance ?? []).map((guidance) => (
-                <article key={guidance} className="decision-card">
-                  <h3>Guidance</h3>
-                  <p>{guidance}</p>
-                </article>
-              ))}
-              {(renderableProposalFollowUp?.alternatives ?? []).map((alternative) => (
-                <article
-                  key={`${alternative.category}-${alternative.summary}`}
-                  className="decision-card"
-                >
-                  <h3>{alternative.summary}</h3>
-                  <p>{alternative.rationale}</p>
-                </article>
-              ))}
-            </div>
-          )}
-          </section>
-        ) : null}
-
         <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Planning notes</p>
           <h2>
@@ -2262,14 +2219,26 @@ function WorkspacePageContent({
             {currentWorkspace.activity_log.length === 0 ? (
               <p className="muted-copy">Planner actions will appear here after the first decision or feedback event.</p>
             ) : (
-              currentWorkspace.activity_log.slice(0, 2).map((entry) => (
+              currentWorkspace.activity_log
+                .slice(0, showAllActivity ? undefined : 2)
+                .map((entry) => (
                 <article key={entry.activity_event_id} className="decision-card">
                   <h3>{entry.event_kind.replace(/_/g, " ")}</h3>
                   <p>{entry.summary}</p>
                 </article>
-              ))
+                ))
             )}
           </div>
+          {currentWorkspace.activity_log.length > 2 ? (
+            <button
+              type="button"
+              className="secondary-button"
+              aria-expanded={showAllActivity}
+              onClick={() => setShowAllActivity((current) => !current)}
+            >
+              {showAllActivity ? "Show recent activity" : "View all activity"}
+            </button>
+          ) : null}
         </section>
       </div>
       </details>

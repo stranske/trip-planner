@@ -953,6 +953,31 @@ describe("WorkspacePage", () => {
     expect(screen.queryByRole("heading", { name: "Budget vs actual" })).not.toBeInTheDocument();
   });
 
+  it("keeps approval details in Policy and expands older activity on request", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        activity_log: [
+          { activity_event_id: "activity:1", occurred_at: "2026-04-10T00:00:00Z", event_kind: "first", summary: "First activity" },
+          { activity_event_id: "activity:2", occurred_at: "2026-04-11T00:00:00Z", event_kind: "second", summary: "Second activity" },
+          { activity_event_id: "activity:3", occurred_at: "2026-04-12T00:00:00Z", event_kind: "older", summary: "Older activity" },
+        ],
+      }),
+    });
+    renderWorkspacePage();
+
+    await waitFor(() => expect(screen.getByText("Latest trip planning actions")).toBeInTheDocument());
+    expect(screen.queryByText("Options and readiness signals")).not.toBeInTheDocument();
+    expect(screen.queryByText("Older activity")).not.toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "View all activity" }));
+    expect(screen.getByText("Older activity")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Policy" }));
+    expect(screen.getByText("Options and readiness signals")).toBeInTheDocument();
+  });
+
   it("throws only when the workspace deliberate-break hook is enabled", async () => {
     mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
     const workspaceWindow = window as WorkspaceTestWindow;
@@ -2112,6 +2137,7 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
+    await selectWorkspaceTab("Policy");
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Options and readiness signals" })).toBeInTheDocument();
     });
