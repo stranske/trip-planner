@@ -746,7 +746,7 @@ describe("mapSurface", () => {
     expect(bundleMarkers.map((marker) => marker.kind)).toEqual(["lodging", "activity", "transport"]);
   });
 
-  it("api key alone does not report a live provider", () => {
+  it("treats a configured key as not observed ready", () => {
     const model = buildTripMapSurfaceModel({
       activeScenario: kyotoBaselineScenario,
       bundles: [kyotoAnchorBundle],
