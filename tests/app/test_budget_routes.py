@@ -208,6 +208,9 @@ def test_budget_spend_routes_reject_non_finite_amounts_without_mutating_state(
         },
     )
     spend_event_id = recorded.json()["spend_events"][0]["spend_event_id"]
+    original_event = client.get(
+        f"/api/workspace/{trip_id}/budget"
+    ).json()["spend_events"][0]
     rejected_update = client.patch(
         f"/api/workspace/{trip_id}/budget/spend-events/{spend_event_id}",
         content=json.dumps(
@@ -221,9 +224,10 @@ def test_budget_spend_routes_reject_non_finite_amounts_without_mutating_state(
         headers={"content-type": "application/json"},
     )
     assert rejected_update.status_code == 422
-    assert client.get(f"/api/workspace/{trip_id}/budget").json()["spend_events"][0][
-        "amount"
-    ] == 25
+    assert (
+        client.get(f"/api/workspace/{trip_id}/budget").json()["spend_events"][0]
+        == original_event
+    )
 
 
 def test_workspace_budget_spend_event_can_be_updated(client: TestClient) -> None:
