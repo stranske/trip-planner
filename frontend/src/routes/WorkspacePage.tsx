@@ -2410,6 +2410,34 @@ function WorkspacePageContent({
                   <>
                     {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
                     {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
+                    <dl className="workspace-meta">
+                      <div>
+                        <dt>Approval readiness</dt>
+                        <dd>
+                          {currentWorkspace.view_model?.policy_presentation.approval_status_label ??
+                            proposalLifecycle?.readinessLabel ??
+                            "Waiting for policy review"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Packet status</dt>
+                        <dd>{currentWorkspace.proposal_state.summary.submission_status ?? "unknown"}</dd>
+                      </div>
+                      <div>
+                        <dt>Comparables</dt>
+                        <dd>{currentWorkspace.proposal_state.summary.comparable_count ?? 0}</dd>
+                      </div>
+                      <div>
+                        <dt>Next step</dt>
+                        <dd>
+                          {currentWorkspace.view_model?.policy_presentation.next_step_label ??
+                            formatFollowUpStatus(
+                              renderableProposalFollowUp?.status ??
+                                currentWorkspace.proposal_state.summary.follow_up_status
+                            )}
+                        </dd>
+                      </div>
+                    </dl>
                     <p>{proposalLifecycle?.summary ?? "Submission stored for later review."}</p>
                     {shouldShowProposalRefresh(
                       currentWorkspace.proposal_state,
@@ -2437,12 +2465,51 @@ function WorkspacePageContent({
                       <article className="decision-card">
                         <h3>{renderableProposalFollowUp.recommended_label ?? renderableProposalFollowUp.title}</h3>
                         <p>{renderableProposalFollowUp.summary}</p>
+                        {renderableProposalFollowUp.guidance?.length ? (
+                          <p className="muted-copy">{renderableProposalFollowUp.guidance[0]}</p>
+                        ) : null}
+                        {renderableProposalFollowUp.selected_alternative?.summary ? (
+                          <p className="muted-copy">
+                            Selected alternative: {renderableProposalFollowUp.selected_alternative.summary}
+                          </p>
+                        ) : null}
+                        {renderableProposalFollowUp.requested_exception?.reason ? (
+                          <p className="muted-copy">
+                            Exception rationale: {renderableProposalFollowUp.requested_exception.reason}
+                          </p>
+                        ) : null}
+                      </article>
+                    ) : null}
+                    {proposalLifecycle?.state === "running" || proposalLifecycle?.state === "deferred" ? (
+                      <article className="decision-card">
+                        <h3>Keep the workspace open for remote results</h3>
+                        <p>
+                          Reloading the workspace preserves the latest stored execution state, so you can safely return
+                          after the remote policy service posts a new verdict.
+                        </p>
+                      </article>
+                    ) : proposalLifecycle?.state === "failed" ? (
+                      <article className="decision-card">
+                        <h3>Review the live transport failure</h3>
+                        <p>
+                          Validate the remote TPP configuration and retry posture before asking travelers to treat this
+                          workspace as approval-ready.
+                        </p>
                       </article>
                     ) : null}
                     {(renderableProposalFollowUp?.guidance ?? []).map((guidance) => (
                       <article key={guidance} className="decision-card">
                         <h3>Guidance</h3>
                         <p>{guidance}</p>
+                      </article>
+                    ))}
+                    {(renderableProposalFollowUp?.alternatives ?? []).map((alternative) => (
+                      <article
+                        key={`${alternative.category}-${alternative.summary}`}
+                        className="decision-card"
+                      >
+                        <h3>{alternative.summary}</h3>
+                        <p>{alternative.rationale}</p>
                       </article>
                     ))}
                   </div>

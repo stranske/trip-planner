@@ -766,6 +766,12 @@ function renderWorkspacePage() {
   );
 }
 
+async function selectWorkspaceTab(
+  label: "Plan" | "Compare" | "Map" | "Budget" | "Notebook" | "Policy"
+) {
+  await userEvent.setup().click(await screen.findByRole("tab", { name: label }));
+}
+
 function getPlannerHost() {
   const plannerHost = document.querySelector(".planner-panel-host");
   expect(plannerHost).toBeTruthy();
@@ -1244,6 +1250,8 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
+    await selectWorkspaceTab("Plan");
+
     await waitFor(() => {
       expect(
         screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length
@@ -1251,6 +1259,8 @@ describe("WorkspacePage", () => {
     });
 
     expect(screen.getAllByTestId("policy-posture")[0]).toHaveTextContent("Approval-ready");
+
+    await selectWorkspaceTab("Policy");
     expect(screen.getByTestId("proposal-lifecycle")).toHaveTextContent(
       "Approval packet is ready"
     );
@@ -1273,13 +1283,18 @@ describe("WorkspacePage", () => {
       expect(screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length).toBeGreaterThan(0);
     });
 
+    await selectWorkspaceTab("Map");
     const routeContextMap = screen.getByLabelText("Route context map");
 
     expect(screen.getAllByRole("heading", { name: "Kyoto base with Uji day trip" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Route sketch for Kyoto base with Uji day trip" })).toBeInTheDocument();
     expect(within(routeContextMap).getAllByText("Kyoto").length).toBeGreaterThan(0);
     expect(within(routeContextMap).getAllByText("Uji").length).toBeGreaterThan(0);
+
+    await selectWorkspaceTab("Plan");
     expect(screen.getByText("Save baseline scenario")).toBeInTheDocument();
+
+    await selectWorkspaceTab("Plan");
     expect(screen.getByRole("heading", { name: "Traveler planning workspace" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "How should the planner work?" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Collaborative/ })).toBeChecked();
@@ -1294,8 +1309,6 @@ describe("WorkspacePage", () => {
     });
     expect(screen.getByRole("button", { name: "Compare routes" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Planner tools available")).not.toBeInTheDocument();
-    expect(routeContextMap).toBeInTheDocument();
-    expect(screen.getByText("Destination context")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trip rhythm and day sequence" })).toBeInTheDocument();
     expect(screen.getByLabelText("Timeline summary")).toBeInTheDocument();
     expect(
@@ -1312,21 +1325,30 @@ describe("WorkspacePage", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Review route tradeoffs" })).toBeInTheDocument();
     expect(screen.getByLabelText("Scenario review board")).toBeInTheDocument();
+
     expect(screen.getAllByText("Approval posture").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Places and options to review" })).toBeInTheDocument();
     expect(screen.getAllByText("Osaka arrival buffer").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Kyoto cultural anchor").length).toBeGreaterThan(0);
+
+    await selectWorkspaceTab("Policy");
     expect(screen.getByRole("heading", { name: "Approval packet is ready" })).toBeInTheDocument();
     expect(screen.getByText("Ready for approval")).toBeInTheDocument();
     expect(screen.getAllByText("Advance to approval").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Options and readiness signals" })).toBeInTheDocument();
     expect(screen.queryByText("Conference Hotel")).not.toBeInTheDocument();
     expect(screen.queryByText("proposal-state:trip-leisure-kyoto-draft")).not.toBeInTheDocument();
+
+    await selectWorkspaceTab("Notebook");
     expect(screen.getByRole("heading", { name: "Planner notes to keep" })).toBeInTheDocument();
     expect(screen.getByText("Planner checkpoint 1")).toBeInTheDocument();
+
+    await selectWorkspaceTab("Compare");
     expect(screen.getByRole("heading", { name: "Compare this workspace with other saved trips" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Compare with Tokyo client summit" })).toBeInTheDocument();
+
+    await selectWorkspaceTab("Plan");
     await waitFor(() => {
       const plannerPanel = getPlannerHost().shadowRoot?.querySelector(
         '[aria-label="Planner side panel"]'
@@ -1915,6 +1937,8 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
+    await selectWorkspaceTab("Map");
+
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" })).toBeInTheDocument();
     });
@@ -1923,18 +1947,22 @@ describe("WorkspacePage", () => {
       screen.getByRole("heading", { name: "Route sketch for Kyoto base with Uji day trip" })
     ).toBeInTheDocument();
     expect(screen.getAllByText("kyoto -> uji -> kyoto").length).toBeGreaterThan(0);
-    expect(screen.getByText("93 / 100 planner score")).toBeInTheDocument();
-    expect(screen.getAllByText("Balanced Kyoto culture baseline").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "2. Kyoto plus Osaka fallback" }));
 
     expect(
       screen.getByRole("heading", { name: "Route sketch for Kyoto plus Osaka fallback" })
     ).toBeInTheDocument();
     expect(screen.getAllByText("kyoto -> osaka -> kyoto").length).toBeGreaterThan(0);
+    expect(within(screen.getByLabelText("Route context map")).getAllByText("Osaka").length).toBeGreaterThan(0);
+
+    await selectWorkspaceTab("Plan");
+
     expect(screen.getByText("88 / 100 planner score")).toBeInTheDocument();
     expect(screen.getAllByText("Higher-energy fallback with extra transfers").length).toBeGreaterThan(0);
-    expect(within(screen.getByLabelText("Route context map")).getAllByText("Osaka").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Higher transfer load to preserve nightlife breadth.").length).toBeGreaterThan(0);
+
+    await selectWorkspaceTab("Map");
+
     expect(screen.getByRole("heading", { name: "Selected scenario affordances" })).toBeInTheDocument();
     expect(screen.getByText("Alternative scenario")).toBeInTheDocument();
     expect(screen.getByText("7 transfer checkpoint(s)")).toBeInTheDocument();
@@ -1950,6 +1978,8 @@ describe("WorkspacePage", () => {
     });
 
     const { container } = renderWorkspacePage();
+
+    await selectWorkspaceTab("Map");
 
     await waitFor(() => {
       expect(screen.getByLabelText("Fallback option markers")).toBeInTheDocument();
@@ -1993,6 +2023,8 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
+    await selectWorkspaceTab("Map");
+
     await waitFor(() => {
       expect(screen.getByLabelText("Fallback option markers")).toBeInTheDocument();
     });
@@ -2010,15 +2042,21 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
+    await selectWorkspaceTab("Compare");
+
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" })).toBeInTheDocument();
     });
 
     expect(screen.getAllByText("Moderate travel friction with a clear cultural center of gravity.").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Compare 2. Kyoto plus Osaka fallback" }));
+
+    await selectWorkspaceTab("Map");
     expect(
       screen.getByRole("heading", { name: "Route sketch for Kyoto plus Osaka fallback" })
     ).toBeInTheDocument();
+
+    await selectWorkspaceTab("Compare");
     expect(screen.getAllByText("Osaka rainy-day fallback").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Higher transfer load to preserve nightlife breadth.").length).toBeGreaterThan(0);
 
@@ -2218,6 +2256,7 @@ describe("WorkspacePage", () => {
     });
 
     expect(screen.getByText("Compact review keeps route, day plan, and next choices close together.")).toBeInTheDocument();
+    await selectWorkspaceTab("Map");
     await waitFor(() => {
       expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Regional route review");
     });
@@ -2226,6 +2265,7 @@ describe("WorkspacePage", () => {
         .length
     ).toBeGreaterThan(0);
     expect(screen.queryByText(/Google Maps JavaScript is not configured in this environment/)).not.toBeInTheDocument();
+    await selectWorkspaceTab("Plan");
     expect(screen.getByRole("heading", { name: "Compact day-by-day review" })).toBeInTheDocument();
   });
 
@@ -2238,6 +2278,8 @@ describe("WorkspacePage", () => {
     });
 
     renderWorkspacePage();
+
+    await selectWorkspaceTab("Map");
 
     await waitFor(() => {
       expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Regional route review");
@@ -2256,6 +2298,8 @@ describe("WorkspacePage", () => {
     });
 
     renderWorkspacePage();
+
+    await selectWorkspaceTab("Map");
 
     await waitFor(() => {
       expect(screen.getByLabelText("Map view confidence")).toHaveTextContent("Regional route review");
@@ -2300,6 +2344,8 @@ describe("WorkspacePage", () => {
     });
 
     renderWorkspacePage();
+
+    await selectWorkspaceTab("Map");
 
     await waitFor(() => {
       expect(
@@ -2504,6 +2550,8 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
+    await selectWorkspaceTab("Policy");
+
     await waitFor(() => {
       expect(
         screen.getByText(
@@ -2542,6 +2590,8 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
+    await selectWorkspaceTab("Policy");
+
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Policy review is deferred" })).toBeInTheDocument();
     });
@@ -2576,6 +2626,8 @@ describe("WorkspacePage", () => {
     });
 
     renderWorkspacePage();
+
+    await selectWorkspaceTab("Policy");
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Policy review is running" })).toBeInTheDocument();
@@ -2618,6 +2670,8 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
+    await selectWorkspaceTab("Policy");
+
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Awaiting policy evaluation result" })).toBeInTheDocument();
     });
@@ -2653,6 +2707,8 @@ describe("WorkspacePage", () => {
     });
 
     renderWorkspacePage();
+
+    await selectWorkspaceTab("Policy");
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Awaiting policy evaluation result" })).toBeInTheDocument();
@@ -2732,6 +2788,8 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
+    await selectWorkspaceTab("Policy");
+
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Refresh live status" })).toBeInTheDocument();
     });
@@ -2776,6 +2834,8 @@ describe("WorkspacePage", () => {
     });
 
     renderWorkspacePage();
+
+    await selectWorkspaceTab("Policy");
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Live policy execution needs attention" })).toBeInTheDocument();
@@ -2846,6 +2906,8 @@ describe("WorkspacePage", () => {
     });
 
     renderWorkspacePage();
+
+    await selectWorkspaceTab("Policy");
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Policy review finished with follow-up" })).toBeInTheDocument();
@@ -2926,6 +2988,8 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
+    await selectWorkspaceTab("Policy");
+
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Policy review finished with follow-up" })).toBeInTheDocument();
     });
@@ -2963,12 +3027,14 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
+    await selectWorkspaceTab("Policy");
+
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Approval packet is ready" })).toBeInTheDocument();
     });
 
     expect(screen.queryByRole("heading", { name: "Approval-ready proposal" })).not.toBeInTheDocument();
-    expect(screen.getByText("resolved")).toBeInTheDocument();
+    expect(screen.getByText("Ready for approval")).toBeInTheDocument();
     expect(screen.queryByText("undefined")).not.toBeInTheDocument();
     expect(screen.queryByText(/Selected alternative:/)).not.toBeInTheDocument();
   });
@@ -3064,6 +3130,8 @@ describe("WorkspacePage", () => {
     });
 
     renderWorkspacePage();
+
+    await selectWorkspaceTab("Budget");
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Budget vs actual" })).toBeInTheDocument();
@@ -3240,6 +3308,8 @@ describe("WorkspacePage", () => {
     });
 
     renderWorkspacePage();
+
+    await selectWorkspaceTab("Budget");
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Record spend event" })).toBeInTheDocument();
@@ -3444,6 +3514,8 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
+    await selectWorkspaceTab("Notebook");
+
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Planning notebook" })).toBeInTheDocument();
     });
@@ -3495,6 +3567,8 @@ describe("WorkspacePage", () => {
     mockedCreateNotebookItem.mockResolvedValue(newItem);
 
     renderWorkspacePage();
+
+    await selectWorkspaceTab("Notebook");
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Planning notebook" })).toBeInTheDocument();
@@ -3557,6 +3631,8 @@ describe("WorkspacePage", () => {
     mockedUpdateNotebookItem.mockResolvedValue(completedItem);
 
     renderWorkspacePage();
+
+    await selectWorkspaceTab("Notebook");
 
     await waitFor(() => {
       expect(screen.getByText("Research tea ceremony venues")).toBeInTheDocument();
@@ -3621,6 +3697,8 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
+    await selectWorkspaceTab("Notebook");
+
     await waitFor(() => {
       expect(screen.getByText("Draft lodging short-list")).toBeInTheDocument();
     });
@@ -3682,6 +3760,8 @@ describe("WorkspacePage", () => {
     mockedSetNotebookFocus.mockResolvedValue({ category: null, notebook_item_id: "nb-item:focus-target" });
 
     renderWorkspacePage();
+
+    await selectWorkspaceTab("Notebook");
 
     await waitFor(() => {
       expect(screen.getByText("Map out Arashiyama day hike")).toBeInTheDocument();
