@@ -47,6 +47,8 @@ def get_allowed_cors_origin_regex() -> str | None:
 def _json_safe_validation_value(value: Any) -> Any:
     if isinstance(value, float) and not math.isfinite(value):
         return str(value)
+    if isinstance(value, Exception):
+        return str(value)
     if isinstance(value, list):
         return [_json_safe_validation_value(item) for item in value]
     if isinstance(value, dict):
