@@ -268,8 +268,8 @@ describe("TripMap", () => {
       "map-route-google-maps-js"
     );
     expect(
-      screen.getByRole("img", { name: "Route geometry overlay for Rail-first route" })
-    ).toBeInTheDocument();
+      screen.getByRole("group", { name: "Interactive Google map for Rail-first route" })
+    ).toHaveAttribute("data-provider-surface", "rendered");
     expect(screen.queryByText(/Google Maps JavaScript/i)).not.toBeInTheDocument();
   });
 
