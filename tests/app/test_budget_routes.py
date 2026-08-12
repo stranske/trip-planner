@@ -149,6 +149,83 @@ def test_budget_route_rejects_non_finite_amounts(client: TestClient, amount: flo
     assert client.get(f"/api/workspace/{trip_id}/budget").json()["budget_plan"] is None
 
 
+@pytest.mark.parametrize("amount", [float("nan"), float("inf"), float("-inf")])
+def test_budget_spend_routes_reject_non_finite_amounts_without_mutating_state(
+    client: TestClient, amount: float
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Finite spend guard",
+            "summary": "Reject non-finite spend inputs before persistence.",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 4, "primary_regions": ["Kyoto"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    client.put(
+        f"/api/workspace/{trip_id}/budget",
+        json={
+            "title": "Finite spend plan",
+            "currency": "USD",
+            "scenario_budgets": [
+                {
+                    "title": "Baseline",
+                    "allocations": [
+                        {
+                            "category_key": "food",
+                            "label": "Food",
+                            "planned_amount": 150,
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    rejected_create = client.post(
+        f"/api/workspace/{trip_id}/budget/spend-events",
+        content=json.dumps(
+            {
+                "category_key": "food",
+                "amount": amount,
+                "source_kind": "manual",
+                "source_context": "Invalid spend",
+            }
+        ),
+        headers={"content-type": "application/json"},
+    )
+    assert rejected_create.status_code == 422
+    assert client.get(f"/api/workspace/{trip_id}/budget").json()["spend_events"] == []
+
+    recorded = client.post(
+        f"/api/workspace/{trip_id}/budget/spend-events",
+        json={
+            "category_key": "food",
+            "amount": 25,
+            "source_kind": "manual",
+            "source_context": "Valid spend",
+        },
+    )
+    spend_event_id = recorded.json()["spend_events"][0]["spend_event_id"]
+    rejected_update = client.patch(
+        f"/api/workspace/{trip_id}/budget/spend-events/{spend_event_id}",
+        content=json.dumps(
+            {
+                "category_key": "food",
+                "amount": amount,
+                "source_kind": "manual",
+                "source_context": "Invalid replacement",
+            }
+        ),
+        headers={"content-type": "application/json"},
+    )
+    assert rejected_update.status_code == 422
+    assert client.get(f"/api/workspace/{trip_id}/budget").json()["spend_events"][0][
+        "amount"
+    ] == 25
+
+
 def test_workspace_budget_spend_event_can_be_updated(client: TestClient) -> None:
     created = client.post(
         "/api/trips",

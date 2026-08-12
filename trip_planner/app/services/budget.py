@@ -594,17 +594,33 @@ def update_workspace_spend_event(
             raise ValueError("currency cannot be changed for an existing spend event")
         updated_currency = normalized_currency
     now = _next_session_timestamp(None)
-    event_record.category_key = category_key
-    event_record.amount = _to_decimal_amount(amount)
-    event_record.currency = updated_currency
-    event_record.occurred_at = occurred_at or event_record.occurred_at
-    event_record.source_kind = source_kind
-    event_record.source_context = source_context
-    event_record.scenario_budget_id = scenario_budget_id
-    event_record.saved_scenario_id = saved_scenario_id
-    event_record.merchant_name = merchant_name
-    event_record.source_ref = source_ref
-    event_record.notes = list(notes)
+    updated_event = ActualSpendEvent(
+        spend_event_id=event_record.spend_event_id,
+        trip_id=record.trip_id,
+        budget_plan_id=event_record.budget_plan_id,
+        category_key=category_key,
+        amount=amount,
+        currency=updated_currency,
+        occurred_at=occurred_at or event_record.occurred_at,
+        source_kind=source_kind,
+        source_context=source_context,
+        scenario_budget_id=scenario_budget_id,
+        saved_scenario_id=saved_scenario_id,
+        merchant_name=merchant_name,
+        source_ref=source_ref,
+        notes=notes,
+    )
+    event_record.category_key = updated_event.category_key
+    event_record.amount = _to_decimal_amount(updated_event.amount)
+    event_record.currency = updated_event.currency
+    event_record.occurred_at = updated_event.occurred_at
+    event_record.source_kind = updated_event.source_kind
+    event_record.source_context = updated_event.source_context
+    event_record.scenario_budget_id = updated_event.scenario_budget_id
+    event_record.saved_scenario_id = updated_event.saved_scenario_id
+    event_record.merchant_name = updated_event.merchant_name
+    event_record.source_ref = updated_event.source_ref
+    event_record.notes = list(updated_event.notes)
     session_record = _ensure_session_record(db_session, record=record, timestamp=now)
     session_record.active_budget_plan_id = event_record.budget_plan_id
     session_record.last_updated_at = _next_session_timestamp(session_record.last_updated_at)
