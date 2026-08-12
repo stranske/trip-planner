@@ -79,6 +79,26 @@ jobs:
       cache: false
     secrets: inherit
 
+  complexity-guard:
+    name: Complexity guard
+    needs: detect
+    if: ${{ needs.detect.outputs.is_python_code == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.14'
+
+      - name: Reject changed functions above the recorded complexity ceiling
+        run: >-
+          python scripts/measure_complexity.py
+          --changed-from ${{ github.event.pull_request.base.sha || 'origin/main' }}
+          --max-complexity 59
+
   cross-repo-smoke:
     name: Cross-Repo Smoke
     needs: detect
@@ -117,7 +137,7 @@ jobs:
 
   summary:
     name: gate-summary
-    needs: [detect, python-ci, runtime-ci, cross-repo-smoke]
+    needs: [detect, python-ci, complexity-guard, runtime-ci, cross-repo-smoke]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -140,12 +160,14 @@ jobs:
         env:
           DETECT_RESULT: ${{ needs.detect.result || 'skipped' }}
           PYTHON_RESULT: ${{ needs.python-ci.result || 'skipped' }}
+          COMPLEXITY_RESULT: ${{ needs.complexity-guard.result || 'skipped' }}
           RUNTIME_RESULT: ${{ needs.runtime-ci.result || 'skipped' }}
           CROSS_REPO_RESULT: ${{ needs.cross-repo-smoke.result || 'skipped' }}
         run: |
           set -euo pipefail
 
           python_result="${PYTHON_RESULT:-skipped}"
+          complexity_result="${COMPLEXITY_RESULT:-skipped}"
           runtime_result="${RUNTIME_RESULT:-skipped}"
           cross_repo_result="${CROSS_REPO_RESULT:-skipped}"
           state="success"
@@ -161,20 +183,23 @@ jobs:
           if [ "$python_result" = "failure" ]; then
             state="failure"
             description="Python CI failed"
+          elif [ "$complexity_result" = "failure" ]; then
+            state="failure"
+            description="Complexity guard failed"
           elif [ "$runtime_result" = "failure" ]; then
             state="failure"
             description="Runtime CI failed"
           elif [ "$cross_repo_result" = "failure" ]; then
             state="failure"
             description="Cross-repo smoke check failed"
-          elif [ "$python_result" = "cancelled" ] || [ "$runtime_result" = "cancelled" ] || [ "$cross_repo_result" = "cancelled" ]; then
+          elif [ "$python_result" = "cancelled" ] || [ "$complexity_result" = "cancelled" ] || [ "$runtime_result" = "cancelled" ] || [ "$cross_repo_result" = "cancelled" ]; then
             state="error"
             description="Checks were cancelled"
-          elif is_terminal_ok "$python_result" && is_terminal_ok "$runtime_result" && is_terminal_ok "$cross_repo_result"; then
+          elif is_terminal_ok "$python_result" && is_terminal_ok "$complexity_result" && is_terminal_ok "$runtime_result" && is_terminal_ok "$cross_repo_result"; then
             state="success"
             ran=()
             skipped=()
-            for pair in "Python CI:$python_result" "runtime CI:$runtime_result" "cross-repo smoke:$cross_repo_result"; do
+            for pair in "Python CI:$python_result" "complexity guard:$complexity_result" "runtime CI:$runtime_result" "cross-repo smoke:$cross_repo_result"; do
               name="${pair%%:*}"
               result="${pair#*:}"
               if [ "$result" = "success" ]; then

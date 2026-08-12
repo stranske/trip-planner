@@ -11,6 +11,7 @@ from sqlalchemy import select
 from trip_planner.app.main import create_app
 from trip_planner.app.services import proposal as proposal_service
 from trip_planner.app.services import workspace as workspace_service
+from trip_planner.app.services import workspace_fixtures
 from trip_planner.app.services.auth import AuthenticatedUser, create_account
 from trip_planner.app.services.feasibility import (
     build_feasibility_planner_outputs,
@@ -45,6 +46,25 @@ _FIXTURE_ADAPTER_MARKERS = {
     "Kyoto ranked scenario workspace",
     "Client summit ranked scenarios",
 }
+_WORKSPACE_MODULE_LINE_CEILING = 4350
+
+
+def test_workspace_module_stays_under_size_ceiling() -> None:
+    workspace_path = Path(workspace_service.__file__)
+
+    assert len(workspace_path.read_text(encoding="utf-8").splitlines()) <= _WORKSPACE_MODULE_LINE_CEILING
+
+
+def test_load_saved_scenarios_allows_entries_without_a_comparison(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "no-comparison.json").write_text('{"records": []}', encoding="utf-8")
+    monkeypatch.setattr(workspace_fixtures, "_state_fixture_dir", lambda _kind: tmp_path)
+
+    records, comparison = workspace_fixtures.load_saved_scenarios("no-comparison.json")
+
+    assert records == []
+    assert comparison is None
 
 
 def _assert_payload_avoids_fixture_or_default_inventory_data(payload: dict[str, Any]) -> None:
