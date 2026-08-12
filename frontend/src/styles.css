@@ -156,6 +156,32 @@ a {
   gap: var(--space-5);
 }
 
+.workspace-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+
+.workspace-tabs button {
+  flex: 1 1 7rem;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid rgba(19, 33, 44, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--color-ink);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.workspace-tabs button[aria-selected="true"] {
+  border-color: rgba(56, 117, 107, 0.55);
+  background: var(--color-mint);
+}
+
 .workspace-grid {
   display: grid;
   gap: var(--space-5);
@@ -693,6 +719,7 @@ a {
 
 .planner-conversation-header {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-4);
   align-items: flex-start;
   justify-content: space-between;
@@ -719,10 +746,12 @@ a {
 
 .planner-conversation-actions {
   display: flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   gap: var(--space-2);
   justify-content: flex-end;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .planner-diagnostics-toggle {
@@ -735,6 +764,8 @@ a {
   font: inherit;
   font-size: 0.82rem;
   font-weight: 700;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .planner-diagnostics-toggle[aria-pressed="true"] {

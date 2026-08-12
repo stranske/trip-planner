@@ -3862,4 +3862,42 @@ describe("WorkspacePage", () => {
 
     expect(screen.getByText("Backend warming up")).toBeInTheDocument();
   });
+
+  it("keeps the workspace tabs within the mobile layout contract with no horizontal overflow at 375px", async () => {
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
+
+    renderWorkspacePage();
+
+    const tablist = await screen.findByRole("tablist", { name: "Workspace sections" });
+    expect(tablist).toHaveClass("workspace-tabs");
+    expect(tablist.querySelectorAll("button")).toHaveLength(6);
+    expect(screen.getByRole("tab", { name: "Plan" })).toHaveAttribute("tabindex", "0");
+  });
+
+  it("renders the trip name as the page heading on workspace routes", async () => {
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
+
+    renderWorkspacePage();
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Spring Kyoto anniversary draft" })
+    ).toBeInTheDocument();
+  });
+
+  it("moves workspace tab focus and selection with ArrowRight", async () => {
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
+    const user = userEvent.setup();
+
+    renderWorkspacePage();
+
+    const planTab = await screen.findByRole("tab", { name: "Plan" });
+    planTab.focus();
+    await user.keyboard("{ArrowRight}");
+
+    const compareTab = screen.getByRole("tab", { name: "Compare" });
+    expect(compareTab).toHaveFocus();
+    expect(compareTab).toHaveAttribute("aria-selected", "true");
+    expect(compareTab).toHaveAttribute("tabindex", "0");
+    expect(planTab).toHaveAttribute("tabindex", "-1");
+  });
 });
