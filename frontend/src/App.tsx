@@ -3,6 +3,7 @@ import {
   NavLink,
   Outlet,
   useLoaderData,
+  useLocation,
   useNavigate,
   useRevalidator,
   useRouteError,
@@ -47,7 +48,9 @@ export default function App() {
   const { session } = useLoaderData() as RootLoaderData;
   const navigate = useNavigate();
   const revalidator = useRevalidator();
+  const location = useLocation();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const isWorkspaceRoute = /^\/trips\/[^/]+(?:\/|$)/.test(location.pathname);
 
   async function handleSignOut() {
     setIsSigningOut(true);
@@ -67,12 +70,18 @@ export default function App() {
       <header className="app-header">
         <div>
           <p className="eyebrow">Trip Planner</p>
-          <h1>Plan trips with a saved workspace</h1>
-          <p className="lede">
-            {session
-              ? `Signed in as ${session.user.display_name}. Open a trip to keep decisions, notes, budgets, and route options together.`
-              : "Sign in to continue planning trips, compare routes, and keep notes in one place."}
-          </p>
+          {isWorkspaceRoute ? (
+            <p className="lede">Trip workspace</p>
+          ) : (
+            <>
+              <h1>Plan trips with a saved workspace</h1>
+              <p className="lede">
+                {session
+                  ? `Signed in as ${session.user.display_name}. Open a trip to keep decisions, notes, budgets, and route options together.`
+                  : "Sign in to continue planning trips, compare routes, and keep notes in one place."}
+              </p>
+            </>
+          )}
         </div>
         <nav aria-label="Primary">
           <NavLink to="/health">Status</NavLink>

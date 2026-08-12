@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useLoaderData } from "react-router-dom";
 
 import type { TripRecord } from "../api/trips";
@@ -1149,6 +1149,14 @@ function WorkspacePageContent({
   const [routeOptionBusyLabel, setRouteOptionBusyLabel] = useState<string | null>(null);
   const [routeOptionSuccess, setRouteOptionSuccess] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("plan");
+  const workspaceTabRefs = useRef<Record<WorkspaceTab, HTMLButtonElement | null>>({
+    plan: null,
+    compare: null,
+    map: null,
+    budget: null,
+    notebook: null,
+    policy: null,
+  });
   const plannerSessionLoadVersion = useRef(0);
   const plannerConversationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const previousWorkspaceRef = useRef(workspace);
@@ -1602,6 +1610,20 @@ function WorkspacePageContent({
     }
   }
 
+  function handleWorkspaceTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, tabId: WorkspaceTab) {
+    const currentIndex = WORKSPACE_TABS.findIndex((tab) => tab.id === tabId);
+    const direction = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    if (!direction) {
+      return;
+    }
+
+    event.preventDefault();
+    const nextIndex = (currentIndex + direction + WORKSPACE_TABS.length) % WORKSPACE_TABS.length;
+    const nextTab = WORKSPACE_TABS[nextIndex].id;
+    setActiveTab(nextTab);
+    workspaceTabRefs.current[nextTab]?.focus();
+  }
+
   async function handleNotebookSetFocus(focus: {
     category?: NotebookCategory | null;
     notebook_item_id?: string | null;
@@ -1655,7 +1677,7 @@ function WorkspacePageContent({
         <p className="status-label">
           {productView?.user_summary.mode_label ?? "Trip workspace"}
         </p>
-        <h2>{productView?.user_summary.trip_title ?? trip.title}</h2>
+        <h1>{productView?.user_summary.trip_title ?? trip.title}</h1>
         <p>{productView?.user_summary.headline ?? trip.summary}</p>
         {productView ? (
           <div className="decision-stack" aria-label="Product workspace summary">
@@ -1782,12 +1804,17 @@ function WorkspacePageContent({
         {WORKSPACE_TABS.map((tab) => (
           <button
             key={tab.id}
+            ref={(element) => {
+              workspaceTabRefs.current[tab.id] = element;
+            }}
             id={workspaceTabButtonId(tab.id)}
             type="button"
             role="tab"
             aria-selected={activeTab === tab.id}
             aria-controls={workspaceTabPanelId(tab.id)}
+            tabIndex={activeTab === tab.id ? 0 : -1}
             onClick={() => setActiveTab(tab.id)}
+            onKeyDown={(event) => handleWorkspaceTabKeyDown(event, tab.id)}
           >
             {tab.label}
           </button>
