@@ -45,8 +45,8 @@ def test_full_product_local_journeys_cover_runtime_identifiers(monkeypatch) -> N
         "model",
     }
     assert by_name["local-business-journey"].details["proposal_id"].startswith("proposal:trip-")
-    assert by_name["local-business-journey"].details["evaluation_status"] == "compliant"
-    assert by_name["local-business-journey"].details["follow_up_status"] == "resolved"
+    assert by_name["local-business-journey"].details["evaluation_status"] == "non_compliant"
+    assert by_name["local-business-journey"].details["follow_up_status"] == "reoptimization_required"
     assert by_name["local-business-journey"].details["status_poll"] in {
         "deferred",
         "failed",
@@ -344,14 +344,16 @@ def test_required_live_tpp_accepts_ready_prerequisite_after_success(monkeypatch)
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "token")
     monkeypatch.setenv("TPP_OIDC_PROVIDER", "google")
 
-    def fake_live_journey(_client, trip_id: str, _env: dict[str, str]) -> dict[str, str]:
+    def fake_live_journey(
+        _client, trip_id: str, _env: dict[str, str], **_: object
+    ) -> dict[str, str]:
         return {
             "base_url": "https://tpp.example.test",
             "trip_id": trip_id,
             "proposal_id": f"proposal:{trip_id}",
             "execution_id": "exec-test",
             "status_poll": "succeeded",
-            "evaluation_status": "compliant",
+            "evaluation_status": "non_compliant",
         }
 
     monkeypatch.setattr(verifier, "_run_live_tpp_journey", fake_live_journey)
