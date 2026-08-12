@@ -341,7 +341,7 @@ def test_workspace_planning_notebook_api_persists_items_and_focus_across_reload(
         json={"category": "lodging", "notebook_item_id": route_item["notebook_item_id"]},
     )
     assert mismatched_focus.status_code == 400
-    assert "does not match notebook item category" in mismatched_focus.json()["detail"]
+    assert mismatched_focus.json()["detail"].startswith("The workspace request was invalid.")
 
     focus_to_route = client.put(
         f"/api/workspace/{trip_id}/planning-notebook/focus",
@@ -477,21 +477,21 @@ def test_workspace_planning_ledger_rejects_supersedes_cycles(
         json={"supersedes_entry_id": first_id},
     )
     assert self_cycle.status_code == 400
-    assert "same ledger entry" in self_cycle.json()["detail"]
+    assert self_cycle.json()["detail"].startswith("The workspace request was invalid.")
 
     indirect_cycle = client.patch(
         f"/api/workspace/{trip_id}/planning-ledger/{first_id}",
         json={"supersedes_entry_id": second_id},
     )
     assert indirect_cycle.status_code == 400
-    assert "cycle" in indirect_cycle.json()["detail"]
+    assert indirect_cycle.json()["detail"].startswith("The workspace request was invalid.")
 
     missing_target = client.patch(
         f"/api/workspace/{trip_id}/planning-ledger/{first_id}",
         json={"supersedes_entry_id": "ledger:does-not-exist"},
     )
     assert missing_target.status_code == 400
-    assert "existing ledger entry" in missing_target.json()["detail"]
+    assert missing_target.json()["detail"].startswith("The workspace request was invalid.")
 
     other_trip = client.post(
         "/api/trips",
@@ -524,7 +524,7 @@ def test_workspace_planning_ledger_rejects_supersedes_cycles(
         json={"supersedes_entry_id": other_entry.json()["ledger_entry_id"]},
     )
     assert other_trip_target.status_code == 400
-    assert "existing ledger entry" in other_trip_target.json()["detail"]
+    assert other_trip_target.json()["detail"].startswith("The workspace request was invalid.")
 
     blank_target = client.patch(
         f"/api/workspace/{trip_id}/planning-ledger/{second_id}",
@@ -2646,7 +2646,7 @@ def test_workspace_option_feedback_rejects_unknown_option_id(client: TestClient)
     )
 
     assert invalid.status_code == 400
-    assert "not available in the current workspace option set" in invalid.json()["detail"]
+    assert invalid.json()["detail"].startswith("The workspace request was invalid.")
 
 
 def test_workspace_activity_log_is_capped_for_persisted_trips(client: TestClient) -> None:

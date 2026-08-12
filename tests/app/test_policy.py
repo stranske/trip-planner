@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
@@ -8,8 +9,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
+from trip_planner.app.routes import errors as route_errors
+from trip_planner.app.routes import policy as policy_routes
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.policy import _tpp_trip_plan_payload
+from trip_planner.integrations.tpp import TPPTransportError
 from trip_planner.integrations.tpp import client as tpp_client_module
 from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.policy import PersistedPolicyState
@@ -361,7 +365,7 @@ def test_workspace_policy_import_rejects_leisure_trip(client: TestClient) -> Non
     )
 
     assert response.status_code == 400
-    assert "business trips" in response.json()["detail"]
+    assert response.json()["detail"].startswith("The workspace policy request was invalid.")
 
 
 def test_workspace_policy_import_uses_live_tpp_transport_when_response_is_omitted(
@@ -522,7 +526,45 @@ def test_workspace_policy_import_surfaces_live_tpp_unavailable_errors(
     )
 
     assert response.status_code == 503
-    assert "failed" in response.json()["detail"]
+    assert response.json()["detail"].startswith(
+        "The policy service could not complete the request."
+    )
+
+
+def test_route_does_not_disclose_upstream_exception_text(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sentinel = "upstream-secret-7da6e2"
+    logged: dict[str, object] = {}
+
+    def _capture_log(*args: object, **kwargs: object) -> None:
+        logged["args"] = args
+        logged["exc_info"] = kwargs["exc_info"]
+
+    monkeypatch.setattr(route_errors.logger, "error", _capture_log)
+
+    def _raise_transport_error(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise TPPTransportError(sentinel, status_code=503)
+
+    monkeypatch.setattr(
+        policy_routes, "import_workspace_policy_constraints", _raise_transport_error
+    )
+    fixture = _load_fixture("standard_policy_sync.json")
+
+    response = client.put(
+        "/api/workspace/trip-secret/policy",
+        json={"request": fixture["request"], "response": fixture["response"]},
+    )
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert sentinel not in response.text
+    match = re.search(r"Reference ID: ([0-9a-f]{32}).", detail)
+    assert match is not None
+    assert str(logged["exc_info"]) == sentinel
+    assert match.group(1) in logged["args"]
 
 
 def test_workspace_policy_import_uses_stored_policy_fallback_on_live_timeout(
