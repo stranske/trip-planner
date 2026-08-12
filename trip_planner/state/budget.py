@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from trip_planner._validators import require_finite
 from trip_planner.contracts._validators import (
     require_non_empty,
     require_optional_non_empty,
@@ -82,6 +83,7 @@ class BudgetCategoryAllocation:
             raise ValueError(f"category_key must be one of {BUDGET_CATEGORY_KEYS}")
         require_non_empty(self.label, "label")
         _require_currency(self.currency, "currency")
+        require_finite(self.planned_amount, "planned_amount")
         if self.planned_amount <= 0:
             raise ValueError("planned_amount must be positive")
         if self.flexibility not in BUDGET_FLEXIBILITY_LEVELS:
@@ -262,6 +264,7 @@ class ActualSpendEvent:
         require_non_empty(self.budget_plan_id, "budget_plan_id")
         if self.category_key not in BUDGET_CATEGORY_KEYS:
             raise ValueError(f"category_key must be one of {BUDGET_CATEGORY_KEYS}")
+        require_finite(self.amount, "amount")
         if self.amount <= 0:
             raise ValueError("amount must be positive")
         _require_currency(self.currency, "currency")

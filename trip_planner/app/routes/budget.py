@@ -55,7 +55,8 @@ def save_workspace_budget(
     except WorkspaceBudgetNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        status_code = 422 if "must be finite" in str(error) else 400
+        raise HTTPException(status_code=status_code, detail=str(error)) from error
     return BudgetWorkspaceResponse.model_validate(result)
 
 
@@ -86,7 +87,8 @@ def create_workspace_spend_event(
     except WorkspaceBudgetNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        status_code = 422 if "must be finite" in str(error) else 400
+        raise HTTPException(status_code=status_code, detail=str(error)) from error
     return BudgetWorkspaceResponse.model_validate(result)
 
 
@@ -122,5 +124,6 @@ def patch_workspace_spend_event(
     except WorkspaceBudgetNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        status_code = 422 if "must be finite" in str(error) else 400
+        raise HTTPException(status_code=status_code, detail=str(error)) from error
     return BudgetWorkspaceResponse.model_validate(result)
