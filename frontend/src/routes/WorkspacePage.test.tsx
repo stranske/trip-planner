@@ -2611,6 +2611,21 @@ describe("WorkspacePage", () => {
   });
 
   it("offers a direct path to prepare an approval packet when none exists", async () => {
+    mockedFetchPlannerSession.mockImplementation(async (tripId) => ({
+      ...plannerSessionPayload,
+      trip_id: tripId,
+      planner_panel_state: {
+        ...plannerSessionPayload.planner_panel_state,
+        trip: {
+          ...plannerSessionPayload.planner_panel_state.trip,
+          trip_id: tripId,
+        },
+        option_set: {
+          ...plannerSessionPayload.planner_panel_state.option_set,
+          trip_id: tripId,
+        },
+      },
+    }));
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
         ...workspacePayload,
@@ -2630,6 +2645,10 @@ describe("WorkspacePage", () => {
     await user.click(await screen.findByRole("button", { name: "Prepare approval packet" }));
 
     expect(screen.getByRole("tab", { name: "Plan" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Plan" })).toHaveFocus();
+    await waitFor(() => {
+      expect(mockedFetchPlannerSession).toHaveBeenCalledWith("trip-business-tokyo-summit");
+    });
   });
 
   it("surfaces a deferred execution state while the remote verdict is queued", async () => {
@@ -2874,6 +2893,9 @@ describe("WorkspacePage", () => {
     expect(
       screen.getAllByText("Use a compliant downtown property before resubmitting the approval packet.").length
     ).toBeGreaterThan(0);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Policy status refreshed: Use a compliant downtown property before resubmitting the approval packet."
+    );
     expect(screen.queryByRole("button", { name: "Refresh live status" })).not.toBeInTheDocument();
   });
 
