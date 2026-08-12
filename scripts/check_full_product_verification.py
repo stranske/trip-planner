@@ -35,6 +35,25 @@ from trip_planner.persistence.db import ensure_database_ready, reset_database_st
 DEFAULT_TPP_REPO_PATH = REPO_ROOT.parent / "Travel-Plan-Permission"
 TPP_PORT = 8765
 EXPECTED_BUSINESS_EVALUATION_STATUS = "non_compliant"
+_EVALUATION_FIXTURE_BY_STATUS = {
+    "compliant": "approved_evaluation.json",
+    "non_compliant": "non_compliant_evaluation.json",
+}
+
+
+def _evaluation_fixture_name(expected_status: str) -> str:
+    fixture_name = _EVALUATION_FIXTURE_BY_STATUS.get(expected_status)
+    if fixture_name is None:
+        raise VerificationFailure(
+            json.dumps(
+                {
+                    "expected_status": expected_status,
+                    "supported_statuses": sorted(_EVALUATION_FIXTURE_BY_STATUS),
+                },
+                sort_keys=True,
+            )
+        )
+    return fixture_name
 
 
 class VerificationFailure(AssertionError):
@@ -691,7 +710,14 @@ def _started_tpp_service(
         stderr_path.unlink(missing_ok=True)
 
 
-def _run_live_tpp_journey(client: TestClient, trip_id: str, env: dict[str, str]) -> dict[str, Any]:
+def _run_live_tpp_journey(
+    client: TestClient,
+    trip_id: str,
+    env: dict[str, str],
+    *,
+    expected_evaluation_status: str = EXPECTED_BUSINESS_EVALUATION_STATUS,
+) -> dict[str, Any]:
+    evaluation_fixture_name = _evaluation_fixture_name(expected_evaluation_status)
     with _started_tpp_service(env) as (base_url, _process):
         with _temporary_tpp_client_environment(base_url, env):
             policy_request = _prepared_policy_request(trip_id)
@@ -745,6 +771,7 @@ def _run_live_tpp_journey(client: TestClient, trip_id: str, env: dict[str, str])
                 trip_id,
                 proposal["proposal_id"],
                 execution_id,
+                fixture_name=evaluation_fixture_name,
             )
             evaluation_response = client.put(
                 f"/api/workspace/{trip_id}/proposal/evaluation",
@@ -998,17 +1025,18 @@ def run_product_journeys(
                 proposal_id=proposal["proposal_id"],
                 summary=refresh_payload["summary"],
             )
+            evaluation_fixture_name = _evaluation_fixture_name(expected_business_evaluation_status)
             evaluation_request = _prepared_evaluation_request(
                 business_trip_id,
                 proposal["proposal_id"],
                 execution_id,
-                fixture_name="non_compliant_evaluation.json",
+                fixture_name=evaluation_fixture_name,
             )
             evaluation_response = _prepared_evaluation_response(
                 business_trip_id,
                 proposal["proposal_id"],
                 execution_id,
-                fixture_name="non_compliant_evaluation.json",
+                fixture_name=evaluation_fixture_name,
             )
             evaluated = client.put(
                 f"/api/workspace/{business_trip_id}/proposal/evaluation",
@@ -1085,6 +1113,7 @@ def run_product_journeys(
                     client,
                     business_trip_id,
                     {key: str(value) for key, value in tpp_status.details.items()},
+                    expected_evaluation_status=expected_business_evaluation_status,
                 )
                 _assert_business_verification_outcomes(
                     local_business_details,

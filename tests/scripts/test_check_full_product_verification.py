@@ -1,3 +1,4 @@
+import os
 import stat
 import time
 from pathlib import Path
@@ -392,6 +393,62 @@ def test_verifier_fails_on_failed_status_poll() -> None:
             _business_details(status_poll="failed"),
             expected_evaluation_status="compliant",
         )
+
+
+def test_verifier_fails_on_failed_live_status_poll() -> None:
+    with pytest.raises(verifier.VerificationFailure, match="status poll reported failure"):
+        verifier._assert_business_verification_outcomes(
+            _business_details(),
+            expected_evaluation_status="compliant",
+            live_details=_business_details(status_poll="failed"),
+        )
+
+
+def test_temporary_tpp_client_environment_restores_missing_keys() -> None:
+    for key in ("TPP_BASE_URL", "TPP_ACCESS_TOKEN", "TPP_OIDC_PROVIDER"):
+        assert key not in os.environ
+
+    with verifier._temporary_tpp_client_environment(
+        "http://127.0.0.1:9",
+        {
+            "TPP_ACCESS_TOKEN": "token",
+            "TPP_OIDC_PROVIDER": "google",
+        },
+    ):
+        assert os.environ["TPP_BASE_URL"] == "http://127.0.0.1:9"
+        assert os.environ["TPP_ACCESS_TOKEN"] == "token"
+        assert os.environ["TPP_OIDC_PROVIDER"] == "google"
+
+    for key in ("TPP_BASE_URL", "TPP_ACCESS_TOKEN", "TPP_OIDC_PROVIDER"):
+        assert key not in os.environ
+
+
+def test_temporary_tpp_client_environment_restores_prior_values_on_exception() -> None:
+    os.environ["TPP_BASE_URL"] = "http://prior.example"
+    os.environ["TPP_ACCESS_TOKEN"] = "prior-token"
+
+    with pytest.raises(RuntimeError):
+        with verifier._temporary_tpp_client_environment(
+            "http://127.0.0.1:9",
+            {
+                "TPP_ACCESS_TOKEN": "token",
+                "TPP_OIDC_PROVIDER": "google",
+            },
+        ):
+            assert os.environ["TPP_BASE_URL"] == "http://127.0.0.1:9"
+            assert os.environ["TPP_ACCESS_TOKEN"] == "token"
+            raise RuntimeError("boom")
+
+    assert os.environ["TPP_BASE_URL"] == "http://prior.example"
+    assert os.environ["TPP_ACCESS_TOKEN"] == "prior-token"
+    assert "TPP_OIDC_PROVIDER" not in os.environ
+    os.environ.pop("TPP_BASE_URL", None)
+    os.environ.pop("TPP_ACCESS_TOKEN", None)
+
+
+def test_evaluation_fixture_name_maps_expected_status() -> None:
+    assert verifier._evaluation_fixture_name("compliant") == "approved_evaluation.json"
+    assert verifier._evaluation_fixture_name("non_compliant") == "non_compliant_evaluation.json"
 
 
 def test_verifier_requires_the_declared_expected_business_outcome() -> None:

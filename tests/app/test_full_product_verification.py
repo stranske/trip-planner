@@ -344,7 +344,9 @@ def test_required_live_tpp_accepts_ready_prerequisite_after_success(monkeypatch)
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "token")
     monkeypatch.setenv("TPP_OIDC_PROVIDER", "google")
 
-    def fake_live_journey(_client, trip_id: str, _env: dict[str, str]) -> dict[str, str]:
+    def fake_live_journey(
+        _client, trip_id: str, _env: dict[str, str], **_: object
+    ) -> dict[str, str]:
         return {
             "base_url": "https://tpp.example.test",
             "trip_id": trip_id,
