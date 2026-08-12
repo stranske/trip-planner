@@ -45,6 +45,13 @@ _FIXTURE_ADAPTER_MARKERS = {
     "Kyoto ranked scenario workspace",
     "Client summit ranked scenarios",
 }
+_WORKSPACE_MODULE_LINE_CEILING = 4350
+
+
+def test_workspace_module_stays_under_size_ceiling() -> None:
+    workspace_path = Path(workspace_service.__file__)
+
+    assert len(workspace_path.read_text(encoding="utf-8").splitlines()) <= _WORKSPACE_MODULE_LINE_CEILING
 
 
 def _assert_payload_avoids_fixture_or_default_inventory_data(payload: dict[str, Any]) -> None:

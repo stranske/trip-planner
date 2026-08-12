@@ -21,6 +21,17 @@ on:
   workflow_dispatch:
 
 jobs:
+  complexity-guard:
+    name: Complexity guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Reject changed functions above the recorded complexity ceiling
+        run: python scripts/measure_complexity.py --changed-from origin/main --max-complexity 59
+
   python:
     name: Python CI
     uses: stranske/Workflows/.github/workflows/reusable-10-ci-python.yml@main
