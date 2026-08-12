@@ -115,10 +115,10 @@ def test_trip_rejects_policy_state_for_leisure_mode() -> None:
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
 def test_traveler_party_rejects_non_finite_traveler_count(value: float) -> None:
     with pytest.raises(ValueError, match="traveler_count must be finite"):
-        TravelerPartySummary(traveler_count=value)
+        TravelerPartySummary(traveler_count=value)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
 def test_trip_frame_rejects_non_finite_duration_days(value: float) -> None:
     with pytest.raises(ValueError, match="duration_days must be finite"):
-        TripFrameSummary(duration_days=value)
+        TripFrameSummary(duration_days=value)  # type: ignore[arg-type]
