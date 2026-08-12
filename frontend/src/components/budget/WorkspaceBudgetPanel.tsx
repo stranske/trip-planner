@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import type {
   ActualSpendEventUpsertPayload,
@@ -117,6 +117,16 @@ function buildSpendFormState(budgetState: BudgetWorkspaceState): SpendFormState 
   };
 }
 
+function budgetRevision(budgetState: BudgetWorkspaceState, tripMode: string): string {
+  return [
+    budgetState.budget_plan?.budget_plan_id ?? "new-budget",
+    budgetState.budget_plan?.updated_at ?? "",
+    budgetState.versions[0]?.version_id ?? "",
+    budgetState.summary.current_scenario_budget_id ?? "",
+    tripMode,
+  ].join(":");
+}
+
 export function WorkspaceBudgetPanel({
   budgetState,
   tripMode,
@@ -139,13 +149,35 @@ export function WorkspaceBudgetPanel({
     buildSpendFormState(budgetState)
   );
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [budgetDirty, setBudgetDirty] = useState(false);
+  const [spendDirty, setSpendDirty] = useState(false);
+  const lastBudgetRevisionRef = useRef<string | null>(null);
   const activeScenario = getActiveScenario(budgetState);
+  const persistedRevision = budgetRevision(budgetState, tripMode);
 
   useEffect(() => {
-    setBudgetForm(buildBudgetFormState(budgetState, tripMode));
-    setSpendForm(buildSpendFormState(budgetState));
-    setValidationMessage(null);
-  }, [budgetState, tripMode]);
+    const previousRevision = lastBudgetRevisionRef.current;
+    if (previousRevision === persistedRevision) {
+      return;
+    }
+    lastBudgetRevisionRef.current = persistedRevision;
+
+    if (!budgetDirty) {
+      setBudgetForm(buildBudgetFormState(budgetState, tripMode));
+    }
+    if (!spendDirty) {
+      setSpendForm(buildSpendFormState(budgetState));
+    }
+    if (!budgetDirty && !spendDirty) {
+      setValidationMessage(null);
+      setRefreshMessage(null);
+    } else if (previousRevision !== null) {
+      setRefreshMessage(
+        "A newer saved budget is available. Your unsaved edits are still here; save them when you are ready."
+      );
+    }
+  }, [budgetDirty, budgetState, persistedRevision, spendDirty, tripMode]);
 
   async function handleBudgetSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -189,6 +221,8 @@ export function WorkspaceBudgetPanel({
       ],
       summary: budgetForm.summary.trim(),
     });
+    setBudgetDirty(false);
+    setRefreshMessage(null);
   }
 
   async function handleSpendSubmit(event: FormEvent<HTMLFormElement>) {
@@ -215,6 +249,8 @@ export function WorkspaceBudgetPanel({
       merchant_name: spendForm.merchant_name.trim(),
       notes: [],
     });
+    setSpendDirty(false);
+    setRefreshMessage(null);
   }
 
   return (
@@ -228,6 +264,7 @@ export function WorkspaceBudgetPanel({
       {busyLabel ? <p className="muted-copy">{busyLabel}</p> : null}
       {errorMessage ? <p className="planner-inline-error">{errorMessage}</p> : null}
       {validationMessage ? <p className="planner-inline-error">{validationMessage}</p> : null}
+      {refreshMessage ? <p className="planner-inline-notice">{refreshMessage}</p> : null}
 
       <dl className="budget-summary-grid">
         <div>
@@ -256,9 +293,10 @@ export function WorkspaceBudgetPanel({
               <input
                 aria-label="Budget title"
                 value={budgetForm.title}
-                onChange={(event) =>
-                  setBudgetForm((current) => ({ ...current, title: event.target.value }))
-                }
+                onChange={(event) => {
+                  setBudgetDirty(true);
+                  setBudgetForm((current) => ({ ...current, title: event.target.value }));
+                }}
               />
             </label>
 
@@ -268,9 +306,10 @@ export function WorkspaceBudgetPanel({
                 aria-label="Currency"
                 maxLength={3}
                 value={budgetForm.currency}
-                onChange={(event) =>
-                  setBudgetForm((current) => ({ ...current, currency: event.target.value.toUpperCase() }))
-                }
+                onChange={(event) => {
+                  setBudgetDirty(true);
+                  setBudgetForm((current) => ({ ...current, currency: event.target.value.toUpperCase() }));
+                }}
               />
             </label>
           </div>
@@ -280,9 +319,10 @@ export function WorkspaceBudgetPanel({
             <input
               aria-label="Scenario label"
               value={budgetForm.scenarioTitle}
-              onChange={(event) =>
-                setBudgetForm((current) => ({ ...current, scenarioTitle: event.target.value }))
-              }
+              onChange={(event) => {
+                setBudgetDirty(true);
+                setBudgetForm((current) => ({ ...current, scenarioTitle: event.target.value }));
+              }}
             />
           </label>
 
@@ -291,9 +331,10 @@ export function WorkspaceBudgetPanel({
             <input
               aria-label="Update summary"
               value={budgetForm.summary}
-              onChange={(event) =>
-                setBudgetForm((current) => ({ ...current, summary: event.target.value }))
-              }
+              onChange={(event) => {
+                setBudgetDirty(true);
+                setBudgetForm((current) => ({ ...current, summary: event.target.value }));
+              }}
             />
           </label>
 
@@ -308,7 +349,8 @@ export function WorkspaceBudgetPanel({
                   min="0"
                   step="0.01"
                   value={allocation.planned_amount}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    setBudgetDirty(true);
                     setBudgetForm((current) => ({
                       ...current,
                       allocations: current.allocations.map((item) =>
@@ -316,8 +358,8 @@ export function WorkspaceBudgetPanel({
                           ? { ...item, planned_amount: event.target.value }
                           : item
                       ),
-                    }))
-                  }
+                    }));
+                  }}
                 />
               </label>
             ))}
@@ -334,9 +376,10 @@ export function WorkspaceBudgetPanel({
             <select
               aria-label="Spend category"
               value={spendForm.category_key}
-              onChange={(event) =>
-                setSpendForm((current) => ({ ...current, category_key: event.target.value }))
-              }
+              onChange={(event) => {
+                setSpendDirty(true);
+                setSpendForm((current) => ({ ...current, category_key: event.target.value }));
+              }}
             >
               {budgetState.summary.category_summaries.map((summary) => (
                 <option key={summary.category_key} value={summary.category_key}>
@@ -355,9 +398,10 @@ export function WorkspaceBudgetPanel({
               min="0"
               step="0.01"
               value={spendForm.amount}
-              onChange={(event) =>
-                setSpendForm((current) => ({ ...current, amount: event.target.value }))
-              }
+              onChange={(event) => {
+                setSpendDirty(true);
+                setSpendForm((current) => ({ ...current, amount: event.target.value }));
+              }}
             />
           </label>
 
@@ -366,9 +410,10 @@ export function WorkspaceBudgetPanel({
             <input
               aria-label="Spend context"
               value={spendForm.source_context}
-              onChange={(event) =>
-                setSpendForm((current) => ({ ...current, source_context: event.target.value }))
-              }
+              onChange={(event) => {
+                setSpendDirty(true);
+                setSpendForm((current) => ({ ...current, source_context: event.target.value }));
+              }}
             />
           </label>
 
@@ -377,9 +422,10 @@ export function WorkspaceBudgetPanel({
             <input
               aria-label="Merchant"
               value={spendForm.merchant_name}
-              onChange={(event) =>
-                setSpendForm((current) => ({ ...current, merchant_name: event.target.value }))
-              }
+              onChange={(event) => {
+                setSpendDirty(true);
+                setSpendForm((current) => ({ ...current, merchant_name: event.target.value }));
+              }}
             />
           </label>
 

@@ -1156,10 +1156,20 @@ function WorkspacePageContent({
     const previousWorkspace = previousWorkspaceRef.current;
     previousWorkspaceRef.current = workspace;
     setCurrentWorkspace(workspace);
-    setSourceMixTarget(sourceMixTargetFromWorkspace(workspace));
-    setSelectedScenarioId(resolveMapScenarioId(workspace));
-    setSelectedMapScope("regional");
-    setSelectedSegmentId(null);
+    const tripChanged = previousWorkspace.trip_record.trip.trip_id !== workspace.trip_record.trip.trip_id;
+    if (tripChanged) {
+      setSourceMixTarget(sourceMixTargetFromWorkspace(workspace));
+      setSelectedScenarioId(resolveMapScenarioId(workspace));
+      setSelectedMapScope("regional");
+      setSelectedSegmentId(null);
+    } else {
+      const availableScenarioIds = new Set(
+        resolveRouteComparison(workspace).scenarios.map((scenario) => scenario.scenario_id)
+      );
+      setSelectedScenarioId((current) =>
+        current !== null && availableScenarioIds.has(current) ? current : resolveMapScenarioId(workspace)
+      );
+    }
     setPlannerConversationNotice(null);
     setRouteOptionSuccess(null);
     setNotebookSuccess(null);
@@ -1169,10 +1179,14 @@ function WorkspacePageContent({
   }, [workspace]);
 
   useEffect(() => {
-    setSelectedTripComparisonId(
-      trips.find((trip) => trip.trip_id !== workspace.trip_record.trip.trip_id)?.trip_id ?? null
-    );
-  }, [trips, workspace]);
+    setSelectedTripComparisonId((current) => {
+      const currentTripId = workspace.trip_record.trip.trip_id;
+      if (current !== null && current !== currentTripId && trips.some((trip) => trip.trip_id === current)) {
+        return current;
+      }
+      return trips.find((trip) => trip.trip_id !== currentTripId)?.trip_id ?? null;
+    });
+  }, [trips, workspace.trip_record.trip.trip_id]);
 
   useEffect(() => {
     let isCancelled = false;

@@ -292,6 +292,48 @@ describe("TripMap", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps a visible marker selected when refreshed scenario data has a new identity", () => {
+    function RefreshHarness({ refreshed }: { refreshed: boolean }) {
+      const [activeScope, setActiveScope] = useState<"global" | "regional" | "local">("regional");
+      const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+      const refreshedComparison = refreshed
+        ? { ...comparison, scenarios: comparison.scenarios.map((scenario) => ({ ...scenario })) }
+        : comparison;
+      return (
+        <TripMap
+          comparison={refreshedComparison}
+          scenarioComparisonSummary="Rail-first stays the easiest route to compare against."
+          scenarioFocusAreas={["route_pace"]}
+          activeScenarioId="route-option:rail-first"
+          onSelectScenario={vi.fn()}
+          bundles={bundles}
+          feasibilitySummary={feasibilitySummary}
+          tripPrimaryRegions={["Sweden", "Norway"]}
+          tripMode="business"
+          policyPosture="No approval packet yet"
+          activeScope={activeScope}
+          selectedSegmentId={selectedSegmentId}
+          onScopeChange={setActiveScope}
+          onSelectSegment={setSelectedSegmentId}
+          compactLayout={false}
+        />
+      );
+    }
+
+    const view = render(<RefreshHarness refreshed={false} />);
+    const markerButtons = screen.getAllByRole("button", { name: /marker:/i });
+    const selectedMarker = markerButtons[markerButtons.length - 1];
+    fireEvent.click(selectedMarker);
+    expect(selectedMarker).toHaveAttribute("aria-pressed", "true");
+
+    view.rerender(<RefreshHarness refreshed />);
+
+    expect(screen.getByRole("button", { name: selectedMarker.getAttribute("aria-label")! })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
   it("renders segment timing and confidence in traveler language", () => {
     renderTripMap();
 

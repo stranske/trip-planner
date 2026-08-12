@@ -149,6 +149,8 @@ function ActiveTripMap({
     mapSurface.visibleMarkers.find((marker) => marker.focusCues.length > 0)?.id ??
     mapSurface.visibleMarkers[0]?.id ??
     null;
+  const visibleMarkerIds = JSON.stringify(mapSurface.visibleMarkers.map((marker) => marker.id));
+  const visibleMarkerIdSet = useMemo(() => new Set(JSON.parse(visibleMarkerIds) as string[]), [visibleMarkerIds]);
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(initialMarkerId);
   const selectedMarker = useMemo(
     () =>
@@ -159,8 +161,12 @@ function ActiveTripMap({
   );
 
   useEffect(() => {
-    setSelectedMarkerId(initialMarkerId);
-  }, [activeScenario.scenario_id, initialMarkerId]);
+    setSelectedMarkerId((current) =>
+      current !== null && visibleMarkerIdSet.has(current)
+        ? current
+        : initialMarkerId
+    );
+  }, [activeScenario.scenario_id, initialMarkerId, visibleMarkerIdSet]);
 
   function handleScopeChange(nextScope: MapViewScope) {
     onScopeChange(nextScope);
