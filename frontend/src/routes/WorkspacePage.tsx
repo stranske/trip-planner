@@ -2429,27 +2429,19 @@ function WorkspacePageContent({
         <PolicyTabPanel labelledBy={workspaceTabButtonId("policy")}>
           <WorkspacePolicyPanel
             grid
+            noPacketAction={
+              currentWorkspace.proposal_state == null
+                ? { onPrepare: handlePrepareApprovalPacket }
+                : null
+            }
             approvalPacketContent={
-              panelVisibility.showApprovalReadinessPanel ? (
+              panelVisibility.showApprovalReadinessPanel && currentWorkspace.proposal_state != null ? (
                 <>
                 <p className="status-label">Approval packet</p>
                 <h2 data-testid="proposal-lifecycle">
                   {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
                 </h2>
-                {currentWorkspace.proposal_state == null ? (
-                  <>
-                    <p className="muted-copy">
-                      Approval packet records have not been saved for this workspace yet.
-                    </p>
-                    <p className="muted-copy">
-                      Start in Plan to prepare the trip details that policy review needs.
-                    </p>
-                    <button type="button" onClick={handlePrepareApprovalPacket}>
-                      Prepare approval packet
-                    </button>
-                  </>
-                ) : (
-                  <>
+                <>
                     <div aria-live="polite" role="status">
                       {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
                       {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
@@ -2497,8 +2489,7 @@ function WorkspacePageContent({
                         {proposalLifecycle?.state === "failed" ? "Retry policy check" : "Refresh live status"}
                       </button>
                     ) : null}
-                  </>
-                )}
+                </>
                 </>
               ) : null
             }
