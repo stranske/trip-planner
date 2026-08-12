@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from trip_planner._validators import require_finite
+
 from ._validators import require_non_empty, require_strings
 
 TRIP_MODES: tuple[str, ...] = ("leisure", "business")
@@ -35,6 +37,7 @@ class TravelerPartySummary:
     def __post_init__(self) -> None:
         if self.kind not in TRAVELER_PARTY_KINDS:
             raise ValueError(f"kind must be one of {TRAVELER_PARTY_KINDS}")
+        require_finite(self.traveler_count, "traveler_count")
         if self.traveler_count <= 0:
             raise ValueError("traveler_count must be positive")
 
@@ -59,6 +62,8 @@ class TripFrameSummary:
             raise ValueError("start_date must be non-empty when provided")
         if self.end_date is not None and not self.end_date:
             raise ValueError("end_date must be non-empty when provided")
+        if self.duration_days is not None:
+            require_finite(self.duration_days, "duration_days")
         if self.duration_days is not None and self.duration_days <= 0:
             raise ValueError("duration_days must be positive when provided")
         require_strings(self.primary_regions, "primary_regions")

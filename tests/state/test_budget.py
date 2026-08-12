@@ -102,6 +102,29 @@ def test_budget_category_allocation_rejects_invalid_currency_and_category() -> N
         )
 
 
+@pytest.mark.parametrize("amount", [float("nan"), float("inf"), float("-inf")])
+def test_budget_records_reject_non_finite_amounts(amount: float) -> None:
+    with pytest.raises(ValueError, match="must be finite"):
+        BudgetCategoryAllocation(
+            category_key="lodging",
+            label="Hotel",
+            planned_amount=amount,
+            currency="USD",
+        )
+    with pytest.raises(ValueError, match="must be finite"):
+        ActualSpendEvent(
+            spend_event_id="spend:non-finite",
+            trip_id="trip-1",
+            budget_plan_id="budget-plan:1",
+            category_key="food",
+            amount=amount,
+            currency="USD",
+            occurred_at="2026-04-02T07:00:00Z",
+            source_kind="manual",
+            source_context="Non-finite test",
+        )
+
+
 def test_actual_spend_event_rejects_invalid_source_or_amount() -> None:
     with pytest.raises(ValueError, match="amount must be positive"):
         ActualSpendEvent(

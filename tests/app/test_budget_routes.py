@@ -1,3 +1,4 @@
+import json
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -106,6 +107,46 @@ def test_workspace_budget_route_persists_plan_and_spend_events(client: TestClien
         == "budget-plan:" + trip_id
     )
     assert workspace_payload["session"]["active_budget_plan_id"] == "budget-plan:" + trip_id
+
+
+@pytest.mark.parametrize("amount", [float("nan"), float("inf"), float("-inf")])
+def test_budget_route_rejects_non_finite_amounts(client: TestClient, amount: float) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Finite budget guard",
+            "summary": "Reject non-finite budget inputs before persistence.",
+            "mode": "leisure",
+            "trip_frame": {"duration_days": 4, "primary_regions": ["Kyoto"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+
+    saved_budget = client.put(
+        f"/api/workspace/{trip_id}/budget",
+        content=json.dumps(
+            {
+                "title": "Invalid budget",
+                "currency": "USD",
+                "scenario_budgets": [
+                    {
+                        "title": "Non-finite allocation",
+                        "allocations": [
+                            {
+                                "category_key": "food",
+                                "label": "Food",
+                                "planned_amount": amount,
+                            }
+                        ],
+                    }
+                ],
+            }
+        ),
+        headers={"content-type": "application/json"},
+    )
+
+    assert saved_budget.status_code == 422
+    assert client.get(f"/api/workspace/{trip_id}/budget").json()["budget_plan"] is None
 
 
 def test_workspace_budget_spend_event_can_be_updated(client: TestClient) -> None:

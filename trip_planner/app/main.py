@@ -1,9 +1,13 @@
 import logging
+import math
 import os
 from contextlib import asynccontextmanager
+from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from trip_planner.app import APP_VERSION
 from trip_planner.app.routes.auth import router as auth_router
@@ -40,6 +44,16 @@ def get_allowed_cors_origin_regex() -> str | None:
     return configured_regex or None
 
 
+def _json_safe_validation_value(value: Any) -> Any:
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, list):
+        return [_json_safe_validation_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _json_safe_validation_value(item) for key, item in value.items()}
+    return value
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Resilient startup: a transient or expired database must not crash the whole
@@ -64,6 +78,15 @@ def create_app() -> FastAPI:
         description="Initial FastAPI runtime for the Trip Planner full-stack application.",
         lifespan=lifespan,
     )
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_error_response(
+        _: Request, error: RequestValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": _json_safe_validation_value(error.errors())},
+        )
 
     app.add_middleware(
         CORSMiddleware,

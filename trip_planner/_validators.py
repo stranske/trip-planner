@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 
@@ -21,8 +22,14 @@ def require_probability(value: float, field_name: str) -> None:
 
 
 def require_non_negative(value: float, field_name: str) -> None:
+    require_finite(value, field_name)
     if value < 0:
         raise ValueError(f"{field_name} cannot be negative")
+
+
+def require_finite(value: float, field_name: str) -> None:
+    if not math.isfinite(value):
+        raise ValueError(f"{field_name} must be finite")
 
 
 def require_strings(values: list[str], field_name: str) -> None:
