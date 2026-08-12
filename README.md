@@ -208,10 +208,12 @@ proprietary data and no external LLM** are involved.
 TRIP_PLANNER_SEED_DEMO=1 python scripts/seed_demo_data.py
 ```
 
-The demo seed uses the same local SQLite database unless
-`TRIP_PLANNER_DATABASE_URL` is set. It never writes a database into the
-repository, so running the command from the repository root leaves `git status`
-clean.
+With the default database configuration, the demo seed uses the same local SQLite
+database unless `TRIP_PLANNER_DATABASE_URL` is set. With that default
+configuration it never writes a database into the repository, so running the
+command from the repository root leaves `git status` clean. A custom
+`TRIP_PLANNER_DATABASE_URL` pointing at a repository-relative SQLite path may
+write into the checkout.
 
 Then sign in at `/login` with the documented demo credentials and open either
 seeded workspace (the script prints the exact `/workspace/<trip_id>` URLs):

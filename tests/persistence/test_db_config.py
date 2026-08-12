@@ -38,6 +38,8 @@ def test_default_database_url_is_absolute_and_outside_the_repository(monkeypatch
 
     database_path = Path(get_database_url().removeprefix("sqlite:///"))
     repository_root = Path(__file__).resolve().parents[2]
+    expected_path = Path.home() / ".trip-planner" / "trip_planner.db"
 
+    assert database_path == expected_path
     assert database_path.is_absolute()
     assert not database_path.is_relative_to(repository_root)
