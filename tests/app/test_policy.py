@@ -536,6 +536,7 @@ def test_route_does_not_disclose_upstream_exception_text(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sentinel = "upstream-secret-7da6e2"
+    reference_id = "a" * 32
     logged: dict[str, object] = {}
 
     def _capture_log(*args: object, **kwargs: object) -> None:
@@ -546,7 +547,7 @@ def test_route_does_not_disclose_upstream_exception_text(
 
     def _raise_transport_error(*args: object, **kwargs: object) -> None:
         del args, kwargs
-        raise TPPTransportError(sentinel, status_code=503)
+        raise TPPTransportError(sentinel, status_code=503, reference_id=reference_id)
 
     monkeypatch.setattr(
         policy_routes, "import_workspace_policy_constraints", _raise_transport_error
@@ -564,7 +565,10 @@ def test_route_does_not_disclose_upstream_exception_text(
     match = re.search(r"Reference ID: ([0-9a-f]{32}).", detail)
     assert match is not None
     assert str(logged["exc_info"]) == sentinel
-    assert match.group(1) in logged["args"]
+    logged_args = logged["args"]
+    assert isinstance(logged_args, tuple)
+    assert match.group(1) == reference_id
+    assert reference_id in logged_args
 
 
 def test_workspace_policy_import_uses_stored_policy_fallback_on_live_timeout(

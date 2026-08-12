@@ -17,7 +17,9 @@ def public_http_error(
     message: str,
 ) -> HTTPException:
     """Log the internal error and return a correlation-safe public response."""
-    reference_id = uuid4().hex
+    reference_id = getattr(error, "reference_id", None)
+    if not isinstance(reference_id, str):
+        reference_id = uuid4().hex
     logger.error(
         "%s (reference_id=%s)",
         message,

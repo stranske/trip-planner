@@ -402,6 +402,7 @@ def _resolve_evaluation_response(
                 error_code="unknown",
                 status_code=502,
                 retryable=False,
+                reference_id=reference_id,
             )
         raise transport_error from exc
 
