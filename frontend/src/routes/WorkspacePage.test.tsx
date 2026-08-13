@@ -2610,6 +2610,47 @@ describe("WorkspacePage", () => {
     expect(screen.queryByRole("button", { name: "Refresh live status" })).not.toBeInTheDocument();
   });
 
+  it("offers a direct path to prepare an approval packet when none exists", async () => {
+    mockedFetchPlannerSession.mockImplementation(async (tripId) => ({
+      ...plannerSessionPayload,
+      trip_id: tripId,
+      planner_panel_state: {
+        ...plannerSessionPayload.planner_panel_state,
+        trip: {
+          ...plannerSessionPayload.planner_panel_state.trip,
+          trip_id: tripId,
+        },
+        option_set: {
+          ...plannerSessionPayload.planner_panel_state.option_set,
+          trip_id: tripId,
+        },
+      },
+    }));
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        trip_record: {
+          ...workspacePayload.trip_record,
+          trip: tripComparisonPayload[1],
+        },
+        proposal_state: null,
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await selectWorkspaceTab("Policy");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Prepare approval packet" }));
+
+    expect(screen.getByRole("tab", { name: "Plan" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Plan" })).toHaveFocus();
+    await waitFor(() => {
+      expect(mockedFetchPlannerSession).toHaveBeenCalledWith("trip-business-tokyo-summit");
+    });
+  });
+
   it("surfaces a deferred execution state while the remote verdict is queued", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
@@ -2852,6 +2893,9 @@ describe("WorkspacePage", () => {
     expect(
       screen.getAllByText("Use a compliant downtown property before resubmitting the approval packet.").length
     ).toBeGreaterThan(0);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Policy status refreshed: Use a compliant downtown property before resubmitting the approval packet."
+    );
     expect(screen.queryByRole("button", { name: "Refresh live status" })).not.toBeInTheDocument();
   });
 
@@ -2890,6 +2934,7 @@ describe("WorkspacePage", () => {
     expect(screen.getByText("Needs policy retry")).toBeInTheDocument();
     expect(screen.getByText("TPP gateway returned a 502 response for the proposal submission.")).toBeInTheDocument();
     expect(screen.getByText("Review the live transport failure")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry policy check" })).toBeInTheDocument();
   });
 
   it("surfaces reoptimization follow-up guidance for non-compliant policy results", async () => {

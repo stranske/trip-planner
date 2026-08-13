@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from trip_planner.app.routes.errors import public_http_error
 from trip_planner.app.schemas.planner import PlannerSessionResponse, PlannerTurnRequest
 from trip_planner.app.services.auth import AuthenticatedUser, require_authenticated_user
 from trip_planner.app.services.planner import (
@@ -23,7 +24,9 @@ def read_planner_session(
     try:
         payload = get_planner_session_payload(db_session, user=user, trip_id=trip_id)
     except WorkspacePlannerTripNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested planner session was not found."
+        ) from error
     return PlannerSessionResponse.model_validate(payload)
 
 
@@ -36,7 +39,9 @@ def resume_planner_session(
     try:
         payload = resume_planner_session_payload(db_session, user=user, trip_id=trip_id)
     except WorkspacePlannerTripNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested planner session was not found."
+        ) from error
     return PlannerSessionResponse.model_validate(payload)
 
 
@@ -56,7 +61,11 @@ def create_planner_turn(
             tool_calls=[item.model_dump() for item in payload.tool_calls],
         )
     except WorkspacePlannerTripNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested planner session was not found."
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=400, message="The planner request was invalid."
+        ) from error
     return PlannerSessionResponse.model_validate(result)

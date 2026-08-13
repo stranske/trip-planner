@@ -601,7 +601,7 @@ def test_workspace_proposal_evaluation_rejects_mismatched_submission_linkage(
         },
     )
     assert evaluated.status_code == 400
-    assert "persisted proposal" in evaluated.json()["detail"]
+    assert evaluated.json()["detail"].startswith("The workspace proposal request was invalid.")
 
 
 def test_workspace_proposal_evaluation_normalizes_stale_request_linkage(
@@ -731,7 +731,9 @@ def test_workspace_proposal_evaluation_rejects_mismatched_scenario_and_organizat
         },
     )
     assert scenario_response.status_code == 400
-    assert "scenario_id" in scenario_response.json()["detail"]
+    assert scenario_response.json()["detail"].startswith(
+        "The workspace proposal request was invalid."
+    )
 
     organization_fixture = _load_fixture("results", "approved_evaluation.json")
     organization_fixture["request"]["trip_id"] = trip_id
@@ -1090,7 +1092,7 @@ def test_workspace_proposal_submission_rejects_leisure_trip(client: TestClient) 
     )
 
     assert response.status_code == 400
-    assert "business trips" in response.json()["detail"]
+    assert response.json()["detail"].startswith("The workspace proposal request was invalid.")
 
 
 def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
@@ -1327,10 +1329,7 @@ def test_workspace_proposal_live_transport_rejects_invalid_upstream_contract(
     )
 
     assert response.status_code == 400
-    assert (
-        response.json()["detail"]
-        == "result_payload.execution_id is required for non-terminal submissions"
-    )
+    assert response.json()["detail"].startswith("The workspace proposal request was invalid.")
 
 
 def test_workspace_proposal_submission_persists_stored_policy_when_live_tpp_times_out(

@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from trip_planner.app.routes.errors import public_http_error
 from trip_planner.app.schemas.policy import (
     PolicySyncImportRequest,
     WorkspacePolicyResponse,
@@ -26,7 +27,11 @@ def read_workspace_policy(
     try:
         payload = get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
     except WorkspacePolicyNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=404,
+            message="The requested workspace policy was not found.",
+        ) from error
     return WorkspacePolicyResponse.model_validate(payload)
 
 
@@ -49,9 +54,21 @@ def save_workspace_policy(
             notes=payload.notes,
         )
     except WorkspacePolicyNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=404,
+            message="The requested workspace policy was not found.",
+        ) from error
     except TPPTransportError as error:
-        raise HTTPException(status_code=error.status_code, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=error.status_code,
+            message="The policy service could not complete the request.",
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error,
+            status_code=400,
+            message="The workspace policy request was invalid.",
+        ) from error
     return WorkspacePolicyResponse.model_validate(result)

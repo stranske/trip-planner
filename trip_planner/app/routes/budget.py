@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from trip_planner.app.routes.errors import public_http_error
 from trip_planner.app.schemas.budget import (
     ActualSpendEventUpsertRequest,
     BudgetPlanUpsertRequest,
@@ -28,7 +29,9 @@ def read_workspace_budget(
     try:
         payload = get_workspace_budget_payload(db_session, user=user, trip_id=trip_id)
     except WorkspaceBudgetNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace budget was not found."
+        ) from error
     return BudgetWorkspaceResponse.model_validate(payload)
 
 
@@ -53,10 +56,14 @@ def save_workspace_budget(
             summary=payload.summary,
         )
     except WorkspaceBudgetNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace budget was not found."
+        ) from error
     except ValueError as error:
         status_code = 422 if "must be finite" in str(error) else 400
-        raise HTTPException(status_code=status_code, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=status_code, message="The workspace budget request was invalid."
+        ) from error
     return BudgetWorkspaceResponse.model_validate(result)
 
 
@@ -85,10 +92,14 @@ def create_workspace_spend_event(
             notes=payload.notes,
         )
     except WorkspaceBudgetNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace budget was not found."
+        ) from error
     except ValueError as error:
         status_code = 422 if "must be finite" in str(error) else 400
-        raise HTTPException(status_code=status_code, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=status_code, message="The workspace budget request was invalid."
+        ) from error
     return BudgetWorkspaceResponse.model_validate(result)
 
 
@@ -122,8 +133,12 @@ def patch_workspace_spend_event(
             notes=payload.notes,
         )
     except WorkspaceBudgetNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace budget was not found."
+        ) from error
     except ValueError as error:
         status_code = 422 if "must be finite" in str(error) else 400
-        raise HTTPException(status_code=status_code, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=status_code, message="The workspace budget request was invalid."
+        ) from error
     return BudgetWorkspaceResponse.model_validate(result)

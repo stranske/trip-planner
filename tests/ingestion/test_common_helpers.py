@@ -1,6 +1,13 @@
+from trip_planner.ingestion import (
+    activity_pipeline,
+    destination_pipeline,
+    lodging_pipeline,
+    transport_pipeline,
+)
 from trip_planner.ingestion._common import (
     IngestionSummary,
     IngestionWarning,
+    _lowest_match_confidence,
     _record_ids_for_decision,
     _records_for_decision,
     make_handoff,
@@ -13,6 +20,7 @@ from trip_planner.sources import (
     DeduplicationDecision,
     EntityResolution,
     MatchCandidate,
+    MergedEntityProvenance,
     ProvenanceReference,
     RawSnapshot,
     RawSourceRecord,
@@ -132,6 +140,63 @@ def test_unresolved_conflicts_excludes_selected_status() -> None:
     unresolved = unresolved_conflicts([selected, needs_review, preserved])
 
     assert unresolved == [needs_review, preserved]
+
+
+def test_lowest_match_confidence_is_status_aware() -> None:
+    match = EntityResolution(
+        resolution_id="resolution-match",
+        entity_scope="lodging",
+        option_kind="lodging",
+        status="match",
+        canonical_entity_id="lodging-match",
+        summary="Matched records retain their lowest candidate confidence.",
+        match_candidates=[
+            MatchCandidate(
+                candidate_id="candidate-high",
+                entity_scope="lodging",
+                option_kind="lodging",
+                match_strategy="provider_id",
+                confidence=0.9,
+            ),
+            MatchCandidate(
+                candidate_id="candidate-low",
+                entity_scope="lodging",
+                option_kind="lodging",
+                match_strategy="provider_id",
+                confidence=0.8,
+            ),
+        ],
+    )
+    ambiguous = EntityResolution(
+        resolution_id="resolution-ambiguous",
+        entity_scope="lodging",
+        option_kind="lodging",
+        status="ambiguous",
+        canonical_entity_id="lodging-ambiguous",
+        summary="Unresolved identity remains low confidence without candidates.",
+        conflicts=[_sample_conflict(status="preserved")],
+        review_required=True,
+    )
+    distinct = EntityResolution(
+        resolution_id="resolution-distinct",
+        entity_scope="lodging",
+        option_kind="lodging",
+        status="distinct",
+        canonical_entity_id="lodging-distinct",
+        summary="Confirmed distinct records have no candidate match.",
+        merged_provenance=MergedEntityProvenance(
+            canonical_entity_id="lodging-distinct",
+            entity_scope="lodging",
+        ),
+    )
+
+    assert _lowest_match_confidence(match) == 0.8
+    assert _lowest_match_confidence(ambiguous) == 0.0
+    assert _lowest_match_confidence(distinct) == 1.0
+    assert activity_pipeline._lowest_match_confidence is _lowest_match_confidence
+    assert destination_pipeline._lowest_match_confidence is _lowest_match_confidence
+    assert lodging_pipeline._lowest_match_confidence is _lowest_match_confidence
+    assert transport_pipeline._lowest_match_confidence is _lowest_match_confidence
 
 
 def test_record_ids_for_decision_collects_unique_ids_in_resolution_order() -> None:

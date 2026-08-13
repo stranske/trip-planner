@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from trip_planner.app.routes.errors import public_http_error
 from trip_planner.app.schemas.workspace import (
     PlannerDecisionAnswerRequest,
     PlannerOptionFeedbackRequest,
@@ -98,9 +99,13 @@ def update_planning_mode(
             include_debug=False,
         )
     except WorkspaceTripNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace was not found."
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=400, message="The workspace request was invalid."
+        ) from error
     return WorkspaceResponse.model_validate(result)
 
 
@@ -130,9 +135,13 @@ def create_workspace_planning_ledger_entry(
             related_decision_id=payload.related_decision_id,
         )
     except WorkspaceTripNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace was not found."
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=400, message="The workspace request was invalid."
+        ) from error
     return PlanningLedgerEntry.model_validate(result)
 
 
@@ -156,9 +165,13 @@ def patch_workspace_planning_ledger_entry(
             updates=payload.model_dump(exclude_unset=True),
         )
     except WorkspaceTripNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace was not found."
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=400, message="The workspace request was invalid."
+        ) from error
     return PlanningLedgerEntry.model_validate(result)
 
 
@@ -188,9 +201,13 @@ def create_workspace_planning_notebook_item(
             tags=payload.tags,
         )
     except WorkspaceTripNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace was not found."
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=400, message="The workspace request was invalid."
+        ) from error
     return PlanningNotebookItem.model_validate(result)
 
 
@@ -214,9 +231,13 @@ def patch_workspace_planning_notebook_item(
             updates=payload.model_dump(exclude_unset=True),
         )
     except WorkspaceTripNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace was not found."
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=400, message="The workspace request was invalid."
+        ) from error
     return PlanningNotebookItem.model_validate(result)
 
 
@@ -238,7 +259,9 @@ def delete_workspace_planning_notebook_item(
             notebook_item_id=notebook_item_id,
         )
     except WorkspaceTripNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace was not found."
+        ) from error
 
 
 @router.put(
@@ -260,9 +283,13 @@ def update_workspace_planning_notebook_focus(
             notebook_item_id=payload.notebook_item_id,
         )
     except WorkspaceTripNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace was not found."
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=400, message="The workspace request was invalid."
+        ) from error
     return PlanningNotebookFocus.model_validate(result)
 
 
@@ -287,9 +314,13 @@ def answer_planner_decision(
             include_debug=False,
         )
     except WorkspaceTripNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace was not found."
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=400, message="The workspace request was invalid."
+        ) from error
     return WorkspaceResponse.model_validate(result)
 
 
@@ -315,9 +346,13 @@ def record_planner_option_feedback(
             include_debug=False,
         )
     except WorkspaceTripNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace was not found."
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=400, message="The workspace request was invalid."
+        ) from error
     return WorkspaceResponse.model_validate(result)
 
 
@@ -342,7 +377,11 @@ def record_route_option_action(
             include_debug=False,
         )
     except WorkspaceTripNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=404, message="The requested workspace was not found."
+        ) from error
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        raise public_http_error(
+            error, status_code=400, message="The workspace request was invalid."
+        ) from error
     return WorkspaceResponse.model_validate(result)

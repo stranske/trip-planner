@@ -6,11 +6,12 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import event, select
 
 from trip_planner.app.main import create_app
 from trip_planner.app.services import proposal as proposal_service
 from trip_planner.app.services import workspace as workspace_service
+from trip_planner.app.services import workspace_fixtures
 from trip_planner.app.services.auth import AuthenticatedUser, create_account
 from trip_planner.app.services.feasibility import (
     build_feasibility_planner_outputs,
@@ -23,6 +24,7 @@ from trip_planner.integrations.tpp import TPPTransportError
 from trip_planner.options import InventoryBundle
 from trip_planner.persistence.db import (
     ensure_database_ready,
+    get_engine,
     get_session_factory,
     reset_database_state,
 )
@@ -45,6 +47,25 @@ _FIXTURE_ADAPTER_MARKERS = {
     "Kyoto ranked scenario workspace",
     "Client summit ranked scenarios",
 }
+_WORKSPACE_MODULE_LINE_CEILING = 4350
+
+
+def test_workspace_module_stays_under_size_ceiling() -> None:
+    workspace_path = Path(workspace_service.__file__)
+
+    assert len(workspace_path.read_text(encoding="utf-8").splitlines()) <= _WORKSPACE_MODULE_LINE_CEILING
+
+
+def test_load_saved_scenarios_allows_entries_without_a_comparison(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "no-comparison.json").write_text('{"records": []}', encoding="utf-8")
+    monkeypatch.setattr(workspace_fixtures, "_state_fixture_dir", lambda _kind: tmp_path)
+
+    records, comparison = workspace_fixtures.load_saved_scenarios("no-comparison.json")
+
+    assert records == []
+    assert comparison is None
 
 
 def _assert_payload_avoids_fixture_or_default_inventory_data(payload: dict[str, Any]) -> None:
@@ -164,6 +185,69 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
     assert payload["budget_state"]["summary"]["planned_total"] > 0
     assert payload["budget_state"]["summary"]["actual_total"] > 0
     assert payload["budget_state"]["summary"]["current_scenario_title"]
+
+
+def _persisted_trip_query_count(client: TestClient, path: str) -> tuple[int, int]:
+    statements: list[str] = []
+
+    def record_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: object,
+    ) -> None:
+        if statement.lstrip().upper().startswith("SELECT") and "FROM persisted_trips" in statement:
+            statements.append(statement)
+
+    engine = get_engine()
+    event.listen(engine, "before_cursor_execute", record_statement)
+    try:
+        response = client.get(path)
+    finally:
+        event.remove(engine, "before_cursor_execute", record_statement)
+    return response.status_code, len(statements)
+
+
+def test_workspace_payload_queries_persisted_trip_once(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Persisted fixture identifier",
+            "summary": "Regression coverage for the fixture-to-persisted lookup path.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+    monkeypatch.setitem(
+        workspace_service.FIXTURES,
+        trip_id,
+        workspace_service.FIXTURES["trip-leisure-kyoto-draft"],
+    )
+
+    status_code, query_count = _persisted_trip_query_count(client, f"/api/workspace/{trip_id}")
+
+    assert status_code == 200
+    assert query_count == 1
+
+
+def test_workspace_payload_queries_fixture_trip_once(client: TestClient) -> None:
+    status_code, query_count = _persisted_trip_query_count(
+        client, "/api/workspace/trip-leisure-kyoto-draft"
+    )
+
+    assert status_code == 200
+    assert query_count == 1
 
 
 def test_workspace_planning_mode_route_persists_mode(client: TestClient) -> None:
@@ -341,7 +425,7 @@ def test_workspace_planning_notebook_api_persists_items_and_focus_across_reload(
         json={"category": "lodging", "notebook_item_id": route_item["notebook_item_id"]},
     )
     assert mismatched_focus.status_code == 400
-    assert "does not match notebook item category" in mismatched_focus.json()["detail"]
+    assert mismatched_focus.json()["detail"].startswith("The workspace request was invalid.")
 
     focus_to_route = client.put(
         f"/api/workspace/{trip_id}/planning-notebook/focus",
@@ -477,21 +561,21 @@ def test_workspace_planning_ledger_rejects_supersedes_cycles(
         json={"supersedes_entry_id": first_id},
     )
     assert self_cycle.status_code == 400
-    assert "same ledger entry" in self_cycle.json()["detail"]
+    assert self_cycle.json()["detail"].startswith("The workspace request was invalid.")
 
     indirect_cycle = client.patch(
         f"/api/workspace/{trip_id}/planning-ledger/{first_id}",
         json={"supersedes_entry_id": second_id},
     )
     assert indirect_cycle.status_code == 400
-    assert "cycle" in indirect_cycle.json()["detail"]
+    assert indirect_cycle.json()["detail"].startswith("The workspace request was invalid.")
 
     missing_target = client.patch(
         f"/api/workspace/{trip_id}/planning-ledger/{first_id}",
         json={"supersedes_entry_id": "ledger:does-not-exist"},
     )
     assert missing_target.status_code == 400
-    assert "existing ledger entry" in missing_target.json()["detail"]
+    assert missing_target.json()["detail"].startswith("The workspace request was invalid.")
 
     other_trip = client.post(
         "/api/trips",
@@ -524,7 +608,7 @@ def test_workspace_planning_ledger_rejects_supersedes_cycles(
         json={"supersedes_entry_id": other_entry.json()["ledger_entry_id"]},
     )
     assert other_trip_target.status_code == 400
-    assert "existing ledger entry" in other_trip_target.json()["detail"]
+    assert other_trip_target.json()["detail"].startswith("The workspace request was invalid.")
 
     blank_target = client.patch(
         f"/api/workspace/{trip_id}/planning-ledger/{second_id}",
@@ -2646,7 +2730,7 @@ def test_workspace_option_feedback_rejects_unknown_option_id(client: TestClient)
     )
 
     assert invalid.status_code == 400
-    assert "not available in the current workspace option set" in invalid.json()["detail"]
+    assert invalid.json()["detail"].startswith("The workspace request was invalid.")
 
 
 def test_workspace_activity_log_is_capped_for_persisted_trips(client: TestClient) -> None:

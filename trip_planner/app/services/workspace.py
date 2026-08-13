@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import secrets
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
@@ -35,6 +33,12 @@ from trip_planner.app.services.scenarios import (
     build_scenario_ranking_outputs,
     build_scenario_ranking_payload,
     build_workspace_scenario_search,
+)
+from trip_planner.app.services.workspace_fixtures import (
+    FIXTURES,
+    load_saved_scenarios,
+    load_session,
+    load_trip_record,
 )
 from trip_planner.contracts import MoneyRange
 from trip_planner.contracts.trip import Trip
@@ -68,17 +72,8 @@ from trip_planner.state import (
     PersistedTripRecord,
     PlanningSessionState,
     SavedScenarioRecord,
-    ScenarioComparison,
     TripLifecycle,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class WorkspaceFixture:
-    trip_fixture: str
-    scenarios_fixture: str
-    session_fixture: str
-    scenario_search_variant: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,52 +147,6 @@ _BOOTSTRAP_SCENARIO_SCORE_BY_LABEL = {
 
 class WorkspaceTripNotFoundError(ValueError):
     """Raised when a workspace trip does not exist for the authenticated user."""
-
-
-_FIXTURES: dict[str, WorkspaceFixture] = {
-    "trip-leisure-kyoto-draft": WorkspaceFixture(
-        trip_fixture="leisure_draft_trip.json",
-        scenarios_fixture="leisure_baseline_vs_fallback.json",
-        session_fixture="active_leisure_session.json",
-        scenario_search_variant="leisure",
-    ),
-    "trip-business-client-summit": WorkspaceFixture(
-        trip_fixture="business_active_trip.json",
-        scenarios_fixture="business_compliant_vs_exception.json",
-        session_fixture="business_review_session.json",
-        scenario_search_variant="business",
-    ),
-}
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
-def _state_fixture_dir(kind: str) -> Path:
-    return _repo_root() / "tests" / "fixtures" / "state" / kind
-
-
-def _load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _load_trip_record(name: str) -> PersistedTripRecord:
-    return PersistedTripRecord.from_dict(_load_json(_state_fixture_dir("trips") / name))
-
-
-def _load_saved_scenarios(
-    name: str,
-) -> tuple[list[SavedScenarioRecord], ScenarioComparison | None]:
-    payload = _load_json(_state_fixture_dir("scenarios") / name)
-    records = [SavedScenarioRecord.from_dict(item) for item in payload["records"]]
-    comparison = payload.get("comparison")
-    return records, (ScenarioComparison.from_dict(comparison) if comparison is not None else None)
-
-
-def _load_session(name: str) -> PlanningSessionState:
-    payload = _load_json(_state_fixture_dir("sessions") / name)
-    return PlanningSessionState.from_dict(payload["session"])
 
 
 def _canonicalize_saved_scenario_ids(
@@ -2528,7 +2477,7 @@ def _build_runtime_scenario_comparison_payload(
     user: AuthenticatedUser,
     trip_id: str,
 ) -> dict[str, Any] | None:
-    fixture = _FIXTURES.get(trip_id)
+    fixture = FIXTURES.get(trip_id)
     if fixture is not None:
         _db_record = db_session.scalar(
             select(PersistedTrip)
@@ -2538,8 +2487,8 @@ def _build_runtime_scenario_comparison_payload(
         if _db_record is not None:
             fixture = None
     if fixture is not None:
-        trip_record = _load_trip_record(fixture.trip_fixture)
-        session = _load_session(fixture.session_fixture)
+        trip_record = load_trip_record(fixture.trip_fixture)
+        session = load_session(fixture.session_fixture)
         inventory_bundles = assemble_inventory_bundles_for_trip(
             trip_id=trip_id,
             trip_mode=trip_record.trip.mode,
@@ -3287,10 +3236,10 @@ def _build_fixture_workspace_payload(
     trip_id: str,
     include_debug: bool,
 ) -> dict[str, Any]:
-    fixture = _FIXTURES[trip_id]
-    trip_record = _load_trip_record(fixture.trip_fixture)
-    saved_scenarios, scenario_comparison = _load_saved_scenarios(fixture.scenarios_fixture)
-    session = _load_session(fixture.session_fixture)
+    fixture = FIXTURES[trip_id]
+    trip_record = load_trip_record(fixture.trip_fixture)
+    saved_scenarios, scenario_comparison = load_saved_scenarios(fixture.scenarios_fixture)
+    session = load_session(fixture.session_fixture)
     _canonicalize_saved_scenario_ids(session, saved_scenarios)
     inventory_assembly_input = _build_inventory_assembly_input(
         trip_id=trip_id,
@@ -3534,20 +3483,22 @@ def get_workspace_payload(
     trip_id: str,
     include_debug: bool = True,
 ) -> dict[str, Any] | None:
-    fixture = _FIXTURES.get(trip_id)
+    fixture = FIXTURES.get(trip_id)
+    record: PersistedTrip | None = None
     if fixture is not None:
-        db_record = db_session.scalar(
+        record = db_session.scalar(
             select(PersistedTrip)
             .where(PersistedTrip.trip_id == trip_id)
             .where(PersistedTrip.user_id == user.user_id)
         )
-        if db_record is None:
+        if record is None:
             return _build_fixture_workspace_payload(trip_id=trip_id, include_debug=include_debug)
-    record = db_session.scalar(
-        select(PersistedTrip)
-        .where(PersistedTrip.trip_id == trip_id)
-        .where(PersistedTrip.user_id == user.user_id)
-    )
+    if record is None:
+        record = db_session.scalar(
+            select(PersistedTrip)
+            .where(PersistedTrip.trip_id == trip_id)
+            .where(PersistedTrip.user_id == user.user_id)
+        )
     if record is None:
         return None
     inputs = _load_persisted_workspace_inputs(db_session, record=record, trip_id=trip_id)

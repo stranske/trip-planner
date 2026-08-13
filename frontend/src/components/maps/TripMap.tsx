@@ -1,5 +1,6 @@
 import type { FeasibilitySummary, RuntimeScenarioComparison, WorkspaceData } from "../../api/workspace";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import {
   buildTripMapSurfaceModel,
   formatEstimatedTotal,
@@ -102,7 +103,7 @@ function ActiveTripMap({
   tripMode,
   policyPosture,
   planningLedger,
-  providerLoadState = "pending",
+  providerLoadState,
   activeScope,
   selectedSegmentId,
   onScopeChange,
@@ -130,6 +131,11 @@ function ActiveTripMap({
   const googleMapsApiKey =
     import.meta.env.VITE_GOOGLE_MAPS_BROWSER_API_KEY ||
     import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY;
+  const [observedProviderLoadState, setObservedProviderLoadState] =
+    useState<MapProviderLoadState>("pending");
+  const effectiveProviderLoadState = providerLoadState ?? observedProviderLoadState;
+  const observesProviderInternally = providerLoadState === undefined;
+
   const mapSurface = buildTripMapSurfaceModel({
     activeScenario,
     bundles,
@@ -140,7 +146,7 @@ function ActiveTripMap({
     tripMode,
     policyPosture,
     googleMapsApiKey,
-    providerLoadState,
+    providerLoadState: effectiveProviderLoadState,
     activeScope,
     selectedSegmentId,
     planningLedger,
@@ -274,13 +280,29 @@ function ActiveTripMap({
               <span>{mapSurface.visibleFocusCues.length} linked planning note(s)</span>
             ) : null}
           </div>
-          {mapSurface.provider.kind === "google-maps-js" ? (
-            <InteractiveProviderMap
+          {googleMapsApiKey && mapSurface.routeState === "ready" && observesProviderInternally ? (
+            <GoogleMapsProviderMap
+              apiKey={googleMapsApiKey}
               title={activeScenario.title}
-              markers={mapSurface.visibleMarkers}
-              selectedMarker={selectedMarker}
               routeSegments={mapSurface.visibleRouteSegments}
-              onSelectMarker={setSelectedMarkerId}
+              visible={mapSurface.provider.kind === "google-maps-js"}
+              onProviderLoadStateChange={setObservedProviderLoadState}
+            >
+              <FallbackRouteSchematic
+                markers={mapSurface.visibleMarkers}
+                selectedMarker={selectedMarker}
+                routeStops={mapSurface.visibleRouteStops}
+                onSelectMarker={setSelectedMarkerId}
+              />
+            </GoogleMapsProviderMap>
+          ) : googleMapsApiKey &&
+            mapSurface.routeState === "ready" &&
+            mapSurface.provider.kind === "google-maps-js" ? (
+            <div
+              className="map-provider-canvas"
+              role="group"
+              aria-label={`Simulated Google map for ${activeScenario.title}`}
+              data-provider-surface="simulated-ready"
             />
           ) : (
             <FallbackRouteSchematic
@@ -454,56 +476,168 @@ function ActiveTripMap({
   );
 }
 
-function InteractiveProviderMap({
+function GoogleMapsProviderMap({
+  apiKey,
   title,
-  markers,
-  selectedMarker,
   routeSegments,
-  onSelectMarker,
+  visible,
+  onProviderLoadStateChange,
+  children,
 }: {
+  apiKey: string;
   title: string;
-  markers: MapMarker[];
-  selectedMarker: MapMarker | null;
   routeSegments: ReturnType<typeof buildTripMapSurfaceModel>["routeSegments"];
-  onSelectMarker: (markerId: string) => void;
+  visible: boolean;
+  onProviderLoadStateChange: (state: MapProviderLoadState) => void;
+  children: ReactNode;
 }) {
+  const [canvas, setCanvas] = useState<HTMLDivElement | null>(null);
+  const [providerSurfaceState, setProviderSurfaceState] =
+    useState<MapProviderLoadState>("pending");
+  const routeKey = routeSegments
+    .map(
+      (segment) =>
+        `${segment.id}:${segment.fromLabel}:${segment.toLabel}:${segment.warning ?? ""}`
+    )
+    .join("|");
+
+  useEffect(() => {
+    if (canvas === null) {
+      return;
+    }
+    let cancelled = false;
+    const overlays: Array<{ setMap: (map: unknown) => void }> = [];
+    onProviderLoadStateChange("loading");
+    setProviderSurfaceState("loading");
+
+    async function renderProviderMap() {
+      try {
+        setOptions({ key: apiKey, v: "weekly" });
+        const [maps, markerLib, geocoding, core] = await Promise.all([
+          importLibrary("maps"),
+          importLibrary("marker"),
+          importLibrary("geocoding"),
+          importLibrary("core"),
+        ]);
+        if (cancelled) {
+          return;
+        }
+
+        const map = new maps.Map(canvas, {
+          center: { lat: 20, lng: 0 },
+          mapId: "DEMO_MAP_ID",
+          zoom: 2,
+          streetViewControl: false,
+          mapTypeControl: false,
+        });
+        const geocoder = new geocoding.Geocoder();
+        const locations = new Map<string, { lat: number; lng: number }>();
+
+        for (const routeLabel of Array.from(
+          new Set(routeSegments.flatMap((segment) => [segment.fromLabel, segment.toLabel]))
+        )) {
+          if (cancelled) {
+            overlays.forEach((overlay) => overlay.setMap(null));
+            return;
+          }
+          try {
+            const response = await geocoder.geocode({ address: routeLabel });
+            const location = response.results[0]?.geometry.location;
+            if (location) {
+              locations.set(routeLabel, location.toJSON());
+            }
+          } catch {
+            // Skip labels that fail geocoding; partial route context is still useful.
+          }
+        }
+        if (cancelled) {
+          overlays.forEach((overlay) => overlay.setMap(null));
+          return;
+        }
+        if (locations.size === 0) {
+          onProviderLoadStateChange("error");
+          setProviderSurfaceState("error");
+          return;
+        }
+
+        const bounds = new core.LatLngBounds();
+        for (const [label, location] of locations) {
+          if (cancelled) {
+            overlays.forEach((overlay) => overlay.setMap(null));
+            return;
+          }
+          const advancedMarker = new markerLib.AdvancedMarkerElement({
+            map,
+            position: location,
+            title: label,
+          });
+          overlays.push(advancedMarker);
+          bounds.extend(location);
+        }
+        for (const segment of routeSegments) {
+          const from = locations.get(segment.fromLabel);
+          const to = locations.get(segment.toLabel);
+          if (from && to) {
+            const polyline = new maps.Polyline({
+              map,
+              path: [from, to],
+              geodesic: true,
+              strokeColor: segment.warning ? "#b42318" : "#2563eb",
+              strokeOpacity: 0.9,
+              strokeWeight: 4,
+            });
+            overlays.push(polyline);
+          }
+        }
+        if (cancelled) {
+          overlays.forEach((overlay) => overlay.setMap(null));
+          return;
+        }
+        map.fitBounds(bounds, 48);
+        onProviderLoadStateChange("ready");
+        setProviderSurfaceState("ready");
+      } catch {
+        if (!cancelled) {
+          onProviderLoadStateChange("error");
+          setProviderSurfaceState("error");
+        }
+      }
+    }
+
+    void renderProviderMap();
+    return () => {
+      cancelled = true;
+      overlays.forEach((overlay) => overlay.setMap(null));
+    };
+  }, [apiKey, canvas, onProviderLoadStateChange, routeKey]);
+
+  const showLiveCanvas = visible && providerSurfaceState === "ready";
+
   return (
-    <div className="map-provider-canvas" role="group" aria-label={`Interactive map for ${title}`}>
-      <svg
-        className="map-route-geometry"
-        viewBox="0 0 100 100"
-        role="img"
-        aria-label={`Route geometry overlay for ${title}`}
-      >
-        {routeSegments.map((segment) => (
-          <line
-            key={segment.id}
-            x1={segment.x1}
-            y1={segment.y1}
-            x2={segment.x2}
-            y2={segment.y2}
-            className={`map-route-line${segment.warning ? " map-route-line-warning" : ""}${
-              segment.focusCues.length > 0 ? " map-route-line-focused" : ""
-            }`}
-          />
-        ))}
-      </svg>
-      {markers.map((marker) => (
-        <button
-          key={marker.id}
-          type="button"
-          className={`map-marker map-marker-${marker.kind}${
-            selectedMarker?.id === marker.id ? " map-marker-selected" : ""
-          }${marker.emphasized ? " map-marker-emphasized" : ""}`}
-          style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
-          aria-label={markerAccessibleLabel(marker)}
-          aria-pressed={selectedMarker?.id === marker.id}
-          onClick={() => onSelectMarker(marker.id)}
-        >
-          <span>{markerLabel(marker.kind)}</span>
-        </button>
-      ))}
-    </div>
+    <>
+      <div
+        ref={setCanvas}
+        className="map-provider-canvas"
+        role="group"
+        aria-label={`Interactive Google map for ${title}`}
+        style={{
+          display: "block",
+          visibility: showLiveCanvas ? "visible" : "hidden",
+          position: showLiveCanvas ? "relative" : "absolute",
+          width: "100%",
+          minHeight: showLiveCanvas ? undefined : "12rem",
+        }}
+        data-provider-surface={
+          providerSurfaceState === "ready"
+            ? "rendered"
+            : providerSurfaceState === "error"
+              ? "error"
+              : "loading"
+        }
+        data-google-maps-live={providerSurfaceState === "ready" ? "true" : "false"}
+      />
+      {showLiveCanvas ? null : children}
+    </>
   );
 }
 
