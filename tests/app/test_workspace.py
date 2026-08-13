@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import event, select
 
 from trip_planner.app.main import create_app
 from trip_planner.app.services import proposal as proposal_service
@@ -24,6 +24,7 @@ from trip_planner.integrations.tpp import TPPTransportError
 from trip_planner.options import InventoryBundle
 from trip_planner.persistence.db import (
     ensure_database_ready,
+    get_engine,
     get_session_factory,
     reset_database_state,
 )
@@ -184,6 +185,69 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
     assert payload["budget_state"]["summary"]["planned_total"] > 0
     assert payload["budget_state"]["summary"]["actual_total"] > 0
     assert payload["budget_state"]["summary"]["current_scenario_title"]
+
+
+def _persisted_trip_query_count(client: TestClient, path: str) -> tuple[int, int]:
+    statements: list[str] = []
+
+    def record_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: object,
+    ) -> None:
+        if statement.lstrip().upper().startswith("SELECT") and "FROM persisted_trips" in statement:
+            statements.append(statement)
+
+    engine = get_engine()
+    event.listen(engine, "before_cursor_execute", record_statement)
+    try:
+        response = client.get(path)
+    finally:
+        event.remove(engine, "before_cursor_execute", record_statement)
+    return response.status_code, len(statements)
+
+
+def test_workspace_payload_queries_persisted_trip_once(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Persisted fixture identifier",
+            "summary": "Regression coverage for the fixture-to-persisted lookup path.",
+            "mode": "leisure",
+            "trip_frame": {
+                "start_date": "2026-06-04",
+                "end_date": "2026-06-07",
+                "duration_days": 4,
+                "primary_regions": ["Lisbon"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+    monkeypatch.setitem(
+        workspace_service.FIXTURES,
+        trip_id,
+        workspace_service.FIXTURES["trip-leisure-kyoto-draft"],
+    )
+
+    status_code, query_count = _persisted_trip_query_count(client, f"/api/workspace/{trip_id}")
+
+    assert status_code == 200
+    assert query_count == 1
+
+
+def test_workspace_payload_queries_fixture_trip_once(client: TestClient) -> None:
+    status_code, query_count = _persisted_trip_query_count(
+        client, "/api/workspace/trip-leisure-kyoto-draft"
+    )
+
+    assert status_code == 200
+    assert query_count == 1
 
 
 def test_workspace_planning_mode_route_persists_mode(client: TestClient) -> None:

@@ -3484,19 +3484,21 @@ def get_workspace_payload(
     include_debug: bool = True,
 ) -> dict[str, Any] | None:
     fixture = FIXTURES.get(trip_id)
+    record: PersistedTrip | None = None
     if fixture is not None:
-        db_record = db_session.scalar(
+        record = db_session.scalar(
             select(PersistedTrip)
             .where(PersistedTrip.trip_id == trip_id)
             .where(PersistedTrip.user_id == user.user_id)
         )
-        if db_record is None:
+        if record is None:
             return _build_fixture_workspace_payload(trip_id=trip_id, include_debug=include_debug)
-    record = db_session.scalar(
-        select(PersistedTrip)
-        .where(PersistedTrip.trip_id == trip_id)
-        .where(PersistedTrip.user_id == user.user_id)
-    )
+    if record is None:
+        record = db_session.scalar(
+            select(PersistedTrip)
+            .where(PersistedTrip.trip_id == trip_id)
+            .where(PersistedTrip.user_id == user.user_id)
+        )
     if record is None:
         return None
     inputs = _load_persisted_workspace_inputs(db_session, record=record, trip_id=trip_id)
