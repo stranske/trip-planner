@@ -24,6 +24,8 @@ function normalizeRecord(record = {}) {
     repository: clean(record.repository),
     desired_tree_hash: clean(record.desired_tree_hash),
     source_commit: clean(record.source_commit),
+    head_observed_sha: clean(record.head_observed_sha),
+    head_observed_at: clean(record.head_observed_at),
     lease_expires_at: clean(record.lease_expires_at),
     predecessor_prs: unique(record.predecessor_prs),
     successor_prs: unique(record.successor_prs),
@@ -57,6 +59,12 @@ function deliveryRecordErrors(record = {}) {
   }
   if (normalized.lease_expires_at && Number.isNaN(Date.parse(normalized.lease_expires_at))) {
     errors.push('lease_expires_at');
+  }
+  if (Boolean(normalized.head_observed_sha) !== Boolean(normalized.head_observed_at)) {
+    errors.push('head_observation_pair');
+  }
+  if (normalized.head_observed_at && Number.isNaN(Date.parse(normalized.head_observed_at))) {
+    errors.push('head_observed_at');
   }
   for (const field of ['review_started_at', 'sealed_at']) {
     if (normalized[field] && Number.isNaN(Date.parse(normalized[field]))) errors.push(field);

@@ -289,6 +289,12 @@ jobs:
                 return;
               }
 
+              if (String(pr.head?.ref || '').startsWith('sync/workflows-')) {
+                core.info('Generated sync PR is Maint 71-owned; skipping autofix.');
+                core.setOutput('should_run', 'false');
+                return;
+              }
+
               const headSha = pr.head?.sha;
               if (!headSha) {
                 core.info('PR head SHA missing; skipping autofix.');
@@ -427,6 +433,12 @@ jobs:
 
             if (!sameRepo) {
               core.info('Fork PR — not supported.');
+              core.setOutput('should_run', 'false');
+              return;
+            }
+
+            if (String(pr.head?.ref || '').startsWith('sync/workflows-')) {
+              core.info('Generated sync PR is Maint 71-owned; skipping autofix.');
               core.setOutput('should_run', 'false');
               return;
             }
