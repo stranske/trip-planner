@@ -1010,6 +1010,15 @@ jobs:
               return stop('head repository mismatch (likely fork)');
             }
 
+            const headRef = String(prData.head?.ref || '');
+            if (headRef.startsWith('sync/workflows-')) {
+              return stop(
+                'generated sync PR is Maint 71-owned; ' +
+                  'intentional delivery holds are not autofix work',
+                'generated_sync_pr',
+              );
+            }
+
             const labels = Array.isArray(prData.labels)
               ? prData.labels
                   .map((label) => (label?.name || '').toLowerCase())
