@@ -2,16 +2,22 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const { parseScopeTasksAcceptanceSections } = require('./issue_scope_parser');
 const { getGithubApiCache } = require('./github-api-cache-client');
-const { loadKeepaliveState, formatStateComment } = require('./keepalive_state');
+const {
+  loadKeepaliveState,
+  formatStateComment,
+  upsertStateCommentBody,
+} = require('./keepalive_state');
 const { resolvePromptMode } = require('./keepalive_prompt_routing');
 const { classifyError, ERROR_CATEGORIES } = require('./error_classifier');
 const { formatFailureComment } = require('./failure_comment_formatter');
 const { detectConflicts } = require('./conflict_detector');
 const { parseTimeoutConfig } = require('./timeout_config');
 const { ensureRateLimitWrapped } = require('./github-rate-limited-wrapper');
+const { verifyAuthorityChallengeClaim } = require('./keepalive_challenge_due');
 
 // Token load balancer for rate limit management
 let tokenLoadBalancer = null;
@@ -23,7 +29,7 @@ try {
 
 const ATTEMPT_HISTORY_LIMIT = 20;
 const ATTEMPTED_TASK_LIMIT = 20;
-const HUMAN_BLOCKER_LABELS = ['agent:needs-attention', 'needs-human'];
+const AUTOMATION_ATTENTION_LABELS = ['agent:needs-attention'];
 
 const TIMEOUT_VARIABLE_NAMES = [
   'WORKFLOW_TIMEOUT_DEFAULT',
@@ -57,16 +63,134 @@ const AGENT_EXECUTION_ACTIONS = new Set(['run', 'fix', 'conflict']);
 
 // Resolve default agent from registry
 let _defaultAgent = 'codex';
+let _agentRegistry = { default_agent: 'codex', agents: {}, authority_shared_secrets: [] };
 try {
   const { loadAgentRegistry } = require('./agent_registry.js');
-  _defaultAgent = loadAgentRegistry().default_agent || 'codex';
+  _agentRegistry = loadAgentRegistry();
+  _defaultAgent = _agentRegistry.default_agent || 'codex';
 } catch (_) { /* registry not available */ }
 
 function normalise(value) {
   return String(value ?? '').trim();
 }
 
-async function clearStaleHumanBlockerLabels({ github, owner, repo, prNumber, core }) {
+function buildAuthorityChallengeEvidence({
+  agentSummary,
+  summaryReason,
+  agentType,
+  operation,
+} = {}) {
+  const rawSummary = normalise(agentSummary || summaryReason).replace(/\s+/g, ' ');
+  const routedAgent = (normalise(agentType) || _defaultAgent).toLowerCase();
+  const authorityCredentialAllowlist = new Set([
+    ...(_agentRegistry.authority_shared_secrets || []),
+    ...(_agentRegistry.agents?.[routedAgent]?.required_secrets || []),
+  ].map(value => normalise(value)).filter(value => /^[A-Z][A-Z0-9]*_[A-Z0-9_]+$/.test(value)));
+  const namedCredentialRemedyPatterns = [
+    /\b(?:missing|required|unset|unavailable|undefined)\b\s+(?:the\s+)?(?:(?:api|oauth|access|auth|private|signing|service|bot)\s+)?(?:keys?|tokens?|secrets?|passwords?|credentials?)\s*[:=]?\s*\b([A-Z][A-Z0-9]*_[A-Z0-9_]+)\b/gi,
+    /\b(?:missing|required|unset|unavailable|undefined)\b\s*[:=]?\s*\b([A-Z][A-Z0-9]*_[A-Z0-9_]+)\b/gi,
+    /\bmissing\s+[A-Za-z][A-Za-z0-9_.-]*\s+auth\s*:\s*set\s+(?:the\s+)?([A-Z][A-Z0-9]*_[A-Z0-9_]+)\b/gi,
+  ];
+  let canonicalCredentialTarget = '';
+  for (const pattern of namedCredentialRemedyPatterns) {
+    for (const match of rawSummary.matchAll(pattern)) {
+      if (authorityCredentialAllowlist.has(match[1])) canonicalCredentialTarget = match[1];
+    }
+  }
+  const namespacedOauthScope = String.raw`(?:repo\s*:\s*(?:status|invite)|user\s*:\s*(?:email|follow)|codespace\s*:\s*secrets|(?:read|write|admin)\s*:\s*(?:org|repo_hook|public_key|gpg_key|ssh_signing_key|discussion|enterprise|project)|read\s*:\s*(?:user|audit_log|network_configurations)|write\s*:\s*network_configurations|admin\s*:\s*org_hook|manage_billing\s*:\s*(?:enterprise|copilot)|manage_runners\s*:\s*enterprise|scim\s*:\s*enterprise)`;
+  const structuredPermissionTarget = String.raw`(?:(?:actions|attestations|checks|contents|deployments|discussions|id-token|issues|models|packages|pages|pull-requests|repository-projects|security-events|statuses|workflows?)\s*:\s*(?:read|write|admin|none)|${namespacedOauthScope})`;
+  const standaloneOauthScope = String.raw`(?:repo|workflow|gist|notifications|user|delete_repo|codespace|copilot|project)`;
+  const standaloneOauthScopes = new Set(
+    ['repo', 'workflow', 'gist', 'notifications', 'user', 'delete_repo', 'codespace', 'copilot', 'project'],
+  );
+  const permissionTarget = String.raw`(?:${structuredPermissionTarget}|${standaloneOauthScope})`;
+  // The target itself remains strictly allowlisted; presentation wrappers are
+  // optional so plain, quoted, code, bold, and bracketed runner output all
+  // produce the same bounded remedy.
+  const quotedPermissionTarget = String.raw`(?:\*\*|__|[\x60"'\[<(])?(?<target>${permissionTarget})(?:\*\*|__|[\x60"'\])>])?`;
+  const remedyCue = String.raw`(?:missing|required|requires?|needs?|insufficient|unavailable|unset|undefined|grant|enable)`;
+  const permissionRemedyPatterns = [
+    // A cue must be part of the same grammatical remedy as the target. Do not
+    // let an unrelated target borrow a nearby cue or context word.
+    new RegExp(String.raw`\b(?<cue>${remedyCue})\b\s+(?:the\s+)?(?<context>scopes?|permissions?)\b\s*(?:[:=]\s*)?${quotedPermissionTarget}`, 'gi'),
+    new RegExp(String.raw`\b(?<cue>${remedyCue})\b\s+(?:the\s+)?${quotedPermissionTarget}\s+(?<context>scopes?|permissions?)\b`, 'gi'),
+    new RegExp(String.raw`\b(?<context>scopes?|permissions?)\b\s*(?:is\s+|are\s+)?(?<cue>${remedyCue})\b\s*(?:[:=]\s*)?${quotedPermissionTarget}`, 'gi'),
+    new RegExp(String.raw`\b(?<context>scopes?|permissions?)\b\s*(?:[:=]\s*)?${quotedPermissionTarget}\s+(?:is\s+|are\s+)?(?<cue>${remedyCue})\b`, 'gi'),
+    new RegExp(String.raw`${quotedPermissionTarget}\s+(?<context>scopes?|permissions?)\b\s+(?:is\s+|are\s+)?(?<cue>${remedyCue})\b`, 'gi'),
+  ];
+  let contextualPermissionTarget = null;
+  for (const pattern of permissionRemedyPatterns) {
+    for (const match of rawSummary.matchAll(pattern)) {
+      const { context, target } = match.groups;
+      if (standaloneOauthScopes.has(target.toLowerCase()) && !context.toLowerCase().startsWith('scope')) continue;
+      if (!contextualPermissionTarget || match.index > contextualPermissionTarget.index) {
+        contextualPermissionTarget = { target, index: match.index };
+      }
+    }
+  }
+  const canonicalPermissionTarget = contextualPermissionTarget?.target
+    ? contextualPermissionTarget.target.replace(/\s*:\s*/g, ':')
+    : '';
+  if (!rawSummary) {
+    return { fingerprint: '', detail: '', humanAction: '', actionable: false };
+  }
+  // Durable state and human-visible actions never copy arbitrary runner text.
+  // Extract only finite, explicitly allowlisted authority facts.
+  const statusCodes = [...new Set(
+    [...rawSummary.matchAll(/\b(?:HTTP\s*)?(401|403)\b/gi)].map(match => match[1]),
+  )].sort();
+  const challengedOperation = (normalise(operation) || 'run').toLowerCase();
+  const actionable = Boolean(canonicalCredentialTarget || canonicalPermissionTarget);
+  const detailParts = [];
+  if (canonicalCredentialTarget) detailParts.push(`Required credential: ${canonicalCredentialTarget}`);
+  if (canonicalPermissionTarget) detailParts.push(`Required permission: ${canonicalPermissionTarget}`);
+  if (statusCodes.length) detailParts.push(`HTTP ${statusCodes.join('/')}`);
+  const detail = detailParts.length
+    ? detailParts.join('; ')
+    : 'Authority failure';
+  const fingerprintProjection = JSON.stringify({
+    credential: canonicalCredentialTarget,
+    permission: canonicalPermissionTarget.toLowerCase(),
+    status_codes: statusCodes,
+  });
+  return {
+    fingerprint: crypto.createHash('sha256')
+      .update(`agent=${routedAgent}|operation=${challengedOperation}|${fingerprintProjection}`)
+      .digest('hex'),
+    detail,
+    humanAction: actionable
+      ? `Resolve the reproduced runner authority failure: ${detail}`
+      : '',
+    actionable,
+  };
+}
+
+function selectEscalationDisposition({
+  required,
+  errorCategory,
+  summaryReason,
+  authorityChallengeConfirmed = false,
+} = {}) {
+  if (!required) return 'none';
+  if (authorityChallengeConfirmed) return 'needs-human';
+  const reason = normalise(summaryReason).toLowerCase();
+  if (errorCategory === ERROR_CATEGORIES.auth && !reason.includes('rate-limit')) {
+    return 'challenge-due';
+  }
+  // Runner/CI/resource/logic/unknown failures and exhausted iteration budgets
+  // prove only that the current strategy stopped. They remain automation-owned.
+  return 'automation-retry';
+}
+
+async function clearStaleHumanBlockerLabels({
+  github,
+  owner,
+  repo,
+  prNumber,
+  core,
+  automationOwned = false,
+}) {
+  if (!automationOwned) return { complete: true, removed: [] };
   let currentLabels = [];
   try {
     const { data } = await github.rest.issues.listLabelsOnIssue({
@@ -80,13 +204,19 @@ async function clearStaleHumanBlockerLabels({ github, owner, repo, prNumber, cor
       .filter(Boolean);
   } catch (error) {
     core?.warning?.(`Unable to inspect PR labels before stale human-blocker cleanup: ${error.message}`);
-    return [];
+    return { complete: false, removed: [] };
   }
 
-  const staleLabels = HUMAN_BLOCKER_LABELS.filter((label) =>
+  // `needs-human` is a hard authority blocker. Keepalive never removes it:
+  // label provenance can change between evaluation and this live read, so an
+  // operator-confirmed blocker must be cleared only by the independent
+  // challenge controller. This cleanup is limited to keepalive's own soft
+  // attention label and requires persisted automation ownership.
+  const staleLabels = AUTOMATION_ATTENTION_LABELS.filter((label) =>
     currentLabels.includes(label.toLowerCase())
   );
   const removed = [];
+  let complete = true;
   for (const label of staleLabels) {
     try {
       await github.rest.issues.removeLabel({
@@ -100,6 +230,7 @@ async function clearStaleHumanBlockerLabels({ github, owner, repo, prNumber, cor
       if (error?.status === 404) {
         continue;
       }
+      complete = false;
       core?.warning?.(`Failed to remove stale ${label} label: ${error.message}`);
     }
   }
@@ -107,7 +238,7 @@ async function clearStaleHumanBlockerLabels({ github, owner, repo, prNumber, cor
   if (removed.length > 0) {
     core?.info?.(`Removed stale human-blocker label(s) after successful keepalive state: ${removed.join(', ')}`);
   }
-  return removed;
+  return { complete, removed };
 }
 
 function resolvePromptRouting({ scenario, mode, action, reason } = {}) {
@@ -1115,7 +1246,12 @@ function classifyFailureDetails({ action, runResult, summaryReason, agentExitCod
 
   // If the agent runner reports failure with exit code 0, that strongly suggests
   // an infrastructure/control-plane hiccup rather than a code/tool failure.
-  if (runFailed && summaryReason === 'agent-run-failed' && (!agentExitCode || agentExitCode === '0')) {
+  if (
+    runFailed &&
+    summaryReason === 'agent-run-failed' &&
+    (!agentExitCode || agentExitCode === '0') &&
+    category !== ERROR_CATEGORIES.auth
+  ) {
     category = ERROR_CATEGORIES.transient;
   }
 
@@ -2660,11 +2796,14 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     // An iteration is productive if it has a reasonable productivity score
     const isProductive = productivityScore >= 20 && !hasRecentFailures;
 
-    // max_iterations is a hard per-PR budget. Once reached, stop dispatching
-    // and require a human to raise the budget or remove the blocker.
+    // max_iterations is the ordinary per-PR budget. Once reached, stop the
+    // current strategy; a single forced recovery lease may cross it once.
     const hasMaxIterations = maxIterations > 0;
     const reachedMaxIterations = hasMaxIterations && iteration >= maxIterations;
-    const shouldStopForMaxIterations = reachedMaxIterations;
+    // A force retry is a single, explicit recovery lease. It may cross the
+    // persisted round budget once; the summary step prevents a forced run from
+    // recursively dispatching another forced run.
+    const shouldStopForMaxIterations = reachedMaxIterations && !forceRetry;
 
     // Build task appendix for the agent prompt (after state load for reconciliation info)
     const taskAppendix = buildTaskAppendix(normalisedSections, checkboxCounts, state, { prBody: pr.body });
@@ -2693,7 +2832,7 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
     // This prevents premature stop when the verifier identifies unmet criteria.
     const needsVerification = allComplete && !verificationDone && !verificationAttempted;
     const needsVerificationRetry = allComplete && verificationFailed
-      && verificationAttemptCount < maxVerificationAttempts;
+      && (verificationAttemptCount < maxVerificationAttempts || forceRetry);
 
     // Only treat GitHub API conflicts as definitive (mergeable_state === 'dirty')
     // CI-log based conflict detection has too many false positives from commit messages
@@ -2765,7 +2904,14 @@ async function evaluateKeepaliveLoop({ github: rawGithub, context, core, payload
         // This ensures at least one fix attempt is made before giving up, and
         // that transient cancelled rounds don't consume the fix budget.
         const gateFailure = await classifyGateFailure({ github, context, pr, core });
-        if (gateFailure.shouldFixMode && consecutiveFixRounds < fixAttemptMax) {
+        if (forceRetry) {
+          // A terminal recovery lease must perform recovery work, even after
+          // the ordinary complete-Gate/fix budgets are exhausted. The summary
+          // consumes the lease after this single non-recursive fix attempt.
+          action = 'fix';
+          reason = `force-retry-fix-${gateFailure.failureType || 'complete-gate'}`;
+          if (core) core.info(`Forced recovery: retrying complete Gate failure (${gateFailure.failureType || 'unknown'}).`);
+        } else if (gateFailure.shouldFixMode && consecutiveFixRounds < fixAttemptMax) {
           // Fix is possible and we haven't exhausted fix attempts — try to fix
           action = 'fix';
           reason = `fix-${gateFailure.failureType}`;
@@ -3042,6 +3188,12 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       inputs.roundsWithoutTaskCompletion ?? inputs.rounds_without_task_completion;
     const agentType = normalise(inputs.agent_type ?? inputs.agentType) || _defaultAgent;
     const runResult = normalise(inputs.runResult || inputs.run_result);
+    const agentExecutionStartedInput =
+      inputs.agent_execution_started ?? inputs.agentExecutionStarted;
+    const agentExecutionStarted =
+      agentExecutionStartedInput === undefined || agentExecutionStartedInput === ''
+        ? null
+        : toBool(agentExecutionStartedInput, false);
     const stateTrace = normalise(inputs.trace || inputs.keepalive_trace || '');
 
     // Delegation policy inputs (from evaluate step when agent:auto is active)
@@ -3102,6 +3254,10 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
     );
     // Resolve force_retry early — needed by the live-recount and zero-activity blocks.
     const isForceRetry = toBool(inputs.force_retry ?? inputs.forceRetry, false);
+    const previousRecoveryLease =
+      previousState?.recovery_lease && typeof previousState.recovery_lease === 'object'
+        ? { ...previousState.recovery_lease }
+        : {};
 
     let roundsWithoutTaskCompletion = hasRoundsWithoutTaskCompletionInput
       ? toNumber(roundsWithoutTaskCompletionInput, 0)
@@ -3365,6 +3521,82 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
     const errorCategory = failureDetails.category;
     const errorType = failureDetails.type;
     const errorRecovery = failureDetails.recovery;
+    const previousAttention = previousState?.attention && typeof previousState.attention === 'object'
+      ? previousState.attention
+      : {};
+    const previousAuthorityChallenge =
+      previousAttention.owner === 'automation' &&
+      previousAttention.disposition === 'challenge-due';
+    const authorityChallengeFingerprint = normalise(
+      inputs.authority_challenge_fingerprint ?? inputs.authorityChallengeFingerprint,
+    );
+    let authorityChallengeClaim = {};
+    const rawAuthorityChallengeClaim = normalise(
+      inputs.authority_challenge_claim ?? inputs.authorityChallengeClaim,
+    );
+    if (rawAuthorityChallengeClaim && rawAuthorityChallengeClaim.length <= 2048) {
+      try {
+        const parsed = JSON.parse(rawAuthorityChallengeClaim);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          authorityChallengeClaim = parsed;
+        }
+      } catch {
+        // A malformed or manually crafted claim is deliberately untrusted.
+      }
+    }
+    const authorityChallengeClaimVerified = verifyAuthorityChallengeClaim({
+      signingKey: inputs.authority_challenge_signing_key,
+      signature: authorityChallengeClaim.signature,
+      repository: `${context.repo.owner}/${context.repo.repo}`,
+      prNumber,
+      boundaryFingerprint: authorityChallengeFingerprint,
+      nonce: authorityChallengeClaim.nonce,
+      sweepRunId: authorityChallengeClaim.sweep_run_id,
+      sweepRunAttempt: authorityChallengeClaim.sweep_run_attempt,
+    });
+    const authorityChallengeProvenanceMatches =
+      previousAuthorityChallenge &&
+      Boolean(authorityChallengeFingerprint) &&
+      authorityChallengeClaimVerified &&
+      authorityChallengeFingerprint === previousAttention.boundary_fingerprint;
+    const authorityEvidence = buildAuthorityChallengeEvidence({
+      agentSummary,
+      summaryReason,
+      agentType,
+      operation: action,
+    });
+    const escalationRequired =
+      ((action === 'run' || action === 'fix') && runResult && runResult !== 'success' && errorCategory !== ERROR_CATEGORIES.transient) ||
+      (action === 'stop' && !isSuccessStop && !isNeutralStop && errorCategory !== ERROR_CATEGORIES.transient);
+    const authorityChallengeConfirmed =
+      authorityChallengeProvenanceMatches &&
+      escalationRequired &&
+      errorCategory === ERROR_CATEGORIES.auth &&
+      Boolean(authorityEvidence.fingerprint) &&
+      authorityEvidence.actionable &&
+      authorityEvidence.fingerprint === authorityChallengeFingerprint;
+    let escalationDisposition = selectEscalationDisposition({
+      required: escalationRequired || stop,
+      errorCategory,
+      summaryReason,
+      authorityChallengeConfirmed,
+    });
+    const recoveryLeaseReason = stop
+      ? normalise(summaryReason).replace(/-repeat$/, '')
+      : '';
+    const recoveryLeaseKey = recoveryLeaseReason
+      ? `${recoveryLeaseReason}:max-iterations=${maxIterations}`
+      : '';
+    const recoveryLeaseMatches =
+      Boolean(recoveryLeaseKey) && normalise(previousRecoveryLease.key) === recoveryLeaseKey;
+    const recoveryLeaseAlreadyIssued =
+      recoveryLeaseMatches && ['issued', 'consumed'].includes(previousRecoveryLease.status);
+    const shouldIssueTerminalRecoveryLease =
+      stop &&
+      escalationDisposition === 'automation-retry' &&
+      !isForceRetry &&
+      !recoveryLeaseAlreadyIssued;
+    let hardHumanLabelApplied = false;
     const tasksComplete = Math.max(0, tasksTotal - tasksUnchecked);
     const allTasksComplete = tasksUnchecked === 0 && tasksTotal > 0;
     const previousCompleteGateFailureRounds = toNumber(previousState?.complete_gate_failure_rounds, 0);
@@ -3813,17 +4045,24 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
         '_To resume immediately: Wait for rate limit reset, or add additional API tokens._',
       );
     } else if (stop) {
+      const challengeDue = escalationDisposition === 'challenge-due';
       summaryLines.push(
         '',
-        '### 🛑 Paused – Human Attention Required',
+        challengeDue
+          ? '### 🔎 Paused – Independent Authority Challenge Required'
+          : '### 🔁 Paused – Automation Recovery Required',
         '',
-        'The keepalive loop has paused due to repeated failures.',
+        challengeDue
+          ? 'The keepalive loop found a possible access boundary. Automation must verify it before asking a human.'
+          : 'The keepalive loop paused this execution strategy after repeated failures; ownership remains with automation.',
         '',
         '**To resume:**',
-        '1. Investigate the failure reason above',
-        '2. Fix any issues in the code or prompt',
-        '3. Remove the `needs-human` label from this PR',
-        '4. The next Gate pass will restart the loop',
+        challengeDue
+          ? '1. Reproduce the access failure from current state and verify the exact unavailable permission or secret'
+          : '1. Route the failure to CI repair, retry/backoff, alternate-agent, review fallback, or issue decomposition',
+        '2. Record a concrete next action and responsible automation worker',
+        '3. Use `needs-human` only after an independent review proves a real authority boundary',
+        '4. Re-run Gate or apply the automation retry path',
         '',
         '_Or manually edit this comment to reset `failure: {}` in the state below._',
       );
@@ -3934,6 +4173,64 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       },
     };
 
+    const ordinaryProgressAfterRecovery =
+      !isForceRetry &&
+      actionRunsAgent &&
+      runResult === 'success' &&
+      (agentFilesChanged > 0 || tasksCompletedThisRound > 0 || checklistChanged);
+    const forcedLeaseExecutedAgent =
+      actionRunsAgent &&
+      (agentExecutionStarted === null ? true : agentExecutionStarted) &&
+      Boolean(runResult) &&
+      !['skipped', 'cancelled'].includes(runResult);
+    const recoveryLeaseBudgetChanged =
+      Object.keys(previousRecoveryLease).length > 0 &&
+      toNumber(previousRecoveryLease.max_iterations, maxIterations) !== maxIterations;
+    if (
+      isForceRetry &&
+      previousRecoveryLease.status === 'issued' &&
+      !isSuccessStop &&
+      !isNeutralStop
+    ) {
+      const forcedLeaseStatus = forcedLeaseExecutedAgent ? 'consumed' : 'deferred';
+      newState.recovery_lease = {
+        ...previousRecoveryLease,
+        status: forcedLeaseStatus,
+        ...(forcedLeaseExecutedAgent
+          ? { consumed_at: new Date().toISOString() }
+          : {
+              deferred_at: new Date().toISOString(),
+              deferred_reason: summaryReason,
+            }),
+      };
+    } else if (shouldIssueTerminalRecoveryLease) {
+      const retryingDeferredLease =
+        recoveryLeaseMatches && previousRecoveryLease.status === 'deferred';
+      const dispatchedAt = new Date().toISOString();
+      newState.recovery_lease = {
+        key: recoveryLeaseKey,
+        reason: recoveryLeaseReason,
+        status: 'issued',
+        issued_at: retryingDeferredLease
+          ? previousRecoveryLease.issued_at || dispatchedAt
+          : dispatchedAt,
+        last_dispatched_at: dispatchedAt,
+        dispatch_attempt: retryingDeferredLease
+          ? toNumber(previousRecoveryLease.dispatch_attempt, 1) + 1
+          : 1,
+        iteration: nextIteration,
+        max_iterations: maxIterations,
+      };
+    } else if (
+      Object.keys(previousRecoveryLease).length > 0 &&
+      !recoveryLeaseBudgetChanged &&
+      !ordinaryProgressAfterRecovery &&
+      !isSuccessStop &&
+      !isNeutralStop
+    ) {
+      newState.recovery_lease = previousRecoveryLease;
+    }
+
     // Persist agent delegation state when in auto mode
     if (agentRoutingMode === 'auto' || previousState?.current_agent) {
       const previousDelegationLog = Array.isArray(previousState?.delegation_log)
@@ -4017,9 +4314,6 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       });
     }
 
-    const previousAttention = previousState?.attention && typeof previousState.attention === 'object'
-      ? previousState.attention
-      : {};
     if (Object.keys(previousAttention).length > 0) {
       newState.attention = { ...previousAttention };
     }
@@ -4029,40 +4323,192 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
       core.setOutput('error_category', errorCategory || '');
     }
 
-    const shouldEscalate =
-      ((action === 'run' || action === 'fix') && runResult && runResult !== 'success' && errorCategory !== ERROR_CATEGORIES.transient) ||
-      (action === 'stop' && !isSuccessStop && !isNeutralStop && errorCategory !== ERROR_CATEGORIES.transient);
+    const shouldEscalate = escalationRequired || stop;
     const shouldClearStaleHumanBlockers =
       isSuccessStop ||
+      (previousAuthorityChallenge && runResult === 'success') ||
       (gateConclusion === 'success' &&
         tasksUnchecked === 0 &&
         runResult === 'success' &&
         (action === 'run' || action === 'fix'));
 
-    const attentionKey = [summaryReason, runResult, errorCategory, errorType, agentExitCode].filter(Boolean).join('|');
+    const attentionKey = [
+      summaryReason,
+      runResult,
+      errorCategory,
+      errorType,
+      agentExitCode,
+      authorityEvidence.fingerprint,
+    ].filter(Boolean).join('|');
     const priorAttentionKey = normalise(previousAttention.key);
+    const previousAttentionHasLegacyOwnership =
+      Object.keys(previousAttention).length > 0 &&
+      !normalise(previousAttention.owner) &&
+      !normalise(previousAttention.disposition);
+    const previousAttentionAutomationOwned =
+      (previousAttention.owner === 'automation' &&
+        ['automation-retry', 'challenge-due'].includes(previousAttention.disposition)) ||
+      previousAttentionHasLegacyOwnership;
+    const challengeDueAt = escalationDisposition === 'challenge-due'
+      ? new Date().toISOString()
+      : null;
+    if (shouldEscalate) {
+      const firstSeenAt = priorAttentionKey === attentionKey
+        ? previousAttention.first_seen_at || new Date().toISOString()
+        : new Date().toISOString();
+      if (escalationDisposition === 'needs-human') {
+        newState.attention = {
+          key: attentionKey,
+          disposition: 'needs-human',
+          owner: 'human',
+          first_seen_at: previousAttention.first_seen_at || firstSeenAt,
+          challenge_started_at: previousAttention.challenge_due_at || firstSeenAt,
+          confirmed_at: new Date().toISOString(),
+          confirmation: 'scheduled-current-state-recheck-reproduced-auth-boundary',
+          boundary_fingerprint: authorityEvidence.fingerprint,
+          boundary_detail: authorityEvidence.detail,
+          human_action: authorityEvidence.humanAction,
+          next_action: authorityEvidence.humanAction,
+        };
+      } else {
+        newState.attention = {
+          key: attentionKey,
+          disposition: escalationDisposition,
+          owner: 'automation',
+          first_seen_at: firstSeenAt,
+          challenge_due_at: challengeDueAt,
+          boundary_fingerprint: escalationDisposition === 'challenge-due'
+            ? authorityEvidence.fingerprint
+            : '',
+          boundary_detail: escalationDisposition === 'challenge-due'
+            ? authorityEvidence.detail
+            : '',
+          next_action: escalationDisposition === 'challenge-due'
+            ? 'Independently rerun the current operation and confirm the same redacted authority-boundary fingerprint.'
+            : 'Route to automation retry/backoff, CI repair, alternate agent, or review fallback.',
+        };
+      }
+    }
 
     // NOTE: Failure comment posting removed - handled by reusable-*-run.yml with proper deduplication
     // This prevents duplicate failure notifications on PRs
 
-    summaryLines.push('', formatStateComment(newState));
-    const body = summaryLines.join('\n');
-
     try {
-      if (commentId) {
-        await github.rest.issues.updateComment({
+      let summaryCommentId = commentId;
+      const persistSummary = async (body) => {
+        if (summaryCommentId) {
+          await github.rest.issues.updateComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            comment_id: summaryCommentId,
+            body,
+          });
+        } else {
+          const created = await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber,
+            body,
+          });
+          summaryCommentId = Number(created?.data?.id) || 0;
+        }
+      };
+
+      if (shouldClearStaleHumanBlockers) {
+        const cleanup = await clearStaleHumanBlockerLabels({
+          github,
           owner: context.repo.owner,
           repo: context.repo.repo,
-          comment_id: commentId,
-          body,
+          prNumber,
+          core,
+          automationOwned: previousAttentionAutomationOwned,
         });
-      } else {
-        await github.rest.issues.createComment({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          issue_number: prNumber,
-          body,
-        });
+        if (previousAttentionAutomationOwned && cleanup.complete) {
+          delete newState.attention;
+        } else if (previousAuthorityChallenge && runResult === 'success') {
+          if (cleanup.complete) {
+            delete newState.attention;
+          } else {
+            newState.attention = {
+              ...previousAttention,
+              cleanup_pending_label: true,
+              next_action: 'Retry removal of the automation-owned agent:needs-attention label after recovery.',
+            };
+          }
+        }
+      }
+
+      if (escalationDisposition === 'needs-human') {
+        // First persist a durable automation-owned transition containing the
+        // exact action. If either later API call fails, the PR never falls back
+        // to an actionless or falsely human-owned state.
+        const pendingState = {
+          ...newState,
+          attention: {
+            ...newState.attention,
+            disposition: 'challenge-due',
+            owner: 'automation',
+            challenge_due_at: new Date().toISOString(),
+            confirmation_pending_label: true,
+            next_action: authorityEvidence.humanAction,
+          },
+        };
+        const pendingLines = [
+          ...summaryLines,
+          '',
+          '### ⏳ Confirmed Authority Boundary – Applying Blocker',
+          '',
+          `**Exact human action:** ${authorityEvidence.humanAction}`,
+          '',
+          formatStateComment(pendingState),
+        ];
+        await persistSummary(pendingLines.join('\n'));
+
+        try {
+          await github.rest.issues.addLabels({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber,
+            labels: ['needs-human'],
+          });
+          hardHumanLabelApplied = true;
+        } catch (error) {
+          escalationDisposition = 'challenge-due';
+          newState.attention = pendingState.attention;
+          core?.warning?.(`Failed to apply needs-human; retaining durable authority challenge: ${error.message}`);
+        }
+
+        if (hardHumanLabelApplied) {
+          summaryLines.push(
+            '',
+            '### 🛑 Independent Authority Challenge Confirmed',
+            '',
+            'A scheduled current-state recheck reproduced the same external authority boundary.',
+            `**Exact human action:** ${authorityEvidence.humanAction}`,
+          );
+        }
+      }
+
+      summaryLines.push('', formatStateComment(newState));
+      const body = summaryLines.join('\n');
+      await persistSummary(body);
+
+      if (isForceRetry && forcedLeaseExecutedAgent) {
+        try {
+          await github.rest.issues.removeLabel({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber,
+            name: 'agent:retry',
+          });
+        } catch (error) {
+          if (
+            error?.status !== 404 &&
+            !String(error?.message || '').includes('Label does not exist')
+          ) {
+            core?.warning?.(`Failed to consume agent:retry label: ${error.message}`);
+          }
+        }
       }
 
       // Append to the work log comment (best-effort; failures don't block the loop)
@@ -4093,39 +4539,90 @@ async function updateKeepaliveLoopSummary({ github: rawGithub, context, core, in
         core?.warning?.(`[work-log] append failed: ${workLogError.message}`);
       }
 
-      if (shouldClearStaleHumanBlockers) {
-        await clearStaleHumanBlockerLabels({
-          github,
+      if (shouldEscalate) {
+        const routingLabel = escalationDisposition === 'needs-human'
+          ? 'needs-human'
+          : escalationDisposition === 'challenge-due'
+            ? 'agent:needs-attention'
+            : 'agent:retry';
+        const addRoutingLabel = () => github.rest.issues.addLabels({
           owner: context.repo.owner,
           repo: context.repo.repo,
-          prNumber,
-          core,
+          issue_number: prNumber,
+          labels: [routingLabel],
         });
-      }
-
-      if (shouldEscalate) {
         try {
-          await github.rest.issues.addLabels({
+          const clearAutomationAttention = () => clearStaleHumanBlockerLabels({
+            github,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            issue_number: prNumber,
-            labels: ['agent:needs-attention'],
+            prNumber,
+            core,
+            automationOwned: previousAttentionAutomationOwned,
           });
+          if (escalationDisposition === 'needs-human') {
+            // The hard blocker was applied before the human-owned state was
+            // persisted. Only now may the recoverable label be removed.
+            await clearAutomationAttention();
+          } else if (escalationDisposition === 'challenge-due') {
+            // Adding an already-present label is idempotent. Never remove the
+            // only sweep-routing signal while renewing or replacing a challenge.
+            await addRoutingLabel();
+          } else {
+            // The direct workflow dispatch below owns the retry lease. Do not
+            // add agent:retry: its labeled event could race a successful
+            // dispatch, while GITHUB_TOKEN cannot wake a failed one. A failure
+            // defers the durable lease for a later direct retry instead.
+            await clearAutomationAttention();
+          }
         } catch (error) {
-          if (core) core.warning(`Failed to add agent:needs-attention label: ${error.message}`);
+          if (core) core.warning(`Failed to add ${escalationDisposition} routing label: ${error.message}`);
         }
-      }
-
-      if (stop) {
-        try {
-          await github.rest.issues.addLabels({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: prNumber,
-            labels: ['needs-human'],
-          });
-        } catch (error) {
-          if (core) core.warning(`Failed to add needs-human label: ${error.message}`);
+        // Every automation-owned terminal gets one immediate recovery lease.
+        // Persist the issued/consumed lease across events so later ordinary
+        // sweeps cannot mint another lease for the same terminal boundary.
+        if (
+          escalationDisposition === 'automation-retry' &&
+          !isForceRetry &&
+          (!stop || shouldIssueTerminalRecoveryLease)
+        ) {
+          try {
+            const retryWorkflowId = normalise(
+              inputs.retry_workflow_id ?? inputs.retryWorkflowId,
+            ) || 'agents-keepalive-loop.yml';
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: retryWorkflowId,
+              ref:
+                context.payload?.repository?.default_branch ||
+                context.payload?.pull_request?.base?.ref ||
+                'main',
+              inputs: {
+                pr_number: String(prNumber),
+                force_retry: 'true',
+              },
+            });
+          } catch (error) {
+            core?.warning?.(`Failed to dispatch bounded automation retry: ${error.message}`);
+            if (newState.recovery_lease?.status === 'issued') {
+              newState.recovery_lease = {
+                ...newState.recovery_lease,
+                status: 'deferred',
+                deferred_at: new Date().toISOString(),
+                deferred_reason: 'workflow-dispatch-failed',
+              };
+              try {
+                await persistSummary(
+                  upsertStateCommentBody(body, formatStateComment(newState)),
+                );
+              } catch (stateError) {
+                core?.warning?.(
+                  `Failed to persist deferred recovery lease: ${stateError.message}`,
+                );
+              }
+            }
+          }
         }
       }
 
@@ -4864,5 +5361,7 @@ module.exports = {
   fileMatchesScopePattern,
   validateScopeCompliance,
   buildMetricsRecord,
+  buildAuthorityChallengeEvidence,
   parseCapabilityBundlesInput,
+  selectEscalationDisposition,
 };

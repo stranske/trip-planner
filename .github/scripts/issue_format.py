@@ -203,6 +203,11 @@ _UNQUOTED_PATH = re.compile(
 )
 _LINE_SUFFIX = re.compile(r":\d+(?:-\d+)?$")
 _NODE_SUFFIX = re.compile(r"::.+$")  # pytest node ids: tests/x.py::test_y
+_ORIGINAL_ISSUE_BLOCK_RE = re.compile(
+    r"<details\b[^>]*>\s*<summary>Original Issue</summary>\s*"
+    r"(?P<fence>`{3,}|~{3,})text\s*\n(?P<inner>.*?)\n(?P=fence)\s*</details>",
+    re.DOTALL | re.IGNORECASE,
+)
 # Self-referential boilerplate. The format contract tells authors to cite it, so
 # nearly every body mentions it — and it lives in every repo, which means
 # counting it as evidence would let one boilerplate line defeat the whole gate.
@@ -463,6 +468,11 @@ def _without_fenced_code(text: str) -> str:
     return "\n".join(kept)
 
 
+def _strip_original_issue_blocks(text: str) -> str:
+    """Remove only the formatter's canonical fenced provenance block."""
+    return _ORIGINAL_ISSUE_BLOCK_RE.sub("", text).rstrip()
+
+
 @dataclass
 class Report:
     ok: bool = True
@@ -509,7 +519,7 @@ def validate(body: str, repo_root: Path | None = None) -> Report:
     the validator stays a pure body check for callers that have no checkout.
     """
     report = Report()
-    body = body or ""
+    body = _strip_original_issue_blocks(body or "")
     for name, aliases in REQUIRED.items():
         if _find(body, aliases) is None:
             report.missing_required.append(name)
