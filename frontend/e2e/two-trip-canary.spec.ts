@@ -48,6 +48,7 @@ async function createTripThroughApp(page: Page, input: TripInput): Promise<strin
   if (process.env.VITE_GOOGLE_MAPS_BROWSER_API_KEY?.trim()) {
     await page.getByRole("tab", { name: "Map", exact: true }).click();
     await expect(page.locator('[data-google-maps-live="true"]')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('[data-provider-surface="rendered"]')).toBeVisible();
     await expect(page.getByText("Live Google Maps", { exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "Compare", exact: true }).click();
   }

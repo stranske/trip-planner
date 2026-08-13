@@ -634,6 +634,7 @@ function GoogleMapsProviderMap({
               ? "error"
               : "loading"
         }
+        data-google-maps-live={providerSurfaceState === "ready" ? "true" : "false"}
       />
       {showLiveCanvas ? null : children}
     </>
