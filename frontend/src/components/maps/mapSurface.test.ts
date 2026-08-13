@@ -746,7 +746,7 @@ describe("mapSurface", () => {
     expect(bundleMarkers.map((marker) => marker.kind)).toEqual(["lodging", "activity", "transport"]);
   });
 
-  it("treats a configured key as not observed ready", () => {
+  it("configured is not observed ready", () => {
     const model = buildTripMapSurfaceModel({
       activeScenario: kyotoBaselineScenario,
       bundles: [kyotoAnchorBundle],
