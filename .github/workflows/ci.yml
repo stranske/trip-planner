@@ -34,7 +34,7 @@ jobs:
           python-version: '3.14'
 
       - name: Reject changed functions above the recorded complexity ceiling
-        run: python scripts/measure_complexity.py --changed-from origin/main --max-complexity 59
+        run: python scripts/measure_complexity.py --changed-from origin/main --max-complexity 25
 
   python:
     name: Python CI
