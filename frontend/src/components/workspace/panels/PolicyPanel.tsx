@@ -31,6 +31,7 @@ export type PolicyPanelView =
 
 type PolicyPanelProps = {
   view: PolicyPanelView;
+  lifecycleContent?: ReactNode | null;
   approvalDetailsContent?: ReactNode | null;
   grid?: boolean;
   statusMessage?: string | null;
@@ -109,7 +110,11 @@ export function derivePolicyPanelView(
   };
 }
 
-function renderPolicyState(view: PolicyPanelView, statusMessage?: string | null) {
+function renderPolicyState(
+  view: PolicyPanelView,
+  statusMessage?: string | null,
+  compact = false
+) {
   const liveRegion = (
     <div aria-live="polite" role="status" data-testid="policy-status-live-region">
       {statusMessage ? <p className="muted-copy">{statusMessage}</p> : null}
@@ -122,23 +127,25 @@ function renderPolicyState(view: PolicyPanelView, statusMessage?: string | null)
         <section className="status-card" data-testid="policy-state-not-evaluated">
           <p className="status-label">Approval packet</p>
           <h2>Policy not yet evaluated</h2>
-          <p className="muted-copy">
-            Approval packet records have not been saved for this workspace yet, or evaluation is still
-            pending.
-          </p>
+          {!compact ? (
+            <p className="muted-copy">
+              Approval packet records have not been saved for this workspace yet, or evaluation is still
+              pending.
+            </p>
+          ) : null}
           {view.blockingPrecondition ? (
             <p className="planner-inline-error">{view.blockingPrecondition.message}</p>
           ) : null}
-          {liveRegion}
-          {view.blockingPrecondition ? (
+          {!compact ? liveRegion : null}
+          {!compact && view.blockingPrecondition ? (
             <button type="button" onClick={view.blockingPrecondition.onSatisfy}>
               {view.blockingPrecondition.actionLabel}
             </button>
-          ) : (
+          ) : !compact ? (
             <button type="button" onClick={view.onPrepare}>
               Prepare approval packet
             </button>
-          )}
+          ) : null}
         </section>
       );
     case "compliant":
@@ -146,8 +153,8 @@ function renderPolicyState(view: PolicyPanelView, statusMessage?: string | null)
         <section className="status-card" data-testid="policy-state-compliant">
           <p className="status-label">Approval packet</p>
           <h2>Policy compliant</h2>
-          <p className="muted-copy">{view.summary}</p>
-          {liveRegion}
+          {!compact ? <p className="muted-copy">{view.summary}</p> : null}
+          {!compact ? liveRegion : null}
         </section>
       );
     case "non-compliant":
@@ -155,13 +162,13 @@ function renderPolicyState(view: PolicyPanelView, statusMessage?: string | null)
         <section className="status-card" data-testid="policy-state-non-compliant">
           <p className="status-label">Approval packet</p>
           <h2>Policy non-compliant</h2>
-          <p className="muted-copy">{view.summary}</p>
+          {!compact ? <p className="muted-copy">{view.summary}</p> : null}
           <ul data-testid="policy-issue-codes">
             {view.issueCodes.map((code) => (
               <li key={code}>{code}</li>
             ))}
           </ul>
-          {liveRegion}
+          {!compact ? liveRegion : null}
         </section>
       );
     case "service-unavailable":
@@ -169,11 +176,13 @@ function renderPolicyState(view: PolicyPanelView, statusMessage?: string | null)
         <section className="status-card" data-testid="policy-state-service-unavailable">
           <p className="status-label">Approval packet</p>
           <h2>Policy service unavailable</h2>
-          <p className="muted-copy">{view.message}</p>
-          {liveRegion}
-          <button type="button" onClick={view.onRetry}>
-            Retry policy check
-          </button>
+          {!compact ? <p className="muted-copy">{view.message}</p> : null}
+          {!compact ? liveRegion : null}
+          {!compact ? (
+            <button type="button" onClick={view.onRetry}>
+              Retry policy check
+            </button>
+          ) : null}
         </section>
       );
   }
@@ -181,13 +190,19 @@ function renderPolicyState(view: PolicyPanelView, statusMessage?: string | null)
 
 export function PolicyPanel({
   view,
+  lifecycleContent = null,
   approvalDetailsContent = null,
   grid = false,
   statusMessage = null,
 }: PolicyPanelProps) {
   const content = (
     <>
-      {renderPolicyState(view, statusMessage)}
+      {renderPolicyState(view, statusMessage, lifecycleContent != null)}
+      {lifecycleContent ? (
+        <section className="status-card" data-testid="approval-packet">
+          {lifecycleContent}
+        </section>
+      ) : null}
       {approvalDetailsContent ? (
         <section className="status-card" data-testid="tpp-label">
           {approvalDetailsContent}

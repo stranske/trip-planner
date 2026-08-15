@@ -2482,6 +2482,61 @@ function WorkspacePageContent({
             grid
             view={policyPanelView}
             statusMessage={proposalStatusMessage ?? proposalBusyLabel ?? proposalError}
+            lifecycleContent={
+              panelVisibility.showApprovalReadinessPanel && currentWorkspace.proposal_state != null ? (
+                <>
+                  <p className="status-label">Approval packet</p>
+                  <h2 data-testid="proposal-lifecycle">
+                    {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
+                  </h2>
+                  <div aria-live="polite" role="status">
+                    {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
+                    {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
+                    {proposalStatusMessage ? <p className="muted-copy">{proposalStatusMessage}</p> : null}
+                  </div>
+                  <dl className="workspace-meta">
+                    <div>
+                      <dt>Approval readiness</dt>
+                      <dd>
+                        {currentWorkspace.view_model?.policy_presentation.approval_status_label ??
+                          proposalLifecycle?.readinessLabel ??
+                          "Waiting for policy review"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Packet status</dt>
+                      <dd>{currentWorkspace.proposal_state.summary.submission_status ?? "unknown"}</dd>
+                    </div>
+                    <div>
+                      <dt>Next step</dt>
+                      <dd>
+                        {currentWorkspace.view_model?.policy_presentation.next_step_label ??
+                          formatFollowUpStatus(
+                            renderableProposalFollowUp?.status ??
+                              currentWorkspace.proposal_state.summary.follow_up_status
+                          )}
+                      </dd>
+                    </div>
+                  </dl>
+                  <p>{proposalLifecycle?.summary ?? "Submission stored for later review."}</p>
+                  {shouldShowProposalRefresh(
+                    currentWorkspace.proposal_state,
+                    renderableProposalFollowUp
+                  ) || proposalLifecycle?.state === "failed" ? (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={Boolean(proposalBusyLabel)}
+                      onClick={handleProposalRefresh}
+                    >
+                      {proposalLifecycle?.state === "failed"
+                        ? "Retry policy check"
+                        : "Refresh live status"}
+                    </button>
+                  ) : null}
+                </>
+              ) : null
+            }
             approvalDetailsContent={
               panelVisibility.showProposalPanel ? (
                 <>
