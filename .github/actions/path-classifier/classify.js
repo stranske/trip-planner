@@ -3,7 +3,14 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const crypto = require('crypto');
 const vm = require('node:vm');
+
+// The first delivery to an older consumer may add this contract to a base
+// branch that does not contain it yet.  The classifier must never execute an
+// arbitrary module supplied by that PR: accept only the exact source contract
+// published by Workflows.  Subsequent deliveries read the trusted base copy.
+const BOOTSTRAP_DELIVERY_CONTRACT_SHA256 = 'b61558cca342ffffbdfc22453e585e252a7465a2d3407020e10e4bda73065023';
 
 const OUTPUT_NAMES = {
   'docs-only': 'is-docs-only',
@@ -235,7 +242,21 @@ function compileDeliveryContract(source, filename) {
 }
 
 function readContractAtRef(ref, contractPath) {
-  return runGit(['show', `${ref}:${contractPath}`]);
+  // Keep the object bytes intact: the bootstrap allowlist digest is calculated
+  // from the canonical tracked file, including its trailing newline.
+  return readGit(['show', `${ref}:${contractPath}`]);
+}
+
+function readGit(args) {
+  return execFileSync('git', args, {
+    cwd: process.env.GITHUB_WORKSPACE || process.cwd(),
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+function runGit(args) {
+  return readGit(args).trim();
 }
 
 function isAddOnlyContractDiff(diffText, contractPath) {
@@ -295,6 +316,10 @@ function loadDeliveryContract(
           return null;
         }
         const source = readBootstrapContract(headSha, relativeContractPath);
+        const digest = crypto.createHash('sha256').update(String(source)).digest('hex');
+        if (digest !== BOOTSTRAP_DELIVERY_CONTRACT_SHA256) {
+          return null;
+        }
         return compileDeliveryContract(source, `${headSha}:${relativeContractPath}`);
       } catch {
         return null;
@@ -307,14 +332,6 @@ function loadDeliveryContract(
     return null;
   }
   return require(contractPath);
-}
-
-function runGit(args) {
-  return execFileSync('git', args, {
-    cwd: process.env.GITHUB_WORKSPACE || process.cwd(),
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim();
 }
 
 function tryGit(args) {
@@ -339,16 +356,32 @@ function resolveBaseRef(inputBaseRef, githubContext) {
   return '';
 }
 
-function fetchBaseRef(baseRef, githubContext) {
+function fetchBaseRef(baseRef, githubContext, fetchGit = tryGit) {
   if (!baseRef || !baseRef.startsWith('origin/')) {
     return;
   }
   const branch = baseRef.slice('origin/'.length);
-  tryGit(['fetch', '--no-tags', '--depth=1', 'origin', branch]);
+  const refs = [branch];
   const prBaseSha = githubContext.event?.pull_request?.base?.sha;
   if (prBaseSha) {
-    tryGit(['fetch', '--no-tags', '--depth=1', 'origin', prBaseSha]);
+    refs.push(prBaseSha);
   }
+  // actions/checkout uses a depth-one synthetic merge commit for pull_request
+  // events, so the exact head object is not guaranteed to exist locally. The
+  // add-only first-delivery bootstrap compares and reads that exact head.
+  const pullRequest = githubContext.event?.pull_request;
+  const prHeadSha = pullRequest?.head?.sha;
+  const headRepository = pullRequest?.head?.repo?.full_name || '';
+  const baseRepository = pullRequest?.base?.repo?.full_name || '';
+  if (
+    isStableDeliveryPullRequest(githubContext)
+    && prHeadSha
+    && headRepository
+    && headRepository === baseRepository
+  ) {
+    refs.push(prHeadSha);
+  }
+  fetchGit(['fetch', '--no-tags', '--depth=1', 'origin', ...new Set(refs)]);
 }
 
 function listChangedFiles({
@@ -492,6 +525,7 @@ module.exports = {
   DEFAULT_CATEGORIES,
   OUTPUT_NAMES,
   classifyFiles,
+  fetchBaseRef,
   globToRegExp,
   isAddOnlyContractDiff,
   isStableDeliveryPullRequest,

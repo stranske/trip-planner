@@ -6,6 +6,19 @@ const STATE_MARKER = 'keepalive-state';
 const STATE_VERSION = 'v1';
 const STATE_REGEX = /<!--\s*keepalive-state(?::([\w.-]+))?\s+(.*?)\s*-->/s;
 const LOG_PREFIX = '[keepalive_state]';
+const TRUSTED_KEEPALIVE_STATE_AUTHORS = new Set([
+  'stranske-keepalive[bot]',
+  'agents-workflows-bot[bot]',
+  // Migration-only compatibility for summaries created before dedicated App
+  // tokens became mandatory. New workflows do not write state with this bot.
+  'github-actions[bot]',
+]);
+const TRUSTED_KEEPALIVE_STATE_PAT_AUTHORS = new Set([
+  // reusable-70-orchestrator-init.yml probes and enforces these exact
+  // identities before ACTIONS_BOT_PAT or SERVICE_BOT_PAT may write state.
+  'stranske',
+  'stranske-automation-bot',
+]);
 
 function logInfo(message) {
   console.info(`${LOG_PREFIX} ${message}`);
@@ -17,6 +30,13 @@ function normalise(value) {
 
 function normaliseLower(value) {
   return normalise(value).toLowerCase();
+}
+
+function isTrustedKeepaliveStateComment(comment) {
+  const type = normaliseLower(comment?.user?.type);
+  const login = normaliseLower(comment?.user?.login);
+  return (type === 'bot' && TRUSTED_KEEPALIVE_STATE_AUTHORS.has(login))
+    || (type === 'user' && TRUSTED_KEEPALIVE_STATE_PAT_AUTHORS.has(login));
 }
 
 function deepMerge(target, source) {
@@ -241,6 +261,9 @@ async function findStateComment({ github, owner, repo, prNumber, trace }) {
   let fallback = null;
   for (let index = comments.length - 1; index >= 0; index -= 1) {
     const comment = comments[index];
+    if (!isTrustedKeepaliveStateComment(comment)) {
+      continue;
+    }
     const parsed = parseStateComment(comment?.body);
     if (!parsed) {
       continue;
@@ -514,4 +537,5 @@ module.exports = {
   upsertStateCommentBody,
   deepMerge,
   formatTimestamp,
+  isTrustedKeepaliveStateComment,
 };
