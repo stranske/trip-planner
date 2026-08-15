@@ -13,6 +13,13 @@ inputs:
     description: Git ref to check out for the target repository.
     required: false
     default: ''
+  target_checkout_ready:
+    description: >-
+      Set to true when the caller checked out the target repository before
+      loading this local action. This preserves the action directory for
+      post-job cleanup.
+    required: false
+    default: 'false'
   workflows_app_id:
     description: GitHub App ID used to mint the preferred write token.
     required: false
@@ -119,6 +126,7 @@ runs:
         printf 'Checkout auth: %s; push permitted with app token: %s.\n' "$source" "$push_allowed"
 
     - name: Checkout
+      if: inputs.target_checkout_ready != 'true'
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
