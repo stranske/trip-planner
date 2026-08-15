@@ -818,6 +818,27 @@ export async function refreshWorkspaceProposalStatus(tripId: string): Promise<Wo
   return response.proposal_state;
 }
 
+export type PrepareApprovalPacketHandlers = {
+  focusPlanTab: () => void;
+  preloadPlannerSession?: (tripId: string) => Promise<unknown>;
+};
+
+/** Policy-tab entry point before an approval packet exists. */
+export function prepareApprovalPacketFromPolicyTab(
+  tripId: string,
+  handlers: PrepareApprovalPacketHandlers
+): void {
+  handlers.focusPlanTab();
+  void handlers.preloadPlannerSession?.(tripId);
+}
+
+/** Retry hook used by the service-unavailable policy state. */
+export async function retryPolicyServiceCheck(
+  tripId: string
+): Promise<WorkspaceData["proposal_state"]> {
+  return refreshWorkspaceProposalStatus(tripId);
+}
+
 export async function answerPlannerDecision(
   tripId: string,
   decisionId: string,

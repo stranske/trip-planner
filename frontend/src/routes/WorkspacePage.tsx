@@ -7,8 +7,10 @@ import {
   createNotebookItem,
   deleteNotebookItem,
   fetchPlannerSession,
+  prepareApprovalPacketFromPolicyTab,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
+  retryPolicyServiceCheck,
   saveWorkspaceBudget,
   setNotebookFocus,
   submitPlannerTurn,
@@ -42,7 +44,7 @@ import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelS
 import { TripComparison } from "../components/trips/TripComparison";
 import { PlanningNotebookPanel } from "../components/workspace/PlanningNotebookPanel";
 import { PlannerPanel } from "../components/workspace/panels/PlannerPanel";
-import { PolicyPanel as WorkspacePolicyPanel } from "../components/workspace/panels/PolicyPanel";
+import { derivePolicyPanelView, PolicyPanel as WorkspacePolicyPanel } from "../components/workspace/panels/PolicyPanel";
 import { RouteTradeoffsPanel } from "../components/workspace/panels/RouteTradeoffsPanel";
 import { RouteOptionWorkbench } from "../components/workspace/RouteOptionWorkbench";
 import { ScenarioComparison } from "../components/workspace/ScenarioComparison";
@@ -1693,9 +1695,58 @@ function WorkspacePageContent({
   }
 
   function handlePrepareApprovalPacket() {
-    setActiveTab("plan");
-    workspaceTabRefs.current.plan?.focus();
+    prepareApprovalPacketFromPolicyTab(trip.trip_id, {
+      focusPlanTab: () => {
+        setActiveTab("plan");
+        workspaceTabRefs.current.plan?.focus();
+      },
+      preloadPlannerSession: fetchPlannerSession,
+    });
   }
+
+  async function handlePolicyServiceRetry() {
+    setProposalBusyLabel("Retrying policy service check…");
+    setProposalError(null);
+    setProposalStatusMessage(null);
+    const refreshVersion = ++proposalRefreshVersion.current;
+    try {
+      const nextProposalState = await retryPolicyServiceCheck(trip.trip_id);
+      if (refreshVersion !== proposalRefreshVersion.current) {
+        return;
+      }
+      setCurrentWorkspace((previous) =>
+        previous
+          ? {
+              ...previous,
+              proposal_state: nextProposalState,
+            }
+          : previous
+      );
+      setProposalStatusMessage(
+        nextProposalState == null
+          ? "Policy status refreshed: no approval packet is currently saved."
+          : "Policy service check completed."
+      );
+    } catch (error) {
+      if (refreshVersion === proposalRefreshVersion.current) {
+        setProposalError(error instanceof Error ? error.message : "Policy service retry failed.");
+      }
+    } finally {
+      if (refreshVersion === proposalRefreshVersion.current) {
+        setProposalBusyLabel(null);
+      }
+    }
+  }
+
+  const policyPanelView = useMemo(
+    () =>
+      derivePolicyPanelView(currentWorkspace, {
+        onPrepare: handlePrepareApprovalPacket,
+        onRetry: handlePolicyServiceRetry,
+        onSatisfyPrecondition: handlePrepareApprovalPacket,
+      }),
+    [currentWorkspace, trip.trip_id]
+  );
 
   if (
     typeof window !== "undefined" &&
@@ -2429,70 +2480,8 @@ function WorkspacePageContent({
         <PolicyTabPanel labelledBy={workspaceTabButtonId("policy")}>
           <WorkspacePolicyPanel
             grid
-            noPacketAction={
-              currentWorkspace.proposal_state == null
-                ? { onPrepare: handlePrepareApprovalPacket }
-                : null
-            }
-            approvalPacketContent={
-              panelVisibility.showApprovalReadinessPanel && currentWorkspace.proposal_state != null ? (
-                <>
-                <p className="status-label">Approval packet</p>
-                <h2 data-testid="proposal-lifecycle">
-                  {proposalLifecycle?.title ?? "Proposal lifecycle in progress"}
-                </h2>
-                <>
-                    <div aria-live="polite" role="status">
-                      {proposalBusyLabel ? <p className="muted-copy">{proposalBusyLabel}</p> : null}
-                      {proposalError ? <p className="planner-inline-error">{proposalError}</p> : null}
-                      {proposalStatusMessage ? <p className="muted-copy">{proposalStatusMessage}</p> : null}
-                    </div>
-                    <dl className="workspace-meta">
-                      <div>
-                        <dt>Approval readiness</dt>
-                        <dd>
-                          {currentWorkspace.view_model?.policy_presentation.approval_status_label ??
-                            proposalLifecycle?.readinessLabel ??
-                            "Waiting for policy review"}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Packet status</dt>
-                        <dd>{currentWorkspace.proposal_state.summary.submission_status ?? "unknown"}</dd>
-                      </div>
-                      <div>
-                        <dt>Comparables</dt>
-                        <dd>{currentWorkspace.proposal_state.summary.comparable_count ?? 0}</dd>
-                      </div>
-                      <div>
-                        <dt>Next step</dt>
-                        <dd>
-                          {currentWorkspace.view_model?.policy_presentation.next_step_label ??
-                            formatFollowUpStatus(
-                              renderableProposalFollowUp?.status ??
-                                currentWorkspace.proposal_state.summary.follow_up_status
-                            )}
-                        </dd>
-                      </div>
-                    </dl>
-                    <p>{proposalLifecycle?.summary ?? "Submission stored for later review."}</p>
-                    {shouldShowProposalRefresh(
-                      currentWorkspace.proposal_state,
-                      renderableProposalFollowUp
-                    ) || proposalLifecycle?.state === "failed" ? (
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        disabled={Boolean(proposalBusyLabel)}
-                        onClick={handleProposalRefresh}
-                      >
-                        {proposalLifecycle?.state === "failed" ? "Retry policy check" : "Refresh live status"}
-                      </button>
-                    ) : null}
-                </>
-                </>
-              ) : null
-            }
+            view={policyPanelView}
+            statusMessage={proposalStatusMessage ?? proposalBusyLabel ?? proposalError}
             approvalDetailsContent={
               panelVisibility.showProposalPanel ? (
                 <>
