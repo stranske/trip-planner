@@ -23,7 +23,10 @@ const OUTPUT_NAMES = {
 
 const DEFAULT_CATEGORIES = {
   'docs-only': { paths: ['docs/**', '*.md', 'README.md'], requireAll: true },
-  'python-code': { paths: ['**/*.py', 'pyproject.toml', 'requirements*.txt'], requireAll: false },
+  'python-code': {
+    paths: ['**/*.py', 'src/trend_analysis/preset_data/**', 'pyproject.toml', 'requirements*.txt'],
+    requireAll: false,
+  },
   'workflow-change': { paths: ['.github/workflows/**', '.github/actions/**'], requireAll: false },
   'security-relevant': {
     paths: ['scripts/**', 'tools/**', '.github/workflows/**', 'pyproject.toml'],
