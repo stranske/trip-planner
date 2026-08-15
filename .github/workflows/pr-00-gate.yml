@@ -56,6 +56,15 @@ jobs:
         with:
           force-full: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'verify:full') || github.event_name == 'schedule' }}
 
+  generated-delivery-seal:
+    name: generated delivery seal
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require an exact-head delivery seal
+        uses: stranske/Workflows/.github/actions/generated-delivery-seal@main
+
   python-ci:
     name: Python CI
     needs: detect
@@ -137,7 +146,7 @@ jobs:
 
   summary:
     name: gate-summary
-    needs: [detect, python-ci, complexity-guard, runtime-ci, cross-repo-smoke]
+    needs: [detect, generated-delivery-seal, python-ci, complexity-guard, runtime-ci, cross-repo-smoke]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -159,6 +168,7 @@ jobs:
         id: summarize
         env:
           DETECT_RESULT: ${{ needs.detect.result || 'skipped' }}
+          DELIVERY_SEAL_RESULT: ${{ needs.generated-delivery-seal.result || 'skipped' }}
           PYTHON_RESULT: ${{ needs.python-ci.result || 'skipped' }}
           COMPLEXITY_RESULT: ${{ needs.complexity-guard.result || 'skipped' }}
           RUNTIME_RESULT: ${{ needs.runtime-ci.result || 'skipped' }}
@@ -167,6 +177,7 @@ jobs:
           set -euo pipefail
 
           python_result="${PYTHON_RESULT:-skipped}"
+          delivery_seal_result="${DELIVERY_SEAL_RESULT:-skipped}"
           complexity_result="${COMPLEXITY_RESULT:-skipped}"
           runtime_result="${RUNTIME_RESULT:-skipped}"
           cross_repo_result="${CROSS_REPO_RESULT:-skipped}"
@@ -180,7 +191,10 @@ jobs:
             esac
           }
 
-          if [ "$python_result" = "failure" ]; then
+          if [ "$delivery_seal_result" = "failure" ]; then
+            state="failure"
+            description="Generated delivery seal failed"
+          elif [ "$python_result" = "failure" ]; then
             state="failure"
             description="Python CI failed"
           elif [ "$complexity_result" = "failure" ]; then
@@ -192,14 +206,14 @@ jobs:
           elif [ "$cross_repo_result" = "failure" ]; then
             state="failure"
             description="Cross-repo smoke check failed"
-          elif [ "$python_result" = "cancelled" ] || [ "$complexity_result" = "cancelled" ] || [ "$runtime_result" = "cancelled" ] || [ "$cross_repo_result" = "cancelled" ]; then
+          elif [ "$delivery_seal_result" = "cancelled" ] || [ "$python_result" = "cancelled" ] || [ "$complexity_result" = "cancelled" ] || [ "$runtime_result" = "cancelled" ] || [ "$cross_repo_result" = "cancelled" ]; then
             state="error"
             description="Checks were cancelled"
-          elif is_terminal_ok "$python_result" && is_terminal_ok "$complexity_result" && is_terminal_ok "$runtime_result" && is_terminal_ok "$cross_repo_result"; then
+          elif is_terminal_ok "$delivery_seal_result" && is_terminal_ok "$python_result" && is_terminal_ok "$complexity_result" && is_terminal_ok "$runtime_result" && is_terminal_ok "$cross_repo_result"; then
             state="success"
             ran=()
             skipped=()
-            for pair in "Python CI:$python_result" "complexity guard:$complexity_result" "runtime CI:$runtime_result" "cross-repo smoke:$cross_repo_result"; do
+            for pair in "delivery seal:$delivery_seal_result" "Python CI:$python_result" "complexity guard:$complexity_result" "runtime CI:$runtime_result" "cross-repo smoke:$cross_repo_result"; do
               name="${pair%%:*}"
               result="${pair#*:}"
               if [ "$result" = "success" ]; then
