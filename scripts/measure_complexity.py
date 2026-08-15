@@ -130,7 +130,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--changed-from", help="Git ref used to limit enforcement to changed functions"
     )
-    parser.add_argument("--max-complexity", type=int, default=59)
+    parser.add_argument("--max-complexity", type=int, default=25)
     return parser.parse_args()
 
 

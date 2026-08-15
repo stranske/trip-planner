@@ -40,6 +40,10 @@ from trip_planner.app.services.workspace_fixtures import (
     load_session,
     load_trip_record,
 )
+from trip_planner.app.services.workspace_planner_policy import (
+    build_planner_policy_proposal_block,
+)
+from trip_planner.app.services.workspace_view_model import build_workspace_view_model
 from trip_planner.contracts import MoneyRange
 from trip_planner.contracts.trip import Trip
 from trip_planner.itinerary import (
@@ -1974,33 +1978,6 @@ def _empty_workspace_scenario_search() -> dict[str, Any]:
     }
 
 
-_TRIP_MODE_LABELS: dict[str, str] = {
-    "leisure": "Leisure trip",
-    "business": "Business trip",
-}
-
-# Raw workspace payload keys that must NEVER appear in user-facing view-model
-# copy. They are mirrored under WorkspaceDebugState.sections so an explicit
-# debug/advanced affordance can still surface them.
-_DEBUG_PAYLOAD_KEYS: tuple[str, ...] = (
-    "runtime_state",
-    "inventory_summary",
-    "scenario_search",
-    "ranking",
-    "route_comparison",
-    "runtime_scenario_comparison",
-    "feasibility_summary",
-    "planner_panel_state",
-    "policy_state",
-    "proposal_state",
-    "trip_record",
-    "session",
-    "saved_scenarios",
-    "activity_log",
-    "planner_memory",
-)
-
-
 def _public_workspace_policy_state(policy_state: Any) -> dict[str, Any] | None:
     if not isinstance(policy_state, dict) or not policy_state:
         return None
@@ -2151,273 +2128,15 @@ def _public_workspace_planner_panel_state(
     return public_state
 
 
-def _workspace_policy_state_is_active(
-    *,
-    policy_state: Any,
-    proposal_state: Any,
-) -> bool:
-    if isinstance(policy_state, dict) and policy_state:
-        return True
-    if not isinstance(proposal_state, dict) or not proposal_state:
-        return False
-
-    summary = proposal_state.get("summary") or {}
-    summary = summary if isinstance(summary, dict) else {}
-    if proposal_state.get("execution_id"):
-        return True
-    if summary.get("approval_ready"):
-        return True
-    if summary.get("evaluation_result_status") or summary.get("follow_up_status"):
-        return True
-    submission_status = str(
-        summary.get("submission_status") or proposal_state.get("submission_status") or ""
-    ).lower()
-    evaluation_status = str(
-        summary.get("evaluation_transport_status") or proposal_state.get("evaluation_status") or ""
-    ).lower()
-    return submission_status not in {"", "pending"} or evaluation_status not in {
-        "",
-        "pending",
-    }
-
-
-def _workspace_approval_status(
-    proposal_state: dict[str, Any],
-) -> tuple[str, str, list[str]]:
-    proposal_summary = proposal_state.get("summary") or {}
-    proposal_summary = proposal_summary if isinstance(proposal_summary, dict) else {}
-    approval_ready = bool(proposal_summary.get("approval_ready"))
-    follow_up_status = str(proposal_summary.get("follow_up_status") or "").lower()
-    evaluation_status = str(
-        proposal_summary.get("evaluation_result_status")
-        or proposal_summary.get("submission_status")
-        or ""
-    ).lower()
-
-    if approval_ready:
-        return "approved", "Your trip is ready for approval.", []
-    if evaluation_status in {"in_review", "pending", "submitted"}:
-        return "in_review", "Your trip approval is in review.", []
-    if evaluation_status in {"failed", "rejected", "needs_attention"} or follow_up_status in {
-        "exception_required",
-        "reoptimization_required",
-        "remediation_required",
-    }:
-        blockers = [
-            str(item)
-            for item in (proposal_summary.get("highlights") or [])
-            if isinstance(item, str)
-        ]
-        return "needs_attention", "Approval needs your attention.", blockers
-    if proposal_state:
-        return "not_ready", "Approval is not ready yet.", []
-    return "not_applicable", "Approval is not required yet.", []
-
-
-def _policy_presentation_for_workspace(
-    *,
-    active_policy_state: bool,
-    proposal_state: Any,
-) -> dict[str, Any]:
-    if not active_policy_state:
-        return {
-            "active_policy_state": False,
-            "posture_label": "Not applicable",
-            "approval_status_label": "Not applicable",
-            "next_step_label": "No policy action needed",
-            "summary": "Policy approval is not part of this workspace yet.",
-        }
-
-    proposal_state = proposal_state if isinstance(proposal_state, dict) else {}
-    if not proposal_state:
-        return {
-            "active_policy_state": True,
-            "posture_label": "Approval not started",
-            "approval_status_label": "Approval not started",
-            "next_step_label": "Build approval packet",
-            "summary": "No approval packet has been submitted yet.",
-        }
-
-    approval_status, headline, blockers = _workspace_approval_status(proposal_state)
-    summary = proposal_state.get("summary") or {}
-    summary = summary if isinstance(summary, dict) else {}
-    follow_up_status = str(summary.get("follow_up_status") or "").lower()
-
-    if approval_status == "approved":
-        posture_label = "Ready for approval"
-        next_step_label = "Prepare approval packet"
-    elif follow_up_status == "exception_required":
-        posture_label = "Needs exception"
-        next_step_label = "Review exception request"
-    elif approval_status == "needs_attention":
-        posture_label = "Needs follow-up"
-        next_step_label = "Resolve policy follow-up"
-    elif approval_status == "in_review":
-        posture_label = "Waiting for policy review"
-        next_step_label = "Wait for policy review"
-    elif approval_status == "not_ready":
-        posture_label = "Not ready for approval"
-        next_step_label = "Complete approval packet"
-    else:
-        posture_label = "Policy state available"
-        next_step_label = "Review policy details"
-
-    return {
-        "active_policy_state": True,
-        "posture_label": posture_label,
-        "approval_status_label": posture_label,
-        "next_step_label": next_step_label,
-        "summary": " ".join([headline, *blockers[:1]]).strip(),
-    }
-
-
 def _build_workspace_view_model(
     payload: dict[str, Any],
     *,
     trip_mode: str | None = None,
     include_debug: bool = True,
 ) -> dict[str, Any]:
-    """Map a workspace payload dict into the typed product view model.
+    """Compatibility seam for callers that imported the original private mapper."""
 
-    The mapper deliberately keeps user-facing strings free of raw runtime,
-    provider, fallback, policy/proposal id, and trip-scoped object id
-    language. Raw payloads are mirrored under ``debug_state.sections`` so the
-    frontend can render them only behind an explicit debug affordance.
-    """
-
-    trip_record = payload.get("trip_record") or {}
-    trip_block = trip_record.get("trip") if isinstance(trip_record, dict) else {}
-    trip_block = trip_block if isinstance(trip_block, dict) else {}
-
-    resolved_mode = str(trip_mode or trip_block.get("mode") or "leisure")
-    if resolved_mode not in _TRIP_MODE_LABELS:
-        resolved_mode = "leisure"
-    mode_label = _TRIP_MODE_LABELS[resolved_mode]
-
-    runtime_state = payload.get("runtime_state") or {}
-    runtime_state = runtime_state if isinstance(runtime_state, dict) else {}
-    status = str(runtime_state.get("status") or "empty")
-    if status not in {"ready", "partial", "empty"}:
-        status = "empty"
-
-    trip_title = str(trip_block.get("title") or "Trip workspace")
-
-    saved_scenarios = payload.get("saved_scenarios") or []
-    saved_scenarios = saved_scenarios if isinstance(saved_scenarios, list) else []
-    feasibility_summary = payload.get("feasibility_summary") or {}
-    feasibility_summary = feasibility_summary if isinstance(feasibility_summary, dict) else {}
-
-    decided: list[str] = []
-    if saved_scenarios:
-        decided.append(f"{len(saved_scenarios)} saved scenario draft(s)")
-    inventory_summary = payload.get("inventory_summary") or {}
-    inventory_summary = inventory_summary if isinstance(inventory_summary, dict) else {}
-    bundle_count = int(inventory_summary.get("bundle_count") or 0)
-    if bundle_count:
-        decided.append(f"{bundle_count} inventory bundle(s) assembled")
-
-    uncertain: list[str] = []
-    attention_count = int(feasibility_summary.get("attention_bundle_count") or 0)
-    if attention_count:
-        uncertain.append(f"{attention_count} bundle(s) need attention")
-    if status == "empty":
-        uncertain.append("Trip context is not complete yet.")
-    elif status == "partial":
-        uncertain.append("Scenario comparison is not yet ready.")
-
-    if status == "ready":
-        headline = "Your trip plan is ready to review."
-        next_step_title = "Review and pick a scenario"
-        next_step_summary = "Compare the saved scenarios and choose one to keep planning around."
-        next_step_action = "Open scenario comparison"
-        next_step_target = "scenario-comparison"
-        blocked = False
-    elif status == "partial":
-        headline = "Your trip plan is partially assembled."
-        next_step_title = "Continue planning"
-        next_step_summary = (
-            "Inventory is in place; resolve the open uncertainties to unlock"
-            " scenario comparison."
-        )
-        next_step_action = "Continue planning"
-        next_step_target = "planner"
-        blocked = False
-    else:
-        headline = "Trip planning hasn't started yet."
-        next_step_title = "Start planning"
-        next_step_summary = "Add the missing trip context to start assembling scenarios."
-        next_step_action = "Open trip setup"
-        next_step_target = "trip-setup"
-        blocked = True
-
-    user_summary = {
-        "trip_title": trip_title,
-        "trip_mode": resolved_mode,
-        "mode_label": mode_label,
-        "status": status,
-        "headline": headline,
-        "decided": decided,
-        "uncertain": uncertain,
-    }
-
-    next_step = {
-        "title": next_step_title,
-        "summary": next_step_summary,
-        "action_label": next_step_action,
-        "action_target": next_step_target,
-        "blocked": blocked,
-    }
-
-    policy_state = payload.get("policy_state")
-    proposal_state_value = payload.get("proposal_state")
-    active_policy_state = _workspace_policy_state_is_active(
-        policy_state=policy_state,
-        proposal_state=proposal_state_value,
-    )
-    show_policy_panels = resolved_mode == "business" or active_policy_state
-    panel_visibility = {
-        "show_budget_panel": True,
-        "show_policy_posture": show_policy_panels,
-        "show_proposal_panel": show_policy_panels,
-        "show_approval_readiness_panel": show_policy_panels,
-    }
-    policy_presentation = _policy_presentation_for_workspace(
-        active_policy_state=show_policy_panels,
-        proposal_state=proposal_state_value,
-    )
-
-    business_summary: dict[str, Any] | None = None
-    if resolved_mode == "business":
-        proposal_state = payload.get("proposal_state") or {}
-        proposal_state = proposal_state if isinstance(proposal_state, dict) else {}
-        approval_status, approval_headline, blockers = _workspace_approval_status(proposal_state)
-
-        business_summary = {
-            "approval_status": approval_status,
-            "headline": approval_headline,
-            "blockers": blockers,
-        }
-
-    debug_sections: dict[str, dict[str, Any]] = {}
-    for key in _DEBUG_PAYLOAD_KEYS:
-        if not include_debug and key in {"policy_state", "proposal_state"}:
-            continue
-        raw_value = payload.get(key)
-        if raw_value is None:
-            continue
-        debug_sections[key] = {
-            "title": key.replace("_", " ").title(),
-            "payload": raw_value,
-        }
-
-    return {
-        "user_summary": user_summary,
-        "next_step": next_step,
-        "panel_visibility": panel_visibility,
-        "policy_presentation": policy_presentation,
-        "business_summary": business_summary,
-        "debug_state": {"sections": debug_sections},
-    }
+    return build_workspace_view_model(payload, trip_mode=trip_mode, include_debug=include_debug)
 
 
 def _build_workspace_runtime_state(
@@ -2684,18 +2403,6 @@ def _sync_workspace_session_record(
     return updated
 
 
-def _transport_error_code(error_record: dict[str, Any]) -> str | None:
-    code = error_record.get("code")
-    if isinstance(code, str) and code:
-        return code
-    details = error_record.get("details")
-    if isinstance(details, dict):
-        details_code = details.get("error_code")
-        if isinstance(details_code, str) and details_code:
-            return details_code
-    return None
-
-
 def _trip_region_summary(trip: dict[str, Any]) -> str:
     primary_regions = list(trip["trip_frame"].get("primary_regions") or [])
     return ", ".join(primary_regions[:2]) if primary_regions else "the current trip frame"
@@ -2930,196 +2637,13 @@ def _build_planner_policy_proposal_block(
     policy_context: dict[str, Any] | None,
     proposal_context: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    proposal_state = (
-        dict(proposal_context["proposal_state"])
-        if proposal_context is not None and proposal_context.get("proposal_state") is not None
-        else None
-    )
-    if proposal_state is not None:
-        policy_evaluation = (
-            dict(proposal_state["evaluation"].get("evaluation_result"))
-            if proposal_state.get("evaluation") is not None
-            and proposal_state["evaluation"].get("evaluation_result") is not None
-            else None
-        )
-        proposal = (
-            dict(proposal_state["proposal"]) if proposal_state.get("proposal") is not None else None
-        )
-    else:
-        policy_evaluation = (
-            dict(policy_context["policy_evaluation"])
-            if policy_context is not None and policy_context.get("policy_evaluation") is not None
-            else None
-        )
-        proposal = (
-            dict(policy_context["proposal"])
-            if policy_context is not None and policy_context.get("proposal") is not None
-            else None
-        )
-    outputs: list[dict[str, Any]] = []
-    next_step_actions: list[dict[str, Any]] = []
-    if policy_evaluation is not None:
-        outputs.append(
-            {
-                "output_id": f"output:{trip['trip_id']}:policy-ready",
-                "title": "Approval readiness loaded",
-                "body": "The workspace is using saved approval inputs instead of placeholder readiness state.",
-                "tags": ["policy", "workspace", trip["mode"]],
-                "status": (
-                    "positive"
-                    if policy_evaluation["status"] == "compliant"
-                    else (
-                        "critical" if policy_evaluation["status"] == "non_compliant" else "caution"
-                    )
-                ),
-                "highlights": list(policy_evaluation.get("notes") or [])[:3],
-            }
-        )
-        next_step_actions.insert(
-            0,
-            {
-                "action_id": f"action:{trip['trip_id']}:review-policy",
-                "action_kind": "prepare_approval",
-                "label": "Review approval readiness",
-                "description": "Inspect saved approval constraints and readiness before moving to submission work.",
-                "emphasis": "primary",
-                "target_section": "approval",
-            },
-        )
-    policy_summary = (
-        dict(policy_context.get("summary") or {}) if isinstance(policy_context, dict) else {}
-    )
-    policy_transport_error = (
-        dict(policy_summary.get("transport_error") or {})
-        if isinstance(policy_summary.get("transport_error"), dict)
-        else {}
-    )
-    policy_error_code = policy_transport_error.get("error_code")
-    if policy_summary.get("status") == "stored_policy_fallback" and policy_error_code in {
-        "breaker_open",
-        "timeout",
-    }:
-        if policy_error_code == "breaker_open":
-            notice_title = "Approval service is temporarily unavailable"
-            notice_body = (
-                "The workspace is using the latest saved approval information while the live "
-                "service recovers."
-            )
-        else:
-            notice_title = "Approval service request timed out"
-            notice_body = (
-                "The workspace is using the latest saved approval information while the live "
-                "service recovers."
-            )
-        outputs.append(
-            {
-                "output_id": f"output:{trip['trip_id']}:policy-transport-fallback",
-                "title": notice_title,
-                "body": notice_body,
-                "tags": ["policy", "transport", "stored-policy", trip["mode"]],
-                "status": "caution",
-                "highlights": [
-                    "Saved approval information is still available.",
-                    "Retry the live approval refresh later.",
-                ],
-            }
-        )
-    if proposal_state is not None:
-        summary = dict(proposal_state.get("summary") or {})
-        follow_up = dict(proposal_state.get("follow_up") or {})
-        outputs.append(
-            {
-                "output_id": f"output:{trip['trip_id']}:proposal-lifecycle",
-                "title": "Approval packet loaded",
-                "body": "The workspace now carries saved approval packet and review state.",
-                "tags": ["proposal", "approval", trip["mode"]],
-                "status": (
-                    "positive"
-                    if summary.get("approval_ready")
-                    else ("caution" if summary.get("evaluation_transport_status") else "neutral")
-                ),
-                "highlights": list(summary.get("highlights") or [])[:3],
-            }
-        )
-        submission_error = summary.get("submission_error")
-        evaluation_error = summary.get("evaluation_error")
-        transport_error = (
-            submission_error
-            if isinstance(submission_error, dict)
-            else evaluation_error if isinstance(evaluation_error, dict) else None
-        )
-        if isinstance(transport_error, dict):
-            error_code = _transport_error_code(transport_error)
-            if error_code in {"breaker_open", "timeout"}:
-                if error_code == "breaker_open":
-                    notice_title = "Approval service is temporarily unavailable"
-                    notice_body = (
-                        "The workspace is using the latest saved approval information while the "
-                        "live service recovers."
-                    )
-                else:
-                    notice_title = "Approval service request timed out"
-                    notice_body = (
-                        "The workspace is using the latest saved approval information while the "
-                        "live service recovers."
-                    )
-                outputs.append(
-                    {
-                        "output_id": f"output:{trip['trip_id']}:proposal-transport-fallback",
-                        "title": notice_title,
-                        "body": notice_body,
-                        "tags": [
-                            "proposal",
-                            "transport",
-                            "stored-policy",
-                            trip["mode"],
-                        ],
-                        "status": "caution",
-                        "highlights": [
-                            "Saved approval information is still available.",
-                            "Retry the live approval refresh later.",
-                        ],
-                    }
-                )
-        if follow_up:
-            outputs.append(
-                {
-                    "output_id": f"output:{trip['trip_id']}:proposal-follow-up",
-                    "title": follow_up.get("title") or "Proposal follow-up",
-                    "body": follow_up.get("summary")
-                    or "The workspace has a persisted follow-up path after policy evaluation.",
-                    "tags": ["proposal", "follow-up", trip["mode"]],
-                    "status": (
-                        "positive"
-                        if follow_up.get("status") in {"resolved", "approval_pending"}
-                        else (
-                            "critical"
-                            if follow_up.get("status") == "reoptimization_required"
-                            else "caution"
-                        )
-                    ),
-                    "highlights": list(follow_up.get("guidance") or [])[:2],
-                }
-            )
-            next_step_actions.insert(
-                0,
-                {
-                    "action_id": f"action:{trip['trip_id']}:proposal-follow-up",
-                    "action_kind": follow_up.get("recommended_action") or "review_follow_up",
-                    "label": follow_up.get("recommended_label") or "Review proposal follow-up",
-                    "description": follow_up.get("summary")
-                    or "Inspect the persisted follow-up lane for the latest policy result.",
-                    "emphasis": "primary",
-                    "target_section": "approval",
-                },
-            )
+    """Compatibility seam for the extracted planner policy presenter."""
 
-    return {
-        "proposal": proposal,
-        "policy_evaluation": policy_evaluation,
-        "outputs": outputs,
-        "next_step_actions": next_step_actions,
-    }
+    return build_planner_policy_proposal_block(
+        trip=trip,
+        policy_context=policy_context,
+        proposal_context=proposal_context,
+    )
 
 
 def _build_planner_panel_state(
@@ -4186,6 +3710,60 @@ def _without_route_option_notes(notes: list[str], option_id: str) -> list[str]:
     return [note for note in notes if note not in managed_tokens]
 
 
+def _apply_route_option_action(
+    session: PlanningSessionState,
+    presentation: OptionPresentationRecord,
+    *,
+    action_type: str,
+    option_id: str,
+) -> tuple[str, str]:
+    """Apply one route-option transition and return its audit presentation."""
+
+    presentation.rejected_option_ids = [
+        item for item in presentation.rejected_option_ids if item != option_id
+    ]
+    if action_type == "make_baseline":
+        presentation.selected_option_id = option_id
+        return (
+            "decision_recorded",
+            f"Traveler made route option '{option_id}' the comparison baseline.",
+        )
+    if action_type == "keep":
+        if presentation.selected_option_id == option_id:
+            presentation.selected_option_id = None
+        presentation.notes.append(f"fallback:{option_id}")
+        return (
+            "decision_recorded",
+            f"Traveler kept route option '{option_id}' for later comparison.",
+        )
+    if action_type == "reject":
+        presentation.rejected_option_ids.append(option_id)
+        if presentation.selected_option_id == option_id:
+            presentation.selected_option_id = None
+        return "option_rejected", f"Traveler rejected route option '{option_id}'."
+    if action_type == "reopen":
+        return (
+            "decision_recorded",
+            f"Traveler reopened route option '{option_id}' for comparison.",
+        )
+    presentation.notes.append(f"needs_research:{option_id}")
+    session.interaction_state.auto_advance_research_passes += 1
+    return (
+        "rerank_requested",
+        f"Traveler asked the planner to revise route option '{option_id}'.",
+    )
+
+
+def _route_option_ledger_state(action_type: str) -> tuple[str, str]:
+    item_type = "option_rejected" if action_type == "reject" else "option_considered"
+    statuses = {
+        "reject": "rejected",
+        "make_baseline": "completed",
+        "keep": "deferred",
+    }
+    return item_type, statuses.get(action_type, "active")
+
+
 def submit_workspace_route_option_action(
     db_session: Session,
     *,
@@ -4223,44 +3801,9 @@ def submit_workspace_route_option_action(
     ]
     presentation.notes = _without_route_option_notes(list(presentation.notes), option_id)
 
-    if action_type == "make_baseline":
-        presentation.selected_option_id = option_id
-        presentation.rejected_option_ids = [
-            item for item in presentation.rejected_option_ids if item != option_id
-        ]
-        event_kind = "decision_recorded"
-        summary = f"Traveler made route option '{option_id}' the comparison baseline."
-    elif action_type == "keep":
-        presentation.rejected_option_ids = [
-            item for item in presentation.rejected_option_ids if item != option_id
-        ]
-        if presentation.selected_option_id == option_id:
-            presentation.selected_option_id = None
-        presentation.notes.append(f"fallback:{option_id}")
-        event_kind = "decision_recorded"
-        summary = f"Traveler kept route option '{option_id}' for later comparison."
-    elif action_type == "reject":
-        if option_id not in presentation.rejected_option_ids:
-            presentation.rejected_option_ids.append(option_id)
-        if presentation.selected_option_id == option_id:
-            presentation.selected_option_id = None
-        event_kind = "option_rejected"
-        summary = f"Traveler rejected route option '{option_id}'."
-    elif action_type == "reopen":
-        presentation.rejected_option_ids = [
-            item for item in presentation.rejected_option_ids if item != option_id
-        ]
-        event_kind = "decision_recorded"
-        summary = f"Traveler reopened route option '{option_id}' for comparison."
-    else:
-        presentation.rejected_option_ids = [
-            item for item in presentation.rejected_option_ids if item != option_id
-        ]
-        presentation.notes.append(f"needs_research:{option_id}")
-        session.interaction_state.auto_advance_research_passes += 1
-        event_kind = "rerank_requested"
-        summary = f"Traveler asked the planner to revise route option '{option_id}'."
-
+    event_kind, summary = _apply_route_option_action(
+        session, presentation, action_type=action_type, option_id=option_id
+    )
     presentation.summary = summary
     session.recent_option_presentations = [presentation]
     session.updated_at = _isoformat(datetime.now(UTC))
@@ -4316,16 +3859,7 @@ def submit_workspace_route_option_action(
             "route_option_action": action_type,
         },
     )
-    ledger_type = "option_rejected" if action_type == "reject" else "option_considered"
-    ledger_status = (
-        "rejected"
-        if action_type == "reject"
-        else (
-            "completed"
-            if action_type == "make_baseline"
-            else "deferred" if action_type == "keep" else "active"
-        )
-    )
+    ledger_type, ledger_status = _route_option_ledger_state(action_type)
     _add_planning_ledger_entry(
         db_session,
         trip_id=trip_id,

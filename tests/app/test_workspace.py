@@ -47,7 +47,7 @@ _FIXTURE_ADAPTER_MARKERS = {
     "Kyoto ranked scenario workspace",
     "Client summit ranked scenarios",
 }
-_WORKSPACE_MODULE_LINE_CEILING = 4350
+_WORKSPACE_MODULE_LINE_CEILING = 3900
 
 
 def test_workspace_module_stays_under_size_ceiling() -> None:

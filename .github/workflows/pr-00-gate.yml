@@ -97,7 +97,7 @@ jobs:
         run: >-
           python scripts/measure_complexity.py
           --changed-from ${{ github.event.pull_request.base.sha || 'origin/main' }}
-          --max-complexity 59
+          --max-complexity 25
 
   cross-repo-smoke:
     name: Cross-Repo Smoke
