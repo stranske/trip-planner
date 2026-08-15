@@ -102,8 +102,16 @@ test("signup, trip creation, and workspace navigation work in the real app", asy
 
   await test.step("reopen both trips from the saved-trips interface", async () => {
     await page.goto("/trips");
-    await expect(page.getByRole("heading", { name: "Canary Washington DC client visit", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Canary Kyoto cultural week", exact: true })).toBeVisible();
+    for (const title of [
+      "Canary Washington DC client visit",
+      "Canary Kyoto cultural week",
+    ]) {
+      const tripCard = page.getByRole("heading", { name: title, exact: true }).locator("..");
+      await tripCard.getByRole("link", { name: "Open planner", exact: true }).click();
+      await expect(page).toHaveURL(/\/workspace\/trip-/);
+      await expect(page.getByRole("heading", { name: title, exact: true }).first()).toBeVisible();
+      await page.goto("/trips");
+    }
   });
   await testInfo.attach("two-trip-canary-summary", {
     body: Buffer.from(JSON.stringify({ businessUrl, leisureUrl }, null, 2)),
