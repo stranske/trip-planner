@@ -3882,3 +3882,62 @@ def submit_workspace_route_option_action(
         )
         or {}
     )
+
+
+def _deliberate_complexity_break(value: int) -> int:
+    """Temporary acceptance-test sentinel; reverted after guard evidence."""
+
+    result = value
+    if value > 0:
+        result += 1
+    if value > 1:
+        result += 1
+    if value > 2:
+        result += 1
+    if value > 3:
+        result += 1
+    if value > 4:
+        result += 1
+    if value > 5:
+        result += 1
+    if value > 6:
+        result += 1
+    if value > 7:
+        result += 1
+    if value > 8:
+        result += 1
+    if value > 9:
+        result += 1
+    if value > 10:
+        result += 1
+    if value > 11:
+        result += 1
+    if value > 12:
+        result += 1
+    if value > 13:
+        result += 1
+    if value > 14:
+        result += 1
+    if value > 15:
+        result += 1
+    if value > 16:
+        result += 1
+    if value > 17:
+        result += 1
+    if value > 18:
+        result += 1
+    if value > 19:
+        result += 1
+    if value > 20:
+        result += 1
+    if value > 21:
+        result += 1
+    if value > 22:
+        result += 1
+    if value > 23:
+        result += 1
+    if value > 24:
+        result += 1
+    if value > 25:
+        result += 1
+    return result
