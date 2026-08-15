@@ -829,7 +829,9 @@ export function prepareApprovalPacketFromPolicyTab(
   handlers: PrepareApprovalPacketHandlers
 ): void {
   handlers.focusPlanTab();
-  void handlers.preloadPlannerSession?.(tripId);
+  handlers.preloadPlannerSession?.(tripId).catch(() => {
+    // Preloading the planner session is best-effort; the Plan tab reloads it.
+  });
 }
 
 /** Retry hook used by the service-unavailable policy state. */

@@ -79,7 +79,7 @@ export function derivePolicyPanelView(
     };
   }
 
-  if (summary.approval_ready || summary.evaluation_result_status === "compliant") {
+  if (summary.evaluation_result_status === "compliant") {
     return {
       kind: "compliant",
       summary:
@@ -90,10 +90,9 @@ export function derivePolicyPanelView(
   }
 
   if (summary.evaluation_result_status === "non_compliant") {
-    const issueCodes =
-      proposal.evaluation?.evaluation_result?.failure_reasons?.map((reason) => reason.code) ??
-      summary.highlights ??
-      [];
+    const failureCodes =
+      proposal.evaluation?.evaluation_result?.failure_reasons?.map((reason) => reason.code) ?? [];
+    const issueCodes = failureCodes.length > 0 ? failureCodes : (summary.highlights ?? []);
     return {
       kind: "non-compliant",
       issueCodes: issueCodes.length > 0 ? issueCodes : ["policy-review-required"],
@@ -104,23 +103,23 @@ export function derivePolicyPanelView(
     };
   }
 
+  if (summary.approval_ready) {
+    return {
+      kind: "compliant",
+      summary:
+        summary.follow_up_summary ??
+        summary.submission_summary ??
+        "This workspace complies with the configured travel policy.",
+    };
+  }
+
   return {
     kind: "not-evaluated",
     onPrepare: handlers.onPrepare,
   };
 }
 
-function renderPolicyState(
-  view: PolicyPanelView,
-  statusMessage?: string | null,
-  compact = false
-) {
-  const liveRegion = (
-    <div aria-live="polite" role="status" data-testid="policy-status-live-region">
-      {statusMessage ? <p className="muted-copy">{statusMessage}</p> : null}
-    </div>
-  );
-
+function renderPolicyState(view: PolicyPanelView, compact = false) {
   switch (view.kind) {
     case "not-evaluated":
       return (
@@ -136,7 +135,6 @@ function renderPolicyState(
           {view.blockingPrecondition ? (
             <p className="planner-inline-error">{view.blockingPrecondition.message}</p>
           ) : null}
-          {!compact ? liveRegion : null}
           {!compact && view.blockingPrecondition ? (
             <button type="button" onClick={view.blockingPrecondition.onSatisfy}>
               {view.blockingPrecondition.actionLabel}
@@ -154,7 +152,6 @@ function renderPolicyState(
           <p className="status-label">Approval packet</p>
           <h2>Policy compliant</h2>
           {!compact ? <p className="muted-copy">{view.summary}</p> : null}
-          {!compact ? liveRegion : null}
         </section>
       );
     case "non-compliant":
@@ -168,7 +165,6 @@ function renderPolicyState(
               <li key={code}>{code}</li>
             ))}
           </ul>
-          {!compact ? liveRegion : null}
         </section>
       );
     case "service-unavailable":
@@ -177,7 +173,6 @@ function renderPolicyState(
           <p className="status-label">Approval packet</p>
           <h2>Policy service unavailable</h2>
           {!compact ? <p className="muted-copy">{view.message}</p> : null}
-          {!compact ? liveRegion : null}
           {!compact ? (
             <button type="button" onClick={view.onRetry}>
               Retry policy check
@@ -195,9 +190,15 @@ export function PolicyPanel({
   grid = false,
   statusMessage = null,
 }: PolicyPanelProps) {
+  const compact = lifecycleContent != null;
   const content = (
     <>
-      {renderPolicyState(view, statusMessage, lifecycleContent != null)}
+      {!compact ? (
+        <div aria-live="polite" role="status" data-testid="policy-status-live-region">
+          {statusMessage ? <p className="muted-copy">{statusMessage}</p> : null}
+        </div>
+      ) : null}
+      {renderPolicyState(view, compact)}
       {lifecycleContent ? (
         <section className="status-card" data-testid="approval-packet">
           {lifecycleContent}
