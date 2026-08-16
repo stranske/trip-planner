@@ -59,7 +59,9 @@ def _workspace_policy_state_is_active(*, policy_state: Any, proposal_state: Any)
     return explicit_state or submission not in {"", "pending"} or evaluation not in {"", "pending"}
 
 
-def _workspace_approval_status(proposal_state: dict[str, Any]) -> tuple[str, str, list[str]]:
+def _workspace_approval_status(
+    proposal_state: dict[str, Any], *, trip_mode: str = "leisure"
+) -> tuple[str, str, list[str]]:
     summary = _dict(proposal_state.get("summary"))
     follow_up = str(summary.get("follow_up_status") or "").lower()
     evaluation = str(
@@ -77,6 +79,8 @@ def _workspace_approval_status(proposal_state: dict[str, Any]) -> tuple[str, str
         blockers = [str(item) for item in summary.get("highlights") or [] if isinstance(item, str)]
         return "needs_attention", "Approval needs your attention.", blockers
     if proposal_state:
+        return "not_ready", "Approval is not ready yet.", []
+    if trip_mode == "business":
         return "not_ready", "Approval is not ready yet.", []
     return "not_applicable", "Approval is not required yet.", []
 
@@ -186,7 +190,9 @@ def build_workspace_view_model(
     show_policy = mode == "business" or active
     business_summary = None
     if mode == "business":
-        approval_status, approval_headline, blockers = _workspace_approval_status(_dict(proposal))
+        approval_status, approval_headline, blockers = _workspace_approval_status(
+            _dict(proposal), trip_mode=mode
+        )
         business_summary = {
             "approval_status": approval_status,
             "headline": approval_headline,

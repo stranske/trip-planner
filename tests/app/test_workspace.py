@@ -11,7 +11,7 @@ from sqlalchemy import event, select
 from trip_planner.app.main import create_app
 from trip_planner.app.services import proposal as proposal_service
 from trip_planner.app.services import workspace as workspace_service
-from trip_planner.app.services import workspace_fixtures
+from trip_planner.app.services import workspace_fixtures, workspace_view_model
 from trip_planner.app.services.auth import AuthenticatedUser, create_account
 from trip_planner.app.services.feasibility import (
     build_feasibility_planner_outputs,
@@ -3597,6 +3597,27 @@ def test_workspace_view_model_builder_handles_empty_runtime_state() -> None:
     assert view_model["next_step"]["blocked"] is True
     assert view_model["business_summary"] is None
     assert view_model["debug_state"]["sections"]["runtime_state"]["payload"]["status"] == "empty"
+
+
+def test_business_trip_with_no_proposal_is_not_applicable_free() -> None:
+    status, headline, blockers = workspace_view_model._workspace_approval_status(
+        {}, trip_mode="business"
+    )
+
+    assert status == "not_ready"
+    assert headline == "Approval is not ready yet."
+    assert "not required" not in headline.lower()
+    assert blockers == []
+
+
+def test_leisure_trip_still_reports_approval_not_required() -> None:
+    status, headline, blockers = workspace_view_model._workspace_approval_status(
+        {}, trip_mode="leisure"
+    )
+
+    assert status == "not_applicable"
+    assert headline == "Approval is not required yet."
+    assert blockers == []
 
 
 def test_workspace_view_model_keeps_active_leisure_policy_state_visible() -> None:
