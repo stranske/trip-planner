@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -23,6 +25,15 @@ from trip_planner.integrations.tpp import TPPTransportError
 from trip_planner.persistence.db import get_db_session
 
 router = APIRouter(tags=["proposal"])
+
+
+def _fixture_response_enabled() -> bool:
+    """Keep test response envelopes off the authenticated production surface."""
+    return os.getenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
 
 @router.get("/workspace/{trip_id}/proposal", response_model=WorkspaceProposalResponse)
@@ -56,7 +67,7 @@ def save_workspace_proposal(
             trip_id=trip_id,
             proposal_payload=payload.proposal,
             request_payload=payload.request,
-            response_payload=payload.response,
+            response_payload=payload.response if _fixture_response_enabled() else None,
             proposal_version=payload.proposal_version,
             scenario_id=payload.scenario_id,
         )
@@ -94,7 +105,7 @@ def save_workspace_proposal_result(
             user=user,
             trip_id=trip_id,
             request_payload=payload.request,
-            response_payload=payload.response,
+            response_payload=payload.response if _fixture_response_enabled() else None,
             proposal_version=payload.proposal_version,
             scenario_id=payload.scenario_id,
         )
