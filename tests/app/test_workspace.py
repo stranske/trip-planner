@@ -3599,7 +3599,7 @@ def test_workspace_view_model_builder_handles_empty_runtime_state() -> None:
     assert view_model["debug_state"]["sections"]["runtime_state"]["payload"]["status"] == "empty"
 
 
-def test_business_trip_with_no_proposal_is_not_applicable_free() -> None:
+def test_business_trip_with_no_proposal_is_not_ready() -> None:
     status, headline, blockers = workspace_view_model._workspace_approval_status(
         {}, trip_mode="business"
     )
@@ -3608,6 +3608,27 @@ def test_business_trip_with_no_proposal_is_not_applicable_free() -> None:
     assert headline == "Approval is not ready yet."
     assert "not required" not in headline.lower()
     assert blockers == []
+
+
+def test_workspace_view_model_builder_preserves_business_empty_proposal_status() -> None:
+    payload = {
+        "trip_record": {
+            "trip": {"title": "Business approval workspace", "mode": "business"},
+        },
+        "runtime_state": {"status": "empty", "title": "", "summary": ""},
+        "saved_scenarios": [],
+        "inventory_summary": {"bundle_count": 0},
+        "feasibility_summary": {"attention_bundle_count": 0},
+        "proposal_state": {},
+    }
+
+    view_model = workspace_service._build_workspace_view_model(payload)
+
+    assert view_model["business_summary"] == {
+        "approval_status": "not_ready",
+        "headline": "Approval is not ready yet.",
+        "blockers": [],
+    }
 
 
 def test_leisure_trip_still_reports_approval_not_required() -> None:
