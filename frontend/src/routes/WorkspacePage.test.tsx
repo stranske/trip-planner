@@ -1564,6 +1564,40 @@ describe("WorkspacePage", () => {
     expect(document.body.textContent ?? "").toContain("proposal_state_id");
   });
 
+  it("approval packet view renders verdict and rule ids and is reachable from the Policy tab", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        trip_record: {
+          ...workspacePayload.trip_record,
+          trip: { ...workspacePayload.trip_record.trip, mode: "business" },
+        },
+        proposal_state: {
+          ...workspacePayload.proposal_state!,
+          evaluation: {
+            evaluation_result: {
+              ...workspacePayload.proposal_state!.evaluation.evaluation_result!,
+              status: "non_compliant",
+              failure_reasons: [
+                { code: "daily_cap", message: "Daily cap exceeded.", severity: "blocking", related_category: "lodging" },
+              ],
+            },
+          },
+          summary: { ...workspacePayload.proposal_state!.summary, evaluation_result_status: "non_compliant" },
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Print / Export approval packet" }));
+
+    expect(screen.getByTestId("approval-packet-document")).toBeInTheDocument();
+    expect(screen.getByText("daily_cap")).toBeInTheDocument();
+    expect(screen.getByText("Daily cap exceeded.")).toBeInTheDocument();
+  });
+
   it("persists planning mode selections through the workspace API", async () => {
     const user = userEvent.setup();
     mockedUseLoaderData.mockReturnValue({

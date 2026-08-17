@@ -43,6 +43,7 @@ import { PlanningModeSelector } from "../components/planner/PlanningModeSelector
 import { PlannerSidePanelSurface } from "../components/planner/PlannerSidePanelSurface";
 import { TripComparison } from "../components/trips/TripComparison";
 import { PlanningNotebookPanel } from "../components/workspace/PlanningNotebookPanel";
+import { ApprovalPacket } from "../components/workspace/ApprovalPacket";
 import { PlannerPanel } from "../components/workspace/panels/PlannerPanel";
 import { derivePolicyPanelView, PolicyPanel as WorkspacePolicyPanel } from "../components/workspace/panels/PolicyPanel";
 import { RouteTradeoffsPanel } from "../components/workspace/panels/RouteTradeoffsPanel";
@@ -1152,6 +1153,7 @@ function WorkspacePageContent({
   const [routeOptionBusyLabel, setRouteOptionBusyLabel] = useState<string | null>(null);
   const [routeOptionSuccess, setRouteOptionSuccess] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("plan");
+  const [showApprovalPacket, setShowApprovalPacket] = useState(false);
   const workspaceTabRefs = useRef<Record<WorkspaceTab, HTMLButtonElement | null>>({
     plan: null,
     compare: null,
@@ -1838,6 +1840,17 @@ function WorkspacePageContent({
             ? "Compact review keeps route, day plan, and next choices close together."
             : "Use this trip workspace to compare options, capture traveler notes, and move toward one clear next step."}
         </p>
+        <button
+          type="button"
+          className="secondary-button no-print"
+          disabled={!currentWorkspace.proposal_state?.summary.evaluation_result_status && !currentWorkspace.proposal_state?.summary.approval_ready}
+          onClick={() => {
+            setActiveTab("policy");
+            setShowApprovalPacket(true);
+          }}
+        >
+          Print / Export approval packet
+        </button>
         <details className="workspace-help-disclosure">
           <summary>How to use this trip workspace</summary>
           <div className="workspace-help-grid">
@@ -2519,6 +2532,17 @@ function WorkspacePageContent({
                     </div>
                   </dl>
                   <p>{proposalLifecycle?.summary ?? "Submission stored for later review."}</p>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!currentWorkspace.proposal_state?.summary.evaluation_result_status && !currentWorkspace.proposal_state?.summary.approval_ready}
+                    onClick={() => setShowApprovalPacket(true)}
+                  >
+                    Print / Export approval packet
+                  </button>
+                  {!currentWorkspace.proposal_state?.summary.evaluation_result_status && !currentWorkspace.proposal_state?.summary.approval_ready ? (
+                    <p className="muted-copy">A saved policy verdict is required before an approval packet can be printed.</p>
+                  ) : null}
                   {shouldShowProposalRefresh(
                     currentWorkspace.proposal_state,
                     renderableProposalFollowUp
@@ -2603,6 +2627,9 @@ function WorkspacePageContent({
               ) : null
             }
           />
+          {showApprovalPacket && currentWorkspace.proposal_state ? (
+            <ApprovalPacket workspace={currentWorkspace} onPrint={() => window.print()} />
+          ) : null}
         </PolicyTabPanel>
       ) : null}
     </section>
