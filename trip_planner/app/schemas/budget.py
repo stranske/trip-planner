@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class BudgetCategoryAllocationRequest(BaseModel):
     category_key: str = Field(min_length=1, max_length=64)
     label: str = Field(min_length=1, max_length=80)
-    planned_amount: float = Field(gt=0)
+    planned_amount: float = Field(gt=0, allow_inf_nan=False)
     currency: str = Field(default="USD", min_length=3, max_length=3)
     flexibility: str = Field(default="flexible", min_length=1, max_length=32)
     notes: list[str] = Field(default_factory=list)
@@ -34,7 +34,7 @@ class BudgetPlanUpsertRequest(BaseModel):
 
 class ActualSpendEventUpsertRequest(BaseModel):
     category_key: str = Field(min_length=1, max_length=64)
-    amount: float = Field(gt=0)
+    amount: float = Field(gt=0, allow_inf_nan=False)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     occurred_at: str | None = Field(default=None, max_length=64)
     source_kind: str = Field(default="manual", min_length=1, max_length=32)

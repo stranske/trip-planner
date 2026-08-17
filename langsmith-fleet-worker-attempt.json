@@ -1,13 +1,13 @@
 {
   "agent": "codex",
   "cli_version": "0.144.1",
-  "emitted_at": "2026-08-17T00:08:35.247925Z",
+  "emitted_at": "2026-08-17T02:11:47.785179Z",
   "execution_profile": "codex-default",
   "fallback_models": [
     "gpt-5.5"
   ],
   "operation_role": "worker",
-  "pr_number": "1734",
+  "pr_number": "1741",
   "requested_model": "gpt-5.6-terra",
   "runner": "reusable-codex-run",
   "schema": "langsmith-fleet/v1",
