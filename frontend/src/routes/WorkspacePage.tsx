@@ -1276,6 +1276,9 @@ function WorkspacePageContent({
     selectedRouteSegment
   );
   const proposalFollowUp = currentWorkspace.proposal_state?.follow_up ?? null;
+  const hasSavedVerdict = Boolean(
+    currentWorkspace.proposal_state?.evaluation.evaluation_result
+  );
   const renderableProposalFollowUp = hasRenderableFollowUp(proposalFollowUp)
     ? proposalFollowUp
     : null;
@@ -1843,7 +1846,8 @@ function WorkspacePageContent({
         <button
           type="button"
           className="secondary-button no-print"
-          disabled={!currentWorkspace.proposal_state?.summary.evaluation_result_status && !currentWorkspace.proposal_state?.summary.approval_ready}
+          aria-describedby={!hasSavedVerdict ? "approval-packet-verdict-help" : undefined}
+          disabled={!hasSavedVerdict}
           onClick={() => {
             setActiveTab("policy");
             setShowApprovalPacket(true);
@@ -1851,6 +1855,11 @@ function WorkspacePageContent({
         >
           Print / Export approval packet
         </button>
+        {!hasSavedVerdict ? (
+          <p id="approval-packet-verdict-help" className="muted-copy">
+            A saved policy verdict is required before an approval packet can be printed.
+          </p>
+        ) : null}
         <details className="workspace-help-disclosure">
           <summary>How to use this trip workspace</summary>
           <div className="workspace-help-grid">
@@ -2536,12 +2545,12 @@ function WorkspacePageContent({
                     type="button"
                     className="secondary-button"
                     aria-label="Open approval packet from Policy tab"
-                    disabled={!currentWorkspace.proposal_state?.summary.evaluation_result_status && !currentWorkspace.proposal_state?.summary.approval_ready}
+                    disabled={!hasSavedVerdict}
                     onClick={() => setShowApprovalPacket(true)}
                   >
                     Print / Export approval packet
                   </button>
-                  {!currentWorkspace.proposal_state?.summary.evaluation_result_status && !currentWorkspace.proposal_state?.summary.approval_ready ? (
+                  {!hasSavedVerdict ? (
                     <p className="muted-copy">A saved policy verdict is required before an approval packet can be printed.</p>
                   ) : null}
                   {shouldShowProposalRefresh(

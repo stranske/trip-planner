@@ -12,13 +12,20 @@ function formatCurrency(amount: number, currency: string): string {
 export function ApprovalPacket({ workspace, onPrint }: ApprovalPacketProps) {
   const trip = workspace.trip_record.trip;
   const proposal = workspace.proposal_state;
-  const scenarioId = workspace.session.current_saved_scenario_id;
+  const savedScenario = workspace.saved_scenarios.find(
+    (scenario) => scenario.saved_scenario_id === workspace.session.current_saved_scenario_id
+  );
+  const activeVersion = savedScenario?.versions.find(
+    (version) => version.version_id === savedScenario.current_version_id
+  );
+  const scenarioId = proposal?.scenario_id ?? activeVersion?.snapshot_refs.itinerary_scenario_id;
   const selectedScenario = workspace.route_comparison.scenarios.find(
     (scenario) => scenario.scenario_id === scenarioId
   ) ?? workspace.route_comparison.scenarios[0];
   const verdict = proposal?.evaluation.evaluation_result;
   const currency = selectedScenario?.metrics.estimated_total?.currency ?? workspace.budget_state.summary.currency;
   const total = selectedScenario?.metrics.estimated_total?.typical_amount ?? workspace.budget_state.summary.planned_total;
+  const travelerParty = trip.trip_frame.traveler_party;
 
   return (
     <section className="approval-packet" aria-label="Approval packet" data-testid="approval-packet-document">
@@ -31,6 +38,8 @@ export function ApprovalPacket({ workspace, onPrint }: ApprovalPacketProps) {
       <dl className="workspace-meta approval-packet-meta">
         <div><dt>Dates</dt><dd>{trip.trip_frame.start_date ?? "Not set"} to {trip.trip_frame.end_date ?? "Not set"}</dd></div>
         <div><dt>Destinations</dt><dd>{trip.trip_frame.primary_regions.join(", ") || "Not set"}</dd></div>
+        <div><dt>Travelers</dt><dd>{travelerParty ? `${travelerParty.traveler_count} ${travelerParty.kind}` : "Not set"}</dd></div>
+        {travelerParty?.notes ? <div><dt>Traveler notes</dt><dd>{travelerParty.notes}</dd></div> : null}
         <div><dt>Selected scenario</dt><dd>{selectedScenario?.title ?? "Not selected"}</dd></div>
         <div><dt>Estimated total</dt><dd>{formatCurrency(total, currency)}</dd></div>
         <div><dt>Policy verdict</dt><dd>{verdict?.status ?? proposal?.summary.evaluation_result_status ?? "Not evaluated"}</dd></div>
@@ -38,9 +47,14 @@ export function ApprovalPacket({ workspace, onPrint }: ApprovalPacketProps) {
       </dl>
       <section>
         <h3>Budget</h3>
+        <p>
+          Selected scenario total: {formatCurrency(total, currency)}. Budget cap: {formatCurrency(workspace.budget_state.summary.planned_total, currency)}. Remaining budget: {formatCurrency(workspace.budget_state.summary.remaining_total, currency)}.
+        </p>
         <ul>
           {workspace.budget_state.summary.category_summaries.map((category) => (
-            <li key={category.category_key}>{category.label}: {formatCurrency(category.planned_amount, category.currency)}</li>
+            <li key={category.category_key}>
+              {category.label}: cap {formatCurrency(category.planned_amount, category.currency)}; remaining {formatCurrency(category.remaining_amount, category.currency)}
+            </li>
           ))}
         </ul>
       </section>

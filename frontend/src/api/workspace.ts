@@ -6,6 +6,11 @@ export type TripFrame = {
   end_date: string | null;
   duration_days: number | null;
   primary_regions: string[];
+  traveler_party?: {
+    kind: string;
+    traveler_count: number;
+    notes: string;
+  };
 };
 
 export type TripRecord = {

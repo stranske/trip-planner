@@ -1591,11 +1591,15 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
     await selectWorkspaceTab("Policy");
-    await userEvent.setup().click(screen.getByRole("button", { name: "Print / Export approval packet" }));
+    await userEvent.setup().click(
+      screen.getByRole("button", { name: "Open approval packet from Policy tab" })
+    );
 
     const packet = screen.getByTestId("approval-packet-document");
     expect(packet).toBeInTheDocument();
     const packetScope = within(packet);
+    expect(packetScope.getByText("2 pair")).toBeInTheDocument();
+    expect(packetScope.getByText(/Selected scenario total:/)).toBeInTheDocument();
     expect(packetScope.getByText("daily_cap")).toBeInTheDocument();
     expect(packetScope.getByText("Daily cap exceeded.")).toBeInTheDocument();
   });
