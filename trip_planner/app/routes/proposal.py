@@ -28,12 +28,16 @@ router = APIRouter(tags=["proposal"])
 
 
 def _fixture_response_enabled() -> bool:
-    """Keep test response envelopes off the authenticated production surface."""
-    return os.getenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
+    """Permit serialized TPP fixtures only in local development and test runs."""
+    environment = os.getenv("TRIP_PLANNER_ENV", "local").strip().lower()
+    return environment in {"local", "development", "dev", "test", "testing"} and (
+        os.getenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "").strip().lower()
+        in {
+            "1",
+            "true",
+            "yes",
+        }
+    )
 
 
 @router.get("/workspace/{trip_id}/proposal", response_model=WorkspaceProposalResponse)
