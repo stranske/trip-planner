@@ -62,7 +62,7 @@ function selectedScenario(
   return comparison.scenarios.find((scenario) => scenario.scenario_id === resolvedId) ?? null;
 }
 
-function readPolicyContext(workspace: WorkspaceData): PolicyContext {
+function readPolicyContext(workspace: WorkspaceData): PolicyContext | null {
   const policyPayload = workspace.view_model?.debug_state?.sections?.policy_state?.payload;
   if (policyPayload != null && typeof policyPayload === "object") {
     const policy = policyPayload as Record<string, unknown>;
@@ -81,10 +81,7 @@ function readPolicyContext(workspace: WorkspaceData): PolicyContext {
     }
   }
 
-  return {
-    organizationId: "org-acme",
-    constraintSetId: "policy-standard-2026-02",
-  };
+  return null;
 }
 
 function moneyRange(
@@ -108,14 +105,27 @@ export function buildProposalSubmissionPayload(
   const proposalId = `proposal:${tripId}`;
   const scenario = selectedScenario(workspace, scenarioId);
   const resolvedScenarioId = scenario?.scenario_id ?? resolveSubmissionScenarioId(workspace, scenarioId);
-  const { constraintSetId, organizationId } = readPolicyContext(workspace);
+  const policyContext = readPolicyContext(workspace);
+  if (policyContext == null) {
+    throw new Error("Policy context is not available for this workspace.");
+  }
+  const { constraintSetId, organizationId } = policyContext;
   const estimatedTotal = scenario?.metrics.estimated_total;
   const currency =
     estimatedTotal?.currency ?? workspace.budget_state.summary.currency ?? "USD";
   const typicalAmount =
     estimatedTotal?.typical_amount ?? workspace.budget_state.summary.planned_total ?? 0;
   const scenarioLabel = scenario?.title ?? trip.title;
-  const bookingChannel = "Navan";
+
+  const selectedOption: Record<string, unknown> = {
+    category: "itinerary",
+    option_id: resolvedScenarioId ?? `option:${tripId}`,
+    label: scenarioLabel,
+    estimated_cost: moneyRange(typicalAmount, currency),
+    justification_refs: scenario?.highlights?.length
+      ? scenario.highlights
+      : ["workspace-scenario"],
+  };
 
   const proposal = {
     proposal_id: proposalId,
@@ -124,23 +134,10 @@ export function buildProposalSubmissionPayload(
     traveler_context: {
       employee_type: "employee",
       traveler_experience: "occasional",
-      home_airport: trip.trip_frame.primary_regions[0] ?? "policy-workspace",
       loyalty_programs: [],
       mobility_or_access_needs: [],
     },
-    selected_options: [
-      {
-        category: "itinerary",
-        option_id: resolvedScenarioId ?? `option:${tripId}`,
-        label: scenarioLabel,
-        vendor: trip.trip_frame.primary_regions.join(", ") || "workspace",
-        booking_channel: bookingChannel,
-        estimated_cost: moneyRange(typicalAmount, currency),
-        justification_refs: scenario?.highlights?.length
-          ? scenario.highlights.map((highlight, index) => `highlight:${index}`)
-          : ["workspace-scenario"],
-      },
-    ],
+    selected_options: [selectedOption],
     cost_summary: {
       currency,
       total_estimated_cost: typicalAmount,
@@ -151,8 +148,6 @@ export function buildProposalSubmissionPayload(
       {
         category: "itinerary",
         label: scenarioLabel,
-        vendor: trip.trip_frame.primary_regions.join(", ") || "workspace",
-        booking_channel: bookingChannel,
         estimated_cost: moneyRange(typicalAmount, currency),
         notes: scenario?.highlights?.length ? scenario.highlights.slice(0, 2) : ["Selected scenario"],
       },
@@ -196,7 +191,11 @@ export function buildProposalEvaluationPayload(
   const tripId = workspace.trip_record.trip.trip_id;
   const proposalId = `proposal:${tripId}`;
   const resolvedScenarioId = resolveSubmissionScenarioId(workspace, scenarioId);
-  const { organizationId } = readPolicyContext(workspace);
+  const policyContext = readPolicyContext(workspace);
+  if (policyContext == null) {
+    throw new Error("Policy context is not available for this workspace.");
+  }
+  const { organizationId } = policyContext;
   const requestId = `req-eval-${tripId}`;
 
   return {

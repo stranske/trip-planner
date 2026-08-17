@@ -2587,6 +2587,7 @@ function WorkspacePageContent({
           <WorkspacePolicyPanel
             grid
             view={policyPanelView}
+            busy={Boolean(proposalBusyLabel)}
             statusMessage={proposalStatusMessage ?? proposalBusyLabel ?? proposalError}
             lifecycleContent={
               panelVisibility.showApprovalReadinessPanel && currentWorkspace.proposal_state != null ? (

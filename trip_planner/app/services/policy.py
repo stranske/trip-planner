@@ -221,7 +221,10 @@ def _proposal_from_import(
             currency="USD",
             total_estimated_cost=0.0,
             category_estimates={},
-            notes=["Cost summary not available until proposal submission wiring lands."],
+            notes=[
+                "Cost summary is not populated for imported policy snapshots;"
+                " submit the selected scenario to produce a costed proposal."
+            ],
         ),
         approval_notes=notes,
         constraint_set_id=imported.constraint_set.policy_id,

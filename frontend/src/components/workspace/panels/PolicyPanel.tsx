@@ -35,6 +35,7 @@ type PolicyPanelProps = {
   approvalDetailsContent?: ReactNode | null;
   grid?: boolean;
   statusMessage?: string | null;
+  busy?: boolean;
 };
 
 function isFailedTransportStatus(status: string | null | undefined): boolean {
@@ -119,7 +120,7 @@ export function derivePolicyPanelView(
   };
 }
 
-function renderPolicyState(view: PolicyPanelView, compact = false) {
+function renderPolicyState(view: PolicyPanelView, compact = false, busy = false) {
   switch (view.kind) {
     case "not-evaluated":
       return (
@@ -140,7 +141,7 @@ function renderPolicyState(view: PolicyPanelView, compact = false) {
               {view.blockingPrecondition.actionLabel}
             </button>
           ) : !compact ? (
-            <button type="button" onClick={view.onPrepare}>
+            <button type="button" disabled={busy} onClick={view.onPrepare}>
               Submit for approval
             </button>
           ) : null}
@@ -189,6 +190,7 @@ export function PolicyPanel({
   approvalDetailsContent = null,
   grid = false,
   statusMessage = null,
+  busy = false,
 }: PolicyPanelProps) {
   const compact = lifecycleContent != null;
   const content = (
@@ -198,7 +200,7 @@ export function PolicyPanel({
           {statusMessage ? <p className="muted-copy">{statusMessage}</p> : null}
         </div>
       ) : null}
-      {renderPolicyState(view, compact)}
+      {renderPolicyState(view, compact, busy)}
       {lifecycleContent ? (
         <section className="status-card" data-testid="approval-packet">
           {lifecycleContent}

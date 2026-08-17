@@ -2890,10 +2890,35 @@ describe("WorkspacePage", () => {
             trip: expect.objectContaining({ trip_id: "trip-business-tokyo-summit" }),
           }),
         }),
-        expect.anything()
+        "scenario:trip-leisure-kyoto-draft:1"
       );
     });
     expect(screen.getByText(/Submitted for approval:/)).toBeInTheDocument();
+  });
+
+  it("surfaces an error when approval submission fails", async () => {
+    mockedSubmitTripForApproval.mockRejectedValue(new Error("Policy gateway unavailable."));
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        trip_record: {
+          ...workspacePayload.trip_record,
+          trip: tripComparisonPayload[1],
+        },
+        proposal_state: null,
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await selectWorkspaceTab("Policy");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Submit for approval" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Policy gateway unavailable.")).toBeInTheDocument();
+    });
   });
 
   it("surfaces a deferred execution state while the remote verdict is queued", async () => {

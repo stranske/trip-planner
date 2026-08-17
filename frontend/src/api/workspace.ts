@@ -851,7 +851,7 @@ export async function refreshWorkspaceProposalStatus(tripId: string): Promise<Wo
     method: "POST",
     credentials: "include",
   });
-  return response.proposal_state;
+  return response?.proposal_state ?? null;
 }
 
 export type WorkspaceProposalApiResponse = {
@@ -872,7 +872,7 @@ export async function submitWorkspaceProposal(
     },
     body: JSON.stringify(payload),
   });
-  return response.proposal_state;
+  return response?.proposal_state ?? null;
 }
 
 export async function submitWorkspaceProposalEvaluation(
@@ -888,7 +888,31 @@ export async function submitWorkspaceProposalEvaluation(
     },
     body: JSON.stringify(payload),
   });
-  return response.proposal_state;
+  return response?.proposal_state ?? null;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function pollForExecutionId(
+  tripId: string,
+  maxAttempts = 5
+): Promise<WorkspaceData["proposal_state"]> {
+  let proposalState: WorkspaceData["proposal_state"] = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (attempt > 0) {
+      await sleep(500 * attempt);
+    }
+    proposalState = await refreshWorkspaceProposalStatus(tripId);
+    if (proposalState?.execution_id) {
+      return proposalState;
+    }
+    if (!proposalState?.summary.submission_requires_polling) {
+      break;
+    }
+  }
+  return proposalState;
 }
 
 export async function submitTripForApproval(
@@ -904,7 +928,7 @@ export async function submitTripForApproval(
 
   let executionId = proposalState?.execution_id ?? null;
   if (!executionId && proposalState?.summary.submission_requires_polling) {
-    proposalState = await refreshWorkspaceProposalStatus(tripId);
+    proposalState = await pollForExecutionId(tripId);
     executionId = proposalState?.execution_id ?? null;
   }
 
@@ -913,7 +937,8 @@ export async function submitTripForApproval(
   }
 
   const evaluation = buildProposalEvaluationPayload(workspace, executionId, scenarioId);
-  return submitWorkspaceProposalEvaluation(tripId, evaluation);
+  const evaluated = await submitWorkspaceProposalEvaluation(tripId, evaluation);
+  return evaluated ?? proposalState;
 }
 
 export type PrepareApprovalPacketHandlers = {
