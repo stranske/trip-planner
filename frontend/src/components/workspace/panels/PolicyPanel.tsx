@@ -141,7 +141,7 @@ function renderPolicyState(view: PolicyPanelView, compact = false) {
             </button>
           ) : !compact ? (
             <button type="button" onClick={view.onPrepare}>
-              Prepare approval packet
+              Submit for approval
             </button>
           ) : null}
         </section>

@@ -183,8 +183,8 @@ def _proposal_from_import(
     notes = [
         f"Imported policy {imported.constraint_set.policy_id} v{imported.constraint_set.policy_version}.",
         (
-            "Final proposal submission remains out of scope for this stored-policy slice; "
-            "workspace approval-readiness is advisory until submission work lands."
+            "Final proposal submission is available from the workspace Policy tab; imported policy"
+            " snapshots remain advisory until a traveler submits the selected scenario."
         ),
     ]
     if imported.constraint_set.documentation_rules:

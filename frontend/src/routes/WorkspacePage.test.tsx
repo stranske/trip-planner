@@ -16,6 +16,7 @@ import {
   submitPlannerTurn,
   submitPlannerOptionFeedback,
   submitRouteOptionAction,
+  submitTripForApproval,
   updateNotebookItem,
   updateWorkspacePlanningMode,
   type PlanningLedgerEntry,
@@ -39,6 +40,7 @@ vi.mock("../api/workspace", async () => {
     saveWorkspaceBudget: vi.fn(),
     recordWorkspaceSpendEvent: vi.fn(),
     refreshWorkspaceProposalStatus: vi.fn(),
+    submitTripForApproval: vi.fn(),
     createNotebookItem: vi.fn(),
     updateNotebookItem: vi.fn(),
     deleteNotebookItem: vi.fn(),
@@ -64,6 +66,7 @@ const mockedUpdateWorkspacePlanningMode = vi.mocked(updateWorkspacePlanningMode)
 const mockedSaveWorkspaceBudget = vi.mocked(saveWorkspaceBudget);
 const mockedRecordWorkspaceSpendEvent = vi.mocked(recordWorkspaceSpendEvent);
 const mockedRefreshWorkspaceProposalStatus = vi.mocked(refreshWorkspaceProposalStatus);
+const mockedSubmitTripForApproval = vi.mocked(submitTripForApproval);
 const mockedCreateNotebookItem = vi.mocked(createNotebookItem);
 const mockedUpdateNotebookItem = vi.mocked(updateNotebookItem);
 const mockedDeleteNotebookItem = vi.mocked(deleteNotebookItem);
@@ -930,6 +933,7 @@ describe("WorkspacePage", () => {
     mockedSaveWorkspaceBudget.mockReset();
     mockedRecordWorkspaceSpendEvent.mockReset();
     mockedRefreshWorkspaceProposalStatus.mockReset();
+    mockedSubmitTripForApproval.mockReset();
     mockedCreateNotebookItem.mockReset();
     mockedUpdateNotebookItem.mockReset();
     mockedDeleteNotebookItem.mockReset();
@@ -2798,22 +2802,30 @@ describe("WorkspacePage", () => {
     expect(screen.queryByRole("button", { name: "Refresh live status" })).not.toBeInTheDocument();
   });
 
-  it("offers a direct path to prepare an approval packet when none exists", async () => {
-    mockedFetchPlannerSession.mockImplementation(async (tripId) => ({
-      ...plannerSessionPayload,
-      trip_id: tripId,
-      planner_panel_state: {
-        ...plannerSessionPayload.planner_panel_state,
-        trip: {
-          ...plannerSessionPayload.planner_panel_state.trip,
-          trip_id: tripId,
-        },
-        option_set: {
-          ...plannerSessionPayload.planner_panel_state.option_set,
-          trip_id: tripId,
+  it("submits a business trip for approval and renders the verdict", async () => {
+    const submittedProposalState = {
+      ...workspacePayload.proposal_state!,
+      submission_status: "succeeded",
+      evaluation_status: "succeeded",
+      summary: {
+        ...workspacePayload.proposal_state!.summary,
+        submission_status: "succeeded",
+        evaluation_transport_status: "succeeded",
+        evaluation_result_status: "compliant",
+        approval_ready: true,
+      },
+      evaluation: {
+        evaluation_result: {
+          evaluation_id: "eval-business-submit-001",
+          status: "compliant",
+          approval_requirements: [],
+          failure_reasons: [],
+          notes: ["Policy constraints satisfied."],
+          compliance_score: 0.99,
         },
       },
-    }));
+    };
+    mockedSubmitTripForApproval.mockResolvedValue(submittedProposalState);
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
         ...workspacePayload,
@@ -2830,13 +2842,58 @@ describe("WorkspacePage", () => {
 
     await selectWorkspaceTab("Policy");
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Prepare approval packet" }));
+    await user.click(await screen.findByRole("button", { name: "Submit for approval" }));
 
-    expect(screen.getByRole("tab", { name: "Plan" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Plan" })).toHaveFocus();
     await waitFor(() => {
-      expect(mockedFetchPlannerSession).toHaveBeenCalledWith("trip-business-tokyo-summit");
+      expect(mockedSubmitTripForApproval).toHaveBeenCalledTimes(1);
+      expect(screen.getByText(/Submitted for approval:/)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Policy compliant" })).toBeInTheDocument();
     });
+  });
+
+  it("offers a direct path to submit for approval when none exists", async () => {
+    mockedSubmitTripForApproval.mockResolvedValue({
+      ...workspacePayload.proposal_state!,
+      submission_status: "deferred",
+      evaluation_status: null,
+      summary: {
+        ...workspacePayload.proposal_state!.summary,
+        submission_status: "deferred",
+        submission_summary: "Proposal queued for evaluation",
+        submission_requires_polling: true,
+        evaluation_result_status: undefined,
+        approval_ready: false,
+      },
+    });
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        trip_record: {
+          ...workspacePayload.trip_record,
+          trip: tripComparisonPayload[1],
+        },
+        proposal_state: null,
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await selectWorkspaceTab("Policy");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Submit for approval" }));
+
+    await waitFor(() => {
+      expect(mockedSubmitTripForApproval).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trip_record: expect.objectContaining({
+            trip: expect.objectContaining({ trip_id: "trip-business-tokyo-summit" }),
+          }),
+        }),
+        expect.anything()
+      );
+    });
+    expect(screen.getByText(/Submitted for approval:/)).toBeInTheDocument();
   });
 
   it("surfaces a deferred execution state while the remote verdict is queued", async () => {

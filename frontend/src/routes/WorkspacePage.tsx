@@ -7,7 +7,6 @@ import {
   createNotebookItem,
   deleteNotebookItem,
   fetchPlannerSession,
-  prepareApprovalPacketFromPolicyTab,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
   retryPolicyServiceCheck,
@@ -15,6 +14,7 @@ import {
   setNotebookFocus,
   submitPlannerTurn,
   submitRouteOptionAction,
+  submitTripForApproval,
   updateNotebookItem,
   updateWorkspacePlanningMode,
   type ActualSpendEventUpsertPayload,
@@ -1714,13 +1714,68 @@ function WorkspacePageContent({
   }
 
   function handlePrepareApprovalPacket() {
-    prepareApprovalPacketFromPolicyTab(trip.trip_id, {
-      focusPlanTab: () => {
+    void handleSubmitForApproval();
+  }
+
+  async function handleSubmitForApproval() {
+    setProposalBusyLabel("Submitting for approval…");
+    setProposalError(null);
+    setProposalStatusMessage(null);
+    const refreshVersion = ++proposalRefreshVersion.current;
+    try {
+      const nextProposalState = await submitTripForApproval(currentWorkspace, selectedScenarioId);
+      if (refreshVersion !== proposalRefreshVersion.current) {
+        return;
+      }
+      if (nextProposalState == null) {
+        setProposalStatusMessage("Submission completed, but no approval packet was saved.");
+        return;
+      }
+      const nextLifecycle = deriveProposalLifecyclePresentation(
+        nextProposalState,
+        nextProposalState.follow_up
+      );
+      startTransition(() => {
+        setCurrentWorkspace((current) => ({
+          ...current,
+          proposal_state: nextProposalState,
+        }));
+      });
+      setProposalStatusMessage(
+        nextLifecycle.state === "failed"
+          ? `Submission completed with a policy failure: ${nextLifecycle.summary}`
+          : `Submitted for approval: ${nextLifecycle.summary}`
+      );
+    } catch (error) {
+      if (refreshVersion === proposalRefreshVersion.current) {
+        setProposalError(error instanceof Error ? error.message : "Approval submission failed.");
+      }
+    } finally {
+      if (refreshVersion === proposalRefreshVersion.current) {
+        setProposalBusyLabel(null);
+      }
+    }
+  }
+
+  function handleNextStepAction(actionTarget: string | null) {
+    switch (actionTarget) {
+      case "scenario-comparison":
+        setActiveTab("compare");
+        workspaceTabRefs.current.compare?.focus();
+        return;
+      case "planner":
         setActiveTab("plan");
         workspaceTabRefs.current.plan?.focus();
-      },
-      preloadPlannerSession: fetchPlannerSession,
-    });
+        return;
+      case "approval":
+        setActiveTab("policy");
+        workspaceTabRefs.current.policy?.focus();
+        return;
+      case "trip-setup":
+      default:
+        setActiveTab("plan");
+        workspaceTabRefs.current.plan?.focus();
+    }
   }
 
   async function handlePolicyServiceRetry() {
@@ -1817,7 +1872,17 @@ function WorkspacePageContent({
               <h3>{productView.next_step.title}</h3>
               <p>{productView.next_step.summary}</p>
               {productView.next_step.action_label ? (
-                <p className="muted-copy">{productView.next_step.action_label}</p>
+                productView.next_step.blocked ? (
+                  <p className="muted-copy">{productView.next_step.action_label}</p>
+                ) : (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => handleNextStepAction(productView.next_step.action_target)}
+                  >
+                    {productView.next_step.action_label}
+                  </button>
+                )
               ) : null}
             </article>
             {productView.business_summary ? (
