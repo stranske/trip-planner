@@ -1570,7 +1570,18 @@ describe("WorkspacePage", () => {
         ...workspacePayload,
         trip_record: {
           ...workspacePayload.trip_record,
-          trip: { ...workspacePayload.trip_record.trip, mode: "business" },
+          trip: {
+            ...workspacePayload.trip_record.trip,
+            mode: "business",
+            trip_frame: {
+              ...workspacePayload.trip_record.trip.trip_frame,
+              traveler_party: {
+                kind: "pair",
+                traveler_count: 2,
+                notes: "Anniversary planning",
+              },
+            },
+          },
         },
         proposal_state: {
           ...workspacePayload.proposal_state!,
