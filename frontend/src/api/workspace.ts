@@ -1,5 +1,13 @@
 import { fetchJson } from "../lib/api/client";
+import {
+  buildProposalEvaluationPayload,
+  buildProposalSubmissionPayload,
+  type ProposalEvaluationPayload,
+  type ProposalSubmissionPayload,
+} from "../lib/proposalSubmission";
 import type { PlannerPanelState } from "../../../bundle/planner/orchestration-contracts";
+
+export type { ProposalEvaluationPayload, ProposalSubmissionPayload };
 
 export type TripFrame = {
   start_date: string | null;
@@ -838,15 +846,102 @@ export async function submitPlannerTurn(
 }
 
 export async function refreshWorkspaceProposalStatus(tripId: string): Promise<WorkspaceData["proposal_state"]> {
-  const response = await fetchJson<{
-    proposal_state: WorkspaceData["proposal_state"];
-    summary: NonNullable<WorkspaceData["proposal_state"]>["summary"] | Record<string, never>;
-  }>({
+  const response = await fetchJson<WorkspaceProposalApiResponse>({
     path: `/api/workspace/${tripId}/proposal/refresh`,
     method: "POST",
     credentials: "include",
   });
-  return response.proposal_state;
+  return response?.proposal_state ?? null;
+}
+
+export type WorkspaceProposalApiResponse = {
+  proposal_state: WorkspaceData["proposal_state"];
+  summary: NonNullable<WorkspaceData["proposal_state"]>["summary"] | Record<string, never>;
+};
+
+export async function submitWorkspaceProposal(
+  tripId: string,
+  payload: ProposalSubmissionPayload
+): Promise<WorkspaceData["proposal_state"]> {
+  const response = await fetchJson<WorkspaceProposalApiResponse>({
+    path: `/api/workspace/${tripId}/proposal`,
+    method: "PUT",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  return response?.proposal_state ?? null;
+}
+
+export async function submitWorkspaceProposalEvaluation(
+  tripId: string,
+  payload: ProposalEvaluationPayload
+): Promise<WorkspaceData["proposal_state"]> {
+  const response = await fetchJson<WorkspaceProposalApiResponse>({
+    path: `/api/workspace/${tripId}/proposal/evaluation`,
+    method: "PUT",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  return response?.proposal_state ?? null;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function pollForExecutionId(
+  tripId: string,
+  maxAttempts = 5
+): Promise<WorkspaceData["proposal_state"]> {
+  let proposalState: WorkspaceData["proposal_state"] = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (attempt > 0) {
+      await sleep(500 * attempt);
+    }
+    proposalState = await refreshWorkspaceProposalStatus(tripId);
+    if (proposalState?.execution_id) {
+      return proposalState;
+    }
+    if (!proposalState?.summary.submission_requires_polling) {
+      break;
+    }
+  }
+  return proposalState;
+}
+
+export async function submitTripForApproval(
+  workspace: WorkspaceData,
+  scenarioId?: string | null
+): Promise<WorkspaceData["proposal_state"]> {
+  const tripId = workspace.trip_record.trip.trip_id;
+  const submission = buildProposalSubmissionPayload(workspace, scenarioId);
+  let proposalState = await submitWorkspaceProposal(tripId, submission);
+  if (proposalState?.evaluation.evaluation_result) {
+    return proposalState;
+  }
+
+  let executionId = proposalState?.execution_id ?? null;
+  if (!executionId && proposalState?.summary.submission_requires_polling) {
+    const polledProposalState = await pollForExecutionId(tripId);
+    if (polledProposalState != null) {
+      proposalState = polledProposalState;
+    }
+    executionId = proposalState?.execution_id ?? null;
+  }
+
+  if (!executionId) {
+    return proposalState;
+  }
+
+  const evaluation = buildProposalEvaluationPayload(workspace, executionId, scenarioId);
+  const evaluated = await submitWorkspaceProposalEvaluation(tripId, evaluation);
+  return evaluated ?? proposalState;
 }
 
 export type PrepareApprovalPacketHandlers = {

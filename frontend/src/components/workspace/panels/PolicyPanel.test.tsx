@@ -21,7 +21,7 @@ describe("PolicyPanel", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Policy not yet evaluated" })).toBeInTheDocument();
-    const action = screen.getByRole("button", { name: "Prepare approval packet" });
+    const action = screen.getByRole("button", { name: "Submit for approval" });
     expect(action).toBeEnabled();
 
     fireEvent.click(action);
@@ -103,7 +103,7 @@ describe("PolicyPanel", () => {
     expect(
       screen.getByText("Approval packets are only available for business trips.")
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Prepare approval packet" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Submit for approval" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open Plan to review trip mode" }));
     expect(onSatisfy).toHaveBeenCalledOnce();
     expect(onPrepare).not.toHaveBeenCalled();
