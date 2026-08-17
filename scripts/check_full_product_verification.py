@@ -859,6 +859,24 @@ def _force_planner_fallback_runtime() -> Iterator[None]:
                 os.environ[key] = value
 
 
+@contextmanager
+def _enable_local_fixture_envelopes() -> Iterator[None]:
+    """Allow serialized TPP fixtures only for this offline verification harness."""
+
+    managed_keys = ("TRIP_PLANNER_ENV", "TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES")
+    previous = {key: os.environ.get(key) for key in managed_keys}
+    os.environ["TRIP_PLANNER_ENV"] = "local"
+    os.environ["TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES"] = "true"
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def run_product_journeys(
     *,
     live_tpp: str,
@@ -869,6 +887,7 @@ def run_product_journeys(
         tempfile.TemporaryDirectory(prefix="trip-planner-full-product.") as tmpdir,
         _temporary_database_url(f"sqlite:///{Path(tmpdir) / 'full_product.db'}"),
         _force_planner_fallback_runtime(),
+        _enable_local_fixture_envelopes(),
     ):
         reset_database_state()
         ensure_database_ready()
