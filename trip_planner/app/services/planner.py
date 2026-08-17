@@ -1179,6 +1179,8 @@ def set_intent_classifier_factory_for_tests(
 
 
 def _planner_chat_model(runtime_config: PlannerRuntimeConfig) -> PlannerChatModel:
+    if runtime_config.provider == "fake":
+        return _FakePlannerChatModel()
     factory = _PLANNER_CHAT_MODEL_FACTORY or (lambda config: _OpenAIPlannerChatModel(config))
     return factory(runtime_config)
 
@@ -1358,6 +1360,27 @@ class _OpenAIPlannerChatModel:
                 }
             )
         return {"content": str(response.content), "tool_calls": tool_calls}
+
+
+class _FakePlannerChatModel:
+    """In-process deterministic model used by the explicit ``fake`` provider."""
+
+    def invoke(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if payload.get("task") == "classify_planner_intent":
+            base_task_class = str(payload.get("base_task_class") or "first_turn_triage")
+            return {
+                "content": json.dumps(
+                    {"task_class": base_task_class, "intent": base_task_class}
+                )
+            }
+        message = str(payload.get("message") or "").strip()
+        return {
+            "content": (
+                "The deterministic planner received your request"
+                + (f": {message}" if message else ".")
+            ),
+            "tool_calls": [],
+        }
 
 
 class ModelBackedPlannerConversationRunnable:
