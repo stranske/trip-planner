@@ -896,7 +896,7 @@ def _planning_mode_guidance(planning_mode: str | None) -> str:
         "in_trip": "In-trip mode: I will focus on adjustments for the active trip.",
     }.get(mode)
     if guidance:
-        return f"{guidance} Without a live model this adjusts tone only."
+        return f"{guidance} Offline this adjusts tone only."
     return "Planning mode is preference-only offline and does not change routing yet."
 
 
@@ -994,8 +994,8 @@ def _fallback_content_from_metadata(
             "routes or stays that satisfy the must-haves."
         )
     return (
-        f"{mode_prefix} For {trip_title}, I noted: \"{_first_sentence(message)}\". "
-        "I would close the biggest missing decision from your note, then move into targeted planning."
+        f"{trip_title} has a useful starting point. I would close the biggest missing decision "
+        "from your note, then move into targeted planning."
     )
 
 
@@ -1469,7 +1469,7 @@ class DeterministicPlannerConversationRunnable:
             lines.append(ledger_line)
 
         lines.append(
-            "Note: the planner is offline and cannot answer free-text questions with a live model."
+            "Note: the planner is offline and cannot answer free-text questions with generative AI."
         )
 
         deduped_refs = list(dict.fromkeys(refs))
