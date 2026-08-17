@@ -29,6 +29,7 @@ from trip_planner.app.services.planner_memory import build_planner_memory_payloa
 from trip_planner.app.services.planner_runtime_config import get_planner_runtime_config
 from trip_planner.app.services.policy import get_workspace_policy_payload
 from trip_planner.app.services.proposal import get_workspace_proposal_payload
+from trip_planner.app.services.scenario_policy_preview import build_scenario_policy_preview
 from trip_planner.app.services.scenarios import (
     build_scenario_ranking_outputs,
     build_scenario_ranking_payload,
@@ -36,6 +37,7 @@ from trip_planner.app.services.scenarios import (
 )
 from trip_planner.app.services.workspace_fixtures import (
     FIXTURES,
+    load_fixture_policy_state,
     load_saved_scenarios,
     load_session,
     load_trip_record,
@@ -1005,6 +1007,9 @@ def _build_runtime_scenario_comparison(
     trip_title: str,
     scenario_search: dict[str, Any],
     session: dict[str, Any] | None = None,
+    policy_state: dict[str, Any] | None = None,
+    trip_mode: str = "leisure",
+    duration_days: int | None = None,
 ) -> dict[str, Any]:
     scenarios = list(scenario_search.get("scenarios", []))
     option_set_id = _bootstrap_option_set_id(trip_id)
@@ -1075,8 +1080,7 @@ def _build_runtime_scenario_comparison(
             state=state,
         )
         available_actions = _route_option_available_actions(state)
-        rows.append(
-            {
+        row = {
                 "scenario_id": scenario["scenario_id"],
                 "route_option_id": scenario["scenario_id"],
                 "title": scenario["title"],
@@ -1142,7 +1146,15 @@ def _build_runtime_scenario_comparison(
                     route_sequence=list(summary.get("route_sequence") or []),
                 ),
             }
+        row["policy_preview"] = build_scenario_policy_preview(
+            policy_state=policy_state,
+            trip_mode=trip_mode,
+            duration_days=duration_days,
+            estimated_total=estimated_total,
+            unresolved_tradeoffs=list(scenario.get("unresolved_tradeoffs") or []),
+            scenario_notes=list(summary.get("notes") or []),
         )
+        rows.append(row)
 
     return {
         "trip_id": trip_id,
@@ -1894,11 +1906,15 @@ def _build_persisted_trip_workspace(
     resolved_feasibility_summary = context.feasibility_summary or build_feasibility_summary_payload(
         resolved_inventory_bundles
     )
+    raw_policy_state = (context.policy_context or {}).get("policy_state")
     runtime_scenario_comparison = _build_runtime_scenario_comparison(
         trip_id=record.trip_id,
         trip_title=trip_record["trip"]["title"],
         scenario_search=resolved_scenario_search,
         session=resolved_session,
+        policy_state=raw_policy_state if isinstance(raw_policy_state, dict) else None,
+        trip_mode=record.mode,
+        duration_days=record.duration_days,
     )
     ranking = build_scenario_ranking_payload(
         trip_id=record.trip_id,
@@ -2226,6 +2242,9 @@ def _build_runtime_scenario_comparison_payload(
             trip_title=trip_record.trip.title,
             scenario_search=scenario_search.to_dict(),
             session=session.to_dict(),
+            policy_state=load_fixture_policy_state(trip_id),
+            trip_mode=trip_record.trip.mode,
+            duration_days=trip_record.trip.trip_frame.duration_days,
         )
 
     try:
@@ -2784,11 +2803,15 @@ def _build_fixture_workspace_payload(
         traveler_party_kind=trip_record.trip.trip_frame.traveler_party.kind,
     )
     feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
+    fixture_policy_state = load_fixture_policy_state(trip_id)
     runtime_scenario_comparison = _build_runtime_scenario_comparison(
         trip_id=trip_id,
         trip_title=trip_record.trip.title,
         scenario_search=scenario_search.to_dict(),
         session=session.to_dict(),
+        policy_state=fixture_policy_state,
+        trip_mode=trip_record.trip.mode,
+        duration_days=trip_record.trip.trip_frame.duration_days,
     )
     ranking = build_scenario_ranking_payload(
         trip_id=trip_id,
@@ -2841,7 +2864,7 @@ def _build_fixture_workspace_payload(
             trip_id=trip_id,
             trip_mode=trip_record.trip.mode,
         ),
-        "policy_state": None,
+        "policy_state": fixture_policy_state,
         "proposal_state": None,
     }
     fixture_payload["view_model"] = _build_workspace_view_model(

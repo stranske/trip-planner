@@ -746,6 +746,13 @@ def test_workspace_endpoint_surfaces_business_ranked_scenarios(client: TestClien
         payload["planner_panel_state"]["option_set"]["options"][0]["label"]
         == "Airport arrival bundle"
     )
+    previews = [
+        scenario["policy_preview"]
+        for scenario in payload["runtime_scenario_comparison"]["scenarios"]
+    ]
+    assert previews
+    assert previews[0]["snapshot_available"] is True
+    assert previews[0]["authoritative"] is False
 
 
 def test_workspace_scenario_comparison_endpoint_returns_runtime_surface(

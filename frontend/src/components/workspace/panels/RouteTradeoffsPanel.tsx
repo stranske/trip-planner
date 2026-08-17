@@ -13,6 +13,8 @@ type RouteTradeoffCard = {
   highlights: string[];
   isSelected: boolean;
   metrics: RouteTradeoffMetric[];
+  policyViolations?: string[];
+  policyDisclaimer?: string | null;
 };
 
 export type RouteTradeoffsPanelProps = {
@@ -34,7 +36,7 @@ export function RouteTradeoffsPanel({
       <h2>{compactLayout ? "Compact route tradeoffs" : "Review route tradeoffs"}</h2>
       <p>
         {showPolicyPosture
-          ? "Cost, route burden, feasibility, and approval posture stay scannable here without forcing you into raw planning notes."
+          ? "Cost, route burden, feasibility, and per-scenario policy preview stay scannable here. Previews are advisory only — final TPP evaluation is authoritative."
           : "Cost, route burden, and feasibility stay scannable here without forcing you into raw planning notes."}
       </p>
       {scenarios.length > 0 ? (
@@ -58,6 +60,18 @@ export function RouteTradeoffsPanel({
                   </div>
                 ))}
               </dl>
+              {scenario.policyViolations != null && scenario.policyViolations.length > 0 ? (
+                <ul className="focus-area-list scenario-highlight-list" aria-label="Policy violations">
+                  {scenario.policyViolations.map((violation) => (
+                    <li key={violation}>{violation}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {scenario.policyDisclaimer ? (
+                <p className="muted-copy" data-testid="policy-preview-disclaimer">
+                  {scenario.policyDisclaimer}
+                </p>
+              ) : null}
               <p className="muted-copy">{scenario.comparisonNote}</p>
               <ul className="focus-area-list scenario-highlight-list">
                 {scenario.highlights.slice(0, 2).map((highlight) => (

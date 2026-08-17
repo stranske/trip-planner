@@ -225,6 +225,24 @@ export type ScenarioRanking = {
   }>;
 };
 
+export type ScenarioPolicyViolation = {
+  rule_id: string;
+  message: string;
+  cap_amount: number | null;
+  actual_amount: number | null;
+  currency: string | null;
+};
+
+export type ScenarioPolicyPreview = {
+  status: string;
+  status_label: string;
+  compliant: boolean | null;
+  snapshot_available: boolean;
+  authoritative: boolean;
+  disclaimer: string;
+  violations: ScenarioPolicyViolation[];
+};
+
 export type RuntimeScenarioComparison = {
   title: string;
   summary: string;
@@ -270,6 +288,7 @@ export type RuntimeScenarioComparison = {
       estimated_total_delta: number | null;
     };
     highlights: string[];
+    policy_preview?: ScenarioPolicyPreview;
     map_view?: {
       active_scope: "global" | "regional" | "local";
       active_route_option_id: string;

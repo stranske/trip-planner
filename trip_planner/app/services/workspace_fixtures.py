@@ -86,3 +86,9 @@ def load_budget_events() -> list[ActualSpendEvent]:
 
 def load_state_payload(kind: str, name: str) -> dict[str, Any]:
     return _load_json(_state_fixture_dir(kind) / name)
+
+
+def load_fixture_policy_state(trip_id: str) -> dict[str, Any] | None:
+    if trip_id != "trip-business-client-summit":
+        return None
+    return _load_json(_state_fixture_dir("policy") / "business_client_summit_policy.json")
