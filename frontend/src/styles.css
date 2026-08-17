@@ -163,6 +163,45 @@ a {
   max-width: 100%;
 }
 
+.approval-packet {
+  margin-top: 1rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color, #c8d1da);
+  border-radius: 0.75rem;
+  background: var(--surface-color, #fff);
+}
+
+.approval-packet-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .approval-packet,
+  .approval-packet * {
+    visibility: visible;
+  }
+
+  .approval-packet {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .approval-packet .no-print,
+  .no-print {
+    display: none !important;
+  }
+}
+
 .workspace-tabs button {
   flex: 1 1 7rem;
   min-width: 0;

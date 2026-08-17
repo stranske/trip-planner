@@ -1564,6 +1564,65 @@ describe("WorkspacePage", () => {
     expect(document.body.textContent ?? "").toContain("proposal_state_id");
   });
 
+  it("approval packet view renders verdict and rule ids and is reachable from the Policy tab", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        route_comparison: undefined as unknown as WorkspaceData["route_comparison"],
+        trip_record: {
+          ...workspacePayload.trip_record,
+          trip: {
+            ...workspacePayload.trip_record.trip,
+            mode: "business",
+            trip_frame: {
+              ...workspacePayload.trip_record.trip.trip_frame,
+              traveler_party: {
+                kind: "pair",
+                traveler_count: 2,
+                notes: "Anniversary planning",
+              },
+            },
+          },
+        },
+        proposal_state: {
+          ...workspacePayload.proposal_state!,
+          evaluation: {
+            evaluation_result: {
+              ...workspacePayload.proposal_state!.evaluation.evaluation_result!,
+              status: "non_compliant",
+              failure_reasons: [
+                { code: "daily_cap", message: "Daily cap exceeded.", severity: "blocking", related_category: "lodging" },
+              ],
+            },
+          },
+          summary: { ...workspacePayload.proposal_state!.summary, evaluation_result_status: "non_compliant" },
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+    await userEvent.setup().click(
+      screen.getByRole("button", { name: "Open approval packet from Policy tab" })
+    );
+
+    const packet = screen.getByTestId("approval-packet-document");
+    expect(packet).toBeInTheDocument();
+    const packetScope = within(packet);
+    expect(packetScope.getByText("2 pair")).toBeInTheDocument();
+    expect(packetScope.getByText(/Selected scenario total:/)).toBeInTheDocument();
+    expect(packetScope.getByText("non_compliant")).toBeInTheDocument();
+    expect(packetScope.getByText("daily_cap")).toBeInTheDocument();
+    expect(packetScope.getByText(/Daily cap exceeded/)).toBeInTheDocument();
+    expect(
+      packetScope.getByText((_, element) =>
+        element?.tagName === "LI" &&
+        (element.textContent?.includes("Conference Hotel from Marriott") ?? false)
+      )
+    ).toBeInTheDocument();
+  });
+
   it("persists planning mode selections through the workspace API", async () => {
     const user = userEvent.setup();
     mockedUseLoaderData.mockReturnValue({
