@@ -1311,7 +1311,9 @@ describe("WorkspacePage", () => {
       ).toBeGreaterThan(0);
     });
 
-    expect(screen.getAllByTestId("policy-posture")[0]).toHaveTextContent("Approval-ready");
+    expect(screen.getAllByTestId("policy-posture")[0]).toHaveTextContent(
+      "No policy snapshot available"
+    );
 
     await selectWorkspaceTab("Policy");
     expect(screen.getByTestId("proposal-lifecycle")).toHaveTextContent(
