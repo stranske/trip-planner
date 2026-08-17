@@ -12,7 +12,7 @@ class WorkspaceProposalSubmissionRequest(BaseModel):
     )
     response: dict[str, Any] | None = Field(
         default=None,
-        description="Optional serialized TPPResponseEnvelope payload for fixture-driven proposal submission.",
+        description="Optional serialized TPPResponseEnvelope payload, accepted only when the explicit test fixture switch is enabled.",
     )
     proposal_version: str = Field(min_length=1, max_length=96)
     scenario_id: str | None = Field(default=None, max_length=96)
@@ -24,7 +24,7 @@ class WorkspaceProposalEvaluationRequest(BaseModel):
     )
     response: dict[str, Any] | None = Field(
         default=None,
-        description="Optional serialized TPPResponseEnvelope payload for fixture-driven evaluation ingestion.",
+        description="Optional serialized TPPResponseEnvelope payload, accepted only when the explicit test fixture switch is enabled.",
     )
     proposal_version: str = Field(min_length=1, max_length=96)
     scenario_id: str | None = Field(default=None, max_length=96)

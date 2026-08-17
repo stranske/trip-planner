@@ -121,6 +121,7 @@ def _proposal_payload(trip_id: str) -> dict:
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'proposal.db'}")
+    monkeypatch.setenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "true")
     reset_database_state()
     app = create_app()
 
@@ -210,6 +211,108 @@ def test_workspace_proposal_submission_and_evaluation_persist(client: TestClient
         reloaded_payload["proposal_state"]["evaluation"]["evaluation_result"]["evaluation_id"]
         == "eval-approved-001"
     )
+
+
+def test_client_supplied_response_cannot_set_approval_ready(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A production request body cannot forge a compliant TPP verdict."""
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Forged verdict attempt",
+            "summary": "Verify the production route ignores a caller-provided verdict.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = _load_fixture("results", "approved_evaluation.json")
+    fixture["request"]["trip_id"] = trip_id
+    fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    fixture["response"]["result_payload"]["trip_id"] = trip_id
+    fixture["response"]["result_payload"]["proposal_id"] = f"proposal:{trip_id}"
+    response = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": fixture["request"],
+            "response": fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+
+    assert response.status_code == 503
+    reloaded = client.get(f"/api/workspace/{trip_id}/proposal")
+    assert reloaded.status_code == 200
+    assert reloaded.json()["proposal_state"] is None
+
+
+def test_production_evaluation_ignores_caller_compliant_response(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A production evaluation cannot use a caller-supplied compliant verdict."""
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Forged evaluation attempt",
+            "summary": "Verify production evaluation ignores caller-provided approval state.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+    submitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": submission_fixture["request"],
+            "response": submission_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert submitted.status_code == 200
+
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    evaluation_fixture = _load_fixture("results", "approved_evaluation.json")
+    evaluation_fixture["request"]["trip_id"] = trip_id
+    evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation_fixture["response"]["result_payload"]["trip_id"] = trip_id
+    evaluation_fixture["response"]["result_payload"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluated = client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation_fixture["request"],
+            "response": evaluation_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+
+    assert evaluated.status_code == 503
+    reloaded = client.get(f"/api/workspace/{trip_id}/proposal")
+    assert reloaded.status_code == 200
+    assert reloaded.json()["proposal_state"]["evaluation"] == {}
+    assert reloaded.json()["proposal_state"]["summary"]["approval_ready"] is False
 
 
 def test_workspace_proposal_evaluation_derives_reoptimization_follow_up(client: TestClient) -> None:
@@ -2135,6 +2238,7 @@ def test_proposal_state_persists_across_create_app_restart(
     """
     db_path = tmp_path / "restart-persistence.db"
     monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "true")
     reset_database_state()
 
     # ---- First app instance: submit + evaluate a proposal. ------------------
