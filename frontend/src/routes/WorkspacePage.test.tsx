@@ -1617,7 +1617,8 @@ describe("WorkspacePage", () => {
     expect(packetScope.getByText(/Daily cap exceeded/)).toBeInTheDocument();
     expect(
       packetScope.getByText((_, element) =>
-        element?.textContent?.includes("Conference Hotel from Marriott") ?? false
+        element?.tagName === "LI" &&
+        (element.textContent?.includes("Conference Hotel from Marriott") ?? false)
       )
     ).toBeInTheDocument();
   });
