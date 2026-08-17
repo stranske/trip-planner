@@ -10,6 +10,7 @@ from trip_planner.itinerary import (
     ScenarioSummary,
     ScenarioTradeoff,
 )
+from trip_planner.app.services import workspace_fixtures
 from trip_planner.orchestration import (
     LeisureWorkflowContext,
     build_leisure_planner_turn,
@@ -27,14 +28,7 @@ def _load_json(path: Path) -> dict:
 
 
 def _trip_record() -> PersistedTripRecord:
-    payload = _load_json(
-        Path(__file__).resolve().parents[1]
-        / "fixtures"
-        / "state"
-        / "trips"
-        / "leisure_draft_trip.json"
-    )
-    return PersistedTripRecord.from_dict(payload)
+    return workspace_fixtures.load_trip_record("leisure_draft_trip.json")
 
 
 def _session_state(name: str) -> PlanningSessionState:

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from trip_planner.app.services import workspace_fixtures
 from trip_planner.orchestration import (
     InTripAdjustmentContext,
     InTripRevisionOutput,
@@ -23,16 +24,7 @@ def _load_event(name: str) -> InTripTriggerEvent:
 
 
 def _load_session() -> PlanningSessionState:
-    payload = json.loads(
-        (
-            Path(__file__).resolve().parents[1]
-            / "fixtures"
-            / "state"
-            / "sessions"
-            / "in_trip_revision_session.json"
-        ).read_text(encoding="utf-8")
-    )
-    return PlanningSessionState.from_dict(payload["session"])
+    return workspace_fixtures.load_session("in_trip_revision_session.json")
 
 
 def _context(
