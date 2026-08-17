@@ -23,6 +23,18 @@ from trip_planner.options import (
     TransportOption,
 )
 from trip_planner.ranking import BusinessRankingEngine
+from trip_planner.ranking.business import _average, _clamp, _round
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_business_ranking_helpers_reject_non_finite_values(value: float) -> None:
+    """Invalid ranking metrics cannot be converted into a top score."""
+    with pytest.raises(ValueError, match="must be finite"):
+        _clamp(value)
+    with pytest.raises(ValueError, match="must be finite"):
+        _round(value)
+    with pytest.raises(ValueError, match="must be finite"):
+        _average([0.5, value])
 
 
 def _fixture_path(*parts: str) -> Path:

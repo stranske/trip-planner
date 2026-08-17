@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from math import isfinite
 from statistics import fmean
 
 from trip_planner._option_contracts import (
@@ -58,17 +59,21 @@ _SOFT_PENALTY_AMOUNTS: dict[str, float] = {
 
 
 def _clamp(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
+    if not isfinite(value):
+        raise ValueError("ranking values must be finite")
     return max(minimum, min(maximum, value))
 
 
 def _round(value: float) -> float:
+    if not isfinite(value):
+        raise ValueError("ranking values must be finite")
     return round(value, 4)
 
 
 def _average(values: Sequence[float | None], *, default: float = 0.5) -> float:
     numeric = [value for value in values if value is not None]
     if not numeric:
-        return default
+        return _clamp(default)
     return _clamp(fmean(numeric))
 
 
