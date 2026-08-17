@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from trip_planner.app.main import create_app
 from trip_planner.app.services.planner import (
     _fallback_content_from_metadata,
+    _format_choice_list,
     _format_estimated_total,
     _scenario_cost_summary,
     set_intent_classifier_factory_for_tests,
@@ -145,6 +146,12 @@ def test_scenario_cost_summary_requires_at_least_one_priced_scenario() -> None:
     assert "USD 900" in summary
     assert "1 transfer" in summary
     assert "2 transfers" in summary
+
+
+def test_format_choice_list_uses_human_readable_punctuation() -> None:
+    assert _format_choice_list(["Keep"]) == "Keep."
+    assert _format_choice_list(["Keep", "Compare"]) == "Keep or Compare."
+    assert _format_choice_list(["Keep", "Compare", "Revise"]) == "Keep, Compare, or Revise."
 
 
 def test_fallback_content_cost_branch_with_priced_scenarios() -> None:
