@@ -96,6 +96,7 @@ type RouteSegmentFocus = {
 type ScenarioReviewMetric = {
   label: string;
   value: string;
+  testId?: string;
 };
 
 type WorkspacePanelVisibility = {
