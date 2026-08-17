@@ -896,8 +896,8 @@ def _planning_mode_guidance(planning_mode: str | None) -> str:
         "in_trip": "In-trip mode: I will focus on adjustments for the active trip.",
     }.get(mode)
     if guidance:
-        return f"{guidance} In fallback mode this adjusts tone only."
-    return "Planning mode is preference-only in fallback mode and does not change routing yet."
+        return f"{guidance} Without a live model this adjusts tone only."
+    return "Planning mode is preference-only offline and does not change routing yet."
 
 
 def _scenario_cost_summary(scenarios: list[dict[str, Any]]) -> str | None:
@@ -945,14 +945,14 @@ def _fallback_content_from_metadata(
     if _CANCEL_INTENT_PATTERN.search(lowered):
         return (
             f"I read your message as wanting to stop or rethink {trip_title}. "
-            "I am in deterministic fallback mode, so I cannot process a real cancellation yet, "
+            "I am in offline deterministic mode, so I cannot process a real cancellation yet, "
             "but I will not pretend the trip still has a useful starting point if you want to end it."
         )
 
     if _message_looks_like_nonsense(message):
         return (
             f"I could not extract a clear planning request from your message for {trip_title}. "
-            "In fallback mode I use keyword matching only — try a concrete question about cost, "
+            "Offline I use keyword matching only — try a concrete question about cost, "
             "routes, policy, or whether to continue planning this trip."
         )
 
@@ -1363,6 +1363,77 @@ class PlannerConversationRunnable(Protocol):
         """Return one planner response for the provided turn."""
 
 
+def _fallback_panel_context_lines(
+    panel: dict[str, Any],
+    scenarios: list[dict[str, Any]],
+    lines: list[str],
+    refs: list[str],
+) -> None:
+    outputs = list(panel.get("outputs") or [])
+    decisions = list(panel.get("pending_decisions") or [])
+    options = list((panel.get("option_set") or {}).get("options") or [])
+
+    tradeoff_line = _scenario_cost_summary(scenarios)
+    if tradeoff_line and tradeoff_line not in lines[0]:
+        lines.append(tradeoff_line)
+
+    if decisions:
+        active = decisions[0]
+        choice_labels = _format_choice_list(list(active.get("choices") or []))
+        lines.append(
+            f"Current blocking decision: {active['prompt']} Choices: {choice_labels}"
+            if choice_labels
+            else f"Current blocking decision: {active['prompt']}"
+        )
+        refs.append(active["decision_id"])
+    elif options:
+        lead = options[0]
+        lines.append(f"Current lead option: {lead['label']}. {lead['summary']}")
+        if len(options) > 1:
+            lines.append(f"Alternative to compare next: {options[1]['label']}.")
+        refs.append(lead["option_id"])
+    else:
+        lines.append(
+            "No ranked planner options exist yet, so the session should stay focused on refining trip scope."
+        )
+
+    if outputs:
+        latest_titles = ", ".join(output["title"] for output in outputs[:2])
+        lines.append(f"Latest workspace signals: {latest_titles}.")
+        refs.extend(output["output_id"] for output in outputs[:2])
+
+
+def _fallback_ledger_focus_line(
+    ledger_summary: dict[str, Any],
+    refs: list[str],
+) -> str | None:
+    ledger_focus: list[str] = []
+    for label, key in (
+        ("decision", "active_decisions"),
+        ("open question", "open_questions"),
+        ("option in view", "active_options"),
+        ("rejected option", "rejected_options"),
+        ("constraint", "constraints"),
+        ("assumption", "assumptions"),
+    ):
+        entries = list(ledger_summary.get(key) or [])
+        if not entries:
+            continue
+        first = entries[0]
+        summary = str(first.get("summary") or "").strip()
+        if not summary:
+            continue
+        ledger_focus.append(f"{label}: {summary}")
+        refs.append(str(first.get("ledger_entry_id") or ""))
+    if not ledger_focus:
+        return None
+    return (
+        "Planning ledger remembers "
+        + "; ".join(_dedupe_preserve_order(ledger_focus)[:3])
+        + "."
+    )
+
+
 class DeterministicPlannerConversationRunnable:
     """Provider-neutral fallback when planner model configuration is absent."""
 
@@ -1378,9 +1449,6 @@ class DeterministicPlannerConversationRunnable:
             planning_mode=request.session.selected_planning_mode,
             intent_classifier=request.intent_classifier,
         )
-        outputs = list(panel.get("outputs") or [])
-        decisions = list(panel.get("pending_decisions") or [])
-        options = list((panel.get("option_set") or {}).get("options") or [])
         ledger_summary = (request.runtime_context.get("planning_ledger") or {}).get("summary") or {}
 
         lines = [
@@ -1394,63 +1462,14 @@ class DeterministicPlannerConversationRunnable:
         ]
         refs = [request.session.session_state_id]
 
-        tradeoff_line = _scenario_cost_summary(scenarios)
-        if tradeoff_line and tradeoff_line not in lines[0]:
-            lines.append(tradeoff_line)
+        _fallback_panel_context_lines(panel, scenarios, lines, refs)
 
-        if decisions:
-            active = decisions[0]
-            choice_labels = _format_choice_list(list(active.get("choices") or []))
-            lines.append(
-                f"Current blocking decision: {active['prompt']} Choices: {choice_labels}"
-                if choice_labels
-                else f"Current blocking decision: {active['prompt']}"
-            )
-            refs.append(active["decision_id"])
-        elif options:
-            lead = options[0]
-            lines.append(f"Current lead option: {lead['label']}. {lead['summary']}")
-            if len(options) > 1:
-                lines.append(f"Alternative to compare next: {options[1]['label']}.")
-            refs.append(lead["option_id"])
-        else:
-            lines.append(
-                "No ranked planner options exist yet, so the session should stay focused on refining trip scope."
-            )
-
-        if outputs:
-            latest_titles = ", ".join(output["title"] for output in outputs[:2])
-            lines.append(f"Latest workspace signals: {latest_titles}.")
-            refs.extend(output["output_id"] for output in outputs[:2])
-
-        ledger_focus: list[str] = []
-        for label, key in (
-            ("decision", "active_decisions"),
-            ("open question", "open_questions"),
-            ("option in view", "active_options"),
-            ("rejected option", "rejected_options"),
-            ("constraint", "constraints"),
-            ("assumption", "assumptions"),
-        ):
-            entries = list(ledger_summary.get(key) or [])
-            if not entries:
-                continue
-            first = entries[0]
-            summary = str(first.get("summary") or "").strip()
-            if not summary:
-                continue
-            ledger_focus.append(f"{label}: {summary}")
-            refs.append(str(first.get("ledger_entry_id") or ""))
-        if ledger_focus:
-            lines.append(
-                "Planning ledger remembers "
-                + "; ".join(_dedupe_preserve_order(ledger_focus)[:3])
-                + "."
-            )
+        ledger_line = _fallback_ledger_focus_line(ledger_summary, refs)
+        if ledger_line:
+            lines.append(ledger_line)
 
         lines.append(
-            "Note: the planner is in deterministic fallback mode and cannot answer free-text "
-            "questions with a live model."
+            "Note: the planner is offline and cannot answer free-text questions with a live model."
         )
 
         deduped_refs = list(dict.fromkeys(refs))
