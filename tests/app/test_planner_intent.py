@@ -143,6 +143,28 @@ def test_model_intent_classifier_uses_configured_model() -> None:
     assert model.payloads[-1]["task"] == "classify_planner_intent"
 
 
+def test_fake_provider_serves_a_turn_without_openai(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The explicit fake provider is runnable without a test-only model seam."""
+    trip_id = _create_trip(client)
+    monkeypatch.setenv("TRIP_PLANNER_PLANNER_PROVIDER", "fake")
+    monkeypatch.delenv("TRIP_PLANNER_PLANNER_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    set_planner_chat_model_factory_for_tests(None)
+
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "Suggest a deterministic next step."},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["runtime"]["provider"] == "fake"
+    assert payload["runtime"]["status"] == "ready"
+    assert "deterministic planner received" in payload["messages"][-1]["content"].lower()
+
+
 def test_invalid_classifier_task_class_falls_back_to_base_task(client: TestClient) -> None:
     trip_id = _create_trip(client)
     set_intent_classifier_factory_for_tests(lambda _: InvalidTaskClassifier())
