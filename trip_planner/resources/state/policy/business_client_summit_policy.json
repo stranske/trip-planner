@@ -1,0 +1,23 @@
+{
+  "policy_state_id": "policy-state:q2-client-summit",
+  "constraint_set": {
+    "policy_id": "policy-standard-2026-02",
+    "organization_id": "org-acme",
+    "policy_version": "2026.02",
+    "budget_rules": {
+      "rule_id": "BUD-001",
+      "max_trip_total_usd": 2300,
+      "label": "Trip total spend cap"
+    },
+    "lodging_rules": {
+      "rule_id": "LOD-001",
+      "max_nightly_rate_usd": 325
+    }
+  },
+  "organization_context": {
+    "organization_id": "org-acme",
+    "policy_status": "pass",
+    "compatible_with_planner_cache": true
+  },
+  "notes": ["Organization policy constraints used for Compare preview."]
+}

@@ -213,6 +213,7 @@ export type ScenarioRanking = {
     estimated_total?: {
       currency: string;
       typical_amount: number;
+      nightly_typical_amount?: number;
     } | null;
     source_result_id?: string | null;
     supporting_option_ids: string[];
@@ -223,6 +224,24 @@ export type ScenarioRanking = {
       severity: string;
     }>;
   }>;
+};
+
+export type ScenarioPolicyViolation = {
+  rule_id: string;
+  message: string;
+  cap_amount: number | null;
+  actual_amount: number | null;
+  currency: string | null;
+};
+
+export type ScenarioPolicyPreview = {
+  status: string;
+  status_label: string;
+  compliant: boolean | null;
+  snapshot_available: boolean;
+  authoritative: boolean;
+  disclaimer: string;
+  violations: ScenarioPolicyViolation[];
 };
 
 export type RuntimeScenarioComparison = {
@@ -261,6 +280,7 @@ export type RuntimeScenarioComparison = {
       estimated_total: {
         currency: string;
         typical_amount: number;
+        nightly_typical_amount?: number;
       } | null;
     };
     delta: {
@@ -270,6 +290,7 @@ export type RuntimeScenarioComparison = {
       estimated_total_delta: number | null;
     };
     highlights: string[];
+    policy_preview?: ScenarioPolicyPreview;
     map_view?: {
       active_scope: "global" | "regional" | "local";
       active_route_option_id: string;

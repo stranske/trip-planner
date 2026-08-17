@@ -47,6 +47,11 @@ import { ApprovalPacket } from "../components/workspace/ApprovalPacket";
 import { PlannerPanel } from "../components/workspace/panels/PlannerPanel";
 import { derivePolicyPanelView, PolicyPanel as WorkspacePolicyPanel } from "../components/workspace/panels/PolicyPanel";
 import { RouteTradeoffsPanel } from "../components/workspace/panels/RouteTradeoffsPanel";
+import {
+  formatScenarioPolicyPreview,
+  formatScenarioPolicyViolations,
+  POLICY_PREVIEW_DISCLAIMER,
+} from "../components/workspace/scenarioPolicyPreview";
 import { RouteOptionWorkbench } from "../components/workspace/RouteOptionWorkbench";
 import { ScenarioComparison } from "../components/workspace/ScenarioComparison";
 import { AsyncRouteContent } from "../lib/routes/AsyncRouteContent";
@@ -92,6 +97,7 @@ type RouteSegmentFocus = {
 type ScenarioReviewMetric = {
   label: string;
   value: string;
+  testId?: string;
 };
 
 type WorkspacePanelVisibility = {
@@ -624,9 +630,11 @@ function buildScenarioReviewMetrics(
   ];
 
   if (panelVisibility.showPolicyPosture) {
+    const preview = scenario.policy_preview;
     metrics.push({
-      label: "Approval posture",
-      value: formatPolicyPosture(workspace),
+      label: "Policy preview",
+      value: formatScenarioPolicyPreview(preview),
+      testId: "policy-posture",
     });
   }
 
@@ -1320,8 +1328,14 @@ function WorkspacePageContent({
       metrics: reviewMetrics.map((metric) => ({
         label: metric.label,
         value: metric.value,
-        testId: metric.label === "Approval posture" ? "policy-posture" : undefined,
+        testId: metric.testId,
       })),
+      policyViolations: panelVisibility.showPolicyPosture
+        ? formatScenarioPolicyViolations(scenario.policy_preview)
+        : [],
+      policyDisclaimer: panelVisibility.showPolicyPosture
+        ? scenario.policy_preview?.disclaimer ?? POLICY_PREVIEW_DISCLAIMER
+        : null,
     };
   });
   function handleScenarioSelection(scenarioId: string) {

@@ -1311,7 +1311,9 @@ describe("WorkspacePage", () => {
       ).toBeGreaterThan(0);
     });
 
-    expect(screen.getAllByTestId("policy-posture")[0]).toHaveTextContent("Approval-ready");
+    expect(screen.getAllByTestId("policy-posture")[0]).toHaveTextContent(
+      "No policy snapshot available"
+    );
 
     await selectWorkspaceTab("Policy");
     expect(screen.getByTestId("proposal-lifecycle")).toHaveTextContent(
@@ -1382,7 +1384,7 @@ describe("WorkspacePage", () => {
     await selectWorkspaceTab("Compare");
     expect(screen.getByRole("heading", { name: "Review route tradeoffs" })).toBeInTheDocument();
     expect(screen.getByLabelText("Scenario review board")).toBeInTheDocument();
-    expect(screen.getAllByText("Approval posture").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Policy preview").length).toBeGreaterThan(0);
 
     await selectWorkspaceTab("Plan");
     expect(screen.queryByRole("heading", { name: "Trip rhythm and day sequence" })).not.toBeInTheDocument();
@@ -1472,7 +1474,7 @@ describe("WorkspacePage", () => {
 
     expect(screen.queryByText("Approval packet")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Options and readiness signals" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Approval posture")).not.toBeInTheDocument();
+    expect(screen.queryByText("Policy preview")).not.toBeInTheDocument();
     expect(screen.queryByText("Policy posture")).not.toBeInTheDocument();
   });
 
@@ -1570,7 +1572,7 @@ describe("WorkspacePage", () => {
     expect(screen.getAllByText("Ready for approval").length).toBeGreaterThan(0);
 
     await selectWorkspaceTab("Compare");
-    expect(screen.getAllByText("Approval posture").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Policy preview").length).toBeGreaterThan(0);
 
     await selectWorkspaceTab("Plan");
     expect(screen.getByText("Advanced diagnostics")).toBeInTheDocument();
@@ -1582,6 +1584,113 @@ describe("WorkspacePage", () => {
       expect(screen.getByRole("heading", { name: "Proposal diagnostics" })).toBeInTheDocument();
     });
     expect(document.body.textContent ?? "").toContain("proposal_state_id");
+  });
+
+  it("Compare shows per-scenario policy violations with rule ids and cap-vs-actual", async () => {
+    const compliantPreview = {
+      status: "compliant",
+      status_label: "In policy (preview)",
+      compliant: true,
+      snapshot_available: true,
+      authoritative: false,
+      disclaimer: "Policy preview only — not the final TPP verdict.",
+      violations: [],
+    };
+    const nonCompliantPreview = {
+      status: "non_compliant",
+      status_label: "Policy issues (preview)",
+      compliant: false,
+      snapshot_available: true,
+      authoritative: false,
+      disclaimer: "Policy preview only — not the final TPP verdict.",
+      violations: [
+        {
+          rule_id: "BUD-001",
+          message: "Estimated trip total exceeds the configured spend cap (BUD-001).",
+          cap_amount: 1200,
+          actual_amount: 1280,
+          currency: "USD",
+        },
+      ],
+    };
+    const updatedScenarios = workspacePayload.runtime_scenario_comparison.scenarios.map(
+      (scenario, index) => ({
+        ...scenario,
+        policy_preview: index === 0 ? compliantPreview : nonCompliantPreview,
+      })
+    );
+    const updatedComparison = {
+      ...workspacePayload.runtime_scenario_comparison,
+      scenarios: updatedScenarios,
+    };
+    const businessCompareWorkspace: WorkspaceData = {
+      ...workspacePayload,
+      trip_record: {
+        ...workspacePayload.trip_record,
+        trip: {
+          ...workspacePayload.trip_record.trip,
+          mode: "business",
+        },
+      },
+      runtime_scenario_comparison: updatedComparison,
+      route_comparison: updatedComparison,
+      view_model: {
+        user_summary: {
+          trip_title: workspacePayload.trip_record.trip.title,
+          trip_mode: "business",
+          mode_label: "Business trip",
+          status: "ready",
+          headline: "Compare scenarios with policy preview.",
+          decided: [],
+          uncertain: [],
+        },
+        next_step: {
+          title: "Compare routes",
+          summary: "Review policy preview per scenario.",
+          action_label: "Open compare",
+          action_target: "compare",
+          blocked: false,
+        },
+        panel_visibility: {
+          show_budget_panel: true,
+          show_policy_posture: true,
+          show_proposal_panel: true,
+          show_approval_readiness_panel: true,
+        },
+        policy_presentation: {
+          active_policy_state: true,
+          posture_label: "Approval not started",
+          approval_status_label: "Approval not started",
+          next_step_label: "Build approval packet",
+          summary: "Policy snapshot loaded for preview.",
+        },
+        business_summary: {
+          approval_status: "not_ready",
+          headline: "Approval not started",
+          blockers: [],
+        },
+        debug_state: { sections: {} },
+      },
+    };
+
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(businessCompareWorkspace),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("heading", { name: "Spring Kyoto anniversary draft" }).length).toBeGreaterThan(0);
+    });
+    await selectWorkspaceTab("Compare");
+
+    const policyValues = screen.getAllByTestId("policy-posture").map((node) => node.textContent);
+    expect(policyValues).toContain("In policy (preview)");
+    expect(policyValues.some((value) => value?.includes("BUD-001"))).toBe(true);
+    expect(policyValues.some((value) => value?.includes("$1,200"))).toBe(true);
+    expect(policyValues.some((value) => value?.includes("$1,280"))).toBe(true);
+    expect(screen.getAllByTestId("policy-preview-disclaimer").length).toBeGreaterThan(0);
   });
 
   it("approval packet view renders verdict and rule ids and is reachable from the Policy tab", async () => {
