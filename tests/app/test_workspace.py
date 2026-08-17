@@ -73,7 +73,8 @@ def test_workspace_payload_resolves_without_tests_directory() -> None:
     state_path = workspace_fixtures._state_fixture_dir("trips")
 
     assert state_path.joinpath("leisure_draft_trip.json").is_file()
-    assert "tests/fixtures/state" not in str(state_path)
+    normalized_state_path = str(state_path).replace("\\", "/")
+    assert "tests/fixtures/state" not in normalized_state_path
     record = workspace_fixtures.load_trip_record("leisure_draft_trip.json")
     assert record.trip.trip_id == "trip-leisure-kyoto-draft"
 

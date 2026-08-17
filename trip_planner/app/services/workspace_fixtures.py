@@ -11,6 +11,7 @@ from trip_planner.state import (
     PlanningSessionState,
     SavedScenarioRecord,
     ScenarioComparison,
+    User,
 )
 
 
@@ -66,3 +67,7 @@ def load_saved_scenarios(
 def load_session(name: str) -> PlanningSessionState:
     payload = _load_json(_state_fixture_dir("sessions") / name)
     return PlanningSessionState.from_dict(payload["session"])
+
+
+def load_account(name: str) -> User:
+    return User.from_dict(_load_json(_state_fixture_dir("accounts") / name))

@@ -66,9 +66,26 @@ def test_app_imports_from_installed_wheel_without_tests_package() -> None:
                 str(venv_python),
                 "-c",
                 (
-                    "from trip_planner.app.services.workspace_fixtures import load_trip_record; "
-                    "assert load_trip_record('leisure_draft_trip.json').trip.trip_id "
-                    "== 'trip-leisure-kyoto-draft'"
+                    "from trip_planner.app.services.auth import AuthenticatedUser\n"
+                    "from trip_planner.app.services.workspace import get_workspace_payload\n"
+                    "from trip_planner.app.services.workspace_fixtures import load_trip_record\n"
+                    "class _StubSession:\n"
+                    "    def scalar(self, _stmt):\n"
+                    "        return None\n"
+                    "trip_id = 'trip-leisure-kyoto-draft'\n"
+                    "assert load_trip_record('leisure_draft_trip.json').trip.trip_id == trip_id\n"
+                    "payload = get_workspace_payload(\n"
+                    "    _StubSession(),\n"
+                    "    user=AuthenticatedUser(\n"
+                    "        user_id='user-leisure-1',\n"
+                    "        email='leisure@example.com',\n"
+                    "        display_name='Leisure User',\n"
+                    "    ),\n"
+                    "    trip_id=trip_id,\n"
+                    ")\n"
+                    "assert payload is not None\n"
+                    "assert payload['sample_data']['is_sample'] is True\n"
+                    "assert payload['trip_record']['trip']['trip_id'] == trip_id\n"
                 ),
             ],
             cwd=tmp,

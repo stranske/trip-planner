@@ -608,7 +608,7 @@ export type WorkspaceData = {
     is_sample: boolean;
     label: string;
     description: string;
-  };
+  } | null;
   trip_record: TripRecord;
   session: SessionState;
   saved_scenarios: SavedScenarioRecord[];
