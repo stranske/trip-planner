@@ -1095,11 +1095,11 @@ def _default_workspace_decisions(trip_id: str) -> list[PendingDecision]:
         PendingDecision(
             decision_id=f"decision:{trip_id}:bootstrap-direction",
             title="Set the first planner direction",
-            prompt="Should the workspace keep the current trip frame narrow, or compare another planner-backed option first?",
+            prompt="Should the workspace keep the current trip scope narrow, or compare another route option first?",
             created_at=_isoformat(datetime.now(UTC)),
             choices=[
                 "Keep the current direction.",
-                "Compare another planner-backed option first.",
+                "Compare another route option first.",
             ],
             blocking=True,
             related_option_set_id=f"option-set:{trip_id}:workspace-bootstrap",
@@ -1195,7 +1195,7 @@ def _bootstrap_version_summary(record: PersistedTrip, *, label: str) -> str:
     scope_label = _bootstrap_scope_label(record)
     if label == "baseline":
         return (
-            f"Capture the current persisted trip frame for {scope_label} so the workspace "
+            f"Capture the current trip scope for {scope_label} so the workspace "
             "has a stable first saved scenario to refine."
         )
     return (
@@ -1271,7 +1271,7 @@ def _bootstrap_saved_scenario_records(
                     "compared_at": created_at,
                     "outcome": "preferred",
                     "summary": (
-                        "The baseline preserves the current trip frame while the fallback "
+                        "The baseline preserves the current trip scope while the fallback "
                         "keeps a broader comparison lane available."
                     ),
                     "focus_areas": ["scope", "comparison-readiness"],
@@ -2268,7 +2268,7 @@ def _sync_workspace_session_record(
 
 def _trip_region_summary(trip: dict[str, Any]) -> str:
     primary_regions = list(trip["trip_frame"].get("primary_regions") or [])
-    return ", ".join(primary_regions[:2]) if primary_regions else "the current trip frame"
+    return ", ".join(primary_regions[:2]) if primary_regions else "the current trip scope"
 
 
 def _build_planner_option_set(
@@ -2296,6 +2296,11 @@ def _build_planner_option_set(
                     "direction": "lower_better",
                 },
                 {"key": "transfers", "label": "Transfers", "direction": "lower_better"},
+                {
+                    "key": "estimated_total",
+                    "label": "Estimated total",
+                    "direction": "lower_better",
+                },
             ],
             "explanation": list(scenario_search.get("explanation") or [])
             or [
@@ -2345,7 +2350,7 @@ def _build_planner_option_set(
             {
                 "option_id": f"bootstrap:{trip['trip_id']}:keep-frame",
                 "kind": "trip_setup",
-                "label": "Keep the current trip frame narrow",
+                "label": "Keep the current trip scope narrow",
                 "summary": f"Use {region_summary} as the first planner pass boundary.",
                 "drawbacks": ["You may need another pass if the trip should span more regions."],
                 "explanation": [
@@ -2409,7 +2414,7 @@ def _build_planner_base_outputs(
         {
             "output_id": f"output:{trip['trip_id']}:next-pass",
             "title": "Next planning pass",
-            "body": "Scenario search, ranking, and persistence issues can now build on a real workspace-mounted planner panel.",
+            "body": "Scenario search, ranking, and persistence issues can now build on the live planner panel in the workspace.",
             "tags": ["handoff", trip["mode"]],
         },
     ]
@@ -2464,7 +2469,7 @@ def _build_planner_pending_decisions(session: dict[str, Any]) -> list[dict[str, 
                 if isinstance(decision.get("choices"), (list, tuple)) and decision["choices"]
                 else [
                     "Keep the current direction.",
-                    "Compare another planner-backed option first.",
+                    "Compare another route option first.",
                 ]
             ),
         }
@@ -2568,7 +2573,7 @@ def _build_planner_panel_state(
             "action_id": f"action:{trip['trip_id']}:compare-options",
             "action_kind": "compare_options",
             "label": "Compare planner options",
-            "description": "Inspect the mounted planner options without leaving the workspace route.",
+            "description": "Review the available route options in the trip workspace.",
             "emphasis": "primary",
             "target_section": "options",
         },
@@ -3500,7 +3505,7 @@ def submit_workspace_option_feedback(
                 created_at=session.updated_at,
                 choices=[
                     "Keep the current direction.",
-                    "Compare another planner-backed option first.",
+                    "Compare another route option first.",
                 ],
                 related_option_set_id=option_set_id,
                 notes=["Generated after workspace option feedback."],
