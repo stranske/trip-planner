@@ -816,33 +816,186 @@ def _implicit_notebook_tool_calls(message: str) -> list[dict[str, Any]]:
     return calls
 
 
+_CANCEL_INTENT_PATTERN = re.compile(
+    r"\b(?:cancel(?:led|lation)?|stop (?:this|the)? trip|do(?:n't| not) want to travel|"
+    r"abort|call off|don't travel)\b",
+    re.IGNORECASE,
+)
+_COST_QUESTION_PATTERN = re.compile(
+    r"\b(?:cost|cheapest|budget|price|how much|afford|expensive)\b",
+    re.IGNORECASE,
+)
+_POLICY_QUESTION_PATTERN = re.compile(
+    r"\b(?:polic(?:y|ies)|complian(?:t|ce)|approval|approved)\b",
+    re.IGNORECASE,
+)
+
+
+def _format_transfer_count(count: int | None) -> str:
+    if count is None:
+        return "transfer count pending"
+    if count == 1:
+        return "1 transfer"
+    return f"{count} transfers"
+
+
+def _format_estimated_total(estimated_total: dict[str, Any] | None) -> str | None:
+    if not isinstance(estimated_total, dict):
+        return None
+    amount = estimated_total.get("typical_amount")
+    currency = str(estimated_total.get("currency") or "USD").strip()
+    if amount is None:
+        return None
+    return f"{currency} {float(amount):,.0f}"
+
+
+def _format_choice_list(choices: list[Any]) -> str:
+    labels = [str(choice).strip().rstrip(".") for choice in choices if str(choice).strip()]
+    if not labels:
+        return ""
+    if len(labels) == 1:
+        return f"{labels[0]}."
+    if len(labels) == 2:
+        return f"{labels[0]} or {labels[1]}."
+    return ", ".join(labels[:-1]) + f", or {labels[-1]}."
+
+
+def _token_is_gibberish(token: str) -> bool:
+    alpha = [character.lower() for character in token if character.isalpha()]
+    if len(alpha) < 3:
+        return False
+    if len(set(alpha)) == 1:
+        return True
+    return len(alpha) >= 4 and len(set(alpha)) <= 2
+
+
+def _message_looks_like_nonsense(message: str) -> bool:
+    tokens = [token.strip(".,!?;:()[]{}\"'") for token in message.split()]
+    if not tokens:
+        return True
+    alpha_tokens = [token for token in tokens if any(character.isalpha() for character in token)]
+    gibberish_tokens = [token for token in alpha_tokens if _token_is_gibberish(token)]
+    if len(gibberish_tokens) >= 2:
+        return True
+    if len(alpha_tokens) >= 3 and len(gibberish_tokens) / len(alpha_tokens) >= 0.5:
+        return True
+    if len(alpha_tokens) < 2 and len(tokens) <= 4:
+        return True
+    unique_lower = {token.lower() for token in alpha_tokens}
+    if len(alpha_tokens) >= 3 and len(unique_lower) <= 2:
+        return True
+    return False
+
+
+def _planning_mode_guidance(planning_mode: str | None) -> str:
+    mode = str(planning_mode or "collaborative").strip().lower()
+    guidance = {
+        "delegated": "Delegated mode: I will recommend a direction when you ask.",
+        "collaborative": "Collaborative mode: I will compare options with you.",
+        "revealed_preference": "Revealed-preference mode: I will surface tradeoffs for you to weigh.",
+        "in_trip": "In-trip mode: I will focus on adjustments for the active trip.",
+    }.get(mode)
+    if guidance:
+        return f"{guidance} In fallback mode this adjusts tone only."
+    return "Planning mode is preference-only in fallback mode and does not change routing yet."
+
+
+def _scenario_cost_summary(scenarios: list[dict[str, Any]]) -> str | None:
+    if not scenarios:
+        return None
+    parts: list[str] = []
+    for scenario in scenarios[:4]:
+        metrics = scenario.get("metrics") or {}
+        cost = _format_estimated_total(metrics.get("estimated_total"))
+        title = str(scenario.get("title") or "Scenario")
+        transfers = _format_transfer_count(metrics.get("transfers"))
+        if cost:
+            parts.append(f"{title}: {cost}, {transfers}")
+        else:
+            parts.append(f"{title}: {transfers}")
+    if not parts:
+        return None
+    return "Scenario costs: " + "; ".join(parts) + "."
+
+
+def _policy_preview_summary(scenarios: list[dict[str, Any]]) -> str | None:
+    for scenario in scenarios:
+        preview = scenario.get("policy_preview")
+        if not isinstance(preview, dict):
+            continue
+        label = str(
+            preview.get("posture_label") or preview.get("summary") or preview.get("label") or ""
+        ).strip()
+        if label:
+            return f"Policy preview for {scenario.get('title')}: {label}."
+    return None
+
+
 def _fallback_content_from_metadata(
     *,
     trip_title: str,
     message: str,
     metadata: dict[str, Any],
+    planning_mode: str | None = None,
+    scenarios: list[dict[str, Any]] | None = None,
 ) -> str:
+    lowered = message.lower()
+    scenario_rows = list(scenarios or [])
+
+    if _CANCEL_INTENT_PATTERN.search(lowered):
+        return (
+            f"I read your message as wanting to stop or rethink {trip_title}. "
+            "I am in deterministic fallback mode, so I cannot process a real cancellation yet, "
+            "but I will not pretend the trip still has a useful starting point if you want to end it."
+        )
+
+    if _message_looks_like_nonsense(message):
+        return (
+            f"I could not extract a clear planning request from your message for {trip_title}. "
+            "In fallback mode I use keyword matching only — try a concrete question about cost, "
+            "routes, policy, or whether to continue planning this trip."
+        )
+
+    if _COST_QUESTION_PATTERN.search(lowered):
+        cost_line = _scenario_cost_summary(scenario_rows)
+        if cost_line:
+            return f"You asked about cost for {trip_title}. {cost_line}"
+        return (
+            f"You asked about cost for {trip_title}, but no priced scenarios are loaded yet. "
+            "I cannot quote figures until ranking finishes."
+        )
+
+    if _POLICY_QUESTION_PATTERN.search(lowered):
+        policy_line = _policy_preview_summary(scenario_rows)
+        if policy_line:
+            return f"You asked about policy or compliance for {trip_title}. {policy_line}"
+        return (
+            f"You asked about policy or compliance for {trip_title}. "
+            "No policy preview is available in the current workspace data yet."
+        )
+
     maturity = metadata["plan_maturity"]
+    mode_prefix = _planning_mode_guidance(planning_mode)
     if maturity == "coherent_plan":
         return (
-            f"I can use the details you gave for {trip_title} to move into option shaping. "
+            f"{mode_prefix} I can use the details you gave for {trip_title} to move into option shaping. "
             "The next useful step is to compare a small set of routes, stays, or pacing tradeoffs "
             "instead of asking broad intake questions again."
         )
     if maturity == "open_ended":
         return (
-            f"Let's narrow {trip_title} before building options. Share a destination or region, "
-            "rough timing, and one priority, and I will turn it into a focused planning path."
+            f"{mode_prefix} Let's narrow {trip_title} before building options. Share a destination "
+            "or region, rough timing, and one priority, and I will turn it into a focused planning path."
         )
     if maturity == "overloaded_constraints":
         return (
-            f"I will organize the constraints for {trip_title} before generating options. "
+            f"{mode_prefix} I will organize the constraints for {trip_title} before generating options. "
             "First I would separate firm requirements from preferences, then compare only the "
             "routes or stays that satisfy the must-haves."
         )
     return (
-        f"{trip_title} has a useful starting point. I would close the biggest missing decision "
-        "from your note, then move into targeted planning."
+        f"{mode_prefix} For {trip_title}, I noted: \"{_first_sentence(message)}\". "
+        "I would close the biggest missing decision from your note, then move into targeted planning."
     )
 
 
@@ -980,7 +1133,7 @@ def _build_decision_block(*, decisions: list[dict[str, Any]]) -> dict[str, Any] 
     decision_items: list[str] = []
     for decision in decisions[:3]:
         prompt = str(decision.get("prompt") or decision.get("title") or "")
-        choices = ", ".join(str(choice) for choice in list(decision.get("choices") or []))
+        choices = _format_choice_list(list(decision.get("choices") or []))
         decision_items.append(f"{prompt} Choices: {choices}" if choices else prompt)
     return _structured_block(
         kind="decision",
@@ -1016,10 +1169,13 @@ def _build_comparison_block(
         for scenario in scenarios[:4]:
             metrics = scenario.get("metrics") or {}
             route_summary = scenario.get("route_summary") or "route details pending"
+            cost = _format_estimated_total(metrics.get("estimated_total"))
+            cost_fragment = f"{cost}; " if cost else ""
             comparison_items.append(
                 f"{scenario.get('title')}: {route_summary}; "
+                f"{cost_fragment}"
                 f"{metrics.get('travel_minutes', 'pending')} travel minutes; "
-                f"{metrics.get('transfers', 'pending')} transfers."
+                f"{_format_transfer_count(metrics.get('transfers'))}."
             )
     elif len(options) > 1:
         comparison_items = [
@@ -1213,6 +1369,8 @@ class DeterministicPlannerConversationRunnable:
     def invoke(self, request: PlannerConversationRequest) -> PlannerConversationReply:
         panel = request.planner_panel_state
         trip = panel["trip"]
+        runtime_comparison = request.runtime_context.get("runtime_scenario_comparison") or {}
+        scenarios = list(runtime_comparison.get("scenarios") or [])
         metadata = _planner_turn_metadata(
             message=request.message,
             runtime_config=get_planner_runtime_config(),
@@ -1230,14 +1388,24 @@ class DeterministicPlannerConversationRunnable:
                 trip_title=trip["title"],
                 message=request.message,
                 metadata=metadata,
+                planning_mode=request.session.selected_planning_mode,
+                scenarios=scenarios,
             )
         ]
         refs = [request.session.session_state_id]
 
+        tradeoff_line = _scenario_cost_summary(scenarios)
+        if tradeoff_line and tradeoff_line not in lines[0]:
+            lines.append(tradeoff_line)
+
         if decisions:
             active = decisions[0]
-            choice_labels = ", ".join(active.get("choices") or [])
-            lines.append(f"Current blocking decision: {active['prompt']} Choices: {choice_labels}.")
+            choice_labels = _format_choice_list(list(active.get("choices") or []))
+            lines.append(
+                f"Current blocking decision: {active['prompt']} Choices: {choice_labels}"
+                if choice_labels
+                else f"Current blocking decision: {active['prompt']}"
+            )
             refs.append(active["decision_id"])
         elif options:
             lead = options[0]
@@ -1279,6 +1447,11 @@ class DeterministicPlannerConversationRunnable:
                 + "; ".join(_dedupe_preserve_order(ledger_focus)[:3])
                 + "."
             )
+
+        lines.append(
+            "Note: the planner is in deterministic fallback mode and cannot answer free-text "
+            "questions with a live model."
+        )
 
         deduped_refs = list(dict.fromkeys(refs))
         return PlannerConversationReply(
