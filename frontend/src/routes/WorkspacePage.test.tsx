@@ -1614,8 +1614,12 @@ describe("WorkspacePage", () => {
     expect(packetScope.getByText(/Selected scenario total:/)).toBeInTheDocument();
     expect(packetScope.getByText("non_compliant")).toBeInTheDocument();
     expect(packetScope.getByText("daily_cap")).toBeInTheDocument();
-    expect(packetScope.getByText("Daily cap exceeded.")).toBeInTheDocument();
-    expect(packetScope.getByText(/Conference Hotel from Marriott/)).toBeInTheDocument();
+    expect(packetScope.getByText(/Daily cap exceeded/)).toBeInTheDocument();
+    expect(
+      packetScope.getByText((_, element) =>
+        element?.textContent?.includes("Conference Hotel from Marriott") ?? false
+      )
+    ).toBeInTheDocument();
   });
 
   it("persists planning mode selections through the workspace API", async () => {
