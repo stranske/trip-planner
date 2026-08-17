@@ -62,7 +62,15 @@ def test_app_imports_from_installed_wheel_without_tests_package() -> None:
         )
 
         result = subprocess.run(
-            [str(venv_python), "-c", "import trip_planner.app.main"],
+            [
+                str(venv_python),
+                "-c",
+                (
+                    "from trip_planner.app.services.workspace_fixtures import load_trip_record; "
+                    "assert load_trip_record('leisure_draft_trip.json').trip.trip_id "
+                    "== 'trip-leisure-kyoto-draft'"
+                ),
+            ],
             cwd=tmp,
             check=False,
             capture_output=True,

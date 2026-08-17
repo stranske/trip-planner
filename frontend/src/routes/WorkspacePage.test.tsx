@@ -961,6 +961,26 @@ describe("WorkspacePage", () => {
     expect(screen.getByRole("heading", { name: "Review route tradeoffs" })).toBeInTheDocument();
   });
 
+  it("labels sample workspace scenarios as demonstration data", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        sample_data: {
+          is_sample: true,
+          label: "Sample planning data",
+          description: "These scenarios demonstrate the workspace and are not a generated trip plan.",
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Sample planning data: These scenarios demonstrate the workspace"
+    );
+  });
+
   it("keeps approval details in Policy and expands older activity on request", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({

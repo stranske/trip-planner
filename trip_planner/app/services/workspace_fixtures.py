@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
+from importlib.resources import files
+from importlib.resources.abc import Traversable
 from typing import Any
 
 from trip_planner.state import (
@@ -37,11 +38,13 @@ FIXTURES: dict[str, WorkspaceFixture] = {
 }
 
 
-def _state_fixture_dir(kind: str) -> Path:
-    return Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "state" / kind
+def _state_fixture_dir(kind: str) -> Traversable:
+    """Return packaged sample workspace data without relying on the source tree."""
+
+    return files("trip_planner.resources").joinpath("state").joinpath(kind)
 
 
-def _load_json(path: Path) -> dict[str, Any]:
+def _load_json(path: Traversable) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 

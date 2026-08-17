@@ -2800,6 +2800,11 @@ def _build_fixture_workspace_payload(
     )
 
     fixture_payload: dict[str, Any] = {
+        "sample_data": {
+            "is_sample": True,
+            "label": "Sample planning data",
+            "description": "These scenarios demonstrate the workspace and are not a generated trip plan.",
+        },
         "trip_record": trip_record.to_dict(),
         "session": session.to_dict(),
         "saved_scenarios": [record.to_dict() for record in saved_scenarios],

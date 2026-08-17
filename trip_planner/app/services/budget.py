@@ -4,7 +4,8 @@ import json
 import secrets
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from pathlib import Path
+from importlib.resources import files
+from importlib.resources.abc import Traversable
 from typing import Any
 
 from sqlalchemy import select
@@ -33,15 +34,13 @@ class WorkspaceBudgetNotFoundError(ValueError):
     """Raised when a workspace budget or trip does not exist for the user."""
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+def _state_fixture_dir(kind: str) -> Traversable:
+    """Return packaged sample budget data without relying on the source tree."""
+
+    return files("trip_planner.resources").joinpath("state").joinpath(kind)
 
 
-def _state_fixture_dir(kind: str) -> Path:
-    return _repo_root() / "tests" / "fixtures" / "state" / kind
-
-
-def _load_json(path: Path) -> dict[str, Any]:
+def _load_json(path: Traversable) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 

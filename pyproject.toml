@@ -56,6 +56,7 @@ trip_planner = [
     "resources/logistics/*.json",
     "resources/options/bundles/*.json",
     "resources/preferences/*.json",
+    "resources/state/**/*.json",
 ]
 
 [tool.pytest.ini_options]
