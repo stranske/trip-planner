@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from trip_planner.app.routes.errors import public_http_error
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.persistence.models.activity import PersistedActivityLogEvent
 from trip_planner.persistence.models.scenario import (
@@ -81,7 +82,11 @@ def _domain_payload_exception(error: Exception) -> HTTPException:
     if isinstance(error, KeyError) and error.args:
         return _unprocessable(f"{error.args[0]} is required")
     if isinstance(error, TypeError):
-        return _unprocessable(str(error))
+        return public_http_error(
+            error,
+            status_code=422,
+            message="The planning payload could not be processed.",
+        )
     if isinstance(error, ValueError):
         return _domain_payload_error(error)
     raise TypeError(f"Unsupported domain payload exception: {type(error)!r}")

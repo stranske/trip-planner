@@ -383,14 +383,12 @@ class TPPRuntimeSettings:
     base_url: str
     access_token: str
     oidc_provider: str
-    timeout_seconds: float = 10.0
 
     @classmethod
     def from_env(cls) -> TPPRuntimeSettings:
         base_url = os.getenv("TPP_BASE_URL", "").strip()
         access_token = os.getenv("TPP_ACCESS_TOKEN", "").strip()
         oidc_provider = os.getenv("TPP_OIDC_PROVIDER", "").strip()
-        timeout_raw = os.getenv("TPP_TIMEOUT_SECONDS", "").strip()
 
         missing = [
             name
@@ -407,24 +405,10 @@ class TPPRuntimeSettings:
                 f"Live TPP transport requires runtime configuration for {joined}."
             )
 
-        timeout_seconds = 10.0
-        if timeout_raw:
-            try:
-                timeout_seconds = float(timeout_raw)
-            except ValueError as exc:
-                raise TPPConfigurationError(
-                    "TPP_TIMEOUT_SECONDS must be a numeric value when provided."
-                ) from exc
-            if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
-                raise TPPConfigurationError(
-                    "TPP_TIMEOUT_SECONDS must be a finite value greater than 0."
-                )
-
         return cls(
             base_url=base_url.rstrip("/"),
             access_token=access_token,
             oidc_provider=oidc_provider,
-            timeout_seconds=timeout_seconds,
         )
 
 
