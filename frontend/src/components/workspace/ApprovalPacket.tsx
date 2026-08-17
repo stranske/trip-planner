@@ -19,12 +19,17 @@ export function ApprovalPacket({ workspace, onPrint }: ApprovalPacketProps) {
     (version) => version.version_id === savedScenario.current_version_id
   );
   const scenarioId = proposal?.scenario_id ?? activeVersion?.snapshot_refs.itinerary_scenario_id;
-  const selectedScenario = workspace.route_comparison.scenarios.find(
+  const routeComparison = workspace.route_comparison ?? workspace.runtime_scenario_comparison;
+  const selectedScenario = routeComparison.scenarios.find(
     (scenario) => scenario.scenario_id === scenarioId
-  ) ?? workspace.route_comparison.scenarios[0];
+  ) ?? routeComparison.scenarios[0];
   const verdict = proposal?.evaluation.evaluation_result;
-  const currency = selectedScenario?.metrics.estimated_total?.currency ?? workspace.budget_state.summary.currency;
-  const total = selectedScenario?.metrics.estimated_total?.typical_amount ?? workspace.budget_state.summary.planned_total;
+  const scenarioTotal = selectedScenario?.metrics.estimated_total;
+  const budgetCurrency = workspace.budget_state.summary.currency;
+  const budgetTotalsUseScenarioCurrency = scenarioTotal?.currency === budgetCurrency;
+  const budgetDelta = scenarioTotal
+    ? workspace.budget_state.summary.planned_total - scenarioTotal.typical_amount
+    : null;
   const travelerParty = trip.trip_frame.traveler_party;
 
   return (
@@ -41,15 +46,22 @@ export function ApprovalPacket({ workspace, onPrint }: ApprovalPacketProps) {
         <div><dt>Travelers</dt><dd>{travelerParty ? `${travelerParty.traveler_count} ${travelerParty.kind}` : "Not set"}</dd></div>
         {travelerParty?.notes ? <div><dt>Traveler notes</dt><dd>{travelerParty.notes}</dd></div> : null}
         <div><dt>Selected scenario</dt><dd>{selectedScenario?.title ?? "Not selected"}</dd></div>
-        <div><dt>Estimated total</dt><dd>{formatCurrency(total, currency)}</dd></div>
+        <div><dt>Estimated total</dt><dd>{scenarioTotal ? formatCurrency(scenarioTotal.typical_amount, scenarioTotal.currency) : "Not available"}</dd></div>
         <div><dt>Policy verdict</dt><dd>{verdict?.status ?? proposal?.summary.evaluation_result_status ?? "Not evaluated"}</dd></div>
         <div><dt>Compliance score</dt><dd>{verdict ? `${Math.round(verdict.compliance_score * 100)}%` : "Not available"}</dd></div>
       </dl>
       <section>
         <h3>Budget</h3>
         <p>
-          Selected scenario total: {formatCurrency(total, currency)}. Budget cap: {formatCurrency(workspace.budget_state.summary.planned_total, currency)}. Remaining budget: {formatCurrency(workspace.budget_state.summary.remaining_total, currency)}.
+          Selected scenario total: {scenarioTotal ? formatCurrency(scenarioTotal.typical_amount, scenarioTotal.currency) : "Not available"}. Budget cap: {formatCurrency(workspace.budget_state.summary.planned_total, budgetCurrency)}. Remaining budget: {formatCurrency(workspace.budget_state.summary.remaining_total, budgetCurrency)}.
         </p>
+        {scenarioTotal && budgetTotalsUseScenarioCurrency && budgetDelta !== null ? (
+          <p>
+            Scenario total is {formatCurrency(Math.abs(budgetDelta), budgetCurrency)} {budgetDelta >= 0 ? "below" : "above"} the budget cap.
+          </p>
+        ) : scenarioTotal ? (
+          <p>Scenario and budget totals use different currencies, so the packet does not compare them.</p>
+        ) : null}
         <ul>
           {workspace.budget_state.summary.category_summaries.map((category) => (
             <li key={category.category_key}>
@@ -57,6 +69,18 @@ export function ApprovalPacket({ workspace, onPrint }: ApprovalPacketProps) {
             </li>
           ))}
         </ul>
+        {proposal?.proposal.comparables?.length ? (
+          <>
+            <h4>Itemized costs</h4>
+            <ul>
+              {proposal.proposal.comparables.map((comparable) => (
+                <li key={`${comparable.category}:${comparable.vendor}:${comparable.label}`}>
+                  {comparable.category}: {comparable.label} from {comparable.vendor} — {formatCurrency(comparable.estimated_cost.typical_amount, comparable.estimated_cost.currency)}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </section>
       <section>
         <h3>Policy reasons</h3>

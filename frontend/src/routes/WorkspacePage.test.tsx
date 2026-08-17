@@ -1568,6 +1568,7 @@ describe("WorkspacePage", () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
         ...workspacePayload,
+        route_comparison: undefined as unknown as WorkspaceData["route_comparison"],
         trip_record: {
           ...workspacePayload.trip_record,
           trip: {
@@ -1611,8 +1612,10 @@ describe("WorkspacePage", () => {
     const packetScope = within(packet);
     expect(packetScope.getByText("2 pair")).toBeInTheDocument();
     expect(packetScope.getByText(/Selected scenario total:/)).toBeInTheDocument();
+    expect(packetScope.getByText("non_compliant")).toBeInTheDocument();
     expect(packetScope.getByText("daily_cap")).toBeInTheDocument();
     expect(packetScope.getByText("Daily cap exceeded.")).toBeInTheDocument();
+    expect(packetScope.getByText(/Conference Hotel from Marriott/)).toBeInTheDocument();
   });
 
   it("persists planning mode selections through the workspace API", async () => {
