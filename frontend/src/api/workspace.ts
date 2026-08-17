@@ -928,7 +928,10 @@ export async function submitTripForApproval(
 
   let executionId = proposalState?.execution_id ?? null;
   if (!executionId && proposalState?.summary.submission_requires_polling) {
-    proposalState = await pollForExecutionId(tripId);
+    const polledProposalState = await pollForExecutionId(tripId);
+    if (polledProposalState != null) {
+      proposalState = polledProposalState;
+    }
     executionId = proposalState?.execution_id ?? null;
   }
 

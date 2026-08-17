@@ -115,6 +115,9 @@ export function buildProposalSubmissionPayload(
     estimatedTotal?.currency ?? workspace.budget_state.summary.currency ?? "USD";
   const typicalAmount =
     estimatedTotal?.typical_amount ?? workspace.budget_state.summary.planned_total ?? 0;
+  if (!Number.isFinite(typicalAmount)) {
+    throw new Error("Proposal cost must be a finite number.");
+  }
   const scenarioLabel = scenario?.title ?? trip.title;
 
   const selectedOption: Record<string, unknown> = {
