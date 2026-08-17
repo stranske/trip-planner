@@ -1,8 +1,8 @@
 import json
-from pathlib import Path
 
 import pytest
 
+from trip_planner.app.services import workspace_fixtures
 from trip_planner.state import (
     PersistedTripArtifactRefs,
     PersistedTripRecord,
@@ -12,14 +12,13 @@ from trip_planner.state import (
 from trip_planner.state.repositories import TripRepository, TripVersion
 
 
-def _fixture_path(name: str) -> Path:
-    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "state" / "trips"
-    return fixtures_dir / name
+def _fixture_payload(name: str) -> dict:
+    path = workspace_fixtures._state_fixture_dir("trips") / name
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _load_fixture(name: str) -> PersistedTripRecord:
-    payload = json.loads(_fixture_path(name).read_text(encoding="utf-8"))
-    return PersistedTripRecord.from_dict(payload)
+    return workspace_fixtures.load_trip_record(name)
 
 
 def test_trip_record_loads_leisure_draft_fixture() -> None:
@@ -59,7 +58,7 @@ def test_validate_trip_status_transition_rejects_skipping_booked_state() -> None
 
 
 def test_trip_record_rejects_leisure_policy_reference() -> None:
-    payload = json.loads(_fixture_path("leisure_draft_trip.json").read_text(encoding="utf-8"))
+    payload = _fixture_payload("leisure_draft_trip.json")
     payload["artifact_refs"]["policy_state_id"] = "policy-state:should-not-exist"
 
     with pytest.raises(ValueError, match="leisure trips cannot persist policy_state_id"):
@@ -77,7 +76,7 @@ def test_trip_record_rejects_string_instead_of_list_for_option_set_ids() -> None
 
 
 def test_trip_record_rejects_status_history_that_ends_at_wrong_status() -> None:
-    payload = json.loads(_fixture_path("business_active_trip.json").read_text(encoding="utf-8"))
+    payload = _fixture_payload("business_active_trip.json")
     payload["status_history"].append(
         {
             "from_status": "booked",

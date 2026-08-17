@@ -288,6 +288,10 @@ class PlanningNotebookFocusRequest(BaseModel):
 
 
 class WorkspaceResponse(BaseModel):
+    sample_data: dict[str, Any] | None = Field(
+        default=None,
+        description="Visible disclosure when this workspace is populated with packaged sample data.",
+    )
     trip_record: dict[str, Any] = Field(
         description="Persisted trip record payload for the workspace."
     )

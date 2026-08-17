@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
+from importlib.resources import files
+from importlib.resources.abc import Traversable
 from typing import Any
 
 from trip_planner.state import (
+    ActualSpendEvent,
+    BudgetPlan,
     PersistedTripRecord,
     PlanningSessionState,
     SavedScenarioRecord,
     ScenarioComparison,
+    User,
 )
 
 
@@ -37,11 +41,13 @@ FIXTURES: dict[str, WorkspaceFixture] = {
 }
 
 
-def _state_fixture_dir(kind: str) -> Path:
-    return Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "state" / kind
+def _state_fixture_dir(kind: str) -> Traversable:
+    """Return packaged sample workspace data without relying on the source tree."""
+
+    return files("trip_planner.resources").joinpath("state").joinpath(kind)
 
 
-def _load_json(path: Path) -> dict[str, Any]:
+def _load_json(path: Traversable) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -63,3 +69,20 @@ def load_saved_scenarios(
 def load_session(name: str) -> PlanningSessionState:
     payload = _load_json(_state_fixture_dir("sessions") / name)
     return PlanningSessionState.from_dict(payload["session"])
+
+
+def load_account(name: str) -> User:
+    return User.from_dict(_load_json(_state_fixture_dir("accounts") / name))
+
+
+def load_budget_plan(name: str) -> BudgetPlan:
+    return BudgetPlan.from_dict(_load_json(_state_fixture_dir("budget") / name))
+
+
+def load_budget_events() -> list[ActualSpendEvent]:
+    payload = _load_json(_state_fixture_dir("budget") / "actual_spend_events.json")
+    return [ActualSpendEvent.from_dict(item) for item in payload["events"]]
+
+
+def load_state_payload(kind: str, name: str) -> dict[str, Any]:
+    return _load_json(_state_fixture_dir(kind) / name)

@@ -1771,6 +1771,11 @@ function WorkspacePageContent({
         </p>
         <h1>{productView?.user_summary.trip_title ?? trip.title}</h1>
         <p>{productView?.user_summary.headline ?? trip.summary}</p>
+        {currentWorkspace.sample_data?.is_sample ? (
+          <p className="muted-copy" role="status">
+            {currentWorkspace.sample_data.label}: {currentWorkspace.sample_data.description}
+          </p>
+        ) : null}
         {productView ? (
           <div className="decision-stack" aria-label="Product workspace summary">
             {productView.user_summary.decided.length > 0 ? (

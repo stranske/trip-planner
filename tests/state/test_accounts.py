@@ -1,8 +1,6 @@
-import json
-from pathlib import Path
-
 import pytest
 
+from trip_planner.app.services import workspace_fixtures
 from trip_planner.state import (
     AccountPreferenceRecord,
     NotificationPreference,
@@ -12,14 +10,8 @@ from trip_planner.state import (
 from trip_planner.state.repositories import AccountRepository, AccountVersion
 
 
-def _fixture_path(name: str) -> Path:
-    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "state" / "accounts"
-    return fixtures_dir / name
-
-
 def _load_fixture(name: str) -> User:
-    payload = json.loads(_fixture_path(name).read_text(encoding="utf-8"))
-    return User.from_dict(payload)
+    return workspace_fixtures.load_account(name)
 
 
 def test_account_loads_leisure_focused_fixture() -> None:

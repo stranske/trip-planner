@@ -68,6 +68,17 @@ def test_load_saved_scenarios_allows_entries_without_a_comparison(
     assert comparison is None
 
 
+def test_workspace_payload_resolves_without_tests_directory() -> None:
+    """Built-in sample workspace data must resolve from packaged resources."""
+    state_path = workspace_fixtures._state_fixture_dir("trips")
+
+    assert state_path.joinpath("leisure_draft_trip.json").is_file()
+    normalized_state_path = str(state_path).replace("\\", "/")
+    assert "tests/fixtures/state" not in normalized_state_path
+    record = workspace_fixtures.load_trip_record("leisure_draft_trip.json")
+    assert record.trip.trip_id == "trip-leisure-kyoto-draft"
+
+
 def _assert_payload_avoids_fixture_or_default_inventory_data(payload: dict[str, Any]) -> None:
     bundle_ids = {bundle["bundle_id"] for bundle in payload["inventory_summary"]["bundles"]}
     assert bundle_ids.isdisjoint(_LEGACY_FIXTURE_BUNDLE_IDS)
@@ -142,6 +153,11 @@ def test_workspace_endpoint_returns_trip_scenario_payload(client: TestClient) ->
 
     assert response.status_code == 200
     payload = response.json()
+    assert payload["sample_data"] == {
+        "is_sample": True,
+        "label": "Sample planning data",
+        "description": "These scenarios demonstrate the workspace and are not a generated trip plan.",
+    }
     assert payload["trip_record"]["trip"]["trip_id"] == "trip-leisure-kyoto-draft"
     assert payload["session"]["selected_planning_mode"] == "collaborative"
     _assert_runtime_ranking_and_route_comparison(payload)
@@ -3699,6 +3715,7 @@ def test_get_workspace_payload_shape_unchanged(client: TestClient) -> None:
     across the seeded leisure and business trips (the fixture-path it now delegates to)."""
     expected_keys = {
         "trip_record",
+        "sample_data",
         "session",
         "saved_scenarios",
         "scenario_comparison",

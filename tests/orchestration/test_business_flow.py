@@ -10,6 +10,7 @@ from trip_planner.business import (
     TripPlanProposal,
     derive_business_planning_objectives,
 )
+from trip_planner.app.services import workspace_fixtures
 from trip_planner.orchestration import (
     BUSINESS_PATHS,
     BusinessWorkflowContext,
@@ -42,10 +43,10 @@ def _load_scenario(name: str) -> dict:
 
 def _build_context(name: str) -> BusinessWorkflowContext:
     scenario = _load_scenario(name)
-    trip_payload = _load_json(_fixture_root() / "state" / "trips" / scenario["trip_fixture"])
+    trip_record = workspace_fixtures.load_trip_record(scenario["trip_fixture"])
     if "trip_overrides" in scenario:
-        trip_payload = _deep_merge(trip_payload, scenario["trip_overrides"])
-    trip_record = PersistedTripRecord.from_dict(trip_payload)
+        trip_payload = _deep_merge(trip_record.to_dict(), scenario["trip_overrides"])
+        trip_record = PersistedTripRecord.from_dict(trip_payload)
 
     profile_payload = _load_json(_fixture_root() / "business" / scenario["profile_fixture"])
     profile = BusinessTravelProfile.from_dict(profile_payload)

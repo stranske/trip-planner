@@ -1,8 +1,8 @@
 import json
-from pathlib import Path
 
 import pytest
 
+from trip_planner.app.services import workspace_fixtures
 from trip_planner.state import (
     ActivityLogEvent,
     PendingDecision,
@@ -17,17 +17,13 @@ from trip_planner.state.repositories import (
 from trip_planner.state.sessions import OptionPresentationRecord
 
 
-def _fixture_path(name: str) -> Path:
-    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "state" / "sessions"
-    return fixtures_dir / name
-
-
 def _load_payload(name: str) -> dict:
-    return json.loads(_fixture_path(name).read_text(encoding="utf-8"))
+    path = workspace_fixtures._state_fixture_dir("sessions") / name
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _load_session(name: str) -> PlanningSessionState:
-    return PlanningSessionState.from_dict(_load_payload(name)["session"])
+    return workspace_fixtures.load_session(name)
 
 
 def _load_events(name: str) -> list[ActivityLogEvent]:

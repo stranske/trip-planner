@@ -604,6 +604,11 @@ export type WorkspaceViewModel = {
 };
 
 export type WorkspaceData = {
+  sample_data?: {
+    is_sample: boolean;
+    label: string;
+    description: string;
+  } | null;
   trip_record: TripRecord;
   session: SessionState;
   saved_scenarios: SavedScenarioRecord[];

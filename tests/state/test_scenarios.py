@@ -1,8 +1,6 @@
-import json
-from pathlib import Path
-
 import pytest
 
+from trip_planner.app.services import workspace_fixtures
 from trip_planner.state import SavedScenarioRecord, ScenarioCheckpoint, ScenarioVersion
 from trip_planner.state.repositories import (
     ScenarioCheckpointRepository,
@@ -14,13 +12,8 @@ from trip_planner.state.scenarios import (
 )
 
 
-def _fixture_path(name: str) -> Path:
-    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "state" / "scenarios"
-    return fixtures_dir / name
-
-
 def _load_payload(name: str) -> dict:
-    return json.loads(_fixture_path(name).read_text(encoding="utf-8"))
+    return workspace_fixtures.load_state_payload("scenarios", name)
 
 
 def test_saved_scenario_record_loads_leisure_pair_fixture() -> None:

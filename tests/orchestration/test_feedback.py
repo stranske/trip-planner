@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from tests.preferences.fixture_corpus import load_fixture_map
+from trip_planner.app.services import workspace_fixtures
 from trip_planner.orchestration import (
     FeedbackLoopContext,
     OptionFeedbackEvent,
@@ -23,16 +24,7 @@ def _load_event(name: str) -> OptionFeedbackEvent:
 
 
 def _load_session() -> PlanningSessionState:
-    payload = json.loads(
-        (
-            Path(__file__).resolve().parents[1]
-            / "fixtures"
-            / "state"
-            / "sessions"
-            / "active_leisure_session.json"
-        ).read_text(encoding="utf-8")
-    )
-    return PlanningSessionState.from_dict(payload["session"])
+    return workspace_fixtures.load_session("active_leisure_session.json")
 
 
 def _context(
