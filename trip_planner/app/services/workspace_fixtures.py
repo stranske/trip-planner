@@ -7,6 +7,8 @@ from importlib.resources.abc import Traversable
 from typing import Any
 
 from trip_planner.state import (
+    ActualSpendEvent,
+    BudgetPlan,
     PersistedTripRecord,
     PlanningSessionState,
     SavedScenarioRecord,
@@ -71,3 +73,16 @@ def load_session(name: str) -> PlanningSessionState:
 
 def load_account(name: str) -> User:
     return User.from_dict(_load_json(_state_fixture_dir("accounts") / name))
+
+
+def load_budget_plan(name: str) -> BudgetPlan:
+    return BudgetPlan.from_dict(_load_json(_state_fixture_dir("budget") / name))
+
+
+def load_budget_events() -> list[ActualSpendEvent]:
+    payload = _load_json(_state_fixture_dir("budget") / "actual_spend_events.json")
+    return [ActualSpendEvent.from_dict(item) for item in payload["events"]]
+
+
+def load_state_payload(kind: str, name: str) -> dict[str, Any]:
+    return _load_json(_state_fixture_dir(kind) / name)

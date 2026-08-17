@@ -1,8 +1,6 @@
-import json
-from pathlib import Path
-
 import pytest
 
+from trip_planner.app.services import workspace_fixtures
 from trip_planner.state import ActualSpendEvent, BudgetPlan, BudgetScenario
 from trip_planner.state.budget import BudgetCategoryAllocation
 from trip_planner.state.repositories import (
@@ -12,19 +10,12 @@ from trip_planner.state.repositories import (
 )
 
 
-def _fixture_path(name: str) -> Path:
-    fixtures_dir = Path(__file__).resolve().parents[1] / "fixtures" / "state" / "budget"
-    return fixtures_dir / name
-
-
 def _load_plan(name: str) -> BudgetPlan:
-    payload = json.loads(_fixture_path(name).read_text(encoding="utf-8"))
-    return BudgetPlan.from_dict(payload)
+    return workspace_fixtures.load_budget_plan(name)
 
 
 def _load_events() -> list[ActualSpendEvent]:
-    payload = json.loads(_fixture_path("actual_spend_events.json").read_text(encoding="utf-8"))
-    return [ActualSpendEvent.from_dict(item) for item in payload["events"]]
+    return workspace_fixtures.load_budget_events()
 
 
 def test_budget_plan_loads_leisure_fixture_with_scenario_variants() -> None:
@@ -69,7 +60,7 @@ def test_actual_spend_event_fixture_captures_source_context() -> None:
 
 
 def test_budget_plan_rejects_leisure_business_only_category() -> None:
-    payload = json.loads(_fixture_path("leisure_budget_plan.json").read_text(encoding="utf-8"))
+    payload = workspace_fixtures.load_state_payload("budget", "leisure_budget_plan.json")
     payload["scenario_budgets"][0]["allocations"].append(
         {
             "category_key": "workspace",
