@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import secrets
 from collections.abc import Callable
@@ -846,7 +847,13 @@ def _format_estimated_total(estimated_total: dict[str, Any] | None) -> str | Non
     currency = str(estimated_total.get("currency") or "USD").strip()
     if amount is None:
         return None
-    return f"{currency} {float(amount):,.0f}"
+    try:
+        numeric = float(amount)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(numeric):
+        return None
+    return f"{currency} {numeric:,.0f}"
 
 
 def _format_choice_list(choices: list[Any]) -> str:
@@ -911,8 +918,6 @@ def _scenario_cost_summary(scenarios: list[dict[str, Any]]) -> str | None:
         transfers = _format_transfer_count(metrics.get("transfers"))
         if cost:
             parts.append(f"{title}: {cost}, {transfers}")
-        else:
-            parts.append(f"{title}: {transfers}")
     if not parts:
         return None
     return "Scenario costs: " + "; ".join(parts) + "."
@@ -949,13 +954,6 @@ def _fallback_content_from_metadata(
             "but I will not pretend the trip still has a useful starting point if you want to end it."
         )
 
-    if _message_looks_like_nonsense(message):
-        return (
-            f"I could not extract a clear planning request from your message for {trip_title}. "
-            "Offline I use keyword matching only — try a concrete question about cost, "
-            "routes, policy, or whether to continue planning this trip."
-        )
-
     if _COST_QUESTION_PATTERN.search(lowered):
         cost_line = _scenario_cost_summary(scenario_rows)
         if cost_line:
@@ -972,6 +970,13 @@ def _fallback_content_from_metadata(
         return (
             f"You asked about policy or compliance for {trip_title}. "
             "No policy preview is available in the current workspace data yet."
+        )
+
+    if _message_looks_like_nonsense(message):
+        return (
+            f"I could not extract a clear planning request from your message for {trip_title}. "
+            "Offline I use keyword matching only — try a concrete question about cost, "
+            "routes, policy, or whether to continue planning this trip."
         )
 
     maturity = metadata["plan_maturity"]
