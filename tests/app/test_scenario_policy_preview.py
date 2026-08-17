@@ -12,7 +12,6 @@ def test_compliant_scenario_preview_when_under_trip_cap() -> None:
     preview = build_scenario_policy_preview(
         policy_state=FIXTURE_POLICY,
         trip_mode="business",
-        duration_days=4,
         estimated_total={"currency": "USD", "typical_amount": 2280},
         unresolved_tradeoffs=[],
         scenario_notes=["compliant-first"],
@@ -28,7 +27,6 @@ def test_non_compliant_scenario_preview_includes_cap_vs_actual() -> None:
     preview = build_scenario_policy_preview(
         policy_state=FIXTURE_POLICY,
         trip_mode="business",
-        duration_days=4,
         estimated_total={"currency": "USD", "typical_amount": 2410},
         unresolved_tradeoffs=[
             {
@@ -51,10 +49,47 @@ def test_missing_policy_snapshot_is_not_marked_compliant() -> None:
     preview = build_scenario_policy_preview(
         policy_state=None,
         trip_mode="business",
-        duration_days=4,
         estimated_total={"currency": "USD", "typical_amount": 2280},
     )
 
     assert preview["snapshot_available"] is False
     assert preview["status_label"] == "No policy snapshot available"
     assert preview["compliant"] is None
+
+
+def test_leisure_scenario_preview_is_not_applicable() -> None:
+    preview = build_scenario_policy_preview(
+        policy_state=FIXTURE_POLICY,
+        trip_mode="leisure",
+        estimated_total={"currency": "USD", "typical_amount": 9999},
+    )
+
+    assert preview["status"] == "not_applicable"
+    assert preview["compliant"] is None
+    assert preview["snapshot_available"] is False
+
+
+def test_lodging_cap_violation_includes_nightly_cap_vs_actual() -> None:
+    preview = build_scenario_policy_preview(
+        policy_state=FIXTURE_POLICY,
+        trip_mode="business",
+        estimated_total={
+            "currency": "USD",
+            "typical_amount": 1000,
+            "nightly_typical_amount": 400,
+        },
+    )
+
+    lodging = next(item for item in preview["violations"] if item["rule_id"] == "LOD-001")
+    assert lodging["cap_amount"] == 325
+    assert lodging["actual_amount"] == 400
+
+
+def test_non_usd_scenario_skips_usd_budget_cap_comparison() -> None:
+    preview = build_scenario_policy_preview(
+        policy_state=FIXTURE_POLICY,
+        trip_mode="business",
+        estimated_total={"currency": "EUR", "typical_amount": 9999},
+    )
+
+    assert not any(item["rule_id"] == "BUD-001" for item in preview["violations"])

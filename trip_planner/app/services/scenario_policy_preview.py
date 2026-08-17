@@ -43,6 +43,8 @@ def _budget_violations(
     if not isinstance(cap_amount, (int, float)) or money is None:
         return []
     actual_amount, currency = money
+    if currency != "USD":
+        return []
     if actual_amount <= float(cap_amount):
         return []
     return [
@@ -70,6 +72,8 @@ def _lodging_violations(
     if not isinstance(nightly_cap, (int, float)) or not isinstance(nightly_actual, (int, float)):
         return []
     currency = str(estimated_total.get("currency") or "USD") if isinstance(estimated_total, dict) else "USD"
+    if currency != "USD":
+        return []
     if float(nightly_actual) <= float(nightly_cap):
         return []
     return [
@@ -132,13 +136,11 @@ def build_scenario_policy_preview(
     *,
     policy_state: dict[str, Any] | None,
     trip_mode: str,
-    duration_days: int | None,
     estimated_total: Any,
     unresolved_tradeoffs: list[dict[str, Any]] | None = None,
     scenario_notes: list[str] | None = None,
 ) -> dict[str, Any]:
     """Return a serializable, non-authoritative policy preview for one Compare scenario."""
-    _ = duration_days
     base = _preview_base()
     if trip_mode != "business":
         return {
@@ -193,7 +195,6 @@ def attach_policy_preview_to_row(
     *,
     policy_state: dict[str, Any] | None,
     trip_mode: str,
-    duration_days: int | None,
     estimated_total: Any,
     unresolved_tradeoffs: list[dict[str, Any]] | None,
     scenario_notes: list[str] | None,
@@ -201,7 +202,6 @@ def attach_policy_preview_to_row(
     row["policy_preview"] = build_scenario_policy_preview(
         policy_state=policy_state,
         trip_mode=trip_mode,
-        duration_days=duration_days,
         estimated_total=estimated_total,
         unresolved_tradeoffs=unresolved_tradeoffs,
         scenario_notes=scenario_notes,

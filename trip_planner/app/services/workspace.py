@@ -991,7 +991,6 @@ def _build_runtime_scenario_comparison(
             row,
             policy_state=policy_state,
             trip_mode=trip_mode,
-            duration_days=duration_days,
             estimated_total=estimated_total,
             unresolved_tradeoffs=list(scenario.get("unresolved_tradeoffs") or []),
             scenario_notes=list(summary.get("notes") or []),
@@ -1361,7 +1360,11 @@ def _bootstrap_scenario_metrics(
         _BOOTSTRAP_SCENARIO_SCORE_BY_LABEL.get(label, 0.6),
         travel_minutes,
         transfers,
-        {"currency": "USD", "typical_amount": round(estimated_total, 2)},
+        {
+            "currency": "USD",
+            "typical_amount": round(estimated_total, 2),
+            "nightly_typical_amount": round(estimated_total / duration_days, 2),
+        },
     )
 
 
@@ -1767,7 +1770,6 @@ def _build_persisted_trip_workspace(
         runtime_scenario_comparison=runtime_scenario_comparison,
     )
 
-    raw_policy_state = (context.policy_context or {}).get("policy_state")
     raw_proposal_state = (context.proposal_context or {}).get("proposal_state")
     planner_panel_state = _build_planner_panel_state(
         trip=trip_record["trip"],

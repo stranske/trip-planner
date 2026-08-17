@@ -1,16 +1,8 @@
 import type { ScenarioPolicyPreview } from "../../api/workspace";
+import { formatCurrency } from "../../lib/formatCurrency";
 
-function formatMoney(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(amount);
-  }
-}
+export const POLICY_PREVIEW_DISCLAIMER =
+  "Policy preview only — not the final TPP verdict.";
 
 export function formatScenarioPolicyPreview(
   preview: ScenarioPolicyPreview | undefined
@@ -36,10 +28,10 @@ export function formatScenarioPolicyPreview(
     primaryViolation.actual_amount != null &&
     primaryViolation.currency
   ) {
-    return `${preview.status_label}: ${primaryViolation.rule_id} cap ${formatMoney(
+    return `${preview.status_label}: ${primaryViolation.rule_id} cap ${formatCurrency(
       primaryViolation.cap_amount,
       primaryViolation.currency
-    )} vs ${formatMoney(primaryViolation.actual_amount, primaryViolation.currency)}`;
+    )} vs ${formatCurrency(primaryViolation.actual_amount, primaryViolation.currency)}`;
   }
 
   return `${preview.status_label}: ${primaryViolation.rule_id} — ${primaryViolation.message}`;
@@ -57,10 +49,10 @@ export function formatScenarioPolicyViolations(
       violation.actual_amount != null &&
       violation.currency
     ) {
-      return `${violation.rule_id}: ${formatMoney(
+      return `${violation.rule_id}: ${formatCurrency(
         violation.cap_amount,
         violation.currency
-      )} cap vs ${formatMoney(violation.actual_amount, violation.currency)} selected`;
+      )} cap vs ${formatCurrency(violation.actual_amount, violation.currency)} selected`;
     }
     return `${violation.rule_id}: ${violation.message}`;
   });

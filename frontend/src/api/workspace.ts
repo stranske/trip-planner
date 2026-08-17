@@ -213,6 +213,7 @@ export type ScenarioRanking = {
     estimated_total?: {
       currency: string;
       typical_amount: number;
+      nightly_typical_amount?: number;
     } | null;
     source_result_id?: string | null;
     supporting_option_ids: string[];
@@ -279,6 +280,7 @@ export type RuntimeScenarioComparison = {
       estimated_total: {
         currency: string;
         typical_amount: number;
+        nightly_typical_amount?: number;
       } | null;
     };
     delta: {

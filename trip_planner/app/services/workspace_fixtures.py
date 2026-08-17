@@ -23,6 +23,7 @@ class WorkspaceFixture:
     scenarios_fixture: str
     session_fixture: str
     scenario_search_variant: str
+    policy_fixture: str | None = None
 
 
 FIXTURES: dict[str, WorkspaceFixture] = {
@@ -37,6 +38,7 @@ FIXTURES: dict[str, WorkspaceFixture] = {
         scenarios_fixture="business_compliant_vs_exception.json",
         session_fixture="business_review_session.json",
         scenario_search_variant="business",
+        policy_fixture="business_client_summit_policy.json",
     ),
 }
 
@@ -89,6 +91,7 @@ def load_state_payload(kind: str, name: str) -> dict[str, Any]:
 
 
 def load_fixture_policy_state(trip_id: str) -> dict[str, Any] | None:
-    if trip_id != "trip-business-client-summit":
+    fixture = FIXTURES.get(trip_id)
+    if fixture is None or fixture.policy_fixture is None:
         return None
-    return _load_json(_state_fixture_dir("policy") / "business_client_summit_policy.json")
+    return _load_json(_state_fixture_dir("policy") / fixture.policy_fixture)

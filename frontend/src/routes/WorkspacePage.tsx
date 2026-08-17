@@ -50,6 +50,7 @@ import { RouteTradeoffsPanel } from "../components/workspace/panels/RouteTradeof
 import {
   formatScenarioPolicyPreview,
   formatScenarioPolicyViolations,
+  POLICY_PREVIEW_DISCLAIMER,
 } from "../components/workspace/scenarioPolicyPreview";
 import { RouteOptionWorkbench } from "../components/workspace/RouteOptionWorkbench";
 import { ScenarioComparison } from "../components/workspace/ScenarioComparison";
@@ -1333,8 +1334,7 @@ function WorkspacePageContent({
         ? formatScenarioPolicyViolations(scenario.policy_preview)
         : [],
       policyDisclaimer: panelVisibility.showPolicyPosture
-        ? scenario.policy_preview?.disclaimer ??
-          "Policy preview only — not the final TPP verdict."
+        ? scenario.policy_preview?.disclaimer ?? POLICY_PREVIEW_DISCLAIMER
         : null,
     };
   });

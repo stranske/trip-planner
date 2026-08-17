@@ -62,8 +62,8 @@ export function RouteTradeoffsPanel({
               </dl>
               {scenario.policyViolations != null && scenario.policyViolations.length > 0 ? (
                 <ul className="focus-area-list scenario-highlight-list" aria-label="Policy violations">
-                  {scenario.policyViolations.map((violation) => (
-                    <li key={violation}>{violation}</li>
+                  {scenario.policyViolations.map((violation, index) => (
+                    <li key={`${index}-${violation}`}>{violation}</li>
                   ))}
                 </ul>
               ) : null}

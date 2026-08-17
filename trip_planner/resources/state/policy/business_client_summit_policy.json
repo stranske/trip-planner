@@ -19,5 +19,5 @@
     "policy_status": "pass",
     "compatible_with_planner_cache": true
   },
-  "notes": ["Fixture policy snapshot for business Compare preview tests."]
+  "notes": ["Organization policy constraints used for Compare preview."]
 }
