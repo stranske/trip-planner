@@ -1593,9 +1593,11 @@ describe("WorkspacePage", () => {
     await selectWorkspaceTab("Policy");
     await userEvent.setup().click(screen.getByRole("button", { name: "Print / Export approval packet" }));
 
-    expect(screen.getByTestId("approval-packet-document")).toBeInTheDocument();
-    expect(screen.getByText("daily_cap")).toBeInTheDocument();
-    expect(screen.getByText("Daily cap exceeded.")).toBeInTheDocument();
+    const packet = screen.getByTestId("approval-packet-document");
+    expect(packet).toBeInTheDocument();
+    const packetScope = within(packet);
+    expect(packetScope.getByText("daily_cap")).toBeInTheDocument();
+    expect(packetScope.getByText("Daily cap exceeded.")).toBeInTheDocument();
   });
 
   it("persists planning mode selections through the workspace API", async () => {
