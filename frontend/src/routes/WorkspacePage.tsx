@@ -2535,6 +2535,7 @@ function WorkspacePageContent({
                   <button
                     type="button"
                     className="secondary-button"
+                    aria-label="Open approval packet from Policy tab"
                     disabled={!currentWorkspace.proposal_state?.summary.evaluation_result_status && !currentWorkspace.proposal_state?.summary.approval_ready}
                     onClick={() => setShowApprovalPacket(true)}
                   >
