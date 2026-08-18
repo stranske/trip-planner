@@ -48,11 +48,6 @@ on:
         required: false
         type: boolean
         default: true
-      bridge_draft_pr:
-        description: "[agent_bridge] Open bootstrap PRs as draft"
-        required: false
-        type: boolean
-        default: false
       topic_files:
         description: "[chatgpt_sync] Topic files to sync (e.g., topics.json, agents/*.md)"
         required: false
@@ -193,7 +188,6 @@ jobs:
         ${{ github.event_name == 'workflow_dispatch'
             && (inputs.post_codex_comment && 'true' || 'false')
             || (needs.check_labels.outputs.agent != 'codex' && 'true' || 'false') }}
-      agent_pr_draft: ${{ inputs.bridge_draft_pr && 'true' || 'false' }}
     secrets:
       service_bot_pat: ${{ secrets.SERVICE_BOT_PAT }}
       owner_pr_pat: ${{ secrets.OWNER_PR_PAT }}

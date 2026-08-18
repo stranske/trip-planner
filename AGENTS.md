@@ -28,6 +28,13 @@ If a file is synced from Workflows, fix it in Workflows first.
 - `pr-00-gate.yml` is a create-only standard file. Keep it aligned with the standard gate unless this repo has a documented reason to diverge.
 - Synced workflows, prompts, scripts, and consumer docs are managed through `.github/sync-manifest.yml` in Workflows.
 
+## Pull Request Readiness Invariant
+
+- Automation-created pull requests must be opened ready for review. Do not create drafts or convert ready pull requests back to draft.
+- Draft state is not a staging, dependency, stack-order, or opener-cap control. Use explicit labels, PR-body lifecycle state, disabled auto-merge, required checks, and exact-head merge guards instead.
+- Before handing off or ending work, verify every pull request created or changed by the run is open and has `isDraft=false`. Convert a pre-existing draft to ready as a recovery action.
+- Do not close an otherwise valid pull request merely to free automation capacity; preserve its branch and route the real blocker or dependency explicitly.
+
 ## Commonly Managed Files
 
 Usually edit locally only when the file is repo-specific:

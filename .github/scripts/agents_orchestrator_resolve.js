@@ -522,7 +522,7 @@ async function resolveOrchestratorParams({ github, context, core, env = process.
       merged.bootstrap_issues_label ?? bootstrap.label,
       DEFAULTS.bootstrap_issues_label
     ),
-    draft_pr: toBoolString(merged.draft_pr, DEFAULTS.draft_pr),
+    draft_pr: 'false',
     dry_run: dryRun,
     options_json: finalOptionsJson,
     dispatcher_force_issue: dispatcherForceIssue,

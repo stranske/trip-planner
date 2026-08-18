@@ -35,7 +35,7 @@ This guide explains how to use the automated workflows in your repository. All w
 **What Happens:**
 - Issue is analyzed for clarity and completeness
 - Issue is formatted to standard template
-- Codex agent creates a branch and opens a draft PR
+- Codex agent creates a branch and opens a ready-for-review PR
 - Agent works through the tasks automatically
 - Keepalive monitors and continues work until complete
 - Verification runs after merge
@@ -192,7 +192,7 @@ Issue: "Add user authentication"
 
 | Event | Workflows That Trigger |
 |-------|----------------------|
-| PR opened | Gate (CI), PR Meta, Agents Guard |
+| PR opened | Gate (CI), Agents 80 PR Event Hub, Agents Guard |
 | Label added: `autofix` | Autofix loop |
 | Label added: `agents:keepalive` | Enables keepalive loop (runs on Gate workflow_run) |
 | Label removed: `agents:paused` | Keepalive resumes |
@@ -264,10 +264,10 @@ Extracts suggestions from the analysis comment and:
 **Assigns Codex agent to create a PR**
 
 1. Creates branch `codex/issue-<number>`
-2. Opens draft PR linked to issue
+2. Opens a ready-for-review PR linked to the issue
 3. Agent begins implementing tasks
 4. Keeps working through keepalive system
-5. Marks PR ready when complete
+5. Keeps dependency and progress state in labels, checks, and the PR body
 
 **Prerequisites:**
 - Issue must be formatted (`agents:formatted` label)
