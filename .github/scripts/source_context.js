@@ -233,11 +233,64 @@ function extractIssueNumberFromText(text) {
   return issueNumbers.size > 0 ? Array.from(issueNumbers)[0] : null;
 }
 
+function extractClosingIssueNumbersFromText(text) {
+  const value = String(text || '');
+  const issueNumbers = new Set();
+  for (const match of value.matchAll(/#([0-9]+)/g)) {
+    const before = value.slice(Math.max(0, match.index - 100), match.index);
+    const token = before.split(/\s/).pop() || '';
+    if (token.includes('/')) {
+      continue;
+    }
+    const prefix = before
+      .replace(/\r\n?/g, '\n')
+      .replace(/[_\[\]()`~]/g, ' ')
+      .trim()
+      .replace(/[>*]/g, ' ')
+      .replace(/\s+/g, ' ');
+    if (
+      !/\b(?:close[sd]?|closing|fix(?:e[sd])?|fixing|resolve[sd]?|resolving)(?:\s+(?:source\s+issue|github\s+issue|issue))?\s*[:#-]?\s*$/i.test(
+        prefix
+      )
+    ) {
+      continue;
+    }
+    const parsed = Number.parseInt(match[1], 10);
+    if (!Number.isNaN(parsed)) {
+      issueNumbers.add(parsed);
+    }
+  }
+  return issueNumbers;
+}
+
 function extractIssueNumberFromPull(pull = {}) {
   const bodyText = String(pull?.body || '');
-  const metaMatch = bodyText.match(/<!--\s*meta:issue:([0-9]+)\s*-->/i);
-  if (metaMatch) {
-    return Number.parseInt(metaMatch[1], 10);
+  const metaIssueNumbers = new Set(
+    Array.from(bodyText.matchAll(/<!--\s*meta:issue:([0-9]+)\s*-->/gi), (match) =>
+      Number.parseInt(match[1], 10),
+    ),
+  );
+  if (metaIssueNumbers.size > 1) {
+    return null;
+  }
+  if (metaIssueNumbers.size === 1) {
+    return Array.from(metaIssueNumbers)[0];
+  }
+
+  const closingIssueNumbers = extractClosingIssueNumbersFromText(bodyText);
+  if (closingIssueNumbers.size === 1) {
+    return Array.from(closingIssueNumbers)[0];
+  }
+  if (closingIssueNumbers.size > 1) {
+    return null;
+  }
+
+  const bodyIssueNumbers = extractIssueNumbersFromText(bodyText);
+  if (bodyIssueNumbers.size === 1) {
+    return Array.from(bodyIssueNumbers)[0];
+  }
+  if (bodyIssueNumbers.size > 1) {
+    return null;
   }
 
   const branch = String(pull?.head?.ref || '');
@@ -251,7 +304,7 @@ function extractIssueNumberFromPull(pull = {}) {
     return titleNumber;
   }
 
-  return extractIssueNumberFromText(bodyText);
+  return null;
 }
 
 function parseHtmlMarker(body, name) {
@@ -489,6 +542,7 @@ module.exports = {
   normalizeSourceType,
   extractIssueNumberFromText,
   extractIssueNumbersFromText,
+  extractClosingIssueNumbersFromText,
   extractIssueNumberFromPull,
   parseWorkflowSourceBlock,
   parseDependencyRepairPromotionSource,
