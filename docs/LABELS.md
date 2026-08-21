@@ -218,7 +218,7 @@ runner and registry entry ship, applying this label will not dispatch a runner. 
 
 **Recovery:** Force a bounded retry by manually dispatching `agents-81-gate-followups.yml` with `pr_number=<PR>` and `force_retry=true`; after the run is confirmed, remove stale recovery labels manually if they remain.
 
-**Workflow:** `agents-81-gate-followups.yml` accepts the explicit `force_retry` dispatch input.
+**Workflow:** `agents-81-gate-followups.yml` accepts the explicit `force_retry` dispatch input; no Workflows-local fallback is attempted.
 
 ---
 
