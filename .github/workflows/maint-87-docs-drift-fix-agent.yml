@@ -1,0 +1,113 @@
+name: Maint 87 Docs Drift Fix Agent
+
+# The missing CALLER for scripts/docs_drift_fix_agent.py.
+#
+# That script has existed and been selftested for months, but nothing invoked it: it appears in no
+# workflow and in no external caller, so it has never produced a repair batch. Maint 48 seeds a
+# monthly issue asking a lane agent to diff the docs by hand; this runs the DETERMINISTIC check
+# instead and turns its output into bounded, agent-ready repair batches.
+#
+# The two are complementary, not duplicates. Maint 48 catches semantic rot an LLM must judge
+# ("this claim is no longer true"). This catches mechanical drift the checker proves
+# (dangling refs, workflow-inventory omissions) and is cheap enough to run weekly.
+#
+# REPORT-ONLY by default. `--apply` creates one issue per repair batch and is reachable only via
+# workflow_dispatch, so a scheduled run can never open issues on its own. The script never edits
+# repository files in either mode.
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # Mondays 08:00 UTC, after the weekly maintenance cluster
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Create one GitHub issue per repair batch'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{ github.ref }}-${{
+      github.event_name == 'workflow_dispatch' && inputs.apply && 'apply' || 'plan'
+    }}
+  # Never interrupt issue creation; a report-only run may still supersede an older report.
+  cancel-in-progress: ${{ !(github.event_name == 'workflow_dispatch' && inputs.apply) }}
+
+jobs:
+  docs-drift-fix-agent:
+    name: Build bounded docs-drift repair batches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime dependency
+        run: python -m pip install "pyyaml==6.0.3"
+
+      - name: Build repair plan (report-only)
+        id: plan
+        run: |
+          set -euo pipefail
+          set +e
+          python3 scripts/docs_drift_fix_agent.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --out-dir docs-drift-plan \
+            --json > docs-drift-plan.json
+          agent_status=$?
+          set -e
+          if [ "${agent_status}" -gt 1 ]; then
+            exit "${agent_status}"
+          fi
+          cat docs-drift-plan.json
+          findings=$(python3 -c "import json;print(json.load(open('docs-drift-plan.json'))['finding_count'])")
+          batches=$(python3 -c "import json;print(json.load(open('docs-drift-plan.json'))['batch_count'])")
+          echo "findings=${findings}" >> "$GITHUB_OUTPUT"
+          echo "batches=${batches}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Docs-drift fix agent"
+            echo ""
+            echo "- findings: ${findings}"
+            echo "- repair batches: ${batches}"
+            echo ""
+            if [ "${findings}" = "0" ]; then
+              echo "No deterministic docs drift. This is the healthy state, not a skipped run."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload repair plan
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: docs-drift-plan
+          path: |
+            docs-drift-plan.json
+            docs-drift-plan/
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Issue creation is dispatch-only AND requires findings, so a scheduled run never opens
+      # issues and a clean tree never opens an empty one.
+      - name: Create repair issues (dispatch-only)
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          inputs.apply &&
+          steps.plan.outputs.findings != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 scripts/docs_drift_fix_agent.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --out-dir docs-drift-plan \
+            --apply
