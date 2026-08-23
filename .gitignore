@@ -103,3 +103,29 @@ poetry.lock
 node_modules/
 
 # END WORKFLOWS STATUS FILES
+
+# --- per-run agent execution telemetry written INTO the checkout by CI ---
+# stranske/Workflows reusable-codex-run.yml wrote langsmith-fleet-worker-attempt.json to the
+# checkout root on every agent round, only to stage its actions/upload-artifact step. The commit
+# step in that same job runs `git add -A` minus a hand-curated exclusion list this file was never
+# added to, so codex-autofix committed it onto whatever PR was open and the next PR then collided
+# with the copy the previous merge left on main.
+#
+# Ignoring is not untracking, and both are needed: `git add -A` skips an ignored UNTRACKED path
+# but stages an ignored TRACKED one, so the pattern below only bites because the same commit
+# removes the file from the index.
+#
+# A pattern, not the literal name: the runner names the file after the ROLE recorded, so a
+# verifier or evaluator attempt arrives as a sibling and would escape a literal.
+#
+# ROOT-ANCHORED, and the leading slash is load-bearing. Unanchored, a gitignore pattern matches
+# at EVERY depth, so `langsmith-fleet*.json` also swallows a contract schema at
+# docs/contracts/schemas/langsmith-fleet-v1.schema.json -- a path stranske/Workflows really
+# tracks. Bounding by extension does not help: a schema IS a .json. Only the runner's ROOT-level
+# write is debris. These are the same two patterns Workflows' consumer template carries at
+# Template-Version 6.
+#
+# Kept OUTSIDE the managed block above on purpose: that block is rewritten wholesale on a
+# Template-Version bump, and this must not depend on a propagator that no workflow invokes.
+/langsmith-fleet*.json
+/langsmith-fleet*.ndjson
