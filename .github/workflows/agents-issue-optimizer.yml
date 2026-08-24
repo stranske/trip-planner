@@ -70,6 +70,7 @@ jobs:
                 . == "agents:auto-pilot-pause" or
                 . == "needs-human" or
                 . == "tracker:durable" or
+                . == "automated" or
                 . == "wontfix"
               )' /tmp/format-eligibility.json >/dev/null; then
               echo "Skipping format: issue is held, exempt, or owned by auto-pilot."
@@ -120,28 +121,28 @@ jobs:
           elif [[ "$LABEL_NAME" == "agents:optimize" ]]; then
             # Skip if auto-pilot label is present (auto-pilot runs optimizer inline)
             # Use pipefail to ensure gh errors cause check to fail-closed
-            if gh issue view "${{ github.event.issue.number }}" --json labels \
+            if gh issue view "$EVENT_ISSUE_NUMBER" --json labels \
                 --jq '.labels[].name' | grep -qx 'agents:auto-pilot'; then
               echo "should_run=false" >> "$GITHUB_OUTPUT"
               echo "Skipping: auto-pilot label present (runs inline)"
             else
               {
                 echo "phase=analyze"
-                echo "issue_number=${{ github.event.issue.number }}"
+                echo "issue_number=$EVENT_ISSUE_NUMBER"
                 echo "should_run=true"
               } >> "$GITHUB_OUTPUT"
             fi
           elif [[ "$LABEL_NAME" == "agents:apply-suggestions" ]]; then
             # Skip if auto-pilot label is present (auto-pilot manages this label for state)
             # Use pipefail to ensure gh errors cause check to fail-closed
-            if gh issue view "${{ github.event.issue.number }}" --json labels \
+            if gh issue view "$EVENT_ISSUE_NUMBER" --json labels \
                 --jq '.labels[].name' | grep -qx 'agents:auto-pilot'; then
               echo "should_run=false" >> "$GITHUB_OUTPUT"
               echo "Skipping: auto-pilot label present (manages apply inline)"
             else
               {
                 echo "phase=apply"
-                echo "issue_number=${{ github.event.issue.number }}"
+                echo "issue_number=$EVENT_ISSUE_NUMBER"
                 echo "should_run=true"
               } >> "$GITHUB_OUTPUT"
             fi
@@ -211,8 +212,29 @@ jobs:
         if: steps.check.outputs.should_run == 'true'
         uses: ./.github/actions/setup-api-client
         with:
-          secrets: ${{ toJSON(secrets) }}
+          # Named secret inputs instead of the whole-secrets-context blob.
+          # setup-api-client jq-extracts exactly these keys from it and already
+          # declares each as an individual input, so this is behaviour-preserving:
+          # an absent secret resolves to empty either way. Removing that handoff
+          # is what cleared GitHub's suspicious-workflow hold on agents-dedup
+          # (#3185) - it then ran at run_attempt 1 with nothing approved.
+          # NOTE: this surface takes its token from the app-token step, not
+          # github.token - preserved deliberately.
           github_token: ${{ steps.token.outputs.token }}
+          service_bot_pat: ${{ secrets.SERVICE_BOT_PAT }}
+          actions_bot_pat: ${{ secrets.ACTIONS_BOT_PAT }}
+          owner_pr_pat: ${{ secrets.OWNER_PR_PAT }}
+          agents_automation_pat: ${{ secrets.AGENTS_AUTOMATION_PAT }}
+          workflows_app_id: ${{ secrets.WORKFLOWS_APP_ID }}
+          workflows_app_private_key: ${{ secrets.WORKFLOWS_APP_PRIVATE_KEY }}
+          keepalive_app_id: ${{ secrets.KEEPALIVE_APP_ID }}
+          keepalive_app_private_key: ${{ secrets.KEEPALIVE_APP_PRIVATE_KEY }}
+          gh_app_id: ${{ secrets.GH_APP_ID }}
+          gh_app_private_key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          app_1_id: ${{ secrets.APP_1_ID }}
+          app_1_private_key: ${{ secrets.APP_1_PRIVATE_KEY }}
+          app_2_id: ${{ secrets.APP_2_ID }}
+          app_2_private_key: ${{ secrets.APP_2_PRIVATE_KEY }}
 
       - name: Set up Python
         if: steps.check.outputs.should_run == 'true'
@@ -232,6 +254,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
           ISSUE_NUMBER: ${{ steps.check.outputs.issue_number }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           # Check how many optimizer runs for this issue in last hour
           one_hour_ago=$( \
@@ -261,7 +284,7 @@ jobs:
             # Post warning comment
             REPO="${{ github.repository }}"
             DOCS_URL="https://github.com/${REPO}"
-            DOCS_URL+="/blob/phase-3/Agents.md"
+            DOCS_URL+="/blob/${DEFAULT_BRANCH}/Agents.md"
             DOCS_URL+="#auto-pilot-recovery-procedures"
             printf '%s\n' \
               "## ⚠️ Optimizer Paused" \
