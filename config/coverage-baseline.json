@@ -1,0 +1,7 @@
+{
+  "line": 90.0,
+  "warn_drop": 1.0,
+  "recovery_days": 3,
+  "updated": "2026-08-26",
+  "notes": "Set at MEASURED CURRENT, not at an aspiration. Measured 90.40% (Gate payload) and floored to 90, with warn_drop 1.0 absorbing run-to-run jitter. A baseline above reality is red on arrival and gets switched off; one far below it cannot fail -- stranske/Fine-Art-Archive carried 25 against a real 81.45%, and stranske/Workflows carries 85 against a real 76.72%. Both are the same defect in opposite directions. This file is what lets Maint Coverage Guard compare at all: without it tools/coverage_trend.py reports baseline_status=absent and computes no delta. Keyed `line` because both coverage_trend.py and coverage_guard.py accept `line` or `coverage`, with `line` taking precedence. Raise it as coverage rises; it is a ratchet, not a target."
+}
