@@ -148,6 +148,11 @@ def load_baseline(path: Path) -> BaselineConfig:
     )
 
 
+def is_coverage_breach(current: float, baseline: float, warn_drop: float) -> bool:
+    """Return whether coverage falls more than ``warn_drop`` points below baseline."""
+    return current < baseline - warn_drop
+
+
 def compute_top_files(coverage_data: dict[str, Any], limit: int = 15) -> list[FileCoverage]:
     """Return the most useful file-level coverage rows for issue comments."""
     files = coverage_data.get("files", {})
@@ -343,10 +348,20 @@ _This issue is automatically updated by the coverage guard workflow._
     return body
 
 
-def _format_recovery_body(current: float, baseline: float, delta: float, run_url: str) -> str:
+def _format_recovery_body(
+    current: float,
+    baseline: float,
+    recovery_threshold: float,
+    delta: float,
+    run_url: str,
+) -> str:
     """Format a concise recovery comment for closing a breach issue."""
     source_line = f"\n\n[Gate Workflow Run]({run_url})" if run_url else ""
-    return f"""Coverage has recovered above the configured baseline.
+    if current >= baseline:
+        headline = "Coverage has recovered to or above the configured baseline."
+    else:
+        headline = "Coverage has recovered to the configured warning threshold."
+    return f"""{headline}
 
 | Metric | Value |
 |--------|-------|
@@ -680,6 +695,9 @@ def main(args: list[str] | None = None) -> int:
         )
         return 0
     delta = current - baseline
+    baseline_config = load_baseline(parsed.baseline_path)
+    warn_drop = baseline_config.warn_drop
+    recovery_threshold = baseline - warn_drop
     configured_recovery_window = max(
         1,
         _to_int(
@@ -691,7 +709,7 @@ def main(args: list[str] | None = None) -> int:
                     baseline_data.get("recovery_runs", baseline_data.get("recovery_days")),
                 )
             ),
-            1,
+            baseline_config.recovery_days,
         ),
     )
     issue_labels = (
@@ -714,7 +732,7 @@ def main(args: list[str] | None = None) -> int:
         return 0
 
     # Create or update issue
-    if current < baseline:
+    if is_coverage_breach(current, baseline, warn_drop):
         try:
             _find_or_create_issue(
                 repo=parsed.repo,
@@ -726,10 +744,17 @@ def main(args: list[str] | None = None) -> int:
             print(f"Failed to create or update coverage issue: {exc}", file=sys.stderr)
             return 1
     else:
-        print(f"Coverage {current:.2f}% meets baseline {baseline:.2f}% - no open issue needed")
+        if current < baseline:
+            print(
+                f"Coverage {current:.2f}% has not fallen more than {warn_drop:.2f} points "
+                f"below baseline {baseline:.2f}% - evaluating recovery-window closure"
+            )
+        else:
+            print(f"Coverage {current:.2f}% meets baseline {baseline:.2f}% - no open issue needed")
+        recovery_check_threshold = baseline if current >= baseline else recovery_threshold
         if not _recovery_window_satisfied(
             trend_data,
-            baseline,
+            recovery_check_threshold,
             configured_recovery_window,
             history_records,
         ):
@@ -742,7 +767,13 @@ def main(args: list[str] | None = None) -> int:
             _close_existing_issue(
                 parsed.repo,
                 parsed.issue_title,
-                _format_recovery_body(current, baseline, delta, parsed.run_url),
+                _format_recovery_body(
+                    current,
+                    baseline,
+                    recovery_threshold,
+                    delta,
+                    parsed.run_url,
+                ),
                 labels=issue_labels,
             )
         except (RuntimeError, subprocess.CalledProcessError) as exc:
