@@ -436,7 +436,11 @@ def _normalize_organization_context_payload(record: PersistedPolicyState) -> dic
         "organization_id": str(
             organization_context.get("organization_id") or record.organization_id
         ),
-        "policy_status": str(organization_context.get("policy_status") or "pass"),
+        # Persisted snapshots without an explicit verdict must not be promoted to
+        # compliant.  The import contract requires one of the known TPP statuses;
+        # this sentinel therefore flows through the existing invalid-state path
+        # and makes the workspace evaluation unavailable until refreshed.
+        "policy_status": str(organization_context.get("policy_status") or "policy_unavailable"),
         "contract_version": str(
             organization_context.get("contract_version") or "2026-04-11"
         ),
