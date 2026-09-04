@@ -5,10 +5,10 @@ branch: codex/issue-1784
 tasks:
   - id: task-01
     title: Update bundle schema under `docs/contracts/` to include `constraint_evaluation`.
-    status: doing
+    status: done
     started_at: '2026-09-04T20:09:20Z'
-    finished_at: null
-    commit: ''
+    finished_at: '2026-09-04T20:09:35Z'
+    commit: bd8fb8310a4470980afdcc509a6c36b605b1dea8
     notes: []
   - id: task-02
     title: Update `app/services/inventory.py` emitter to include `constraint_evaluation`
