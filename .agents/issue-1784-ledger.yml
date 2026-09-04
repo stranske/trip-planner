@@ -1,0 +1,98 @@
+version: 1
+issue: 1784
+base: main
+branch: codex/issue-1784
+tasks:
+  - id: task-01
+    title: Update bundle schema under `docs/contracts/` to include `constraint_evaluation`.
+    status: doing
+    started_at: '2026-09-04T20:09:20Z'
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-02
+    title: Update `app/services/inventory.py` emitter to include `constraint_evaluation`
+      in inventory bundles.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-03
+    title: Add `tests/contracts/test_constraint_evaluation.py` with a `test_bundle_includes_evaluation`
+      case that builds an inventory bundle and asserts the emitted payload includes
+      a `constraint_evaluation` block.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-04
+    title: 'Add `tests/contracts/test_constraint_evaluation.py` with a `test_bundle_includes_evaluation`
+      case that builds an inventory bundle (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-05
+    title: 'Add `tests/contracts/test_constraint_evaluation.py` with asserts the emitted
+      payload includes a `constraint_evaluation` block. (verify: tests pass)'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-06
+    title: '`tests/contracts/test_constraint_evaluation.py::test_bundle_includes_evaluation`
+      passes.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-07
+    title: Deliberately omitting the `constraint_evaluation` block causes `tests/contracts/test_constraint_evaluation.py::test_bundle_includes_evaluation`
+      to fail, and restoring the block makes it pass again.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-08
+    title: Extend bundle schema under `docs/contracts/`.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-09
+    title: Update `app/services/inventory.py` emitter.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-10
+    title: Add `tests/contracts/test_constraint_evaluation.py`.
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-11
+    title: 'Named test: `tests/contracts/test_constraint_evaluation.py::test_bundle_includes_evaluation`
+      passes.'
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
+  - id: task-12
+    title: "**Deliberate-break gate:** omit block \u2192 test **must FAIL** \u2192\
+      \ revert."
+    status: todo
+    started_at: null
+    finished_at: null
+    commit: ''
+    notes: []
