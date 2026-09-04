@@ -203,6 +203,56 @@ def test_workspace_policy_import_maps_tpp_failure_to_blocking_reasons(client: Te
     }
 
 
+@pytest.mark.parametrize("missing_policy_status", [True, False])
+def test_workspace_policy_reload_treats_missing_or_empty_status_with_blocking_issues_as_unavailable(
+    client: TestClient,
+    missing_policy_status: bool,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Incomplete stored policy verdict",
+            "summary": "Do not treat an incomplete persisted policy as compliant.",
+            "mode": "business",
+            "trip_frame": {"duration_days": 2, "primary_regions": ["Chicago"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = _load_fixture("standard_policy_sync.json")
+    imported = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={"request": fixture["request"], "response": fixture["response"]},
+    )
+    assert imported.status_code == 200
+
+    with get_session_factory()() as db_session:
+        state = db_session.get(PersistedPolicyState, f"policy-state:{trip_id}")
+        assert state is not None
+        state.organization_context = {
+            **state.organization_context,
+            "blocking_issues": [
+                {
+                    "code": "BUD-001",
+                    "summary": "Trip cost exceeds the approved budget cap.",
+                    "severity": "blocking",
+                }
+            ],
+        }
+        if missing_policy_status:
+            state.organization_context.pop("policy_status", None)
+        else:
+            state.organization_context["policy_status"] = ""
+        db_session.commit()
+
+    reloaded = client.get(f"/api/workspace/{trip_id}/policy")
+
+    assert reloaded.status_code == 200
+    payload = reloaded.json()
+    assert payload["policy_evaluation"]["status"] == "policy_unavailable"
+    assert payload["summary"]["status"] == "policy_state_invalid"
+    assert "policy_status must be one of" in payload["summary"]["validation_error"]
+
+
 def test_workspace_policy_invalid_persisted_blocking_issue_is_unavailable(
     client: TestClient,
 ) -> None:

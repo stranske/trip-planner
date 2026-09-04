@@ -432,11 +432,23 @@ def _normalize_organization_context_payload(record: PersistedPolicyState) -> dic
         for key, value in comparable_requirements_payload.items():
             if isinstance(key, str) and key and isinstance(value, int):
                 comparable_requirements[key] = value
+    blocking_issues_payload = _optional_policy_requirements_payload(
+        organization_context, "blocking_issues"
+    )
+    if organization_context.get("policy_status") is not None:
+        policy_status = str(organization_context.get("policy_status"))
+    elif blocking_issues_payload:
+        # Blocking issues without an explicit TPP verdict must not be treated as pass.
+        # The sentinel is invalid for OrganizationContextSnapshot and routes through
+        # the existing validation failure path as policy_unavailable.
+        policy_status = "policy_unavailable"
+    else:
+        policy_status = "pass"
     return {
         "organization_id": str(
             organization_context.get("organization_id") or record.organization_id
         ),
-        "policy_status": str(organization_context.get("policy_status") or "pass"),
+        "policy_status": policy_status,
         "contract_version": str(
             organization_context.get("contract_version") or "2026-04-11"
         ),
