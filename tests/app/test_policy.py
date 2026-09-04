@@ -203,8 +203,10 @@ def test_workspace_policy_import_maps_tpp_failure_to_blocking_reasons(client: Te
     }
 
 
-def test_workspace_policy_reload_treats_blocking_issues_without_pass_status_as_non_compliant(
+@pytest.mark.parametrize("missing_policy_status", [True, False])
+def test_workspace_policy_reload_treats_missing_or_empty_status_with_blocking_issues_as_unavailable(
     client: TestClient,
+    missing_policy_status: bool,
 ) -> None:
     created = client.post(
         "/api/trips",
@@ -236,7 +238,10 @@ def test_workspace_policy_reload_treats_blocking_issues_without_pass_status_as_n
                 }
             ],
         }
-        state.organization_context.pop("policy_status")
+        if missing_policy_status:
+            state.organization_context.pop("policy_status", None)
+        else:
+            state.organization_context["policy_status"] = ""
         db_session.commit()
 
     reloaded = client.get(f"/api/workspace/{trip_id}/policy")
