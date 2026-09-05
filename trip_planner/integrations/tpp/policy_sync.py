@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from trip_planner._validators import (
     require_non_empty,
@@ -14,8 +14,10 @@ from trip_planner._validators import (
 )
 from trip_planner.business.policy_contracts import PolicyConstraintSet
 
-from .client import TPPIntegrationClient
 from .contracts import TPPRequestEnvelope, TPPResponseEnvelope
+
+if TYPE_CHECKING:
+    from .client import TPPIntegrationClient
 
 POLICY_SYNC_STATES: tuple[str, ...] = ("current", "stale", "invalidated")
 TPP_POLICY_STATUSES: tuple[str, ...] = ("pass", "fail")
@@ -66,25 +68,38 @@ class TPPPolicyRequirement:
         return asdict(self)
 
 
-def _require_policy_requirements(value: Any, field_name: str) -> list[TPPPolicyRequirement]:
+def parse_policy_requirements(value: Any, field_name: str) -> list[TPPPolicyRequirement]:
+    """Normalize wire and stored requirements without downgrading blocking rules.
+
+    Explicit blocking or wire ``error`` severity maps to ``blocking``; canonical
+    severities are preserved. An omitted severity defaults to ``warning``, as on
+    the HTTP boundary. Malformed values remain errors on every ingestion path.
+    """
     if not isinstance(value, list):
         raise ValueError(f"{field_name} must be provided as a list")
     requirements: list[TPPPolicyRequirement] = []
     for index, item in enumerate(value):
+        location = f"{field_name}[{index}]"
         if not isinstance(item, dict):
-            raise ValueError(f"{field_name}[{index}] must be provided as a mapping")
-        requirements.append(
-            TPPPolicyRequirement(
-                code=_require_string_field(item.get("code"), f"{field_name}[{index}].code"),
-                summary=_require_string_field(
-                    item.get("summary"), f"{field_name}[{index}].summary"
-                ),
-                severity=_require_string_field(
-                    item.get("severity"), f"{field_name}[{index}].severity"
-                ),
-            )
-        )
+            raise ValueError(f"{location} must be provided as a mapping")
+        try:
+            code = _require_string_field(item.get("code"), f"{location}.code").strip()
+            summary = _require_string_field(item.get("summary"), f"{location}.summary").strip()
+            severity = item.get("severity", "warning")
+            if not isinstance(severity, str) or severity not in {"warning", "blocking", "error"}:
+                raise ValueError("severity must be 'warning', 'blocking', or 'error'")
+            if "blocking" in item and not isinstance(item["blocking"], bool):
+                raise ValueError("blocking must be a boolean")
+            if item.get("blocking") is True or severity == "error":
+                severity = "blocking"
+            requirements.append(TPPPolicyRequirement(code=code, summary=summary, severity=severity))
+        except ValueError as error:
+            raise ValueError(f"{location} is invalid: {error}") from error
     return requirements
+
+
+def _require_policy_requirements(value: Any, field_name: str) -> list[TPPPolicyRequirement]:
+    return parse_policy_requirements(value, field_name)
 
 
 def _require_string_field(value: Any, field_name: str) -> str:
@@ -431,7 +446,8 @@ def summarize_policy_import(
         "contract_version": imported.organization_context.contract_version,
         "compatible_with_planner_cache": imported.organization_context.compatible_with_planner_cache,
         "booking_requirements": [
-            requirement.to_dict() for requirement in imported.organization_context.booking_requirements
+            requirement.to_dict()
+            for requirement in imported.organization_context.booking_requirements
         ],
         "blocking_issues": [
             requirement.to_dict() for requirement in imported.organization_context.blocking_issues
