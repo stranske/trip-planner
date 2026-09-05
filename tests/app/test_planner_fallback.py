@@ -87,7 +87,9 @@ def _planner_reply(client: TestClient, trip_id: str, message: str) -> str:
 
 def test_fallback_replies_differ_for_materially_different_messages(client: TestClient) -> None:
     trip_id = _create_business_trip(client)
-    cancel_reply = _planner_reply(client, trip_id, "Cancel this trip. I do not want to travel at all.")
+    cancel_reply = _planner_reply(
+        client, trip_id, "Cancel this trip. I do not want to travel at all."
+    )
     nonsense_reply = _planner_reply(
         client,
         trip_id,
@@ -95,7 +97,10 @@ def test_fallback_replies_differ_for_materially_different_messages(client: TestC
     )
     assert cancel_reply != nonsense_reply
     assert "cancel" in cancel_reply.lower() or "stop" in cancel_reply.lower()
-    assert "could not extract" in nonsense_reply.lower() or "keyword matching" in nonsense_reply.lower()
+    assert (
+        "could not extract" in nonsense_reply.lower()
+        or "keyword matching" in nonsense_reply.lower()
+    )
 
 
 def test_fallback_one_word_cost_and_policy_intents_are_not_gibberish(client: TestClient) -> None:
@@ -116,14 +121,17 @@ def test_format_estimated_total_rejects_malformed_and_non_finite_values() -> Non
 
 
 def test_scenario_cost_summary_requires_at_least_one_priced_scenario() -> None:
-    assert _scenario_cost_summary(
-        [
-            {
-                "title": "Scenario",
-                "metrics": {"transfers": 2},
-            }
-        ]
-    ) is None
+    assert (
+        _scenario_cost_summary(
+            [
+                {
+                    "title": "Scenario",
+                    "metrics": {"transfers": 2},
+                }
+            ]
+        )
+        is None
+    )
     summary = _scenario_cost_summary(
         [
             {

@@ -29,10 +29,8 @@ from trip_planner.app.services.planner_memory import build_planner_memory_payloa
 from trip_planner.app.services.planner_runtime_config import get_planner_runtime_config
 from trip_planner.app.services.policy import get_workspace_policy_payload
 from trip_planner.app.services.proposal import get_workspace_proposal_payload
-from trip_planner.app.services.scenario_policy_preview import attach_policy_preview_to_row
-from trip_planner.app.services.workspace_map_payloads import (
-    build_runtime_map_diagnostics_payload,
-    build_runtime_map_view_payload,
+from trip_planner.app.services.scenario_policy_preview import (
+    attach_policy_preview_to_row,
 )
 from trip_planner.app.services.scenarios import (
     build_scenario_ranking_outputs,
@@ -45,6 +43,10 @@ from trip_planner.app.services.workspace_fixtures import (
     load_saved_scenarios,
     load_session,
     load_trip_record,
+)
+from trip_planner.app.services.workspace_map_payloads import (
+    build_runtime_map_diagnostics_payload,
+    build_runtime_map_view_payload,
 )
 from trip_planner.app.services.workspace_planner_policy import (
     build_planner_policy_proposal_block,
@@ -922,71 +924,70 @@ def _build_runtime_scenario_comparison(
         )
         available_actions = _route_option_available_actions(state)
         row = {
-                "scenario_id": scenario["scenario_id"],
-                "route_option_id": scenario["scenario_id"],
-                "title": scenario["title"],
-                "rank": scenario["rank"],
-                "status": status,
-                "state": state,
-                "purpose": _route_option_purpose(
-                    state=state,
-                    status=status,
-                    scenario=scenario,
+            "scenario_id": scenario["scenario_id"],
+            "route_option_id": scenario["scenario_id"],
+            "title": scenario["title"],
+            "rank": scenario["rank"],
+            "status": status,
+            "state": state,
+            "purpose": _route_option_purpose(
+                state=state,
+                status=status,
+                scenario=scenario,
+            ),
+            "confidence": _route_option_confidence(scenario=scenario, state=state),
+            "unresolved_questions": unresolved_questions,
+            "available_actions": available_actions,
+            "open_question": unresolved_questions[0] if unresolved_questions else None,
+            "available_action": available_actions[0] if available_actions else None,
+            "summary": summary["headline"],
+            "comparison_note": (
+                "Lead route for the current workspace comparison set."
+                if scenario["scenario_id"] == lead["scenario_id"]
+                else "Alternative route preserved for direct scenario comparison."
+            ),
+            "option_count": max(
+                1,
+                len(scenario.get("supporting_option_ids") or []),
+            ),
+            "checkpoint_id": None,
+            "budget_variant_id": None,
+            "route_sequence": list(summary.get("route_sequence") or []),
+            "route_summary": " -> ".join(summary.get("route_sequence") or []) or "route pending",
+            "recommended_for_selection": summary["recommended_for_selection"],
+            "feasible": summary["feasible"],
+            "metrics": {
+                "score": scenario["score"],
+                "travel_minutes": summary["total_travel_minutes"],
+                "transfers": summary["total_transfer_count"],
+                "estimated_total": estimated_total,
+            },
+            "delta": {
+                "score_delta": round(float(scenario["score"]) - float(lead["score"]), 2),
+                "travel_minutes_delta": (
+                    summary["total_travel_minutes"]
+                    - lead["scenario_summary"]["total_travel_minutes"]
                 ),
-                "confidence": _route_option_confidence(scenario=scenario, state=state),
-                "unresolved_questions": unresolved_questions,
-                "available_actions": available_actions,
-                "open_question": unresolved_questions[0] if unresolved_questions else None,
-                "available_action": available_actions[0] if available_actions else None,
-                "summary": summary["headline"],
-                "comparison_note": (
-                    "Lead route for the current workspace comparison set."
-                    if scenario["scenario_id"] == lead["scenario_id"]
-                    else "Alternative route preserved for direct scenario comparison."
+                "transfers_delta": (
+                    summary["total_transfer_count"]
+                    - lead["scenario_summary"]["total_transfer_count"]
                 ),
-                "option_count": max(
-                    1,
-                    len(scenario.get("supporting_option_ids") or []),
-                ),
-                "checkpoint_id": None,
-                "budget_variant_id": None,
-                "route_sequence": list(summary.get("route_sequence") or []),
-                "route_summary": " -> ".join(summary.get("route_sequence") or [])
-                or "route pending",
-                "recommended_for_selection": summary["recommended_for_selection"],
-                "feasible": summary["feasible"],
-                "metrics": {
-                    "score": scenario["score"],
-                    "travel_minutes": summary["total_travel_minutes"],
-                    "transfers": summary["total_transfer_count"],
-                    "estimated_total": estimated_total,
-                },
-                "delta": {
-                    "score_delta": round(float(scenario["score"]) - float(lead["score"]), 2),
-                    "travel_minutes_delta": (
-                        summary["total_travel_minutes"]
-                        - lead["scenario_summary"]["total_travel_minutes"]
-                    ),
-                    "transfers_delta": (
-                        summary["total_transfer_count"]
-                        - lead["scenario_summary"]["total_transfer_count"]
-                    ),
-                    "estimated_total_delta": _estimated_total_delta(scenario, lead),
-                },
-                "highlights": _comparison_highlights(scenario=scenario, lead=lead),
-                "source_result_id": scenario["source_result_id"],
-                "objective_refs": list(scenario.get("objective_refs") or []),
-                "map_view": build_runtime_map_view_payload(
-                    scenario=scenario,
-                    summary=summary,
-                    route_sequence=list(summary.get("route_sequence") or []),
-                ),
-                "map_diagnostics": build_runtime_map_diagnostics_payload(
-                    scenario=scenario,
-                    summary=summary,
-                    route_sequence=list(summary.get("route_sequence") or []),
-                ),
-            }
+                "estimated_total_delta": _estimated_total_delta(scenario, lead),
+            },
+            "highlights": _comparison_highlights(scenario=scenario, lead=lead),
+            "source_result_id": scenario["source_result_id"],
+            "objective_refs": list(scenario.get("objective_refs") or []),
+            "map_view": build_runtime_map_view_payload(
+                scenario=scenario,
+                summary=summary,
+                route_sequence=list(summary.get("route_sequence") or []),
+            ),
+            "map_diagnostics": build_runtime_map_diagnostics_payload(
+                scenario=scenario,
+                summary=summary,
+                route_sequence=list(summary.get("route_sequence") or []),
+            ),
+        }
         attach_policy_preview_to_row(
             row,
             policy_state=policy_state,

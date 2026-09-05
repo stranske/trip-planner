@@ -9,7 +9,9 @@ from trip_planner.app.services.inventory import (
 from trip_planner.persistence.models.trip import PersistedTrip
 
 
-def _assert_bundle_payload_includes_constraint_evaluation(bundle_payload: dict[str, object]) -> None:
+def _assert_bundle_payload_includes_constraint_evaluation(
+    bundle_payload: dict[str, object],
+) -> None:
     assert "constraint_evaluation" in bundle_payload
     evaluation = bundle_payload["constraint_evaluation"]
     assert isinstance(evaluation, dict)

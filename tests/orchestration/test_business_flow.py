@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
+from trip_planner.app.services import workspace_fixtures
 from trip_planner.business import (
     BusinessTravelProfile,
     PolicyConstraintSet,
     TripPlanProposal,
     derive_business_planning_objectives,
 )
-from trip_planner.app.services import workspace_fixtures
 from trip_planner.orchestration import (
     BUSINESS_PATHS,
     BusinessWorkflowContext,

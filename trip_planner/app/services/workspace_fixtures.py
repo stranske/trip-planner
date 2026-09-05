@@ -63,9 +63,7 @@ def load_saved_scenarios(
     payload = _load_json(_state_fixture_dir("scenarios") / name)
     records = [SavedScenarioRecord.from_dict(item) for item in payload["records"]]
     comparison = payload.get("comparison")
-    return records, (
-        ScenarioComparison.from_dict(comparison) if comparison is not None else None
-    )
+    return records, (ScenarioComparison.from_dict(comparison) if comparison is not None else None)
 
 
 def load_session(name: str) -> PlanningSessionState:

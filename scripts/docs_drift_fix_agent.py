@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts import check_docs_drift  # noqa: E402
+from scripts import check_docs_drift
 
 DEFAULT_REPO = "stranske/Workflows"
 DEFAULT_MAX_PER_BATCH = 8

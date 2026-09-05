@@ -8,7 +8,10 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from scripts.langchain.issue_pr_context import DEFAULT_TOKEN_BUDGET
-from scripts.langchain.structured_output import MAX_REPAIR_ATTEMPTS, clamp_repair_attempts
+from scripts.langchain.structured_output import (
+    MAX_REPAIR_ATTEMPTS,
+    clamp_repair_attempts,
+)
 
 EVAL_PAIR_BUDGET_TOKENS = DEFAULT_TOKEN_BUDGET
 EVAL_SCHEMA_REPAIR_BUDGET_TOKENS = DEFAULT_TOKEN_BUDGET
@@ -185,11 +188,13 @@ def _coerce_artifact(value: Any) -> Any:
 
 def _extract_verdicts(text: str) -> list[str]:
     verdicts: list[str] = []
-    for match in re.finditer(r"verdict:\s*\*?\*?\s*(pass|concerns|fail|error)\b", text, re.I):
+    for match in re.finditer(
+        r"verdict:\s*\*?\*?\s*(pass|concerns|fail|error)\b", text, re.IGNORECASE
+    ):
         verdicts.append(match.group(1).upper())
 
     for match in re.finditer(
-        r"\|\s*[^|\n]+\s*\|\s*[^|\n]*\|\s*(pass|concerns|fail|error)\s*\|", text, re.I
+        r"\|\s*[^|\n]+\s*\|\s*[^|\n]*\|\s*(pass|concerns|fail|error)\s*\|", text, re.IGNORECASE
     ):
         verdicts.append(match.group(1).upper())
 
