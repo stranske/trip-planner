@@ -158,3 +158,43 @@ def test_non_usd_scenario_skips_usd_budget_cap_comparison() -> None:
     )
 
     assert not any(item["rule_id"] == "BUD-001" for item in preview["violations"])
+
+
+@pytest.mark.parametrize("cap", [True, False, float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("estimated_total", [None, {"currency": "USD", "typical_amount": 2400}])
+def test_invalid_budget_cap_does_not_create_budget_finding(cap: Any, estimated_total: Any) -> None:
+    preview = build_scenario_policy_preview(
+        policy_state={"constraint_set": {"budget_rules": {"max_trip_total_usd": cap}}},
+        trip_mode="business",
+        estimated_total=estimated_total,
+        scenario_notes=["exception-nearest"],
+    )
+
+    assert [item["rule_id"] for item in preview["violations"]] == ["POL-EXC"]
+    assert preview["compliant"] is False
+
+
+@pytest.mark.parametrize(
+    "amount", [None, "unknown", True, float("nan"), float("inf"), float("-inf")]
+)
+def test_non_usd_missing_amount_skips_usd_budget_cap(amount: Any) -> None:
+    preview = build_scenario_policy_preview(
+        policy_state=FIXTURE_POLICY,
+        trip_mode="business",
+        estimated_total={"currency": "EUR", "typical_amount": amount},
+    )
+
+    assert preview["violations"] == []
+    assert preview["status"] == "compliant"
+
+
+def test_non_usd_absent_amount_preserves_known_policy_violation() -> None:
+    preview = build_scenario_policy_preview(
+        policy_state=FIXTURE_POLICY,
+        trip_mode="business",
+        estimated_total={"currency": "EUR"},
+        scenario_notes=["exception-nearest"],
+    )
+
+    assert [item["rule_id"] for item in preview["violations"]] == ["POL-EXC"]
+    assert preview["compliant"] is False

@@ -40,10 +40,19 @@ def _preview_base() -> dict[str, Any]:
 def _budget_violations(
     budget_rules: dict[str, Any],
     money: tuple[float, str] | None,
+    *,
+    currency_hint: str = "USD",
 ) -> list[dict[str, Any]]:
     cap_amount = budget_rules.get("max_trip_total_usd")
     rule_id = str(budget_rules.get("rule_id") or "BUD-001")
-    if not isinstance(cap_amount, (int, float)):
+    if (
+        isinstance(cap_amount, bool)
+        or not isinstance(cap_amount, (int, float))
+        or not math.isfinite(cap_amount)
+    ):
+        return []
+    currency = money[1] if money is not None else currency_hint
+    if currency != "USD":
         return []
     if money is None:
         return [
@@ -52,13 +61,11 @@ def _budget_violations(
                 "message": "Trip cost is unavailable; the configured spend cap cannot be checked.",
                 "cap_amount": float(cap_amount),
                 "actual_amount": None,
-                "currency": "USD",
+                "currency": currency,
                 "incomplete": True,
             }
         ]
     actual_amount, currency = money
-    if currency != "USD":
-        return []
     if actual_amount <= float(cap_amount):
         return []
     return [
@@ -181,7 +188,12 @@ def build_scenario_policy_preview(
 
     budget_rules = constraint_set.get("budget_rules")
     if isinstance(budget_rules, dict):
-        violations.extend(_budget_violations(budget_rules, money))
+        currency_hint = (
+            str(estimated_total.get("currency") or "USD")
+            if isinstance(estimated_total, dict)
+            else "USD"
+        )
+        violations.extend(_budget_violations(budget_rules, money, currency_hint=currency_hint))
 
     lodging_rules = constraint_set.get("lodging_rules")
     if isinstance(lodging_rules, dict):
