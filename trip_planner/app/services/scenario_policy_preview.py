@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
-POLICY_PREVIEW_DISCLAIMER = (
-    "Policy preview only — not the final TPP verdict."
-)
+POLICY_PREVIEW_DISCLAIMER = "Policy preview only — not the final TPP verdict."
 
 
 def _money_amount(estimated_total: Any) -> tuple[float, str] | None:
@@ -14,7 +13,11 @@ def _money_amount(estimated_total: Any) -> tuple[float, str] | None:
         return None
     amount = estimated_total.get("typical_amount")
     currency = estimated_total.get("currency") or "USD"
-    if not isinstance(amount, (int, float)):
+    if (
+        isinstance(amount, bool)
+        or not isinstance(amount, (int, float))
+        or not math.isfinite(amount)
+    ):
         return None
     return float(amount), str(currency)
 
@@ -40,8 +43,19 @@ def _budget_violations(
 ) -> list[dict[str, Any]]:
     cap_amount = budget_rules.get("max_trip_total_usd")
     rule_id = str(budget_rules.get("rule_id") or "BUD-001")
-    if not isinstance(cap_amount, (int, float)) or money is None:
+    if not isinstance(cap_amount, (int, float)):
         return []
+    if money is None:
+        return [
+            {
+                "rule_id": rule_id,
+                "message": "Trip cost is unavailable; the configured spend cap cannot be checked.",
+                "cap_amount": float(cap_amount),
+                "actual_amount": None,
+                "currency": "USD",
+                "incomplete": True,
+            }
+        ]
     actual_amount, currency = money
     if currency != "USD":
         return []
@@ -50,9 +64,7 @@ def _budget_violations(
     return [
         {
             "rule_id": rule_id,
-            "message": (
-                f"Estimated trip total exceeds the configured spend cap ({rule_id})."
-            ),
+            "message": (f"Estimated trip total exceeds the configured spend cap ({rule_id})."),
             "cap_amount": float(cap_amount),
             "actual_amount": actual_amount,
             "currency": currency,
@@ -71,7 +83,11 @@ def _lodging_violations(
         nightly_actual = estimated_total.get("nightly_typical_amount")
     if not isinstance(nightly_cap, (int, float)) or not isinstance(nightly_actual, (int, float)):
         return []
-    currency = str(estimated_total.get("currency") or "USD") if isinstance(estimated_total, dict) else "USD"
+    currency = (
+        str(estimated_total.get("currency") or "USD")
+        if isinstance(estimated_total, dict)
+        else "USD"
+    )
     if currency != "USD":
         return []
     if float(nightly_actual) <= float(nightly_cap):
@@ -79,9 +95,7 @@ def _lodging_violations(
     return [
         {
             "rule_id": rule_id,
-            "message": (
-                f"Selected nightly rate exceeds the configured lodging cap ({rule_id})."
-            ),
+            "message": (f"Selected nightly rate exceeds the configured lodging cap ({rule_id})."),
             "cap_amount": float(nightly_cap),
             "actual_amount": float(nightly_actual),
             "currency": currency,
@@ -177,6 +191,16 @@ def build_scenario_policy_preview(
     note_violation = _exception_note_violation(notes, violations)
     if note_violation is not None:
         violations.append(note_violation)
+
+    if violations and all(item.get("incomplete") for item in violations):
+        return {
+            **base,
+            "status": "preview_incomplete",
+            "status_label": "Trip cost unavailable (preview)",
+            "compliant": None,
+            "snapshot_available": True,
+            "violations": violations,
+        }
 
     compliant = len(violations) == 0
     status_label = "In policy (preview)" if compliant else "Policy issues (preview)"
