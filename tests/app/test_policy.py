@@ -299,7 +299,7 @@ def test_workspace_policy_invalid_persisted_blocking_issue_is_unavailable(
             "message": (
                 "Stored TPP policy requirements are invalid and cannot be used for compliance "
                 "evaluation: organization_context.blocking_issues[0] is invalid: severity must be "
-                "'warning' or 'blocking'"
+                "'warning', 'blocking', or 'error'"
             ),
             "severity": "blocking",
             "related_category": "policy_sync",
