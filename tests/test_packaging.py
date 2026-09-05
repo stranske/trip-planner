@@ -132,5 +132,5 @@ def test_production_tests_import_guard_fails_on_deliberate_break(
 
     scenarios_path.write_text(bad_import_line + "\n", encoding="utf-8")
     assert _production_tests_import_offenders() == [
-        f"trip_planner/app/services/scenarios.py:1: {bad_import_line}"
+        f"{scenarios_path.relative_to(tmp_path)}:1: {bad_import_line}"
     ]
