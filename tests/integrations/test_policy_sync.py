@@ -1,16 +1,25 @@
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from trip_planner.app.services.policy import (
+    PersistedPolicyStateValidationError,
+    _normalize_policy_requirements,
+)
 from trip_planner.integrations.tpp import (
     BaseTPPIntegrationClient,
+    HTTPTPPIntegrationClient,
     PolicySyncError,
+    TPPContractError,
     TPPPolicySyncService,
     TPPRequestEnvelope,
     TPPResponseEnvelope,
+    TPPRuntimeSettings,
     summarize_policy_import,
 )
+from trip_planner.integrations.tpp.policy_sync import parse_policy_requirements
 
 
 def _fixture_path(name: str) -> Path:
@@ -171,3 +180,92 @@ def test_policy_sync_rejects_mismatched_correlation_id() -> None:
 
     with pytest.raises(PolicySyncError, match="response.correlation_id"):
         service.import_policy_constraints(request)
+
+
+@pytest.mark.parametrize(
+    ("flags", "expected_severity"),
+    [
+        ({"blocking": True}, "blocking"),
+        ({"blocking": True, "severity": "warning"}, "blocking"),
+        ({"severity": "error"}, "blocking"),
+        ({"severity": "blocking"}, "blocking"),
+        ({"blocking": False, "severity": "blocking"}, "blocking"),
+        ({"severity": "warning"}, "warning"),
+        ({"blocking": False}, "warning"),
+        ({}, "warning"),
+    ],
+)
+def test_http_and_fixture_paths_normalize_blocking_requirement_severity_identically(
+    monkeypatch: pytest.MonkeyPatch,
+    flags: dict[str, Any],
+    expected_severity: str,
+) -> None:
+    requirement = {"code": " booking-channel ", "summary": " Use approved booking ", **flags}
+    fixture = _load_fixture("standard_policy_sync.json")
+    fixture["request"]["payload"]["trip_plan"] = {"trip_id": "trip-policy-parser"}
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    fixture["response"]["result_payload"]["organization_context"]["booking_requirements"] = [
+        requirement
+    ]
+    fixture_import = TPPPolicySyncService(
+        FakeTPPPolicyClient(TPPResponseEnvelope.from_dict(fixture["response"]))
+    ).import_policy_constraints(request)
+
+    http_client = HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url="https://tpp.example", access_token="test-token", oidc_provider="okta"
+        )
+    )
+    snapshot = {
+        "versioning": {
+            "policy_version": "2026-02",
+            "contract_version": "2026-04-11",
+            "compatible_with_planner_cache": True,
+        },
+        "generated_at": "2026-02-15T12:00:00Z",
+        "policy_status": "pass",
+        "booking_requirements": [requirement],
+    }
+    monkeypatch.setattr(http_client, "_request_json", lambda **_kwargs: snapshot)
+    http_import = TPPPolicySyncService(http_client).import_policy_constraints(request)
+    expected = [
+        {
+            "code": "booking-channel",
+            "summary": "Use approved booking",
+            "severity": expected_severity,
+        }
+    ]
+    assert [
+        item.to_dict() for item in fixture_import.organization_context.booking_requirements
+    ] == expected
+    assert [
+        item.to_dict() for item in http_import.organization_context.booking_requirements
+    ] == expected
+    # The DB reload path must accept the same input and the canonical stored output.
+    for stored in ([requirement], expected):
+        reloaded = _normalize_policy_requirements(stored, field_name="booking_requirements")
+        assert [item.to_dict() for item in reloaded] == expected
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        None,
+        {},
+        [None],
+        [{"code": 12, "summary": "Rule", "severity": "warning"}],
+        [{"code": "rule", "summary": "  ", "severity": "warning"}],
+        [{"code": "rule", "summary": "Rule", "severity": "critical"}],
+        [{"code": "rule", "summary": "Rule", "severity": None}],
+        [{"code": "rule", "summary": "Rule", "blocking": "true"}],
+    ],
+)
+def test_requirement_paths_reject_malformed_values_with_boundary_error_types(payload: Any) -> None:
+    with pytest.raises(ValueError):
+        parse_policy_requirements(payload, "booking_requirements")
+    with pytest.raises(TPPContractError):
+        HTTPTPPIntegrationClient._adapt_policy_requirements(
+            payload, field_name="booking_requirements"
+        )
+    with pytest.raises(PersistedPolicyStateValidationError):
+        _normalize_policy_requirements(payload, field_name="booking_requirements")

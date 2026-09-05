@@ -15,6 +15,25 @@ This scaffold imports policy constraints and organization context from `Travel-P
 - `OrganizationContextSnapshot` for approved channels, comparable requirements, approval triggers, comfort preferences, and class-of-service limits
 - `PolicyFreshness` for snapshot versioning, freshness windows, and invalidation markers
 
+## Requirement Normalization
+
+`parse_policy_requirements` in `policy_sync.py` owns requirement parsing for HTTP
+snapshots, fixture imports, and persisted workspace reloads. A boolean
+`blocking: true` or wire `severity: error` normalizes to `blocking`. Canonical
+`blocking` and `warning` severities are preserved, including when `blocking` is
+false; an omitted severity defaults to `warning`. Code and summary must be
+nonempty strings and are trimmed. Invalid severity, nonboolean blocking flags,
+and malformed collections fail validation instead of silently becoming warnings.
+The HTTP and persistence boundaries retain their respective `TPPContractError`
+and `PersistedPolicyStateValidationError` exception types.
+
+The regression gate is
+`pytest tests/integrations/test_policy_sync.py::test_http_and_fixture_paths_normalize_blocking_requirement_severity_identically`.
+It checks expected severities across all three paths. To verify sensitivity,
+temporarily remove the `blocking is True` condition in the shared parser (the
+HTTP adapter now delegates there), run the gate and observe the blocking cases
+fail, then restore the condition and confirm the gate passes.
+
 ## Consumption Rules
 
 - Ranking and candidate-generation flows may read imported channels, class-of-service limits, documentation rules, and comparable requirements as planning inputs.

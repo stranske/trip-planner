@@ -29,6 +29,7 @@ from trip_planner.integrations.tpp import (
     TPPResponseEnvelope,
     TPPTransportError,
 )
+from trip_planner.integrations.tpp.policy_sync import parse_policy_requirements
 from trip_planner.persistence.models.policy import PersistedPolicyState
 from trip_planner.persistence.models.trip import PersistedTrip
 
@@ -368,33 +369,13 @@ def _normalize_string_list(payload: object) -> list[str]:
 def _normalize_policy_requirements(
     payload: object, *, field_name: str
 ) -> list[TPPPolicyRequirement]:
-    if not isinstance(payload, list):
-        raise PersistedPolicyStateValidationError(f"{field_name} must be provided as a list")
-    requirements: list[TPPPolicyRequirement] = []
-    for index, item in enumerate(payload):
-        if not isinstance(item, dict):
-            raise PersistedPolicyStateValidationError(
-                f"{field_name}[{index}] must be provided as a mapping"
-            )
-        code = item.get("code")
-        summary = item.get("summary")
-        severity = item.get("severity")
-        if not isinstance(code, str) or not isinstance(summary, str) or not isinstance(severity, str):
-            raise PersistedPolicyStateValidationError(
-                f"{field_name}[{index}] must include string code, summary, and severity values"
-            )
-        try:
-            requirements.append(TPPPolicyRequirement(code=code, summary=summary, severity=severity))
-        except ValueError as error:
-            raise PersistedPolicyStateValidationError(
-                f"{field_name}[{index}] is invalid: {error}"
-            ) from error
-    return requirements
+    try:
+        return parse_policy_requirements(payload, field_name)
+    except ValueError as error:
+        raise PersistedPolicyStateValidationError(str(error)) from error
 
 
-def _optional_policy_requirements_payload(
-    organization_context: dict[str, Any], key: str
-) -> object:
+def _optional_policy_requirements_payload(organization_context: dict[str, Any], key: str) -> object:
     """Default only absent persisted requirements; preserve malformed values for validation."""
 
     value = organization_context.get(key)
@@ -449,9 +430,7 @@ def _normalize_organization_context_payload(record: PersistedPolicyState) -> dic
             organization_context.get("organization_id") or record.organization_id
         ),
         "policy_status": policy_status,
-        "contract_version": str(
-            organization_context.get("contract_version") or "2026-04-11"
-        ),
+        "contract_version": str(organization_context.get("contract_version") or "2026-04-11"),
         "compatible_with_planner_cache": organization_context.get(
             "compatible_with_planner_cache", True
         ),

@@ -19,6 +19,7 @@ from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 
 from .contracts import TPPRequestEnvelope, TPPResponseEnvelope
+from .policy_sync import parse_policy_requirements
 
 
 class TPPIntegrationClient(Protocol):
@@ -953,21 +954,10 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
 
     @staticmethod
     def _adapt_policy_requirements(value: Any, *, field_name: str) -> list[dict[str, str]]:
-        if not isinstance(value, list):
-            raise TPPContractError(f"TPP {field_name} must be a list.")
-        requirements: list[dict[str, str]] = []
-        for index, item in enumerate(value):
-            if not isinstance(item, dict):
-                raise TPPContractError(f"TPP {field_name}[{index}] must be an object.")
-            code = str(item.get("code") or "").strip()
-            summary = str(item.get("summary") or "").strip()
-            if not code or not summary:
-                raise TPPContractError(
-                    f"TPP {field_name}[{index}] must include non-empty code and summary."
-                )
-            severity = "blocking" if item.get("blocking") is True or item.get("severity") == "error" else "warning"
-            requirements.append({"code": code, "summary": summary, "severity": severity})
-        return requirements
+        try:
+            return [item.to_dict() for item in parse_policy_requirements(value, field_name)]
+        except ValueError as error:
+            raise TPPContractError(f"TPP {error}") from error
 
     def _submit_proposal(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
         payload = self._request_json(
