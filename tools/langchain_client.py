@@ -163,7 +163,10 @@ def _build_openai_client(
         "timeout": timeout,
         "max_retries": max_retries,
     }
-    if not _is_reasoning_model(model):
+    if model.lower().startswith("gpt-6-astra"):
+        kwargs["use_responses_api"] = True
+        kwargs["reasoning"] = {"effort": "high"}
+    elif not _is_reasoning_model(model):
         kwargs["temperature"] = 0.1
     return chat_openai(**kwargs)
 
@@ -420,6 +423,12 @@ def build_chat_clients(
         return []
     registry = _load_model_registry()
     if selected_provider:
+        if not first_model:
+            first_model = configured_model_for_provider(selected_provider, registry=registry)
+            second_model = second_model or first_model
+        if not first_model:
+            logger.warning("No reviewed model is configured for provider %s", selected_provider)
+            return []
         blocked_models = [candidate for candidate in (first_model, second_model) if candidate]
         if any(
             _is_model_blocked(selected_provider, candidate, registry=registry)
