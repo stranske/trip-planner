@@ -30,10 +30,12 @@ from .bundles import (
     BundleFeasibility,
     BundleProvenanceSummary,
     BundleQualityValueFitSummary,
+    ConstraintEvaluation,
     InventoryBundle,
     MixedOption,
     RouteCoherenceSummary,
     ScheduleFitSummary,
+    constraint_evaluation_from_feasibility,
 )
 from .bundles import (
     SCHEMA_VERSION as BUNDLE_SCHEMA_VERSION,
@@ -156,6 +158,7 @@ __all__ = [
     "BundleCompositionSummary",
     "BundleExplanation",
     "BundleFeasibility",
+    "ConstraintEvaluation",
     "BundleProvenanceSummary",
     "BundleQualityValueFitSummary",
     "Destination",

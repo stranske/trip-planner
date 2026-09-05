@@ -30,6 +30,7 @@ from .bundles import (
     BundleCompositionSummary,
     BundleExplanation,
     BundleFeasibility,
+    ConstraintEvaluation,
     BundleProvenanceSummary,
     BundleQualityValueFitSummary,
     InventoryBundle,

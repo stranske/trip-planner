@@ -668,6 +668,20 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
             },
             "source_records": [self.source_record.to_dict()],
             "feasibility": {"available": True, "internally_consistent": True},
+            "constraint_evaluation": {
+                "status": "evaluated",
+                "overall_pass": True,
+                "hard_constraints_satisfied": True,
+                "policy_constraints_satisfied": True if self.trip_mode == "business" else None,
+                "blocking_constraint_ids": [],
+                "evaluated_constraint_ids": [
+                    "bundle.feasibility.available",
+                    "bundle.feasibility.internally_consistent",
+                    "inventory.runtime_seed",
+                ],
+                "summary": "Runtime bundle assembled with satisfied feasibility constraints.",
+                "notes": [],
+            },
             "explanation": {
                 "headline": "Runtime inventory assembled from persisted trip context.",
                 "strengths": [

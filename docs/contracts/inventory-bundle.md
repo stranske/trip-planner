@@ -11,6 +11,7 @@
 ## What The Layer Adds
 
 - bundle-level feasibility with explicit blocking reasons for infeasible but still inspectable alternatives
+- `constraint_evaluation` envelope that records hard/policy constraint posture separately from raw feasibility signals
 - composition summaries that declare bundle order, primary destination, and the exact normalized option IDs assembled into each bundle or mixed alternative
 - provenance summaries that roll source references and booking links up from the included normalized objects without hiding the underlying records
 - quality/value/fit rollups that make mixed alternatives rankable without flattening away category-specific summaries
@@ -25,3 +26,17 @@
 - UI-specific rendering state
 
 Those remain later concerns. This layer exists to make cross-category alternatives stable, inspectable, and reusable across profile-learning and inventory-narrowing flows.
+
+## ConstraintEvaluation Envelope
+
+Each `InventoryBundle` carries a `constraint_evaluation` block alongside `feasibility`:
+
+- `status`: `evaluated`, `partial`, or `unavailable`
+- `overall_pass`: whether the bundle is constraint-clean for downstream ranking
+- `hard_constraints_satisfied`: whether structural bundle constraints passed
+- `policy_constraints_satisfied`: optional business-policy posture when known
+- `blocking_constraint_ids`: machine-readable blockers when `overall_pass` is false
+- `evaluated_constraint_ids`: which constraint checks were applied
+- `summary` and `notes`: human-readable evaluation context
+
+`trip_planner/app/services/inventory.py` must emit this block on every inventory bundle payload returned to API consumers. Feasibility remains the source signal; `constraint_evaluation` is the inspectable envelope required by B2-048.
