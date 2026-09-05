@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -73,7 +74,7 @@ def test_runtime_inventory_emitter_includes_constraint_evaluation() -> None:
     assert payload["constraint_evaluation"]["policy_constraints_satisfied"] is True
 
 
-def _bundle_payload() -> dict:
+def _bundle_payload() -> dict[str, Any]:
     fixture = Path("tests/fixtures/options/bundles/lodging_only_comparison.json")
     return json.loads(fixture.read_text())["bundles"][0]
 
@@ -94,7 +95,7 @@ def test_bundle_rejects_invalid_explicit_evaluation(raw: object) -> None:
 def test_evaluation_rejects_non_boolean_fields(
     field_name: str, invalid: object, deserialize: bool
 ) -> None:
-    payload = {field_name: invalid}
+    payload: dict[str, Any] = {field_name: invalid}
     with pytest.raises(ValueError, match=field_name + ".*boolean"):
         if deserialize:
             ConstraintEvaluation.from_dict(payload)
@@ -157,7 +158,11 @@ def test_missing_evaluation_derives_from_feasibility(
 @pytest.mark.parametrize("unmet", ["available", "internally_consistent"])
 def test_direct_construction_derives_failing_evaluation(unmet: str) -> None:
     bundle = InventoryBundle.from_dict(_bundle_payload())
-    feasibility = BundleFeasibility(**{unmet: False}, blocking_reasons=["capacity"])
+    feasibility = BundleFeasibility(
+        available=unmet != "available",
+        internally_consistent=unmet != "internally_consistent",
+        blocking_reasons=["capacity"],
+    )
     direct = InventoryBundle(
         bundle_id=bundle.bundle_id,
         title=bundle.title,
