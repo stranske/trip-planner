@@ -2,9 +2,7 @@ from typing import Any
 
 import pytest
 
-from trip_planner.app.services.scenario_policy_preview import (
-    build_scenario_policy_preview,
-)
+from trip_planner.app.services.scenario_policy_preview import build_scenario_policy_preview
 
 FIXTURE_POLICY = {
     "constraint_set": {

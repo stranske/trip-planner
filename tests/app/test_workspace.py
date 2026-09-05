@@ -53,10 +53,7 @@ _WORKSPACE_MODULE_LINE_CEILING = 3900
 def test_workspace_module_stays_under_size_ceiling() -> None:
     workspace_path = Path(workspace_service.__file__)
 
-    assert (
-        len(workspace_path.read_text(encoding="utf-8").splitlines())
-        <= _WORKSPACE_MODULE_LINE_CEILING
-    )
+    assert len(workspace_path.read_text(encoding="utf-8").splitlines()) <= _WORKSPACE_MODULE_LINE_CEILING
 
 
 def test_load_saved_scenarios_allows_entries_without_a_comparison(

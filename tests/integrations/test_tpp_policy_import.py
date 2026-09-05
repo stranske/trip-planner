@@ -15,14 +15,23 @@ from trip_planner.persistence.db import reset_database_state
 
 def _load_policy_fixture(name: str) -> dict[str, object]:
     path = (
-        Path(__file__).resolve().parents[1] / "fixtures" / "integrations" / "tpp" / "policy" / name
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "integrations"
+        / "tpp"
+        / "policy"
+        / name
     )
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 @pytest.fixture
-def workspace_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'policy-import.db'}")
+def workspace_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[TestClient]:
+    monkeypatch.setenv(
+        "TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'policy-import.db'}"
+    )
     reset_database_state()
     with TestClient(create_app()) as client:
         signup = client.post(

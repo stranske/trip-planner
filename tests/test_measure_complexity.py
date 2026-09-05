@@ -59,7 +59,9 @@ def test_changed_function_guard_selects_only_functions_touched_by_diff(
     )
     diff = "+++ b/sample.py\n@@ -4,0 +5,1 @@\n+    if value:\n"
 
-    selected = changed_functions(measure_file(source), changed_line_ranges(diff)[Path("sample.py")])
+    selected = changed_functions(
+        measure_file(source), changed_line_ranges(diff)[Path("sample.py")]
+    )
 
     assert [metric.name for metric in selected] == ["changed"]
 
@@ -89,7 +91,9 @@ def test_complexity_cli_rejects_a_changed_function_over_the_ceiling(
         encoding="utf-8",
     )
     subprocess.run(["git", "add", "trip_planner/sample.py"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "commit", "--quiet", "-m", "deliberate break"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "commit", "--quiet", "-m", "deliberate break"], cwd=tmp_path, check=True
+    )
 
     result = subprocess.run(
         [

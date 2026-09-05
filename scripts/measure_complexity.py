@@ -76,7 +76,9 @@ def measure_file(path: Path) -> list[FunctionMetric]:
                     complexity=_complexity(node),
                 )
             )
-    return sorted(metrics, key=lambda metric: (metric.path, metric.start_line, metric.name))
+    return sorted(
+        metrics, key=lambda metric: (metric.path, metric.start_line, metric.name)
+    )
 
 
 def changed_line_ranges(diff: str) -> dict[Path, list[range]]:
@@ -99,12 +101,15 @@ def changed_line_ranges(diff: str) -> dict[Path, list[range]]:
     return result
 
 
-def changed_functions(metrics: list[FunctionMetric], ranges: list[range]) -> list[FunctionMetric]:
+def changed_functions(
+    metrics: list[FunctionMetric], ranges: list[range]
+) -> list[FunctionMetric]:
     return [
         metric
         for metric in metrics
         if any(
-            metric.start_line < changed_range.stop and changed_range.start <= metric.end_line
+            metric.start_line < changed_range.stop
+            and changed_range.start <= metric.end_line
             for changed_range in ranges
         )
     ]
@@ -149,7 +154,9 @@ def main() -> int:
         if metric.path in ranges_by_path
         for metric in changed_functions([metric], ranges_by_path[metric.path])
     ]
-    violations = [metric for metric in guarded if metric.complexity > args.max_complexity]
+    violations = [
+        metric for metric in guarded if metric.complexity > args.max_complexity
+    ]
     if violations:
         for metric in violations:
             print(

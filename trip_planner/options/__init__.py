@@ -111,6 +111,7 @@ from .transport import (
 )
 
 __all__ = [
+    "constraint_evaluation_from_feasibility",
     "ACTIVITY_AVAILABILITY_STATUSES",
     "ACTIVITY_FORMATS",
     "ACTIVITY_KINDS",

@@ -429,19 +429,17 @@ def test_temporary_tpp_client_environment_restores_prior_values_on_exception(mon
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "prior-token")
     monkeypatch.delenv("TPP_OIDC_PROVIDER", raising=False)
 
-    with (
-        pytest.raises(RuntimeError),
-        verifier._temporary_tpp_client_environment(
+    with pytest.raises(RuntimeError):
+        with verifier._temporary_tpp_client_environment(
             "http://127.0.0.1:9",
             {
                 "TPP_ACCESS_TOKEN": "token",
                 "TPP_OIDC_PROVIDER": "google",
             },
-        ),
-    ):
-        assert os.environ["TPP_BASE_URL"] == "http://127.0.0.1:9"
-        assert os.environ["TPP_ACCESS_TOKEN"] == "token"
-        raise RuntimeError("boom")
+        ):
+            assert os.environ["TPP_BASE_URL"] == "http://127.0.0.1:9"
+            assert os.environ["TPP_ACCESS_TOKEN"] == "token"
+            raise RuntimeError("boom")
 
     assert os.environ["TPP_BASE_URL"] == "http://prior.example"
     assert os.environ["TPP_ACCESS_TOKEN"] == "prior-token"

@@ -35,8 +35,10 @@ Each `InventoryBundle` carries a `constraint_evaluation` block alongside `feasib
 - `overall_pass`: whether the bundle is constraint-clean for downstream ranking
 - `hard_constraints_satisfied`: whether structural bundle constraints passed
 - `policy_constraints_satisfied`: optional business-policy posture when known
-- `blocking_constraint_ids`: machine-readable blockers when `overall_pass` is false
+- `blocking_constraint_ids`: blocker identifiers or inherited human-readable feasibility reasons when `overall_pass` is false
 - `evaluated_constraint_ids`: which constraint checks were applied
 - `summary` and `notes`: human-readable evaluation context
 
 `trip_planner/app/services/inventory.py` must emit this block on every inventory bundle payload returned to API consumers. Feasibility remains the source signal; `constraint_evaluation` is the inspectable envelope required by B2-048.
+
+Missing or null evaluations are derived from bundle feasibility, including when constructing a bundle directly. A provided evaluation must be a non-empty mapping. Boolean fields accept actual booleans only; `policy_constraints_satisfied` also accepts null. Explicit evaluations are preserved.

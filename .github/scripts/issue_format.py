@@ -70,7 +70,7 @@ GATE = re.compile(
     r"|\bcurl\b|\bHTTP [1-5]\d\d\b"
     r"|\b(?:API|endpoint|request|response)\s+(?:returns?|responds with)\s+[1-5]\d\d(?:\s+status)?\b"
     r"|\bsmoke\b|\bverif\w*)",
-    re.IGNORECASE,
+    re.I,
 )
 BANNED_ADJECTIVES = (
     "clean",
@@ -109,16 +109,16 @@ def _concrete_span(span: str) -> bool:
     span = span.strip().rstrip(".,;:!?")
     if not span:
         return False
-    if re.fullmatch(_TASK_CATEGORY, span, re.IGNORECASE):
+    if re.fullmatch(_TASK_CATEGORY, span, re.I):
         return False
     # Bare lowercase English words (`bugs`, `later`) are not actionable targets.
     if re.fullmatch(r"[a-z]{2,24}", span):
         return False
     if "/" in span or span.startswith("."):
         return True
-    if re.fullmatch(_TASK_KNOWN_BASENAME, span, re.IGNORECASE):
+    if re.fullmatch(_TASK_KNOWN_BASENAME, span, re.I):
         return True
-    if re.fullmatch(rf"[\w.-]+\.(?:{_TASK_EXTENSION})", span, re.IGNORECASE):
+    if re.fullmatch(rf"[\w.-]+\.(?:{_TASK_EXTENSION})", span, re.I):
         return True
     if "_" in span or "." in span:
         return True
@@ -131,7 +131,7 @@ def _concrete_span(span: str) -> bool:
 def _task_has_concrete_target(item: str) -> bool:
     """True when a task checkbox names a file, path, symbol, config, job, or command."""
     # Category word must be followed by a concrete identifier (not "file handling").
-    for match in re.finditer(rf"\b{_TASK_CATEGORY}\s+(`[^`]+`|[^\s]+)", item, re.IGNORECASE):
+    for match in re.finditer(rf"\b{_TASK_CATEGORY}\s+(`[^`]+`|[^\s]+)", item, re.I):
         token = match.group(1)
         span = token[1:-1] if token.startswith("`") and token.endswith("`") else token.strip("'\"")
         # A quoted identifier immediately following an explicit target category
@@ -141,7 +141,7 @@ def _task_has_concrete_target(item: str) -> bool:
             token.startswith("`")
             and token.endswith("`")
             and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", span)
-            and not re.fullmatch(_TASK_CATEGORY, span, re.IGNORECASE)
+            and not re.fullmatch(_TASK_CATEGORY, span, re.I)
         ):
             return True
         if _concrete_span(span):
@@ -165,16 +165,16 @@ def _task_has_concrete_target(item: str) -> bool:
             continue
         if _concrete_span(token):
             return True
-    if re.search(rf"(?:^|[\s])({_TASK_KNOWN_BASENAME})\b", item, re.IGNORECASE):
+    if re.search(rf"(?:^|[\s])({_TASK_KNOWN_BASENAME})\b", item, re.I):
         return True
-    if re.search(rf"(?:^|[\s])([\w.-]+\.(?:{_TASK_EXTENSION}))\b", item, re.IGNORECASE):
+    if re.search(rf"(?:^|[\s])([\w.-]+\.(?:{_TASK_EXTENSION}))\b", item, re.I):
         return True
     # Unquoted path with a directory separator (src/main.go, .github/workflows/x.yml).
     if re.search(r"(?:^|[\s])((?:\./)?[\w.-]+(?:/[\w./-]+)+)", item):
         return True
     # Command names in prose ("make the UI better", "go improve it") are not
     # concrete targets. Require a command-shaped invocation instead.
-    return re.search(rf"(?:^|[\s`]){_TASK_COMMAND}", item, re.IGNORECASE) is not None
+    return re.search(rf"(?:^|[\s`]){_TASK_COMMAND}", item, re.I) is not None
 
 
 # --- Addressability ---------------------------------------------------------
@@ -253,7 +253,8 @@ def _normalise_cited_path(raw: str) -> str | None:
     """Return a safe repo-relative citation, or None for non-path text."""
     candidate = _NODE_SUFFIX.sub("", raw.strip())
     candidate = _LINE_SUFFIX.sub("", candidate)
-    candidate = candidate.removeprefix("./")
+    if candidate.startswith("./"):
+        candidate = candidate[2:]
     if not candidate or " " in candidate:
         return None
     if candidate.startswith("/") or any(part == ".." for part in candidate.split("/")):
@@ -270,7 +271,7 @@ def _normalise_cited_path(raw: str) -> str | None:
 
 
 def _task_items(body: str) -> list[str]:
-    return re.findall(r"^\s*[-*]\s*\[[ xX]\]\s*(.+)$", body or "", re.MULTILINE)
+    return re.findall(r"^\s*[-*]\s*\[[ xX]\]\s*(.+)$", body or "", re.M)
 
 
 def _candidate_matches(text: str) -> list[tuple[int, int, str]]:
@@ -286,7 +287,7 @@ _EXPLICIT_CREATE_PREFIX = re.compile(
     r"\b(?:create|add|introduce|scaffold|generate|write)\s+"
     r"(?:(?:a|the)\s+)?(?:new\s+)?(?:(?:files?|directories|directory|folders?)\s+)?"
     r"(?:at\s+|named\s+)?$",
-    re.IGNORECASE,
+    re.I,
 )
 
 
@@ -324,7 +325,7 @@ def _created_paths(body: str) -> set[str]:
             elif creation_chain:
                 separator = item[previous_end:start]
                 creation_chain = bool(
-                    re.fullmatch(r"\s*(?:[,;]\s*)?(?:(?:and|or)\s+)?", separator, re.IGNORECASE)
+                    re.fullmatch(r"\s*(?:[,;]\s*)?(?:(?:and|or)\s+)?", separator, re.I)
                 )
             if creation_chain:
                 created.add(candidate)
@@ -532,7 +533,7 @@ def validate(body: str, repo_root: Path | None = None) -> Report:
         task_items = re.findall(
             r"^\s*[-*]\s*\[[ xX]\]\s*(.+)$",
             _without_fenced_code(_section_text(body, tasks_at)),
-            re.MULTILINE,
+            re.M,
         )
         if not task_items:
             report.problems.append(
@@ -561,9 +562,7 @@ def validate(body: str, repo_root: Path | None = None) -> Report:
             "",
             prose,
         )
-        hits = [
-            word for word in BANNED_ADJECTIVES if re.search(rf"\b{word}\b", prose, re.IGNORECASE)
-        ]
+        hits = [word for word in BANNED_ADJECTIVES if re.search(rf"\b{word}\b", prose, re.I)]
         if hits:
             report.problems.append(
                 "`Acceptance Criteria` uses subjective wording ("

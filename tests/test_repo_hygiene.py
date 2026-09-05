@@ -39,7 +39,9 @@ _DB_ARTIFACT_RE = re.compile(r"\.(db|sqlite|sqlite3)(?:$|-)")
 def test_no_tracked_database_binaries() -> None:
     """Runtime databases and SQLite sidecars must stay out of version control."""
     tracked = [
-        path for path in _all_tracked_files() if _DB_ARTIFACT_RE.search(path.rsplit("/", 1)[-1])
+        path
+        for path in _all_tracked_files()
+        if _DB_ARTIFACT_RE.search(path.rsplit("/", 1)[-1])
     ]
     assert not tracked, (
         "Found tracked SQLite database binaries. Remove them with "

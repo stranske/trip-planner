@@ -75,12 +75,13 @@ def _dedupe_strings(values: list[str]) -> list[str]:
     return list(dict.fromkeys(values))
 
 
-def _parse_constraint_evaluation(payload: dict[str, Any]) -> ConstraintEvaluation:
+def _parse_constraint_evaluation(payload: dict[str, Any]) -> ConstraintEvaluation | None:
     raw = payload.get("constraint_evaluation")
-    feasibility = BundleFeasibility(**_optional_mapping_field(payload, "feasibility"))
-    if isinstance(raw, dict) and raw:
-        return ConstraintEvaluation.from_dict(raw)
-    return constraint_evaluation_from_feasibility(feasibility)
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError("constraint_evaluation must be a non-empty mapping when provided")
+    return ConstraintEvaluation.from_dict(raw)
 
 
 def _parse_source_record(payload: dict[str, Any]) -> SourceRecord:
@@ -200,6 +201,13 @@ class ConstraintEvaluation:
     def __post_init__(self) -> None:
         if self.status not in CONSTRAINT_EVALUATION_STATUSES:
             raise ValueError(f"status must be one of {CONSTRAINT_EVALUATION_STATUSES}")
+        for field_name in ("overall_pass", "hard_constraints_satisfied"):
+            if not isinstance(getattr(self, field_name), bool):
+                raise ValueError(f"{field_name} must be a boolean")
+        if self.policy_constraints_satisfied is not None and not isinstance(
+            self.policy_constraints_satisfied, bool
+        ):
+            raise ValueError("policy_constraints_satisfied must be a boolean or None")
         _require_string_list(self.blocking_constraint_ids, "blocking_constraint_ids")
         _require_string_list(self.evaluated_constraint_ids, "evaluated_constraint_ids")
         _require_string_list(self.notes, "notes")
@@ -218,8 +226,8 @@ class ConstraintEvaluation:
             return cls()
         return cls(
             status=payload.get("status", "evaluated"),
-            overall_pass=bool(payload.get("overall_pass", True)),
-            hard_constraints_satisfied=bool(payload.get("hard_constraints_satisfied", True)),
+            overall_pass=payload.get("overall_pass", True),
+            hard_constraints_satisfied=payload.get("hard_constraints_satisfied", True),
             policy_constraints_satisfied=payload.get("policy_constraints_satisfied"),
             blocking_constraint_ids=_optional_list_field(
                 {"blocking_constraint_ids": payload.get("blocking_constraint_ids", [])},
@@ -383,7 +391,7 @@ class InventoryBundle:
     )
     source_records: list[SourceRecord] = field(default_factory=list)
     feasibility: BundleFeasibility = field(default_factory=BundleFeasibility)
-    constraint_evaluation: ConstraintEvaluation = field(default_factory=ConstraintEvaluation)
+    constraint_evaluation: ConstraintEvaluation | None = None
     explanation: BundleExplanation = field(default_factory=BundleExplanation)
     summary: str = ""
     tags: list[str] = field(default_factory=list)
@@ -397,6 +405,11 @@ class InventoryBundle:
             raise ValueError(f"bundle_context must be one of {BUNDLE_CONTEXTS}")
         if self.schema_version != SCHEMA_VERSION:
             raise ValueError(f"schema_version must be {SCHEMA_VERSION!r}")
+        self._validate_components()
+        self._validate_references()
+        self._validate_provenance()
+
+    def _validate_components(self) -> None:
         if any(not isinstance(item, Destination) for item in self.destinations):
             raise ValueError("destinations must contain Destination instances")
         if any(not isinstance(item, LodgingOption) for item in self.lodging_options):
@@ -415,6 +428,8 @@ class InventoryBundle:
             raise ValueError("source_records must contain SourceRecord instances")
         if not isinstance(self.feasibility, BundleFeasibility):
             raise ValueError("feasibility must be a BundleFeasibility")
+        if self.constraint_evaluation is None:
+            self.constraint_evaluation = constraint_evaluation_from_feasibility(self.feasibility)
         if not isinstance(self.constraint_evaluation, ConstraintEvaluation):
             raise ValueError("constraint_evaluation must be a ConstraintEvaluation")
         if not isinstance(self.explanation, BundleExplanation):
@@ -425,6 +440,8 @@ class InventoryBundle:
             )
         _require_string_list(self.tags, "tags")
         _require_string_list(self.notes, "notes")
+
+    def _validate_references(self) -> None:
         represented_destination_ids = {item.destination_id for item in self.destinations}
         referenced_destination_ids = {item.destination_id for item in self.lodging_options} | {
             item.destination_id for item in self.activity_options
@@ -468,6 +485,8 @@ class InventoryBundle:
             raise ValueError(
                 "composition_summary.primary_destination_id must reference a bundle destination"
             )
+
+    def _validate_provenance(self) -> None:
         nested_source_refs = set(self._aggregate_source_refs())
         if not set(self.provenance_summary.source_refs).issubset(nested_source_refs):
             raise ValueError(
