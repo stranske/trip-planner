@@ -87,7 +87,7 @@ def parse_policy_requirements(value: Any, field_name: str) -> list[TPPPolicyRequ
             summary = _require_string_field(item.get("summary"), f"{location}.summary").strip()
             severity = item.get("severity", "warning")
             if not isinstance(severity, str) or severity not in {"warning", "blocking", "error"}:
-                raise ValueError("severity must be 'warning' or 'blocking'")
+                raise ValueError("severity must be 'warning', 'blocking', or 'error'")
             if "blocking" in item and not isinstance(item["blocking"], bool):
                 raise ValueError("blocking must be a boolean")
             if item.get("blocking") is True or severity == "error":
