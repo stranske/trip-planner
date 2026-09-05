@@ -9,10 +9,12 @@ from trip_planner.options.bundles import (
     BundleFeasibility,
     BundleProvenanceSummary,
     BundleQualityValueFitSummary,
+    ConstraintEvaluation,
     InventoryBundle,
     MixedOption,
     RouteCoherenceSummary,
     ScheduleFitSummary,
+    constraint_evaluation_from_feasibility,
 )
 
 __all__ = [
@@ -24,8 +26,10 @@ __all__ = [
     "BundleFeasibility",
     "BundleProvenanceSummary",
     "BundleQualityValueFitSummary",
+    "ConstraintEvaluation",
     "InventoryBundle",
     "MixedOption",
     "RouteCoherenceSummary",
     "ScheduleFitSummary",
+    "constraint_evaluation_from_feasibility",
 ]

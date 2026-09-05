@@ -32,6 +32,7 @@ from .bundles import (
     BundleFeasibility,
     BundleProvenanceSummary,
     BundleQualityValueFitSummary,
+    ConstraintEvaluation,
     InventoryBundle,
     MixedOption,
     RouteCoherenceSummary,
@@ -116,6 +117,7 @@ from .trip import (
 )
 
 __all__ = [
+    "ConstraintEvaluation",
     "ACTIVITY_AVAILABILITY_STATUSES",
     "ACTIVITY_FORMATS",
     "ACTIVITY_KINDS",

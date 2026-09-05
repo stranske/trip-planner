@@ -30,10 +30,12 @@ from .bundles import (
     BundleFeasibility,
     BundleProvenanceSummary,
     BundleQualityValueFitSummary,
+    ConstraintEvaluation,
     InventoryBundle,
     MixedOption,
     RouteCoherenceSummary,
     ScheduleFitSummary,
+    constraint_evaluation_from_feasibility,
 )
 from .bundles import (
     SCHEMA_VERSION as BUNDLE_SCHEMA_VERSION,
@@ -109,6 +111,7 @@ from .transport import (
 )
 
 __all__ = [
+    "constraint_evaluation_from_feasibility",
     "ACTIVITY_AVAILABILITY_STATUSES",
     "ACTIVITY_FORMATS",
     "ACTIVITY_KINDS",
@@ -158,6 +161,7 @@ __all__ = [
     "BundleFeasibility",
     "BundleProvenanceSummary",
     "BundleQualityValueFitSummary",
+    "ConstraintEvaluation",
     "Destination",
     "DestinationGeo",
     "DestinationSourceRef",
