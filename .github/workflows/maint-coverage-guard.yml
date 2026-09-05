@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       proceed: ${{ steps.check.outputs.proceed || 'true' }}
+      remaining: ${{ steps.check.outputs.remaining || '' }}
     steps:
       # Mint GitHub App token early to use for API calls (avoids rate limits)
       - name: Mint GitHub App Token
@@ -29,7 +30,7 @@ jobs:
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         continue-on-error: true
         with:
-          app-id: ${{ secrets.WORKFLOWS_APP_ID || '0' }}
+          client-id: ${{ secrets.WORKFLOWS_APP_ID || '0' }}
           private-key: ${{ secrets.WORKFLOWS_APP_PRIVATE_KEY || 'dummy' }}
 
       - name: Checkout retry helpers
@@ -128,7 +129,7 @@ jobs:
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         continue-on-error: true
         with:
-          app-id: ${{ secrets.WORKFLOWS_APP_ID || '0' }}
+          client-id: ${{ secrets.WORKFLOWS_APP_ID || '0' }}
           private-key: ${{ secrets.WORKFLOWS_APP_PRIVATE_KEY || 'dummy' }}
           owner: ${{ github.repository_owner }}
 
@@ -142,8 +143,53 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { owner, repo } = context.repo;
-            const workflowId = '.github/workflows/pr-00-gate.yml';
             const fs = require('fs');
+            // WHICH WORKFLOW CARRIES THIS REPO'S COVERAGE IS A PER-REPO FACT, AND IT WAS HARDCODED.
+            //
+            // Two repos are invisible to this guard for the same reason, and neither is
+            // misconfigured. stranske/Counter_Risk deliberately measures coverage on ci.yml -- its
+            // Gate carries an explicit "PR Gate is optimized for fast feedback. Full coverage
+            // enforcement runs on main" rationale. stranske/Orchestrator publishes its only honest
+            // figure (80.3% combined, against the 34.11% its Gate reports for pytest alone) from a
+            // job in ci.yml, because 79 of its 102 modules are exercised by --selftest subprocesses
+            // that pytest-cov cannot see. A guard that can only ever look at pr-00-gate.yml reports
+            // "no coverage" for both, which is indistinguishable from a repo that has none.
+            //
+            // Read from config/coverage-baseline.json, which is the right home: it is already the
+            // per-repo coverage config and is explicitly EXCLUDED from template sync ("Each repo
+            // maintains its own coverage baseline"), so a repo can answer this without diverging
+            // from the synced workflow.
+            //
+            // The default is exactly the previous behaviour, so no repo changes unless it opts in,
+            // and an unreadable or malformed config falls back to it rather than failing: a guard
+            // that died on its own config would be worse than one that looks in one place.
+            const DEFAULT_WORKFLOWS = ['.github/workflows/pr-00-gate.yml'];
+            const configuredWorkflowIds = (declared) =>
+              Array.isArray(declared)
+                ? declared
+                    .filter((workflow) => typeof workflow === 'string')
+                    .map((workflow) => workflow.trim())
+                    .filter(Boolean)
+                : [];
+            const errorMessage = (error) =>
+              error instanceof Error ? error.message : String(error);
+            let workflowIds = DEFAULT_WORKFLOWS;
+            let workflowSource = 'default';
+            try {
+              const cfgRaw = fs.readFileSync('config/coverage-baseline.json', 'utf8');
+              const cfg = JSON.parse(cfgRaw);
+              const declared = configuredWorkflowIds(cfg.source_workflows);
+              if (declared.length) {
+                workflowIds = declared;
+                workflowSource = 'config/coverage-baseline.json';
+              }
+            } catch (err) {
+              core.info(
+                `coverage-baseline.json not read for source_workflows (${errorMessage(err)}); ` +
+                  'using the default workflow list'
+              );
+            }
+            core.info(`Searching for coverage in: ${workflowIds.join(', ')} (from ${workflowSource})`);
             const retryHelperPath = './.github/scripts/github-api-with-retry.js';
             const retryHelpers = fs.existsSync(retryHelperPath)
               ? require(retryHelperPath)
@@ -154,39 +200,108 @@ jobs:
                 };
             const { paginateWithRetry, withRetry } = retryHelpers;
 
-            const runs = await paginateWithRetry(
-              github, github.rest.actions.listWorkflowRuns,
-              {
-                owner,
-                repo,
-                workflow_id: workflowId,
-                status: 'completed',
-                per_page: 50,
-              },
-            );
+            // Every configured workflow is listed and the runs POOLED, rather than stopping at the
+            // first that returns anything. A repo can legitimately publish coverage from more than
+            // one workflow, and taking only the first would make the ORDER of a config list into a
+            // silent filter.
+            let runs = [];
+            const searched = [];
+            for (const wf of workflowIds) {
+              try {
+                const found = await paginateWithRetry(
+                  github, github.rest.actions.listWorkflowRuns,
+                  {
+                    owner,
+                    repo,
+                    workflow_id: wf,
+                    status: 'completed',
+                    per_page: 50,
+                  },
+                );
+                const successfulForWorkflow = found
+                  .filter((run) => ['success', 'neutral'].includes(run.conclusion || ''))
+                  .sort(
+                    (a, b) =>
+                      new Date(b.run_started_at || b.created_at || 0) -
+                      new Date(a.run_started_at || a.created_at || 0),
+                  )
+                  .slice(0, 10);
+                searched.push(
+                  `${wf} (${found.length} run(s); ${successfulForWorkflow.length} successful probed)`,
+                );
+                runs = runs.concat(successfulForWorkflow);
+              } catch (err) {
+                // A workflow named in config that does not exist here is a CONFIG error worth
+                // naming, not a reason to abandon the others.
+                searched.push(`${wf} (UNAVAILABLE: ${errorMessage(err)})`);
+              }
+            }
 
             if (!runs.length) {
-              core.warning('No Gate workflow runs found.');
+              core.warning(`No successful or neutral completed runs found in: ${searched.join('; ')}`);
               core.setOutput('run_id', '');
-              core.setFailed('Coverage verification requires at least one completed Gate workflow run.');
+              core.setFailed(
+                'Coverage verification requires at least one successful or neutral completed run ' +
+                  `in a configured workflow. Searched: ${searched.join('; ')}. If this repo ` +
+                  'publishes coverage elsewhere, add source_workflows to config/coverage-baseline.json.'
+              );
               return;
             }
 
-            runs.sort(
+            const runsToProbe = runs.sort(
               (a, b) =>
                 new Date(b.run_started_at || b.created_at || 0) -
                 new Date(a.run_started_at || a.created_at || 0),
             );
-            const successfulRuns = runs.filter((run) =>
-              ['success', 'neutral'].includes(run.conclusion || ''),
-            );
-            const runsToProbe = successfulRuns.slice(0, 10);
-            const requiredCoverageArtifactNames = new Set([
-              'gate-coverage-trend',
-              'gate-coverage-trend-history',
-              'gate-coverage',
-            ]);
+            // THE PAYLOAD IS THE ONLY REQUIREMENT, AND IT HAS TWO NAMES IN THE WILD.
+            // pr-00-gate.yml uploads it under the ARTIFACT name `gate-coverage.json` (the FILE
+            // inside is gate-coverage.json; the step conflated the two), while this guard was
+            // written against `gate-coverage`. A paired literal in two files that disagreed, so
+            // the guard probed ten successful runs, found two of three artifacts every time, and
+            // reported no usable run at all -- in every consumer repo, for as long as it existed.
+            //
+            // Accept BOTH here rather than renaming the producer: pr-00-gate.yml is distributed
+            // create-only, so a producer rename reaches NEW repos only, while this file is
+            // sync-managed and reaches all of them.
+            //
+            // AND IT HAS A THIRD SHAPE, WHICH IS THE ONE ALMOST EVERY REPO ACTUALLY USES. The
+            // producer runs under a version matrix, so the artifact it publishes is suffixed:
+            // `gate-coverage-3.12-1` and `gate-coverage-3.13-1`. Measured 2026-08-30 across the
+            // lane fleet, EIGHT repos published a trend, a summary and both suffixed payloads --
+            // everything this job needs -- and every one was skipped, because an exact-name list
+            // can never match a name that carries a matrix suffix. The guard had failed in all 13
+            // repos, continuously; two more names would not have fixed it, so the match is by
+            // PREFIX with the non-payload artifacts excluded by name.
+            //
+            // Note what the exclusions are: `-trend`, `-trend-history`, `-summary` and `-delta`
+            // all share the `gate-coverage` prefix, so a bare prefix match would have selected the
+            // TREND as the payload and compared coverage against itself.
+            const coveragePayloadNames = ['gate-coverage', 'gate-coverage.json'];
+            const payloadPrefix = 'gate-coverage';
+            const notAPayload = /^gate-coverage-(trend|summary|delta)/;
+            const payloadCandidates = (names) => {
+              const exact = coveragePayloadNames.filter((name) => names.has(name));
+              const suffixed = [...names]
+                .filter((name) => name.startsWith(payloadPrefix) && !notAPayload.test(name))
+                .filter((name) => !coveragePayloadNames.includes(name))
+                .sort();
+              // Exact names first so a repo where this already worked is untouched; the suffixed
+              // ones are SORTED rather than taken in listing order, because the API's order is not
+              // stable and a coverage figure that depends on it would move for no reason.
+              return [...exact, ...suffixed];
+            };
+            // The guard cannot evaluate a baseline from the payload alone: coverage_guard.py
+            // deliberately treats a missing trend payload as a no-op.  Only select runs that
+            // carry the trend artifact, otherwise this job can report success without checking
+            // coverage or updating a breach issue.
+            const trendArtifactName = 'gate-coverage-trend';
+            const historyArtifactName = 'gate-coverage-trend-history';
             let candidate = null;
+            let resolvedPayloadName = '';
+            let resolvedTrendName = '';
+            let resolvedHistoryName = '';
+            const seenCoverageArtifacts = new Set();
+            const seenPayloadArtifacts = new Set();
             for (const run of runsToProbe) {
               let artifacts = [];
               try {
@@ -207,82 +322,128 @@ jobs:
                 continue;
               }
 
+              // Accumulated ACROSS runs so the failure message can distinguish "no coverage
+              // artifacts anywhere" from "artifacts under names this job cannot use". Those are
+              // opposite findings and only one of them means coverage is off.
               const availableCoverageArtifactNames = new Set(
                 artifacts
                   .filter((artifact) => !artifact.expired)
                   .map((artifact) => artifact.name),
               );
-              const missingCoverageArtifactNames = [...requiredCoverageArtifactNames].filter(
-                (artifactName) => !availableCoverageArtifactNames.has(artifactName),
-              );
-              if (!missingCoverageArtifactNames.length) {
+              for (const name of availableCoverageArtifactNames) {
+                if (name.startsWith(payloadPrefix)) seenCoverageArtifacts.add(name);
+              }
+              const candidateNames = payloadCandidates(availableCoverageArtifactNames);
+              for (const name of candidateNames) seenPayloadArtifacts.add(name);
+              const payloadName = candidateNames[0] || '';
+              if (candidateNames.length > 1) {
+                core.info(
+                  `Gate run ${run.id} carries ${candidateNames.length} coverage payloads ` +
+                    `(${candidateNames.join(', ')}); using ${payloadName}. They are the same ` +
+                    'suite on different interpreters, so the choice is fixed rather than left ' +
+                    'to listing order.',
+                );
+              }
+              const hasTrend = availableCoverageArtifactNames.has(trendArtifactName);
+              if (payloadName && hasTrend) {
                 candidate = run;
+                resolvedPayloadName = payloadName;
+                resolvedTrendName = trendArtifactName;
+                resolvedHistoryName = availableCoverageArtifactNames.has(historyArtifactName)
+                  ? historyArtifactName
+                  : '';
                 break;
               }
               core.info(
                 [
-                  `Skipping Gate run ${run.id}; missing required coverage artifacts:`,
-                  missingCoverageArtifactNames.join(', '),
+                  `Skipping Gate run ${run.id}; required coverage artifacts are incomplete.`,
+                  payloadName
+                    ? `Found payload ${payloadName} but no ${trendArtifactName}.`
+                    : seenCoverageArtifacts.size
+                      ? `No usable payload among ${[...seenCoverageArtifacts].sort().join(', ')}.`
+                      : 'This run published no gate-coverage artifacts at all.',
                 ].join(' '),
               );
             }
 
-            if (!candidate && !successfulRuns.length) {
-              core.warning(
-                'Unable to locate a successful or neutral completed Gate workflow run.',
-              );
-              core.setOutput('run_id', '');
-              core.setFailed('Coverage verification could not find a successful Gate workflow run.');
-              return;
-            }
-
             if (!candidate) {
+              // THREE FINDINGS, NOT ONE. "This repo does not measure coverage", "it measures it
+              // and publishes it under a name I do not recognise" and "it publishes a payload but
+              // no trend" have completely different fixes, and the single message this replaced
+              // asserted the first in all three cases. It told eight repos that were measuring
+              // coverage, and publishing it, to go and switch coverage on.
               core.warning(
-                [
-                  'Unable to locate a recent successful Gate workflow run with required',
-                  'coverage artifacts: gate-coverage-trend, gate-coverage-trend-history,',
-                  'gate-coverage.',
-              ].join(' '),
+                seenCoverageArtifacts.size === 0
+                  ? [
+                      'Unable to locate a recent successful Gate workflow run carrying any',
+                      'gate-coverage artifact. Coverage is most likely not being measured here:',
+                      'check that the reusable CI caller sets coverage: true and',
+                      'enable-soft-gate: true.',
+                    ].join(' ')
+                  : seenPayloadArtifacts.size === 0
+                    ? [
+                        'Gate runs DID publish gate-coverage artifacts, but none matched a',
+                        'supported payload shape.',
+                        `Seen: ${[...seenCoverageArtifacts].sort().join(', ')}.`,
+                        `A payload is any gate-coverage* artifact except ${'-trend'}/-summary/-delta.`,
+                        'Coverage IS being measured in this repo, but the payload names are',
+                        'unusable by this guard; align the producer name or matcher.',
+                      ].join(' ')
+                    : [
+                        'Gate runs DID publish usable coverage payloads, but none had the required',
+                        `${trendArtifactName} on the same run.`,
+                        `Payloads seen: ${[...seenPayloadArtifacts].sort().join(', ')}.`,
+                        'Coverage IS being measured in this repo; publish the missing trend',
+                        'artifact rather than enabling coverage again.',
+                      ].join(' '),
               );
               core.setOutput('run_id', '');
-              core.setFailed(
-                'Coverage verification could not find required coverage artifacts on a successful Gate run.',
-              );
+              const missingPairReason =
+                seenCoverageArtifacts.size === 0
+                  ? 'no gate-coverage artifacts were published'
+                  : seenPayloadArtifacts.size === 0
+                    ? 'published coverage artifact names did not match a supported payload shape'
+                    : `coverage payloads were published without ${trendArtifactName}`;
+              core.setFailed(`Coverage verification could not proceed: ${missingPairReason}.`);
               return;
             }
 
             core.setOutput('run_id', String(candidate.id || ''));
             core.setOutput('run_number', String(candidate.run_number || ''));
+            // The downloader learns the names from the producer's actual artifact list instead of
+            // repeating a literal. A name that is discovered cannot drift from the name that
+            // exists, which is the whole defect this replaces.
+            core.setOutput('coverage_artifact_name', resolvedPayloadName);
+            core.setOutput('trend_artifact_name', resolvedTrendName);
+            core.setOutput('history_artifact_name', resolvedHistoryName);
             core.setOutput('run_url', candidate.html_url || '');
             const url = candidate.html_url || 'no url';
             core.notice(`Using Gate workflow run ${candidate.id} (${url})`);
 
       - name: Download coverage trend artifact
-        if: ${{ steps.discover.outputs.run_id }}
+        if: ${{ steps.discover.outputs.trend_artifact_name }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        continue-on-error: true
         with:
-          name: gate-coverage-trend
+          name: ${{ steps.discover.outputs.trend_artifact_name }}
           run-id: ${{ steps.discover.outputs.run_id }}
           path: coverage_artifacts/trend
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download coverage trend history artifact
-        if: ${{ steps.discover.outputs.run_id }}
+        if: ${{ steps.discover.outputs.history_artifact_name }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         continue-on-error: true
         with:
-          name: gate-coverage-trend-history
+          name: ${{ steps.discover.outputs.history_artifact_name }}
           run-id: ${{ steps.discover.outputs.run_id }}
           path: coverage_artifacts/history
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download coverage payload artifact
-        if: ${{ steps.discover.outputs.run_id }}
+        if: ${{ steps.discover.outputs.coverage_artifact_name }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        continue-on-error: true
         with:
-          name: gate-coverage
+          name: ${{ steps.discover.outputs.coverage_artifact_name }}
           run-id: ${{ steps.discover.outputs.run_id }}
           path: coverage_artifacts/payload
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -321,9 +482,26 @@ jobs:
           done
 
           # Check for coverage json
+          # THE ARTIFACT IS FOUND AND THE FILE INSIDE IT IS NOT. This list is the same shape of
+          # defect as the artifact-NAME list one step earlier: seven hardcoded paths against a
+          # producer that writes somewhere else. Verified 2026-08-30 by downloading
+          # stranske/Counter_Risk's real `gate-coverage-3.12-1` -- it holds `index.ndjson` and
+          # `runtimes/3.12/coverage.json`, extracting to
+          # `coverage_artifacts/payload/runtimes/3.12/coverage.json`, one directory level from the
+          # first candidate and matched by none of them. The list also hardcodes the Python
+          # versions, so a matrix change breaks it silently and later.
+          #
+          # Literals first, so a repo where they already work is untouched and this change cannot
+          # alter a working resolution. Then FIND the payload rather than guess where it is: a
+          # file is the payload when it PARSES and carries `totals.percent_covered`, which is what
+          # the guard actually reads. That test cannot drift from the producer's directory layout,
+          # because it does not mention the layout.
           for candidate in \
+            "coverage_artifacts/payload/coverage/runtimes/3.12/coverage.json" \
+            "coverage_artifacts/payload/coverage/runtimes/3.13/coverage.json" \
             "coverage_artifacts/payload/artifacts/coverage/runtimes/3.12/coverage.json" \
             "coverage_artifacts/payload/artifacts/coverage/runtimes/3.13/coverage.json" \
+            "coverage_artifacts/payload/gate-coverage.json" \
             "coverage_artifacts/payload/coverage.json" \
             "coverage_artifacts/coverage.json"; do
             if [ -f "$candidate" ]; then
@@ -331,6 +509,18 @@ jobs:
               break
             fi
           done
+          # `sort` so an artifact holding two runtimes resolves to the SAME file every run: they
+          # are one suite on different interpreters, and a figure that moved with directory order
+          # would be noise reported as a coverage change.
+          if [ -z "$COVERAGE_PATH" ]; then
+            while IFS= read -r found; do
+              if python -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if isinstance(d,dict) and 'percent_covered' in (d.get('totals') or {}) else 1)" "$found" 2>/dev/null; then
+                COVERAGE_PATH="$found"
+                echo "::notice title=Coverage payload located by search::No known path matched; found ${found} by looking for a JSON carrying totals.percent_covered."
+                break
+              fi
+            done < <(find coverage_artifacts -type f -name '*.json' 2>/dev/null | sort)
+          fi
 
           # Build args
           ARGS=(
@@ -354,4 +544,52 @@ jobs:
             ARGS+=(--baseline-path "config/coverage-baseline.json")
           fi
 
+          if [ -z "$TREND_PATH" ] || [ -z "$COVERAGE_PATH" ]; then
+            echo "Required coverage artifacts are missing after download."
+            echo "TREND_PATH=${TREND_PATH:-<missing>}"
+            echo "COVERAGE_PATH=${COVERAGE_PATH:-<missing>}"
+            # WHAT WAS ACTUALLY THERE. Without this, the message says a file is missing and gives
+            # no way to tell "the artifact was empty" from "the artifact was full and nothing in
+            # it looked like a coverage report" -- and the second is what really happened.
+            echo "--- files downloaded (the search covered every .json among these) ---"
+            find coverage_artifacts -type f 2>/dev/null | head -50 || echo "(coverage_artifacts is absent or empty)"
+            exit 1
+          fi
+
           python tools/coverage_guard.py "${ARGS[@]}"
+
+  # A SKIPPED GUARD USED TO BE INDISTINGUISHABLE FROM A PASSING ONE. `guard` is gated on the
+  # rate-limit job, so when quota is low the job is skipped and the WORKFLOW IS GREEN with nothing
+  # checked. stranske/Workflows' three most recent runs all read `success` at the workflow level
+  # and `coverage baseline monitor: skipped` at the job level -- which is how a monitor that has
+  # never once executed came to look healthy for months. This job always runs and says which
+  # happened, so the run's own summary distinguishes "checked, and it was fine" from "did not
+  # check". It deliberately does NOT fail on a deferral: the quota gate is legitimate, and turning
+  # a deferral into a red would train everyone to ignore the red.
+  report:
+    name: coverage guard outcome
+    needs: [rate-limit-check, guard]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record whether the guard actually evaluated
+        env:
+          PROCEED: ${{ needs.rate-limit-check.outputs.proceed }}
+          GUARD_RESULT: ${{ needs.guard.result }}
+        run: |
+          if [ "${GUARD_RESULT}" = "skipped" ]; then
+            if [ "${PROCEED}" = "true" ]; then
+              REASON="the guard job was skipped for a reason other than API quota"
+            else
+              REASON="API quota was below the threshold, so the check was deferred"
+            fi
+            {
+              echo "### Coverage guard: NOT EVALUATED"
+              echo ""
+              echo "Coverage was **not** checked on this run - ${REASON}."
+              echo "A green run here does not mean coverage is healthy."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=Coverage guard not evaluated::${REASON}"
+          else
+            echo "### Coverage guard: evaluated (${GUARD_RESULT})" >> "$GITHUB_STEP_SUMMARY"
+          fi
