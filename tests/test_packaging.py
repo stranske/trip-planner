@@ -114,24 +114,23 @@ def test_scenario_personas_match_packaged_fixture_map() -> None:
 )
 def test_production_tests_import_guard_fails_on_deliberate_break(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
     bad_import_line: str,
 ) -> None:
-    offenders = _production_tests_import_offenders()
-    assert offenders == []
-
-    scenarios_path = TRIP_PLANNER_ROOT / "app" / "services" / "scenarios.py"
-    original = scenarios_path.read_text(encoding="utf-8")
-    broken = original.replace(
-        "from trip_planner.preferences.fixture_corpus import load_fixture_map",
-        bad_import_line,
-        1,
+    # Exercise the same scanner on a private tree. Mutating the checkout races
+    # with the production guard and wheel builds in other pytest-xdist workers.
+    package_root = tmp_path / "trip_planner"
+    scenarios_path = package_root / "app" / "services" / "scenarios.py"
+    scenarios_path.parent.mkdir(parents=True)
+    scenarios_path.write_text(
+        "from trip_planner.preferences.fixture_corpus import load_fixture_map\n",
+        encoding="utf-8",
     )
-    scenarios_path.write_text(broken, encoding="utf-8")
-    try:
-        offenders = _production_tests_import_offenders()
-        assert offenders, "Deliberate tests import should be detected"
-        assert any("from tests." in offender for offender in offenders)
-    finally:
-        scenarios_path.write_text(original, encoding="utf-8")
-
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(sys.modules[__name__], "TRIP_PLANNER_ROOT", package_root)
     assert _production_tests_import_offenders() == []
+
+    scenarios_path.write_text(bad_import_line + "\n", encoding="utf-8")
+    assert _production_tests_import_offenders() == [
+        f"trip_planner/app/services/scenarios.py:1: {bad_import_line}"
+    ]
