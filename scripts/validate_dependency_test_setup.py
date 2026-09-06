@@ -53,7 +53,7 @@ def _check_requirement(requirement: Requirement, locked: list[Requirement]) -> s
         ):
             return f"{requirement.name}: lock entry must specify an exact version"
         version = versions[0].version
-        if not requirement.specifier.contains(version, prereleases=True):
+        if not requirement.specifier.contains(version):
             return f"{requirement.name}: locked {version} does not satisfy {requirement.specifier}"
     return None
 

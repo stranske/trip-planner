@@ -77,11 +77,12 @@ def test_validator_rejects_inconsistent_lock(repo_fixture: Path, lock: str, mess
     assert message in result.stdout
 
 
-def test_validator_requires_real_application_path(repo_fixture: Path) -> None:
-    (repo_fixture / "trip_planner/app/main.py").unlink()
+@pytest.mark.parametrize("relative", ["trip_planner/app/main.py", "trip_planner/__init__.py"])
+def test_validator_requires_real_application_path(repo_fixture: Path, relative: str) -> None:
+    (repo_fixture / relative).unlink()
     result = run_validator(repo_fixture)
     assert result.returncode == 1
-    assert "trip_planner/app/main.py" in result.stdout
+    assert relative in result.stdout
 
 
 @pytest.mark.parametrize("filename", ["pyproject.toml", "requirements.lock"])
@@ -122,3 +123,18 @@ def test_validator_checks_runtime_dependencies(repo_fixture: Path) -> None:
     result = run_validator(repo_fixture)
     assert result.returncode == 1
     assert "runtime: fastapi: missing" in result.stdout
+
+
+def test_validator_accepts_explicit_prerelease_declaration(repo_fixture: Path) -> None:
+    project = repo_fixture / "pyproject.toml"
+    project.write_text(
+        project.read_text(encoding="utf-8").replace("fastapi>=0.100,<1", "fastapi>=0.142rc1,<1"),
+        encoding="utf-8",
+    )
+    lock = repo_fixture / "requirements.lock"
+    lock.write_text(
+        lock.read_text(encoding="utf-8").replace("fastapi==0.141.1", "fastapi==0.142rc1"),
+        encoding="utf-8",
+    )
+    result = run_validator(repo_fixture)
+    assert result.returncode == 0, result.stdout
