@@ -401,6 +401,61 @@ def _objectives_for_scenario(
     return profile, objectives, constraint_set
 
 
+def test_objective_derivation_uses_tpp_comparable_requirements_for_ranking_penalties() -> None:
+    profile = _load_profile("conference_profile.json")
+    constraint_set = _load_constraint_set("policy_round_trip_compliant.json")
+    profile.vendor_constraints.comparison_requirements = {"airfare": 1, "lodging": 1}
+
+    baseline_objectives = derive_business_planning_objectives(
+        profile,
+        trip_id="trip:tpp-comparable-baseline",
+        constraint_set=constraint_set,
+    )
+    tpp_objectives = derive_business_planning_objectives(
+        profile,
+        trip_id="trip:tpp-comparable-override",
+        constraint_set=constraint_set,
+        organization_context={"comparable_requirements": {"airfare": 5, "lodging": 5}},
+    )
+
+    assert tpp_objectives.comparable_requirements.required_categories == {
+        "airfare": 5,
+        "lodging": 5,
+    }
+
+    bundle = _compliant_conference_bundle()
+    engine = BusinessRankingEngine()
+    baseline_result = engine.rank_bundles(
+        profile,
+        baseline_objectives,
+        [bundle],
+        trip_id="trip:tpp-comparable-baseline",
+        constraint_set=constraint_set,
+    ).results[0]
+    tpp_result = engine.rank_bundles(
+        profile,
+        tpp_objectives,
+        [bundle],
+        trip_id="trip:tpp-comparable-override",
+        constraint_set=constraint_set,
+    ).results[0]
+
+    baseline_missing = [
+        penalty
+        for penalty in baseline_result.score_breakdown.missing_data_penalties
+        if penalty.reason_code == "comparables_missing"
+    ]
+    tpp_missing = [
+        penalty
+        for penalty in tpp_result.score_breakdown.missing_data_penalties
+        if penalty.reason_code == "comparables_missing"
+    ]
+
+    assert not baseline_missing
+    assert tpp_missing
+    assert tpp_result.score < baseline_result.score
+
+
 @pytest.mark.parametrize(
     ("scenario_name", "bundles"),
     [

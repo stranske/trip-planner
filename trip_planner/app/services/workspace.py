@@ -378,6 +378,17 @@ def _business_search_result(trip_id: str) -> ScenarioSearchResult:
     )
 
 
+def _organization_context_from_policy_state(
+    policy_state: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not isinstance(policy_state, dict):
+        return None
+    organization_context = policy_state.get("organization_context")
+    if isinstance(organization_context, dict):
+        return organization_context
+    return None
+
+
 def _build_scenario_search(
     *,
     trip_id: str,
@@ -387,6 +398,7 @@ def _build_scenario_search(
     primary_regions: tuple[str, ...] = (),
     duration_days: int | None = None,
     traveler_party_kind: str | None = None,
+    organization_context: dict[str, Any] | None = None,
 ) -> ScenarioSearchResult:
     return build_workspace_scenario_search(
         trip_id=trip_id,
@@ -396,6 +408,7 @@ def _build_scenario_search(
         primary_regions=primary_regions,
         duration_days=duration_days,
         traveler_party_kind=traveler_party_kind,
+        organization_context=organization_context,
     )
 
 
@@ -2076,6 +2089,7 @@ def _build_runtime_scenario_comparison_payload(
             trip_id=trip_id,
             trip_mode=trip_record.trip.mode,
         )
+        fixture_policy_state = load_fixture_policy_state(trip_id)
         scenario_search = _build_scenario_search(
             trip_id=trip_id,
             trip_mode=trip_record.trip.mode,
@@ -2084,13 +2098,14 @@ def _build_runtime_scenario_comparison_payload(
             primary_regions=tuple(trip_record.trip.trip_frame.primary_regions),
             duration_days=trip_record.trip.trip_frame.duration_days,
             traveler_party_kind=trip_record.trip.trip_frame.traveler_party.kind,
+            organization_context=_organization_context_from_policy_state(fixture_policy_state),
         )
         return _build_runtime_scenario_comparison(
             trip_id=trip_id,
             trip_title=trip_record.trip.title,
             scenario_search=scenario_search.to_dict(),
             session=session.to_dict(),
-            policy_state=load_fixture_policy_state(trip_id),
+            policy_state=fixture_policy_state,
             trip_mode=trip_record.trip.mode,
             duration_days=trip_record.trip.trip_frame.duration_days,
         )
@@ -2646,6 +2661,7 @@ def _build_fixture_workspace_payload(
     inventory_bundles = assemble_inventory_bundles_for_trip(
         assembly_input=inventory_assembly_input,
     )
+    fixture_policy_state = load_fixture_policy_state(trip_id)
     scenario_search = _build_scenario_search(
         trip_id=trip_id,
         trip_mode=trip_record.trip.mode,
@@ -2654,9 +2670,9 @@ def _build_fixture_workspace_payload(
         primary_regions=tuple(trip_record.trip.trip_frame.primary_regions),
         duration_days=trip_record.trip.trip_frame.duration_days,
         traveler_party_kind=trip_record.trip.trip_frame.traveler_party.kind,
+        organization_context=_organization_context_from_policy_state(fixture_policy_state),
     )
     feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
-    fixture_policy_state = load_fixture_policy_state(trip_id)
     runtime_scenario_comparison = _build_runtime_scenario_comparison(
         trip_id=trip_id,
         trip_title=trip_record.trip.title,

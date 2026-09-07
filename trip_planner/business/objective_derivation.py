@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Any
 
 from trip_planner.business.objectives import (
     BookingChannelObjectives,
@@ -110,9 +111,26 @@ def _schedule_protection(
     )
 
 
+def _merge_tpp_comparable_requirements(
+    profile_requirements: dict[str, int],
+    organization_context: dict[str, Any] | None,
+) -> dict[str, int]:
+    merged = dict(profile_requirements)
+    if not organization_context:
+        return merged
+    tpp_requirements = organization_context.get("comparable_requirements")
+    if not isinstance(tpp_requirements, dict):
+        return merged
+    for key, value in tpp_requirements.items():
+        if isinstance(key, str) and key and isinstance(value, int) and value >= 0:
+            merged[key] = value
+    return merged
+
+
 def _comparable_requirements(
     profile: BusinessTravelProfile,
     constraint_set: PolicyConstraintSet | None,
+    organization_context: dict[str, Any] | None = None,
 ) -> ComparableRequirementObjectives:
     notes = []
     documentation_rules = _effective_documentation_rules(profile, constraint_set)
@@ -120,10 +138,13 @@ def _comparable_requirements(
         notes.append("Comparable capture is required before proposal export.")
     if documentation_rules:
         notes.append("Documentation rules: " + ", ".join(documentation_rules))
+    required_categories = _merge_tpp_comparable_requirements(
+        profile.vendor_constraints.comparison_requirements,
+        organization_context,
+    )
     return ComparableRequirementObjectives(
         required_categories={
-            key: profile.vendor_constraints.comparison_requirements[key]
-            for key in sorted(profile.vendor_constraints.comparison_requirements)
+            key: required_categories[key] for key in sorted(required_categories)
         },
         capture_required=profile.documentation_requirements.comparable_capture_required,
         additional_comparables_for_exception=(
@@ -384,11 +405,16 @@ def derive_business_planning_objectives(
     trip_id: str,
     constraint_set: PolicyConstraintSet | None = None,
     objective_id: str | None = None,
+    organization_context: dict[str, Any] | None = None,
 ) -> BusinessPlanningObjectives:
     """Derive deterministic business-planning objectives from policy-aware inputs."""
     channel_strategy = _channel_strategy(profile, constraint_set)
     schedule_protection = _schedule_protection(profile)
-    comparable_requirements = _comparable_requirements(profile, constraint_set)
+    comparable_requirements = _comparable_requirements(
+        profile,
+        constraint_set,
+        organization_context,
+    )
     justification_readiness = _justification_readiness(profile, constraint_set)
     cost_control_posture = _cost_control_posture(profile)
     comfort_floor_protection = _comfort_floor(profile)
