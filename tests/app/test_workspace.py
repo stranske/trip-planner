@@ -3449,12 +3449,13 @@ def test_workspace_response_filters_business_policy_proposal_diagnostics_by_defa
     assert "proposal_state" not in payload["view_model"]["debug_state"]["sections"]
 
 
-def test_public_proposal_state_reports_missing_saved_verdict() -> None:
+@pytest.mark.parametrize("evaluation_result", [None, {}, "compliant", ["compliant"], True, 1])
+def test_public_proposal_state_reports_missing_saved_verdict(evaluation_result: Any) -> None:
     proposal_state = {
         "proposal": {"proposal_id": "proposal:no-verdict"},
         "evaluation": {
             "status_endpoint": "https://tpp.example.test/executions/exec-no-verdict",
-            "evaluation_result": None,
+            "evaluation_result": evaluation_result,
         },
         "summary": {"approval_ready": True, "submission_summary": "Packet submitted."},
         "follow_up": None,

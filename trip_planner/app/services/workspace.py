@@ -1964,14 +1964,15 @@ def _public_workspace_proposal_state(proposal_state: Any) -> dict[str, Any] | No
 
 
 def _proposal_state_has_saved_verdict(proposal_state: Any) -> bool:
-    """Report whether a policy evaluation verdict is stored for this proposal state."""
+    """Attest a nonempty verdict object without exposing its diagnostic fields."""
 
     if not isinstance(proposal_state, dict):
         return False
     evaluation = proposal_state.get("evaluation")
     if not isinstance(evaluation, dict):
         return False
-    return bool(evaluation.get("evaluation_result"))
+    evaluation_result = evaluation.get("evaluation_result")
+    return isinstance(evaluation_result, dict) and bool(evaluation_result)
 
 
 def _public_workspace_planner_panel_state(
