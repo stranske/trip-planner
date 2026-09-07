@@ -32,6 +32,8 @@ FIXTURE_POLICY = {
         {"typical_amount": float("nan")},
         {"typical_amount": float("inf")},
         {"typical_amount": float("-inf")},
+        {"typical_amount": 10**1000},
+        {"typical_amount": -(10**1000)},
     ],
 )
 def test_missing_estimated_total_does_not_mark_compliant_under_budget_cap(
@@ -160,6 +162,8 @@ def test_leisure_scenario_preview_is_not_applicable() -> None:
         {"nightly_typical_amount": float("nan")},
         {"nightly_typical_amount": float("inf")},
         {"nightly_typical_amount": float("-inf")},
+        {"nightly_typical_amount": 10**1000},
+        {"nightly_typical_amount": -(10**1000)},
     ],
 )
 def test_missing_nightly_amount_marks_lodging_preview_incomplete_not_compliant(
@@ -199,7 +203,18 @@ def test_lodging_preview_is_compliant_at_or_under_cap(nightly_amount: float) -> 
     assert preview["violations"] == []
 
 
-@pytest.mark.parametrize("cap", [None, "unknown", True, float("nan"), float("inf")])
+@pytest.mark.parametrize(
+    "cap",
+    [
+        None,
+        "unknown",
+        True,
+        float("nan"),
+        float("inf"),
+        pytest.param(10**1000, id="overflow"),
+        pytest.param(-(10**1000), id="negative-overflow"),
+    ],
+)
 def test_invalid_lodging_cap_does_not_create_lodging_finding(cap: Any) -> None:
     preview = build_scenario_policy_preview(
         policy_state={"constraint_set": {"lodging_rules": {"max_nightly_rate_usd": cap}}},
@@ -248,7 +263,18 @@ def test_non_usd_scenario_skips_usd_budget_cap_comparison() -> None:
     assert not any(item["rule_id"] == "BUD-001" for item in preview["violations"])
 
 
-@pytest.mark.parametrize("cap", [True, False, float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize(
+    "cap",
+    [
+        True,
+        False,
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+        pytest.param(10**1000, id="overflow"),
+        pytest.param(-(10**1000), id="negative-overflow"),
+    ],
+)
 @pytest.mark.parametrize("estimated_total", [None, {"currency": "USD", "typical_amount": 2400}])
 def test_invalid_budget_cap_does_not_create_budget_finding(cap: Any, estimated_total: Any) -> None:
     preview = build_scenario_policy_preview(
