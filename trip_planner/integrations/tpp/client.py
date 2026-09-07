@@ -873,16 +873,8 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             or str(organization_context.get("organization_id") or "").strip()
             or "tpp"
         )
-        documentation_rules = [
-            str(item.get("code") or item.get("summary") or "").strip()
-            for item in payload.get("documentation_rules") or []
-            if isinstance(item, dict) and str(item.get("code") or item.get("summary") or "").strip()
-        ]
-        approval_triggers = [
-            str(item.get("code") or item.get("summary") or "").strip()
-            for item in payload.get("approval_triggers") or []
-            if isinstance(item, dict) and str(item.get("code") or item.get("summary") or "").strip()
-        ]
+        documentation_rules = self._policy_rule_codes(payload.get("documentation_rules"))
+        approval_triggers = self._policy_rule_codes(payload.get("approval_triggers"))
         booking_requirements = self._adapt_policy_requirements(
             payload.get("booking_requirements"),
             field_name="booking_requirements",
@@ -902,10 +894,10 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 "organization_id": organization_id,
                 "policy_version": policy_version,
                 "required_booking_channels": [],
-                "airfare_rules": {},
-                "lodging_rules": {},
-                "ground_transport_rules": {},
-                "meal_rules": {},
+                "airfare_rules": payload.get("airfare_rules", {}),
+                "lodging_rules": payload.get("lodging_rules", {}),
+                "ground_transport_rules": payload.get("ground_transport_rules", {}),
+                "meal_rules": payload.get("meal_rules", {}),
                 "approval_rules": approval_triggers,
                 "documentation_rules": documentation_rules,
                 "allowed_exception_types": [],
@@ -918,7 +910,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 "booking_requirements": booking_requirements,
                 "blocking_issues": blocking_issues,
                 "approved_channels": [],
-                "comparable_requirements": {},
+                "comparable_requirements": payload.get("comparable_requirements", {}),
                 "documentation_rules": documentation_rules,
                 "approval_triggers": approval_triggers,
                 "comfort_preferences": {},
@@ -951,6 +943,14 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 "received_at": payload.get("generated_at"),
             }
         )
+
+    @staticmethod
+    def _policy_rule_codes(value: Any) -> list[str]:
+        return [
+            str(item.get("code") or item.get("summary") or "").strip()
+            for item in value or []
+            if isinstance(item, dict) and str(item.get("code") or item.get("summary") or "").strip()
+        ]
 
     @staticmethod
     def _adapt_policy_requirements(value: Any, *, field_name: str) -> list[dict[str, str]]:

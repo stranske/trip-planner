@@ -269,3 +269,109 @@ def test_requirement_paths_reject_malformed_values_with_boundary_error_types(pay
         )
     with pytest.raises(PersistedPolicyStateValidationError):
         _normalize_policy_requirements(payload, field_name="booking_requirements")
+
+
+@pytest.fixture
+def live_policy_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[TPPPolicySyncService, TPPRequestEnvelope, dict[str, Any]]:
+    fixture = _load_fixture("standard_policy_sync.json")
+    fixture["request"]["payload"]["trip_plan"] = {"trip_id": "trip-live-policy-rules"}
+    request = TPPRequestEnvelope.from_dict(fixture["request"])
+    client = HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url="https://tpp.example", access_token="test-token", oidc_provider="okta"
+        )
+    )
+    snapshot: dict[str, Any] = {
+        "versioning": {
+            "policy_version": "2026.02",
+            "contract_version": "2026-04-11",
+            "compatible_with_planner_cache": True,
+        },
+        "generated_at": "2026-02-15T12:00:00Z",
+        "policy_status": "pass",
+        "booking_requirements": [],
+    }
+
+    def fake_request(**kwargs: Any) -> dict[str, Any]:
+        assert kwargs["method"] == "GET"
+        assert kwargs["path"] == "/api/planner/policy-snapshot"
+        return snapshot
+
+    monkeypatch.setattr(client, "_request_json", fake_request)
+    return TPPPolicySyncService(client), request, snapshot
+
+
+def test_live_policy_snapshot_maps_lodging_and_airfare_rules_into_constraint_set(
+    live_policy_snapshot: tuple[TPPPolicySyncService, TPPRequestEnvelope, dict[str, Any]],
+) -> None:
+    service, request, snapshot = live_policy_snapshot
+    fixture_payload = _load_fixture("standard_policy_sync.json")["response"]["result_payload"]
+    rule_fields = ("airfare_rules", "lodging_rules", "ground_transport_rules", "meal_rules")
+    snapshot.update({key: fixture_payload["constraint_set"][key] for key in rule_fields})
+    snapshot["comparable_requirements"] = {"airfare": 3, "lodging": 2}
+
+    imported = service.import_policy_constraints(request)
+    serialized = imported.to_dict()
+
+    assert imported.constraint_set.lodging_rules["max_nightly_rate_usd"] == 325
+    assert imported.constraint_set.airfare_rules["max_cabin"] == "premium_economy"
+    for key in rule_fields:
+        assert getattr(imported.constraint_set, key) == snapshot[key]
+        assert serialized["constraint_set"][key] == snapshot[key]
+    assert imported.organization_context.comparable_requirements == {"airfare": 3, "lodging": 2}
+    assert serialized["organization_context"]["comparable_requirements"] == {
+        "airfare": 3,
+        "lodging": 2,
+    }
+
+
+@pytest.mark.parametrize("provided", [False, True])
+def test_live_policy_snapshot_optional_rule_blocks_default_to_empty(
+    live_policy_snapshot: tuple[TPPPolicySyncService, TPPRequestEnvelope, dict[str, Any]],
+    provided: bool,
+) -> None:
+    service, request, snapshot = live_policy_snapshot
+    rule_fields = ("airfare_rules", "lodging_rules", "ground_transport_rules", "meal_rules")
+    if provided:
+        snapshot.update(dict.fromkeys((*rule_fields, "comparable_requirements")))
+
+    imported = service.import_policy_constraints(request)
+
+    for key in rule_fields:
+        assert getattr(imported.constraint_set, key) == {}
+    assert imported.organization_context.comparable_requirements == {}
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "airfare_rules",
+        "lodging_rules",
+        "ground_transport_rules",
+        "meal_rules",
+        "comparable_requirements",
+    ],
+)
+@pytest.mark.parametrize("value", [[], "invalid"])
+def test_live_policy_snapshot_rejects_malformed_rule_blocks(
+    live_policy_snapshot: tuple[TPPPolicySyncService, TPPRequestEnvelope, dict[str, Any]],
+    field_name: str,
+    value: Any,
+) -> None:
+    service, request, snapshot = live_policy_snapshot
+    snapshot[field_name] = value
+
+    with pytest.raises(ValueError, match=field_name):
+        service.import_policy_constraints(request)
+
+
+def test_live_policy_snapshot_validates_comparable_counts(
+    live_policy_snapshot: tuple[TPPPolicySyncService, TPPRequestEnvelope, dict[str, Any]],
+) -> None:
+    service, request, snapshot = live_policy_snapshot
+    snapshot["comparable_requirements"] = {"airfare": "three"}
+
+    with pytest.raises(ValueError, match=r"comparable_requirements\[airfare\]"):
+        service.import_policy_constraints(request)
