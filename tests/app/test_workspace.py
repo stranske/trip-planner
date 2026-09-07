@@ -54,7 +54,10 @@ _WORKSPACE_MODULE_LINE_CEILING = 3900
 def test_workspace_module_stays_under_size_ceiling() -> None:
     workspace_path = Path(workspace_service.__file__)
 
-    assert len(workspace_path.read_text(encoding="utf-8").splitlines()) <= _WORKSPACE_MODULE_LINE_CEILING
+    assert (
+        len(workspace_path.read_text(encoding="utf-8").splitlines())
+        <= _WORKSPACE_MODULE_LINE_CEILING
+    )
 
 
 def test_load_saved_scenarios_allows_entries_without_a_comparison(
@@ -3821,3 +3824,63 @@ def test_get_workspace_payload_shape_unchanged(client: TestClient) -> None:
     assert leisure["scenario_search"]["scenarios"]
     assert "bundle_count" in leisure["inventory_summary"]
     assert leisure["runtime_state"]["status"]
+
+
+@pytest.mark.parametrize(
+    "counts", [{"airfare": True}, {"airfare": -1}, {"airfare": "2"}, [1], {"": 2}]
+)
+def test_workspace_invalid_stored_comparable_counts_remain_unavailable(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    counts: Any,
+) -> None:
+    bundles = workspace_service.assemble_inventory_bundles_for_trip(
+        trip_id="trip-business-client-summit", trip_mode="business"
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "_build_workspace_inventory_inputs",
+        lambda record: (bundles, workspace_service.build_inventory_summary_payload(bundles)),
+    )
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Invalid comparable counts",
+            "summary": "Retain explicit policy errors",
+            "mode": "business",
+            "trip_frame": {"duration_days": 2, "primary_regions": ["Chicago"]},
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = json.loads(
+        (
+            Path(__file__).resolve().parents[2]
+            / "tests/fixtures/integrations/tpp/policy/standard_policy_sync.json"
+        ).read_text()
+    )
+    assert (
+        client.put(
+            f"/api/workspace/{trip_id}/policy",
+            json={
+                "request": fixture["request"],
+                "response": fixture["response"],
+            },
+        ).status_code
+        == 200
+    )
+    with get_session_factory()() as db_session:
+        state = db_session.get(PersistedPolicyState, f"policy-state:{trip_id}")
+        assert state is not None
+        state.organization_context = {
+            **state.organization_context,
+            "comparable_requirements": counts,
+        }
+        db_session.commit()
+    policy = client.get(f"/api/workspace/{trip_id}/policy")
+    assert policy.status_code == 200
+    assert policy.json()["summary"]["status"] == "policy_state_invalid"
+    assert policy.json()["policy_evaluation"]["status"] == "policy_unavailable"
+    response = client.get(f"/api/workspace/{trip_id}")
+    assert response.status_code == 200
+    assert response.json()["scenario_search"]["scenarios"]
+    assert client.get(f"/api/workspace/{trip_id}/scenarios/compare").status_code == 200

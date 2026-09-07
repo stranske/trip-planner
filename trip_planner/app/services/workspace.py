@@ -2113,6 +2113,7 @@ def _build_runtime_scenario_comparison_payload(
             trip_id=trip_id,
             trip_mode=trip_record.trip.mode,
         )
+        fixture_policy_state = load_fixture_policy_state(trip_id)
         scenario_search = _build_scenario_search(
             trip_id=trip_id,
             trip_mode=trip_record.trip.mode,
@@ -2122,7 +2123,7 @@ def _build_runtime_scenario_comparison_payload(
             duration_days=trip_record.trip.trip_frame.duration_days,
             traveler_party_kind=trip_record.trip.trip_frame.traveler_party.kind,
             organization_comparable_requirements=_policy_comparable_requirements(
-                {"policy_state": load_fixture_policy_state(trip_id)}
+                {"policy_state": fixture_policy_state}
             ),
         )
         return _build_runtime_scenario_comparison(
@@ -2130,7 +2131,7 @@ def _build_runtime_scenario_comparison_payload(
             trip_title=trip_record.trip.title,
             scenario_search=scenario_search.to_dict(),
             session=session.to_dict(),
-            policy_state=load_fixture_policy_state(trip_id),
+            policy_state=fixture_policy_state,
             trip_mode=trip_record.trip.mode,
             duration_days=trip_record.trip.trip_frame.duration_days,
         )
@@ -2689,6 +2690,7 @@ def _build_fixture_workspace_payload(
     inventory_bundles = assemble_inventory_bundles_for_trip(
         assembly_input=inventory_assembly_input,
     )
+    fixture_policy_state = load_fixture_policy_state(trip_id)
     scenario_search = _build_scenario_search(
         trip_id=trip_id,
         trip_mode=trip_record.trip.mode,
@@ -2698,11 +2700,10 @@ def _build_fixture_workspace_payload(
         duration_days=trip_record.trip.trip_frame.duration_days,
         traveler_party_kind=trip_record.trip.trip_frame.traveler_party.kind,
         organization_comparable_requirements=_policy_comparable_requirements(
-            {"policy_state": load_fixture_policy_state(trip_id)}
+            {"policy_state": fixture_policy_state}
         ),
     )
     feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
-    fixture_policy_state = load_fixture_policy_state(trip_id)
     runtime_scenario_comparison = _build_runtime_scenario_comparison(
         trip_id=trip_id,
         trip_title=trip_record.trip.title,
@@ -2859,6 +2860,7 @@ def _assemble_persisted_workspace_context(
     record: PersistedTrip,
     inputs: _PersistedWorkspaceInputs,
     include_debug: bool,
+    policy_context: dict[str, Any] | None,
 ) -> WorkspaceBuildContext:
     session_record = inputs.session_record
     persisted_saved_scenarios = inputs.saved_scenarios
@@ -2911,11 +2913,7 @@ def _assemble_persisted_workspace_context(
             session_state_id=session_record.session_state_id,
         ),
         budget_state=load_budget_payload_for_workspace(db_session, record=record),
-        policy_context=(
-            get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
-            if record.mode == "business" or include_debug
-            else None
-        ),
+        policy_context=policy_context,
         proposal_context=(
             get_workspace_proposal_payload(db_session, user=user, trip_id=trip_id)
             if record.mode == "business" or include_debug
@@ -2954,15 +2952,16 @@ def get_workspace_payload(
         )
     if record is None:
         return None
+    policy_context = (
+        get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
+        if record.mode == "business" or include_debug
+        else None
+    )
     inputs = _load_persisted_workspace_inputs(
         db_session,
         record=record,
         trip_id=trip_id,
-        policy_context=(
-            get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
-            if record.mode == "business"
-            else None
-        ),
+        policy_context=policy_context,
     )
     if inputs is None:
         return None
@@ -2973,6 +2972,7 @@ def get_workspace_payload(
         record=record,
         inputs=inputs,
         include_debug=include_debug,
+        policy_context=policy_context,
     )
     return _build_persisted_trip_workspace(record, context=context)
 
