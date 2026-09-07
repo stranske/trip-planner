@@ -248,8 +248,14 @@ def test_policy_import_persists_budget_rules_for_scenario_preview(
                 assert stored is not None
                 assert stored.constraint_set["budget_rules"] == budget_rules
 
-            # Reopen SQLite so preview uses persisted, normalized public policy state.
-            reset_database_state()
+        # Close the first app before reopening SQLite and loading persisted state.
+        reset_database_state()
+        with TestClient(create_app()) as client:
+            login = client.post(
+                "/api/auth/login",
+                json={"email": "budget@example.com", "password": "password123"},
+            )
+            assert login.status_code == 200
             reloaded = client.get(policy_url)
             assert reloaded.status_code == 200
             policy_state = reloaded.json()["policy_state"]
@@ -261,8 +267,10 @@ def test_policy_import_persists_budget_rules_for_scenario_preview(
             )
             assert preview["compliant"] is False
             violation = next(
-                item for item in preview["violations"] if item["rule_id"] == "BUD-IMPORT"
+                (item for item in preview["violations"] if item["rule_id"] == "BUD-IMPORT"),
+                None,
             )
+            assert violation is not None, "Expected the persisted BUD-IMPORT cap to be violated"
             assert violation["cap_amount"] == 2300
             assert violation["actual_amount"] == 2410
             assert preview["authoritative"] is False
