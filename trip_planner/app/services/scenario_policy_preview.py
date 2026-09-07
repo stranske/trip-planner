@@ -88,7 +88,11 @@ def _lodging_violations(
     nightly_actual = None
     if isinstance(estimated_total, dict):
         nightly_actual = estimated_total.get("nightly_typical_amount")
-    if not isinstance(nightly_cap, (int, float)) or not isinstance(nightly_actual, (int, float)):
+    if (
+        isinstance(nightly_cap, bool)
+        or not isinstance(nightly_cap, (int, float))
+        or not math.isfinite(nightly_cap)
+    ):
         return []
     currency = (
         str(estimated_total.get("currency") or "USD")
@@ -97,6 +101,21 @@ def _lodging_violations(
     )
     if currency != "USD":
         return []
+    if (
+        isinstance(nightly_actual, bool)
+        or not isinstance(nightly_actual, (int, float))
+        or not math.isfinite(nightly_actual)
+    ):
+        return [
+            {
+                "rule_id": rule_id,
+                "message": "Nightly rate is unavailable; the configured lodging cap cannot be checked.",
+                "cap_amount": float(nightly_cap),
+                "actual_amount": None,
+                "currency": currency,
+                "incomplete": True,
+            }
+        ]
     if float(nightly_actual) <= float(nightly_cap):
         return []
     return [
