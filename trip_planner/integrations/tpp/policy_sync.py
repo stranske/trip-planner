@@ -339,6 +339,7 @@ class TPPPolicySyncService:
                 "ground_transport_rules",
             ),
             meal_rules=_optional_mapping(constraint_payload.get("meal_rules"), "meal_rules"),
+            budget_rules=_optional_mapping(constraint_payload.get("budget_rules"), "budget_rules"),
             approval_rules=_optional_string_list(
                 constraint_payload.get("approval_rules")
                 or context_payload.get("approval_triggers"),

@@ -308,8 +308,15 @@ def test_live_policy_snapshot_maps_lodging_and_airfare_rules_into_constraint_set
 ) -> None:
     service, request, snapshot = live_policy_snapshot
     fixture_payload = _load_fixture("standard_policy_sync.json")["response"]["result_payload"]
-    rule_fields = ("airfare_rules", "lodging_rules", "ground_transport_rules", "meal_rules")
+    rule_fields: tuple[str, ...] = (
+        "airfare_rules",
+        "lodging_rules",
+        "ground_transport_rules",
+        "meal_rules",
+    )
     snapshot.update({key: fixture_payload["constraint_set"][key] for key in rule_fields})
+    snapshot["budget_rules"] = {"rule_id": "BUD-001", "max_trip_total_usd": 2300}
+    rule_fields = (*rule_fields, "budget_rules")
     snapshot["comparable_requirements"] = {"airfare": 3, "lodging": 2}
 
     imported = service.import_policy_constraints(request)
@@ -333,7 +340,13 @@ def test_live_policy_snapshot_optional_rule_blocks_default_to_empty(
     provided: bool,
 ) -> None:
     service, request, snapshot = live_policy_snapshot
-    rule_fields = ("airfare_rules", "lodging_rules", "ground_transport_rules", "meal_rules")
+    rule_fields: tuple[str, ...] = (
+        "airfare_rules",
+        "lodging_rules",
+        "ground_transport_rules",
+        "meal_rules",
+    )
+    rule_fields = (*rule_fields, "budget_rules")
     if provided:
         snapshot.update(dict.fromkeys((*rule_fields, "comparable_requirements")))
 
@@ -351,6 +364,7 @@ def test_live_policy_snapshot_optional_rule_blocks_default_to_empty(
         "lodging_rules",
         "ground_transport_rules",
         "meal_rules",
+        "budget_rules",
         "comparable_requirements",
     ],
 )

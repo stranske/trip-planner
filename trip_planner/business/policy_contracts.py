@@ -56,6 +56,7 @@ class PolicyConstraintSet:
     approval_rules: list[str] = field(default_factory=list)
     documentation_rules: list[str] = field(default_factory=list)
     allowed_exception_types: list[str] = field(default_factory=list)
+    budget_rules: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         require_non_empty(self.policy_id, "policy_id")
@@ -66,6 +67,7 @@ class PolicyConstraintSet:
         require_string_mapping(self.lodging_rules, "lodging_rules")
         require_string_mapping(self.ground_transport_rules, "ground_transport_rules")
         require_string_mapping(self.meal_rules, "meal_rules")
+        require_string_mapping(self.budget_rules, "budget_rules")
         require_strings(self.approval_rules, "approval_rules")
         require_strings(self.documentation_rules, "documentation_rules")
         require_strings(self.allowed_exception_types, "allowed_exception_types")
