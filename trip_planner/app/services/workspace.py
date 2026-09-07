@@ -1844,7 +1844,7 @@ def _public_workspace_policy_state(policy_state: Any) -> dict[str, Any] | None:
 
     constraint_set = deepcopy(policy_state.get("constraint_set") or {})
     if isinstance(constraint_set, dict):
-        for key in ("policy_id", "organization_id", "policy_version"):
+        for key in ("organization_id", "policy_version"):
             constraint_set.pop(key, None)
     else:
         constraint_set = {}
@@ -1856,6 +1856,10 @@ def _public_workspace_policy_state(policy_state: Any) -> dict[str, Any] | None:
         organization_context = {}
 
     public_state: dict[str, Any] = {}
+    # Submission needs these routing identifiers even when diagnostics are hidden.
+    organization_id = policy_state.get("organization_id")
+    if isinstance(organization_id, str) and organization_id:
+        public_state["organization_id"] = organization_id
     if constraint_set:
         public_state["constraint_set"] = constraint_set
     if organization_context:

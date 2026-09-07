@@ -1,5 +1,6 @@
 import json
 from collections.abc import Iterator
+from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -3426,9 +3427,16 @@ def _persist_diagnostic_policy_and_proposal(trip_id: str) -> None:
 def test_workspace_response_filters_business_policy_proposal_diagnostics_by_default() -> None:
     payload = _build_diagnostic_workspace_payload(include_debug=False)
 
-    _assert_raw_policy_proposal_tokens_absent(payload)
+    assert payload["policy_state"]["organization_id"] == "org-acme"
+    assert payload["policy_state"]["constraint_set"]["policy_id"] == "policy-standard-2026-02"
+    # Only the two submission fields are public; verify diagnostics everywhere else.
+    diagnostic_payload = deepcopy(payload)
+    diagnostic_payload["policy_state"].pop("organization_id")
+    diagnostic_payload["policy_state"]["constraint_set"].pop("policy_id")
+    _assert_raw_policy_proposal_tokens_absent(diagnostic_payload)
     assert payload["policy_state"]["constraint_set"]["required_booking_channels"] == ["Navan"]
-    assert "policy_id" not in payload["policy_state"]["constraint_set"]
+    assert "organization_id" not in payload["policy_state"]["constraint_set"]
+    assert "policy_version" not in payload["policy_state"]["constraint_set"]
     assert payload["proposal_state"]["summary"]["approval_ready"] is True
     assert payload["proposal_state"]["follow_up"]["title"] == "Ready for approval"
     assert payload["proposal_state"]["evaluation"]["evaluation_result"] is None
