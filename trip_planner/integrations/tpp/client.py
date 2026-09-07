@@ -898,6 +898,7 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 "lodging_rules": payload.get("lodging_rules", {}),
                 "ground_transport_rules": payload.get("ground_transport_rules", {}),
                 "meal_rules": payload.get("meal_rules", {}),
+                "budget_rules": payload.get("budget_rules", {}),
                 "approval_rules": approval_triggers,
                 "documentation_rules": documentation_rules,
                 "allowed_exception_types": [],

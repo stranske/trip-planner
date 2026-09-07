@@ -407,6 +407,7 @@ def _normalize_constraint_set_payload(record: PersistedPolicyState) -> dict[str,
             constraint_set.get("ground_transport_rules")
         ),
         "meal_rules": _normalize_json_object(constraint_set.get("meal_rules")),
+        "budget_rules": _normalize_json_object(constraint_set.get("budget_rules")),
         "approval_rules": _normalize_string_list(constraint_set.get("approval_rules")),
         "documentation_rules": _normalize_string_list(constraint_set.get("documentation_rules")),
         "allowed_exception_types": _normalize_string_list(

@@ -1,8 +1,16 @@
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
 
-from trip_planner.app.services.scenario_policy_preview import build_scenario_policy_preview
+from trip_planner.app.main import create_app
+from trip_planner.app.services.scenario_policy_preview import (
+    build_scenario_policy_preview,
+)
+from trip_planner.persistence.db import get_session_factory, reset_database_state
+from trip_planner.persistence.models.policy import PersistedPolicyState
 
 FIXTURE_POLICY = {
     "constraint_set": {
@@ -198,3 +206,73 @@ def test_non_usd_absent_amount_preserves_known_policy_violation() -> None:
 
     assert [item["rule_id"] for item in preview["violations"]] == ["POL-EXC"]
     assert preview["compliant"] is False
+
+
+def test_policy_import_persists_budget_rules_for_scenario_preview(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'budget.db'}")
+    fixture_path = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures/integrations/tpp/policy/standard_policy_sync.json"
+    )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    budget_rules = {"rule_id": "BUD-IMPORT", "max_trip_total_usd": 2300}
+    fixture["response"]["result_payload"]["constraint_set"]["budget_rules"] = budget_rules
+    reset_database_state()
+    try:
+        with TestClient(create_app()) as client:
+            signup = client.post(
+                "/api/auth/signup",
+                json={
+                    "email": "budget@example.com",
+                    "password": "password123",
+                    "display_name": "Budget Owner",
+                },
+            )
+            assert signup.status_code == 201
+            created = client.post(
+                "/api/trips", json={"title": "Budget policy import", "mode": "business"}
+            )
+            assert created.status_code == 201
+            trip_id = created.json()["trip"]["trip_id"]
+            policy_url = f"/api/workspace/{trip_id}/policy"
+            imported = client.put(
+                policy_url,
+                json={"request": fixture["request"], "response": fixture["response"]},
+            )
+            assert imported.status_code == 200
+            assert imported.json()["policy_state"]["constraint_set"]["budget_rules"] == budget_rules
+            with get_session_factory()() as session:
+                stored = session.get(PersistedPolicyState, f"policy-state:{trip_id}")
+                assert stored is not None
+                assert stored.constraint_set["budget_rules"] == budget_rules
+
+        # Close the first app before reopening SQLite and loading persisted state.
+        reset_database_state()
+        with TestClient(create_app()) as client:
+            login = client.post(
+                "/api/auth/login",
+                json={"email": "budget@example.com", "password": "password123"},
+            )
+            assert login.status_code == 200
+            reloaded = client.get(policy_url)
+            assert reloaded.status_code == 200
+            policy_state = reloaded.json()["policy_state"]
+            assert policy_state["constraint_set"]["budget_rules"] == budget_rules
+            preview = build_scenario_policy_preview(
+                policy_state=policy_state,
+                trip_mode="business",
+                estimated_total={"currency": "USD", "typical_amount": 2410},
+            )
+            assert preview["compliant"] is False
+            violation = next(
+                (item for item in preview["violations"] if item["rule_id"] == "BUD-IMPORT"),
+                None,
+            )
+            assert violation is not None, "Expected the persisted BUD-IMPORT cap to be violated"
+            assert violation["cap_amount"] == 2300
+            assert violation["actual_amount"] == 2410
+            assert preview["authoritative"] is False
+    finally:
+        reset_database_state()
