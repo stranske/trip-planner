@@ -3440,10 +3440,32 @@ def test_workspace_response_filters_business_policy_proposal_diagnostics_by_defa
     assert payload["proposal_state"]["summary"]["approval_ready"] is True
     assert payload["proposal_state"]["follow_up"]["title"] == "Ready for approval"
     assert payload["proposal_state"]["evaluation"]["evaluation_result"] is None
+    # `evaluation_result` is nulled for the public payload, so the summary must still say
+    # whether a verdict exists; otherwise the UI cannot enable print/export for it.
+    assert payload["proposal_state"]["summary"]["has_saved_verdict"] is True
     assert payload["planner_panel_state"]["policy_evaluation"]["notes"]
     assert "evaluation_id" not in payload["planner_panel_state"]["policy_evaluation"]
     assert "policy_state" not in payload["view_model"]["debug_state"]["sections"]
     assert "proposal_state" not in payload["view_model"]["debug_state"]["sections"]
+
+
+@pytest.mark.parametrize("evaluation_result", [None, {}, "compliant", ["compliant"], True, 1])
+def test_public_proposal_state_reports_missing_saved_verdict(evaluation_result: Any) -> None:
+    proposal_state = {
+        "proposal": {"proposal_id": "proposal:no-verdict"},
+        "evaluation": {
+            "status_endpoint": "https://tpp.example.test/executions/exec-no-verdict",
+            "evaluation_result": evaluation_result,
+        },
+        "summary": {"approval_ready": True, "submission_summary": "Packet submitted."},
+        "follow_up": None,
+    }
+
+    public_state = workspace_service._public_workspace_proposal_state(proposal_state)
+
+    assert public_state is not None
+    assert public_state["summary"]["approval_ready"] is True
+    assert public_state["summary"]["has_saved_verdict"] is False
 
 
 def test_workspace_response_includes_policy_proposal_diagnostics_in_debug_mode() -> None:

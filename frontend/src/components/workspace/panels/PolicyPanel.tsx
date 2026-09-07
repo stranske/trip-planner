@@ -42,6 +42,24 @@ function isFailedTransportStatus(status: string | null | undefined): boolean {
   return status != null && ["failed", "error", "errored", "rejected", "invalid"].includes(status);
 }
 
+/**
+ * Default (non-debug) workspace payloads null `evaluation.evaluation_result`, so its absence
+ * alone does not mean "not evaluated". The public summary carries `has_saved_verdict` for
+ * exactly this case; `evaluation_result_status` only appears on debug payloads, where a status
+ * is itself proof that a verdict was stored.
+ */
+export function hasSavedPolicyVerdict(
+  proposal: NonNullable<WorkspaceData["proposal_state"]>
+): boolean {
+  if (proposal.evaluation?.evaluation_result != null) {
+    return true;
+  }
+  if (proposal.summary.has_saved_verdict === true) {
+    return true;
+  }
+  return proposal.summary.evaluation_result_status != null;
+}
+
 export function derivePolicyPanelView(
   workspace: WorkspaceData,
   handlers: {
@@ -104,7 +122,10 @@ export function derivePolicyPanelView(
     };
   }
 
-  if (summary.approval_ready) {
+  // `approval_ready` alone is not enough: without a saved verdict the workspace cannot
+  // enable print/export, and a "Policy compliant" headline over disabled export buttons is
+  // the exact dead end this guard exists to prevent.
+  if (summary.approval_ready && hasSavedPolicyVerdict(proposal)) {
     return {
       kind: "compliant",
       summary:
