@@ -8,18 +8,25 @@ from typing import Any
 POLICY_PREVIEW_DISCLAIMER = "Policy preview only — not the final TPP verdict."
 
 
+def _finite_amount(value: Any) -> float | None:
+    """Normalize numeric amounts without overflowing on unrepresentable integers."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        amount = float(value)
+    except OverflowError:
+        return None
+    return amount if math.isfinite(amount) else None
+
+
 def _money_amount(estimated_total: Any) -> tuple[float, str] | None:
     if not isinstance(estimated_total, dict):
         return None
-    amount = estimated_total.get("typical_amount")
+    amount = _finite_amount(estimated_total.get("typical_amount"))
     currency = estimated_total.get("currency") or "USD"
-    if (
-        isinstance(amount, bool)
-        or not isinstance(amount, (int, float))
-        or not math.isfinite(amount)
-    ):
+    if amount is None:
         return None
-    return float(amount), str(currency)
+    return amount, str(currency)
 
 
 def _constraint_rules(policy_state: dict[str, Any] | None) -> dict[str, Any]:
@@ -43,13 +50,9 @@ def _budget_violations(
     *,
     currency_hint: str = "USD",
 ) -> list[dict[str, Any]]:
-    cap_amount = budget_rules.get("max_trip_total_usd")
+    cap_amount = _finite_amount(budget_rules.get("max_trip_total_usd"))
     rule_id = str(budget_rules.get("rule_id") or "BUD-001")
-    if (
-        isinstance(cap_amount, bool)
-        or not isinstance(cap_amount, (int, float))
-        or not math.isfinite(cap_amount)
-    ):
+    if cap_amount is None:
         return []
     currency = money[1] if money is not None else currency_hint
     if currency != "USD":
@@ -59,20 +62,20 @@ def _budget_violations(
             {
                 "rule_id": rule_id,
                 "message": "Trip cost is unavailable; the configured spend cap cannot be checked.",
-                "cap_amount": float(cap_amount),
+                "cap_amount": cap_amount,
                 "actual_amount": None,
                 "currency": currency,
                 "incomplete": True,
             }
         ]
     actual_amount, currency = money
-    if actual_amount <= float(cap_amount):
+    if actual_amount <= cap_amount:
         return []
     return [
         {
             "rule_id": rule_id,
             "message": (f"Estimated trip total exceeds the configured spend cap ({rule_id})."),
-            "cap_amount": float(cap_amount),
+            "cap_amount": cap_amount,
             "actual_amount": actual_amount,
             "currency": currency,
         }
@@ -83,12 +86,12 @@ def _lodging_violations(
     lodging_rules: dict[str, Any],
     estimated_total: Any,
 ) -> list[dict[str, Any]]:
-    nightly_cap = lodging_rules.get("max_nightly_rate_usd")
+    nightly_cap = _finite_amount(lodging_rules.get("max_nightly_rate_usd"))
     rule_id = str(lodging_rules.get("rule_id") or "LOD-001")
     nightly_actual = None
     if isinstance(estimated_total, dict):
-        nightly_actual = estimated_total.get("nightly_typical_amount")
-    if not isinstance(nightly_cap, (int, float)) or not isinstance(nightly_actual, (int, float)):
+        nightly_actual = _finite_amount(estimated_total.get("nightly_typical_amount"))
+    if nightly_cap is None:
         return []
     currency = (
         str(estimated_total.get("currency") or "USD")
@@ -97,14 +100,25 @@ def _lodging_violations(
     )
     if currency != "USD":
         return []
-    if float(nightly_actual) <= float(nightly_cap):
+    if nightly_actual is None:
+        return [
+            {
+                "rule_id": rule_id,
+                "message": "Nightly rate is unavailable; the configured lodging cap cannot be checked.",
+                "cap_amount": nightly_cap,
+                "actual_amount": None,
+                "currency": currency,
+                "incomplete": True,
+            }
+        ]
+    if nightly_actual <= nightly_cap:
         return []
     return [
         {
             "rule_id": rule_id,
             "message": (f"Selected nightly rate exceeds the configured lodging cap ({rule_id})."),
-            "cap_amount": float(nightly_cap),
-            "actual_amount": float(nightly_actual),
+            "cap_amount": nightly_cap,
+            "actual_amount": nightly_actual,
             "currency": currency,
         }
     ]

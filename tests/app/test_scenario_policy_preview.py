@@ -32,6 +32,8 @@ FIXTURE_POLICY = {
         {"typical_amount": float("nan")},
         {"typical_amount": float("inf")},
         {"typical_amount": float("-inf")},
+        {"typical_amount": 10**1000},
+        {"typical_amount": -(10**1000)},
     ],
 )
 def test_missing_estimated_total_does_not_mark_compliant_under_budget_cap(
@@ -64,7 +66,11 @@ def test_missing_cost_preserves_known_policy_violations() -> None:
 
     assert preview["compliant"] is False
     assert preview["status"] == "non_compliant"
-    assert {item["rule_id"] for item in preview["violations"]} == {"BUD-001", "POL-EXC"}
+    assert {item["rule_id"] for item in preview["violations"]} == {
+        "BUD-001",
+        "LOD-001",
+        "POL-EXC",
+    }
 
 
 @pytest.mark.parametrize("budget_rules", [{}, {"max_trip_total_usd": "unknown"}])
@@ -85,7 +91,11 @@ def test_compliant_scenario_preview_when_under_trip_cap() -> None:
     preview = build_scenario_policy_preview(
         policy_state=FIXTURE_POLICY,
         trip_mode="business",
-        estimated_total={"currency": "USD", "typical_amount": 2280},
+        estimated_total={
+            "currency": "USD",
+            "typical_amount": 2280,
+            "nightly_typical_amount": 300,
+        },
         unresolved_tradeoffs=[],
         scenario_notes=["compliant-first"],
     )
@@ -142,6 +152,91 @@ def test_leisure_scenario_preview_is_not_applicable() -> None:
     assert preview["snapshot_available"] is False
 
 
+@pytest.mark.parametrize(
+    "nightly_fields",
+    [
+        {},
+        {"nightly_typical_amount": None},
+        {"nightly_typical_amount": "unknown"},
+        {"nightly_typical_amount": True},
+        {"nightly_typical_amount": float("nan")},
+        {"nightly_typical_amount": float("inf")},
+        {"nightly_typical_amount": float("-inf")},
+        {"nightly_typical_amount": 10**1000},
+        {"nightly_typical_amount": -(10**1000)},
+    ],
+)
+def test_missing_nightly_amount_marks_lodging_preview_incomplete_not_compliant(
+    nightly_fields: dict[str, Any],
+) -> None:
+    preview = build_scenario_policy_preview(
+        policy_state=FIXTURE_POLICY,
+        trip_mode="business",
+        estimated_total={"currency": "USD", "typical_amount": 1000, **nightly_fields},
+    )
+
+    assert preview["compliant"] is None
+    assert preview["status"] == "preview_incomplete"
+    assert preview["snapshot_available"] is True
+    assert preview["authoritative"] is False
+    assert preview["violations"] == [
+        {
+            "rule_id": "LOD-001",
+            "message": "Nightly rate is unavailable; the configured lodging cap cannot be checked.",
+            "cap_amount": 325,
+            "actual_amount": None,
+            "currency": "USD",
+            "incomplete": True,
+        }
+    ]
+
+
+@pytest.mark.parametrize("nightly_amount", [0, 300, 325])
+def test_lodging_preview_is_compliant_at_or_under_cap(nightly_amount: float) -> None:
+    preview = build_scenario_policy_preview(
+        policy_state=FIXTURE_POLICY,
+        trip_mode="business",
+        estimated_total={"typical_amount": 1000, "nightly_typical_amount": nightly_amount},
+    )
+
+    assert preview["compliant"] is True
+    assert preview["violations"] == []
+
+
+@pytest.mark.parametrize(
+    "cap",
+    [
+        None,
+        "unknown",
+        True,
+        float("nan"),
+        float("inf"),
+        pytest.param(10**1000, id="overflow"),
+        pytest.param(-(10**1000), id="negative-overflow"),
+    ],
+)
+def test_invalid_lodging_cap_does_not_create_lodging_finding(cap: Any) -> None:
+    preview = build_scenario_policy_preview(
+        policy_state={"constraint_set": {"lodging_rules": {"max_nightly_rate_usd": cap}}},
+        trip_mode="business",
+        estimated_total=None,
+    )
+
+    assert preview["violations"] == []
+
+
+def test_missing_nightly_rate_preserves_known_budget_violation() -> None:
+    preview = build_scenario_policy_preview(
+        policy_state=FIXTURE_POLICY,
+        trip_mode="business",
+        estimated_total={"typical_amount": 2410},
+    )
+
+    assert preview["compliant"] is False
+    assert preview["status"] == "non_compliant"
+    assert {item["rule_id"] for item in preview["violations"]} == {"BUD-001", "LOD-001"}
+
+
 def test_lodging_cap_violation_includes_nightly_cap_vs_actual() -> None:
     preview = build_scenario_policy_preview(
         policy_state=FIXTURE_POLICY,
@@ -168,7 +263,18 @@ def test_non_usd_scenario_skips_usd_budget_cap_comparison() -> None:
     assert not any(item["rule_id"] == "BUD-001" for item in preview["violations"])
 
 
-@pytest.mark.parametrize("cap", [True, False, float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize(
+    "cap",
+    [
+        True,
+        False,
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+        pytest.param(10**1000, id="overflow"),
+        pytest.param(-(10**1000), id="negative-overflow"),
+    ],
+)
 @pytest.mark.parametrize("estimated_total", [None, {"currency": "USD", "typical_amount": 2400}])
 def test_invalid_budget_cap_does_not_create_budget_finding(cap: Any, estimated_total: Any) -> None:
     preview = build_scenario_policy_preview(
