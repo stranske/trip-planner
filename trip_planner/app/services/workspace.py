@@ -1949,6 +1949,11 @@ def _public_workspace_proposal_state(proposal_state: Any) -> dict[str, Any] | No
         for key, value in summary.items()
         if key in public_summary_keys and value is not None
     }
+    # The public payload nulls `evaluation.evaluation_result` so raw diagnostics never
+    # leave the service. Callers still need to know whether a verdict was saved at all,
+    # otherwise the workspace cannot tell "approval ready with a stored verdict" apart
+    # from "nothing evaluated yet" and ends up claiming compliance while blocking export.
+    public_summary["has_saved_verdict"] = _proposal_state_has_saved_verdict(proposal_state)
 
     return {
         "proposal": public_proposal,
@@ -1956,6 +1961,17 @@ def _public_workspace_proposal_state(proposal_state: Any) -> dict[str, Any] | No
         "summary": public_summary,
         "follow_up": _public_workspace_follow_up(proposal_state.get("follow_up")),
     }
+
+
+def _proposal_state_has_saved_verdict(proposal_state: Any) -> bool:
+    """Report whether a policy evaluation verdict is stored for this proposal state."""
+
+    if not isinstance(proposal_state, dict):
+        return False
+    evaluation = proposal_state.get("evaluation")
+    if not isinstance(evaluation, dict):
+        return False
+    return bool(evaluation.get("evaluation_result"))
 
 
 def _public_workspace_planner_panel_state(

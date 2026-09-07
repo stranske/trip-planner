@@ -2761,6 +2761,84 @@ describe("WorkspacePage", () => {
     expect(screen.queryByText("2026-05-04")).not.toBeInTheDocument();
   });
 
+  it("keeps the approval packet printable on a sanitized proposal state with a saved verdict", async () => {
+    // Mirrors a default (non-debug) API load: `evaluation_result` and
+    // `evaluation_result_status` are stripped, and `has_saved_verdict` is the only public
+    // signal that a verdict was stored. Identifier/transport fields are kept only to satisfy
+    // the shared payload type.
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state!,
+          evaluation: { evaluation_result: null },
+          summary: {
+            submission_summary: "Proposal submitted to the policy engine.",
+            approval_ready: true,
+            has_saved_verdict: true,
+            comparable_count: 1,
+            highlights: ["Policy constraints satisfied."],
+            follow_up_status: "resolved",
+            follow_up_title: "Approval-ready proposal",
+            follow_up_summary:
+              "Policy evaluation passed. Move the workspace packet into final approval handling.",
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await selectWorkspaceTab("Policy");
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Policy compliant" })).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("button", { name: "Print / Export approval packet" })
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Open approval packet from Policy tab" })
+    ).toBeEnabled();
+    expect(
+      screen.queryByText("A saved policy verdict is required before an approval packet can be printed.")
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not claim policy compliance on a sanitized proposal state without a saved verdict", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state!,
+          evaluation: { evaluation_result: null },
+          summary: {
+            submission_summary: "Proposal submitted to the policy engine.",
+            approval_ready: true,
+            has_saved_verdict: false,
+            comparable_count: 1,
+            highlights: [],
+            follow_up_status: "resolved",
+            follow_up_title: "Approval-ready proposal",
+            follow_up_summary: "Awaiting a saved policy verdict.",
+          },
+        },
+      }),
+    });
+
+    renderWorkspacePage();
+
+    await selectWorkspaceTab("Policy");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("policy-state-not-evaluated")).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("heading", { name: "Policy compliant" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Print / Export approval packet" })
+    ).toBeDisabled();
+  });
+
   it("surfaces a pending execution state before the proposal is sent", async () => {
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({

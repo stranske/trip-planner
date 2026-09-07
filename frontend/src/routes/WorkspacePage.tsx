@@ -45,7 +45,11 @@ import { TripComparison } from "../components/trips/TripComparison";
 import { PlanningNotebookPanel } from "../components/workspace/PlanningNotebookPanel";
 import { ApprovalPacket } from "../components/workspace/ApprovalPacket";
 import { PlannerPanel } from "../components/workspace/panels/PlannerPanel";
-import { derivePolicyPanelView, PolicyPanel as WorkspacePolicyPanel } from "../components/workspace/panels/PolicyPanel";
+import {
+  derivePolicyPanelView,
+  hasSavedPolicyVerdict,
+  PolicyPanel as WorkspacePolicyPanel,
+} from "../components/workspace/panels/PolicyPanel";
 import { RouteTradeoffsPanel } from "../components/workspace/panels/RouteTradeoffsPanel";
 import {
   formatScenarioPolicyPreview,
@@ -1284,9 +1288,9 @@ function WorkspacePageContent({
     selectedRouteSegment
   );
   const proposalFollowUp = currentWorkspace.proposal_state?.follow_up ?? null;
-  const hasSavedVerdict = Boolean(
-    currentWorkspace.proposal_state?.evaluation.evaluation_result
-  );
+  const hasSavedVerdict =
+    currentWorkspace.proposal_state != null &&
+    hasSavedPolicyVerdict(currentWorkspace.proposal_state);
   const renderableProposalFollowUp = hasRenderableFollowUp(proposalFollowUp)
     ? proposalFollowUp
     : null;

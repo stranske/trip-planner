@@ -728,7 +728,7 @@ export type WorkspaceData = {
         }>;
         notes: string[];
         compliance_score: number;
-      };
+      } | null;
     };
     follow_up: {
       status: string;
@@ -765,6 +765,7 @@ export type WorkspaceData = {
       evaluation_transport_status?: string;
       evaluation_result_status?: string;
       approval_ready?: boolean;
+      has_saved_verdict?: boolean;
       comparable_count?: number;
       highlights?: string[];
       follow_up_status?: string;
