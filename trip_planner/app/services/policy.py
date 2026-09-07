@@ -291,7 +291,12 @@ def _policy_evaluation_from_import(
                 )
                 for issue in blocking_issues
             )
-        notes.append("TPP reported a failing policy verdict or blocking policy issues.")
+        if imported.organization_context.policy_status == "fail":
+            notes.append("TPP reported a failing policy verdict.")
+        else:
+            notes.append(
+                "TPP reported blocking policy issues while preserving the upstream pass verdict."
+            )
     elif _is_effectively_stale(imported):
         status = "non_compliant"
         compliance_score = 0.35
