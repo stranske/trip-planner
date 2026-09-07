@@ -1545,7 +1545,23 @@ def test_workspace_endpoint_treats_whitespace_only_primary_regions_as_missing(
 
 def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_trip(
     client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Supply stable inventory at the adapter boundary; the policy import, persistence,
+    # objective derivation and ranking remain real throughout both HTTP reads.
+    bundles = workspace_service.assemble_inventory_bundles_for_trip(
+        trip_id="trip-business-client-summit", trip_mode="business"
+    )
+    for bundle in bundles:
+        for transport in bundle.transport_options:
+            transport.booking_terms.comparable_reference_ids = [
+                f"cmp-{index}" for index in range(10)
+            ]
+    monkeypatch.setattr(
+        workspace_service,
+        "_build_workspace_inventory_inputs",
+        lambda record: (bundles, workspace_service.build_inventory_summary_payload(bundles)),
+    )
     created = client.post(
         "/api/trips",
         json={
@@ -1571,6 +1587,14 @@ def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_tri
             / "standard_policy_sync.json"
         ).read_text(encoding="utf-8")
     )
+    baseline_response = client.get(f"/api/workspace/{trip_id}")
+    assert baseline_response.status_code == 200
+    baseline_scenarios = baseline_response.json()["scenario_search"]["scenarios"]
+    assert baseline_scenarios
+    fixture["response"]["result_payload"]["organization_context"]["comparable_requirements"] = {
+        "airfare": 100,
+        "lodging": 100,
+    }
     imported = client.put(
         f"/api/workspace/{trip_id}/policy",
         json={
@@ -1585,6 +1609,16 @@ def test_workspace_endpoint_surfaces_persisted_policy_readiness_for_business_tri
 
     assert response.status_code == 200
     payload = response.json()
+    reranked_scenarios = payload["scenario_search"]["scenarios"]
+    assert reranked_scenarios
+    assert max(item["score"] for item in reranked_scenarios) < max(
+        item["score"] for item in baseline_scenarios
+    )
+    comparison_response = client.get(f"/api/workspace/{trip_id}/scenarios/compare")
+    assert comparison_response.status_code == 200
+    assert [row["metrics"]["score"] for row in comparison_response.json()["scenarios"]] == [
+        item["score"] for item in reranked_scenarios
+    ]
     assert "policy_id" not in payload["policy_state"]
     assert payload["policy_state"]["constraint_set"]["required_booking_channels"] == [
         "Navan",

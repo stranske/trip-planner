@@ -378,6 +378,19 @@ def _business_search_result(trip_id: str) -> ScenarioSearchResult:
     )
 
 
+def _policy_comparable_requirements(policy_context: dict[str, Any] | None) -> dict[str, int]:
+    """Use normalized imported counts; invalid policy remains on its error path."""
+    if (
+        not policy_context
+        or (policy_context.get("summary") or {}).get("status") == "policy_state_invalid"
+    ):
+        return {}
+    policy_state = policy_context.get("policy_state") or {}
+    return dict(
+        (policy_state.get("organization_context") or {}).get("comparable_requirements") or {}
+    )
+
+
 def _build_scenario_search(
     *,
     trip_id: str,
@@ -387,6 +400,7 @@ def _build_scenario_search(
     primary_regions: tuple[str, ...] = (),
     duration_days: int | None = None,
     traveler_party_kind: str | None = None,
+    organization_comparable_requirements: dict[str, int] | None = None,
 ) -> ScenarioSearchResult:
     return build_workspace_scenario_search(
         trip_id=trip_id,
@@ -396,6 +410,7 @@ def _build_scenario_search(
         primary_regions=primary_regions,
         duration_days=duration_days,
         traveler_party_kind=traveler_party_kind,
+        organization_comparable_requirements=organization_comparable_requirements,
     )
 
 
@@ -578,6 +593,7 @@ def _build_runtime_scenario_search_for_trip(
     inventory_bundles: list[Any],
     saved_scenarios: list[dict[str, Any]],
     inventory_status: str = "ready",
+    organization_comparable_requirements: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     if inventory_status != "ready":
         if saved_scenarios:
@@ -598,6 +614,7 @@ def _build_runtime_scenario_search_for_trip(
                 primary_regions=tuple(record.primary_regions),
                 duration_days=record.duration_days,
                 traveler_party_kind=record.traveler_party_kind,
+                organization_comparable_requirements=organization_comparable_requirements,
             ).to_dict(),
         )
 
@@ -1746,6 +1763,9 @@ def _build_persisted_trip_workspace(
             inventory_bundles=resolved_inventory_bundles,
             saved_scenarios=ordered_saved_scenarios,
             inventory_status=inventory_status,
+            organization_comparable_requirements=_policy_comparable_requirements(
+                context.policy_context
+            ),
         )
     )
     resolved_feasibility_summary = context.feasibility_summary or build_feasibility_summary_payload(
@@ -2101,6 +2121,9 @@ def _build_runtime_scenario_comparison_payload(
             primary_regions=tuple(trip_record.trip.trip_frame.primary_regions),
             duration_days=trip_record.trip.trip_frame.duration_days,
             traveler_party_kind=trip_record.trip.trip_frame.traveler_party.kind,
+            organization_comparable_requirements=_policy_comparable_requirements(
+                {"policy_state": load_fixture_policy_state(trip_id)}
+            ),
         )
         return _build_runtime_scenario_comparison(
             trip_id=trip_id,
@@ -2154,6 +2177,9 @@ def _build_runtime_scenario_comparison_payload(
             inventory_bundles=persisted_inventory_bundles,
             saved_scenarios=persisted_saved_scenarios,
             inventory_status=inventory_status,
+            organization_comparable_requirements=_policy_comparable_requirements(
+                get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
+            ),
         ),
         session=_serialize_session_record(session_record),
     )
@@ -2671,6 +2697,9 @@ def _build_fixture_workspace_payload(
         primary_regions=tuple(trip_record.trip.trip_frame.primary_regions),
         duration_days=trip_record.trip.trip_frame.duration_days,
         traveler_party_kind=trip_record.trip.trip_frame.traveler_party.kind,
+        organization_comparable_requirements=_policy_comparable_requirements(
+            {"policy_state": load_fixture_policy_state(trip_id)}
+        ),
     )
     feasibility_summary = build_feasibility_summary_payload(inventory_bundles)
     fixture_policy_state = load_fixture_policy_state(trip_id)
@@ -2750,6 +2779,7 @@ def _load_persisted_workspace_inputs(
     *,
     record: PersistedTrip,
     trip_id: str,
+    policy_context: dict[str, Any] | None = None,
 ) -> _PersistedWorkspaceInputs | None:
     session_record = _get_or_create_workspace_session_record(db_session, record=record)
     persisted_saved_scenarios = list(
@@ -2785,6 +2815,7 @@ def _load_persisted_workspace_inputs(
             for scenario in persisted_saved_scenarios
         ],
         inventory_status=inventory_status,
+        organization_comparable_requirements=_policy_comparable_requirements(policy_context),
     )
     if _sync_workspace_session_record(
         session_record,
@@ -2923,7 +2954,16 @@ def get_workspace_payload(
         )
     if record is None:
         return None
-    inputs = _load_persisted_workspace_inputs(db_session, record=record, trip_id=trip_id)
+    inputs = _load_persisted_workspace_inputs(
+        db_session,
+        record=record,
+        trip_id=trip_id,
+        policy_context=(
+            get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
+            if record.mode == "business"
+            else None
+        ),
+    )
     if inputs is None:
         return None
     context = _assemble_persisted_workspace_context(
