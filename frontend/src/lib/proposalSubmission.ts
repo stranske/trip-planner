@@ -63,7 +63,13 @@ function selectedScenario(
 }
 
 function readPolicyContext(workspace: WorkspaceData): PolicyContext | null {
-  const policyPayload = workspace.view_model?.debug_state?.sections?.policy_state?.payload;
+  return (
+    policyContextFromPayload(workspace.policy_state) ??
+    policyContextFromPayload(workspace.view_model?.debug_state?.sections?.policy_state?.payload)
+  );
+}
+
+function policyContextFromPayload(policyPayload: unknown): PolicyContext | null {
   if (policyPayload != null && typeof policyPayload === "object") {
     const policy = policyPayload as Record<string, unknown>;
     const organizationId =

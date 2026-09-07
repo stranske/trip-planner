@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { WorkspaceData } from "../api/workspace";
-import { buildProposalSubmissionPayload } from "./proposalSubmission";
+import {
+  buildProposalEvaluationPayload,
+  buildProposalSubmissionPayload,
+} from "./proposalSubmission";
 
 function businessWorkspaceWithAmount(
   typicalAmount: number
@@ -106,6 +109,55 @@ function businessWorkspaceWithAmount(
 }
 
 describe("buildProposalSubmissionPayload", () => {
+  it("submits and fetches evaluation with public policy context and no debug sections", () => {
+    const workspace = businessWorkspaceWithAmount(1250);
+    workspace.policy_state = {
+      organization_id: "org:public",
+      constraint_set: { policy_id: "policy:public" },
+    };
+    workspace.view_model!.debug_state.sections = {};
+
+    const payload = buildProposalSubmissionPayload(workspace);
+    expect(payload.proposal.constraint_set_id).toBe("policy:public");
+    expect(payload.request.organization_id).toBe("org:public");
+    expect(payload.scenario_id).toBe("scenario:tokyo:1");
+    expect(buildProposalEvaluationPayload(workspace, "exec:public").request).toMatchObject({
+      organization_id: "org:public",
+      payload: { execution_id: "exec:public" },
+    });
+  });
+
+  it("prefers a complete public context over debug identifiers", () => {
+    const workspace = businessWorkspaceWithAmount(1250);
+    workspace.policy_state = {
+      organization_id: "org:public",
+      constraint_set: { policy_id: "policy:public" },
+    };
+    const payload = buildProposalSubmissionPayload(workspace);
+    expect(payload.request.organization_id).toBe("org:public");
+    expect(payload.proposal.constraint_set_id).toBe("policy:public");
+  });
+
+  it.each([undefined, null, {}, { organization_id: "org:partial" }])(
+    "falls back to a complete debug context when public context is %j",
+    (policyState) => {
+      const workspace = businessWorkspaceWithAmount(1250);
+      workspace.policy_state = policyState;
+      const payload = buildProposalSubmissionPayload(workspace);
+      expect(payload.request.organization_id).toBe("org:test");
+      expect(payload.proposal.constraint_set_id).toBe("policy:tokyo");
+    }
+  );
+
+  it("rejects an incomplete public context when no debug context is available", () => {
+    const workspace = businessWorkspaceWithAmount(1250);
+    workspace.policy_state = { organization_id: "org:partial" };
+    workspace.view_model!.debug_state.sections = {};
+    expect(() => buildProposalSubmissionPayload(workspace)).toThrow(
+      "Policy context is not available for this workspace."
+    );
+  });
+
   it("rejects NaN proposal costs", () => {
     expect(() => buildProposalSubmissionPayload(businessWorkspaceWithAmount(Number.NaN))).toThrow(
       "Proposal cost must be a finite number."

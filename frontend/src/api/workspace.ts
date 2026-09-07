@@ -683,6 +683,10 @@ export type WorkspaceData = {
     };
   };
   budget_state: BudgetWorkspaceState;
+  policy_state?: {
+    organization_id?: string;
+    constraint_set?: { policy_id?: string } & Record<string, unknown>;
+  } | null;
   proposal_state: {
     proposal_state_id: string;
     trip_id: string;
