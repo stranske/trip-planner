@@ -223,8 +223,10 @@ def _proposal_from_import(
             total_estimated_cost=0.0,
             category_estimates={},
             notes=[
-                "Cost summary is not populated for imported policy snapshots;"
-                " submit the selected scenario to produce a costed proposal."
+                (
+                    "Cost summary is not populated for imported policy snapshots;"
+                    " submit the selected scenario to produce a costed proposal."
+                )
             ],
         ),
         approval_notes=notes,
@@ -263,7 +265,10 @@ def _policy_evaluation_from_import(
             )
         )
         notes.append("TPP policy cache compatibility check failed; refresh is required.")
-    elif imported.organization_context.policy_status == "fail":
+    elif (
+        imported.organization_context.policy_status == "fail"
+        or imported.organization_context.blocking_issues
+    ):
         status = "non_compliant"
         compliance_score = 0.0
         blocking_issues = imported.organization_context.blocking_issues
@@ -286,7 +291,7 @@ def _policy_evaluation_from_import(
                 )
                 for issue in blocking_issues
             )
-        notes.append("TPP reported a failing policy verdict.")
+        notes.append("TPP reported a failing policy verdict or blocking policy issues.")
     elif _is_effectively_stale(imported):
         status = "non_compliant"
         compliance_score = 0.35
@@ -417,6 +422,8 @@ def _normalize_organization_context_payload(record: PersistedPolicyState) -> dic
         organization_context, "blocking_issues"
     )
     if organization_context.get("policy_status") is not None:
+        # Preserve the explicit upstream verdict for validation and display. Evaluation
+        # independently honors blocking issues, even when this verdict says pass.
         policy_status = str(organization_context.get("policy_status"))
     elif blocking_issues_payload:
         # Blocking issues without an explicit TPP verdict must not be treated as pass.
