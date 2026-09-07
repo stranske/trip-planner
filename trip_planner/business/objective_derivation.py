@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from trip_planner.business.objectives import (
     BookingChannelObjectives,
@@ -113,19 +113,30 @@ def _schedule_protection(
 def _comparable_requirements(
     profile: BusinessTravelProfile,
     constraint_set: PolicyConstraintSet | None,
+    organization_comparable_requirements: Mapping[str, int] | None,
 ) -> ComparableRequirementObjectives:
+    required_categories = dict(profile.vendor_constraints.comparison_requirements)
+    for category, count in (organization_comparable_requirements or {}).items():
+        if not isinstance(category, str) or not category:
+            raise ValueError("organization comparable categories must be non-empty strings")
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise ValueError("organization comparable counts must be non-negative integers")
+        if count == 0:
+            required_categories.pop(category, None)
+        else:
+            required_categories[category] = count
+    capture_required = profile.documentation_requirements.comparable_capture_required or any(
+        (organization_comparable_requirements or {}).values()
+    )
     notes = []
     documentation_rules = _effective_documentation_rules(profile, constraint_set)
-    if profile.documentation_requirements.comparable_capture_required:
+    if capture_required:
         notes.append("Comparable capture is required before proposal export.")
     if documentation_rules:
         notes.append("Documentation rules: " + ", ".join(documentation_rules))
     return ComparableRequirementObjectives(
-        required_categories={
-            key: profile.vendor_constraints.comparison_requirements[key]
-            for key in sorted(profile.vendor_constraints.comparison_requirements)
-        },
-        capture_required=profile.documentation_requirements.comparable_capture_required,
+        required_categories={key: required_categories[key] for key in sorted(required_categories)},
+        capture_required=capture_required,
         additional_comparables_for_exception=(
             profile.exception_strategy.require_additional_comparables
         ),
@@ -384,11 +395,15 @@ def derive_business_planning_objectives(
     trip_id: str,
     constraint_set: PolicyConstraintSet | None = None,
     objective_id: str | None = None,
+    *,
+    organization_comparable_requirements: Mapping[str, int] | None = None,
 ) -> BusinessPlanningObjectives:
     """Derive deterministic business-planning objectives from policy-aware inputs."""
     channel_strategy = _channel_strategy(profile, constraint_set)
     schedule_protection = _schedule_protection(profile)
-    comparable_requirements = _comparable_requirements(profile, constraint_set)
+    comparable_requirements = _comparable_requirements(
+        profile, constraint_set, organization_comparable_requirements
+    )
     justification_readiness = _justification_readiness(profile, constraint_set)
     cost_control_posture = _cost_control_posture(profile)
     comfort_floor_protection = _comfort_floor(profile)

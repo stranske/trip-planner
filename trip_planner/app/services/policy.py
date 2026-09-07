@@ -420,10 +420,19 @@ def _normalize_organization_context_payload(record: PersistedPolicyState) -> dic
     organization_context = _normalize_json_object(record.organization_context)
     comparable_requirements_payload = organization_context.get("comparable_requirements")
     comparable_requirements: dict[str, int] = {}
-    if isinstance(comparable_requirements_payload, dict):
+    if comparable_requirements_payload is not None:
+        if not isinstance(comparable_requirements_payload, dict):
+            raise PersistedPolicyStateValidationError("comparable_requirements must be an object")
         for key, value in comparable_requirements_payload.items():
-            if isinstance(key, str) and key and isinstance(value, int):
-                comparable_requirements[key] = value
+            if not isinstance(key, str) or not key:
+                raise PersistedPolicyStateValidationError(
+                    "comparable_requirements must use non-empty string keys"
+                )
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise PersistedPolicyStateValidationError(
+                    "comparable_requirements counts must be non-negative integers"
+                )
+            comparable_requirements[key] = value
     blocking_issues_payload = _optional_policy_requirements_payload(
         organization_context, "blocking_issues"
     )

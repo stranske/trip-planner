@@ -11,6 +11,12 @@ from trip_planner.business import (
     derive_business_planning_objectives,
 )
 from trip_planner.candidates import CandidateSeed, CandidateSet
+from trip_planner.integrations.tpp import (
+    BaseTPPIntegrationClient,
+    TPPPolicySyncService,
+    TPPRequestEnvelope,
+    TPPResponseEnvelope,
+)
 from trip_planner.itinerary.feasibility import FeasibilityAssessment
 from trip_planner.options import (
     BundleCompositionSummary,
@@ -942,3 +948,51 @@ def test_preference_signals_break_policy_tie() -> None:
     assert schedule_contribution.weighted_impact > cost_schedule_contribution.weighted_impact
     assert schedule_result.score > cost_result.score
     assert schedule_result.rank < cost_result.rank
+
+
+@pytest.mark.parametrize("capture_required", [True, False])
+def test_objective_derivation_uses_tpp_comparable_requirements_for_ranking_penalties(
+    capture_required: bool,
+) -> None:
+    """Imported policy overrides defaults and changes real ranking penalties and scores."""
+    fixture = _load_json("integrations", "tpp", "policy", "standard_policy_sync.json")
+
+    class FixturePolicyClient(BaseTPPIntegrationClient):
+        def execute(self, request: TPPRequestEnvelope) -> TPPResponseEnvelope:
+            return TPPResponseEnvelope.from_dict(fixture["response"])
+
+    imported = TPPPolicySyncService(FixturePolicyClient()).import_policy_constraints(
+        TPPRequestEnvelope.from_dict(fixture["request"])
+    )
+    profile = _load_profile("conference_profile.json")
+    profile.vendor_constraints.comparison_requirements = {"lodging": 1}
+    profile.documentation_requirements.comparable_capture_required = capture_required
+    baseline = derive_business_planning_objectives(profile, trip_id="trip-comparables")
+    objectives = derive_business_planning_objectives(
+        profile,
+        trip_id="trip-comparables",
+        organization_comparable_requirements=imported.organization_context.comparable_requirements,
+    )
+    assert objectives.comparable_requirements.required_categories == {"airfare": 2, "lodging": 2}
+    assert objectives.comparable_requirements.capture_required is True
+    assert profile.vendor_constraints.comparison_requirements == {"lodging": 1}
+    bundle = _cheaper_restricted_bundle()
+    for transport in bundle.transport_options:
+        transport.booking_terms.comparable_reference_ids = []
+        transport.policy_summary.comparable_reference_ids = ["cmp-flight-1"]
+    engine = BusinessRankingEngine()
+    baseline_result = engine.rank_bundles(
+        profile, baseline, [bundle], trip_id="trip-comparables"
+    ).results[0]
+    result = engine.rank_bundles(profile, objectives, [bundle], trip_id="trip-comparables").results[
+        0
+    ]
+    assert not any(
+        penalty.reason_code == "comparables_missing"
+        for penalty in baseline_result.score_breakdown.missing_data_penalties
+    )
+    assert any(
+        penalty.reason_code == "comparables_missing" and penalty.amount == 0.08
+        for penalty in result.score_breakdown.missing_data_penalties
+    )
+    assert result.score_breakdown.final_score < baseline_result.score_breakdown.final_score

@@ -350,6 +350,7 @@ def build_workspace_scenario_search(
     primary_regions: tuple[str, ...] = (),
     duration_days: int | None = None,
     traveler_party_kind: str | None = None,
+    organization_comparable_requirements: dict[str, int] | None = None,
 ):
     fixture_seed = _SCENARIO_FIXTURE_SEEDS.get(trip_id)
     title = _default_scenario_title(
@@ -424,6 +425,7 @@ def build_workspace_scenario_search(
             business_profile,
             trip_id=trip_id,
             constraint_set=constraint_set,
+            organization_comparable_requirements=organization_comparable_requirements,
         )
         ranked_results = BusinessRankingEngine().rank_bundles(
             business_profile,

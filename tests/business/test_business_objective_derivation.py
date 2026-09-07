@@ -196,3 +196,38 @@ def test_derivation_sorts_unordered_business_inputs() -> None:
 def test_comparable_requirement_objectives_reject_non_int_values(value: object) -> None:
     with pytest.raises(ValueError, match=r"required_categories\[lodging\] must be an int"):
         ComparableRequirementObjectives(required_categories={"lodging": cast(Any, value)})
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected"),
+    [
+        (None, {"lodging": 2, "transport": 3}),
+        ({}, {"lodging": 2, "transport": 3}),
+        ({"lodging": 1, "airfare": 4}, {"airfare": 4, "lodging": 1, "transport": 3}),
+        ({"lodging": 0}, {"transport": 3}),
+    ],
+)
+def test_organization_comparables_override_only_named_profile_categories(
+    overrides: dict[str, int] | None,
+    expected: dict[str, int],
+) -> None:
+    profile = _load_profile("conference_profile.json")
+    profile.vendor_constraints.comparison_requirements = {"transport": 3, "lodging": 2}
+    objectives = derive_business_planning_objectives(
+        profile,
+        trip_id="trip-org-counts",
+        organization_comparable_requirements=overrides,
+    )
+    assert objectives.comparable_requirements.required_categories == expected
+    assert list(objectives.comparable_requirements.required_categories) == sorted(expected)
+    assert profile.vendor_constraints.comparison_requirements == {"transport": 3, "lodging": 2}
+
+
+@pytest.mark.parametrize("count", [-1, True, 1.5, "2"])
+def test_organization_comparables_reject_invalid_counts(count: Any) -> None:
+    with pytest.raises(ValueError, match="non-negative integers"):
+        derive_business_planning_objectives(
+            _load_profile("conference_profile.json"),
+            trip_id="trip-invalid-counts",
+            organization_comparable_requirements={"airfare": count},
+        )
