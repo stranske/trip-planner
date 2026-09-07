@@ -2,7 +2,7 @@ import json
 import re
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Self
 from urllib import error as urllib_error
 
 import pytest
@@ -65,7 +65,7 @@ class _FakeHTTPResponse:
     def read(self) -> bytes:
         return json.dumps(self._payload).encode("utf-8")
 
-    def __enter__(self) -> "_FakeHTTPResponse":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> Literal[False]:
@@ -201,6 +201,99 @@ def test_workspace_policy_import_maps_tpp_failure_to_blocking_reasons(client: Te
         "severity": "blocking",
         "related_category": "policy_sync",
     }
+
+
+@pytest.mark.parametrize("freshness_status", ["current", "stale"])
+def test_workspace_policy_reload_pass_status_with_blocking_issues_is_non_compliant(
+    client: TestClient,
+    freshness_status: str,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Contradictory stored policy verdict",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = _load_fixture("standard_policy_sync.json")
+    imported = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={"request": fixture["request"], "response": fixture["response"]},
+    )
+    assert imported.status_code == 200
+    assert imported.json()["policy_evaluation"]["status"] == "compliant"
+    blockers = [
+        {"code": "BUD-001", "summary": "Budget cap exceeded.", "severity": "blocking"},
+        {"code": "AIR-001", "summary": "Cabin class is disallowed.", "severity": "blocking"},
+    ]
+    with get_session_factory()() as db_session:
+        state = db_session.get(PersistedPolicyState, f"policy-state:{trip_id}")
+        assert state is not None
+        state.organization_context = {
+            **state.organization_context,
+            "policy_status": "pass",
+            "blocking_issues": blockers,
+        }
+        state.freshness = {**state.freshness, "status": freshness_status}
+        db_session.commit()
+
+    # Reopen storage to prove the HTTP evaluation is based on the saved JSON.
+    reset_database_state()
+    reloaded = client.get(f"/api/workspace/{trip_id}/policy")
+    assert reloaded.status_code == 200
+    payload = reloaded.json()
+    evaluation = payload["policy_evaluation"]
+    assert evaluation["status"] == "non_compliant"
+    assert evaluation["compliance_score"] == 0.0
+    assert evaluation["failure_reasons"] == [
+        {
+            "code": issue["code"],
+            "message": issue["summary"],
+            "severity": "blocking",
+            "related_category": "policy_sync",
+        }
+        for issue in blockers
+    ]
+    assert payload["summary"]["policy_status"] == "pass"
+    assert payload["summary"]["blocking_issues"] == blockers
+    assert payload["policy_state"]["organization_context"]["policy_status"] == "pass"
+
+
+@pytest.mark.parametrize("policy_status", ["pass", "fail"])
+def test_workspace_policy_import_honors_blockers_independently_of_verdict(
+    client: TestClient,
+    policy_status: str,
+) -> None:
+    created = client.post(
+        "/api/trips",
+        json={"title": "Blocking import", "mode": "business"},
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = _load_fixture("standard_policy_sync.json")
+    context = fixture["response"]["result_payload"]["organization_context"]
+    context["policy_status"] = policy_status
+    context["blocking_issues"] = [
+        {"code": "BUD-001", "summary": "Budget cap exceeded.", "severity": "blocking"}
+    ]
+
+    imported = client.put(
+        f"/api/workspace/{trip_id}/policy",
+        json={"request": fixture["request"], "response": fixture["response"]},
+    )
+    assert imported.status_code == 200
+    evaluation = imported.json()["policy_evaluation"]
+    assert evaluation["status"] == "non_compliant"
+    assert evaluation["compliance_score"] == 0.0
+    assert evaluation["failure_reasons"][0]["code"] == "BUD-001"
 
 
 @pytest.mark.parametrize("missing_policy_status", [True, False])
