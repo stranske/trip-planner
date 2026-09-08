@@ -6,11 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
+from trip_planner.app.services import workspace as workspace_service
 from trip_planner.app.services.scenario_policy_preview import (
     build_scenario_policy_preview,
 )
 from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.policy import PersistedPolicyState
+from trip_planner.persistence.models.trip import PersistedTrip
 
 FIXTURE_POLICY = {
     "constraint_set": {
@@ -18,6 +20,56 @@ FIXTURE_POLICY = {
         "lodging_rules": {"rule_id": "LOD-001", "max_nightly_rate_usd": 325},
     }
 }
+
+
+@pytest.mark.parametrize("trip_mode", ["business", "leisure"])
+@pytest.mark.parametrize("compliant_notes", [[], ["exception-nearest"]])
+def test_exception_nearest_saved_scenario_surfaces_pol_exc_preview_violation(
+    trip_mode: str,
+    compliant_notes: list[str],
+) -> None:
+    fixture_path = (
+        Path(__file__).resolve().parents[2]
+        / "trip_planner/resources/state/scenarios/business_compliant_vs_exception.json"
+    )
+    saved_scenarios = json.loads(fixture_path.read_text())["records"]
+    # Prose on a compliant scenario must not turn it into an exception route.
+    saved_scenarios[0]["versions"][0]["notes"] = compliant_notes
+    record = PersistedTrip(
+        trip_id="trip-business-client-summit",
+        title="Client summit",
+        mode=trip_mode,
+        duration_days=1,
+        primary_regions=["Chicago"],
+    )
+    search = workspace_service._build_saved_scenario_runtime_search(
+        record, saved_scenarios=saved_scenarios
+    )
+    exception_scenario = next(
+        scenario
+        for scenario in search["scenarios"]
+        if scenario["scenario_id"] == "saved-scenario:exception-nearest"
+    )
+    assert "exception-nearest" not in exception_scenario["scenario_summary"]["notes"]
+    comparison = workspace_service._build_runtime_scenario_comparison(
+        trip_id=record.trip_id,
+        trip_title=record.title,
+        scenario_search=search,
+        policy_state=FIXTURE_POLICY,
+        trip_mode=trip_mode,
+    )
+    previews = {row["scenario_id"]: row["policy_preview"] for row in comparison["scenarios"]}
+    exception = previews["saved-scenario:exception-nearest"]
+    compliant = previews["saved-scenario:compliant-first"]
+    assert exception["authoritative"] is False
+    if trip_mode == "business":
+        assert [item["rule_id"] for item in exception["violations"]] == ["POL-EXC"]
+        assert exception["compliant"] is False
+        assert compliant["violations"] == []
+        assert compliant["compliant"] is True
+    else:
+        assert exception["status"] == "not_applicable"
+        assert exception["violations"] == []
 
 
 @pytest.mark.parametrize(
@@ -61,7 +113,7 @@ def test_missing_cost_preserves_known_policy_violations() -> None:
         policy_state=FIXTURE_POLICY,
         trip_mode="business",
         estimated_total=None,
-        scenario_notes=["exception-nearest"],
+        scenario_label="exception_nearest",
     )
 
     assert preview["compliant"] is False
@@ -97,7 +149,7 @@ def test_compliant_scenario_preview_when_under_trip_cap() -> None:
             "nightly_typical_amount": 300,
         },
         unresolved_tradeoffs=[],
-        scenario_notes=["compliant-first"],
+        scenario_label="compliant_first",
     )
 
     assert preview["snapshot_available"] is True
@@ -118,14 +170,14 @@ def test_non_compliant_scenario_preview_includes_cap_vs_actual() -> None:
                 "blocking": True,
             }
         ],
-        scenario_notes=["exception-nearest"],
+        scenario_label="exception_nearest",
     )
 
     assert preview["compliant"] is False
     bud_violation = next(item for item in preview["violations"] if item["rule_id"] == "BUD-001")
     assert bud_violation["cap_amount"] == 2300
     assert bud_violation["actual_amount"] == 2410
-    assert any(item["rule_id"] == "POL-EXC" for item in preview["violations"])
+    assert sum(item["rule_id"] == "POL-EXC" for item in preview["violations"]) == 1
 
 
 def test_missing_policy_snapshot_is_not_marked_compliant() -> None:
@@ -281,7 +333,7 @@ def test_invalid_budget_cap_does_not_create_budget_finding(cap: Any, estimated_t
         policy_state={"constraint_set": {"budget_rules": {"max_trip_total_usd": cap}}},
         trip_mode="business",
         estimated_total=estimated_total,
-        scenario_notes=["exception-nearest"],
+        scenario_label="exception_nearest",
     )
 
     assert [item["rule_id"] for item in preview["violations"]] == ["POL-EXC"]
@@ -307,7 +359,7 @@ def test_non_usd_absent_amount_preserves_known_policy_violation() -> None:
         policy_state=FIXTURE_POLICY,
         trip_mode="business",
         estimated_total={"currency": "EUR"},
-        scenario_notes=["exception-nearest"],
+        scenario_label="exception_nearest",
     )
 
     assert [item["rule_id"] for item in preview["violations"]] == ["POL-EXC"]
