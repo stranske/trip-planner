@@ -29,10 +29,8 @@ from trip_planner.app.services.planner_memory import build_planner_memory_payloa
 from trip_planner.app.services.planner_runtime_config import get_planner_runtime_config
 from trip_planner.app.services.policy import get_workspace_policy_payload
 from trip_planner.app.services.proposal import get_workspace_proposal_payload
-from trip_planner.app.services.scenario_policy_preview import attach_policy_preview_to_row
-from trip_planner.app.services.workspace_map_payloads import (
-    build_runtime_map_diagnostics_payload,
-    build_runtime_map_view_payload,
+from trip_planner.app.services.scenario_policy_preview import (
+    attach_policy_preview_to_row,
 )
 from trip_planner.app.services.scenarios import (
     build_scenario_ranking_outputs,
@@ -45,6 +43,10 @@ from trip_planner.app.services.workspace_fixtures import (
     load_saved_scenarios,
     load_session,
     load_trip_record,
+)
+from trip_planner.app.services.workspace_map_payloads import (
+    build_runtime_map_diagnostics_payload,
+    build_runtime_map_view_payload,
 )
 from trip_planner.app.services.workspace_planner_policy import (
     build_planner_policy_proposal_block,
@@ -1010,7 +1012,7 @@ def _build_runtime_scenario_comparison(
             trip_mode=trip_mode,
             estimated_total=estimated_total,
             unresolved_tradeoffs=list(scenario.get("unresolved_tradeoffs") or []),
-            scenario_notes=list(summary.get("notes") or []),
+            scenario_label=scenario.get("label"),
         )
         rows.append(row)
 
@@ -1412,6 +1414,7 @@ def _build_saved_scenario_runtime_search(
         scenario_rows.append(
             {
                 "scenario_id": saved_scenario["saved_scenario_id"],
+                "label": label,
                 "title": version["title"],
                 "rank": index,
                 "bundle_id": None,

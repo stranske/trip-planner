@@ -150,11 +150,11 @@ def _tradeoff_violations(unresolved_tradeoffs: list[dict[str, Any]] | None) -> l
     return violations
 
 
-def _exception_note_violation(
-    notes: list[str],
+def _exception_label_violation(
+    scenario_label: str | None,
     violations: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
-    if "exception-nearest" not in notes:
+    if scenario_label != "exception_nearest":
         return None
     if any(item["rule_id"] == "POL-EXC" for item in violations):
         return None
@@ -173,7 +173,7 @@ def build_scenario_policy_preview(
     trip_mode: str,
     estimated_total: Any,
     unresolved_tradeoffs: list[dict[str, Any]] | None = None,
-    scenario_notes: list[str] | None = None,
+    scenario_label: str | None = None,
 ) -> dict[str, Any]:
     """Return a serializable, non-authoritative policy preview for one Compare scenario."""
     base = _preview_base()
@@ -197,7 +197,6 @@ def build_scenario_policy_preview(
         }
 
     money = _money_amount(estimated_total)
-    notes = [str(item) for item in (scenario_notes or []) if isinstance(item, str)]
     violations: list[dict[str, Any]] = []
 
     budget_rules = constraint_set.get("budget_rules")
@@ -214,9 +213,9 @@ def build_scenario_policy_preview(
         violations.extend(_lodging_violations(lodging_rules, estimated_total))
 
     violations.extend(_tradeoff_violations(unresolved_tradeoffs))
-    note_violation = _exception_note_violation(notes, violations)
-    if note_violation is not None:
-        violations.append(note_violation)
+    label_violation = _exception_label_violation(scenario_label, violations)
+    if label_violation is not None:
+        violations.append(label_violation)
 
     if violations and all(item.get("incomplete") for item in violations):
         return {
@@ -247,12 +246,12 @@ def attach_policy_preview_to_row(
     trip_mode: str,
     estimated_total: Any,
     unresolved_tradeoffs: list[dict[str, Any]] | None,
-    scenario_notes: list[str] | None,
+    scenario_label: str | None,
 ) -> None:
     row["policy_preview"] = build_scenario_policy_preview(
         policy_state=policy_state,
         trip_mode=trip_mode,
         estimated_total=estimated_total,
         unresolved_tradeoffs=unresolved_tradeoffs,
-        scenario_notes=scenario_notes,
+        scenario_label=scenario_label,
     )
