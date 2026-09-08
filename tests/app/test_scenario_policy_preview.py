@@ -34,7 +34,12 @@ def test_exception_nearest_saved_scenario_surfaces_pol_exc_preview_violation(
     )
     saved_scenarios = json.loads(fixture_path.read_text())["records"]
     # Prose on a compliant scenario must not turn it into an exception route.
-    saved_scenarios[0]["versions"][0]["notes"] = compliant_notes
+    compliant_scenario = next(
+        scenario
+        for scenario in saved_scenarios
+        if scenario["saved_scenario_id"] == "saved-scenario:compliant-first"
+    )
+    compliant_scenario["versions"][0]["notes"] = compliant_notes
     record = PersistedTrip(
         trip_id="trip-business-client-summit",
         title="Client summit",
