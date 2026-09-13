@@ -71,11 +71,17 @@ def test_fetch_snapshot_rejects_invalid_urls(deep_link: str) -> None:
         LodgingDeepLinkAdapter().fetch_snapshot(query)
 
 
-@pytest.mark.parametrize("field", ["entity_scope", "option_kind"])
-def test_fetch_snapshot_rejects_unsupported_scope(field: str) -> None:
+@pytest.mark.parametrize(
+    ("entity_scope", "option_kind", "field"),
+    [("transport", "lodging", "entity_scope"), ("lodging", "flight", "option_kind")],
+)
+def test_fetch_snapshot_rejects_unsupported_scope(
+    entity_scope: str, option_kind: str, field: str
+) -> None:
     query = replace(
         _sample_query(),
-        **{field: "transport" if field == "entity_scope" else "flight"},
+        entity_scope=entity_scope,
+        option_kind=option_kind,
         filters={"deep_link": "https://example.com/hotel"},
     )
     with pytest.raises(ValueError, match=rf"query\.{field} must be lodging"):
