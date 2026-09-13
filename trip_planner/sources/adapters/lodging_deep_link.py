@@ -52,9 +52,7 @@ class LodgingDeepLinkAdapter(SourceAdapter):
             category="specialist_non_commercial",
             coverage_scope="global",
             supported_option_kinds=["lodging"],
-            notes=[
-                "Honest lodging lane that stores deep links without live OTA search."
-            ],
+            notes=["Honest lodging lane that stores deep links without live OTA search."],
         )
         self.supported_entity_scopes = ("lodging",)
         self.supported_option_kinds = ("lodging",)
@@ -66,7 +64,9 @@ class LodgingDeepLinkAdapter(SourceAdapter):
         if query.option_kind != "lodging":
             raise ValueError("query.option_kind must be lodging")
 
-        captured_at = capture.captured_at or query.requested_at or "1970-01-01T00:00:00Z"
+        captured_at = capture.captured_at or query.requested_at
+        if not captured_at:
+            raise ValueError("capture or query must provide a timestamp")
         record_id = f"{query.query_id}-deep-link"
         record = RawSourceRecord(
             record_id=record_id,
