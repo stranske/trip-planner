@@ -610,7 +610,8 @@ function buildScenarioReviewMetrics(
 ): ScenarioReviewMetric[] {
   const metrics: ScenarioReviewMetric[] = [
     {
-      label: "Estimated total",
+      // Not an estimate: generated from flat per-day rates that ignore the destination.
+      label: "Indicative cost",
       value:
         scenario.metrics.estimated_total == null
           ? "Pending"

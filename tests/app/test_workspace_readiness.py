@@ -85,13 +85,25 @@ def test_leisure_trip_does_not_require_a_business_purpose() -> None:
     model = build_workspace_view_model(_payload(mode="leisure", **frame))
 
     assert model["user_summary"]["status"] == "ready"
-    assert model["user_summary"]["headline"] == "Your trip plan is ready to review."
+    assert "Nothing has been planned yet" in model["user_summary"]["headline"]
 
 
-def test_complete_trip_is_still_reported_as_ready() -> None:
+def test_setup_complete_trip_does_not_claim_a_reviewable_plan() -> None:
+    """Generated route shapes are not a plan, and are never the traveller's decisions."""
+
     model = build_workspace_view_model(_payload(**_complete_frame()))
     summary = model["user_summary"]
 
     assert summary["status"] == "ready"
-    assert summary["headline"] == "Your trip plan is ready to review."
-    assert "2 saved scenario draft(s)" in summary["decided"]
+    assert "ready to review" not in summary["headline"]
+    assert summary["headline"] == "Trip setup is saved. Nothing has been planned yet."
+    next_step = build_workspace_view_model(_payload(**_complete_frame()))["next_step"]
+    assert "indicative only" in next_step["summary"]
+    # Auto-generated drafts and bundles are never reported as traveller decisions.
+    assert summary["decided"] == []
+
+
+def test_generated_artefacts_are_never_listed_as_decisions() -> None:
+    for mode in ("business", "leisure"):
+        model = build_workspace_view_model(_payload(mode=mode, **_complete_frame()))
+        assert model["user_summary"]["decided"] == [], mode

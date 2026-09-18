@@ -167,10 +167,16 @@ def _next_step(status: str, missing: list[str]) -> tuple[str, str, str, str, boo
             True,
         )
     if status == "ready":
+        # Everything available at this point is generated from flat constants, so the
+        # traveller is told what these options actually are rather than being told a
+        # plan is "ready to review".
         return (
-            "Your trip plan is ready to review.",
-            "Review and pick a scenario",
-            "Compare the saved scenarios and choose one to keep planning around.",
+            "Trip setup is saved. Nothing has been planned yet.",
+            "Look over the starting options",
+            (
+                "The planner has laid out a few rough route shapes to react to. They are "
+                "indicative only — not priced for your destination."
+            ),
             "Open scenario comparison",
             False,
         )
@@ -209,14 +215,10 @@ def build_workspace_view_model(
     inventory = _dict(payload.get("inventory_summary"))
     feasibility = _dict(payload.get("feasibility_summary"))
     bundle_count = int(inventory.get("bundle_count") or 0)
-    decided = []
-    if not _missing_trip_context(trip, mode=mode):
-        # Placeholder inventory exists from the moment a trip is created, so it is only
-        # reported as progress once the traveller has supplied real trip context.
-        if saved_scenarios:
-            decided.append(f"{len(saved_scenarios)} saved scenario draft(s)")
-        if bundle_count:
-            decided.append(f"{bundle_count} inventory bundle(s) assembled")
+    # "Decided" means the traveller decided it. Route options and inventory bundles are
+    # generated automatically for every trip from flat constants, so they are never
+    # progress the traveller made and must not be reported as such.
+    decided: list[str] = []
     missing_context = _missing_trip_context(trip, mode=mode)
     if missing_context:
         # Generated bundles must never present an unstarted trip as reviewable.
