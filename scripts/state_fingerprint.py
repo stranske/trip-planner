@@ -345,8 +345,7 @@ def _write_github_output(outputs: dict[str, str]) -> None:
     if not output_path:
         return
     with open(output_path, "a", encoding="utf-8") as handle:
-        for key, value in outputs.items():
-            handle.write(f"{key}={value}\n")
+        handle.writelines(f"{key}={value}\n" for key, value in outputs.items())
 
 
 def _compare_command(args: argparse.Namespace) -> int:

@@ -123,12 +123,63 @@ def _policy_presentation(*, active: bool, proposal_state: Any) -> dict[str, Any]
     }
 
 
-def _next_step(status: str) -> tuple[str, str, str, str, bool]:
-    if status == "ready":
+#: Trip-frame fields the traveller must supply before generated options mean anything.
+def _missing_trip_context(trip: dict[str, Any], *, mode: str) -> list[str]:
+    """Name the traveller-supplied inputs the planner still needs.
+
+    Generated inventory and scenarios exist for every trip, including one created with
+    nothing but a title, so they cannot be used to decide whether a plan is worth
+    reviewing. Readiness is derived from what the traveller actually provided.
+    """
+
+    frame = _dict(trip.get("trip_frame"))
+    missing: list[str] = []
+
+    regions = frame.get("primary_regions")
+    if not (isinstance(regions, list) and any(str(region).strip() for region in regions)):
+        missing.append("a destination")
+
+    if (
+        not str(frame.get("start_date") or "").strip()
+        or not str(frame.get("end_date") or "").strip()
+    ):
+        missing.append("travel dates")
+
+    if mode == "business" and not str(trip.get("summary") or "").strip():
+        missing.append("a business purpose for the approver")
+
+    return missing
+
+
+def _humanise(items: list[str]) -> str:
+    if len(items) == 1:
+        return items[0]
+    return f"{', '.join(items[:-1])} and {items[-1]}"
+
+
+def _next_step(status: str, missing: list[str]) -> tuple[str, str, str, str, bool]:
+    if missing:
         return (
-            "Your trip plan is ready to review.",
-            "Review and pick a scenario",
-            "Compare the saved scenarios and choose one to keep planning around.",
+            f"This trip still needs {_humanise(missing)}.",
+            "Finish trip setup",
+            (
+                "The planner cannot suggest routes or costs worth reviewing until it knows "
+                f"{_humanise(missing)}."
+            ),
+            "Open trip setup",
+            True,
+        )
+    if status == "ready":
+        # Everything available at this point is generated from flat constants, so the
+        # traveller is told what these options actually are rather than being told a
+        # plan is "ready to review".
+        return (
+            "Trip setup is saved. Nothing has been planned yet.",
+            "Look over the starting options",
+            (
+                "The planner has laid out a few rough route shapes to react to. They are "
+                "indicative only — not priced for your destination."
+            ),
             "Open scenario comparison",
             False,
         )
@@ -166,23 +217,33 @@ def build_workspace_view_model(
     saved_scenarios = saved_scenarios if isinstance(saved_scenarios, list) else []
     inventory = _dict(payload.get("inventory_summary"))
     feasibility = _dict(payload.get("feasibility_summary"))
-    decided = []
-    if saved_scenarios:
-        decided.append(f"{len(saved_scenarios)} saved scenario draft(s)")
     bundle_count = int(inventory.get("bundle_count") or 0)
-    if bundle_count:
-        decided.append(f"{bundle_count} inventory bundle(s) assembled")
+    # "Decided" means the traveller decided it. Route options and inventory bundles are
+    # generated automatically for every trip from flat constants, so they are never
+    # progress the traveller made and must not be reported as such.
+    decided: list[str] = []
+    missing_context = _missing_trip_context(trip, mode=mode)
+    if missing_context:
+        # Generated bundles must never present an unstarted trip as reviewable.
+        status = "empty"
+
     uncertain = []
     attention_count = int(feasibility.get("attention_bundle_count") or 0)
     if attention_count:
         uncertain.append(f"{attention_count} bundle(s) need attention")
-    if status == "empty":
+    for item in missing_context:
+        uncertain.append(f"Trip setup is missing {item}.")
+    if status == "empty" and not missing_context:
         uncertain.append("Trip context is not complete yet.")
     elif status == "partial":
         uncertain.append("Scenario comparison is not yet ready.")
 
-    headline, next_title, next_summary, next_action, blocked = _next_step(status)
-    next_target = {"ready": "scenario-comparison", "partial": "planner"}.get(status, "trip-setup")
+    headline, next_title, next_summary, next_action, blocked = _next_step(status, missing_context)
+    next_target = (
+        "trip-setup"
+        if missing_context
+        else {"ready": "scenario-comparison", "partial": "planner"}.get(status, "trip-setup")
+    )
     proposal = payload.get("proposal_state")
     active = _workspace_policy_state_is_active(
         policy_state=payload.get("policy_state"), proposal_state=proposal

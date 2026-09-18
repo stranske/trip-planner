@@ -91,8 +91,7 @@ def _mentioned_workflow_filenames(text: str, root_workflows: set[str] | None = N
         if token.startswith("n.") and match.start(1) > 0 and text[match.start(1) - 1] == "\\":
             token = token[2:]
         filename = PurePosixPath(token).name
-        if filename.startswith("."):
-            filename = filename[1:]
+        filename = filename.removeprefix(".")
         if filename.endswith(WORKFLOW_SUFFIXES) and filename not in WORKFLOW_SUFFIXES:
             filenames.add(filename)
     return filenames

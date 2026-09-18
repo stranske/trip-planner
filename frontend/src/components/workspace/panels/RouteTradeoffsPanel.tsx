@@ -39,6 +39,11 @@ export function RouteTradeoffsPanel({
           ? "Cost, route burden, feasibility, and per-scenario policy preview stay scannable here. Previews are advisory only — final TPP evaluation is authoritative."
           : "Cost, route burden, and feasibility stay scannable here without forcing you into raw planning notes."}
       </p>
+      <p className="placeholder-costs-notice" role="note">
+        These are rough starting shapes, not researched options. The figures come from flat
+        per-day rates that do not vary by destination, so do not use them for a budget or an
+        approval request.
+      </p>
       {scenarios.length > 0 ? (
         <div className="scenario-review-grid" aria-label="Scenario review board">
           {scenarios.map((scenario) => (
