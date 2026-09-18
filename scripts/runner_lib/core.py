@@ -1029,7 +1029,7 @@ def should_dispatch(
     elif str(prior.get("status") or "") == "pending":
         reason = "stale-pending"
     else:
-        reason = f"retry-{str(prior.get('status') or 'unknown')}"
+        reason = f"retry-{prior.get('status') or 'unknown'!s}"
     record = {
         "provider": provider,
         "pr_number": pr_number,
@@ -1093,8 +1093,9 @@ def _write_github_output(outputs: dict[str, str]) -> None:
     if not output_path:
         return
     with open(output_path, "a", encoding="utf-8") as handle:
-        for key, value in outputs.items():
-            handle.write(f"{key}={_github_output_value(value)}\n")
+        handle.writelines(
+            f"{key}={_github_output_value(value)}\n" for key, value in outputs.items()
+        )
 
 
 def _parse_optional_bool(raw: str) -> bool | None:

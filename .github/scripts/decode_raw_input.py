@@ -62,8 +62,7 @@ def main() -> None:
         ),
     }
     # Remove BOM
-    if original.startswith("\ufeff"):
-        original = original[1:]
+    original = original.removeprefix("\ufeff")
     # Replace CRLF and CR
     original = original.replace("\r\n", "\n").replace("\r", "\n")
     # Replace NBSP with normal space
