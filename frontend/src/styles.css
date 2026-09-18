@@ -1880,3 +1880,113 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* --- Trip setup: guided inputs with inline help --------------------------- */
+
+.setup-card {
+  max-width: 40rem;
+}
+
+/* Hints sit directly under the control they explain, so the gap is tightened. */
+.setup-form .field-hint {
+  margin: calc(var(--space-3) * -1) 0 0;
+  color: var(--color-ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.setup-form .field-error {
+  margin: calc(var(--space-3) * -1) 0 0;
+  color: var(--color-rose);
+  font-size: 0.9rem;
+}
+
+.setup-group > .field-hint:first-of-type {
+  margin-top: 0;
+}
+
+.choice-grid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.choice-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "radio title"
+    "radio description";
+  gap: var(--space-1) var(--space-3);
+  align-items: start;
+  border: 1px solid rgba(19, 33, 44, 0.16);
+  border-radius: 16px;
+  padding: var(--space-4);
+  cursor: pointer;
+  font-weight: 400;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.choice-card:hover {
+  border-color: rgba(19, 33, 44, 0.32);
+}
+
+.choice-card:focus-within {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+.choice-card-selected {
+  border-color: var(--color-ink);
+  box-shadow: inset 0 0 0 1px var(--color-ink);
+}
+
+.choice-card input[type="radio"] {
+  grid-area: radio;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0.15rem 0 0;
+  accent-color: var(--color-ink);
+}
+
+.choice-title {
+  grid-area: title;
+  font-weight: 700;
+}
+
+.choice-description {
+  grid-area: description;
+  color: var(--color-ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.setup-next {
+  border: 1px dashed rgba(19, 33, 44, 0.24);
+  border-radius: 16px;
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.setup-next p {
+  margin: 0;
+  color: var(--color-ink-soft);
+  line-height: 1.5;
+}
+
+.setup-next-blocked {
+  color: var(--color-ink) !important;
+  font-weight: 600;
+}
+
+/* Comfortable tap targets on small screens. */
+@media (max-width: 640px) {
+  .choice-card {
+    padding: var(--space-4) var(--space-3);
+  }
+
+  .setup-form input,
+  .setup-form select {
+    min-height: 44px;
+  }
+}
