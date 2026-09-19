@@ -24,7 +24,10 @@
       "minLength": 1
     },
     "git_sha": {
-      "type": ["string", "null"]
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "created_at": {
       "type": "string",
@@ -61,6 +64,9 @@
               "log",
               "evidence",
               "envelope",
+              "tracked_variables",
+              "mosaic_bundle",
+              "output_substrate",
               "other"
             ]
           },

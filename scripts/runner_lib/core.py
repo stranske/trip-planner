@@ -30,6 +30,20 @@ PROVIDERS = {"autofix", "claude", "codex", "cursor", "gemini"}
 PROMPT_PROVIDERS = {"claude", "codex", "cursor", "gemini"}
 TERMINAL_STATUSES = {"completed", "error"}
 PENDING_STALE_AFTER_SECONDS = 30 * 60
+# A runner can exit 0 having produced nothing — the codex sandbox failing to initialize
+# (`bwrap: loopback: Failed RTM_NEWADDR`) reports itself as a SUCCESSFUL run with no commit.
+# Recording that as a terminal `completed` burned the (head_sha, provider) key, and the only
+# thing that clears the key is a new head commit, which only the agent being refused could
+# produce: clearing the gate required the action the gate forbade. This many re-dispatches are
+# granted on the same head after an unproductive completion (#3433). ONE constant, consumed by
+# both the refusal branch and the message it prints, so the two cannot drift apart.
+UNPRODUCTIVE_COMPLETION_RETRY_LIMIT = 2
+# What happens once those retries are spent. Refusing until the head changes would put the
+# ORIGINAL latch back one step further out: a new head commit can only come from the agent
+# being refused. So the allowance expires into a cooldown instead — a wait that time alone
+# clears, which the hourly keepalive sweep then wakes. Nothing the gate forbids is required
+# to open it.
+UNPRODUCTIVE_COMPLETION_COOLDOWN_SECONDS = 30 * 60
 TRUSTED_MARKER_AUTHORS = {
     "chatgpt-codex-connector",
     "chatgpt-codex-connector[bot]",
@@ -87,6 +101,10 @@ class DebounceDecision:
     key: str
     prior_status: str | None = None
     prior_head_sha: str | None = None
+    # What would clear this refusal. Runtime rule: a gate reports its blocking quantity AND its
+    # drainable quantity in the same place, so a refusal can never go silent about what would
+    # release it. Empty when nothing is being blocked.
+    drainable: str = ""
 
 
 def _validate_capability_effect_evidence_values(values: dict[str, str]) -> None:
@@ -888,16 +906,18 @@ class RepoVariableRunnerStorage:
         repo, token = _github_context()
         return cls(GitHubApi(repo, token))
 
-    def read_record(self, pr_number: int, provider: str) -> dict[str, Any] | None:
+    def read_record(
+        self, pr_number: int, provider: str, *, require_access: bool = False
+    ) -> dict[str, Any] | None:
         name = _variable_name(pr_number, provider)
         try:
             payload = self.api.request("GET", f"/repos/{self.api.repo}/actions/variables/{name}")
         except RuntimeError as exc:
             message = str(exc)
-            if (
-                " failed: 404 " in message
-                or " failed: 401 " in message
-                or " failed: 403 " in message
+            # Explicit single-store callers retain their historical best-effort
+            # read. Migration checks must distinguish denied access from absence.
+            if " failed: 404 " in message or (
+                not require_access and (" failed: 401 " in message or " failed: 403 " in message)
             ):
                 return None
             raise
@@ -995,6 +1015,113 @@ def _pending_record_is_stale(prior: dict[str, Any], *, now: dt.datetime | None =
     return (current - started_at).total_seconds() > PENDING_STALE_AFTER_SECONDS
 
 
+def _utc_now_dt() -> dt.datetime:
+    return dt.datetime.now(dt.UTC)
+
+
+def _unproductive_retry_available_at(prior: dict[str, Any] | None) -> dt.datetime | None:
+    """When the cooldown after spent retries expires, or None if it cannot be determined.
+
+    An unreadable or absent ``completed_at`` returns None, which the caller treats as "cooldown
+    cannot be measured, so let the dispatch through". Failing toward motion is the whole point:
+    a gate that cannot measure itself must not hold the loop shut on that basis.
+    """
+    if not prior:
+        return None
+    completed_at = _parse_timestamp(prior.get("completed_at"))
+    if completed_at is None:
+        return None
+    return completed_at + dt.timedelta(seconds=UNPRODUCTIVE_COMPLETION_COOLDOWN_SECONDS)
+
+
+def _completion_was_unproductive(prior: dict[str, Any] | None) -> bool:
+    """True only when a completion explicitly reported that it produced no work.
+
+    Absence of the field means the caller did not measure productivity, which must keep the
+    pre-#3433 behavior (treat the completion as terminal) rather than silently loosening the
+    debounce for every caller that has not been taught to report it.
+    """
+    return prior is not None and prior.get("productive") is False
+
+
+def _unproductive_completion_count(prior: dict[str, Any] | None) -> int:
+    if not prior:
+        return 0
+    try:
+        return int(prior.get("unproductive_completions") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _workflow_attempt_id() -> str:
+    """Identify the reserving workflow attempt across its jobs, not just the PR head."""
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "")
+    if repository and run_id and attempt:
+        return f"{repository}:{run_id}:{attempt}"
+    return ""
+
+
+def _unavailable_dispatch(key: str, prior: dict[str, Any] | None = None) -> DebounceDecision:
+    return DebounceDecision(
+        False,
+        "authoritative-storage-unavailable",
+        key,
+        prior_status=str(prior.get("status")) if prior else None,
+        prior_head_sha=str(prior.get("head_sha")) if prior else None,
+        drainable="retry reservation after primary storage and legacy-state reads recover",
+    )
+
+
+def _reserve_dispatch(
+    storage: RunnerDispatchStorage,
+    pr_number: int,
+    head_sha: str,
+    provider: str,
+    key: str,
+    prior: dict[str, Any] | None,
+    *,
+    reason: str,
+) -> DebounceDecision:
+    """Write the pending reservation for a granted dispatch and describe the decision."""
+    record = {
+        "provider": provider,
+        "pr_number": pr_number,
+        "head_sha": head_sha,
+        "key": key,
+        "status": "pending",
+        "started_at": _utc_now(),
+    }
+    attempt_id = _workflow_attempt_id()
+    if attempt_id:
+        record["workflow_attempt_id"] = attempt_id
+    # Carry the unproductive tally across the retry so the allowance is bounded: it is the only
+    # thing that makes "retry an unproductive completion" terminate instead of cycling forever.
+    unproductive = _unproductive_completion_count(prior)
+    if unproductive and prior and prior.get("head_sha") == head_sha:
+        record["unproductive_completions"] = unproductive
+        if _completion_was_unproductive(prior):
+            record["productive"] = False
+    # Auto completions only accept the primary reservation. Never start work
+    # whose ownership would exist only in the fallback and could not complete.
+    reservation_storage = storage.primary if isinstance(storage, FallbackRunnerStorage) else storage
+    try:
+        reservation_storage.write_record(pr_number, provider, record)
+    except Exception as exc:
+        if not isinstance(storage, FallbackRunnerStorage):
+            raise
+        _log_storage_failure("write", exc, phase="reservation")
+        return _unavailable_dispatch(key, prior)
+    return DebounceDecision(
+        True,
+        reason,
+        key,
+        prior_status=str(prior.get("status")) if prior else None,
+        prior_head_sha=str(prior.get("head_sha")) if prior else None,
+    )
+
+
 def should_dispatch(
     pr_number: int,
     head_sha: str,
@@ -1005,14 +1132,72 @@ def should_dispatch(
 
     Error records are retried deliberately: they mean the prior runner attempt did not
     leave a successful completion marker, so a later Gate pass may try again.
+
+    A completion that produced no work is retried too, up to
+    ``UNPRODUCTIVE_COMPLETION_RETRY_LIMIT`` times on the same head, and after that on a
+    ``UNPRODUCTIVE_COMPLETION_COOLDOWN_SECONDS`` timer. Without that, a runner that exits 0
+    having done nothing latches the loop shut: the refusal could only be cleared by a new head
+    commit, and only the refused agent could push one (#3433). The cooldown matters for the
+    same reason — an allowance that expired into a permanent refusal would just move that latch
+    two runs later.
     """
     provider = _validate_provider(provider)
     storage = storage or _storage_from_name("auto")
     key = _runner_key(pr_number, head_sha, provider)
-    prior = storage.read_record(pr_number, provider)
+    try:
+        if isinstance(storage, FallbackRunnerStorage):
+            prior = storage.primary.read_record(pr_number, provider)
+            if prior is None:
+                # Respect legacy fallback reservations until they finish/age out,
+                # but any newly granted reservation must be written to primary.
+                if isinstance(storage.fallback, RepoVariableRunnerStorage):
+                    prior = storage.fallback.read_record(pr_number, provider, require_access=True)
+                else:
+                    prior = storage.fallback.read_record(pr_number, provider)
+        else:
+            prior = storage.read_record(pr_number, provider)
+    except Exception as exc:
+        if not isinstance(storage, FallbackRunnerStorage):
+            raise
+        _log_storage_failure("read", exc, phase="reservation")
+        return _unavailable_dispatch(key)
+    unproductive_completions = _unproductive_completion_count(prior)
 
     if prior and prior.get("head_sha") == head_sha:
         status = str(prior.get("status") or "")
+        if status == "completed" and _completion_was_unproductive(prior):
+            if unproductive_completions <= UNPRODUCTIVE_COMPLETION_RETRY_LIMIT:
+                return _reserve_dispatch(
+                    storage,
+                    pr_number,
+                    head_sha,
+                    provider,
+                    key,
+                    prior,
+                    reason="retry-unproductive-completion",
+                )
+            retry_at = _unproductive_retry_available_at(prior)
+            if retry_at is not None and _utc_now_dt() < retry_at:
+                return DebounceDecision(
+                    False,
+                    "unproductive-cooldown",
+                    key,
+                    prior_status=status,
+                    prior_head_sha=head_sha,
+                    drainable=(
+                        f"time: retry at {retry_at.isoformat()} "
+                        f"(after {unproductive_completions} zero-output runs)"
+                    ),
+                )
+            return _reserve_dispatch(
+                storage,
+                pr_number,
+                head_sha,
+                provider,
+                key,
+                prior,
+                reason="retry-after-unproductive-cooldown",
+            )
         if status == "completed" or (status == "pending" and not _pending_record_is_stale(prior)):
             return DebounceDecision(
                 False,
@@ -1020,6 +1205,14 @@ def should_dispatch(
                 key,
                 prior_status=status,
                 prior_head_sha=head_sha,
+                drainable=(
+                    "a new head commit"
+                    if status == "completed"
+                    else (
+                        "the in-flight run finishing, or this pending record ageing past "
+                        f"{PENDING_STALE_AFTER_SECONDS}s"
+                    )
+                ),
             )
 
     if prior is None:
@@ -1030,22 +1223,31 @@ def should_dispatch(
         reason = "stale-pending"
     else:
         reason = f"retry-{str(prior.get('status') or 'unknown')}"
-    record = {
-        "provider": provider,
-        "pr_number": pr_number,
-        "head_sha": head_sha,
-        "key": key,
-        "status": "pending",
-        "started_at": _utc_now(),
-    }
-    storage.write_record(pr_number, provider, record)
-    return DebounceDecision(
-        True,
-        reason,
-        key,
-        prior_status=str(prior.get("status")) if prior else None,
-        prior_head_sha=str(prior.get("head_sha")) if prior else None,
+    return _reserve_dispatch(storage, pr_number, head_sha, provider, key, prior, reason=reason)
+
+
+def _log_storage_failure(operation: str, exc: Exception, *, phase: str = "completion") -> None:
+    # GitHubApi preserves the HTTP/network exception as its cause. Log diagnostic
+    # metadata, not raw exception text, which can contain URLs or response bodies.
+    cause = exc.__cause__ or exc
+    code = getattr(cause, "code", None)
+    status = str(code) if isinstance(code, int) and 100 <= code <= 599 else "unknown"
+    print(
+        f"warning: authoritative {phase} {operation} failed: "
+        f"error_type={type(exc).__name__} cause_type={type(cause).__name__} "
+        f"http_status={status}",
+        file=sys.stderr,
     )
+
+
+def _unrecorded_completion(prior: dict[str, Any], key: str, reason: str) -> dict[str, Any]:
+    return {
+        "status": "unknown",
+        "key": key,
+        **prior,
+        "completion_recorded": False,
+        "completion_reason": reason,
+    }
 
 
 def record_completion(
@@ -1054,8 +1256,16 @@ def record_completion(
     provider: str,
     result: RunnerResult | dict[str, Any],
     storage: RunnerDispatchStorage | None = None,
+    produced_work: bool | None = None,
 ) -> dict[str, Any]:
-    """Persist terminal runner state after a dispatch finishes."""
+    """Persist terminal runner state after a dispatch finishes.
+
+    ``produced_work`` is the caller's verdict on whether the run actually moved the branch.
+    ``None`` means unmeasured and preserves an existing same-head unproductive retry streak;
+    otherwise it preserves the pre-#3433 behavior. ``False`` marks the
+    completion unproductive so ``should_dispatch`` will grant a bounded retry on the same head
+    instead of refusing forever (#3433).
+    """
     provider = _validate_provider(provider)
     storage = storage or _storage_from_name("auto")
     key = _runner_key(pr_number, head_sha, provider)
@@ -1064,7 +1274,31 @@ def record_completion(
     )
     status = "completed" if result_payload.get("success") else "error"
     compact_result = _compact_runner_result_payload(result_payload)
-    prior = storage.read_record(pr_number, provider) or {}
+    # Dispatch and completion both require the authoritative reservation.
+    # An empty/stale fallback cannot prove that a newer attempt does not own the
+    # primary, even if caller identity is absent.
+    uses_fallback = isinstance(storage, FallbackRunnerStorage)
+    completion_storage = storage.primary if isinstance(storage, FallbackRunnerStorage) else storage
+    try:
+        prior_record = completion_storage.read_record(pr_number, provider)
+    except Exception as exc:
+        if not uses_fallback:
+            raise
+        _log_storage_failure("read", exc)
+        return _unrecorded_completion({}, key, "authoritative-storage-unavailable")
+    if uses_fallback and prior_record is None:
+        return _unrecorded_completion({}, key, "authoritative-reservation-missing")
+    prior = prior_record or {}
+    if prior.get("workflow_attempt_id") and (
+        prior.get("workflow_attempt_id") != _workflow_attempt_id()
+        or (prior.get("key") != key and produced_work is not True)
+    ):
+        # A completion rerun from an earlier attempt must not overwrite a newer reservation,
+        # including when both attempts target the same head. The owning attempt may report
+        # a new head only when it explicitly measured productive work. Return an observation only.
+        return _unrecorded_completion(prior, key, "stale-attempt")
+    if produced_work is None and prior.get("key") == key and _completion_was_unproductive(prior):
+        produced_work = False
     completed_at = (
         prior.get("completed_at")
         if prior.get("key") == key and prior.get("status") in TERMINAL_STATUSES
@@ -1080,7 +1314,34 @@ def record_completion(
         "completed_at": completed_at,
         "result": compact_result,
     }
-    storage.write_record(pr_number, provider, record)
+    if status == "completed" and produced_work is not None:
+        record["productive"] = bool(produced_work)
+        if produced_work:
+            record["unproductive_completions"] = 0
+        elif prior.get("key") == key and prior.get("status") in TERMINAL_STATUSES:
+            # This completion is already recorded; re-running the completion job for the same
+            # dispatch key must not spend another retry. record_completion is idempotent for a
+            # key by contract (see completed_at above, which is preserved the same way), and a
+            # counter that advanced on a rerun would quietly exhaust the allowance without any
+            # additional agent run having happened.
+            record["unproductive_completions"] = _unproductive_completion_count(prior) or 1
+        else:
+            previous = _unproductive_completion_count(prior)
+            # Past the allowance the streak stops climbing: the cooldown is re-armed from this
+            # completion's timestamp instead, so each new zero-output run buys one fresh window
+            # rather than an ever-growing count that means nothing.
+            record["unproductive_completions"] = min(
+                previous + 1, UNPRODUCTIVE_COMPLETION_RETRY_LIMIT + 1
+            )
+    try:
+        completion_storage.write_record(pr_number, provider, record)
+    except Exception as exc:
+        if not uses_fallback:
+            raise
+        _log_storage_failure("write", exc)
+        # Never redirect a checked primary reservation into an unchecked fallback.
+        # A failed response may be ambiguous; a retry re-reads primary state first.
+        return _unrecorded_completion(prior, key, "authoritative-storage-unavailable")
     return record
 
 
@@ -1165,10 +1426,29 @@ def _cmd_should_dispatch(args: argparse.Namespace) -> int:
         "key": decision.key,
         "prior_status": decision.prior_status or "",
         "prior_head_sha": decision.prior_head_sha or "",
+        # Always emitted, including as "" for a granted dispatch, so "no drainable path stated"
+        # can never be confused with "nothing is blocking" — one sentinel, one meaning.
+        "drainable": decision.drainable,
     }
     _write_github_output(outputs)
     print(json.dumps(outputs, sort_keys=True))
     return 0
+
+
+def _parse_produced_work(raw: str) -> bool | None:
+    """Parse the caller's productivity verdict, treating anything unrecognized as unmeasured.
+
+    Deliberately does NOT reuse ``_parse_optional_bool``: that helper raises on an unknown
+    value, and a workflow that could not read the branch head (API hiccup, token scope) would
+    then fail to record the completion at all — a worse outcome than the debounce defect this
+    field exists to fix. Unmeasured must degrade to the pre-#3433 behavior, not to an error.
+    """
+    normalized = (raw or "").strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return None
 
 
 def _cmd_record_completion(args: argparse.Namespace) -> int:
@@ -1196,8 +1476,15 @@ def _cmd_record_completion(args: argparse.Namespace) -> int:
         args.provider,
         result,
         storage=_storage_from_name(args.storage),
+        produced_work=_parse_produced_work(args.produced_work),
     )
-    outputs = {"recorded": "true", "status": str(record["status"]), "key": str(record["key"])}
+    outputs = {
+        "recorded": "false" if record.get("completion_recorded") is False else "true",
+        "reason": str(record.get("completion_reason", "")),
+        "status": str(record["status"]),
+        "key": str(record["key"]),
+        "productive": "" if "productive" not in record else str(record["productive"]).lower(),
+    }
     _write_github_output(outputs)
     print(json.dumps(outputs, sort_keys=True))
     return 0
@@ -1262,6 +1549,14 @@ def build_parser() -> argparse.ArgumentParser:
     complete.add_argument("--raw-output-file", default="")
     complete.add_argument("--summary", default="")
     complete.add_argument("--exit-code", default=None)
+    complete.add_argument(
+        "--produced-work",
+        default="",
+        help=(
+            "whether the run actually moved the branch (true/false). Anything else, including "
+            "the default, means unmeasured and preserves an existing unproductive retry streak."
+        ),
+    )
     complete.set_defaults(func=_cmd_record_completion)
 
     evidence = subparsers.add_parser(
