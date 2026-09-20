@@ -8,14 +8,14 @@ Enable a business traveller to plan a trip and hand it to Travel-Plan-Permission
 Sign up → create business trip → compare options → message planner → check policy → submit proposal → print/export approval packet.
 
 ## Core functions
-| id | a <user> can … and sees … | entry point | probe (how to exercise it; vary these determinants) | status 2026-09-20 |
+| id | a user can … and sees … | entry point | probe (how to exercise it; vary these determinants) | status 2026-09-20 |
 |---|---|---|---|---|
-| TP1 | a traveller can sign up or sign in and sees a session that survives navigation | `POST /api/auth/signup`, `/login`, `GET /api/auth/session` | create fresh account; read session | WORKS |
+| TP1 | a traveller can sign up or sign in and sees a session that survives navigation | `POST /api/auth/signup`, `POST /api/auth/login`, `GET /api/auth/session` | vary fresh signup and existing-account login; navigate/create request then read session | WORKS |
 | TP2 | a traveller can create a business trip and sees persisted destination, dates, party and purpose | `/trips/new` → `POST /api/trips` | POST trips with different destination, dates, party and purpose; read each trip | WORKS |
 | TP3 | a traveller can compare scenarios and sees ranked cost, travel time, transfers and feasibility for the trip | Compare tab → `GET /api/workspace/{id}/scenarios/compare` | compare Reykjavik vs Nairobi, party 1 vs 8, duration 1 vs 14 days; diff figures | FABRICATED |
-| TP4 | a traveller can message the planner and sees a reply responsive to the request | Plan tab → `POST /api/planner/{id}/turns` | send cancellation request vs gibberish; diff replies | PARTIAL |
-| TP5 | a traveller can check policy and sees a policy snapshot and posture for the trip | Policy tab → `PUT /api/workspace/{id}/policy` | create business trip; inspect policy state; exercise policy request | BROKEN |
-| TP6 | a traveller can submit for approval and sees a TPP proposal execution | Policy tab Submit for approval → `PUT /api/workspace/{id}/proposal` | build frontend proposal payload and PUT it; inspect execution/error | BROKEN |
+| TP4 | a traveller can message the planner and sees a reply responsive to the request | Plan tab → `POST /api/planner/{id}/turns` | vary cancellation and gibberish; assert cancellation acknowledgement versus fallback reply | PARTIAL |
+| TP5 | a traveller can check policy and sees a policy snapshot and posture for the trip | Policy tab → `PUT /api/workspace/{id}/policy` | vary policy payload fare/cabin limits; inspect resulting state and blockers | BROKEN |
+| TP6 | a traveller can submit for approval and sees a TPP proposal execution | Policy tab Submit → `PUT /api/workspace/{id}/proposal` | vary proposal home_airport and policy context; inspect execution/error | BROKEN |
 | TP7 | a traveller can print or export an approval packet and sees a printable approver document | Policy tab Print / Export (`ApprovalPacket`) | submit then open ApprovalPacket and print/export | BROKEN |
 
 ## Known gaps at draft time
