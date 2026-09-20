@@ -92,8 +92,14 @@ describe("missingTripContext", () => {
 
   it("requires business purpose and a parsed destination", () => {
     expect(missingTripContext({
-      mode: "business", purpose: " ", destinations: ", ,", startDate: "2026-10-12", endDate: "2026-10-15",
+      mode: "business", purpose: " ", destinations: "; ;", startDate: "2026-10-12", endDate: "2026-10-15",
     })).toEqual(["at least one destination", "a business purpose"]);
+  });
+
+  it("treats a reversed date range as missing travel dates", () => {
+    expect(missingTripContext({
+      mode: "leisure", purpose: "", destinations: "Chicago, IL", startDate: "2026-10-15", endDate: "2026-10-12",
+    })).toEqual(["travel dates"]);
   });
 });
 
@@ -113,7 +119,7 @@ describe("NewTripPage", () => {
     fireEvent.change(screen.getByLabelText(/What is this trip for\?/), {
       target: { value: "Food and gardens" },
     });
-    fireEvent.change(screen.getByLabelText(/Destinations/), { target: { value: "Kyoto, Osaka" } });
+    fireEvent.change(screen.getByLabelText(/Destinations/), { target: { value: "Kyoto; Osaka" } });
     fireEvent.click(screen.getByRole("button", { name: "Create trip" }));
 
     await waitFor(() => {
@@ -127,6 +133,29 @@ describe("NewTripPage", () => {
       );
     });
     expect(mockedNavigate).toHaveBeenCalledWith("/workspace/trip-kyoto-123abc");
+  });
+
+  it("preserves a city-state destination as one primary region", async () => {
+    mockedCreateTrip.mockResolvedValue(tripResponse());
+    renderPage();
+    fireEvent.click(screen.getByRole("radio", { name: /Personal trip/ }));
+    fireEvent.change(screen.getByLabelText(/Trip name/), { target: { value: "Chicago visit" } });
+    fireEvent.change(screen.getByLabelText(/Destinations/), { target: { value: "Chicago, IL" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create trip" }));
+    await waitFor(() => {
+      expect(mockedCreateTrip).toHaveBeenCalledWith(
+        expect.objectContaining({ trip_frame: expect.objectContaining({ primary_regions: ["Chicago, IL"] }) })
+      );
+    });
+  });
+
+  it("rejects a whitespace-only trip name before the API call", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("radio", { name: /Personal trip/ }));
+    fireEvent.change(screen.getByLabelText(/Trip name/), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: "Create trip" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/enter a trip name/i);
+    expect(mockedCreateTrip).not.toHaveBeenCalled();
   });
 
   it("requires the traveller to choose a trip type rather than defaulting silently", () => {
@@ -174,7 +203,7 @@ describe("NewTripPage", () => {
 
     // Every section carries guidance rather than a bare label.
     expect(container.querySelectorAll(".field-hint").length).toBeGreaterThanOrEqual(6);
-    expect(screen.getByText(/Separate multiple stops with commas/)).toBeInTheDocument();
+    expect(screen.getByText(/Separate multiple stops with semicolons/)).toBeInTheDocument();
     expect(
       screen.getByText(/decides whether the trip goes through travel policy and approval/)
     ).toBeInTheDocument();
@@ -247,7 +276,7 @@ describe("NewTripPage", () => {
   it("blocks submission above eight destinations and identifies the invalid control", () => {
     renderPage();
     const input = screen.getByLabelText(/Destinations/);
-    fireEvent.change(input, { target: { value: "A, B, C, D, E, F, G, H, I" } });
+    fireEvent.change(input, { target: { value: "A; B; C; D; E; F; G; H; I" } });
     expect(screen.getByRole("alert")).toHaveTextContent(/more than 8 destinations/);
     expect(input).toHaveAttribute("aria-invalid", "true");
     expect(input).toHaveAttribute("aria-describedby", "destinations-hint destinations-error");

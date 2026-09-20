@@ -53,10 +53,10 @@ export function missingTripContext(values: {
   if (!values.mode) {
     missing.push("trip type");
   }
-  if (!values.destinations.split(",").some((destination) => destination.trim())) {
+  if (!values.destinations.split(";").some((destination) => destination.trim())) {
     missing.push("at least one destination");
   }
-  if (!values.startDate || !values.endDate) {
+  if (travelDaysInclusive(values.startDate, values.endDate) == null) {
     missing.push("travel dates");
   }
   if (values.mode === "business" && !values.purpose.trim()) {
@@ -85,7 +85,7 @@ export function NewTripPage() {
   const durationValue = durationOverride !== "" ? durationOverride : derivedDuration != null ? String(derivedDuration) : "";
   const datesInvalid = Boolean(startDate && endDate && derivedDuration == null);
   const destinationList = destinations
-    .split(",")
+    .split(";")
     .map((value) => value.trim())
     .filter(Boolean);
   const tooManyDestinations = destinationList.length > 8;
@@ -95,6 +95,10 @@ export function NewTripPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!title.trim()) {
+      setErrorMessage("Enter a trip name before creating the trip.");
+      return;
+    }
     if (datesInvalid || tooManyDestinations) {
       return;
     }
@@ -214,7 +218,7 @@ export function NewTripPage() {
               />
             </label>
             <p className="field-hint" id="destinations-hint">
-              Where you are going. Separate multiple stops with commas — up to 8.
+              Where you are going. Separate multiple stops with semicolons — up to 8.
               {destinationList.length > 0 ? ` Currently ${destinationList.length}.` : ""}
             </p>
             {tooManyDestinations ? (
