@@ -171,7 +171,7 @@ export function ScenarioComparison({
                   <dd>{formatMetricValue("transfers", scenario)}</dd>
                 </div>
                 <div>
-                  <dt>Cost</dt>
+                  <dt>Indicative cost</dt>
                   <dd>{formatMetricValue("estimated_total", scenario)}</dd>
                 </div>
               </dl>

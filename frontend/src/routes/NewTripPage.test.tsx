@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createTrip } from "../api/trips";
-import { NewTripPage, missingTripContext, nightsBetween } from "./NewTripPage";
+import { NewTripPage, missingTripContext, travelDaysInclusive } from "./NewTripPage";
 import { TestMemoryRouter } from "../test/router";
 
 vi.mock("../api/trips", () => ({
@@ -57,21 +57,21 @@ function renderPage() {
   );
 }
 
-describe("nightsBetween", () => {
+describe("travelDaysInclusive", () => {
   it("counts travel days inclusively", () => {
-    expect(nightsBetween("2026-10-12", "2026-10-15")).toBe(4);
-    expect(nightsBetween("2026-10-12", "2026-10-12")).toBe(1);
+    expect(travelDaysInclusive("2026-10-12", "2026-10-15")).toBe(4);
+    expect(travelDaysInclusive("2026-10-12", "2026-10-12")).toBe(1);
   });
 
   it("returns null when the range is unusable", () => {
-    expect(nightsBetween("2026-10-15", "2026-10-12")).toBeNull();
-    expect(nightsBetween("", "2026-10-12")).toBeNull();
+    expect(travelDaysInclusive("2026-10-15", "2026-10-12")).toBeNull();
+    expect(travelDaysInclusive("", "2026-10-12")).toBeNull();
   });
 });
 
 describe("missingTripContext", () => {
   it("names every input the planner still needs", () => {
-    expect(missingTripContext({ mode: "", destinations: "", startDate: "", endDate: "" })).toEqual([
+    expect(missingTripContext({ mode: "", purpose: "", destinations: "", startDate: "", endDate: "" })).toEqual([
       "trip type",
       "at least one destination",
       "travel dates",
@@ -82,11 +82,18 @@ describe("missingTripContext", () => {
     expect(
       missingTripContext({
         mode: "business",
+        purpose: "Client review",
         destinations: "Chicago, IL",
         startDate: "2026-10-12",
         endDate: "2026-10-15",
       })
     ).toEqual([]);
+  });
+
+  it("requires business purpose and a parsed destination", () => {
+    expect(missingTripContext({
+      mode: "business", purpose: " ", destinations: ", ,", startDate: "2026-10-12", endDate: "2026-10-15",
+    })).toEqual(["at least one destination", "a business purpose"]);
   });
 });
 
@@ -199,6 +206,8 @@ describe("NewTripPage", () => {
     });
 
     expect(screen.getByRole("alert")).toHaveTextContent(/last day is before the first day/i);
+    expect(screen.getByLabelText(/First day of travel/)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText(/Last day of travel/)).toHaveAttribute("aria-describedby", "dates-error");
     expect(screen.getByRole("button", { name: "Create trip" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Create trip" }));
     expect(mockedCreateTrip).not.toHaveBeenCalled();
@@ -220,6 +229,8 @@ describe("NewTripPage", () => {
       target: { value: "2026-10-15" },
     });
 
+    expect(screen.getByText(/Still needed before the planner/)).toHaveTextContent(/business purpose/);
+    fireEvent.change(screen.getByLabelText(/Business purpose/), { target: { value: "Client review" } });
     expect(screen.queryByText(/Still needed before the planner/)).not.toBeInTheDocument();
     expect(screen.getByText(/print an approval packet/)).toBeInTheDocument();
   });
@@ -231,5 +242,17 @@ describe("NewTripPage", () => {
 
     expect(screen.getByLabelText(/Business purpose/)).toBeInTheDocument();
     expect(screen.getByText(/Approvers read this first/)).toBeInTheDocument();
+  });
+
+  it("blocks submission above eight destinations and identifies the invalid control", () => {
+    renderPage();
+    const input = screen.getByLabelText(/Destinations/);
+    fireEvent.change(input, { target: { value: "A, B, C, D, E, F, G, H, I" } });
+    expect(screen.getByRole("alert")).toHaveTextContent(/more than 8 destinations/);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAttribute("aria-describedby", "destinations-hint destinations-error");
+    expect(screen.getByRole("button", { name: "Create trip" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Create trip" }));
+    expect(mockedCreateTrip).not.toHaveBeenCalled();
   });
 });

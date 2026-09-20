@@ -139,7 +139,10 @@ def _missing_trip_context(trip: dict[str, Any], *, mode: str) -> list[str]:
     if not (isinstance(regions, list) and any(str(region).strip() for region in regions)):
         missing.append("a destination")
 
-    if not str(frame.get("start_date") or "").strip() or not str(frame.get("end_date") or "").strip():
+    if (
+        not str(frame.get("start_date") or "").strip()
+        or not str(frame.get("end_date") or "").strip()
+    ):
         missing.append("travel dates")
 
     if mode == "business" and not str(trip.get("summary") or "").strip():
@@ -212,9 +215,7 @@ def build_workspace_view_model(
 
     saved_scenarios = payload.get("saved_scenarios")
     saved_scenarios = saved_scenarios if isinstance(saved_scenarios, list) else []
-    inventory = _dict(payload.get("inventory_summary"))
     feasibility = _dict(payload.get("feasibility_summary"))
-    bundle_count = int(inventory.get("bundle_count") or 0)
     # "Decided" means the traveller decided it. Route options and inventory bundles are
     # generated automatically for every trip from flat constants, so they are never
     # progress the traveller made and must not be reported as such.

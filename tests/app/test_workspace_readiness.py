@@ -13,7 +13,7 @@ from trip_planner.app.services.workspace_view_model import build_workspace_view_
 
 
 def _payload(*, mode: str = "business", **frame: Any) -> dict[str, Any]:
-    trip_frame = {
+    trip_frame: dict[str, Any] = {
         "start_date": None,
         "end_date": None,
         "duration_days": 7,

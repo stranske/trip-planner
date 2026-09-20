@@ -29,7 +29,7 @@ const PARTY_CHOICES: Array<{ value: string; label: string }> = [
 ];
 
 /** Whole days between two ISO dates, inclusive of the start day. */
-export function nightsBetween(startDate: string, endDate: string): number | null {
+export function travelDaysInclusive(startDate: string, endDate: string): number | null {
   if (!startDate || !endDate) {
     return null;
   }
@@ -44,6 +44,7 @@ export function nightsBetween(startDate: string, endDate: string): number | null
 /** Fields the planner needs before it can assemble anything worth reviewing. */
 export function missingTripContext(values: {
   mode: TripMode | "";
+  purpose: string;
   destinations: string;
   startDate: string;
   endDate: string;
@@ -52,11 +53,14 @@ export function missingTripContext(values: {
   if (!values.mode) {
     missing.push("trip type");
   }
-  if (!values.destinations.trim()) {
+  if (!values.destinations.split(",").some((destination) => destination.trim())) {
     missing.push("at least one destination");
   }
   if (!values.startDate || !values.endDate) {
     missing.push("travel dates");
+  }
+  if (values.mode === "business" && !values.purpose.trim()) {
+    missing.push("a business purpose");
   }
   return missing;
 }
@@ -77,7 +81,7 @@ export function NewTripPage() {
   const [travelerCount, setTravelerCount] = useState("1");
   const [travelerNotes, setTravelerNotes] = useState("");
 
-  const derivedDuration = useMemo(() => nightsBetween(startDate, endDate), [startDate, endDate]);
+  const derivedDuration = useMemo(() => travelDaysInclusive(startDate, endDate), [startDate, endDate]);
   const durationValue = durationOverride !== "" ? durationOverride : derivedDuration != null ? String(derivedDuration) : "";
   const datesInvalid = Boolean(startDate && endDate && derivedDuration == null);
   const destinationList = destinations
@@ -86,7 +90,7 @@ export function NewTripPage() {
     .filter(Boolean);
   const tooManyDestinations = destinationList.length > 8;
 
-  const missing = missingTripContext({ mode, destinations, startDate, endDate });
+  const missing = missingTripContext({ mode, purpose, destinations, startDate, endDate });
   const isBusiness = mode === "business";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -205,7 +209,8 @@ export function NewTripPage() {
                 value={destinations}
                 onChange={(event) => setDestinations(event.target.value)}
                 placeholder="Chicago, IL"
-                aria-describedby="destinations-hint"
+                aria-invalid={tooManyDestinations}
+                aria-describedby={tooManyDestinations ? "destinations-hint destinations-error" : "destinations-hint"}
               />
             </label>
             <p className="field-hint" id="destinations-hint">
@@ -213,7 +218,7 @@ export function NewTripPage() {
               {destinationList.length > 0 ? ` Currently ${destinationList.length}.` : ""}
             </p>
             {tooManyDestinations ? (
-              <p className="field-error" role="alert">
+              <p className="field-error" id="destinations-error" role="alert">
                 That is more than 8 destinations. Remove a few, or plan them as separate trips.
               </p>
             ) : null}
@@ -232,6 +237,8 @@ export function NewTripPage() {
                 type="date"
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
+                aria-invalid={datesInvalid}
+                aria-describedby={datesInvalid ? "dates-error" : undefined}
               />
             </label>
 
@@ -243,11 +250,13 @@ export function NewTripPage() {
                 value={endDate}
                 min={startDate || undefined}
                 onChange={(event) => setEndDate(event.target.value)}
+                aria-invalid={datesInvalid}
+                aria-describedby={datesInvalid ? "dates-error" : undefined}
               />
             </label>
 
             {datesInvalid ? (
-              <p className="field-error" role="alert">
+              <p className="field-error" id="dates-error" role="alert">
                 The last day is before the first day. Check the dates.
               </p>
             ) : null}
