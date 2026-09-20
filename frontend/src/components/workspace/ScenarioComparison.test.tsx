@@ -85,6 +85,7 @@ describe("ScenarioComparison", () => {
       "Rail vs flight comparison"
     );
     expect(screen.getByText("Time").closest("div")).toHaveTextContent("420 min");
+    expect(screen.getByText("Indicative cost").closest("div")).toHaveTextContent("3,600");
   });
 
   it("invokes onSelectScenario when a scenario chip is clicked", () => {
