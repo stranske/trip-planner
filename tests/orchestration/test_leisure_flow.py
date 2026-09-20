@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 
-from trip_planner.app.services import workspace_fixtures
 from trip_planner.contracts import MoneyRange
 from trip_planner.itinerary import (
     ItineraryScenario,
@@ -11,6 +10,7 @@ from trip_planner.itinerary import (
     ScenarioSummary,
     ScenarioTradeoff,
 )
+from trip_planner.app.services import workspace_fixtures
 from trip_planner.orchestration import (
     LeisureWorkflowContext,
     build_leisure_planner_turn,

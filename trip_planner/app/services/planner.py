@@ -1432,7 +1432,11 @@ def _fallback_ledger_focus_line(
         refs.append(str(first.get("ledger_entry_id") or ""))
     if not ledger_focus:
         return None
-    return "Planning ledger remembers " + "; ".join(_dedupe_preserve_order(ledger_focus)[:3]) + "."
+    return (
+        "Planning ledger remembers "
+        + "; ".join(_dedupe_preserve_order(ledger_focus)[:3])
+        + "."
+    )
 
 
 class DeterministicPlannerConversationRunnable:
@@ -1562,7 +1566,9 @@ class _FakePlannerChatModel:
         if payload.get("task") == "classify_planner_intent":
             base_task_class = str(payload.get("base_task_class") or "first_turn_triage")
             return {
-                "content": json.dumps({"task_class": base_task_class, "intent": base_task_class})
+                "content": json.dumps(
+                    {"task_class": base_task_class, "intent": base_task_class}
+                )
             }
         message = str(payload.get("message") or "").strip()
         return {

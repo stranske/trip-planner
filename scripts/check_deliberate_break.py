@@ -81,7 +81,8 @@ def _write_github_output(**fields: str) -> None:
     if not output_path:
         return
     with Path(output_path).open("a", encoding="utf-8") as handle:
-        handle.writelines(f"{key}={value}\n" for key, value in fields.items())
+        for key, value in fields.items():
+            handle.write(f"{key}={value}\n")
 
 
 def _acceptance_criteria(markdown: str) -> str:

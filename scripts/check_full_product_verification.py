@@ -26,16 +26,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient  # noqa: E402
 
-from trip_planner.app.main import create_app
-from trip_planner.app.services.planner_runtime_config import (
-    build_planner_runtime_config,
-)
-from trip_planner.persistence.db import (
-    ensure_database_ready,
-    reset_database_state,
-)
+from trip_planner.app.main import create_app  # noqa: E402
+from trip_planner.app.services.planner_runtime_config import build_planner_runtime_config  # noqa: E402
+from trip_planner.persistence.db import ensure_database_ready, reset_database_state  # noqa: E402
 
 DEFAULT_TPP_REPO_PATH = REPO_ROOT.parent / "Travel-Plan-Permission"
 TPP_PORT = 8765
@@ -1099,9 +1094,7 @@ def run_product_journeys(
             )
             reloaded_proposal = reloaded_business_workspace.json()["proposal_state"]
             expected_follow_up_status = (
-                "resolved"
-                if expected_business_evaluation_status == "compliant"
-                else "reoptimization_required"
+                "resolved" if expected_business_evaluation_status == "compliant" else "reoptimization_required"
             )
             _require(
                 reloaded_proposal["summary"]["follow_up_status"] == expected_follow_up_status,
@@ -1116,9 +1109,7 @@ def run_product_journeys(
                 "trip_id": business_trip_id,
                 "proposal_id": proposal["proposal_id"],
                 "evaluation_status": evaluation_payload["summary"]["evaluation_result_status"],
-                "planning_mode": reloaded_business_workspace.json()["session"][
-                    "selected_planning_mode"
-                ],
+                "planning_mode": reloaded_business_workspace.json()["session"]["selected_planning_mode"],
                 "follow_up_status": evaluation_payload["summary"]["follow_up_status"],
                 "status_poll": refresh_payload["summary"]["submission_status"],
             }

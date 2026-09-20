@@ -364,7 +364,8 @@ def sync_lockfile(
         target_requirement = f"=={target_version}{match.group('marker') or ''}"
         if target_version and current_requirement != target_requirement:
             current_version = match.group("specifier") or "(unversioned)"
-            current_version = current_version.removeprefix("==")
+            if current_version.startswith("=="):
+                current_version = current_version[2:]
             changes.append(f"{lockfile_path.name}:{name}: {current_version} -> =={target_version}")
             if apply:
                 updated_lines.append(

@@ -139,10 +139,7 @@ def _missing_trip_context(trip: dict[str, Any], *, mode: str) -> list[str]:
     if not (isinstance(regions, list) and any(str(region).strip() for region in regions)):
         missing.append("a destination")
 
-    if (
-        not str(frame.get("start_date") or "").strip()
-        or not str(frame.get("end_date") or "").strip()
-    ):
+    if not str(frame.get("start_date") or "").strip() or not str(frame.get("end_date") or "").strip():
         missing.append("travel dates")
 
     if mode == "business" and not str(trip.get("summary") or "").strip():
