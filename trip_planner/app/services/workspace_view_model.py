@@ -6,6 +6,7 @@ growing the workspace integration module again.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 _TRIP_MODE_LABELS = {
@@ -139,10 +140,13 @@ def _missing_trip_context(trip: dict[str, Any], *, mode: str) -> list[str]:
     if not (isinstance(regions, list) and any(str(region).strip() for region in regions)):
         missing.append("a destination")
 
-    if (
-        not str(frame.get("start_date") or "").strip()
-        or not str(frame.get("end_date") or "").strip()
-    ):
+    try:
+        start_date = date.fromisoformat(str(frame.get("start_date") or ""))
+        end_date = date.fromisoformat(str(frame.get("end_date") or ""))
+        dates_valid = end_date >= start_date
+    except ValueError:
+        dates_valid = False
+    if not dates_valid:
         missing.append("travel dates")
 
     if mode == "business" and not str(trip.get("summary") or "").strip():

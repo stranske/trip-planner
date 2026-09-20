@@ -79,6 +79,16 @@ def test_business_trip_requires_a_purpose_for_the_approver() -> None:
     assert "business purpose" in model["user_summary"]["headline"]
 
 
+def test_malformed_or_reversed_dates_do_not_make_trip_ready() -> None:
+    for start, end in (("bad-date", "2026-10-15"), ("2026-10-15", "2026-10-12")):
+        frame = _complete_frame()
+        frame["trip_frame"]["start_date"] = start
+        frame["trip_frame"]["end_date"] = end
+        model = build_workspace_view_model(_payload(**frame))
+        assert model["user_summary"]["status"] == "empty"
+        assert "travel dates" in model["user_summary"]["headline"]
+
+
 def test_leisure_trip_does_not_require_a_business_purpose() -> None:
     frame = _complete_frame()
     frame["summary"] = ""
