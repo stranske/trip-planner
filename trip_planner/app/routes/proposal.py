@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from trip_planner.app.routes.errors import public_http_error
 from trip_planner.app.schemas.proposal import (
+    WorkspaceProposalSubmitRequest,
     WorkspaceProposalEvaluationRequest,
     WorkspaceProposalFollowUpRequest,
     WorkspaceProposalReoptimizeRequest,
@@ -13,6 +14,7 @@ from trip_planner.app.schemas.proposal import (
 )
 from trip_planner.app.services.auth import AuthenticatedUser, require_authenticated_user
 from trip_planner.app.services.proposal import (
+    submit_workspace_proposal_for_trip,
     WorkspaceProposalNotFoundError,
     get_workspace_proposal_payload,
     refresh_workspace_proposal_status,
@@ -235,5 +237,35 @@ def reoptimize_workspace_proposal(
             error,
             status_code=400,
             message="The workspace proposal request was invalid.",
+        ) from error
+    return WorkspaceProposalResponse.model_validate(result)
+
+
+@router.post("/workspace/{trip_id}/proposal/submit", response_model=WorkspaceProposalResponse)
+def submit_workspace_proposal(
+    trip_id: str,
+    payload: WorkspaceProposalSubmitRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> WorkspaceProposalResponse:
+    """Submit the planned trip to TPP for a policy verdict."""
+
+    try:
+        result = submit_workspace_proposal_for_trip(
+            db_session, user=user, trip_id=trip_id, scenario_id=payload.scenario_id
+        )
+    except WorkspaceProposalNotFoundError as error:
+        raise public_http_error(
+            error, status_code=404, message="The requested trip was not found."
+        ) from error
+    except TPPTransportError as error:
+        raise public_http_error(
+            error,
+            status_code=error.status_code,
+            message="The policy service could not be reached, so nothing was submitted.",
+        ) from error
+    except ValueError as error:
+        raise public_http_error(
+            error, status_code=400, message=str(error)
         ) from error
     return WorkspaceProposalResponse.model_validate(result)

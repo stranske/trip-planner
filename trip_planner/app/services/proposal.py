@@ -843,6 +843,62 @@ def get_workspace_proposal_payload(
     }
 
 
+def submit_workspace_proposal_for_trip(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    scenario_id: str | None = None,
+) -> dict[str, Any]:
+    """Submit this trip to TPP for a policy verdict, building everything server-side.
+
+    The traveller presses one button. The proposal and the TPP request envelope are
+    derived from the persisted trip and its synced policy; no verdict is accepted from
+    the caller, and no TPP payload is assembled in the browser.
+    """
+
+    from trip_planner.app.services.policy import get_workspace_policy_payload
+
+    policy_payload = get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
+    proposal_payload = policy_payload.get("proposal")
+    if not isinstance(proposal_payload, dict) or not proposal_payload:
+        msg = (
+            "This trip has no travel policy yet. Sync the policy for your organization "
+            "before submitting for approval."
+        )
+        raise ValueError(msg)
+
+    policy_state = policy_payload.get("policy_state")
+    organization_id = ""
+    if isinstance(policy_state, dict):
+        organization_id = str(policy_state.get("organization_id") or "")
+
+    proposal_id = str(proposal_payload.get("proposal_id") or f"proposal:{trip_id}")
+    request_payload = TPPRequestEnvelope(
+        operation="submit_proposal",
+        request_id=f"submit-proposal:{uuid4().hex}",
+        correlation_id=TPPCorrelationId.from_value(f"submit-proposal:{trip_id}"),
+        payload={"proposal": proposal_payload},
+        transport_pattern="sync",
+        organization_id=organization_id or None,
+        trip_id=trip_id,
+        proposal_id=proposal_id,
+        submitted_at=_now_iso(),
+        metadata={"source": "workspace_policy_tab"},
+    ).to_dict()
+
+    return save_workspace_proposal_submission(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        proposal_payload=proposal_payload,
+        request_payload=request_payload,
+        response_payload=None,
+        proposal_version=str(proposal_payload.get("proposal_version") or "v1"),
+        scenario_id=scenario_id,
+    )
+
+
 def save_workspace_proposal_submission(
     db_session: Session,
     *,

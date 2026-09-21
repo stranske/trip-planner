@@ -1,6 +1,8 @@
 import { startTransition, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useLoaderData } from "react-router-dom";
 
+import { readPolicyContext } from "../lib/proposalSubmission";
+
 import type { TripRecord } from "../api/trips";
 import {
   answerPlannerDecision,
@@ -9,6 +11,7 @@ import {
   fetchPlannerSession,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
+  syncWorkspacePolicy,
   retryPolicyServiceCheck,
   saveWorkspaceBudget,
   setNotebookFocus,
@@ -1728,7 +1731,22 @@ function WorkspacePageContent({
     setProposalStatusMessage(null);
     const refreshVersion = ++proposalRefreshVersion.current;
     try {
-      const nextProposalState = await submitTripForApproval(currentWorkspace, selectedScenarioId);
+      let submissionWorkspace = currentWorkspace;
+      if (readPolicyContext(submissionWorkspace) == null) {
+        // The step nothing ever performed. Without it buildProposalSubmissionPayload
+        // throws "Policy context is not available for this workspace." and the button
+        // appears to do nothing at all.
+        setProposalBusyLabel("Fetching your travel policy…");
+        const syncedPolicy = await syncWorkspacePolicy(
+          submissionWorkspace.trip_record.trip.trip_id
+        );
+        // Merge the synced policy in rather than refetching, so nothing else the
+        // traveller has on screen is replaced underneath them.
+        submissionWorkspace = { ...submissionWorkspace, policy_state: syncedPolicy };
+        setCurrentWorkspace(submissionWorkspace);
+        setProposalBusyLabel("Submitting for approval…");
+      }
+      const nextProposalState = await submitTripForApproval(submissionWorkspace, selectedScenarioId);
       if (refreshVersion !== proposalRefreshVersion.current) {
         return;
       }

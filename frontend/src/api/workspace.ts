@@ -4,6 +4,7 @@ import {
   buildProposalSubmissionPayload,
   type ProposalEvaluationPayload,
   type ProposalSubmissionPayload,
+  readPolicyContext,
 } from "../lib/proposalSubmission";
 import type { PlannerPanelState } from "../../../bundle/planner/orchestration-contracts";
 
@@ -954,16 +955,20 @@ export type PrepareApprovalPacketHandlers = {
   preloadPlannerSession?: (tripId: string) => Promise<unknown>;
 };
 
-/** Policy-tab entry point before an approval packet exists. */
-export function prepareApprovalPacketFromPolicyTab(
-  tripId: string,
-  handlers: PrepareApprovalPacketHandlers
-): void {
-  handlers.focusPlanTab();
-  handlers.preloadPlannerSession?.(tripId).catch(() => {
-    // Preloading the planner session is best-effort; the Plan tab reloads it.
+/** Fetch this trip's travel policy from TPP and store it on the workspace. */
+export async function syncWorkspacePolicy(
+  tripId: string
+): Promise<WorkspaceData["policy_state"]> {
+  const response = await fetchJson<{ policy_state: WorkspaceData["policy_state"] }>({
+    path: `/api/workspace/${tripId}/policy/sync`,
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
   });
+  return response.policy_state;
 }
+
 
 /** Retry hook used by the service-unavailable policy state. */
 export async function retryPolicyServiceCheck(

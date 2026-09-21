@@ -21,3 +21,9 @@ class WorkspacePolicyResponse(BaseModel):
     proposal: dict[str, Any] | None = None
     policy_evaluation: dict[str, Any] | None = None
     summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class PolicySyncRequest(BaseModel):
+    """Everything the traveller supplies to sync policy: which organization applies."""
+
+    organization_id: str | None = Field(default=None, max_length=96)
