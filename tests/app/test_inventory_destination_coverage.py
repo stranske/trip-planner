@@ -64,14 +64,17 @@ def test_uncovered_destination_produces_no_bundles_and_says_so() -> None:
 
 
 def test_any_unsupported_primary_region_blocks_bundle_assembly() -> None:
-    payload = _summary("Chicago", "Reykjavik, Iceland")
+    # One unresolvable stop blocks the whole trip, even alongside a resolvable one.
+    # (This originally used "Reykjavik, Iceland", which the GeoNames dataset now
+    # resolves; a genuinely unresolvable name is needed to exercise the guard.)
+    payload = _summary("Chicago", "Zzqxwv Nonexistent Place")
     runtime = payload["runtime_state"]
 
     assert payload["bundle_count"] == 0
     assert runtime["status"] == "empty"
     assert runtime["issues"]
     assert runtime["issues"][0]["code"] == "unsupported_inventory_destination"
-    assert runtime["issues"][0]["details"]["region"] == "Reykjavik, Iceland"
+    assert runtime["issues"][0]["details"]["region"] == "Zzqxwv Nonexistent Place"
 
 
 def test_geo_payload_raises_rather_than_returning_null_island() -> None:
