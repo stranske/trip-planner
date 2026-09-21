@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date, datetime
 
 import geonamescache
 import pytest
@@ -25,7 +26,9 @@ from trip_planner.geo import ResolvedPlace, distance_km, resolve_place
 from trip_planner.geo import resolver as geo_resolver
 
 
-def _journey(origin: str | None, regions: list[str], *, days: int = 4, travellers: int = 1):
+def _journey(
+    origin: str | None, regions: list[str], *, days: int = 4, travellers: int = 1
+):
     adapter = PersistedTripSourceInventoryAdapter(
         trip_id="trip-probe",
         trip_mode="business",
@@ -66,7 +69,10 @@ def test_a_longer_leg_is_never_cheaper_or_quicker() -> None:
     previous = None
     for destination in ("Austin", "Chicago", "Reykjavik, Iceland", "Tokyo", "Nairobi"):
         current = _journey("Seattle", [destination])
-        if previous is not None and current.total_distance_km > previous.total_distance_km:
+        if (
+            previous is not None
+            and current.total_distance_km > previous.total_distance_km
+        ):
             assert current.travel_minutes >= previous.travel_minutes
             assert current.transport_cost_usd >= previous.transport_cost_usd
         previous = current
@@ -97,7 +103,9 @@ def test_an_unresolvable_origin_is_refused_too() -> None:
 # assert the payload the product actually serves.
 
 
-def _bundle_dict(origin: str, destination: str, *, days: int = 4, travellers: int = 1) -> dict:
+def _bundle_dict(
+    origin: str, destination: str, *, days: int = 4, travellers: int = 1
+) -> dict:
     assembly = _build_inventory_assembly_input(
         trip_id=f"trip-{destination.lower().replace(' ', '-').replace(',', '')}-{travellers}",
         trip_mode="business",
@@ -127,7 +135,9 @@ def test_emitted_cost_and_duration_differ_by_destination() -> None:
     far_cost, far_minutes = _emitted("Seattle", "Tokyo")
 
     assert far_cost != near_cost, "the served cost must move with the destination"
-    assert far_minutes != near_minutes, "the served duration must move with the destination"
+    assert far_minutes != near_minutes, (
+        "the served duration must move with the destination"
+    )
     assert far_cost > near_cost
     assert far_minutes > near_minutes
 
@@ -148,7 +158,7 @@ def test_long_journey_arrival_timestamp_stays_valid() -> None:
     adapter = PersistedTripSourceInventoryAdapter(
         trip_id="trip-long",
         trip_mode="business",
-        primary_regions=["Tokyo"],
+        primary_regions=["Nairobi"],
         origin="Seattle",
         duration_days=4,
         start_date="2026-06-01",
@@ -156,7 +166,8 @@ def test_long_journey_arrival_timestamp_stays_valid() -> None:
     adapter.traveler_count = 1
     bundle = adapter._build_runtime_bundle_payload()
     timing = bundle["transport_options"][0]["timing_summary"]
-    assert int(timing["arrival_local"].split("T")[1][:2]) < 24
+    arrival = datetime.fromisoformat(timing["arrival_local"])
+    assert arrival.date() == date(2026, 6, 2)
 
 
 def test_emitted_transport_mode_follows_air_leg() -> None:
@@ -170,6 +181,61 @@ def test_qualified_cambridge_resolves_to_massachusetts_not_uk() -> None:
     resolved = resolve_place("Cambridge, MA")
     assert resolved is not None
     assert resolved.country_code == "US"
+
+
+def test_qualified_city_resolves_full_country_name_outside_explicit_aliases() -> None:
+    resolved = resolve_place("Paris, France")
+    assert resolved is not None
+    assert resolved.country_code == "FR"
+
+
+@pytest.mark.parametrize(
+    ("latitude", "longitude", "message"),
+    [
+        (float("nan"), 0.0, "invalid latitude"),
+        (0.0, float("inf"), "invalid longitude"),
+        (90.1, 0.0, "invalid latitude"),
+        (0.0, -180.1, "invalid longitude"),
+    ],
+)
+def test_resolved_place_rejects_nonfinite_and_out_of_range_coordinates(
+    latitude: float, longitude: float, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        ResolvedPlace(
+            query="invalid",
+            name="invalid",
+            latitude=latitude,
+            longitude=longitude,
+            country_code="ZZ",
+            population=0,
+        )
+
+
+def test_coordinate_validation_applies_to_both_city_indexes(monkeypatch) -> None:
+    monkeypatch.setattr(
+        geo_resolver,
+        "_city_index",
+        lambda: {"bad unqualified": ("Bad", float("nan"), 0.0, "ZZ", 0)},
+    )
+    with pytest.raises(ValueError, match="invalid latitude"):
+        resolve_place("Bad Unqualified")
+
+    monkeypatch.setattr(
+        geo_resolver,
+        "_qualified_city_index",
+        lambda: {
+            ("bad qualified", "FR", ""): {
+                "name": "Bad",
+                "latitude": 0.0,
+                "longitude": 181.0,
+                "countrycode": "FR",
+                "population": 0,
+            }
+        },
+    )
+    with pytest.raises(ValueError, match="invalid longitude"):
+        resolve_place("Bad Qualified, France")
 
 
 def test_qualified_city_resolution_builds_geonames_index_once(monkeypatch) -> None:

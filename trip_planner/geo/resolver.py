@@ -6,7 +6,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
-from math import asin, cos, radians, sin, sqrt
+from math import asin, cos, isfinite, radians, sin, sqrt
 
 _EARTH_RADIUS_KM = 6371.0088
 
@@ -96,6 +96,12 @@ class ResolvedPlace:
     country_code: str
     population: int
 
+    def __post_init__(self) -> None:
+        if not isfinite(self.latitude) or not -90.0 <= self.latitude <= 90.0:
+            raise ValueError(f"invalid latitude: {self.latitude!r}")
+        if not isfinite(self.longitude) or not -180.0 <= self.longitude <= 180.0:
+            raise ValueError(f"invalid longitude: {self.longitude!r}")
+
     def to_geo_payload(self) -> dict[str, object]:
         """Shape the inventory adapter consumes."""
 
@@ -173,6 +179,20 @@ def _city_index() -> dict[str, tuple]:
     return index
 
 
+@lru_cache(maxsize=1)
+def _country_name_index() -> dict[str, str]:
+    """Map normalized GeoNames country names to their two-letter codes."""
+
+    import geonamescache
+
+    index: dict[str, str] = {}
+    for code, country in geonamescache.GeonamesCache().get_countries().items():
+        name = str(country.get("name") or "")
+        if name:
+            index[_normalise(name)] = str(code).upper()
+    return index
+
+
 def _qualifier_filters(qualifier: str) -> tuple[str | None, str | None]:
     token = qualifier.strip()
     if not token:
@@ -185,6 +205,9 @@ def _qualifier_filters(qualifier: str) -> tuple[str | None, str | None]:
     country = _COUNTRY_ALIASES.get(_normalise(token))
     if country:
         return country, None
+    country = _country_name_index().get(_normalise(token))
+    if country:
+        return country, None
     return None, None
 
 
@@ -194,7 +217,9 @@ def _city_matches_name(city: dict[str, object], city_key: str) -> bool:
     return any(_normalise(name) == city_key for name in names if name)
 
 
-def _resolved_place_from_city(destination: str, city: dict[str, object]) -> ResolvedPlace:
+def _resolved_place_from_city(
+    destination: str, city: dict[str, object]
+) -> ResolvedPlace:
     return ResolvedPlace(
         query=destination,
         name=str(city.get("name") or destination),
@@ -223,9 +248,9 @@ def _qualified_city_index() -> dict[tuple[str, str, str], dict[str, object]]:
             normalised = _normalise(name)
             for key in ((normalised, country, ""), (normalised, country, admin)):
                 existing = index.get(key)
-                if existing is None or _coerce_int(city.get("population")) > _coerce_int(
-                    existing.get("population")
-                ):
+                if existing is None or _coerce_int(
+                    city.get("population")
+                ) > _coerce_int(existing.get("population")):
                     index[key] = city
     return index
 
@@ -236,7 +261,9 @@ def _resolve_with_qualifier(city: str, qualifier: str) -> ResolvedPlace | None:
         return None
 
     city_key = _normalise(city)
-    city_data = _qualified_city_index().get((city_key, country_filter, admin_filter or ""))
+    city_data = _qualified_city_index().get(
+        (city_key, country_filter, admin_filter or "")
+    )
     if city_data is None:
         return None
     return _resolved_place_from_city(f"{city}, {qualifier}", city_data)
@@ -270,7 +297,9 @@ def resolve_place(destination: str) -> ResolvedPlace | None:
     if not destination or not destination.strip():
         return None
 
-    parts = [part.strip() for part in _QUALIFIER_SPLIT.split(destination) if part.strip()]
+    parts = [
+        part.strip() for part in _QUALIFIER_SPLIT.split(destination) if part.strip()
+    ]
     if len(parts) >= 2:
         qualified = _resolve_with_qualifier(parts[0], parts[-1])
         if qualified is not None:
