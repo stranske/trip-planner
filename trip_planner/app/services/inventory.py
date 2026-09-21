@@ -42,6 +42,24 @@ def _commerciality_for_category(category: str) -> float:
     return _CATEGORY_COMMERCIALITY.get(category, 0.5)
 
 
+class UnsupportedDestinationError(ValueError):
+    """Raised when the planner has no geographic coverage for a destination.
+
+    The planner may only plan places it actually knows. Anything else must surface as
+    a stated limit, never as a bundle built from an invented location.
+    """
+
+    def __init__(self, message: str, *, region: str) -> None:
+        super().__init__(message)
+        self.region = region
+
+
+def supported_destinations() -> list[str]:
+    """Destination slugs the planner has real coordinates for."""
+
+    return sorted(_REGION_GEO_DEFAULTS)
+
+
 _REGION_GEO_DEFAULTS: dict[str, dict[str, Any]] = {
     "austin": {
         "latitude": 30.2672,
@@ -419,15 +437,13 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
 
     def _geo_payload(self, region: str) -> dict[str, Any]:
         geo = _REGION_GEO_DEFAULTS.get(self._slug(region))
-        if geo is not None:
-            return dict(geo)
-        return {
-            "latitude": 0.0,
-            "longitude": 0.0,
-            "country_code": "ZZ",
-            "time_zone": "",
-            "locality_hint": region,
-        }
+        if geo is None:
+            # Never invent a location. Emitting (0.0, 0.0) placed every unsupported
+            # destination at Null Island and let the planner produce confident
+            # route, timing and cost figures for a trip it knows nothing about.
+            msg = f"no geographic coverage for destination {region!r}"
+            raise UnsupportedDestinationError(msg, region=region)
+        return dict(geo)
 
     def _trip_timestamp(self, *, hour: int, minute: int = 0) -> str:
         trip_date = self.start_date or self.end_date or "1970-01-01"
@@ -732,7 +748,32 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                     details={"trip_id": self.trip_id, "trip_mode": self.trip_mode},
                 )
             )
+        unsupported_region: str | None = None
+        bundle_payload: dict[str, Any] | None = None
         if not missing_primary_regions and not missing_duration:
+            try:
+                bundle_payload = self._build_runtime_bundle_payload()
+            except UnsupportedDestinationError as error:
+                unsupported_region = error.region
+                issues.append(
+                    AdapterIssue(
+                        issue_id=f"issue:{self.trip_id}:inventory-unsupported-destination",
+                        stage="availability",
+                        severity="warning",
+                        code="unsupported_inventory_destination",
+                        message=(
+                            f"The planner has no coverage for {error.region}, so no route, "
+                            "timing or cost options can be assembled for it."
+                        ),
+                        details={
+                            "trip_id": self.trip_id,
+                            "trip_mode": self.trip_mode,
+                            "region": error.region,
+                            "supported_destinations": ", ".join(supported_destinations()),
+                        },
+                    )
+                )
+        if bundle_payload is not None:
             records.append(
                 RawSourceRecord(
                     record_id=f"{query.query_id}:1",
@@ -740,7 +781,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                     provider_entity_id=f"{self.trip_id}:runtime-bundle-seed",
                     payload_type="runtime_bundle_seed",
                     payload={
-                        "bundle_payloads": [self._build_runtime_bundle_payload()],
+                        "bundle_payloads": [bundle_payload],
                     },
                     captured_at=self._trip_timestamp(hour=0) or "",
                     metadata={"source_seed": "persisted_trip_runtime"},
@@ -948,6 +989,8 @@ def build_inventory_summary_payload(
     assembly_input: InventoryAssemblyInput | None = None,
 ) -> dict[str, Any]:
     def _issue_reason(issue_code: str) -> str:
+        if issue_code == "unsupported_inventory_destination":
+            return "unsupported_destination"
         if issue_code == "missing_inventory_primary_regions":
             return "missing_destination"
         if issue_code == "missing_inventory_trip_duration":
@@ -1032,7 +1075,20 @@ def build_inventory_summary_payload(
         }
     elif assembly_input is not None and assembly_input.snapshot.issues:
         issue = assembly_input.snapshot.issues[0]
-        if issue.code == "missing_inventory_trip_duration":
+        if issue.code == "unsupported_inventory_destination":
+            region = str((issue.details or {}).get("region") or "this destination")
+            runtime_state = {
+                "status": "empty",
+                "title": f"The planner does not cover {region} yet",
+                "summary": (
+                    f"No route, timing or cost options can be produced for {region}. "
+                    "Destinations the planner currently covers: "
+                    + ", ".join(name.title() for name in supported_destinations())
+                    + "."
+                ),
+                "issues": runtime_issues,
+            }
+        elif issue.code == "missing_inventory_trip_duration":
             runtime_state = {
                 "status": "partial",
                 "title": "Runtime inventory is partially specified",
