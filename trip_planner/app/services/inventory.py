@@ -5,6 +5,7 @@ import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from importlib import resources
 from typing import Any
 
@@ -56,10 +57,16 @@ class UnsupportedDestinationError(ValueError):
         self.region = region
 
 
-def supported_destinations() -> list[str]:
-    """Curated fallback destinations; real coverage comes from the GeoNames dataset."""
+def curated_destination_examples() -> list[str]:
+    """Curated destinations with extra metadata; GeoNames supplies the broader coverage set."""
 
     return sorted(_REGION_GEO_DEFAULTS)
+
+
+def supported_destinations() -> list[str]:
+    """Backward-compatible alias for :func:`curated_destination_examples`."""
+
+    return curated_destination_examples()
 
 
 #: Nightly lodging allowance by trip mode, in USD. A documented planning assumption,
@@ -100,11 +107,24 @@ class JourneyProfile:
     """
 
     destination: ResolvedPlace
-    legs: tuple[tuple[str, str, float], ...]
+    legs: tuple[tuple[str, str, float, str], ...]
     total_distance_km: float
     travel_minutes: int
     transport_cost_usd: float
     assumptions: tuple[str, ...]
+
+
+def _contract_transport_mode(leg_mode: str) -> str:
+    """Map internal leg mode labels to the transport contract vocabulary."""
+
+    return "flight" if leg_mode == "air" else "rail"
+
+
+def _option_transport_kind(leg_modes: Sequence[str]) -> str:
+    contract_modes = {_contract_transport_mode(mode) for mode in leg_modes}
+    if len(contract_modes) == 1:
+        return next(iter(contract_modes))
+    return "mixed"
 
 
 def _leg_time_and_cost(distance_km_value: float) -> tuple[int, float, str]:
@@ -232,7 +252,9 @@ class PersistedTripInventoryContext:
     origin: str | None = None
 
     @classmethod
-    def from_persisted_trip(cls, record: PersistedTrip) -> PersistedTripInventoryContext:
+    def from_persisted_trip(
+        cls, record: PersistedTrip
+    ) -> PersistedTripInventoryContext:
         return cls(
             trip_id=record.trip_id,
             trip_mode=record.mode,
@@ -263,7 +285,9 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
     ) -> None:
         self.trip_id = trip_id
         self.trip_mode = trip_mode
-        self.primary_regions = tuple(region.strip() for region in primary_regions if region.strip())
+        self.primary_regions = tuple(
+            region.strip() for region in primary_regions if region.strip()
+        )
         self.duration_days = duration_days
         self.allow_fixture_fallback = allow_fixture_fallback
         self.adapter_id = "persisted-trip-fixture-inventory"
@@ -279,7 +303,9 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
                 freshness_confidence=0.7,
                 commerciality=_commerciality_for_category("commercial_inventory"),
                 operational_reliability=0.65,
-                notes=["Fixture source freshness is pinned to the bundled fixture capture date."],
+                notes=[
+                    "Fixture source freshness is pinned to the bundled fixture capture date."
+                ],
             ),
             quality_summary=QualityValueFitSummary(
                 quality_signal=0.68,
@@ -405,7 +431,9 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
                 "trip_id": self.trip_id,
                 "trip_mode": self.trip_mode,
                 "region_count": str(len(self.primary_regions)),
-                "duration_days": "" if self.duration_days is None else str(self.duration_days),
+                "duration_days": ""
+                if self.duration_days is None
+                else str(self.duration_days),
             },
         )
 
@@ -463,7 +491,9 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
     ) -> None:
         self.trip_id = trip_id
         self.trip_mode = trip_mode
-        self.primary_regions = tuple(region.strip() for region in primary_regions if region.strip())
+        self.primary_regions = tuple(
+            region.strip() for region in primary_regions if region.strip()
+        )
         self.origin = (origin or "").strip() or None
         self.start_date = (start_date or "").strip()
         self.end_date = (end_date or "").strip()
@@ -496,14 +526,18 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                 fit_signal=0.8 if primary_regions else 0.55,
                 confidence=0.76 if primary_regions else 0.5,
             ),
-            notes=["Derives normalized inventory seeds directly from persisted trip context."],
+            notes=[
+                "Derives normalized inventory seeds directly from persisted trip context."
+            ],
         )
         self.supported_entity_scopes = ("mixed",)
         self.supported_option_kinds = ("mixed", "lodging", "activity", "rail")
         self.capabilities = ("read_file", "supports_normalization_handoff")
 
     @classmethod
-    def from_persisted_trip(cls, record: PersistedTrip) -> PersistedTripSourceInventoryAdapter:
+    def from_persisted_trip(
+        cls, record: PersistedTrip
+    ) -> PersistedTripSourceInventoryAdapter:
         return cls(
             trip_id=record.trip_id,
             trip_mode=record.mode,
@@ -550,9 +584,16 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         for region in self.primary_regions:
             self._geo_payload(region)
 
-    def _trip_timestamp(self, *, hour: int, minute: int = 0) -> str:
+    def _trip_timestamp(
+        self, *, hour: int, minute: int = 0, add_minutes: int = 0
+    ) -> str:
         trip_date = self.start_date or self.end_date or "1970-01-01"
-        return f"{trip_date}T{hour:02d}:{minute:02d}:00Z"
+        base = datetime.fromisoformat(
+            f"{trip_date}T{hour:02d}:{minute:02d}:00"
+        ).replace(tzinfo=UTC)
+        if add_minutes:
+            base += timedelta(minutes=add_minutes)
+        return base.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     @property
     def stable_source_id(self) -> str:
@@ -586,7 +627,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                 raise UnsupportedDestinationError(msg, region=region)
             places.append(place)
 
-        legs: list[tuple[str, str, float]] = []
+        legs: list[tuple[str, str, float, str]] = []
         total_km = 0.0
         minutes = 0
         cost = 0.0
@@ -594,7 +635,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         for first, second in itertools.pairwise(places):
             leg_km = distance_km(first, second)
             leg_minutes, leg_cost, mode = _leg_time_and_cost(leg_km)
-            legs.append((first.name, second.name, round(leg_km, 1)))
+            legs.append((first.name, second.name, round(leg_km, 1), mode))
             total_km += leg_km
             minutes += leg_minutes
             cost += leg_cost
@@ -602,11 +643,12 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                 f"{first.name} to {second.name}: {leg_km:,.0f} km modelled as {mode}"
             )
 
-        # Every destination also carries a local gateway transfer (airport/station to city).
-        minutes += LOCAL_TRANSFER_MINUTES * len(places)
-        cost += LOCAL_TRANSFER_COST_USD * len(places)
+        # Every destination carries a local gateway transfer; the origin is not a destination.
+        destination_count = len(self.primary_regions)
+        minutes += LOCAL_TRANSFER_MINUTES * destination_count
+        cost += LOCAL_TRANSFER_COST_USD * destination_count
         assumptions.append(
-            f"{len(places)} local gateway transfer(s) at {LOCAL_TRANSFER_MINUTES} min each"
+            f"{destination_count} local gateway transfer(s) at {LOCAL_TRANSFER_MINUTES} min each"
         )
 
         return JourneyProfile(
@@ -632,11 +674,17 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         # which the traveller adjusts on the Budget tab if they are sharing.
         travellers = max(1, int(self.traveler_count or 1))
         lodging_total = round(
-            max(1, duration_days) * LODGING_NIGHTLY_RATE_USD[self.trip_mode_key] * travellers, 2
+            max(1, duration_days)
+            * LODGING_NIGHTLY_RATE_USD[self.trip_mode_key]
+            * travellers,
+            2,
         )
         transport_total = round(journey.transport_cost_usd * travellers, 2)
         activity_total = round(
-            ACTIVITY_ALLOWANCE_USD[self.trip_mode_key] * max(1, duration_days) * travellers, 2
+            ACTIVITY_ALLOWANCE_USD[self.trip_mode_key]
+            * max(1, duration_days)
+            * travellers,
+            2,
         )
         baseline_signal = 0.82 if self.trip_mode == "business" else 0.79
         destination_geo = self._geo_payload(destination_name)
@@ -650,9 +698,34 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         captured_at = self._trip_timestamp(hour=0)
         transport_timing: dict[str, Any] = {"duration_minutes": journey.travel_minutes}
         departure_local = self._trip_timestamp(hour=9)
-        arrival_local = self._trip_timestamp(
-            hour=9 + journey.travel_minutes // 60, minute=journey.travel_minutes % 60
-        )
+        arrival_local = self._trip_timestamp(hour=9, add_minutes=journey.travel_minutes)
+        leg_modes = [leg[3] for leg in journey.legs]
+        if journey.legs:
+            transport_kind = _option_transport_kind(leg_modes)
+            transport_segments = [
+                {
+                    "segment_id": f"segment:{self.trip_id}:leg-{index}",
+                    "mode": _contract_transport_mode(leg_mode),
+                    "origin_label": origin_name,
+                    "destination_label": dest_name,
+                }
+                for index, (
+                    origin_name,
+                    dest_name,
+                    _distance_km,
+                    leg_mode,
+                ) in enumerate(journey.legs, start=1)
+            ]
+        else:
+            transport_kind = "rail"
+            transport_segments = [
+                {
+                    "segment_id": f"segment:{self.trip_id}:arrival-1",
+                    "mode": "rail",
+                    "origin_label": f"{destination_name} gateway",
+                    "destination_label": destination_name,
+                }
+            ]
         transport_timing.update(
             {
                 "departure_local": departure_local,
@@ -768,18 +841,11 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                 {
                     "option_id": transport_option_id,
                     "name": f"{destination_name} arrival connector",
-                    "transport_kind": "rail",
+                    "transport_kind": transport_kind,
                     "origin_id": gateway_id,
                     "destination_id": destination_id,
                     "timing_summary": transport_timing,
-                    "segments": [
-                        {
-                            "segment_id": f"segment:{self.trip_id}:arrival-1",
-                            "mode": "rail",
-                            "origin_label": f"{destination_name} gateway",
-                            "destination_label": destination_name,
-                        }
-                    ],
+                    "segments": transport_segments,
                     "cost_summary": {
                         "total": {"currency": "USD", "typical_amount": transport_total}
                     },
@@ -789,7 +855,10 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                             "preferred" if self.trip_mode == "business" else "approved"
                         )
                     },
-                    "feasibility": {"available": True, "availability_status": "available"},
+                    "feasibility": {
+                        "available": True,
+                        "availability_status": "available",
+                    },
                     "source_refs": [
                         _provenance_ref(
                             provenance_id=f"{provenance_base}:transport",
@@ -808,11 +877,15 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                         if self.trip_mode == "business"
                         else f"{destination_name} anchor experience"
                     ),
-                    "activity_kind": "dining" if self.trip_mode == "business" else "museum",
+                    "activity_kind": "dining"
+                    if self.trip_mode == "business"
+                    else "museum",
                     "destination_id": destination_id,
                     "place_id": f"place:{self.trip_id}:primary-activity",
                     "category": {
-                        "primary": "meeting" if self.trip_mode == "business" else "museum",
+                        "primary": "meeting"
+                        if self.trip_mode == "business"
+                        else "museum",
                     },
                     "timing_summary": {
                         "duration_minutes": 120,
@@ -826,7 +899,10 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                         "total": {"currency": "USD", "typical_amount": activity_total}
                     },
                     "fit_summary": {"overall_signal": baseline_signal},
-                    "feasibility": {"available": True, "availability_status": "available"},
+                    "feasibility": {
+                        "available": True,
+                        "availability_status": "available",
+                    },
                     "source_refs": [
                         _provenance_ref(
                             provenance_id=f"{provenance_base}:activity",
@@ -855,7 +931,9 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                 "status": "evaluated",
                 "overall_pass": True,
                 "hard_constraints_satisfied": True,
-                "policy_constraints_satisfied": True if self.trip_mode == "business" else None,
+                "policy_constraints_satisfied": True
+                if self.trip_mode == "business"
+                else None,
                 "blocking_constraint_ids": [],
                 "evaluated_constraint_ids": [
                     "bundle.feasibility.available",
@@ -935,7 +1013,9 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                             "trip_id": self.trip_id,
                             "trip_mode": self.trip_mode,
                             "region": error.region,
-                            "supported_destinations": ", ".join(supported_destinations()),
+                            "supported_destinations": ", ".join(
+                                supported_destinations()
+                            ),
                         },
                     )
                 )
@@ -971,7 +1051,9 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                 "trip_id": self.trip_id,
                 "trip_mode": self.trip_mode,
                 "region_count": str(len(self.primary_regions)),
-                "duration_days": "" if self.duration_days is None else str(self.duration_days),
+                "duration_days": ""
+                if self.duration_days is None
+                else str(self.duration_days),
             },
         )
 
@@ -1012,7 +1094,9 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
 
 def _load_mixed_option_fixture(name: str) -> MixedOption:
     payload = json.loads(
-        resources.files(_BUNDLE_RESOURCE_PACKAGE).joinpath(name).read_text(encoding="utf-8")
+        resources.files(_BUNDLE_RESOURCE_PACKAGE)
+        .joinpath(name)
+        .read_text(encoding="utf-8")
     )
     return MixedOption.from_dict(payload)
 
@@ -1035,7 +1119,9 @@ def _build_inventory_assembly_input(
     allow_fixture_fallback: bool = True,
 ) -> InventoryAssemblyInput:
     if persisted_trip is not None:
-        persisted_context = PersistedTripInventoryContext.from_persisted_trip(persisted_trip)
+        persisted_context = PersistedTripInventoryContext.from_persisted_trip(
+            persisted_trip
+        )
         trip_id = persisted_context.trip_id
         trip_mode = persisted_context.trip_mode
         start_date = persisted_context.start_date
@@ -1087,7 +1173,9 @@ def _build_inventory_assembly_input(
         )
     else:
         if persisted_trip is not None:
-            adapter = PersistedTripSourceInventoryAdapter.from_persisted_trip(persisted_trip)
+            adapter = PersistedTripSourceInventoryAdapter.from_persisted_trip(
+                persisted_trip
+            )
         else:
             adapter = PersistedTripSourceInventoryAdapter(
                 trip_id=trip_id,
@@ -1111,7 +1199,9 @@ def _build_inventory_assembly_input(
         snapshot=snapshot,
         handoff=handoff,
         record_payloads=tuple(
-            record.payload for record in snapshot.records if isinstance(record.payload, dict)
+            record.payload
+            for record in snapshot.records
+            if isinstance(record.payload, dict)
         ),
         fixture_names=tuple(
             record.metadata["fixture_name"]
@@ -1132,7 +1222,9 @@ def assemble_inventory_bundles_for_trip(
 ) -> list[InventoryBundle]:
     if assembly_input is None:
         if trip_id is None or trip_mode is None:
-            msg = "trip_id and trip_mode are required when assembly_input is not provided"
+            msg = (
+                "trip_id and trip_mode are required when assembly_input is not provided"
+            )
             raise ValueError(msg)
         assembly_input = _build_inventory_assembly_input(
             trip_id=trip_id,
@@ -1251,9 +1343,9 @@ def build_inventory_summary_payload(
                 "title": f"The planner does not cover {region} yet",
                 "summary": (
                     f"No route, timing or cost options can be produced for {region}. "
-                    "Destinations the planner currently covers: "
-                    + ", ".join(name.title() for name in supported_destinations())
-                    + "."
+                    "Example curated destinations with extra metadata: "
+                    + ", ".join(name.title() for name in curated_destination_examples())
+                    + ". Many additional cities resolve through the bundled GeoNames dataset."
                 ),
                 "issues": runtime_issues,
             }
@@ -1294,11 +1386,15 @@ def build_inventory_summary_payload(
                 "title": bundle.title,
                 "bundle_context": bundle.bundle_context,
                 "summary": bundle.summary or bundle.explanation.headline,
-                "destination_names": [destination.name for destination in bundle.destinations],
+                "destination_names": [
+                    destination.name for destination in bundle.destinations
+                ],
                 "option_count": len(bundle.option_ids),
                 "strengths": list(bundle.explanation.strengths[:2]),
                 "tradeoffs": list(bundle.explanation.tradeoffs[:2]),
-                "source_records": [record.to_dict() for record in bundle.source_records],
+                "source_records": [
+                    record.to_dict() for record in bundle.source_records
+                ],
             }
             for bundle in bundles
         ],
@@ -1351,5 +1447,7 @@ def get_inventory_payload(
         "trip_id": trip_id,
         "bundle_count": len(bundles),
         "bundles": [bundle.to_dict() for bundle in bundles],
-        "summary": build_inventory_summary_payload(bundles, assembly_input=assembly_input),
+        "summary": build_inventory_summary_payload(
+            bundles, assembly_input=assembly_input
+        ),
     }

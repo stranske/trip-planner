@@ -15,6 +15,7 @@ from trip_planner.app.services.inventory import (
     _build_inventory_assembly_input,
     assemble_inventory_bundles_for_trip,
     build_inventory_summary_payload,
+    curated_destination_examples,
     supported_destinations,
 )
 
@@ -23,7 +24,9 @@ def _summary(*regions: str) -> dict:
     """Assemble inventory exactly as the workspace does."""
     assembly = _build_inventory_assembly_input(
         trip_id="trip-"
-        + "-".join(region.lower().replace(" ", "-").replace(",", "") for region in regions),
+        + "-".join(
+            region.lower().replace(" ", "-").replace(",", "") for region in regions
+        ),
         trip_mode="business",
         primary_regions=list(regions),
         duration_days=4,
@@ -33,10 +36,11 @@ def _summary(*regions: str) -> dict:
     return build_inventory_summary_payload(bundles, assembly_input=assembly)
 
 
-def test_supported_destinations_is_not_empty_and_is_sorted() -> None:
-    names = supported_destinations()
-    assert names, "the planner must declare the destinations it covers"
+def test_curated_destination_examples_is_not_empty_and_is_sorted() -> None:
+    names = curated_destination_examples()
+    assert names, "the planner must declare curated destination examples"
     assert names == sorted(names)
+    assert supported_destinations() == names
 
 
 def test_covered_destination_still_assembles() -> None:

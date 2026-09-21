@@ -13,6 +13,77 @@ _EARTH_RADIUS_KM = 6371.0088
 #: Trailing administrative qualifiers travellers habitually append ("Chicago, IL").
 _QUALIFIER_SPLIT = re.compile(r"\s*[,/|]\s*")
 
+_US_STATE_CODES = frozenset(
+    {
+        "AL",
+        "AK",
+        "AZ",
+        "AR",
+        "CA",
+        "CO",
+        "CT",
+        "DE",
+        "FL",
+        "GA",
+        "HI",
+        "ID",
+        "IL",
+        "IN",
+        "IA",
+        "KS",
+        "KY",
+        "LA",
+        "ME",
+        "MD",
+        "MA",
+        "MI",
+        "MN",
+        "MS",
+        "MO",
+        "MT",
+        "NE",
+        "NV",
+        "NH",
+        "NJ",
+        "NM",
+        "NY",
+        "NC",
+        "ND",
+        "OH",
+        "OK",
+        "OR",
+        "PA",
+        "RI",
+        "SC",
+        "SD",
+        "TN",
+        "TX",
+        "UT",
+        "VT",
+        "VA",
+        "WA",
+        "WV",
+        "WI",
+        "WY",
+        "DC",
+    }
+)
+
+_COUNTRY_ALIASES: dict[str, str] = {
+    "gb": "GB",
+    "iceland": "IS",
+    "is": "IS",
+    "japan": "JP",
+    "jp": "JP",
+    "kenya": "KE",
+    "ke": "KE",
+    "uk": "GB",
+    "united kingdom": "GB",
+    "united states": "US",
+    "us": "US",
+    "usa": "US",
+}
+
 
 @dataclass(frozen=True)
 class ResolvedPlace:
@@ -76,6 +147,64 @@ def _city_index() -> dict[str, tuple]:
     return index
 
 
+def _qualifier_filters(qualifier: str) -> tuple[str | None, str | None]:
+    token = qualifier.strip()
+    if not token:
+        return None, None
+    upper = token.upper()
+    if len(upper) == 2 and upper in _US_STATE_CODES:
+        return "US", upper
+    if len(upper) == 2:
+        return upper, None
+    country = _COUNTRY_ALIASES.get(_normalise(token))
+    if country:
+        return country, None
+    return None, None
+
+
+def _city_matches_name(city: dict[str, object], city_key: str) -> bool:
+    names = {str(city.get("name") or "")}
+    names.update(str(name) for name in (city.get("alternatenames") or []))
+    return any(_normalise(name) == city_key for name in names if name)
+
+
+def _resolved_place_from_city(
+    destination: str, city: dict[str, object]
+) -> ResolvedPlace:
+    return ResolvedPlace(
+        query=destination,
+        name=str(city.get("name") or destination),
+        latitude=float(city["latitude"]),
+        longitude=float(city["longitude"]),
+        country_code=str(city.get("countrycode") or ""),
+        population=int(city.get("population") or 0),
+    )
+
+
+def _resolve_with_qualifier(city: str, qualifier: str) -> ResolvedPlace | None:
+    country_filter, admin_filter = _qualifier_filters(qualifier)
+    if country_filter is None:
+        return None
+
+    import geonamescache
+
+    city_key = _normalise(city)
+    matches: list[dict[str, object]] = []
+    for city_data in geonamescache.GeonamesCache().get_cities().values():
+        if not _city_matches_name(city_data, city_key):
+            continue
+        if str(city_data.get("countrycode") or "") != country_filter:
+            continue
+        if admin_filter and str(city_data.get("admin1code") or "") != admin_filter:
+            continue
+        matches.append(city_data)
+
+    if not matches:
+        return None
+    best = max(matches, key=lambda city_data: int(city_data.get("population") or 0))
+    return _resolved_place_from_city(f"{city}, {qualifier}", best)
+
+
 def _candidate_keys(destination: str) -> list[str]:
     """Progressively simpler forms of a traveller's destination string."""
 
@@ -103,6 +232,16 @@ def resolve_place(destination: str) -> ResolvedPlace | None:
 
     if not destination or not destination.strip():
         return None
+
+    parts = [
+        part.strip() for part in _QUALIFIER_SPLIT.split(destination) if part.strip()
+    ]
+    if len(parts) >= 2:
+        qualified = _resolve_with_qualifier(parts[0], parts[-1])
+        if qualified is not None:
+            return qualified
+        return None
+
     index = _city_index()
     for key in _candidate_keys(destination):
         hit = index.get(key)

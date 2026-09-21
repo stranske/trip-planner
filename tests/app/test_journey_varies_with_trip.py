@@ -23,7 +23,9 @@ from trip_planner.app.services.inventory import (
 from trip_planner.geo import ResolvedPlace, distance_km, resolve_place
 
 
-def _journey(origin: str | None, regions: list[str], *, days: int = 4, travellers: int = 1):
+def _journey(
+    origin: str | None, regions: list[str], *, days: int = 4, travellers: int = 1
+):
     adapter = PersistedTripSourceInventoryAdapter(
         trip_id="trip-probe",
         trip_mode="business",
@@ -64,7 +66,10 @@ def test_a_longer_leg_is_never_cheaper_or_quicker() -> None:
     previous = None
     for destination in ("Austin", "Chicago", "Reykjavik, Iceland", "Tokyo", "Nairobi"):
         current = _journey("Seattle", [destination])
-        if previous is not None and current.total_distance_km > previous.total_distance_km:
+        if (
+            previous is not None
+            and current.total_distance_km > previous.total_distance_km
+        ):
             assert current.travel_minutes >= previous.travel_minutes
             assert current.transport_cost_usd >= previous.transport_cost_usd
         previous = current
@@ -95,7 +100,9 @@ def test_an_unresolvable_origin_is_refused_too() -> None:
 # assert the payload the product actually serves.
 
 
-def _bundle_dict(origin: str, destination: str, *, days: int = 4, travellers: int = 1) -> dict:
+def _bundle_dict(
+    origin: str, destination: str, *, days: int = 4, travellers: int = 1
+) -> dict:
     assembly = _build_inventory_assembly_input(
         trip_id=f"trip-{destination.lower().replace(' ', '-').replace(',', '')}-{travellers}",
         trip_mode="business",
@@ -125,7 +132,9 @@ def test_emitted_cost_and_duration_differ_by_destination() -> None:
     far_cost, far_minutes = _emitted("Seattle", "Tokyo")
 
     assert far_cost != near_cost, "the served cost must move with the destination"
-    assert far_minutes != near_minutes, "the served duration must move with the destination"
+    assert far_minutes != near_minutes, (
+        "the served duration must move with the destination"
+    )
     assert far_cost > near_cost
     assert far_minutes > near_minutes
 
@@ -135,3 +144,36 @@ def test_emitted_cost_scales_with_the_party() -> None:
     team, _ = _totals(_bundle_dict("Seattle", "Chicago", travellers=8))
 
     assert team > solo, "eight travellers must not cost the same as one"
+
+
+def test_origin_is_not_charged_a_destination_gateway_transfer() -> None:
+    journey = _journey("Seattle", ["Chicago"])
+    assert any("1 local gateway transfer" in note for note in journey.assumptions)
+
+
+def test_long_journey_arrival_timestamp_stays_valid() -> None:
+    adapter = PersistedTripSourceInventoryAdapter(
+        trip_id="trip-long",
+        trip_mode="business",
+        primary_regions=["Tokyo"],
+        origin="Seattle",
+        duration_days=4,
+        start_date="2026-06-01",
+    )
+    adapter.traveler_count = 1
+    bundle = adapter._build_runtime_bundle_payload()
+    timing = bundle["transport_options"][0]["timing_summary"]
+    assert int(timing["arrival_local"].split("T")[1][:2]) < 24
+
+
+def test_emitted_transport_mode_follows_air_leg() -> None:
+    bundle = _bundle_dict("Seattle", "Tokyo")
+    transport = bundle["transport_options"][0]
+    assert transport["transport_kind"] == "flight"
+    assert transport["segments"][0]["mode"] == "flight"
+
+
+def test_qualified_cambridge_resolves_to_massachusetts_not_uk() -> None:
+    resolved = resolve_place("Cambridge, MA")
+    assert resolved is not None
+    assert resolved.country_code == "US"

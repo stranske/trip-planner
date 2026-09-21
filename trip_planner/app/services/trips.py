@@ -105,7 +105,7 @@ def _build_trip_record(
         summary=summary.strip(),
         mode=mode,
         status="draft",
-        origin=(origin or None),
+        origin=(origin.strip() or None) if origin is not None else None,
         start_date=start_date,
         end_date=end_date,
         duration_days=duration_days,
@@ -194,7 +194,9 @@ def list_trips(db_session: Session, *, user: AuthenticatedUser) -> list[dict]:
     return [serialize_trip(record) for record in records]
 
 
-def get_trip(db_session: Session, *, user: AuthenticatedUser, trip_id: str) -> dict | None:
+def get_trip(
+    db_session: Session, *, user: AuthenticatedUser, trip_id: str
+) -> dict | None:
     record = db_session.scalar(
         select(PersistedTrip)
         .where(PersistedTrip.trip_id == trip_id)
