@@ -19,6 +19,7 @@ class TravelerPartyRequest(BaseModel):
 
 
 class TripFrameRequest(BaseModel):
+    origin: str | None = Field(default=None, max_length=120)
     start_date: str | None = Field(default=None, max_length=32)
     end_date: str | None = Field(default=None, max_length=32)
     duration_days: int | None = Field(default=None, ge=1, le=365)

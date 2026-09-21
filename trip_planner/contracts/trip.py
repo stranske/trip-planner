@@ -51,6 +51,7 @@ class TravelerPartySummary:
 
 @dataclass(slots=True)
 class TripFrameSummary:
+    origin: str | None = None
     start_date: str | None = None
     end_date: str | None = None
     duration_days: int | None = None

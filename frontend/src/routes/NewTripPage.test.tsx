@@ -71,17 +71,16 @@ describe("travelDaysInclusive", () => {
 
 describe("missingTripContext", () => {
   it("names every input the planner still needs", () => {
-    expect(missingTripContext({ mode: "", purpose: "", destinations: "", startDate: "", endDate: "" })).toEqual([
-      "trip type",
-      "at least one destination",
-      "travel dates",
-    ]);
+    expect(
+      missingTripContext({ mode: "", origin: "", purpose: "", destinations: "", startDate: "", endDate: "" })
+    ).toEqual(["trip type", "a starting point", "at least one destination", "travel dates"]);
   });
 
   it("is satisfied once type, destination and dates are supplied", () => {
     expect(
       missingTripContext({
         mode: "business",
+        origin: "Seattle",
         purpose: "Client review",
         destinations: "Chicago, IL",
         startDate: "2026-10-12",
@@ -92,14 +91,26 @@ describe("missingTripContext", () => {
 
   it("requires business purpose and a parsed destination", () => {
     expect(missingTripContext({
-      mode: "business", purpose: " ", destinations: "; ;", startDate: "2026-10-12", endDate: "2026-10-15",
+      mode: "business", origin: "Seattle", purpose: " ", destinations: "; ;",
+      startDate: "2026-10-12", endDate: "2026-10-15",
     })).toEqual(["at least one destination", "a business purpose"]);
   });
 
   it("treats a reversed date range as missing travel dates", () => {
     expect(missingTripContext({
-      mode: "leisure", purpose: "", destinations: "Chicago, IL", startDate: "2026-10-15", endDate: "2026-10-12",
+      mode: "leisure", origin: "Seattle", purpose: "", destinations: "Chicago, IL",
+      startDate: "2026-10-15", endDate: "2026-10-12",
     })).toEqual(["travel dates"]);
+
+  });
+
+  it("asks where the journey starts, because distance depends on it", () => {
+    expect(
+      missingTripContext({
+        mode: "leisure", origin: "", purpose: "", destinations: "Chicago, IL",
+        startDate: "2026-10-12", endDate: "2026-10-15",
+      })
+    ).toEqual(["a starting point"]);
   });
 });
 
@@ -250,6 +261,7 @@ describe("NewTripPage", () => {
     );
 
     fireEvent.click(screen.getByRole("radio", { name: /Business trip/ }));
+    fireEvent.change(screen.getByLabelText(/Travelling from/), { target: { value: "Seattle" } });
     fireEvent.change(screen.getByLabelText(/Destinations/), { target: { value: "Chicago, IL" } });
     fireEvent.change(screen.getByLabelText(/First day of travel/), {
       target: { value: "2026-10-12" },

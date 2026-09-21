@@ -2666,7 +2666,9 @@ def test_workspace_route_option_actions_update_comparison_and_ledger(
                 "start_date": "2026-07-04",
                 "end_date": "2026-07-12",
                 "duration_days": 9,
-                "primary_regions": ["Stockholm", "Oslo", "Bergen"],
+                # Two stops: real travel burden stays inside the feasibility guard so this
+                # test keeps exercising route-option actions rather than feasibility.
+                "primary_regions": ["Stockholm", "Oslo"],
             },
         },
     )

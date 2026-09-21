@@ -455,9 +455,7 @@ def test_trip_scenario_history_rejects_invalid_domain_payloads_with_422(
         },
     )
     assert invalid_scenario.status_code == 422
-    assert invalid_scenario.json()["detail"][0]["ctx"]["error"].startswith(
-        "label must be one of"
-    )
+    assert invalid_scenario.json()["detail"][0]["ctx"]["error"].startswith("label must be one of")
 
     invalid_history = client.post(
         f"/api/trips/{trip_id}/planning-history",

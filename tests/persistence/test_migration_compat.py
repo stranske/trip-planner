@@ -71,7 +71,7 @@ def test_current_migrations_repair_database_stamped_at_previous_20260510_02(
 
     with engine.connect() as connection:
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "20260512_01"
+            "20260921_01"
         )
         assert (
             connection.execute(
