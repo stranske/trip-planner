@@ -33,6 +33,7 @@ class PersistedTrip(Base):
     start_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
     end_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
     duration_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    origin: Mapped[str | None] = mapped_column(String(120), nullable=True)
     primary_regions: Mapped[list[str]] = mapped_column(JSON, default=list)
     traveler_party_kind: Mapped[str] = mapped_column(String(32), default="solo")
     traveler_count: Mapped[int] = mapped_column(Integer, default=1)

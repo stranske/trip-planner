@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import json
 import re
 from collections.abc import Sequence
@@ -11,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.geo import ResolvedPlace, distance_km, resolve_place
 from trip_planner.options import InventoryBundle, MixedOption
 from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.sources import (
@@ -55,9 +57,65 @@ class UnsupportedDestinationError(ValueError):
 
 
 def supported_destinations() -> list[str]:
-    """Destination slugs the planner has real coordinates for."""
+    """Curated fallback destinations; real coverage comes from the GeoNames dataset."""
 
     return sorted(_REGION_GEO_DEFAULTS)
+
+
+#: Nightly lodging allowance by trip mode, in USD. A documented planning assumption,
+#: not a quoted rate; the traveller refines it on the Budget tab.
+LODGING_NIGHTLY_RATE_USD: dict[str, float] = {"business": 230.0, "leisure": 165.0}
+
+#: Daily activity/incidental allowance by trip mode, in USD.
+ACTIVITY_ALLOWANCE_USD: dict[str, float] = {"business": 75.0, "leisure": 120.0}
+
+#: Above this great-circle distance the journey is modelled as a flight. Set at 700 km
+#: because surface rail stays competitive with air below roughly that range on the
+#: corridors this planner sees (e.g. Stockholm-Oslo at 417 km is a train journey).
+AIR_THRESHOLD_KM = 700.0
+
+#: Modelled surface speed (km/h) and per-km cost for a ground leg.
+GROUND_SPEED_KMH = 80.0
+GROUND_COST_PER_KM_USD = 0.28
+
+#: Modelled cruise speed (km/h) for an air leg, plus fixed airport overhead in minutes
+#: (check-in, security, taxi, transfer) applied once per flown leg.
+AIR_SPEED_KMH = 780.0
+AIR_OVERHEAD_MINUTES = 150
+AIR_BASE_COST_USD = 90.0
+AIR_COST_PER_KM_USD = 0.11
+
+#: A local gateway transfer (airport or station to the city) applied per destination.
+LOCAL_TRANSFER_MINUTES = 45
+LOCAL_TRANSFER_COST_USD = 55.0
+
+
+@dataclass(frozen=True)
+class JourneyProfile:
+    """Travel time and transport cost derived from the trip's real geography.
+
+    These are modelled estimates whose inputs are real: the great-circle distance
+    between the places the traveller actually named. They vary with the trip. They are
+    not quoted fares, and every component records its basis in `assumptions`.
+    """
+
+    destination: ResolvedPlace
+    legs: tuple[tuple[str, str, float], ...]
+    total_distance_km: float
+    travel_minutes: int
+    transport_cost_usd: float
+    assumptions: tuple[str, ...]
+
+
+def _leg_time_and_cost(distance_km_value: float) -> tuple[int, float, str]:
+    """Minutes, USD and mode for one leg of a given great-circle distance."""
+
+    if distance_km_value <= AIR_THRESHOLD_KM:
+        minutes = round(distance_km_value / GROUND_SPEED_KMH * 60)
+        return minutes, round(distance_km_value * GROUND_COST_PER_KM_USD, 2), "ground"
+    minutes = round(distance_km_value / AIR_SPEED_KMH * 60) + AIR_OVERHEAD_MINUTES
+    cost = AIR_BASE_COST_USD + distance_km_value * AIR_COST_PER_KM_USD
+    return minutes, round(cost, 2), "air"
 
 
 _REGION_GEO_DEFAULTS: dict[str, dict[str, Any]] = {
@@ -171,12 +229,14 @@ class PersistedTripInventoryContext:
     trip_summary: str | None
     traveler_party_kind: str | None
     traveler_count: int | None
+    origin: str | None = None
 
     @classmethod
     def from_persisted_trip(cls, record: PersistedTrip) -> PersistedTripInventoryContext:
         return cls(
             trip_id=record.trip_id,
             trip_mode=record.mode,
+            origin=getattr(record, "origin", None),
             start_date=record.start_date,
             end_date=record.end_date,
             trip_status=record.status,
@@ -393,6 +453,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         trip_id: str,
         trip_mode: str,
         primary_regions: Sequence[str],
+        origin: str | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
         duration_days: int | None = None,
@@ -403,6 +464,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         self.trip_id = trip_id
         self.trip_mode = trip_mode
         self.primary_regions = tuple(region.strip() for region in primary_regions if region.strip())
+        self.origin = (origin or "").strip() or None
         self.start_date = (start_date or "").strip()
         self.end_date = (end_date or "").strip()
         self.duration_days = duration_days
@@ -446,6 +508,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
             trip_id=record.trip_id,
             trip_mode=record.mode,
             primary_regions=tuple(record.primary_regions),
+            origin=getattr(record, "origin", None),
             start_date=record.start_date,
             end_date=record.end_date,
             duration_days=record.duration_days,
@@ -467,10 +530,16 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         return tuple(dict.fromkeys(keys))
 
     def _geo_payload(self, region: str) -> dict[str, Any]:
+        # Curated entries carry a time zone and region code the dataset does not, so
+        # they win where they exist. Their lookup keys also tolerate "Chicago, IL".
         for key in self._geo_lookup_keys(region):
-            geo = _REGION_GEO_DEFAULTS.get(key)
-            if geo is not None:
-                return dict(geo)
+            curated = _REGION_GEO_DEFAULTS.get(key)
+            if curated is not None:
+                return dict(curated)
+        # Everywhere else comes from the bundled GeoNames dataset.
+        place = resolve_place(region)
+        if place is not None:
+            return place.to_geo_payload()
         # Never invent a location. Emitting (0.0, 0.0) placed every unsupported
         # destination at Null Island and let the planner produce confident
         # route, timing and cost figures for a trip it knows nothing about.
@@ -495,6 +564,60 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         """
         return self.source_record.source_id
 
+    @property
+    def trip_mode_key(self) -> str:
+        return "business" if self.trip_mode == "business" else "leisure"
+
+    def _journey_profile(self) -> JourneyProfile:
+        """Resolve every named destination and measure the real journey between them."""
+
+        places = []
+        origin_name = getattr(self, "origin", None)
+        if origin_name:
+            origin_place = resolve_place(origin_name)
+            if origin_place is None:
+                msg = f"no geographic coverage for origin {origin_name!r}"
+                raise UnsupportedDestinationError(msg, region=origin_name)
+            places.append(origin_place)
+        for region in self.primary_regions:
+            place = resolve_place(region)
+            if place is None:
+                msg = f"no geographic coverage for destination {region!r}"
+                raise UnsupportedDestinationError(msg, region=region)
+            places.append(place)
+
+        legs: list[tuple[str, str, float]] = []
+        total_km = 0.0
+        minutes = 0
+        cost = 0.0
+        assumptions: list[str] = []
+        for first, second in itertools.pairwise(places):
+            leg_km = distance_km(first, second)
+            leg_minutes, leg_cost, mode = _leg_time_and_cost(leg_km)
+            legs.append((first.name, second.name, round(leg_km, 1)))
+            total_km += leg_km
+            minutes += leg_minutes
+            cost += leg_cost
+            assumptions.append(
+                f"{first.name} to {second.name}: {leg_km:,.0f} km modelled as {mode}"
+            )
+
+        # Every destination also carries a local gateway transfer (airport/station to city).
+        minutes += LOCAL_TRANSFER_MINUTES * len(places)
+        cost += LOCAL_TRANSFER_COST_USD * len(places)
+        assumptions.append(
+            f"{len(places)} local gateway transfer(s) at {LOCAL_TRANSFER_MINUTES} min each"
+        )
+
+        return JourneyProfile(
+            destination=places[1] if origin_name and len(places) > 1 else places[0],
+            legs=tuple(legs),
+            total_distance_km=round(total_km, 1),
+            travel_minutes=minutes,
+            transport_cost_usd=round(cost, 2),
+            assumptions=tuple(assumptions),
+        )
+
     def _build_runtime_bundle_payload(self) -> dict[str, Any]:
         source_id = self.stable_source_id
         source_category = self.source_record.category
@@ -504,11 +627,17 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         destination_id = f"dest-city-{primary_slug}"
         destination_name = primary_region
         duration_days = self.duration_days or 1
-        lodging_total = float(
-            max(1, duration_days) * (230 if self.trip_mode == "business" else 165)
+        journey = self._journey_profile()
+        # Per-traveller costs scale with the party. Lodging assumes one room each,
+        # which the traveller adjusts on the Budget tab if they are sharing.
+        travellers = max(1, int(self.traveler_count or 1))
+        lodging_total = round(
+            max(1, duration_days) * LODGING_NIGHTLY_RATE_USD[self.trip_mode_key] * travellers, 2
         )
-        transport_total = float(165 if self.trip_mode == "business" else 95)
-        activity_total = float(75 if self.trip_mode == "business" else 120)
+        transport_total = round(journey.transport_cost_usd * travellers, 2)
+        activity_total = round(
+            ACTIVITY_ALLOWANCE_USD[self.trip_mode_key] * max(1, duration_days) * travellers, 2
+        )
         baseline_signal = 0.82 if self.trip_mode == "business" else 0.79
         destination_geo = self._geo_payload(destination_name)
         gateway_geo = dict(destination_geo)
@@ -519,9 +648,11 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         )
         provenance_base = f"prov:{self.trip_id}:runtime"
         captured_at = self._trip_timestamp(hour=0)
-        transport_timing: dict[str, Any] = {"duration_minutes": 45}
+        transport_timing: dict[str, Any] = {"duration_minutes": journey.travel_minutes}
         departure_local = self._trip_timestamp(hour=9)
-        arrival_local = self._trip_timestamp(hour=9, minute=45)
+        arrival_local = self._trip_timestamp(
+            hour=9 + journey.travel_minutes // 60, minute=journey.travel_minutes % 60
+        )
         transport_timing.update(
             {
                 "departure_local": departure_local,
@@ -900,6 +1031,7 @@ def _build_inventory_assembly_input(
     traveler_party_kind: str | None = None,
     traveler_count: int | None = None,
     persisted_trip: PersistedTrip | None = None,
+    origin: str | None = None,
     allow_fixture_fallback: bool = True,
 ) -> InventoryAssemblyInput:
     if persisted_trip is not None:
@@ -910,6 +1042,7 @@ def _build_inventory_assembly_input(
         end_date = persisted_context.end_date
         trip_status = persisted_context.trip_status
         primary_regions = persisted_context.primary_regions
+        origin = persisted_context.origin
         duration_days = persisted_context.duration_days
         trip_title = persisted_context.trip_title
         trip_summary = persisted_context.trip_summary
@@ -960,6 +1093,7 @@ def _build_inventory_assembly_input(
                 trip_id=trip_id,
                 trip_mode=trip_mode,
                 primary_regions=primary_regions,
+                origin=origin,
                 start_date=start_date,
                 end_date=end_date,
                 duration_days=duration_days,

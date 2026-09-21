@@ -92,6 +92,7 @@ def _build_trip_record(
     primary_regions: list[str],
     traveler_kind: str,
     traveler_count: int,
+    origin: str | None,
     traveler_notes: str,
 ) -> PersistedTrip:
     trip_id = _generate_trip_id(title)
@@ -104,6 +105,7 @@ def _build_trip_record(
         summary=summary.strip(),
         mode=mode,
         status="draft",
+        origin=(origin or None),
         start_date=start_date,
         end_date=end_date,
         duration_days=duration_days,
@@ -126,6 +128,7 @@ def serialize_trip(record: PersistedTrip) -> dict:
         title=record.title,
         summary=record.summary,
         trip_frame=TripFrameSummary(
+            origin=record.origin,
             start_date=record.start_date,
             end_date=record.end_date,
             duration_days=record.duration_days,
@@ -155,6 +158,7 @@ def create_trip(
     primary_regions: list[str],
     traveler_kind: str,
     traveler_count: int,
+    origin: str | None = None,
     traveler_notes: str,
 ) -> dict:
     normalized_title = title.strip()
@@ -172,6 +176,7 @@ def create_trip(
         primary_regions=_normalize_regions(primary_regions),
         traveler_kind=traveler_kind,
         traveler_count=traveler_count,
+        origin=origin,
         traveler_notes=traveler_notes,
     )
     db_session.add(record)

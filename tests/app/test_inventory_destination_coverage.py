@@ -44,15 +44,22 @@ def test_covered_destination_still_assembles() -> None:
     assert payload["bundle_count"] >= 1
 
 
-def test_uncovered_destination_produces_no_bundles_and_says_so() -> None:
+def test_real_destination_outside_the_curated_six_now_resolves() -> None:
+    """Coverage comes from the GeoNames dataset, not a six-entry lookup."""
     payload = _summary("Reykjavik, Iceland")
+    assert payload["runtime_state"]["status"] == "ready"
+    assert payload["bundle_count"] >= 1
+
+
+def test_uncovered_destination_produces_no_bundles_and_says_so() -> None:
+    payload = _summary("Zzqxwv Nonexistent Place")
     runtime = payload["runtime_state"]
 
     # No invented inventory for a place the planner cannot plan.
     assert payload["bundle_count"] == 0
     assert runtime["status"] == "empty"
     # And the limit is stated, naming the destination and what is covered.
-    assert "Reykjavik, Iceland" in runtime["title"] or "Reykjavik, Iceland" in runtime["summary"]
+    assert "Zzqxwv Nonexistent Place" in runtime["title"] + runtime["summary"]
     assert "Chicago" in runtime["summary"]
 
 

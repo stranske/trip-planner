@@ -7,6 +7,7 @@ export type TravelerParty = {
 };
 
 export type TripFrame = {
+  origin?: string | null;
   start_date: string | null;
   end_date: string | null;
   duration_days: number | null;
