@@ -95,8 +95,6 @@ def test_an_unresolvable_origin_is_refused_too() -> None:
 # assert the payload the product actually serves.
 
 
-
-
 def _bundle_dict(origin: str, destination: str, *, days: int = 4, travellers: int = 1) -> dict:
     assembly = _build_inventory_assembly_input(
         trip_id=f"trip-{destination.lower().replace(' ', '-').replace(',', '')}-{travellers}",
