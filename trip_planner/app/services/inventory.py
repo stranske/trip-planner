@@ -748,13 +748,11 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                     details={"trip_id": self.trip_id, "trip_mode": self.trip_mode},
                 )
             )
-        unsupported_region: str | None = None
         bundle_payload: dict[str, Any] | None = None
         if not missing_primary_regions and not missing_duration:
             try:
                 bundle_payload = self._build_runtime_bundle_payload()
             except UnsupportedDestinationError as error:
-                unsupported_region = error.region
                 issues.append(
                     AdapterIssue(
                         issue_id=f"issue:{self.trip_id}:inventory-unsupported-destination",
