@@ -19,12 +19,12 @@ from trip_planner.app.services.inventory import (
 )
 
 
-def _summary(region: str) -> dict:
-    """Assemble inventory for one destination exactly as the workspace does."""
+def _summary(*regions: str) -> dict:
+    """Assemble inventory exactly as the workspace does."""
     assembly = _build_inventory_assembly_input(
-        trip_id=f"trip-{region.lower().replace(' ', '-').replace(',', '')}",
+        trip_id="trip-" + "-".join(region.lower().replace(" ", "-").replace(",", "") for region in regions),
         trip_mode="business",
-        primary_regions=[region],
+        primary_regions=list(regions),
         duration_days=4,
         allow_fixture_fallback=False,
     )
@@ -54,6 +54,17 @@ def test_uncovered_destination_produces_no_bundles_and_says_so() -> None:
     # And the limit is stated, naming the destination and what is covered.
     assert "Reykjavik, Iceland" in runtime["title"] or "Reykjavik, Iceland" in runtime["summary"]
     assert "Chicago" in runtime["summary"]
+
+
+def test_any_unsupported_primary_region_blocks_bundle_assembly() -> None:
+    payload = _summary("Chicago", "Reykjavik, Iceland")
+    runtime = payload["runtime_state"]
+
+    assert payload["bundle_count"] == 0
+    assert runtime["status"] == "empty"
+    assert runtime["issues"]
+    assert runtime["issues"][0]["code"] == "unsupported_inventory_destination"
+    assert runtime["issues"][0]["details"]["region"] == "Reykjavik, Iceland"
 
 
 def test_geo_payload_raises_rather_than_returning_null_island() -> None:

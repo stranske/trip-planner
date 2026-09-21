@@ -75,6 +75,12 @@ _REGION_GEO_DEFAULTS: dict[str, dict[str, Any]] = {
         "region_code": "IL",
         "time_zone": "America/Chicago",
     },
+    "barcelona": {
+        "latitude": 41.3851,
+        "longitude": 2.1734,
+        "country_code": "ES",
+        "time_zone": "Europe/Madrid",
+    },
     "kyoto": {
         "latitude": 35.0116,
         "longitude": 135.7681,
@@ -86,6 +92,18 @@ _REGION_GEO_DEFAULTS: dict[str, dict[str, Any]] = {
         "longitude": -9.1393,
         "country_code": "PT",
         "time_zone": "Europe/Lisbon",
+    },
+    "osaka": {
+        "latitude": 34.6937,
+        "longitude": 135.5023,
+        "country_code": "JP",
+        "time_zone": "Asia/Tokyo",
+    },
+    "prague": {
+        "latitude": 50.0755,
+        "longitude": 14.4378,
+        "country_code": "CZ",
+        "time_zone": "Europe/Prague",
     },
     "seattle": {
         "latitude": 47.6062,
@@ -99,6 +117,12 @@ _REGION_GEO_DEFAULTS: dict[str, dict[str, Any]] = {
         "longitude": 139.6503,
         "country_code": "JP",
         "time_zone": "Asia/Tokyo",
+    },
+    "vienna": {
+        "latitude": 48.2082,
+        "longitude": 16.3738,
+        "country_code": "AT",
+        "time_zone": "Europe/Vienna",
     },
 }
 
@@ -435,15 +459,27 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
         return slug or "destination"
 
+    def _geo_lookup_keys(self, region: str) -> tuple[str, ...]:
+        keys = [self._slug(region)]
+        base_region = region.split(",", maxsplit=1)[0].strip()
+        if base_region and base_region != region:
+            keys.append(self._slug(base_region))
+        return tuple(dict.fromkeys(keys))
+
     def _geo_payload(self, region: str) -> dict[str, Any]:
-        geo = _REGION_GEO_DEFAULTS.get(self._slug(region))
-        if geo is None:
-            # Never invent a location. Emitting (0.0, 0.0) placed every unsupported
-            # destination at Null Island and let the planner produce confident
-            # route, timing and cost figures for a trip it knows nothing about.
-            msg = f"no geographic coverage for destination {region!r}"
-            raise UnsupportedDestinationError(msg, region=region)
-        return dict(geo)
+        for key in self._geo_lookup_keys(region):
+            geo = _REGION_GEO_DEFAULTS.get(key)
+            if geo is not None:
+                return dict(geo)
+        # Never invent a location. Emitting (0.0, 0.0) placed every unsupported
+        # destination at Null Island and let the planner produce confident
+        # route, timing and cost figures for a trip it knows nothing about.
+        msg = f"no geographic coverage for destination {region!r}"
+        raise UnsupportedDestinationError(msg, region=region)
+
+    def _validate_primary_regions_supported(self) -> None:
+        for region in self.primary_regions:
+            self._geo_payload(region)
 
     def _trip_timestamp(self, *, hour: int, minute: int = 0) -> str:
         trip_date = self.start_date or self.end_date or "1970-01-01"
@@ -751,6 +787,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         bundle_payload: dict[str, Any] | None = None
         if not missing_primary_regions and not missing_duration:
             try:
+                self._validate_primary_regions_supported()
                 bundle_payload = self._build_runtime_bundle_payload()
             except UnsupportedDestinationError as error:
                 issues.append(
