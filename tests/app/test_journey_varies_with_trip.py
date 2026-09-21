@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import re
 
+import geonamescache
 import pytest
 
 from trip_planner.app.services.inventory import (
@@ -21,11 +22,10 @@ from trip_planner.app.services.inventory import (
     assemble_inventory_bundles_for_trip,
 )
 from trip_planner.geo import ResolvedPlace, distance_km, resolve_place
+from trip_planner.geo import resolver as geo_resolver
 
 
-def _journey(
-    origin: str | None, regions: list[str], *, days: int = 4, travellers: int = 1
-):
+def _journey(origin: str | None, regions: list[str], *, days: int = 4, travellers: int = 1):
     adapter = PersistedTripSourceInventoryAdapter(
         trip_id="trip-probe",
         trip_mode="business",
@@ -66,10 +66,7 @@ def test_a_longer_leg_is_never_cheaper_or_quicker() -> None:
     previous = None
     for destination in ("Austin", "Chicago", "Reykjavik, Iceland", "Tokyo", "Nairobi"):
         current = _journey("Seattle", [destination])
-        if (
-            previous is not None
-            and current.total_distance_km > previous.total_distance_km
-        ):
+        if previous is not None and current.total_distance_km > previous.total_distance_km:
             assert current.travel_minutes >= previous.travel_minutes
             assert current.transport_cost_usd >= previous.transport_cost_usd
         previous = current
@@ -100,9 +97,7 @@ def test_an_unresolvable_origin_is_refused_too() -> None:
 # assert the payload the product actually serves.
 
 
-def _bundle_dict(
-    origin: str, destination: str, *, days: int = 4, travellers: int = 1
-) -> dict:
+def _bundle_dict(origin: str, destination: str, *, days: int = 4, travellers: int = 1) -> dict:
     assembly = _build_inventory_assembly_input(
         trip_id=f"trip-{destination.lower().replace(' ', '-').replace(',', '')}-{travellers}",
         trip_mode="business",
@@ -132,9 +127,7 @@ def test_emitted_cost_and_duration_differ_by_destination() -> None:
     far_cost, far_minutes = _emitted("Seattle", "Tokyo")
 
     assert far_cost != near_cost, "the served cost must move with the destination"
-    assert far_minutes != near_minutes, (
-        "the served duration must move with the destination"
-    )
+    assert far_minutes != near_minutes, "the served duration must move with the destination"
     assert far_cost > near_cost
     assert far_minutes > near_minutes
 
@@ -177,3 +170,24 @@ def test_qualified_cambridge_resolves_to_massachusetts_not_uk() -> None:
     resolved = resolve_place("Cambridge, MA")
     assert resolved is not None
     assert resolved.country_code == "US"
+
+
+def test_qualified_city_resolution_builds_geonames_index_once(monkeypatch) -> None:
+    original = geonamescache.GeonamesCache
+    constructor_calls = 0
+
+    class CountingGeonamesCache:
+        def __init__(self):
+            nonlocal constructor_calls
+            constructor_calls += 1
+            self._delegate = original()
+
+        def get_cities(self):
+            return self._delegate.get_cities()
+
+    geo_resolver._qualified_city_index.cache_clear()
+    monkeypatch.setattr(geonamescache, "GeonamesCache", CountingGeonamesCache)
+
+    assert resolve_place("Cambridge, MA") is not None
+    assert resolve_place("Chicago, IL") is not None
+    assert constructor_calls == 1

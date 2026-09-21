@@ -194,9 +194,7 @@ def _city_matches_name(city: dict[str, object], city_key: str) -> bool:
     return any(_normalise(name) == city_key for name in names if name)
 
 
-def _resolved_place_from_city(
-    destination: str, city: dict[str, object]
-) -> ResolvedPlace:
+def _resolved_place_from_city(destination: str, city: dict[str, object]) -> ResolvedPlace:
     return ResolvedPlace(
         query=destination,
         name=str(city.get("name") or destination),
@@ -207,28 +205,41 @@ def _resolved_place_from_city(
     )
 
 
+@lru_cache(maxsize=1)
+def _qualified_city_index() -> dict[tuple[str, str, str], dict[str, object]]:
+    """Index qualified city names once, retaining the largest matching place."""
+    import geonamescache
+
+    index: dict[tuple[str, str, str], dict[str, object]] = {}
+    for raw_city in geonamescache.GeonamesCache().get_cities().values():
+        city = dict(raw_city)
+        country = str(city.get("countrycode") or "")
+        admin = str(city.get("admin1code") or "")
+        names = {str(city.get("name") or "")}
+        names.update(_coerce_str_list(city.get("alternatenames")))
+        for name in names:
+            if not name:
+                continue
+            normalised = _normalise(name)
+            for key in ((normalised, country, ""), (normalised, country, admin)):
+                existing = index.get(key)
+                if existing is None or _coerce_int(city.get("population")) > _coerce_int(
+                    existing.get("population")
+                ):
+                    index[key] = city
+    return index
+
+
 def _resolve_with_qualifier(city: str, qualifier: str) -> ResolvedPlace | None:
     country_filter, admin_filter = _qualifier_filters(qualifier)
     if country_filter is None:
         return None
 
-    import geonamescache
-
     city_key = _normalise(city)
-    matches: list[dict[str, object]] = []
-    for city_data in geonamescache.GeonamesCache().get_cities().values():
-        if not _city_matches_name(city_data, city_key):
-            continue
-        if str(city_data.get("countrycode") or "") != country_filter:
-            continue
-        if admin_filter and str(city_data.get("admin1code") or "") != admin_filter:
-            continue
-        matches.append(city_data)
-
-    if not matches:
+    city_data = _qualified_city_index().get((city_key, country_filter, admin_filter or ""))
+    if city_data is None:
         return None
-    best = max(matches, key=lambda city_data: _coerce_int(city_data.get("population")))
-    return _resolved_place_from_city(f"{city}, {qualifier}", best)
+    return _resolved_place_from_city(f"{city}, {qualifier}", city_data)
 
 
 def _candidate_keys(destination: str) -> list[str]:
@@ -259,9 +270,7 @@ def resolve_place(destination: str) -> ResolvedPlace | None:
     if not destination or not destination.strip():
         return None
 
-    parts = [
-        part.strip() for part in _QUALIFIER_SPLIT.split(destination) if part.strip()
-    ]
+    parts = [part.strip() for part in _QUALIFIER_SPLIT.split(destination) if part.strip()]
     if len(parts) >= 2:
         qualified = _resolve_with_qualifier(parts[0], parts[-1])
         if qualified is not None:
