@@ -116,6 +116,32 @@ def _normalise(value: str) -> str:
     return " ".join(stripped.casefold().split())
 
 
+def _coerce_float(value: object) -> float:
+    if isinstance(value, (int, float, str)):
+        return float(value)
+    raise TypeError(f"expected numeric coordinate, got {type(value)!r}")
+
+
+def _coerce_int(value: object, default: int = 0) -> int:
+    if value is None:
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        return int(value) if value else default
+    return default
+
+
+def _coerce_str_list(value: object) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value]
+    return []
+
+
 @lru_cache(maxsize=1)
 def _city_index() -> dict[str, tuple]:
     """Map every normalised city name (and alternate name) to its largest match.
@@ -164,7 +190,7 @@ def _qualifier_filters(qualifier: str) -> tuple[str | None, str | None]:
 
 def _city_matches_name(city: dict[str, object], city_key: str) -> bool:
     names = {str(city.get("name") or "")}
-    names.update(str(name) for name in (city.get("alternatenames") or []))
+    names.update(_coerce_str_list(city.get("alternatenames")))
     return any(_normalise(name) == city_key for name in names if name)
 
 
@@ -174,10 +200,10 @@ def _resolved_place_from_city(
     return ResolvedPlace(
         query=destination,
         name=str(city.get("name") or destination),
-        latitude=float(city["latitude"]),
-        longitude=float(city["longitude"]),
+        latitude=_coerce_float(city["latitude"]),
+        longitude=_coerce_float(city["longitude"]),
         country_code=str(city.get("countrycode") or ""),
-        population=int(city.get("population") or 0),
+        population=_coerce_int(city.get("population")),
     )
 
 
@@ -201,7 +227,7 @@ def _resolve_with_qualifier(city: str, qualifier: str) -> ResolvedPlace | None:
 
     if not matches:
         return None
-    best = max(matches, key=lambda city_data: int(city_data.get("population") or 0))
+    best = max(matches, key=lambda city_data: _coerce_int(city_data.get("population")))
     return _resolved_place_from_city(f"{city}, {qualifier}", best)
 
 
