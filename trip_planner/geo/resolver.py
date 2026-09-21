@@ -87,8 +87,11 @@ def _candidate_keys(destination: str) -> list[str]:
         candidates.append(_normalise(parts[0]))
     else:
         candidates.append(_normalise(destination))
-    seen: set[str] = set()
-    return [c for c in candidates if c and not (c in seen or seen.add(c))]
+    ordered: list[str] = []
+    for candidate in candidates:
+        if candidate and candidate not in ordered:
+            ordered.append(candidate)
+    return ordered
 
 
 def resolve_place(destination: str) -> ResolvedPlace | None:

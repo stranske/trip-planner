@@ -103,6 +103,10 @@ extend-exclude = '''
 '''
 
 [[tool.mypy.overrides]]
+module = ["geonamescache.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = [
     "jsonschema",
     "jinja2",
