@@ -7,7 +7,7 @@ import pytest
 # Skip entire module if openai not available
 openai = pytest.importorskip("openai", reason="openai not installed")
 
-import scripts.generate_segments as gs  # noqa: E402
+import scripts.generate_segments as gs
 
 
 def fake_chat_completion(*args, **kwargs):

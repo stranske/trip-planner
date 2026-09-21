@@ -22,7 +22,8 @@ from trip_planner.app.services.inventory import (
 def _summary(*regions: str) -> dict:
     """Assemble inventory exactly as the workspace does."""
     assembly = _build_inventory_assembly_input(
-        trip_id="trip-" + "-".join(region.lower().replace(" ", "-").replace(",", "") for region in regions),
+        trip_id="trip-"
+        + "-".join(region.lower().replace(" ", "-").replace(",", "") for region in regions),
         trip_mode="business",
         primary_regions=list(regions),
         duration_days=4,
