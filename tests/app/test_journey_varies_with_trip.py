@@ -9,13 +9,18 @@ varied an input and diffed the output. These tests are that diff.
 
 from __future__ import annotations
 
+import json
+import re
+
 import pytest
 
 from trip_planner.app.services.inventory import (
     PersistedTripSourceInventoryAdapter,
     UnsupportedDestinationError,
+    _build_inventory_assembly_input,
+    assemble_inventory_bundles_for_trip,
 )
-from trip_planner.geo import distance_km, resolve_place
+from trip_planner.geo import ResolvedPlace, distance_km, resolve_place
 
 
 def _journey(origin: str | None, regions: list[str], *, days: int = 4, travellers: int = 1):
@@ -30,13 +35,20 @@ def _journey(origin: str | None, regions: list[str], *, days: int = 4, traveller
     return adapter._journey_profile()
 
 
+def _place(name: str) -> ResolvedPlace:
+    """Resolve a place the planner must know, failing loudly if it does not."""
+    resolved = resolve_place(name)
+    assert resolved is not None, f"{name} must resolve"
+    return resolved
+
+
 def test_distance_follows_real_geography() -> None:
-    seattle = resolve_place("Seattle")
-    assert distance_km(seattle, resolve_place("Chicago")) == pytest.approx(2789, abs=40)
-    assert distance_km(seattle, resolve_place("Tokyo")) == pytest.approx(7696, abs=80)
+    seattle = _place("Seattle")
+    assert distance_km(seattle, _place("Chicago")) == pytest.approx(2789, abs=40)
+    assert distance_km(seattle, _place("Tokyo")) == pytest.approx(7696, abs=80)
     # Accents and administrative qualifiers resolve to the same real place.
-    assert resolve_place("Reykjavík").name == resolve_place("Reykjavik, Iceland").name
-    assert resolve_place("Chicago, IL").country_code == "US"
+    assert _place("Reykjavík").name == _place("Reykjavik, Iceland").name
+    assert _place("Chicago, IL").country_code == "US"
 
 
 def test_travel_time_and_cost_move_with_the_destination() -> None:
@@ -82,13 +94,7 @@ def test_an_unresolvable_origin_is_refused_too() -> None:
 # to flat constants left every one of those tests green, so they guarded nothing. These
 # assert the payload the product actually serves.
 
-import json
-import re
 
-from trip_planner.app.services.inventory import (
-    _build_inventory_assembly_input,
-    assemble_inventory_bundles_for_trip,
-)
 
 
 def _bundle_dict(origin: str, destination: str, *, days: int = 4, travellers: int = 1) -> dict:
