@@ -952,6 +952,73 @@ def _money_range_from_estimated(estimated: Any, fallback_currency: str) -> Money
     )
 
 
+def _trip_title_from_workspace(workspace: dict[str, Any], trip_id: str) -> str:
+    trip_record = workspace.get("trip_record")
+    if isinstance(trip_record, dict):
+        trip = trip_record.get("trip")
+        if isinstance(trip, dict) and trip.get("title"):
+            return str(trip["title"])
+    return trip_id
+
+
+def _home_airport_from_workspace(workspace: dict[str, Any]) -> str:
+    from trip_planner.app.services.scenarios import _home_airport_for_regions
+
+    trip_record = workspace.get("trip_record")
+    if isinstance(trip_record, dict):
+        trip = trip_record.get("trip")
+        if isinstance(trip, dict):
+            regions = trip.get("primary_regions")
+            if isinstance(regions, list):
+                primary_regions = tuple(str(region) for region in regions if region)
+                if primary_regions:
+                    return _home_airport_for_regions(primary_regions)
+    return "workspace"
+
+
+def _submission_cost_details(
+    workspace: dict[str, Any],
+    scenario_row: dict[str, Any],
+) -> tuple[str, float, MoneyRange]:
+    metrics = scenario_row.get("metrics")
+    estimated_total = metrics.get("estimated_total") if isinstance(metrics, dict) else None
+    budget_state = workspace.get("budget_state")
+    budget_summary = budget_state.get("summary") if isinstance(budget_state, dict) else {}
+    if not isinstance(budget_summary, dict):
+        budget_summary = {}
+
+    currency = str(budget_summary.get("currency") or "USD")
+    typical_amount = float(budget_summary.get("planned_total") or 0.0)
+    if isinstance(estimated_total, dict):
+        currency = str(estimated_total.get("currency") or currency)
+        if estimated_total.get("typical_amount") is not None:
+            typical_amount = float(estimated_total["typical_amount"])
+    if not math.isfinite(typical_amount):
+        raise ValueError("Proposal cost must be a finite number.")
+    return currency, typical_amount, _money_range_from_estimated(estimated_total, currency)
+
+
+def _booking_channel_from_workspace(workspace: dict[str, Any]) -> str:
+    policy_state = workspace.get("policy_state")
+    org_context = (
+        policy_state.get("organization_context") if isinstance(policy_state, dict) else {}
+    )
+    if isinstance(org_context, dict):
+        raw_channels = org_context.get("required_booking_channels")
+        if isinstance(raw_channels, list):
+            channels = [str(channel) for channel in raw_channels if channel]
+            if channels:
+                return channels[0]
+    return "workspace"
+
+
+def _justification_refs_from_scenario(scenario_row: dict[str, Any]) -> list[str]:
+    highlights = scenario_row.get("highlights")
+    if isinstance(highlights, list) and highlights:
+        return [str(item) for item in highlights if item]
+    return ["workspace-scenario"]
+
+
 def build_workspace_submission_proposal(
     db_session: Session,
     *,
@@ -973,50 +1040,11 @@ def build_workspace_submission_proposal(
         raise ValueError("No scenario is available for proposal submission.")
 
     resolved_scenario_id = str(scenario_row.get("scenario_id") or f"scenario:{trip_id}")
-    trip_record = workspace.get("trip_record")
-    trip_title = trip_id
-    if isinstance(trip_record, dict):
-        trip = trip_record.get("trip")
-        if isinstance(trip, dict) and trip.get("title"):
-            trip_title = str(trip["title"])
+    trip_title = _trip_title_from_workspace(workspace, trip_id)
     scenario_label = str(scenario_row.get("title") or trip_title)
-
-    metrics = scenario_row.get("metrics")
-    estimated_total = metrics.get("estimated_total") if isinstance(metrics, dict) else None
-    budget_state = workspace.get("budget_state")
-    budget_summary = budget_state.get("summary") if isinstance(budget_state, dict) else {}
-    if not isinstance(budget_summary, dict):
-        budget_summary = {}
-
-    currency = str(budget_summary.get("currency") or "USD")
-    typical_amount = float(budget_summary.get("planned_total") or 0.0)
-    if isinstance(estimated_total, dict):
-        currency = str(estimated_total.get("currency") or currency)
-        if estimated_total.get("typical_amount") is not None:
-            typical_amount = float(estimated_total["typical_amount"])
-    if not math.isfinite(typical_amount):
-        raise ValueError("Proposal cost must be a finite number.")
-
-    cost_range = _money_range_from_estimated(estimated_total, currency)
-    policy_state = workspace.get("policy_state")
-    org_context = (
-        policy_state.get("organization_context")
-        if isinstance(policy_state, dict)
-        else {}
-    )
-    booking_channels: list[str] = []
-    if isinstance(org_context, dict):
-        raw_channels = org_context.get("required_booking_channels")
-        if isinstance(raw_channels, list):
-            booking_channels = [str(channel) for channel in raw_channels if channel]
-    booking_channel = booking_channels[0] if booking_channels else "workspace"
-
-    highlights = scenario_row.get("highlights")
-    justification_refs = (
-        [str(item) for item in highlights if item]
-        if isinstance(highlights, list) and highlights
-        else ["workspace-scenario"]
-    )
+    currency, typical_amount, cost_range = _submission_cost_details(workspace, scenario_row)
+    booking_channel = _booking_channel_from_workspace(workspace)
+    justification_refs = _justification_refs_from_scenario(scenario_row)
 
     selected_option = SelectedOptionSummary(
         category="itinerary",
@@ -1035,6 +1063,7 @@ def build_workspace_submission_proposal(
         traveler_context=TravelerContext(
             employee_type="employee",
             traveler_experience="occasional",
+            home_airport=_home_airport_from_workspace(workspace),
             loyalty_programs=[],
             mobility_or_access_needs=[],
         ),
