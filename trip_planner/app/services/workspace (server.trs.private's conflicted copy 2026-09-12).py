@@ -12,10 +12,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
-from trip_planner.app.services.trip_prices import (
-    build_trip_prices_payload,
-    read_trip_prices_for_owner,
-)
 from trip_planner.app.services.budget import (
     build_fixture_budget_payload,
     load_budget_payload_for_workspace,
@@ -107,10 +103,6 @@ class WorkspaceBuildContext:
     inventory_summary: dict[str, Any] | None = None
     scenario_search: dict[str, Any] | None = None
     feasibility_summary: dict[str, Any] | None = None
-    #: Prices the traveller entered by hand. Until a provider adapter exists this is
-    #: the only approved source of a price, so it is the only thing that can fill
-    #: `estimated_total`.
-    entered_prices: dict[str, Any] | None = None
     include_debug: bool = True
 
 
@@ -869,22 +861,6 @@ def _route_option_available_actions(state: str) -> list[dict[str, str]]:
     return actions
 
 
-def _apply_entered_total(
-    planner_total: dict[str, Any] | None, entered_total: dict[str, Any] | None
-) -> dict[str, Any] | None:
-    """Return the figure a source actually produced, preferring the human override.
-
-    Returns the planner's own envelope untouched when nothing was entered, so a trip with
-    no entered price keeps whatever the pipeline produced — today, an absent amount.
-    """
-
-    if entered_total is None:
-        return planner_total
-    if entered_total.get("typical_amount") is None:
-        return planner_total
-    return dict(entered_total)
-
-
 def _build_runtime_scenario_comparison(
     *,
     trip_id: str,
@@ -894,7 +870,6 @@ def _build_runtime_scenario_comparison(
     policy_state: dict[str, Any] | None = None,
     trip_mode: str = "leisure",
     duration_days: int | None = None,
-    entered_total: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     scenarios = list(scenario_search.get("scenarios", []))
     option_set_id = _bootstrap_option_set_id(trip_id)
@@ -949,10 +924,7 @@ def _build_runtime_scenario_comparison(
     rows = []
     for scenario in scenarios:
         summary = scenario["scenario_summary"]
-        # No source priced this scenario unless the traveller did. A human override is an
-        # approved source and always wins, so it is applied here rather than being shown
-        # beside a figure the planner could not produce.
-        estimated_total = _apply_entered_total(summary.get("estimated_total"), entered_total)
+        estimated_total = summary.get("estimated_total")
         status = _comparison_status_label(scenario)
         state = _route_option_state(
             scenario_id=scenario["scenario_id"],
@@ -969,70 +941,71 @@ def _build_runtime_scenario_comparison(
         )
         available_actions = _route_option_available_actions(state)
         row = {
-            "scenario_id": scenario["scenario_id"],
-            "route_option_id": scenario["scenario_id"],
-            "title": scenario["title"],
-            "rank": scenario["rank"],
-            "status": status,
-            "state": state,
-            "purpose": _route_option_purpose(
-                state=state,
-                status=status,
-                scenario=scenario,
-            ),
-            "confidence": _route_option_confidence(scenario=scenario, state=state),
-            "unresolved_questions": unresolved_questions,
-            "available_actions": available_actions,
-            "open_question": unresolved_questions[0] if unresolved_questions else None,
-            "available_action": available_actions[0] if available_actions else None,
-            "summary": summary["headline"],
-            "comparison_note": (
-                "Lead route for the current workspace comparison set."
-                if scenario["scenario_id"] == lead["scenario_id"]
-                else "Alternative route preserved for direct scenario comparison."
-            ),
-            "option_count": max(
-                1,
-                len(scenario.get("supporting_option_ids") or []),
-            ),
-            "checkpoint_id": None,
-            "budget_variant_id": None,
-            "route_sequence": list(summary.get("route_sequence") or []),
-            "route_summary": " -> ".join(summary.get("route_sequence") or []) or "route pending",
-            "recommended_for_selection": summary["recommended_for_selection"],
-            "feasible": summary["feasible"],
-            "metrics": {
-                "score": scenario["score"],
-                "travel_minutes": summary["total_travel_minutes"],
-                "transfers": summary["total_transfer_count"],
-                "estimated_total": estimated_total,
-            },
-            "delta": {
-                "score_delta": round(float(scenario["score"]) - float(lead["score"]), 2),
-                "travel_minutes_delta": (
-                    summary["total_travel_minutes"]
-                    - lead["scenario_summary"]["total_travel_minutes"]
+                "scenario_id": scenario["scenario_id"],
+                "route_option_id": scenario["scenario_id"],
+                "title": scenario["title"],
+                "rank": scenario["rank"],
+                "status": status,
+                "state": state,
+                "purpose": _route_option_purpose(
+                    state=state,
+                    status=status,
+                    scenario=scenario,
                 ),
-                "transfers_delta": (
-                    summary["total_transfer_count"]
-                    - lead["scenario_summary"]["total_transfer_count"]
+                "confidence": _route_option_confidence(scenario=scenario, state=state),
+                "unresolved_questions": unresolved_questions,
+                "available_actions": available_actions,
+                "open_question": unresolved_questions[0] if unresolved_questions else None,
+                "available_action": available_actions[0] if available_actions else None,
+                "summary": summary["headline"],
+                "comparison_note": (
+                    "Lead route for the current workspace comparison set."
+                    if scenario["scenario_id"] == lead["scenario_id"]
+                    else "Alternative route preserved for direct scenario comparison."
                 ),
-                "estimated_total_delta": _estimated_total_delta(scenario, lead),
-            },
-            "highlights": _comparison_highlights(scenario=scenario, lead=lead),
-            "source_result_id": scenario["source_result_id"],
-            "objective_refs": list(scenario.get("objective_refs") or []),
-            "map_view": build_runtime_map_view_payload(
-                scenario=scenario,
-                summary=summary,
-                route_sequence=list(summary.get("route_sequence") or []),
-            ),
-            "map_diagnostics": build_runtime_map_diagnostics_payload(
-                scenario=scenario,
-                summary=summary,
-                route_sequence=list(summary.get("route_sequence") or []),
-            ),
-        }
+                "option_count": max(
+                    1,
+                    len(scenario.get("supporting_option_ids") or []),
+                ),
+                "checkpoint_id": None,
+                "budget_variant_id": None,
+                "route_sequence": list(summary.get("route_sequence") or []),
+                "route_summary": " -> ".join(summary.get("route_sequence") or [])
+                or "route pending",
+                "recommended_for_selection": summary["recommended_for_selection"],
+                "feasible": summary["feasible"],
+                "metrics": {
+                    "score": scenario["score"],
+                    "travel_minutes": summary["total_travel_minutes"],
+                    "transfers": summary["total_transfer_count"],
+                    "estimated_total": estimated_total,
+                },
+                "delta": {
+                    "score_delta": round(float(scenario["score"]) - float(lead["score"]), 2),
+                    "travel_minutes_delta": (
+                        summary["total_travel_minutes"]
+                        - lead["scenario_summary"]["total_travel_minutes"]
+                    ),
+                    "transfers_delta": (
+                        summary["total_transfer_count"]
+                        - lead["scenario_summary"]["total_transfer_count"]
+                    ),
+                    "estimated_total_delta": _estimated_total_delta(scenario, lead),
+                },
+                "highlights": _comparison_highlights(scenario=scenario, lead=lead),
+                "source_result_id": scenario["source_result_id"],
+                "objective_refs": list(scenario.get("objective_refs") or []),
+                "map_view": build_runtime_map_view_payload(
+                    scenario=scenario,
+                    summary=summary,
+                    route_sequence=list(summary.get("route_sequence") or []),
+                ),
+                "map_diagnostics": build_runtime_map_diagnostics_payload(
+                    scenario=scenario,
+                    summary=summary,
+                    route_sequence=list(summary.get("route_sequence") or []),
+                ),
+            }
         attach_policy_preview_to_row(
             row,
             policy_state=policy_state,
@@ -1393,20 +1366,23 @@ def _bootstrap_scenario_metrics(
 ) -> tuple[float, int, int, dict[str, Any]]:
     duration_days = max(record.duration_days or 1, 1)
     base_minutes = 90 if record.mode == "leisure" else 120
+    base_cost = 180.0 if record.mode == "leisure" else 320.0
     if label == "fallback":
         travel_minutes = duration_days * (base_minutes + 45)
         transfers = 2
+        estimated_total = base_cost * duration_days + 120.0
     else:
         travel_minutes = duration_days * base_minutes
         transfers = 1
+        estimated_total = base_cost * duration_days
     return (
         _BOOTSTRAP_SCENARIO_SCORE_BY_LABEL.get(label, 0.6),
         travel_minutes,
         transfers,
         {
             "currency": "USD",
-            "typical_amount": None,
-            "nightly_typical_amount": None,
+            "typical_amount": round(estimated_total, 2),
+            "nightly_typical_amount": round(estimated_total / duration_days, 2),
         },
     )
 
@@ -1799,7 +1775,6 @@ def _build_persisted_trip_workspace(
         resolved_inventory_bundles
     )
     raw_policy_state = (context.policy_context or {}).get("policy_state")
-    entered_prices = context.entered_prices
     runtime_scenario_comparison = _build_runtime_scenario_comparison(
         trip_id=record.trip_id,
         trip_title=trip_record["trip"]["title"],
@@ -1808,7 +1783,6 @@ def _build_persisted_trip_workspace(
         policy_state=raw_policy_state if isinstance(raw_policy_state, dict) else None,
         trip_mode=record.mode,
         duration_days=record.duration_days,
-        entered_total=(entered_prices or {}).get("total"),
     )
     ranking = build_scenario_ranking_payload(
         trip_id=record.trip_id,
@@ -2913,9 +2887,6 @@ def _assemble_persisted_workspace_context(
         .limit(PLANNING_NOTEBOOK_LIMIT)
     ).all()
     feasibility_summary = build_feasibility_summary_payload(persisted_inventory_bundles)
-    entered_prices = build_trip_prices_payload(
-        read_trip_prices_for_owner(db_session, user_id=user.user_id, trip_id=trip_id)
-    )
     return WorkspaceBuildContext(
         session=(_serialize_session_record(session_record) if session_record is not None else None),
         saved_scenarios=[
@@ -2955,7 +2926,6 @@ def _assemble_persisted_workspace_context(
         inventory_summary=inputs.inventory_summary,
         scenario_search=inputs.scenario_search,
         feasibility_summary=feasibility_summary,
-        entered_prices=entered_prices,
         include_debug=include_debug,
     )
 
