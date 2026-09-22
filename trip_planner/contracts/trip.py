@@ -77,6 +77,7 @@ class TripFrameSummary:
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> TripFrameSummary:
         return cls(
+            origin=payload.get("origin"),
             start_date=payload.get("start_date"),
             end_date=payload.get("end_date"),
             duration_days=payload.get("duration_days"),

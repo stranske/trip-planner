@@ -234,6 +234,8 @@ def test_client_supplied_response_cannot_set_approval_ready(
         },
     )
     trip_id = created.json()["trip"]["trip_id"]
+    workspace = client.get(f"/api/workspace/{trip_id}").json()
+    scenario_id = workspace["route_comparison"]["scenarios"][0]["scenario_id"]
     fixture = _load_fixture("results", "approved_evaluation.json")
     fixture["request"]["trip_id"] = trip_id
     fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
@@ -246,7 +248,7 @@ def test_client_supplied_response_cannot_set_approval_ready(
             "request": fixture["request"],
             "response": fixture["response"],
             "proposal_version": "proposal-v3",
-            "scenario_id": "scenario-a",
+            "scenario_id": scenario_id,
         },
     )
 
