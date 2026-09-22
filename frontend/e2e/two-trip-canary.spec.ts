@@ -12,6 +12,7 @@ type TripInput = {
   title: string;
   summary: string;
   mode: "business" | "leisure";
+  origin: string;
   regions: string;
   startDate: string;
   endDate: string;
@@ -30,16 +31,17 @@ function isoDate(daysFromToday: number): string {
 async function createTripThroughApp(page: Page, input: TripInput): Promise<string> {
   return test.step(`create trip: ${input.title}`, async () => {
     await page.goto("/trips/new");
-    await page.getByLabel("Title", { exact: true }).fill(input.title);
-    await page.getByLabel("Summary", { exact: true }).fill(input.summary);
-    await page.locator('select[name="mode"]').selectOption(input.mode);
-    await page.getByLabel("Primary regions", { exact: true }).fill(input.regions);
-    await page.getByLabel("Start date", { exact: true }).fill(input.startDate);
-    await page.getByLabel("End date", { exact: true }).fill(input.endDate);
-    await page.getByLabel("Duration days", { exact: true }).fill(input.durationDays);
+    await page.getByRole("radio", { name: input.mode === "business" ? "Business trip" : "Personal trip" }).check();
+    await page.getByLabel("Trip name", { exact: true }).fill(input.title);
+    await page.getByLabel(input.mode === "business" ? "Business purpose" : "What is this trip for?", { exact: true }).fill(input.summary);
+    await page.getByLabel("Travelling from", { exact: true }).fill(input.origin);
+    await page.getByLabel("Destinations", { exact: true }).fill(input.regions);
+    await page.getByLabel("First day of travel", { exact: true }).fill(input.startDate);
+    await page.getByLabel("Last day of travel", { exact: true }).fill(input.endDate);
+    await page.getByLabel("Trip length (days)", { exact: true }).fill(input.durationDays);
     await page.locator('select[name="travelerKind"]').selectOption(input.travelerKind);
-    await page.getByLabel("Traveler count", { exact: true }).fill(input.travelerCount);
-    await page.getByLabel("Traveler notes", { exact: true }).fill(input.travelerNotes);
+    await page.getByLabel("Number of travellers", { exact: true }).fill(input.travelerCount);
+    await page.getByLabel("Anything the planner should know", { exact: true }).fill(input.travelerNotes);
     await page.getByRole("button", { name: "Create trip", exact: true }).click();
 
     await test.step(`open workspace: ${input.title}`, async () => {
@@ -70,6 +72,7 @@ test("signup, trip creation, and workspace navigation work in the real app", asy
     title: "Canary Washington DC client visit",
     summary: "Three travelers attending a two-day client meeting with an arrival buffer.",
     mode: "business",
+    origin: "Chicago",
     regions: "Washington DC",
     startDate: isoDate(75),
     endDate: isoDate(77),
@@ -87,6 +90,7 @@ test("signup, trip creation, and workspace navigation work in the real app", asy
     title: "Canary Kyoto cultural week",
     summary: "Seven days focused on Kyoto culture, food, and low-transfer neighborhood exploration.",
     mode: "leisure",
+    origin: "Chicago",
     regions: "Kyoto, Osaka",
     startDate: isoDate(90),
     endDate: isoDate(96),
