@@ -39,14 +39,25 @@ def _create_trip(client: TestClient) -> str:
         "/api/trips",
         json={
             "title": "Chicago client review",
+            "summary": "Two days on site with the client team.",
             "mode": "business",
-            "start_date": "2026-10-05",
-            "end_date": "2026-10-07",
-            "primary_regions": ["Chicago"],
+            # The dates and destinations belong inside trip_frame. Sent flat they are
+            # silently dropped and the API still answers 201, which produced a trip with
+            # no destination and no dates while this gate looked like it was passing.
+            "trip_frame": {
+                "start_date": "2026-10-05",
+                "end_date": "2026-10-07",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
         },
     )
     assert response.status_code == 201, response.text
-    return str(response.json()["trip"]["trip_id"])
+    created = response.json()["trip"]
+    assert created["trip_frame"]["primary_regions"] == ["Chicago"], (
+        "the trip did not keep its destination, so this gate would be testing a blank trip"
+    )
+    return str(created["trip_id"])
 
 
 def _scenario_totals(client: TestClient, trip_id: str) -> list[dict[str, Any] | None]:
@@ -140,13 +151,18 @@ def test_the_planner_never_supplies_a_price_on_its_own(client: TestClient) -> No
         "/api/trips",
         json={
             "title": "Reykjavik supplier visit",
+            "summary": "Supplier site visit.",
             "mode": "business",
-            "start_date": "2026-10-05",
-            "end_date": "2026-10-07",
-            "primary_regions": ["Reykjavik"],
+            "trip_frame": {
+                "start_date": "2026-10-05",
+                "end_date": "2026-10-07",
+                "duration_days": 3,
+                "primary_regions": ["Reykjavik"],
+            },
         },
     )
     assert second.status_code == 201, second.text
+    assert second.json()["trip"]["trip_frame"]["primary_regions"] == ["Reykjavik"]
     second_id = str(second.json()["trip"]["trip_id"])
 
     for trip_id in (first, second_id):
