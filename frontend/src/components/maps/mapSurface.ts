@@ -3,6 +3,7 @@ import type {
   RuntimeScenarioComparison,
   WorkspaceData,
 } from "../../api/workspace";
+import { formatMoney } from "../../lib/money";
 
 type TripMapScenario = RuntimeScenarioComparison["scenarios"][number];
 type InventoryBundle = WorkspaceData["inventory_summary"]["bundles"][number];
@@ -175,15 +176,7 @@ export function humanizeStop(stop: string): string {
 export function formatEstimatedTotal(
   value: RuntimeScenarioComparison["scenarios"][number]["metrics"]["estimated_total"]
 ): string {
-  if (value == null) {
-    return "Pending";
-  }
-
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: value.currency,
-    maximumFractionDigits: 0,
-  }).format(value.typical_amount);
+  return formatMoney(value);
 }
 
 export function summarizeFeasibility(
