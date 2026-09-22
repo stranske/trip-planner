@@ -220,8 +220,8 @@ export type ScenarioRanking = {
     total_transfer_count: number;
     estimated_total?: {
       currency: string;
-      typical_amount: number;
-      nightly_typical_amount?: number;
+      typical_amount: number | null;
+      nightly_typical_amount?: number | null;
     } | null;
     source_result_id?: string | null;
     supporting_option_ids: string[];
@@ -287,8 +287,8 @@ export type RuntimeScenarioComparison = {
       transfers: number;
       estimated_total: {
         currency: string;
-        typical_amount: number;
-        nightly_typical_amount?: number;
+        typical_amount: number | null;
+        nightly_typical_amount?: number | null;
       } | null;
     };
     delta: {
@@ -706,7 +706,7 @@ export type WorkspaceData = {
         booking_channel: string;
         estimated_cost: {
           currency: string;
-          typical_amount: number;
+          typical_amount: number | null;
         };
         notes: string[];
       }>;

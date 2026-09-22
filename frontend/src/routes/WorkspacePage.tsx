@@ -65,6 +65,7 @@ import { MapPanel } from "./workspace/MapPanel";
 import { NotebookPanel } from "./workspace/NotebookPanel";
 import { PlanPanel } from "./workspace/PlanPanel";
 import { PolicyPanel as PolicyTabPanel } from "./workspace/PolicyPanel";
+import { formatMoney } from "../lib/money";
 
 type LoaderData = {
   workspace: Promise<WorkspaceData>;
@@ -610,15 +611,8 @@ function buildScenarioReviewMetrics(
 ): ScenarioReviewMetric[] {
   const metrics: ScenarioReviewMetric[] = [
     {
-      // Not an estimate: generated from flat per-day rates that ignore the destination.
-      label: "Indicative cost",
-      value:
-        scenario.metrics.estimated_total == null
-          ? "Pending"
-          : formatCurrency(
-              scenario.metrics.estimated_total.typical_amount,
-              scenario.metrics.estimated_total.currency
-            ),
+      label: "Cost",
+      value: formatMoney(scenario.metrics.estimated_total),
     },
     {
       label: "Travel minutes",

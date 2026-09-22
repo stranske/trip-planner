@@ -1,4 +1,5 @@
 import type { RuntimeScenarioComparison, SavedScenarioRecord } from "../../api/workspace";
+import { formatMoney } from "../../lib/money";
 
 type ComparisonScenario = RuntimeScenarioComparison["scenarios"][number];
 
@@ -7,15 +8,7 @@ function formatMetricValue(
   scenario: ComparisonScenario
 ): string {
   if (axisKey === "estimated_total") {
-    const estimatedTotal = scenario.metrics.estimated_total;
-    if (estimatedTotal == null) {
-      return "Pending";
-    }
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: estimatedTotal.currency,
-      maximumFractionDigits: 0,
-    }).format(estimatedTotal.typical_amount);
+    return formatMoney(scenario.metrics.estimated_total);
   }
 
   if (axisKey === "score") {

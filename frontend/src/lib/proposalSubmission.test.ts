@@ -158,6 +158,31 @@ describe("buildProposalSubmissionPayload", () => {
     );
   });
 
+  it("refuses to submit a trip no source has priced", () => {
+    // The old fallback chain ended in `?? 0`, so an unpriced trip reached the policy
+    // engine as costing nothing — and a $0 trip satisfies every spend rule there is.
+    // A verdict computed against a fabricated cost is worse than no verdict.
+    const workspace = businessWorkspaceWithAmount(1250);
+    workspace.runtime_scenario_comparison!.scenarios[0]!.metrics.estimated_total = {
+      currency: "USD",
+      typical_amount: null,
+    };
+    expect(() => buildProposalSubmissionPayload(workspace)).toThrow(
+      /has no price yet/
+    );
+  });
+
+  it("does not substitute the budget cap for a missing price", () => {
+    // A cap is what the traveller may spend, not what this trip costs. Submitting the cap
+    // as the cost would make every trip exactly compliant, by construction.
+    const workspace = businessWorkspaceWithAmount(1250);
+    workspace.budget_state.summary.planned_total = 9999;
+    workspace.runtime_scenario_comparison!.scenarios[0]!.metrics.estimated_total = null;
+    expect(() => buildProposalSubmissionPayload(workspace)).toThrow(
+      /has no price yet/
+    );
+  });
+
   it("rejects NaN proposal costs", () => {
     expect(() => buildProposalSubmissionPayload(businessWorkspaceWithAmount(Number.NaN))).toThrow(
       "Proposal cost must be a finite number."
