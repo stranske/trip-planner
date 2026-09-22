@@ -527,6 +527,26 @@ def _derive_follow_up_state(
     return follow_up
 
 
+def _submission_outcome(
+    *, state: Any, queue_state: Any, error_category: Any
+) -> str:
+    """Tell a policy refusal apart from a transport failure.
+
+    Both arrive as `state == "failed"`, and they mean opposite things. A transport
+    failure means we could not ask. A policy block means we asked, TPP answered, and the
+    answer was no — which is the most useful thing this product produces and must not be
+    reported as though the request never landed.
+    """
+
+    if str(queue_state) == "blocked_by_policy" or str(error_category) == "policy":
+        return "blocked_by_policy"
+    if state in {None, ""}:
+        return "not_submitted"
+    if str(state) == "failed":
+        return "failed"
+    return str(state)
+
+
 def _build_summary(
     *,
     submission_record: dict[str, Any],
@@ -538,6 +558,20 @@ def _build_summary(
     evaluation_transport = dict(evaluation_record.get("execution_status") or {})
     evaluation_result = dict(evaluation_record.get("evaluation_result") or {})
     failure_reasons = list(evaluation_result.get("failure_reasons") or [])
+    # TPP refuses a proposal that breaks policy, and says exactly which rules it broke.
+    # Those codes arrive in the submission's own response payload, before any evaluation
+    # record exists, and were being dropped on the floor.
+    submission_response = dict(submission_record.get("response_payload") or {})
+    submission_error = dict(submission_record.get("error") or {})
+    blocking_codes = [str(code) for code in (submission_response.get("blocking_codes") or [])]
+    submission_outcome = _submission_outcome(
+        state=execution_status.get("state"),
+        # `queue_state` is lifted to the top level of the record and also left in the
+        # response payload. Read both: a record that carries it in only one place must
+        # still be recognised.
+        queue_state=submission_record.get("queue_state") or submission_response.get("queue_state"),
+        error_category=submission_error.get("category"),
+    )
     follow_up = _derive_follow_up_state(
         proposal_payload=proposal_payload,
         evaluation_record=evaluation_record,
@@ -549,6 +583,11 @@ def _build_summary(
         if evaluation_result
         else list(proposal_payload.get("approval_notes") or [])[:2]
     )
+    if submission_outcome == "blocked_by_policy" and blocking_codes:
+        highlights = [
+            "Policy blocked this proposal: " + ", ".join(blocking_codes),
+            *highlights,
+        ][:3]
     if follow_up.get("summary"):
         highlights = [str(follow_up["summary"]), *highlights][:3]
     submission_requires_polling = (
@@ -560,6 +599,8 @@ def _build_summary(
         "proposal_version": submission_record.get("linkage", {}).get("proposal_version"),
         "submission_status": execution_status.get("state"),
         "submission_summary": execution_status.get("summary"),
+        "submission_outcome": submission_outcome,
+        "submission_blocking_codes": blocking_codes,
         "submission_requires_polling": submission_requires_polling,
         "evaluation_transport_status": evaluation_transport.get("state"),
         "evaluation_result_status": evaluation_result.get("status"),
