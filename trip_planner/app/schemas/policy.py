@@ -24,6 +24,6 @@ class WorkspacePolicyResponse(BaseModel):
 
 
 class PolicySyncRequest(BaseModel):
-    """Everything the traveller supplies to sync policy: which organization applies."""
+    """Policy sync takes no traveller-controlled organization or verdict."""
 
-    organization_id: str | None = Field(default=None, max_length=96)
+    model_config = {"extra": "forbid"}

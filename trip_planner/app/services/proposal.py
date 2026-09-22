@@ -44,6 +44,10 @@ class WorkspaceProposalNotFoundError(ValueError):
     """Raised when workspace proposal state or trip ownership is missing."""
 
 
+class WorkspacePolicyMissingForSubmissionError(ValueError):
+    """The trip must have a synced policy before proposal submission."""
+
+
 def _owner_profile_id(record: PersistedTrip) -> str:
     if record.mode == "business" and record.business_profile_id:
         return record.business_profile_id
@@ -866,7 +870,7 @@ def submit_workspace_proposal_for_trip(
             "This trip has no travel policy yet. Sync the policy for your organization "
             "before submitting for approval."
         )
-        raise ValueError(msg)
+        raise WorkspacePolicyMissingForSubmissionError(msg)
 
     policy_state = policy_payload.get("policy_state")
     organization_id = ""

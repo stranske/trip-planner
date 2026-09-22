@@ -86,8 +86,8 @@ def sync_workspace_policy(
 ) -> WorkspacePolicyResponse:
     """Fetch this trip's travel policy from TPP and store it on the workspace.
 
-    The traveller supplies only their organization. The request envelope is built
-    server-side from the persisted trip, and no verdict is accepted from the caller.
+    The organization and request envelope are resolved server-side from deployment
+    configuration and the persisted trip; no verdict is accepted from the caller.
     """
 
     try:
@@ -95,7 +95,6 @@ def sync_workspace_policy(
             db_session,
             user=user,
             trip_id=trip_id,
-            organization_id=payload.organization_id,
         )
     except WorkspacePolicyNotFoundError as error:
         raise public_http_error(

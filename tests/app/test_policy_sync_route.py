@@ -87,6 +87,23 @@ def test_organization_comes_from_deployment_config_not_the_caller(
     assert resolve_configured_organization_id() == "org-northwind"
 
 
+def test_sync_rejects_caller_selected_organization(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TPP_ORGANIZATION_ID", "org-northwind")
+    trip_id = _business_trip(client)
+    response = client.post(
+        f"/api/workspace/{trip_id}/policy/sync",
+        json={"organization_id": "org-unrelated"},
+    )
+    assert response.status_code == 422
+
+
+def test_submit_missing_trip_returns_not_found(client: TestClient) -> None:
+    response = client.post("/api/workspace/missing-trip/proposal/submit", json={})
+    assert response.status_code == 404
+
+
 def test_submit_without_a_policy_explains_the_missing_step(client: TestClient) -> None:
     """The old failure mode was a silent no-op; it must now say what is missing."""
     trip_id = _business_trip(client)

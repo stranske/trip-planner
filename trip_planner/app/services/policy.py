@@ -734,7 +734,6 @@ def sync_workspace_policy_from_tpp(
     *,
     user: AuthenticatedUser,
     trip_id: str,
-    organization_id: str | None = None,
 ) -> dict[str, Any]:
     """Fetch this trip's policy from TPP and persist it as the workspace policy state.
 
@@ -743,7 +742,7 @@ def sync_workspace_policy_from_tpp(
     """
 
     trip_record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
-    resolved_organization = organization_id or resolve_configured_organization_id()
+    resolved_organization = resolve_configured_organization_id()
     return import_workspace_policy_constraints(
         db_session,
         user=user,
