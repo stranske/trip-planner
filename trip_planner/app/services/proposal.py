@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -8,12 +9,19 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from trip_planner._option_contracts import MoneyRange
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.business import (
     ExceptionRequest,
     PolicyEvaluationResult,
     TripPlanProposal,
 )
+from trip_planner.business.policy_contracts import (
+    ComparableOption,
+    ProposalCostSummary,
+    SelectedOptionSummary,
+)
+from trip_planner.business.profile import TravelerContext
 from trip_planner.integrations.tpp import (
     BaseTPPIntegrationClient,
     EvaluationResultIngestionError,
@@ -828,6 +836,230 @@ def _persist_submission_refresh_failure(
     record.submission_record = submission_record
 
 
+def _route_comparison(workspace: dict[str, Any]) -> dict[str, Any]:
+    comparison = workspace.get("route_comparison") or workspace.get("runtime_scenario_comparison")
+    return comparison if isinstance(comparison, dict) else {}
+
+
+def _resolve_submission_scenario_id(
+    workspace: dict[str, Any],
+    scenario_id: str | None,
+) -> str | None:
+    if scenario_id:
+        return scenario_id
+
+    saved_scenarios = workspace.get("saved_scenarios")
+    if isinstance(saved_scenarios, list) and saved_scenarios:
+        session = workspace.get("session")
+        current_saved_id = session.get("current_saved_scenario_id") if isinstance(session, dict) else None
+        saved = next(
+            (
+                record
+                for record in saved_scenarios
+                if isinstance(record, dict)
+                and record.get("saved_scenario_id") == current_saved_id
+            ),
+            saved_scenarios[0] if isinstance(saved_scenarios[0], dict) else None,
+        )
+        if isinstance(saved, dict):
+            versions = saved.get("versions")
+            current_version_id = saved.get("current_version_id")
+            if isinstance(versions, list):
+                active_version = next(
+                    (
+                        version
+                        for version in versions
+                        if isinstance(version, dict) and version.get("version_id") == current_version_id
+                    ),
+                    None,
+                )
+                if isinstance(active_version, dict):
+                    snapshot_refs = active_version.get("snapshot_refs")
+                    if isinstance(snapshot_refs, dict):
+                        itinerary_id = snapshot_refs.get("itinerary_scenario_id")
+                        if itinerary_id:
+                            return str(itinerary_id)
+
+    comparison = _route_comparison(workspace)
+    lead_scenario_id = comparison.get("lead_scenario_id")
+    if lead_scenario_id:
+        return str(lead_scenario_id)
+    scenarios = comparison.get("scenarios")
+    if isinstance(scenarios, list) and scenarios:
+        first = scenarios[0]
+        if isinstance(first, dict) and first.get("scenario_id"):
+            return str(first["scenario_id"])
+    return None
+
+
+def _selected_scenario_row(
+    workspace: dict[str, Any],
+    scenario_id: str | None,
+) -> dict[str, Any] | None:
+    resolved_id = _resolve_submission_scenario_id(workspace, scenario_id)
+    comparison = _route_comparison(workspace)
+    scenarios = comparison.get("scenarios")
+    if not isinstance(scenarios, list) or not scenarios:
+        return None
+    if resolved_id:
+        for row in scenarios:
+            if isinstance(row, dict) and row.get("scenario_id") == resolved_id:
+                return row
+    first = scenarios[0]
+    return first if isinstance(first, dict) else None
+
+
+def _policy_context_from_workspace(workspace: dict[str, Any]) -> tuple[str, str]:
+    policy = workspace.get("policy_state")
+    if not isinstance(policy, dict):
+        msg = (
+            "This trip has no travel policy yet. Sync the policy for your organization "
+            "before submitting for approval."
+        )
+        raise WorkspacePolicyMissingForSubmissionError(msg)
+    organization_id = str(policy.get("organization_id") or "")
+    constraint_set = policy.get("constraint_set")
+    constraint_set_id = ""
+    if isinstance(constraint_set, dict):
+        constraint_set_id = str(constraint_set.get("policy_id") or "")
+    if not organization_id or not constraint_set_id:
+        msg = (
+            "This trip has no travel policy yet. Sync the policy for your organization "
+            "before submitting for approval."
+        )
+        raise WorkspacePolicyMissingForSubmissionError(msg)
+    return organization_id, constraint_set_id
+
+
+def _money_range_from_estimated(estimated: Any, fallback_currency: str) -> MoneyRange:
+    if isinstance(estimated, dict):
+        currency = str(estimated.get("currency") or fallback_currency)
+        typical_amount = estimated.get("typical_amount")
+        if typical_amount is None:
+            typical_amount = 0.0
+        typical = float(typical_amount)
+        return MoneyRange(
+            currency=currency,
+            typical_amount=typical,
+            min_amount=typical,
+            max_amount=typical,
+        )
+    return MoneyRange(
+        currency=fallback_currency,
+        typical_amount=0.0,
+        min_amount=0.0,
+        max_amount=0.0,
+    )
+
+
+def build_workspace_submission_proposal(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    scenario_id: str | None = None,
+) -> TripPlanProposal:
+    """Build a costed proposal from the persisted workspace, not a policy preview."""
+
+    from trip_planner.app.services.workspace import get_workspace_payload
+
+    workspace = get_workspace_payload(db_session, user=user, trip_id=trip_id, include_debug=True)
+    if workspace is None:
+        raise WorkspaceProposalNotFoundError(f"Trip '{trip_id}' was not found.")
+
+    organization_id, constraint_set_id = _policy_context_from_workspace(workspace)
+    scenario_row = _selected_scenario_row(workspace, scenario_id)
+    if scenario_row is None:
+        raise ValueError("No scenario is available for proposal submission.")
+
+    resolved_scenario_id = str(scenario_row.get("scenario_id") or f"scenario:{trip_id}")
+    trip_record = workspace.get("trip_record")
+    trip_title = trip_id
+    if isinstance(trip_record, dict):
+        trip = trip_record.get("trip")
+        if isinstance(trip, dict) and trip.get("title"):
+            trip_title = str(trip["title"])
+    scenario_label = str(scenario_row.get("title") or trip_title)
+
+    metrics = scenario_row.get("metrics")
+    estimated_total = metrics.get("estimated_total") if isinstance(metrics, dict) else None
+    budget_state = workspace.get("budget_state")
+    budget_summary = budget_state.get("summary") if isinstance(budget_state, dict) else {}
+    if not isinstance(budget_summary, dict):
+        budget_summary = {}
+
+    currency = str(budget_summary.get("currency") or "USD")
+    typical_amount = float(budget_summary.get("planned_total") or 0.0)
+    if isinstance(estimated_total, dict):
+        currency = str(estimated_total.get("currency") or currency)
+        if estimated_total.get("typical_amount") is not None:
+            typical_amount = float(estimated_total["typical_amount"])
+    if not math.isfinite(typical_amount):
+        raise ValueError("Proposal cost must be a finite number.")
+
+    cost_range = _money_range_from_estimated(estimated_total, currency)
+    policy_state = workspace.get("policy_state")
+    org_context = (
+        policy_state.get("organization_context")
+        if isinstance(policy_state, dict)
+        else {}
+    )
+    booking_channels: list[str] = []
+    if isinstance(org_context, dict):
+        raw_channels = org_context.get("required_booking_channels")
+        if isinstance(raw_channels, list):
+            booking_channels = [str(channel) for channel in raw_channels if channel]
+    booking_channel = booking_channels[0] if booking_channels else "workspace"
+
+    highlights = scenario_row.get("highlights")
+    justification_refs = (
+        [str(item) for item in highlights if item]
+        if isinstance(highlights, list) and highlights
+        else ["workspace-scenario"]
+    )
+
+    selected_option = SelectedOptionSummary(
+        category="itinerary",
+        option_id=resolved_scenario_id,
+        label=scenario_label,
+        vendor=organization_id,
+        booking_channel=booking_channel,
+        estimated_cost=cost_range,
+        justification_refs=justification_refs,
+    )
+    summary_note = str(scenario_row.get("summary") or "Built from the selected workspace scenario.")
+    return TripPlanProposal(
+        proposal_id=f"proposal:{trip_id}",
+        trip_id=trip_id,
+        mode="business",
+        traveler_context=TravelerContext(
+            employee_type="employee",
+            traveler_experience="occasional",
+            loyalty_programs=[],
+            mobility_or_access_needs=[],
+        ),
+        selected_options=[selected_option],
+        cost_summary=ProposalCostSummary(
+            currency=currency,
+            total_estimated_cost=typical_amount,
+            category_estimates={"itinerary": typical_amount} if typical_amount > 0 else {},
+            notes=[summary_note],
+        ),
+        comparables=[
+            ComparableOption(
+                category="itinerary",
+                label=scenario_label,
+                vendor=organization_id,
+                booking_channel=booking_channel,
+                estimated_cost=cost_range,
+                notes=[str(scenario_row.get("comparison_note") or "Selected scenario")],
+            )
+        ],
+        approval_notes=["Submitted from the workspace Policy tab."],
+        constraint_set_id=constraint_set_id,
+    )
+
+
 def get_workspace_proposal_payload(
     db_session: Session,
     *,
@@ -863,21 +1095,20 @@ def submit_workspace_proposal_for_trip(
 
     from trip_planner.app.services.policy import get_workspace_policy_payload
 
+    proposal = build_workspace_submission_proposal(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        scenario_id=scenario_id,
+    )
+    proposal_payload = proposal.to_dict()
     policy_payload = get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
-    proposal_payload = policy_payload.get("proposal")
-    if not isinstance(proposal_payload, dict) or not proposal_payload:
-        msg = (
-            "This trip has no travel policy yet. Sync the policy for your organization "
-            "before submitting for approval."
-        )
-        raise WorkspacePolicyMissingForSubmissionError(msg)
-
     policy_state = policy_payload.get("policy_state")
     organization_id = ""
     if isinstance(policy_state, dict):
         organization_id = str(policy_state.get("organization_id") or "")
 
-    proposal_id = str(proposal_payload.get("proposal_id") or f"proposal:{trip_id}")
+    proposal_id = proposal.proposal_id
     request_payload = TPPRequestEnvelope(
         operation="submit_proposal",
         request_id=f"submit-proposal:{uuid4().hex}",

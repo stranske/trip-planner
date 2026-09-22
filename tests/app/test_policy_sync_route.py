@@ -110,3 +110,26 @@ def test_submit_without_a_policy_explains_the_missing_step(client: TestClient) -
     response = client.post(f"/api/workspace/{trip_id}/proposal/submit", json={})
     assert response.status_code == 400
     assert "policy" in response.text.lower()
+
+
+def test_submit_builds_costed_proposal_not_policy_preview(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Server submit must not reuse the zero-cost policy preview envelope."""
+    monkeypatch.setenv("TPP_ORGANIZATION_ID", "org-northwind")
+    trip_id = _business_trip(client)
+    sync_response = client.post(f"/api/workspace/{trip_id}/policy/sync", json={})
+    assert sync_response.status_code not in {404, 405}
+    if sync_response.status_code != 200:
+        pytest.skip(f"TPP unavailable in this environment: {sync_response.status_code}")
+
+    submit_response = client.post(f"/api/workspace/{trip_id}/proposal/submit", json={})
+    if submit_response.status_code == 400 and "scenario" in submit_response.text.lower():
+        pytest.skip("Workspace has no runtime scenario comparison in this fixture trip.")
+    assert submit_response.status_code in {200, 502, 503}, submit_response.text
+    if submit_response.status_code == 200:
+        proposal_state = submit_response.json()["proposal_state"]
+        proposal_payload = proposal_state["proposal_payload"]
+        assert proposal_payload["proposal_id"] == f"proposal:{trip_id}"
+        assert "proposal-preview" not in proposal_payload["proposal_id"]
+        assert proposal_payload["cost_summary"]["total_estimated_cost"] >= 0

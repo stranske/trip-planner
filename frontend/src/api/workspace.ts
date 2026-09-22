@@ -5,6 +5,7 @@ import {
   type ProposalEvaluationPayload,
   type ProposalSubmissionPayload,
   readPolicyContext,
+  resolveSubmissionScenarioId,
 } from "../lib/proposalSubmission";
 import type { PlannerPanelState } from "../../../bundle/planner/orchestration-contracts";
 
@@ -881,6 +882,23 @@ export async function submitWorkspaceProposal(
   return response?.proposal_state ?? null;
 }
 
+/** Server-owned submission: proposal and TPP envelope are derived on the backend. */
+export async function submitWorkspaceProposalViaServer(
+  tripId: string,
+  scenarioId?: string | null
+): Promise<WorkspaceData["proposal_state"]> {
+  const response = await fetchJson<WorkspaceProposalApiResponse>({
+    path: `/api/workspace/${tripId}/proposal/submit`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ scenario_id: scenarioId ?? null }),
+  });
+  return response?.proposal_state ?? null;
+}
+
 export async function submitWorkspaceProposalEvaluation(
   tripId: string,
   payload: ProposalEvaluationPayload
@@ -926,8 +944,8 @@ export async function submitTripForApproval(
   scenarioId?: string | null
 ): Promise<WorkspaceData["proposal_state"]> {
   const tripId = workspace.trip_record.trip.trip_id;
-  const submission = buildProposalSubmissionPayload(workspace, scenarioId);
-  let proposalState = await submitWorkspaceProposal(tripId, submission);
+  const resolvedScenarioId = resolveSubmissionScenarioId(workspace, scenarioId);
+  let proposalState = await submitWorkspaceProposalViaServer(tripId, resolvedScenarioId);
   if (proposalState?.evaluation.evaluation_result) {
     return proposalState;
   }
