@@ -941,71 +941,70 @@ def _build_runtime_scenario_comparison(
         )
         available_actions = _route_option_available_actions(state)
         row = {
-                "scenario_id": scenario["scenario_id"],
-                "route_option_id": scenario["scenario_id"],
-                "title": scenario["title"],
-                "rank": scenario["rank"],
-                "status": status,
-                "state": state,
-                "purpose": _route_option_purpose(
-                    state=state,
-                    status=status,
-                    scenario=scenario,
+            "scenario_id": scenario["scenario_id"],
+            "route_option_id": scenario["scenario_id"],
+            "title": scenario["title"],
+            "rank": scenario["rank"],
+            "status": status,
+            "state": state,
+            "purpose": _route_option_purpose(
+                state=state,
+                status=status,
+                scenario=scenario,
+            ),
+            "confidence": _route_option_confidence(scenario=scenario, state=state),
+            "unresolved_questions": unresolved_questions,
+            "available_actions": available_actions,
+            "open_question": unresolved_questions[0] if unresolved_questions else None,
+            "available_action": available_actions[0] if available_actions else None,
+            "summary": summary["headline"],
+            "comparison_note": (
+                "Lead route for the current workspace comparison set."
+                if scenario["scenario_id"] == lead["scenario_id"]
+                else "Alternative route preserved for direct scenario comparison."
+            ),
+            "option_count": max(
+                1,
+                len(scenario.get("supporting_option_ids") or []),
+            ),
+            "checkpoint_id": None,
+            "budget_variant_id": None,
+            "route_sequence": list(summary.get("route_sequence") or []),
+            "route_summary": " -> ".join(summary.get("route_sequence") or []) or "route pending",
+            "recommended_for_selection": summary["recommended_for_selection"],
+            "feasible": summary["feasible"],
+            "metrics": {
+                "score": scenario["score"],
+                "travel_minutes": summary["total_travel_minutes"],
+                "transfers": summary["total_transfer_count"],
+                "estimated_total": estimated_total,
+            },
+            "delta": {
+                "score_delta": round(float(scenario["score"]) - float(lead["score"]), 2),
+                "travel_minutes_delta": (
+                    summary["total_travel_minutes"]
+                    - lead["scenario_summary"]["total_travel_minutes"]
                 ),
-                "confidence": _route_option_confidence(scenario=scenario, state=state),
-                "unresolved_questions": unresolved_questions,
-                "available_actions": available_actions,
-                "open_question": unresolved_questions[0] if unresolved_questions else None,
-                "available_action": available_actions[0] if available_actions else None,
-                "summary": summary["headline"],
-                "comparison_note": (
-                    "Lead route for the current workspace comparison set."
-                    if scenario["scenario_id"] == lead["scenario_id"]
-                    else "Alternative route preserved for direct scenario comparison."
+                "transfers_delta": (
+                    summary["total_transfer_count"]
+                    - lead["scenario_summary"]["total_transfer_count"]
                 ),
-                "option_count": max(
-                    1,
-                    len(scenario.get("supporting_option_ids") or []),
-                ),
-                "checkpoint_id": None,
-                "budget_variant_id": None,
-                "route_sequence": list(summary.get("route_sequence") or []),
-                "route_summary": " -> ".join(summary.get("route_sequence") or [])
-                or "route pending",
-                "recommended_for_selection": summary["recommended_for_selection"],
-                "feasible": summary["feasible"],
-                "metrics": {
-                    "score": scenario["score"],
-                    "travel_minutes": summary["total_travel_minutes"],
-                    "transfers": summary["total_transfer_count"],
-                    "estimated_total": estimated_total,
-                },
-                "delta": {
-                    "score_delta": round(float(scenario["score"]) - float(lead["score"]), 2),
-                    "travel_minutes_delta": (
-                        summary["total_travel_minutes"]
-                        - lead["scenario_summary"]["total_travel_minutes"]
-                    ),
-                    "transfers_delta": (
-                        summary["total_transfer_count"]
-                        - lead["scenario_summary"]["total_transfer_count"]
-                    ),
-                    "estimated_total_delta": _estimated_total_delta(scenario, lead),
-                },
-                "highlights": _comparison_highlights(scenario=scenario, lead=lead),
-                "source_result_id": scenario["source_result_id"],
-                "objective_refs": list(scenario.get("objective_refs") or []),
-                "map_view": build_runtime_map_view_payload(
-                    scenario=scenario,
-                    summary=summary,
-                    route_sequence=list(summary.get("route_sequence") or []),
-                ),
-                "map_diagnostics": build_runtime_map_diagnostics_payload(
-                    scenario=scenario,
-                    summary=summary,
-                    route_sequence=list(summary.get("route_sequence") or []),
-                ),
-            }
+                "estimated_total_delta": _estimated_total_delta(scenario, lead),
+            },
+            "highlights": _comparison_highlights(scenario=scenario, lead=lead),
+            "source_result_id": scenario["source_result_id"],
+            "objective_refs": list(scenario.get("objective_refs") or []),
+            "map_view": build_runtime_map_view_payload(
+                scenario=scenario,
+                summary=summary,
+                route_sequence=list(summary.get("route_sequence") or []),
+            ),
+            "map_diagnostics": build_runtime_map_diagnostics_payload(
+                scenario=scenario,
+                summary=summary,
+                route_sequence=list(summary.get("route_sequence") or []),
+            ),
+        }
         attach_policy_preview_to_row(
             row,
             policy_state=policy_state,
@@ -1075,6 +1074,7 @@ def _serialize_persisted_trip_record(record: PersistedTrip) -> dict[str, Any]:
             "mode": record.mode,
             "status": record.status,
             "trip_frame": {
+                "origin": record.origin,
                 "start_date": record.start_date,
                 "end_date": record.end_date,
                 "duration_days": record.duration_days,
@@ -1366,23 +1366,20 @@ def _bootstrap_scenario_metrics(
 ) -> tuple[float, int, int, dict[str, Any]]:
     duration_days = max(record.duration_days or 1, 1)
     base_minutes = 90 if record.mode == "leisure" else 120
-    base_cost = 180.0 if record.mode == "leisure" else 320.0
     if label == "fallback":
         travel_minutes = duration_days * (base_minutes + 45)
         transfers = 2
-        estimated_total = base_cost * duration_days + 120.0
     else:
         travel_minutes = duration_days * base_minutes
         transfers = 1
-        estimated_total = base_cost * duration_days
     return (
         _BOOTSTRAP_SCENARIO_SCORE_BY_LABEL.get(label, 0.6),
         travel_minutes,
         transfers,
         {
             "currency": "USD",
-            "typical_amount": round(estimated_total, 2),
-            "nightly_typical_amount": round(estimated_total / duration_days, 2),
+            "typical_amount": None,
+            "nightly_typical_amount": None,
         },
     )
 

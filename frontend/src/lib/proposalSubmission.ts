@@ -62,7 +62,7 @@ function selectedScenario(
   return comparison.scenarios.find((scenario) => scenario.scenario_id === resolvedId) ?? null;
 }
 
-function readPolicyContext(workspace: WorkspaceData): PolicyContext | null {
+export function readPolicyContext(workspace: WorkspaceData): PolicyContext | null {
   return (
     policyContextFromPayload(workspace.policy_state) ??
     policyContextFromPayload(workspace.view_model?.debug_state?.sections?.policy_state?.payload)

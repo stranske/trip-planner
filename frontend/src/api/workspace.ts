@@ -4,6 +4,8 @@ import {
   buildProposalSubmissionPayload,
   type ProposalEvaluationPayload,
   type ProposalSubmissionPayload,
+  readPolicyContext,
+  resolveSubmissionScenarioId,
 } from "../lib/proposalSubmission";
 import type { PlannerPanelState } from "../../../bundle/planner/orchestration-contracts";
 
@@ -880,6 +882,23 @@ export async function submitWorkspaceProposal(
   return response?.proposal_state ?? null;
 }
 
+/** Server-owned submission: proposal and TPP envelope are derived on the backend. */
+export async function submitWorkspaceProposalViaServer(
+  tripId: string,
+  scenarioId?: string | null
+): Promise<WorkspaceData["proposal_state"]> {
+  const response = await fetchJson<WorkspaceProposalApiResponse>({
+    path: `/api/workspace/${tripId}/proposal/submit`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ scenario_id: scenarioId ?? null }),
+  });
+  return response?.proposal_state ?? null;
+}
+
 export async function submitWorkspaceProposalEvaluation(
   tripId: string,
   payload: ProposalEvaluationPayload
@@ -925,8 +944,8 @@ export async function submitTripForApproval(
   scenarioId?: string | null
 ): Promise<WorkspaceData["proposal_state"]> {
   const tripId = workspace.trip_record.trip.trip_id;
-  const submission = buildProposalSubmissionPayload(workspace, scenarioId);
-  let proposalState = await submitWorkspaceProposal(tripId, submission);
+  const resolvedScenarioId = resolveSubmissionScenarioId(workspace, scenarioId);
+  let proposalState = await submitWorkspaceProposalViaServer(tripId, resolvedScenarioId);
   if (proposalState?.evaluation.evaluation_result) {
     return proposalState;
   }
@@ -954,16 +973,20 @@ export type PrepareApprovalPacketHandlers = {
   preloadPlannerSession?: (tripId: string) => Promise<unknown>;
 };
 
-/** Policy-tab entry point before an approval packet exists. */
-export function prepareApprovalPacketFromPolicyTab(
-  tripId: string,
-  handlers: PrepareApprovalPacketHandlers
-): void {
-  handlers.focusPlanTab();
-  handlers.preloadPlannerSession?.(tripId).catch(() => {
-    // Preloading the planner session is best-effort; the Plan tab reloads it.
+/** Fetch this trip's travel policy from TPP and store it on the workspace. */
+export async function syncWorkspacePolicy(
+  tripId: string
+): Promise<WorkspaceData["policy_state"]> {
+  const response = await fetchJson<{ policy_state: WorkspaceData["policy_state"] }>({
+    path: `/api/workspace/${tripId}/policy/sync`,
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
   });
+  return response.policy_state;
 }
+
 
 /** Retry hook used by the service-unavailable policy state. */
 export async function retryPolicyServiceCheck(

@@ -21,3 +21,9 @@ class WorkspacePolicyResponse(BaseModel):
     proposal: dict[str, Any] | None = None
     policy_evaluation: dict[str, Any] | None = None
     summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class PolicySyncRequest(BaseModel):
+    """Policy sync takes no traveller-controlled organization or verdict."""
+
+    model_config = {"extra": "forbid"}

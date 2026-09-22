@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -25,6 +27,7 @@ from trip_planner.integrations.tpp import (
     PolicyFreshness,
     TPPPolicyRequirement,
     TPPPolicySyncService,
+    TPPCorrelationId,
     TPPRequestEnvelope,
     TPPResponseEnvelope,
     TPPTransportError,
@@ -673,6 +676,84 @@ def get_workspace_policy_payload(
     return _build_workspace_policy_payload(
         trip_record=trip_record,
         policy_record=policy_record,
+    )
+
+
+def build_policy_sync_request(
+    record: PersistedTrip, *, user: AuthenticatedUser, organization_id: str
+) -> dict[str, Any]:
+    """Build the TPP fetch request for a trip, server-side.
+
+    The traveller cannot be expected to hand-assemble a TPPRequestEnvelope, and the
+    frontend must never be the thing that decides what policy applies. Everything here
+    is derived from the persisted trip.
+    """
+
+    return TPPRequestEnvelope(
+        operation="fetch_policy_constraints",
+        request_id=f"policy-sync:{uuid4().hex}",
+        correlation_id=TPPCorrelationId.from_value(f"policy-sync:{record.trip_id}"),
+        payload={"trip_plan": _tpp_trip_plan_payload(record, user=user)},
+        transport_pattern="sync",
+        organization_id=organization_id,
+        trip_id=record.trip_id,
+        proposal_id=None,
+        submitted_at=datetime.now(UTC).isoformat(),
+        metadata={"source": "workspace_policy_sync"},
+    ).to_dict()
+
+
+class PolicyConfigurationError(ValueError):
+    """The deployment is missing configuration the traveller cannot supply.
+
+    Distinguished from a normal ValueError because its message names a config key and
+    contains no user data, so it is safe — and necessary — to show the operator rather
+    than replacing it with a correlation id.
+    """
+
+
+def resolve_configured_organization_id() -> str:
+    """The organization whose travel policy applies, from deployment config.
+
+    Deployment-level, not per-trip: a traveller should never be asked to type an
+    organization id, and the UI must not be the thing that decides what policy applies.
+    """
+
+    organization_id = os.getenv("TPP_ORGANIZATION_ID", "").strip()
+    if not organization_id:
+        msg = (
+            "No organization is configured for policy sync. Set TPP_ORGANIZATION_ID "
+            "so the planner knows whose travel policy applies."
+        )
+        raise PolicyConfigurationError(msg)
+    return organization_id
+
+
+def sync_workspace_policy_from_tpp(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+) -> dict[str, Any]:
+    """Fetch this trip's policy from TPP and persist it as the workspace policy state.
+
+    This is the step that was missing: `policy_state` stayed absent for every trip, so
+    the approval path could never begin. No verdict is accepted from the caller.
+    """
+
+    trip_record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
+    resolved_organization = resolve_configured_organization_id()
+    return import_workspace_policy_constraints(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        request_payload=build_policy_sync_request(
+            trip_record, user=user, organization_id=resolved_organization
+        ),
+        response_payload=None,
+        source_kind="tpp_sync",
+        tags=["workspace-sync"],
+        notes=["Synced from the workspace Policy tab."],
     )
 
 

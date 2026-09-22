@@ -44,6 +44,7 @@ export function travelDaysInclusive(startDate: string, endDate: string): number 
 /** Fields the planner needs before it can assemble anything worth reviewing. */
 export function missingTripContext(values: {
   mode: TripMode | "";
+  origin?: string;
   purpose: string;
   destinations: string;
   startDate: string;
@@ -52,6 +53,9 @@ export function missingTripContext(values: {
   const missing: string[] = [];
   if (!values.mode) {
     missing.push("trip type");
+  }
+  if (!(values.origin ?? "").trim()) {
+    missing.push("a starting point");
   }
   if (!values.destinations.split(";").some((destination) => destination.trim())) {
     missing.push("at least one destination");
@@ -73,6 +77,7 @@ export function NewTripPage() {
   const [mode, setMode] = useState<TripMode | "">("");
   const [title, setTitle] = useState("");
   const [purpose, setPurpose] = useState("");
+  const [origin, setOrigin] = useState("");
   const [destinations, setDestinations] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -90,7 +95,7 @@ export function NewTripPage() {
     .filter(Boolean);
   const tooManyDestinations = destinationList.length > 8;
 
-  const missing = missingTripContext({ mode, purpose, destinations, startDate, endDate });
+  const missing = missingTripContext({ mode, origin, purpose, destinations, startDate, endDate });
   const isBusiness = mode === "business";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -111,6 +116,7 @@ export function NewTripPage() {
         summary: purpose.trim(),
         mode: mode || "leisure",
         trip_frame: {
+          origin: origin.trim() || null,
           start_date: startDate || null,
           end_date: endDate || null,
           duration_days: durationValue ? Number(durationValue) : null,
@@ -203,6 +209,22 @@ export function NewTripPage() {
               {isBusiness
                 ? "Approvers read this first. One sentence on why the travel is necessary."
                 : "Optional. A short note about the purpose of the trip."}
+            </p>
+
+            <label>
+              Travelling from
+              <input
+                name="origin"
+                type="text"
+                maxLength={120}
+                value={origin}
+                onChange={(event) => setOrigin(event.target.value)}
+                placeholder="Seattle"
+              />
+            </label>
+            <p className="field-hint">
+              Where the journey starts. The planner measures the route from here, so distance,
+              travel time and transport cost all depend on it.
             </p>
 
             <label>

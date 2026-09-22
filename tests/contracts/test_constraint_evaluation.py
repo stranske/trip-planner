@@ -11,8 +11,12 @@ from trip_planner.app.services.inventory import (
     _build_inventory_assembly_input,
     assemble_inventory_bundles_for_trip,
 )
+from trip_planner.options.bundles import (
+    BundleFeasibility,
+    ConstraintEvaluation,
+    InventoryBundle,
+)
 from trip_planner.persistence.models.trip import PersistedTrip
-from trip_planner.options.bundles import BundleFeasibility, ConstraintEvaluation, InventoryBundle
 
 
 def _assert_bundle_payload_includes_constraint_evaluation(
@@ -194,8 +198,7 @@ def test_explicit_evaluation_is_preserved() -> None:
 
 
 def test_public_contract_exports() -> None:
-    import trip_planner.contracts as contracts
-    import trip_planner.options as options
+    from trip_planner import contracts, options
 
     assert contracts.ConstraintEvaluation is ConstraintEvaluation
     assert "ConstraintEvaluation" in contracts.__all__

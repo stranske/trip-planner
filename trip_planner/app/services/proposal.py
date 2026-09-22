@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import math
+import os
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -8,12 +10,19 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from trip_planner._option_contracts import MoneyRange
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.business import (
     ExceptionRequest,
     PolicyEvaluationResult,
     TripPlanProposal,
 )
+from trip_planner.business.policy_contracts import (
+    ComparableOption,
+    ProposalCostSummary,
+    SelectedOptionSummary,
+)
+from trip_planner.business.profile import TravelerContext
 from trip_planner.integrations.tpp import (
     BaseTPPIntegrationClient,
     EvaluationResultIngestionError,
@@ -42,6 +51,10 @@ logger = logging.getLogger(__name__)
 
 class WorkspaceProposalNotFoundError(ValueError):
     """Raised when workspace proposal state or trip ownership is missing."""
+
+
+class WorkspacePolicyMissingForSubmissionError(ValueError):
+    """The trip must have a synced policy before proposal submission."""
 
 
 def _owner_profile_id(record: PersistedTrip) -> str:
@@ -824,6 +837,394 @@ def _persist_submission_refresh_failure(
     record.submission_record = submission_record
 
 
+def _route_comparison(workspace: dict[str, Any]) -> dict[str, Any]:
+    comparison = workspace.get("route_comparison") or workspace.get("runtime_scenario_comparison")
+    return comparison if isinstance(comparison, dict) else {}
+
+
+def _workspace_scenario_ids(workspace: dict[str, Any]) -> set[str]:
+    ids: set[str] = set()
+    comparison = _route_comparison(workspace)
+    lead_scenario_id = comparison.get("lead_scenario_id")
+    if lead_scenario_id:
+        ids.add(str(lead_scenario_id))
+    scenarios = comparison.get("scenarios")
+    if isinstance(scenarios, list):
+        for row in scenarios:
+            if isinstance(row, dict) and row.get("scenario_id"):
+                ids.add(str(row["scenario_id"]))
+
+    saved_scenarios = workspace.get("saved_scenarios")
+    if isinstance(saved_scenarios, list):
+        for saved in saved_scenarios:
+            if not isinstance(saved, dict):
+                continue
+            versions = saved.get("versions")
+            if not isinstance(versions, list):
+                continue
+            for version in versions:
+                if not isinstance(version, dict):
+                    continue
+                snapshot_refs = version.get("snapshot_refs")
+                if isinstance(snapshot_refs, dict) and snapshot_refs.get("itinerary_scenario_id"):
+                    ids.add(str(snapshot_refs["itinerary_scenario_id"]))
+    return ids
+
+
+def _fixture_proposal_flow_enabled() -> bool:
+    environment = os.getenv("TRIP_PLANNER_ENV", "local").strip().lower()
+    return environment in {"local", "development", "dev", "test", "testing"} and (
+        os.getenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "").strip().lower()
+        in {"1", "true", "yes"}
+    )
+
+
+def _looks_like_materialized_scenario_id(scenario_id: str) -> bool:
+    return scenario_id.startswith("scenario:") and (
+        ":trip-" in scenario_id
+        or ":route-option:" in scenario_id
+        or scenario_id.endswith(":workspace-bootstrap")
+    )
+
+
+def _validate_persisted_scenario_id(
+    workspace: dict[str, Any],
+    scenario_id: str | None,
+    *,
+    existing_scenario_id: str | None = None,
+) -> str | None:
+    """Reject client scenario identifiers that are not owned by this trip workspace."""
+
+    if scenario_id is None:
+        return None
+    if existing_scenario_id is not None and scenario_id == existing_scenario_id:
+        return scenario_id
+
+    valid_ids = _workspace_scenario_ids(workspace)
+    if scenario_id in valid_ids:
+        return scenario_id
+    if not valid_ids:
+        return scenario_id
+    if _looks_like_materialized_scenario_id(scenario_id):
+        raise ValueError("Selected scenario is not in this trip's workspace.")
+    if _fixture_proposal_flow_enabled():
+        return scenario_id
+    raise ValueError("Selected scenario is not in this trip's workspace.")
+
+
+def _resolve_submission_scenario_id(
+    workspace: dict[str, Any],
+    scenario_id: str | None,
+) -> str | None:
+    if scenario_id:
+        return scenario_id
+
+    saved_scenarios = workspace.get("saved_scenarios")
+    if isinstance(saved_scenarios, list) and saved_scenarios:
+        session = workspace.get("session")
+        current_saved_id = (
+            session.get("current_saved_scenario_id") if isinstance(session, dict) else None
+        )
+        saved = next(
+            (
+                record
+                for record in saved_scenarios
+                if isinstance(record, dict) and record.get("saved_scenario_id") == current_saved_id
+            ),
+            saved_scenarios[0] if isinstance(saved_scenarios[0], dict) else None,
+        )
+        if isinstance(saved, dict):
+            versions = saved.get("versions")
+            current_version_id = saved.get("current_version_id")
+            if isinstance(versions, list):
+                active_version = next(
+                    (
+                        version
+                        for version in versions
+                        if isinstance(version, dict)
+                        and version.get("version_id") == current_version_id
+                    ),
+                    None,
+                )
+                if isinstance(active_version, dict):
+                    snapshot_refs = active_version.get("snapshot_refs")
+                    if isinstance(snapshot_refs, dict):
+                        itinerary_id = snapshot_refs.get("itinerary_scenario_id")
+                        if itinerary_id:
+                            return str(itinerary_id)
+
+    comparison = _route_comparison(workspace)
+    lead_scenario_id = comparison.get("lead_scenario_id")
+    if lead_scenario_id:
+        return str(lead_scenario_id)
+    scenarios = comparison.get("scenarios")
+    if isinstance(scenarios, list) and scenarios:
+        first = scenarios[0]
+        if isinstance(first, dict) and first.get("scenario_id"):
+            return str(first["scenario_id"])
+    return None
+
+
+def _saved_comparison_row(
+    workspace: dict[str, Any], scenarios: list[Any], resolved_id: str
+) -> dict[str, Any] | None:
+    saved_scenarios = workspace.get("saved_scenarios")
+    if not isinstance(saved_scenarios, list):
+        return None
+    session = workspace.get("session")
+    current_saved_id = (
+        session.get("current_saved_scenario_id") if isinstance(session, dict) else None
+    )
+    ordered = sorted(
+        (saved for saved in saved_scenarios if isinstance(saved, dict)),
+        key=lambda saved: saved.get("saved_scenario_id") != current_saved_id,
+    )
+    for saved in ordered:
+        versions = saved.get("versions")
+        if not isinstance(versions, list):
+            continue
+        active_version = next(
+            (
+                v
+                for v in versions
+                if isinstance(v, dict) and v.get("version_id") == saved.get("current_version_id")
+            ),
+            None,
+        )
+        refs = active_version.get("snapshot_refs") if isinstance(active_version, dict) else None
+        if not isinstance(refs, dict) or refs.get("itinerary_scenario_id") != resolved_id:
+            continue
+        return next(
+            (
+                row
+                for row in scenarios
+                if isinstance(row, dict)
+                and row.get("scenario_id") == saved.get("saved_scenario_id")
+            ),
+            None,
+        )
+    return None
+
+
+def _selected_scenario_row(
+    workspace: dict[str, Any],
+    scenario_id: str | None,
+) -> dict[str, Any] | None:
+    resolved_id = _resolve_submission_scenario_id(workspace, scenario_id)
+    comparison = _route_comparison(workspace)
+    scenarios = comparison.get("scenarios")
+    if not isinstance(scenarios, list) or not scenarios:
+        return None
+    if resolved_id:
+        direct = next(
+            (
+                row
+                for row in scenarios
+                if isinstance(row, dict) and row.get("scenario_id") == resolved_id
+            ),
+            None,
+        )
+        if direct is not None:
+            return direct
+        saved_row = _saved_comparison_row(workspace, scenarios, resolved_id)
+        if saved_row is not None:
+            return saved_row
+        if scenario_id is not None:
+            raise ValueError("Selected scenario is not in this trip's workspace.")
+        lead_id = comparison.get("lead_scenario_id")
+        lead = next(
+            (
+                row
+                for row in scenarios
+                if isinstance(row, dict) and row.get("scenario_id") == lead_id
+            ),
+            None,
+        )
+        if lead is not None:
+            return lead
+    return next((row for row in scenarios if isinstance(row, dict)), None)
+
+
+def _policy_context_from_workspace(workspace: dict[str, Any]) -> tuple[str, str]:
+    policy = workspace.get("policy_state")
+    if not isinstance(policy, dict):
+        msg = (
+            "This trip has no travel policy yet. Sync the policy for your organization "
+            "before submitting for approval."
+        )
+        raise WorkspacePolicyMissingForSubmissionError(msg)
+    organization_id = str(policy.get("organization_id") or "")
+    constraint_set = policy.get("constraint_set")
+    constraint_set_id = ""
+    if isinstance(constraint_set, dict):
+        constraint_set_id = str(constraint_set.get("policy_id") or "")
+    if not organization_id or not constraint_set_id:
+        msg = (
+            "This trip has no travel policy yet. Sync the policy for your organization "
+            "before submitting for approval."
+        )
+        raise WorkspacePolicyMissingForSubmissionError(msg)
+    return organization_id, constraint_set_id
+
+
+def _money_range_from_estimated(estimated: Any, fallback_currency: str) -> MoneyRange:
+    if isinstance(estimated, dict):
+        currency = str(estimated.get("currency") or fallback_currency)
+        typical_amount = estimated.get("typical_amount")
+        if typical_amount is None:
+            typical_amount = 0.0
+        typical = float(typical_amount)
+        return MoneyRange(
+            currency=currency,
+            typical_amount=typical,
+            min_amount=typical,
+            max_amount=typical,
+        )
+    return MoneyRange(
+        currency=fallback_currency,
+        typical_amount=0.0,
+        min_amount=0.0,
+        max_amount=0.0,
+    )
+
+
+def _trip_title_from_workspace(workspace: dict[str, Any], trip_id: str) -> str:
+    trip_record = workspace.get("trip_record")
+    if isinstance(trip_record, dict):
+        trip = trip_record.get("trip")
+        if isinstance(trip, dict) and trip.get("title"):
+            return str(trip["title"])
+    return trip_id
+
+
+def _home_airport_from_workspace(workspace: dict[str, Any]) -> str:
+    trip_record = workspace.get("trip_record")
+    if isinstance(trip_record, dict):
+        trip = trip_record.get("trip")
+        if isinstance(trip, dict):
+            trip_frame = trip.get("trip_frame")
+            if isinstance(trip_frame, dict) and trip_frame.get("origin"):
+                return str(trip_frame["origin"])
+    return "workspace"
+
+
+def _submission_cost_details(
+    workspace: dict[str, Any],
+    scenario_row: dict[str, Any],
+) -> tuple[str, float, MoneyRange]:
+    metrics = scenario_row.get("metrics")
+    estimated_total = metrics.get("estimated_total") if isinstance(metrics, dict) else None
+    budget_state = workspace.get("budget_state")
+    budget_summary = budget_state.get("summary") if isinstance(budget_state, dict) else {}
+    if not isinstance(budget_summary, dict):
+        budget_summary = {}
+
+    currency = str(budget_summary.get("currency") or "USD")
+    typical_amount = float(budget_summary.get("planned_total") or 0.0)
+    if isinstance(estimated_total, dict):
+        currency = str(estimated_total.get("currency") or currency)
+        if estimated_total.get("typical_amount") is not None:
+            typical_amount = float(estimated_total["typical_amount"])
+    if not math.isfinite(typical_amount):
+        raise ValueError("Proposal cost must be a finite number.")
+    cost_range = MoneyRange(
+        currency=currency,
+        typical_amount=typical_amount,
+        min_amount=typical_amount,
+        max_amount=typical_amount,
+    )
+    return currency, typical_amount, cost_range
+
+
+def _booking_channel_from_workspace(workspace: dict[str, Any]) -> str:
+    policy_state = workspace.get("policy_state")
+    org_context = policy_state.get("organization_context") if isinstance(policy_state, dict) else {}
+    if isinstance(org_context, dict):
+        raw_channels = org_context.get("required_booking_channels")
+        if isinstance(raw_channels, list):
+            channels = [str(channel) for channel in raw_channels if channel]
+            if channels:
+                return channels[0]
+    return "workspace"
+
+
+def _justification_refs_from_scenario(scenario_row: dict[str, Any]) -> list[str]:
+    highlights = scenario_row.get("highlights")
+    if isinstance(highlights, list) and highlights:
+        return [str(item) for item in highlights if item]
+    return ["workspace-scenario"]
+
+
+def build_workspace_submission_proposal(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    scenario_id: str | None = None,
+) -> TripPlanProposal:
+    """Build a costed proposal from the persisted workspace, not a policy preview."""
+
+    from trip_planner.app.services.workspace import get_workspace_payload
+
+    workspace = get_workspace_payload(db_session, user=user, trip_id=trip_id, include_debug=True)
+    if workspace is None:
+        raise WorkspaceProposalNotFoundError(f"Trip '{trip_id}' was not found.")
+
+    organization_id, constraint_set_id = _policy_context_from_workspace(workspace)
+    scenario_row = _selected_scenario_row(workspace, scenario_id)
+    if scenario_row is None:
+        raise ValueError("No scenario is available for proposal submission.")
+
+    resolved_scenario_id = str(scenario_row.get("scenario_id") or f"scenario:{trip_id}")
+    trip_title = _trip_title_from_workspace(workspace, trip_id)
+    scenario_label = str(scenario_row.get("title") or trip_title)
+    currency, typical_amount, cost_range = _submission_cost_details(workspace, scenario_row)
+    booking_channel = _booking_channel_from_workspace(workspace)
+    justification_refs = _justification_refs_from_scenario(scenario_row)
+
+    selected_option = SelectedOptionSummary(
+        category="itinerary",
+        option_id=resolved_scenario_id,
+        label=scenario_label,
+        vendor=organization_id,
+        booking_channel=booking_channel,
+        estimated_cost=cost_range,
+        justification_refs=justification_refs,
+    )
+    summary_note = str(scenario_row.get("summary") or "Built from the selected workspace scenario.")
+    return TripPlanProposal(
+        proposal_id=f"proposal:{trip_id}",
+        trip_id=trip_id,
+        mode="business",
+        traveler_context=TravelerContext(
+            employee_type="employee",
+            traveler_experience="occasional",
+            home_airport=_home_airport_from_workspace(workspace),
+            loyalty_programs=[],
+            mobility_or_access_needs=[],
+        ),
+        selected_options=[selected_option],
+        cost_summary=ProposalCostSummary(
+            currency=currency,
+            total_estimated_cost=typical_amount,
+            category_estimates={"itinerary": typical_amount} if typical_amount > 0 else {},
+            notes=[summary_note],
+        ),
+        comparables=[
+            ComparableOption(
+                category="itinerary",
+                label=scenario_label,
+                vendor=organization_id,
+                booking_channel=booking_channel,
+                estimated_cost=cost_range,
+                notes=[str(scenario_row.get("comparison_note") or "Selected scenario")],
+            )
+        ],
+        approval_notes=["Submitted from the workspace Policy tab."],
+        constraint_set_id=constraint_set_id,
+    )
+
+
 def get_workspace_proposal_payload(
     db_session: Session,
     *,
@@ -843,6 +1244,61 @@ def get_workspace_proposal_payload(
     }
 
 
+def submit_workspace_proposal_for_trip(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    scenario_id: str | None = None,
+) -> dict[str, Any]:
+    """Submit this trip to TPP for a policy verdict, building everything server-side.
+
+    The traveller presses one button. The proposal and the TPP request envelope are
+    derived from the persisted trip and its synced policy; no verdict is accepted from
+    the caller, and no TPP payload is assembled in the browser.
+    """
+
+    from trip_planner.app.services.policy import get_workspace_policy_payload
+
+    proposal = build_workspace_submission_proposal(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        scenario_id=scenario_id,
+    )
+    proposal_payload = proposal.to_dict()
+    policy_payload = get_workspace_policy_payload(db_session, user=user, trip_id=trip_id)
+    policy_state = policy_payload.get("policy_state")
+    organization_id = ""
+    if isinstance(policy_state, dict):
+        organization_id = str(policy_state.get("organization_id") or "")
+
+    proposal_id = proposal.proposal_id
+    request_payload = TPPRequestEnvelope(
+        operation="submit_proposal",
+        request_id=f"submit-proposal:{uuid4().hex}",
+        correlation_id=TPPCorrelationId.from_value(f"submit-proposal:{trip_id}"),
+        payload={"proposal": proposal_payload},
+        transport_pattern="sync",
+        organization_id=organization_id or None,
+        trip_id=trip_id,
+        proposal_id=proposal_id,
+        submitted_at=_now_iso(),
+        metadata={"source": "workspace_policy_tab"},
+    ).to_dict()
+
+    return save_workspace_proposal_submission(
+        db_session,
+        user=user,
+        trip_id=trip_id,
+        proposal_payload=proposal_payload,
+        request_payload=request_payload,
+        response_payload=None,
+        proposal_version=str(proposal_payload.get("proposal_version") or "v1"),
+        scenario_id=proposal.selected_options[0].option_id,
+    )
+
+
 def save_workspace_proposal_submission(
     db_session: Session,
     *,
@@ -857,6 +1313,13 @@ def save_workspace_proposal_submission(
     trip_record = _get_owned_trip_record(db_session, user=user, trip_id=trip_id)
     if trip_record.mode != "business":
         raise ValueError("Only business trips can persist proposal lifecycle state.")
+
+    from trip_planner.app.services.workspace import get_workspace_payload
+
+    workspace = get_workspace_payload(db_session, user=user, trip_id=trip_id, include_debug=True)
+    if workspace is None:
+        raise WorkspaceProposalNotFoundError(f"Trip '{trip_id}' was not found.")
+    scenario_id = _validate_persisted_scenario_id(workspace, scenario_id)
 
     proposal = TripPlanProposal.from_dict(proposal_payload)
     if proposal.trip_id != trip_id:
@@ -956,6 +1419,17 @@ def save_workspace_proposal_evaluation(
         raise WorkspaceProposalNotFoundError(
             "Proposal evaluation cannot be stored before a proposal submission exists."
         )
+
+    from trip_planner.app.services.workspace import get_workspace_payload
+
+    workspace = get_workspace_payload(db_session, user=user, trip_id=trip_id, include_debug=True)
+    if workspace is None:
+        raise WorkspaceProposalNotFoundError(f"Trip '{trip_id}' was not found.")
+    scenario_id = _validate_persisted_scenario_id(
+        workspace,
+        scenario_id,
+        existing_scenario_id=existing.scenario_id,
+    )
 
     request = _normalize_evaluation_request(
         TPPRequestEnvelope.from_dict(request_payload),

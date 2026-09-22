@@ -46,7 +46,9 @@ def test_full_product_local_journeys_cover_runtime_identifiers(monkeypatch) -> N
     }
     assert by_name["local-business-journey"].details["proposal_id"].startswith("proposal:trip-")
     assert by_name["local-business-journey"].details["evaluation_status"] == "non_compliant"
-    assert by_name["local-business-journey"].details["follow_up_status"] == "reoptimization_required"
+    assert (
+        by_name["local-business-journey"].details["follow_up_status"] == "reoptimization_required"
+    )
     assert by_name["local-business-journey"].details["status_poll"] in {
         "deferred",
         "failed",

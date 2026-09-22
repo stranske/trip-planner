@@ -6,6 +6,7 @@ dependencies = [
     "alembic==1.18.5",
     "anyio==4.14.2",
     "fastapi==0.141.1",
+    "geonamescache==3.0.2",
     "jsonschema>=4.26.0,<4.27.0",
     "langchain-core==1.5.3",
     "langchain-openai==1.4.1",
@@ -100,6 +101,10 @@ extend-exclude = '''
 | /node_modules/
 )
 '''
+
+[[tool.mypy.overrides]]
+module = ["geonamescache.*"]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [

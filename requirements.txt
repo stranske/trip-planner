@@ -2,3 +2,4 @@ jinja2
 pytest
 jsonschema>=4.26.0,<4.27.0
 openai
+geonamescache==3.0.2

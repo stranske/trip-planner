@@ -39,6 +39,7 @@ def create_trip_record(
         title=payload.title,
         summary=payload.summary,
         mode=payload.mode,
+        origin=payload.trip_frame.origin,
         start_date=payload.trip_frame.start_date,
         end_date=payload.trip_frame.end_date,
         duration_days=payload.trip_frame.duration_days,
