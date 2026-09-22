@@ -5,6 +5,19 @@ from sqlalchemy import create_engine, inspect, text
 from trip_planner.persistence.db import ensure_database_ready, reset_database_state
 
 
+
+def _expected_migration_head() -> str:
+    """The single head of the migration chain, read from the scripts themselves."""
+
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    heads = ScriptDirectory.from_config(config).get_heads()
+    assert len(heads) == 1, f"migrations must have exactly one head, found {heads}"
+    return heads[0]
+
+
 def test_current_migrations_repair_database_stamped_at_previous_20260510_02(
     tmp_path: Path,
     monkeypatch,
@@ -70,9 +83,12 @@ def test_current_migrations_repair_database_stamped_at_previous_20260510_02(
     } <= {column["name"] for column in inspector.get_columns("persisted_planning_session_states")}
 
     with engine.connect() as connection:
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "20260921_01"
-        )
+        # Derive the expected head rather than pinning a literal. A hardcoded revision
+        # means every future migration fails this test for the wrong reason, which trains
+        # people to edit the assertion instead of reading it.
+        assert connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one() == _expected_migration_head()
         assert (
             connection.execute(
                 text(

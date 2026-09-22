@@ -26,6 +26,7 @@ from trip_planner.persistence.models.session import (
     PersistedPlanningSessionState,
 )
 from trip_planner.persistence.models.trip import PersistedTrip
+from trip_planner.persistence.models.trip_price import PersistedTripPrice
 
 __all__ = [
     "AuthSession",
@@ -43,5 +44,6 @@ __all__ = [
     "PersistedProposalState",
     "PersistedSavedScenario",
     "PersistedTrip",
+    "PersistedTripPrice",
     "UserAccount",
 ]

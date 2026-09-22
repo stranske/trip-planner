@@ -12,6 +12,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.app.services.trip_prices import (
+    build_trip_prices_payload,
+    read_trip_prices_for_owner,
+)
 from trip_planner.app.services.budget import (
     build_fixture_budget_payload,
     load_budget_payload_for_workspace,
@@ -103,6 +107,10 @@ class WorkspaceBuildContext:
     inventory_summary: dict[str, Any] | None = None
     scenario_search: dict[str, Any] | None = None
     feasibility_summary: dict[str, Any] | None = None
+    #: Prices the traveller entered by hand. Until a provider adapter exists this is
+    #: the only approved source of a price, so it is the only thing that can fill
+    #: `estimated_total`.
+    entered_prices: dict[str, Any] | None = None
     include_debug: bool = True
 
 
@@ -861,6 +869,22 @@ def _route_option_available_actions(state: str) -> list[dict[str, str]]:
     return actions
 
 
+def _apply_entered_total(
+    planner_total: dict[str, Any] | None, entered_total: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """Return the figure a source actually produced, preferring the human override.
+
+    Returns the planner's own envelope untouched when nothing was entered, so a trip with
+    no entered price keeps whatever the pipeline produced — today, an absent amount.
+    """
+
+    if entered_total is None:
+        return planner_total
+    if entered_total.get("typical_amount") is None:
+        return planner_total
+    return dict(entered_total)
+
+
 def _build_runtime_scenario_comparison(
     *,
     trip_id: str,
@@ -870,6 +894,7 @@ def _build_runtime_scenario_comparison(
     policy_state: dict[str, Any] | None = None,
     trip_mode: str = "leisure",
     duration_days: int | None = None,
+    entered_total: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     scenarios = list(scenario_search.get("scenarios", []))
     option_set_id = _bootstrap_option_set_id(trip_id)
@@ -924,7 +949,10 @@ def _build_runtime_scenario_comparison(
     rows = []
     for scenario in scenarios:
         summary = scenario["scenario_summary"]
-        estimated_total = summary.get("estimated_total")
+        # No source priced this scenario unless the traveller did. A human override is an
+        # approved source and always wins, so it is applied here rather than being shown
+        # beside a figure the planner could not produce.
+        estimated_total = _apply_entered_total(summary.get("estimated_total"), entered_total)
         status = _comparison_status_label(scenario)
         state = _route_option_state(
             scenario_id=scenario["scenario_id"],
@@ -1772,6 +1800,7 @@ def _build_persisted_trip_workspace(
         resolved_inventory_bundles
     )
     raw_policy_state = (context.policy_context or {}).get("policy_state")
+    entered_prices = context.entered_prices
     runtime_scenario_comparison = _build_runtime_scenario_comparison(
         trip_id=record.trip_id,
         trip_title=trip_record["trip"]["title"],
@@ -1780,6 +1809,7 @@ def _build_persisted_trip_workspace(
         policy_state=raw_policy_state if isinstance(raw_policy_state, dict) else None,
         trip_mode=record.mode,
         duration_days=record.duration_days,
+        entered_total=(entered_prices or {}).get("total"),
     )
     ranking = build_scenario_ranking_payload(
         trip_id=record.trip_id,
@@ -2884,6 +2914,9 @@ def _assemble_persisted_workspace_context(
         .limit(PLANNING_NOTEBOOK_LIMIT)
     ).all()
     feasibility_summary = build_feasibility_summary_payload(persisted_inventory_bundles)
+    entered_prices = build_trip_prices_payload(
+        read_trip_prices_for_owner(db_session, user_id=user.user_id, trip_id=trip_id)
+    )
     return WorkspaceBuildContext(
         session=(_serialize_session_record(session_record) if session_record is not None else None),
         saved_scenarios=[
@@ -2923,6 +2956,7 @@ def _assemble_persisted_workspace_context(
         inventory_summary=inputs.inventory_summary,
         scenario_search=inputs.scenario_search,
         feasibility_summary=feasibility_summary,
+        entered_prices=entered_prices,
         include_debug=include_debug,
     )
 

@@ -145,3 +145,8 @@ node_modules/
 # Template-Version bump, and this must not depend on a propagator that no workflow invokes.
 /langsmith-fleet*.json
 /langsmith-fleet*.ndjson
+
+# Dropbox conflicted copies. This workspace is on a cloud-sync mount, and these
+# files have been committed twice by a broad `git add`, breaking CI collection both
+# times: pytest tries to import a module name containing spaces and parentheses.
+*conflicted copy*

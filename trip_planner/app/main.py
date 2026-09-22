@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from trip_planner.app import APP_VERSION
 from trip_planner.app.routes.auth import router as auth_router
 from trip_planner.app.routes.budget import router as budget_router
+from trip_planner.app.routes.trip_prices import router as trip_prices_router
 from trip_planner.app.routes.health import router as health_router
 from trip_planner.app.routes.inventory import router as inventory_router
 from trip_planner.app.routes.planner import router as planner_router
@@ -109,6 +110,7 @@ def create_app() -> FastAPI:
     app.include_router(scenario_history_router, prefix="/api")
     app.include_router(workspace_router, prefix="/api")
     app.include_router(budget_router, prefix="/api")
+    app.include_router(trip_prices_router, prefix="/api")
 
     @app.get("/")
     def read_root() -> dict[str, str]:
