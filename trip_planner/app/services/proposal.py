@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -841,6 +842,76 @@ def _route_comparison(workspace: dict[str, Any]) -> dict[str, Any]:
     return comparison if isinstance(comparison, dict) else {}
 
 
+def _workspace_scenario_ids(workspace: dict[str, Any]) -> set[str]:
+    ids: set[str] = set()
+    comparison = _route_comparison(workspace)
+    lead_scenario_id = comparison.get("lead_scenario_id")
+    if lead_scenario_id:
+        ids.add(str(lead_scenario_id))
+    scenarios = comparison.get("scenarios")
+    if isinstance(scenarios, list):
+        for row in scenarios:
+            if isinstance(row, dict) and row.get("scenario_id"):
+                ids.add(str(row["scenario_id"]))
+
+    saved_scenarios = workspace.get("saved_scenarios")
+    if isinstance(saved_scenarios, list):
+        for saved in saved_scenarios:
+            if not isinstance(saved, dict):
+                continue
+            versions = saved.get("versions")
+            if not isinstance(versions, list):
+                continue
+            for version in versions:
+                if not isinstance(version, dict):
+                    continue
+                snapshot_refs = version.get("snapshot_refs")
+                if isinstance(snapshot_refs, dict) and snapshot_refs.get("itinerary_scenario_id"):
+                    ids.add(str(snapshot_refs["itinerary_scenario_id"]))
+    return ids
+
+
+def _fixture_proposal_flow_enabled() -> bool:
+    environment = os.getenv("TRIP_PLANNER_ENV", "local").strip().lower()
+    return environment in {"local", "development", "dev", "test", "testing"} and (
+        os.getenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", "").strip().lower()
+        in {"1", "true", "yes"}
+    )
+
+
+def _looks_like_materialized_scenario_id(scenario_id: str) -> bool:
+    return scenario_id.startswith("scenario:") and (
+        ":trip-" in scenario_id
+        or ":route-option:" in scenario_id
+        or scenario_id.endswith(":workspace-bootstrap")
+    )
+
+
+def _validate_persisted_scenario_id(
+    workspace: dict[str, Any],
+    scenario_id: str | None,
+    *,
+    existing_scenario_id: str | None = None,
+) -> str | None:
+    """Reject client scenario identifiers that are not owned by this trip workspace."""
+
+    if scenario_id is None:
+        return None
+    if existing_scenario_id is not None and scenario_id == existing_scenario_id:
+        return scenario_id
+
+    valid_ids = _workspace_scenario_ids(workspace)
+    if scenario_id in valid_ids:
+        return scenario_id
+    if not valid_ids:
+        return scenario_id
+    if _looks_like_materialized_scenario_id(scenario_id):
+        raise ValueError("Selected scenario is not in this trip's workspace.")
+    if _fixture_proposal_flow_enabled():
+        return scenario_id
+    raise ValueError("Selected scenario is not in this trip's workspace.")
+
+
 def _resolve_submission_scenario_id(
     workspace: dict[str, Any],
     scenario_id: str | None,
@@ -1179,6 +1250,13 @@ def save_workspace_proposal_submission(
     if trip_record.mode != "business":
         raise ValueError("Only business trips can persist proposal lifecycle state.")
 
+    from trip_planner.app.services.workspace import get_workspace_payload
+
+    workspace = get_workspace_payload(db_session, user=user, trip_id=trip_id, include_debug=True)
+    if workspace is None:
+        raise WorkspaceProposalNotFoundError(f"Trip '{trip_id}' was not found.")
+    scenario_id = _validate_persisted_scenario_id(workspace, scenario_id)
+
     proposal = TripPlanProposal.from_dict(proposal_payload)
     if proposal.trip_id != trip_id:
         raise ValueError("proposal.trip_id must match the workspace trip.")
@@ -1277,6 +1355,17 @@ def save_workspace_proposal_evaluation(
         raise WorkspaceProposalNotFoundError(
             "Proposal evaluation cannot be stored before a proposal submission exists."
         )
+
+    from trip_planner.app.services.workspace import get_workspace_payload
+
+    workspace = get_workspace_payload(db_session, user=user, trip_id=trip_id, include_debug=True)
+    if workspace is None:
+        raise WorkspaceProposalNotFoundError(f"Trip '{trip_id}' was not found.")
+    scenario_id = _validate_persisted_scenario_id(
+        workspace,
+        scenario_id,
+        existing_scenario_id=existing.scenario_id,
+    )
 
     request = _normalize_evaluation_request(
         TPPRequestEnvelope.from_dict(request_payload),

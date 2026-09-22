@@ -18,7 +18,10 @@ from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
 from trip_planner.app.services.policy import resolve_configured_organization_id
-from trip_planner.app.services.proposal import _selected_scenario_row
+from trip_planner.app.services.proposal import (
+    _selected_scenario_row,
+    _validate_persisted_scenario_id,
+)
 from trip_planner.integrations.tpp import TPPResponseEnvelope
 from trip_planner.persistence.db import reset_database_state
 
@@ -115,6 +118,26 @@ def test_submission_rejects_scenario_outside_trip_workspace() -> None:
     ]["scenarios"][0]
     with pytest.raises(ValueError, match="not in this trip's workspace"):
         _selected_scenario_row(workspace, "scenario:trip-two:1")
+
+
+def test_persisted_scenario_validation_allows_legacy_fixture_ids_without_workspace() -> None:
+    assert _validate_persisted_scenario_id({}, "scenario-a") == "scenario-a"
+
+
+def test_persisted_scenario_validation_rejects_foreign_ids_when_workspace_has_scenarios(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", raising=False)
+    workspace = {
+        "route_comparison": {
+            "scenarios": [{"scenario_id": "scenario:trip-one:1", "title": "Own scenario"}]
+        }
+    }
+    assert _validate_persisted_scenario_id(workspace, "scenario:trip-one:1") == "scenario:trip-one:1"
+    with pytest.raises(ValueError, match="not in this trip's workspace"):
+        _validate_persisted_scenario_id(workspace, "scenario:trip-two:1")
+    with pytest.raises(ValueError, match="not in this trip's workspace"):
+        _validate_persisted_scenario_id(workspace, "scenario-a")
 
 
 def test_sync_without_configured_organization_says_so(
