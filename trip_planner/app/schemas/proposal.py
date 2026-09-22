@@ -18,6 +18,12 @@ class WorkspaceProposalSubmissionRequest(BaseModel):
     scenario_id: str | None = Field(default=None, max_length=96)
 
 
+class WorkspaceProposalSubmitRequest(BaseModel):
+    """All the traveller supplies: which scenario, if they have chosen one."""
+
+    scenario_id: str | None = Field(default=None, max_length=96)
+
+
 class WorkspaceProposalEvaluationRequest(BaseModel):
     request: dict[str, Any] = Field(
         description="Serialized TPPRequestEnvelope payload used to ingest evaluation state."

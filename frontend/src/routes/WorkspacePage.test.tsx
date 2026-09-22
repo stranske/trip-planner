@@ -17,6 +17,7 @@ import {
   submitPlannerOptionFeedback,
   submitRouteOptionAction,
   submitTripForApproval,
+  syncWorkspacePolicy,
   updateNotebookItem,
   updateWorkspacePlanningMode,
   type PlanningLedgerEntry,
@@ -41,6 +42,7 @@ vi.mock("../api/workspace", async () => {
     recordWorkspaceSpendEvent: vi.fn(),
     refreshWorkspaceProposalStatus: vi.fn(),
     submitTripForApproval: vi.fn(),
+    syncWorkspacePolicy: vi.fn(),
     createNotebookItem: vi.fn(),
     updateNotebookItem: vi.fn(),
     deleteNotebookItem: vi.fn(),
@@ -67,6 +69,7 @@ const mockedSaveWorkspaceBudget = vi.mocked(saveWorkspaceBudget);
 const mockedRecordWorkspaceSpendEvent = vi.mocked(recordWorkspaceSpendEvent);
 const mockedRefreshWorkspaceProposalStatus = vi.mocked(refreshWorkspaceProposalStatus);
 const mockedSubmitTripForApproval = vi.mocked(submitTripForApproval);
+const mockedSyncWorkspacePolicy = vi.mocked(syncWorkspacePolicy);
 const mockedCreateNotebookItem = vi.mocked(createNotebookItem);
 const mockedUpdateNotebookItem = vi.mocked(updateNotebookItem);
 const mockedDeleteNotebookItem = vi.mocked(deleteNotebookItem);
@@ -912,6 +915,9 @@ describe("WorkspacePage", () => {
     mockedFetchPlannerSession.mockResolvedValue(plannerSessionPayload);
     mockedSubmitPlannerTurn.mockResolvedValue(plannerSessionPayload);
     mockedSubmitRouteOptionAction.mockResolvedValue(workspacePayload);
+    // A workspace with no policy now syncs one before submitting; these fixtures have
+    // none, so the sync is stubbed and returns the same workspace.
+    mockedSyncWorkspacePolicy.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -927,6 +933,7 @@ describe("WorkspacePage", () => {
     mockedAnswerPlannerDecision.mockReset();
     mockedFetchPlannerSession.mockReset();
     mockedSubmitPlannerOptionFeedback.mockReset();
+    mockedSyncWorkspacePolicy.mockReset();
     mockedSubmitRouteOptionAction.mockReset();
     mockedSubmitPlannerTurn.mockReset();
     mockedUpdateWorkspacePlanningMode.mockReset();
@@ -2972,6 +2979,53 @@ describe("WorkspacePage", () => {
       );
     });
     expect(screen.getByText(/Submitted for approval:/)).toBeInTheDocument();
+  });
+
+  it("syncs the travel policy before submitting when the workspace has none", async () => {
+    // Issue #1731: policy_state was absent for every trip, so buildProposalSubmissionPayload
+    // threw "Policy context is not available for this workspace" and the button appeared
+    // to do nothing. Nothing in the product ever fetched a policy.
+    const syncedPolicy = {
+      organization_id: "org-northwind",
+      constraint_set: { policy_id: "policy-northwind" },
+    };
+    let resolvePolicy!: (policy: typeof syncedPolicy) => void;
+    mockedSyncWorkspacePolicy.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePolicy = resolve;
+      })
+    );
+    mockedSubmitTripForApproval.mockResolvedValue(workspacePayload.proposal_state);
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        trip_record: { ...workspacePayload.trip_record, trip: tripComparisonPayload[1] },
+        proposal_state: null,
+        policy_state: null,
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Submit for approval" }));
+
+    await waitFor(() => {
+      expect(mockedSyncWorkspacePolicy).toHaveBeenCalledWith("trip-business-tokyo-summit");
+    });
+    expect(screen.getByText("Fetching your travel policy…")).toBeInTheDocument();
+    expect(mockedSubmitTripForApproval).not.toHaveBeenCalled();
+    resolvePolicy(syncedPolicy);
+    await waitFor(() => {
+      expect(mockedSubmitTripForApproval).toHaveBeenCalledWith(
+        expect.objectContaining({ policy_state: syncedPolicy }),
+        expect.anything()
+      );
+    });
+    expect(mockedSyncWorkspacePolicy.mock.invocationCallOrder[0]).toBeLessThan(
+      mockedSubmitTripForApproval.mock.invocationCallOrder[0]
+    );
   });
 
   it("surfaces an error when approval submission fails", async () => {

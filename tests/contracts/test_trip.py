@@ -39,6 +39,11 @@ def test_trip_serializes_valid_leisure_container() -> None:
     assert payload["artifacts"]["option_set_ids"] == ["optset-1", "optset-2"]
 
 
+def test_trip_frame_round_trip_preserves_origin() -> None:
+    frame = TripFrameSummary.from_dict({"origin": "Chicago", "primary_regions": ["Japan"]})
+    assert frame.to_dict()["origin"] == "Chicago"
+
+
 def test_trip_serializes_valid_business_container() -> None:
     trip = Trip(
         trip_id="trip-business-1",
