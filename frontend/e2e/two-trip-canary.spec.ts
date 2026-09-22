@@ -91,7 +91,7 @@ test("signup, trip creation, and workspace navigation work in the real app", asy
     summary: "Seven days focused on Kyoto culture, food, and low-transfer neighborhood exploration.",
     mode: "leisure",
     origin: "Chicago",
-    regions: "Kyoto, Osaka",
+    regions: "Kyoto",
     startDate: isoDate(90),
     endDate: isoDate(96),
     durationDays: "7",
