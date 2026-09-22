@@ -1074,6 +1074,7 @@ def _serialize_persisted_trip_record(record: PersistedTrip) -> dict[str, Any]:
             "mode": record.mode,
             "status": record.status,
             "trip_frame": {
+                "origin": record.origin,
                 "start_date": record.start_date,
                 "end_date": record.end_date,
                 "duration_days": record.duration_days,

@@ -272,6 +272,7 @@ Use these env vars only when you are intentionally exercising an integration sea
 - `TRIP_PLANNER_DATA_ZONE`: explicit data-zone switch for integration seams. Use `synthetic` for local/demo data (the default) or `proprietary` for real traveler/company data inside the perimeter.
 - `TRIP_PLANNER_OPENAI_AUTHORIZED_ENDPOINT`: marker for an approved no-train OpenAI endpoint. In `TRIP_PLANNER_DATA_ZONE=proprietary`, the planner refuses the OpenAI path and stays in deterministic fallback unless this marker is set. The outbound planner prompt redaction hook still runs before model invocation when the OpenAI path is enabled.
 - `TPP_BASE_URL`, `TPP_ACCESS_TOKEN`, `TPP_OIDC_PROVIDER`: enable the live `Travel-Plan-Permission` transport client. If they are unset, the repo should continue to present stored-policy and passive/local TPP seams rather than implying a real remote policy round-trip. In `TRIP_PLANNER_DATA_ZONE=proprietary`, `TPP_BASE_URL` must point only at an in-perimeter service.
+- `TPP_ORGANIZATION_ID`: deployment-owned organization for workspace policy sync. Configure it alongside the live TPP transport; travellers cannot override it through the sync API. Without it, policy sync returns 503 naming this key.
 - `TPP_REPO_PATH`: optional sibling checkout path used by `make full-product-check` when it needs to start a local Travel-Plan-Permission service instead of using `TPP_BASE_URL`.
 
 TPP transport policy env overrides (used only when live TPP transport is enabled):
