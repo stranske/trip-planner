@@ -19,7 +19,9 @@ from fastapi.testclient import TestClient
 from trip_planner.app.main import create_app
 from trip_planner.app.services.policy import resolve_configured_organization_id
 from trip_planner.app.services.proposal import (
+    _home_airport_from_workspace,
     _selected_scenario_row,
+    _submission_cost_details,
     _validate_persisted_scenario_id,
 )
 from trip_planner.integrations.tpp import TPPResponseEnvelope
@@ -113,11 +115,83 @@ def test_submission_rejects_scenario_outside_trip_workspace() -> None:
             "scenarios": [{"scenario_id": "scenario:trip-one:1", "title": "Own scenario"}]
         }
     }
-    assert _selected_scenario_row(workspace, "scenario:trip-one:1") == workspace[
-        "route_comparison"
-    ]["scenarios"][0]
+    assert (
+        _selected_scenario_row(workspace, "scenario:trip-one:1")
+        == workspace["route_comparison"]["scenarios"][0]
+    )
     with pytest.raises(ValueError, match="not in this trip's workspace"):
         _selected_scenario_row(workspace, "scenario:trip-two:1")
+
+
+def test_submission_maps_current_saved_snapshot_to_materialized_row() -> None:
+    saved_row = {"scenario_id": "saved:one", "title": "Saved itinerary"}
+    workspace = {
+        "route_comparison": {
+            "lead_scenario_id": "other",
+            "scenarios": [
+                {"scenario_id": "other"},
+                saved_row,
+            ],
+        },
+        "session": {"current_saved_scenario_id": "saved:one"},
+        "saved_scenarios": [
+            {
+                "saved_scenario_id": "saved:one",
+                "current_version_id": "version:one",
+                "versions": [
+                    {
+                        "version_id": "version:one",
+                        "snapshot_refs": {
+                            "itinerary_scenario_id": "snapshot:one",
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+    assert _selected_scenario_row(workspace, None) == saved_row
+    assert _selected_scenario_row(workspace, "snapshot:one") == saved_row
+    with pytest.raises(ValueError, match="not in this trip's workspace"):
+        _selected_scenario_row(workspace, "snapshot:foreign")
+
+
+def test_submission_implicit_selection_uses_comparison_when_saved_ref_is_stale() -> None:
+    lead = {"scenario_id": "scenario:lead"}
+    workspace = {
+        "route_comparison": {"lead_scenario_id": "scenario:lead", "scenarios": [lead]},
+        "saved_scenarios": [
+            {
+                "saved_scenario_id": "saved:stale",
+                "current_version_id": "version:stale",
+                "versions": [
+                    {
+                        "version_id": "version:stale",
+                        "snapshot_refs": {
+                            "itinerary_scenario_id": "snapshot:stale",
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+    assert _selected_scenario_row(workspace, None) == lead
+
+
+def test_submission_uses_persisted_origin_not_destination_regions() -> None:
+    workspace = {
+        "trip_record": {"trip": {"trip_frame": {"origin": "Boston", "primary_regions": ["Japan"]}}}
+    }
+    assert _home_airport_from_workspace(workspace) == "Boston"
+
+
+def test_submission_cost_range_uses_resolved_budget_fallback() -> None:
+    workspace = {"budget_state": {"summary": {"currency": "USD", "planned_total": 780}}}
+    currency, typical, cost_range = _submission_cost_details(
+        workspace, {"metrics": {"estimated_total": {"currency": "USD"}}}
+    )
+    assert currency == "USD"
+    assert typical == 780
+    assert cost_range.typical_amount == cost_range.min_amount == cost_range.max_amount == 780
 
 
 def test_persisted_scenario_validation_allows_legacy_fixture_ids_without_workspace() -> None:
@@ -133,7 +207,9 @@ def test_persisted_scenario_validation_rejects_foreign_ids_when_workspace_has_sc
             "scenarios": [{"scenario_id": "scenario:trip-one:1", "title": "Own scenario"}]
         }
     }
-    assert _validate_persisted_scenario_id(workspace, "scenario:trip-one:1") == "scenario:trip-one:1"
+    assert (
+        _validate_persisted_scenario_id(workspace, "scenario:trip-one:1") == "scenario:trip-one:1"
+    )
     with pytest.raises(ValueError, match="not in this trip's workspace"):
         _validate_persisted_scenario_id(workspace, "scenario:trip-two:1")
     with pytest.raises(ValueError, match="not in this trip's workspace"):

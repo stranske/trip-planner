@@ -2989,7 +2989,12 @@ describe("WorkspacePage", () => {
       organization_id: "org-northwind",
       constraint_set: { policy_id: "policy-northwind" },
     };
-    mockedSyncWorkspacePolicy.mockResolvedValue(syncedPolicy);
+    let resolvePolicy!: (policy: typeof syncedPolicy) => void;
+    mockedSyncWorkspacePolicy.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePolicy = resolve;
+      })
+    );
     mockedSubmitTripForApproval.mockResolvedValue(workspacePayload.proposal_state);
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
@@ -3009,6 +3014,9 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(mockedSyncWorkspacePolicy).toHaveBeenCalledWith("trip-business-tokyo-summit");
     });
+    expect(screen.getByText("Fetching your travel policy…")).toBeInTheDocument();
+    expect(mockedSubmitTripForApproval).not.toHaveBeenCalled();
+    resolvePolicy(syncedPolicy);
     await waitFor(() => {
       expect(mockedSubmitTripForApproval).toHaveBeenCalledWith(
         expect.objectContaining({ policy_state: syncedPolicy }),

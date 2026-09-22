@@ -922,13 +922,14 @@ def _resolve_submission_scenario_id(
     saved_scenarios = workspace.get("saved_scenarios")
     if isinstance(saved_scenarios, list) and saved_scenarios:
         session = workspace.get("session")
-        current_saved_id = session.get("current_saved_scenario_id") if isinstance(session, dict) else None
+        current_saved_id = (
+            session.get("current_saved_scenario_id") if isinstance(session, dict) else None
+        )
         saved = next(
             (
                 record
                 for record in saved_scenarios
-                if isinstance(record, dict)
-                and record.get("saved_scenario_id") == current_saved_id
+                if isinstance(record, dict) and record.get("saved_scenario_id") == current_saved_id
             ),
             saved_scenarios[0] if isinstance(saved_scenarios[0], dict) else None,
         )
@@ -940,7 +941,8 @@ def _resolve_submission_scenario_id(
                     (
                         version
                         for version in versions
-                        if isinstance(version, dict) and version.get("version_id") == current_version_id
+                        if isinstance(version, dict)
+                        and version.get("version_id") == current_version_id
                     ),
                     None,
                 )
@@ -976,6 +978,46 @@ def _selected_scenario_row(
         for row in scenarios:
             if isinstance(row, dict) and row.get("scenario_id") == resolved_id:
                 return row
+        saved_scenarios = workspace.get("saved_scenarios")
+        session = workspace.get("session")
+        current_saved_id = (
+            session.get("current_saved_scenario_id") if isinstance(session, dict) else None
+        )
+        if isinstance(saved_scenarios, list):
+            ordered = sorted(
+                (saved for saved in saved_scenarios if isinstance(saved, dict)),
+                key=lambda saved: saved.get("saved_scenario_id") != current_saved_id,
+            )
+            for saved in ordered:
+                versions = saved.get("versions")
+                active_version_id = saved.get("current_version_id")
+                if not isinstance(versions, list):
+                    continue
+                active_version = next(
+                    (
+                        v
+                        for v in versions
+                        if isinstance(v, dict) and v.get("version_id") == active_version_id
+                    ),
+                    None,
+                )
+                refs = (
+                    active_version.get("snapshot_refs")
+                    if isinstance(active_version, dict)
+                    else None
+                )
+                if isinstance(refs, dict) and refs.get("itinerary_scenario_id") == resolved_id:
+                    for row in scenarios:
+                        if isinstance(row, dict) and row.get("scenario_id") == saved.get(
+                            "saved_scenario_id"
+                        ):
+                            return row
+        if scenario_id is None:
+            lead_id = comparison.get("lead_scenario_id")
+            for row in scenarios:
+                if isinstance(row, dict) and row.get("scenario_id") == lead_id:
+                    return row
+            return next((row for row in scenarios if isinstance(row, dict)), None)
         raise ValueError("Selected scenario is not in this trip's workspace.")
     first = scenarios[0]
     return first if isinstance(first, dict) else None
@@ -1034,17 +1076,13 @@ def _trip_title_from_workspace(workspace: dict[str, Any], trip_id: str) -> str:
 
 
 def _home_airport_from_workspace(workspace: dict[str, Any]) -> str:
-    from trip_planner.app.services.scenarios import _home_airport_for_regions
-
     trip_record = workspace.get("trip_record")
     if isinstance(trip_record, dict):
         trip = trip_record.get("trip")
         if isinstance(trip, dict):
-            regions = trip.get("primary_regions")
-            if isinstance(regions, list):
-                primary_regions = tuple(str(region) for region in regions if region)
-                if primary_regions:
-                    return _home_airport_for_regions(primary_regions)
+            trip_frame = trip.get("trip_frame")
+            if isinstance(trip_frame, dict) and trip_frame.get("origin"):
+                return str(trip_frame["origin"])
     return "workspace"
 
 
@@ -1067,14 +1105,18 @@ def _submission_cost_details(
             typical_amount = float(estimated_total["typical_amount"])
     if not math.isfinite(typical_amount):
         raise ValueError("Proposal cost must be a finite number.")
-    return currency, typical_amount, _money_range_from_estimated(estimated_total, currency)
+    cost_range = MoneyRange(
+        currency=currency,
+        typical_amount=typical_amount,
+        min_amount=typical_amount,
+        max_amount=typical_amount,
+    )
+    return currency, typical_amount, cost_range
 
 
 def _booking_channel_from_workspace(workspace: dict[str, Any]) -> str:
     policy_state = workspace.get("policy_state")
-    org_context = (
-        policy_state.get("organization_context") if isinstance(policy_state, dict) else {}
-    )
+    org_context = policy_state.get("organization_context") if isinstance(policy_state, dict) else {}
     if isinstance(org_context, dict):
         raw_channels = org_context.get("required_booking_channels")
         if isinstance(raw_channels, list):
@@ -1231,7 +1273,7 @@ def submit_workspace_proposal_for_trip(
         request_payload=request_payload,
         response_payload=None,
         proposal_version=str(proposal_payload.get("proposal_version") or "v1"),
-        scenario_id=scenario_id,
+        scenario_id=proposal.selected_options[0].option_id,
     )
 
 
