@@ -2985,6 +2985,11 @@ describe("WorkspacePage", () => {
     // Issue #1731: policy_state was absent for every trip, so buildProposalSubmissionPayload
     // threw "Policy context is not available for this workspace" and the button appeared
     // to do nothing. Nothing in the product ever fetched a policy.
+    const syncedPolicy = {
+      organization_id: "org-northwind",
+      constraint_set: { policy_id: "policy-northwind" },
+    };
+    mockedSyncWorkspacePolicy.mockResolvedValue(syncedPolicy);
     mockedSubmitTripForApproval.mockResolvedValue(workspacePayload.proposal_state);
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
@@ -3004,10 +3009,15 @@ describe("WorkspacePage", () => {
     await waitFor(() => {
       expect(mockedSyncWorkspacePolicy).toHaveBeenCalledWith("trip-business-tokyo-summit");
     });
-    // And the submission still happens, after the sync.
     await waitFor(() => {
-      expect(mockedSubmitTripForApproval).toHaveBeenCalled();
+      expect(mockedSubmitTripForApproval).toHaveBeenCalledWith(
+        expect.objectContaining({ policy_state: syncedPolicy }),
+        expect.anything()
+      );
     });
+    expect(mockedSyncWorkspacePolicy.mock.invocationCallOrder[0]).toBeLessThan(
+      mockedSubmitTripForApproval.mock.invocationCallOrder[0]
+    );
   });
 
   it("surfaces an error when approval submission fails", async () => {

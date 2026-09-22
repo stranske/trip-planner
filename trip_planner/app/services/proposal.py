@@ -905,6 +905,7 @@ def _selected_scenario_row(
         for row in scenarios:
             if isinstance(row, dict) and row.get("scenario_id") == resolved_id:
                 return row
+        raise ValueError("Selected scenario is not in this trip's workspace.")
     first = scenarios[0]
     return first if isinstance(first, dict) else None
 

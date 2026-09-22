@@ -9,6 +9,7 @@ TPPRequestEnvelope.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -17,6 +18,8 @@ from fastapi.testclient import TestClient
 
 from trip_planner.app.main import create_app
 from trip_planner.app.services.policy import resolve_configured_organization_id
+from trip_planner.app.services.proposal import _selected_scenario_row
+from trip_planner.integrations.tpp import TPPResponseEnvelope
 from trip_planner.persistence.db import reset_database_state
 
 
@@ -64,6 +67,54 @@ def test_sync_endpoint_is_reachable_and_not_a_404(client: TestClient) -> None:
     response = client.post(f"/api/workspace/{trip_id}/policy/sync", json={})
     # Whatever the TPP outcome, the endpoint must be routed and must not 404/405.
     assert response.status_code not in {404, 405}
+
+
+def test_sync_persists_policy_from_successful_tpp_response(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import trip_planner.app.services.policy as policy_service
+
+    monkeypatch.setenv("TPP_ORGANIZATION_ID", "org-acme")
+    fixture_path = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures/integrations/tpp/policy/standard_policy_sync.json"
+    )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+
+    def tpp_response(request, _response_payload, *, trip_plan_payload):
+        assert request.organization_id == "org-acme"
+        assert request.trip_id == trip_id
+        assert trip_plan_payload
+        response = fixture["response"].copy()
+        response["request_id"] = request.request_id
+        response["correlation_id"] = request.correlation_id.to_dict()
+        return TPPResponseEnvelope.from_dict(response)
+
+    monkeypatch.setattr(policy_service, "_resolve_policy_response", tpp_response)
+    trip_id = _business_trip(client)
+    response = client.post(f"/api/workspace/{trip_id}/policy/sync", json={})
+    assert response.status_code == 200, response.text
+    policy_state = response.json()["policy_state"]
+    assert policy_state["organization_id"] == "org-acme"
+    assert policy_state["constraint_set"]["policy_id"] == "policy-standard-2026-02"
+    workspace = client.get(f"/api/workspace/{trip_id}")
+    assert workspace.status_code == 200, workspace.text
+    persisted = workspace.json()["policy_state"]
+    assert persisted["organization_id"] == "org-acme"
+    assert persisted["constraint_set"]["policy_id"] == "policy-standard-2026-02"
+
+
+def test_submission_rejects_scenario_outside_trip_workspace() -> None:
+    workspace = {
+        "route_comparison": {
+            "scenarios": [{"scenario_id": "scenario:trip-one:1", "title": "Own scenario"}]
+        }
+    }
+    assert _selected_scenario_row(workspace, "scenario:trip-one:1") == workspace[
+        "route_comparison"
+    ]["scenarios"][0]
+    with pytest.raises(ValueError, match="not in this trip's workspace"):
+        _selected_scenario_row(workspace, "scenario:trip-two:1")
 
 
 def test_sync_without_configured_organization_says_so(
