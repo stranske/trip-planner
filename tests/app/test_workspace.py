@@ -1040,6 +1040,7 @@ def test_workspace_endpoint_creates_non_seeded_persisted_leisure_trip_with_runti
         # No source has priced this scenario, so it carries no amount. Asserting a
         # price exists here is what let invented figures pass for months.
         assert "estimated_total" in scenario["metrics"]
+        assert scenario["metrics"]["estimated_total"]["typical_amount"] is None
         assert any(
             scenario["metrics"][key] is not None for key in ("score", "travel_minutes", "transfers")
         )
@@ -1119,6 +1120,7 @@ def test_workspace_endpoint_creates_non_seeded_persisted_business_trip_with_runt
         # No source has priced this scenario, so it carries no amount. Asserting a
         # price exists here is what let invented figures pass for months.
         assert "estimated_total" in scenario["metrics"]
+        assert scenario["metrics"]["estimated_total"]["typical_amount"] is None
         assert any(
             scenario["metrics"][key] is not None for key in ("score", "travel_minutes", "transfers")
         )
