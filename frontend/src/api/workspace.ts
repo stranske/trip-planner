@@ -762,6 +762,10 @@ export type WorkspaceData = {
     } | null;
     summary: {
       submission_status?: string;
+      /** blocked_by_policy | failed | not_submitted | an accepted state (PR #1835). */
+      submission_outcome?: string;
+      /** Rule codes TPP named when it refused the proposal. */
+      submission_blocking_codes?: string[];
       submission_summary?: string;
       submission_requires_polling?: boolean;
       evaluation_transport_status?: string;
@@ -773,6 +777,11 @@ export type WorkspaceData = {
       follow_up_status?: string;
       follow_up_title?: string;
       follow_up_summary?: string;
+      /** Public follow-up: carries TPP's own failure message for each rule code. */
+      follow_up?: {
+        failure_reasons?: Array<{ code: string; message: string; severity?: string }>;
+        guidance?: string[];
+      };
     };
   } | null;
   view_model: WorkspaceViewModel | null;
