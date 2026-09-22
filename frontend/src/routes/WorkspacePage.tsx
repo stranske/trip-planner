@@ -7,9 +7,12 @@ import {
   createNotebookItem,
   deleteNotebookItem,
   fetchPlannerSession,
+  fetchTripPrices,
+  fetchWorkspace,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
   retryPolicyServiceCheck,
+  saveTripPrice,
   saveWorkspaceBudget,
   setNotebookFocus,
   submitPlannerTurn,
@@ -34,9 +37,11 @@ import {
   submitPlannerOptionFeedback,
   type PlannerToolCallRequest,
   type SavedScenarioRecord,
+  type TripPricesState,
   type WorkspaceData,
 } from "../api/workspace";
 import { WorkspaceBudgetPanel } from "../components/budget/WorkspaceBudgetPanel";
+import { TripPricesPanel } from "../components/budget/TripPricesPanel";
 import { TripMap } from "../components/maps/TripMap";
 import type { MapViewScope } from "../components/maps/mapSurface";
 import { PlanningModeSelector } from "../components/planner/PlanningModeSelector";
@@ -1149,6 +1154,9 @@ function WorkspacePageContent({
   const [planningModeError, setPlanningModeError] = useState<string | null>(null);
   const [showWorkspaceDebugDetails, setShowWorkspaceDebugDetails] = useState(false);
   const [budgetError, setBudgetError] = useState<string | null>(null);
+  const [tripPrices, setTripPrices] = useState<TripPricesState | null>(null);
+  const [tripPricesError, setTripPricesError] = useState<string | null>(null);
+  const [tripPricesBusy, setTripPricesBusy] = useState(false);
   const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
   const [notebookError, setNotebookError] = useState<string | null>(null);
   const [notebookBusyLabel, setNotebookBusyLabel] = useState<string | null>(null);
@@ -1495,6 +1503,46 @@ function WorkspacePageContent({
       setBudgetError(error instanceof Error ? error.message : "Budget plan update failed.");
     } finally {
       setBudgetBusyLabel(null);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchTripPrices(trip.trip_id)
+      .then((next) => {
+        if (!cancelled) {
+          setTripPrices(next);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setTripPricesError(
+            error instanceof Error ? error.message : "Loading trip prices failed."
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trip.trip_id]);
+
+  async function handleTripPriceSave(component: string, amount: number | null, note: string) {
+    setTripPricesError(null);
+    setTripPricesBusy(true);
+    try {
+      const next = await saveTripPrice(trip.trip_id, { component, amount, note });
+      setTripPrices(next);
+      // Re-read the workspace so the entered figure reaches Compare and the approval
+      // packet in the same interaction, rather than after a reload the traveller has no
+      // reason to expect.
+      const refreshed = await fetchWorkspace(trip.trip_id);
+      startTransition(() => {
+        setCurrentWorkspace(refreshed);
+      });
+    } catch (error) {
+      setTripPricesError(error instanceof Error ? error.message : "Saving that price failed.");
+    } finally {
+      setTripPricesBusy(false);
     }
   }
 
@@ -2519,6 +2567,12 @@ function WorkspacePageContent({
       ) : null}
       {activeTab === "budget" ? (
         <BudgetPanel labelledBy={workspaceTabButtonId("budget")}>
+          <TripPricesPanel
+            prices={tripPrices}
+            busy={tripPricesBusy}
+            errorMessage={tripPricesError}
+            onSave={handleTripPriceSave}
+          />
           {panelVisibility.showBudgetPanel ? (
             <WorkspaceBudgetPanel
               budgetState={currentWorkspace.budget_state}

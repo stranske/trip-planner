@@ -1171,3 +1171,44 @@ export async function setNotebookFocus(
     body: JSON.stringify(payload),
   });
 }
+
+export type TripPriceComponent = {
+  component: string;
+  label: string;
+  currency: string;
+  /** Null when nobody has priced this component. Never 0 as a stand-in for absent. */
+  typical_amount: number | null;
+  note: string;
+  price_source: { kind: string; attributed_to: string; captured_at: string } | null;
+};
+
+export type TripPricesState = {
+  components: TripPriceComponent[];
+  total: {
+    typical_amount: number;
+    currency: string;
+    price_source: { kind: string; attributed_to: string; captured_at: string };
+  } | null;
+  priced_component_count: number;
+  unpriced_component_count: number;
+};
+
+export async function fetchTripPrices(tripId: string): Promise<TripPricesState> {
+  return fetchJson<TripPricesState>({
+    path: `/api/workspace/${tripId}/prices`,
+    credentials: "include",
+  });
+}
+
+export async function saveTripPrice(
+  tripId: string,
+  payload: { component: string; amount: number | null; currency?: string; note?: string }
+): Promise<TripPricesState> {
+  return fetchJson<TripPricesState>({
+    path: `/api/workspace/${tripId}/prices`,
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}

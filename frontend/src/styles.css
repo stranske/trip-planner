@@ -1998,3 +1998,33 @@ a {
   color: var(--color-ink);
   font-weight: 600;
 }
+
+/* Trip cost entry: one row per component, collapsing to stacked fields on narrow screens. */
+.trip-price-list {
+  display: grid;
+  gap: 1rem;
+  list-style: none;
+  padding: 0;
+}
+
+.trip-price-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) 8rem minmax(10rem, 1.5fr) auto auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.trip-price-row > label {
+  font-weight: 600;
+}
+
+.trip-price-row > .field-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .trip-price-row {
+    grid-template-columns: 1fr;
+  }
+}
