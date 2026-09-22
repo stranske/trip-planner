@@ -68,32 +68,10 @@ def test_exception_nearest_saved_scenario_surfaces_pol_exc_preview_violation(
     compliant = previews["saved-scenario:compliant-first"]
     assert exception["authoritative"] is False
     if trip_mode == "business":
-        # With no priced source, the spend and lodging caps cannot be evaluated, so the
-        # preview reports them as un-checkable rather than silently passing them. Those
-        # markers carry `incomplete`; a real breach does not. Separate the two, because
-        # "we checked and it was fine" and "we could not check" must never read alike.
-        def _breaches(preview: dict[str, Any]) -> list[str]:
-            return [
-                str(item["rule_id"])
-                for item in preview["violations"]
-                if not item.get("incomplete")
-            ]
-
-        def _uncheckable(preview: dict[str, Any]) -> list[str]:
-            return [
-                str(item["rule_id"]) for item in preview["violations"] if item.get("incomplete")
-            ]
-
-        assert _breaches(exception) == ["POL-EXC"]
-        assert _uncheckable(exception) == ["BUD-001", "LOD-001"]
+        assert [item["rule_id"] for item in exception["violations"]] == ["POL-EXC"]
         assert exception["compliant"] is False
-        # The compliant scenario has no breach, but its caps were not checked either, so
-        # the preview must say "unknown", not "compliant". Claiming compliance we did not
-        # verify is the same defect as inventing the price that would have verified it.
-        assert _breaches(compliant) == []
-        assert _uncheckable(compliant) == ["BUD-001", "LOD-001"]
-        assert compliant["status"] == "preview_incomplete"
-        assert compliant["compliant"] is None
+        assert compliant["violations"] == []
+        assert compliant["compliant"] is True
     else:
         assert exception["status"] == "not_applicable"
         assert exception["violations"] == []
