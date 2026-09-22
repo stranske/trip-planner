@@ -69,48 +69,44 @@ def supported_destinations() -> list[str]:
     return curated_destination_examples()
 
 
-#: Nightly lodging allowance by trip mode, in USD. A documented planning assumption,
-#: not a quoted rate; the traveller refines it on the Budget tab.
-LODGING_NIGHTLY_RATE_USD: dict[str, float] = {"business": 230.0, "leisure": 165.0}
-
-#: Daily activity/incidental allowance by trip mode, in USD.
-ACTIVITY_ALLOWANCE_USD: dict[str, float] = {"business": 75.0, "leisure": 120.0}
+# Money rates deliberately do not live here. A price may only come from a source
+# (trip_planner.pricing): a provider quote, or a human override. Rates invented by the
+# software are not a source, and a figure derived from them is not a price.
 
 #: Above this great-circle distance the journey is modelled as a flight. Set at 700 km
 #: because surface rail stays competitive with air below roughly that range on the
 #: corridors this planner sees (e.g. Stockholm-Oslo at 417 km is a train journey).
 AIR_THRESHOLD_KM = 700.0
 
-#: Modelled surface speed (km/h) and per-km cost for a ground leg.
+#: Modelled surface speed (km/h) for a ground leg. Not a price.
 GROUND_SPEED_KMH = 80.0
-GROUND_COST_PER_KM_USD = 0.28
 
 #: Modelled cruise speed (km/h) for an air leg, plus fixed airport overhead in minutes
 #: (check-in, security, taxi, transfer) applied once per flown leg.
 AIR_SPEED_KMH = 780.0
 AIR_OVERHEAD_MINUTES = 150
-AIR_BASE_COST_USD = 90.0
-AIR_COST_PER_KM_USD = 0.11
 
 #: A local gateway transfer (airport or station to the city) applied per destination.
 LOCAL_TRANSFER_MINUTES = 45
-LOCAL_TRANSFER_COST_USD = 55.0
 
 
 @dataclass(frozen=True)
 class JourneyProfile:
     """Travel time and transport cost derived from the trip's real geography.
 
-    These are modelled estimates whose inputs are real: the great-circle distance
-    between the places the traveller actually named. They vary with the trip. They are
-    not quoted fares, and every component records its basis in `assumptions`.
+    Distance and duration only. Both are measurements: great-circle distance between
+    the places the traveller named, and time derived from it at a stated speed.
+
+    There is deliberately no cost here. A fare is not derivable from distance, and an
+    earlier version of this class carried one computed from per-km rates the software
+    held — which was an invention presented as an estimate. Prices come from
+    `trip_planner.pricing`: a provider quote, or a human override.
     """
 
     destination: ResolvedPlace
     legs: tuple[tuple[str, str, float, str], ...]
     total_distance_km: float
     travel_minutes: int
-    transport_cost_usd: float
     assumptions: tuple[str, ...]
 
 
@@ -127,15 +123,27 @@ def _option_transport_kind(leg_modes: Sequence[str]) -> str:
     return "mixed"
 
 
-def _leg_time_and_cost(distance_km_value: float) -> tuple[int, float, str]:
-    """Minutes, USD and mode for one leg of a given great-circle distance."""
+def _unpriced_total(amount: float | None) -> dict[str, Any]:
+    """Shape a cost total, leaving the amount absent when no source has priced it.
+
+    `MoneyRange.typical_amount` is already optional, so absence is the existing way to
+    say "no price". That is the point: a surface can render "not priced yet", but it
+    cannot render an invented figure as a cost.
+    """
+
+    return {"currency": "USD", "typical_amount": amount}
+
+
+def _leg_time_and_mode(distance_km_value: float) -> tuple[int, str]:
+    """Minutes and travel mode for one leg. Deliberately returns no price.
+
+    Duration is derived from real distance and a stated speed, which is a measurement.
+    A fare is not derivable this way and must come from a source.
+    """
 
     if distance_km_value <= AIR_THRESHOLD_KM:
-        minutes = round(distance_km_value / GROUND_SPEED_KMH * 60)
-        return minutes, round(distance_km_value * GROUND_COST_PER_KM_USD, 2), "ground"
-    minutes = round(distance_km_value / AIR_SPEED_KMH * 60) + AIR_OVERHEAD_MINUTES
-    cost = AIR_BASE_COST_USD + distance_km_value * AIR_COST_PER_KM_USD
-    return minutes, round(cost, 2), "air"
+        return round(distance_km_value / GROUND_SPEED_KMH * 60), "ground"
+    return round(distance_km_value / AIR_SPEED_KMH * 60) + AIR_OVERHEAD_MINUTES, "air"
 
 
 _REGION_GEO_DEFAULTS: dict[str, dict[str, Any]] = {
@@ -630,15 +638,13 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         legs: list[tuple[str, str, float, str]] = []
         total_km = 0.0
         minutes = 0
-        cost = 0.0
         assumptions: list[str] = []
         for first, second in itertools.pairwise(places):
             leg_km = distance_km(first, second)
-            leg_minutes, leg_cost, mode = _leg_time_and_cost(leg_km)
+            leg_minutes, mode = _leg_time_and_mode(leg_km)
             legs.append((first.name, second.name, round(leg_km, 1), mode))
             total_km += leg_km
             minutes += leg_minutes
-            cost += leg_cost
             assumptions.append(
                 f"{first.name} to {second.name}: {leg_km:,.0f} km modelled as {mode}"
             )
@@ -646,7 +652,6 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         # Every destination carries a local gateway transfer; the origin is not a destination.
         destination_count = len(self.primary_regions)
         minutes += LOCAL_TRANSFER_MINUTES * destination_count
-        cost += LOCAL_TRANSFER_COST_USD * destination_count
         assumptions.append(
             f"{destination_count} local gateway transfer(s) at {LOCAL_TRANSFER_MINUTES} min each"
         )
@@ -656,7 +661,6 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
             legs=tuple(legs),
             total_distance_km=round(total_km, 1),
             travel_minutes=minutes,
-            transport_cost_usd=round(cost, 2),
             assumptions=tuple(assumptions),
         )
 
@@ -668,24 +672,14 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         gateway_id = f"dest-gateway-{primary_slug}"
         destination_id = f"dest-city-{primary_slug}"
         destination_name = primary_region
-        duration_days = self.duration_days or 1
         journey = self._journey_profile()
-        # Per-traveller costs scale with the party. Lodging assumes one room each,
-        # which the traveller adjusts on the Budget tab if they are sharing.
-        travellers = max(1, int(self.traveler_count or 1))
-        lodging_total = round(
-            max(1, duration_days)
-            * LODGING_NIGHTLY_RATE_USD[self.trip_mode_key]
-            * travellers,
-            2,
-        )
-        transport_total = round(journey.transport_cost_usd * travellers, 2)
-        activity_total = round(
-            ACTIVITY_ALLOWANCE_USD[self.trip_mode_key]
-            * max(1, duration_days)
-            * travellers,
-            2,
-        )
+        # No source, no price. This adapter measures distance and duration; it does not
+        # quote fares or rates, so it emits no amounts. A provider adapter or a human
+        # override supplies them (trip_planner.pricing), and until one does the surfaces
+        # say the option is not priced rather than showing a number nobody stands behind.
+        lodging_total: float | None = None
+        transport_total: float | None = None
+        activity_total: float | None = None
         baseline_signal = 0.82 if self.trip_mode == "business" else 0.79
         destination_geo = self._geo_payload(destination_name)
         gateway_geo = dict(destination_geo)
@@ -817,7 +811,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                     "room_summary": {"lodging_kind": "hotel"},
                     "booking_terms": {"checkin_window": "15:00-22:00"},
                     "cost_summary": {
-                        "total": {"currency": "USD", "typical_amount": lodging_total},
+                        "total": _unpriced_total(lodging_total),
                     },
                     "fit_summary": {"overall_signal": baseline_signal},
                     "feasibility": {
@@ -847,7 +841,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                     "timing_summary": transport_timing,
                     "segments": transport_segments,
                     "cost_summary": {
-                        "total": {"currency": "USD", "typical_amount": transport_total}
+                        "total": _unpriced_total(transport_total)
                     },
                     "fit_summary": {"overall_signal": baseline_signal},
                     "policy_summary": {
@@ -896,7 +890,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                         "anchor_worthy": True,
                     },
                     "cost_summary": {
-                        "total": {"currency": "USD", "typical_amount": activity_total}
+                        "total": _unpriced_total(activity_total)
                     },
                     "fit_summary": {"overall_signal": baseline_signal},
                     "feasibility": {
