@@ -4,6 +4,7 @@ import type {
   RouteOptionState,
   RuntimeScenarioComparison,
 } from "../../api/workspace";
+import { formatMoney } from "../../lib/money";
 
 type RouteOptionScenario = RuntimeScenarioComparison["scenarios"][number];
 
@@ -135,14 +136,7 @@ function formatConfidence(confidence: number | undefined): string {
 
 function formatMetric(scenario: RouteOptionScenario): string {
   const estimatedTotal = scenario.metrics.estimated_total;
-  const cost =
-    estimatedTotal == null
-      ? "cost pending"
-      : new Intl.NumberFormat("en-US", {
-          style: "currency",
-          currency: estimatedTotal.currency,
-          maximumFractionDigits: 0,
-        }).format(estimatedTotal.typical_amount);
+  const cost = formatMoney(estimatedTotal, { fallback: "not priced" });
   return `${scenario.metrics.travel_minutes} min, ${scenario.metrics.transfers} transfer${
     scenario.metrics.transfers === 1 ? "" : "s"
   }, ${cost}`;

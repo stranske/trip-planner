@@ -1,4 +1,5 @@
 import type { WorkspaceData } from "../../api/workspace";
+import { NOT_PRICED, formatMoney, pricedAmount } from "../../lib/money";
 
 type ApprovalPacketProps = {
   workspace: WorkspaceData;
@@ -25,11 +26,12 @@ export function ApprovalPacket({ workspace, onPrint }: ApprovalPacketProps) {
   ) ?? routeComparison.scenarios[0];
   const verdict = proposal?.evaluation.evaluation_result;
   const scenarioTotal = selectedScenario?.metrics.estimated_total;
+  const scenarioAmount = pricedAmount(scenarioTotal);
+  const scenarioCurrency = scenarioTotal?.currency ?? "USD";
   const budgetCurrency = workspace.budget_state.summary.currency;
-  const budgetTotalsUseScenarioCurrency = scenarioTotal?.currency === budgetCurrency;
-  const budgetDelta = scenarioTotal
-    ? workspace.budget_state.summary.planned_total - scenarioTotal.typical_amount
-    : null;
+  const budgetTotalsUseScenarioCurrency = scenarioCurrency === budgetCurrency;
+  const budgetDelta =
+    scenarioAmount == null ? null : workspace.budget_state.summary.planned_total - scenarioAmount;
   const travelerParty = trip.trip_frame.traveler_party;
 
   return (
@@ -46,20 +48,32 @@ export function ApprovalPacket({ workspace, onPrint }: ApprovalPacketProps) {
         <div><dt>Travelers</dt><dd>{travelerParty ? `${travelerParty.traveler_count} ${travelerParty.kind}` : "Not set"}</dd></div>
         {travelerParty?.notes ? <div><dt>Traveler notes</dt><dd>{travelerParty.notes}</dd></div> : null}
         <div><dt>Selected scenario</dt><dd>{selectedScenario?.title ?? "Not selected"}</dd></div>
-        <div><dt>Estimated total</dt><dd>{scenarioTotal ? formatCurrency(scenarioTotal.typical_amount, scenarioTotal.currency) : "Not available"}</dd></div>
+        <div>
+          <dt>Trip cost</dt>
+          <dd data-testid="approval-packet-trip-cost">
+            {scenarioAmount == null ? NOT_PRICED : formatCurrency(scenarioAmount, scenarioCurrency)}
+          </dd>
+        </div>
         <div><dt>Policy verdict</dt><dd>{verdict?.status ?? proposal?.summary.evaluation_result_status ?? "Not evaluated"}</dd></div>
         <div><dt>Compliance score</dt><dd>{verdict ? `${Math.round(verdict.compliance_score * 100)}%` : "Not available"}</dd></div>
       </dl>
       <section>
         <h3>Budget</h3>
+        {scenarioAmount == null ? (
+          <p data-testid="approval-packet-unpriced-notice" role="note">
+            <strong>This trip has no price.</strong> No source has quoted it, so this packet
+            carries no cost figure. Enter the amounts you already hold on the Budget tab and
+            they will appear here, attributed to you.
+          </p>
+        ) : null}
         <p>
-          Selected scenario total: {scenarioTotal ? formatCurrency(scenarioTotal.typical_amount, scenarioTotal.currency) : "Not available"}. Budget cap: {formatCurrency(workspace.budget_state.summary.planned_total, budgetCurrency)}. Remaining budget: {formatCurrency(workspace.budget_state.summary.remaining_total, budgetCurrency)}.
+          Selected scenario total: {scenarioAmount == null ? NOT_PRICED : formatCurrency(scenarioAmount, scenarioCurrency)}. Budget cap: {formatCurrency(workspace.budget_state.summary.planned_total, budgetCurrency)}. Remaining budget: {formatCurrency(workspace.budget_state.summary.remaining_total, budgetCurrency)}.
         </p>
-        {scenarioTotal && budgetTotalsUseScenarioCurrency && budgetDelta !== null ? (
+        {scenarioAmount != null && budgetTotalsUseScenarioCurrency && budgetDelta !== null ? (
           <p>
             Scenario total is {formatCurrency(Math.abs(budgetDelta), budgetCurrency)} {budgetDelta >= 0 ? "below" : "above"} the budget cap.
           </p>
-        ) : scenarioTotal ? (
+        ) : scenarioAmount != null ? (
           <p>Scenario and budget totals use different currencies, so the packet does not compare them.</p>
         ) : null}
         <ul>
@@ -75,7 +89,12 @@ export function ApprovalPacket({ workspace, onPrint }: ApprovalPacketProps) {
             <ul>
               {proposal.proposal.comparables.map((comparable) => (
                 <li key={`${comparable.category}:${comparable.vendor}:${comparable.label}`}>
-                  {comparable.category}: {comparable.label} from {comparable.vendor} — {formatCurrency(comparable.estimated_cost.typical_amount, comparable.estimated_cost.currency)}
+                  {comparable.category}: {comparable.label} from {comparable.vendor} — {(() => {
+                    const amount = pricedAmount(comparable.estimated_cost);
+                    return amount == null
+                      ? NOT_PRICED
+                      : formatCurrency(amount, comparable.estimated_cost.currency);
+                  })()}
                 </li>
               ))}
             </ul>

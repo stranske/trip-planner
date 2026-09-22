@@ -119,8 +119,17 @@ export function buildProposalSubmissionPayload(
   const estimatedTotal = scenario?.metrics.estimated_total;
   const currency =
     estimatedTotal?.currency ?? workspace.budget_state.summary.currency ?? "USD";
-  const typicalAmount =
-    estimatedTotal?.typical_amount ?? workspace.budget_state.summary.planned_total ?? 0;
+  // The old fallback chain ended in `?? 0`, so an unpriced trip was submitted to the
+  // policy engine as costing nothing — and a $0 trip passes every spend rule there is.
+  // A budget cap is not a price either: it is what the traveller is allowed to spend,
+  // not what this trip costs. Refuse instead, and let the caller ask for a real figure.
+  const typicalAmount = estimatedTotal?.typical_amount;
+  if (typicalAmount == null) {
+    throw new Error(
+      "This trip has no price yet, so it cannot be submitted for approval. Enter the " +
+        "amounts you hold on the Budget tab, or connect a pricing source."
+    );
+  }
   if (!Number.isFinite(typicalAmount)) {
     throw new Error("Proposal cost must be a finite number.");
   }
