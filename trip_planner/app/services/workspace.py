@@ -1366,23 +1366,20 @@ def _bootstrap_scenario_metrics(
 ) -> tuple[float, int, int, dict[str, Any]]:
     duration_days = max(record.duration_days or 1, 1)
     base_minutes = 90 if record.mode == "leisure" else 120
-    base_cost = 180.0 if record.mode == "leisure" else 320.0
     if label == "fallback":
         travel_minutes = duration_days * (base_minutes + 45)
         transfers = 2
-        estimated_total = base_cost * duration_days + 120.0
     else:
         travel_minutes = duration_days * base_minutes
         transfers = 1
-        estimated_total = base_cost * duration_days
     return (
         _BOOTSTRAP_SCENARIO_SCORE_BY_LABEL.get(label, 0.6),
         travel_minutes,
         transfers,
         {
             "currency": "USD",
-            "typical_amount": round(estimated_total, 2),
-            "nightly_typical_amount": round(estimated_total / duration_days, 2),
+            "typical_amount": None,
+            "nightly_typical_amount": None,
         },
     )
 

@@ -56,25 +56,30 @@ def test_distance_follows_real_geography() -> None:
     assert _place("Chicago, IL").country_code == "US"
 
 
-def test_travel_time_and_cost_move_with_the_destination() -> None:
+def test_travel_time_moves_with_the_destination() -> None:
     near = _journey("Seattle", ["Chicago"])
     far = _journey("Seattle", ["Tokyo"])
 
     assert far.total_distance_km > near.total_distance_km * 2
     assert far.travel_minutes > near.travel_minutes
-    assert far.transport_cost_usd > near.transport_cost_usd
 
 
-def test_a_longer_leg_is_never_cheaper_or_quicker() -> None:
+def test_the_journey_carries_no_price() -> None:
+    """Distance and duration are measurements; a fare is not derivable from them.
+
+    An earlier version computed a transport cost from per-km rates the software held.
+    That was an invention presented as an estimate.
+    """
+    journey = _journey("Seattle", ["Tokyo"])
+    assert not hasattr(journey, "transport_cost_usd")
+
+
+def test_a_longer_leg_is_never_quicker() -> None:
     previous = None
     for destination in ("Austin", "Chicago", "Reykjavik, Iceland", "Tokyo", "Nairobi"):
         current = _journey("Seattle", [destination])
-        if (
-            previous is not None
-            and current.total_distance_km > previous.total_distance_km
-        ):
+        if previous is not None and current.total_distance_km > previous.total_distance_km:
             assert current.travel_minutes >= previous.travel_minutes
-            assert current.transport_cost_usd >= previous.transport_cost_usd
         previous = current
 
 
@@ -130,23 +135,20 @@ def _emitted(origin: str, destination: str, *, days: int = 4) -> tuple[float, in
     return _totals(_bundle_dict(origin, destination, days=days))
 
 
-def test_emitted_cost_and_duration_differ_by_destination() -> None:
-    near_cost, near_minutes = _emitted("Seattle", "Chicago")
-    far_cost, far_minutes = _emitted("Seattle", "Tokyo")
+def test_emitted_duration_differs_by_destination() -> None:
+    _, near_minutes = _emitted("Seattle", "Chicago")
+    _, far_minutes = _emitted("Seattle", "Tokyo")
 
-    assert far_cost != near_cost, "the served cost must move with the destination"
-    assert far_minutes != near_minutes, (
-        "the served duration must move with the destination"
-    )
-    assert far_cost > near_cost
+    assert far_minutes != near_minutes, "the served duration must move with the destination"
     assert far_minutes > near_minutes
 
 
-def test_emitted_cost_scales_with_the_party() -> None:
+def test_party_size_cannot_be_priced_without_a_source() -> None:
+    """Scaling an invented rate by the party size still produces an invented price."""
     solo, _ = _totals(_bundle_dict("Seattle", "Chicago", travellers=1))
     team, _ = _totals(_bundle_dict("Seattle", "Chicago", travellers=8))
 
-    assert team > solo, "eight travellers must not cost the same as one"
+    assert solo == 0.0 and team == 0.0, "no priced amounts may be emitted at all"
 
 
 def test_origin_is_not_charged_a_destination_gateway_transfer() -> None:

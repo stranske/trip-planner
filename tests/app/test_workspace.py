@@ -1037,7 +1037,14 @@ def test_workspace_endpoint_creates_non_seeded_persisted_leisure_trip_with_runti
     assert runtime_scenarios
     for scenario in runtime_scenarios:
         assert scenario["scenario_id"]
-        assert scenario["metrics"]["estimated_total"] is not None
+        # No source has priced this scenario, so it carries no amount. Asserting a
+        # price exists here is what let invented figures pass for months.
+        assert "estimated_total" in scenario["metrics"]
+        estimated_total = scenario["metrics"]["estimated_total"]
+        # None means no priced component reached the bundle at all; a dict means the
+        # money shape survived with its amount still absent. Both are honest answers.
+        # A number is not, and neither form above can be satisfied by one.
+        assert estimated_total is None or estimated_total["typical_amount"] is None
         assert any(
             scenario["metrics"][key] is not None for key in ("score", "travel_minutes", "transfers")
         )
@@ -1114,7 +1121,14 @@ def test_workspace_endpoint_creates_non_seeded_persisted_business_trip_with_runt
     assert runtime_scenarios
     for scenario in runtime_scenarios:
         assert scenario["scenario_id"]
-        assert scenario["metrics"]["estimated_total"] is not None
+        # No source has priced this scenario, so it carries no amount. Asserting a
+        # price exists here is what let invented figures pass for months.
+        assert "estimated_total" in scenario["metrics"]
+        estimated_total = scenario["metrics"]["estimated_total"]
+        # None means no priced component reached the bundle at all; a dict means the
+        # money shape survived with its amount still absent. Both are honest answers.
+        # A number is not, and neither form above can be satisfied by one.
+        assert estimated_total is None or estimated_total["typical_amount"] is None
         assert any(
             scenario["metrics"][key] is not None for key in ("score", "travel_minutes", "transfers")
         )
