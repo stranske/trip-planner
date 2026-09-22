@@ -965,6 +965,47 @@ def _resolve_submission_scenario_id(
     return None
 
 
+def _saved_comparison_row(
+    workspace: dict[str, Any], scenarios: list[Any], resolved_id: str
+) -> dict[str, Any] | None:
+    saved_scenarios = workspace.get("saved_scenarios")
+    if not isinstance(saved_scenarios, list):
+        return None
+    session = workspace.get("session")
+    current_saved_id = (
+        session.get("current_saved_scenario_id") if isinstance(session, dict) else None
+    )
+    ordered = sorted(
+        (saved for saved in saved_scenarios if isinstance(saved, dict)),
+        key=lambda saved: saved.get("saved_scenario_id") != current_saved_id,
+    )
+    for saved in ordered:
+        versions = saved.get("versions")
+        if not isinstance(versions, list):
+            continue
+        active_version = next(
+            (
+                v
+                for v in versions
+                if isinstance(v, dict) and v.get("version_id") == saved.get("current_version_id")
+            ),
+            None,
+        )
+        refs = active_version.get("snapshot_refs") if isinstance(active_version, dict) else None
+        if not isinstance(refs, dict) or refs.get("itinerary_scenario_id") != resolved_id:
+            continue
+        return next(
+            (
+                row
+                for row in scenarios
+                if isinstance(row, dict)
+                and row.get("scenario_id") == saved.get("saved_scenario_id")
+            ),
+            None,
+        )
+    return None
+
+
 def _selected_scenario_row(
     workspace: dict[str, Any],
     scenario_id: str | None,
@@ -975,52 +1016,33 @@ def _selected_scenario_row(
     if not isinstance(scenarios, list) or not scenarios:
         return None
     if resolved_id:
-        for row in scenarios:
-            if isinstance(row, dict) and row.get("scenario_id") == resolved_id:
-                return row
-        saved_scenarios = workspace.get("saved_scenarios")
-        session = workspace.get("session")
-        current_saved_id = (
-            session.get("current_saved_scenario_id") if isinstance(session, dict) else None
+        direct = next(
+            (
+                row
+                for row in scenarios
+                if isinstance(row, dict) and row.get("scenario_id") == resolved_id
+            ),
+            None,
         )
-        if isinstance(saved_scenarios, list):
-            ordered = sorted(
-                (saved for saved in saved_scenarios if isinstance(saved, dict)),
-                key=lambda saved: saved.get("saved_scenario_id") != current_saved_id,
-            )
-            for saved in ordered:
-                versions = saved.get("versions")
-                active_version_id = saved.get("current_version_id")
-                if not isinstance(versions, list):
-                    continue
-                active_version = next(
-                    (
-                        v
-                        for v in versions
-                        if isinstance(v, dict) and v.get("version_id") == active_version_id
-                    ),
-                    None,
-                )
-                refs = (
-                    active_version.get("snapshot_refs")
-                    if isinstance(active_version, dict)
-                    else None
-                )
-                if isinstance(refs, dict) and refs.get("itinerary_scenario_id") == resolved_id:
-                    for row in scenarios:
-                        if isinstance(row, dict) and row.get("scenario_id") == saved.get(
-                            "saved_scenario_id"
-                        ):
-                            return row
-        if scenario_id is None:
-            lead_id = comparison.get("lead_scenario_id")
-            for row in scenarios:
-                if isinstance(row, dict) and row.get("scenario_id") == lead_id:
-                    return row
-            return next((row for row in scenarios if isinstance(row, dict)), None)
-        raise ValueError("Selected scenario is not in this trip's workspace.")
-    first = scenarios[0]
-    return first if isinstance(first, dict) else None
+        if direct is not None:
+            return direct
+        saved_row = _saved_comparison_row(workspace, scenarios, resolved_id)
+        if saved_row is not None:
+            return saved_row
+        if scenario_id is not None:
+            raise ValueError("Selected scenario is not in this trip's workspace.")
+        lead_id = comparison.get("lead_scenario_id")
+        lead = next(
+            (
+                row
+                for row in scenarios
+                if isinstance(row, dict) and row.get("scenario_id") == lead_id
+            ),
+            None,
+        )
+        if lead is not None:
+            return lead
+    return next((row for row in scenarios if isinstance(row, dict)), None)
 
 
 def _policy_context_from_workspace(workspace: dict[str, Any]) -> tuple[str, str]:
