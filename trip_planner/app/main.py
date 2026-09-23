@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from trip_planner.app import APP_VERSION
+from trip_planner.app.database_status import DatabaseStatus
 from trip_planner.app.routes.auth import router as auth_router
 from trip_planner.app.routes.budget import router as budget_router
 from trip_planner.app.routes.trip_prices import router as trip_prices_router
@@ -58,19 +59,13 @@ def _json_safe_validation_value(value: Any) -> Any:
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(app: FastAPI):
     # Resilient startup: a transient or expired database must not crash the whole
     # service. If it did, the health check would fail and every deploy would be
     # marked failed (the exact failure mode when the managed Postgres expired).
-    # Degrade instead: keep the API up so /api/health passes, and let DB-backed
-    # routes surface their own errors until the database is reachable again.
-    try:
-        ensure_database_ready()
-    except Exception:
-        logger.exception(
-            "Database initialization failed at startup; continuing in degraded "
-            "mode (database-backed routes will error until the database is reachable)."
-        )
+    # Degrade instead: keep the API up, record what happened, and let /api/health
+    # report "degraded" until a retry finds the database reachable (issue 1851).
+    app.state.database_status = DatabaseStatus(initialise=lambda: ensure_database_ready()).check()
     yield
 
 

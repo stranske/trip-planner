@@ -5,6 +5,8 @@ export type HealthStatus = {
   status: string;
   environment: string;
   version: string;
+  /** Database readiness as last observed; absent from backends older than issue 1851. */
+  database?: { ready: boolean; reason: string | null; checked_at: string | null } | null;
 };
 
 let inFlightHealthProbe: Promise<HealthStatus> | null = null;

@@ -14,6 +14,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TripPricesState, WorkspaceData } from "../../api/workspace";
 import { ApprovalPacket } from "./ApprovalPacket";
 
+// Vitest runs in Node; the frontend tsconfig carries no Node types, so reach the env this way.
+const env = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process.env;
+
 afterEach(() => {
   cleanup();
 });
@@ -108,7 +111,7 @@ describe("ApprovalPacket", () => {
     expect(costs).toHaveTextContent("Flights and ground travel");
     expect(costs).toHaveTextContent("$486");
     expect(costs).toHaveTextContent("United.com economy");
-    expect(costs).toHaveTextContent("Entered by Priya Raman on 2026-09-22");
+    expect(costs).toHaveTextContent("Entered by Priya Raman on September 22, 2026");
     expect(costs).toHaveTextContent("$612");
     expect(screen.getByTestId("approval-packet-trip-cost")).toHaveTextContent("$1,098");
     expect(costs).toHaveTextContent("1 item(s) not priced");
@@ -235,5 +238,42 @@ describe("ApprovalPacket", () => {
   it("prints no policy limit when the policy publishes none", () => {
     render(<ApprovalPacket workspace={workspace()} prices={PRICED} onPrint={vi.fn()} />);
     expect(screen.queryByTestId("approval-packet-policy-limit")).toBeNull();
+  });
+
+  it("dates every line in the same calendar, the reader's own (issue 1853)", () => {
+    // A US evening: 21:30 in New York is 01:30 the next day in UTC. The packet used to print
+    // "Prepared September 22" beside "Entered … on 2026-09-23" for a price entered minutes earlier.
+    const previousTz = env.TZ;
+    env.TZ = "America/New_York";
+    try {
+      const lateSource = { ...SOURCE, captured_at: "2026-09-23T01:30:00+00:00" };
+      const lateEntry: TripPricesState = {
+        ...PRICED,
+        components: PRICED.components.map((component) =>
+          component.price_source ? { ...component, price_source: lateSource } : component
+        ),
+      };
+      render(
+        <ApprovalPacket
+          workspace={workspace()}
+          prices={lateEntry}
+          preparedOn={new Date("2026-09-23T01:45:00+00:00")}
+          onPrint={vi.fn()}
+        />
+      );
+
+      const text = documentText();
+      expect(text).toContain("September 22, 2026");
+      expect(screen.getByTestId("approval-packet-costs")).toHaveTextContent("on September 22, 2026");
+      expect(text).not.toMatch(/2026-09-23|September 23/);
+      // Trip dates are calendar days and never shift with the reader's timezone.
+      expect(text).toContain("October 5, 2026 to October 7, 2026");
+    } finally {
+      if (previousTz === undefined) {
+        delete env.TZ;
+      } else {
+        env.TZ = previousTz;
+      }
+    }
   });
 });

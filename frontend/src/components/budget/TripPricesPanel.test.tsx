@@ -82,7 +82,7 @@ describe("TripPricesPanel", () => {
     expect(screen.getByTestId("trip-prices-total")).toHaveTextContent("$486");
     expect(screen.getByTestId("trip-prices-total")).toHaveTextContent("Dana Chen");
     expect(screen.getByTestId("trip-price-source-transport")).toHaveTextContent(
-      "Entered by Dana Chen on 2026-09-21"
+      "Entered by Dana Chen on September 21, 2026"
     );
     expect(screen.getByTestId("trip-price-source-lodging")).toHaveTextContent(
       "No source has priced this yet."

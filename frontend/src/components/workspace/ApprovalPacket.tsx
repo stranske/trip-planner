@@ -1,5 +1,6 @@
 import type { TripPricesState, WorkspaceData } from "../../api/workspace";
 import { formatMoney } from "../../lib/money";
+import { formatCalendarDate, formatInstantDate } from "../../lib/dates";
 import { explainPolicyCode } from "../../lib/policyCodes";
 
 /**
@@ -84,15 +85,6 @@ function policyTripLimit(workspace: WorkspaceData): { amount: number; ruleId: st
   return { amount, ruleId: typeof rules.rule_id === "string" ? rules.rule_id : "policy limit" };
 }
 
-function formatDate(value: string | null | undefined): string {
-  if (!value) {
-    return "Not set";
-  }
-  const parsed = new Date(`${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime())
-    ? value
-    : parsed.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-}
 
 export function ApprovalPacket({
   workspace,
@@ -144,7 +136,7 @@ export function ApprovalPacket({
         </div>
         <div>
           <dt>Prepared</dt>
-          <dd>{preparedOn.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</dd>
+          <dd>{formatInstantDate(preparedOn)}</dd>
         </div>
         <div>
           <dt>Journey</dt>
@@ -155,7 +147,7 @@ export function ApprovalPacket({
         <div>
           <dt>Dates</dt>
           <dd>
-            {formatDate(frame.start_date)} to {formatDate(frame.end_date)}
+            {formatCalendarDate(frame.start_date)} to {formatCalendarDate(frame.end_date)}
           </dd>
         </div>
         <div>
@@ -199,7 +191,7 @@ export function ApprovalPacket({
                   <td>
                     {component.note ? `${component.note}. ` : ""}
                     {component.price_source
-                      ? `Entered by ${component.price_source.attributed_to} on ${component.price_source.captured_at.slice(0, 10)}`
+                      ? `Entered by ${component.price_source.attributed_to} on ${formatInstantDate(component.price_source.captured_at)}`
                       : null}
                   </td>
                 </tr>
