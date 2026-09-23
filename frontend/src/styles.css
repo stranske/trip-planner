@@ -775,7 +775,13 @@ a {
   border-radius: 999px;
   width: fit-content;
   background: rgba(132, 86, 35, 0.12);
-  text-transform: capitalize;
+}
+
+/* Sentence case for chips built from keys ("route burden" -> "Route burden"). The old
+   text-transform: capitalize turned every sentence in these lists into Title Case
+   ("No Source Has Priced This Yet.", "Transfer(S)"), issue 1843. */
+.focus-area-list li::first-letter {
+  text-transform: uppercase;
 }
 
 .muted-copy {
@@ -2042,6 +2048,12 @@ a {
 
 /* Generated route options are not researched estimates; say so prominently. */
 /* Trip cost entry: one row per component, collapsing to stacked fields on narrow screens. */
+.budget-tracking-disclosure > summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin: var(--space-4) 0 var(--space-2);
+}
+
 .trip-price-list {
   display: grid;
   gap: 1rem;

@@ -125,7 +125,7 @@ export function TripPricesPanel({ prices, busy, errorMessage, onSave }: TripPric
         </div>
       </dl>
 
-      <ul className="focus-area-list trip-price-list">
+      <ul className="trip-price-list">
         {prices.components.map((component) => {
           const attribution = sourceLine(component);
           return (
@@ -163,6 +163,7 @@ export function TripPricesPanel({ prices, busy, errorMessage, onSave }: TripPric
               <button
                 type="button"
                 disabled={busy}
+                aria-label={`${component.typical_amount == null ? "Save" : "Update"} ${component.label}`}
                 onClick={() => {
                   const raw = (drafts[component.component] ?? "").trim();
                   const lowestRaw = lowestFare.trim();
@@ -188,6 +189,7 @@ export function TripPricesPanel({ prices, busy, errorMessage, onSave }: TripPric
                   type="button"
                   className="link-button"
                   disabled={busy}
+                  aria-label={`Remove ${component.label}`}
                   onClick={() => onSave(component.component, null, "")}
                 >
                   Remove
@@ -254,7 +256,10 @@ export function TripPricesPanel({ prices, busy, errorMessage, onSave }: TripPric
                 </div>
               ) : null}
               <p className="field-hint" data-testid={`trip-price-source-${component.component}`}>
-                {attribution ?? "No source has priced this yet."}
+                {attribution ??
+                  (component.component === "other"
+                    ? "No source has priced this yet. Enter 0 if there are none, so the trip counts as fully priced."
+                    : "No source has priced this yet.")}
               </p>
             </li>
           );

@@ -1,9 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BudgetWorkspaceState } from "../../api/workspace";
 import { WorkspaceBudgetPanel } from "./WorkspaceBudgetPanel";
+
+afterEach(() => {
+  cleanup();
+});
 
 const budgetState: BudgetWorkspaceState = {
   budget_plan: {
@@ -100,5 +104,39 @@ describe("WorkspaceBudgetPanel", () => {
     );
 
     expect(title).toHaveValue("Unsaved Kyoto edits");
+  });
+
+  it("never prints a negative zero, and says when no budget is set (issue 1843)", () => {
+    const props = {
+      tripMode: "business",
+      busyLabel: null,
+      errorMessage: null,
+      onSaveBudget: vi.fn(),
+      onRecordSpend: vi.fn(),
+    };
+    const unset: BudgetWorkspaceState = {
+      ...budgetState,
+      budget_plan: null,
+      summary: {
+        ...budgetState.summary,
+        has_budget_plan: false,
+        planned_total: 0,
+        remaining_total: -0,
+        category_summaries: [],
+      },
+    };
+    const view = render(<WorkspaceBudgetPanel budgetState={unset} {...props} />);
+    expect(view.container.textContent ?? "").not.toMatch(/-\$0/);
+    expect(screen.getByTestId("budget-remaining-total")).toHaveTextContent("No budget set");
+    view.unmount();
+
+    const drained: BudgetWorkspaceState = {
+      ...budgetState,
+      summary: { ...budgetState.summary, remaining_total: -0.001 },
+    };
+    const second = render(<WorkspaceBudgetPanel budgetState={drained} {...props} />);
+    expect(screen.getByTestId("budget-remaining-total")).toHaveTextContent("$0.00");
+    expect(second.container.textContent ?? "").not.toMatch(/-\$0/);
+    expect(second.container.textContent ?? "").not.toMatch(/should feed later planner/);
   });
 });

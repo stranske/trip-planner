@@ -37,12 +37,14 @@ function titleCaseCategory(categoryKey: string): string {
 }
 
 function formatCurrency(amount: number, currency: string): string {
+  // Round first and fold negative zero, so an empty budget never reads "-$0.00" (issue 1843).
+  const rounded = Math.round(amount * 100) / 100;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(amount);
+  }).format(rounded === 0 ? 0 : rounded);
 }
 
 function getActiveScenario(budgetState: BudgetWorkspaceState) {
@@ -255,11 +257,12 @@ export function WorkspaceBudgetPanel({
 
   return (
     <section className="status-card budget-panel-card">
-      <p className="status-label">Budget state</p>
+      <p className="status-label">Your own budget</p>
       <h2>Budget vs actual</h2>
       <p className="muted-copy">
-        Planned caps, actual spend drift, and remaining category headroom should feed later planner tradeoff
-        reasoning and in-trip replans.
+        Optional. Set a cap per category and record what you actually spend during or after the
+        trip. The approval packet itemises the prices above, and shows a cap you set here as
+        your own budget.
       </p>
       {busyLabel ? <p className="muted-copy">{busyLabel}</p> : null}
       {errorMessage ? <p className="planner-inline-error">{errorMessage}</p> : null}
@@ -269,15 +272,27 @@ export function WorkspaceBudgetPanel({
       <dl className="budget-summary-grid">
         <div>
           <dt>Planned total</dt>
-          <dd>{formatCurrency(budgetState.summary.planned_total, budgetState.summary.currency)}</dd>
+          <dd data-testid="budget-planned-total">
+            {budgetState.summary.has_budget_plan
+              ? formatCurrency(budgetState.summary.planned_total, budgetState.summary.currency)
+              : "No budget set"}
+          </dd>
         </div>
         <div>
           <dt>Actual total</dt>
-          <dd>{formatCurrency(budgetState.summary.actual_total, budgetState.summary.currency)}</dd>
+          <dd>
+            {budgetState.summary.spend_event_count > 0
+              ? formatCurrency(budgetState.summary.actual_total, budgetState.summary.currency)
+              : "Nothing recorded"}
+          </dd>
         </div>
         <div>
           <dt>Remaining</dt>
-          <dd>{formatCurrency(budgetState.summary.remaining_total, budgetState.summary.currency)}</dd>
+          <dd data-testid="budget-remaining-total">
+            {budgetState.summary.has_budget_plan
+              ? formatCurrency(budgetState.summary.remaining_total, budgetState.summary.currency)
+              : "No budget set"}
+          </dd>
         </div>
         <div>
           <dt>Spend events</dt>

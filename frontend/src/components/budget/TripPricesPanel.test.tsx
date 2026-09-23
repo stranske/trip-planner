@@ -64,7 +64,7 @@ describe("TripPricesPanel", () => {
     fireEvent.change(screen.getByLabelText("Where the Flights and ground travel figure came from"), {
       target: { value: "United.com" },
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Save Flights and ground travel" }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith("transport", 486, "United.com", {
@@ -93,7 +93,7 @@ describe("TripPricesPanel", () => {
     const onSave = vi.fn();
     render(<TripPricesPanel prices={PRICED} busy={false} errorMessage={null} onSave={onSave} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Flights and ground travel" }));
 
     await waitFor(() => {
       // null withdraws; 0 would assert the leg is free, which nobody said.
@@ -106,7 +106,7 @@ describe("TripPricesPanel", () => {
     render(<TripPricesPanel prices={PRICED} busy={false} errorMessage={null} onSave={onSave} />);
 
     fireEvent.change(screen.getByLabelText("Flights and ground travel"), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update Flights and ground travel" }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith("transport", null, "United.com", {
@@ -133,7 +133,7 @@ describe("TripPricesPanel", () => {
     );
     fireEvent.change(screen.getByLabelText("Cabin booked"), { target: { value: "economy" } });
     fireEvent.change(screen.getByLabelText("Longest flight, in hours"), { target: { value: "4.5" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Save Flights and ground travel" }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith("transport", 486, "", {
@@ -148,5 +148,30 @@ describe("TripPricesPanel", () => {
   it("offers fare detail only on the flights row", () => {
     render(<TripPricesPanel prices={EMPTY} busy={false} errorMessage={null} onSave={vi.fn()} />);
     expect(screen.getAllByLabelText("Lowest fare you found for the same journey")).toHaveLength(1);
+  });
+
+  it("names every save button after its item, so a screen reader can tell them apart (issue 1843)", () => {
+    const four: TripPricesState = {
+      ...EMPTY,
+      components: [
+        ...EMPTY.components,
+        { component: "activities", label: "Meals and activities", currency: "USD", typical_amount: null, note: "", price_source: null },
+        { component: "other", label: "Other costs", currency: "USD", typical_amount: null, note: "", price_source: null },
+      ],
+      unpriced_component_count: 4,
+    };
+    render(<TripPricesPanel prices={four} busy={false} errorMessage={null} onSave={vi.fn()} />);
+
+    const names = screen
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label") ?? button.textContent ?? "");
+    expect(names).toEqual([
+      "Save Flights and ground travel",
+      "Save Accommodation",
+      "Save Meals and activities",
+      "Save Other costs",
+    ]);
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.getByTestId("trip-price-source-other")).toHaveTextContent("Enter 0 if there are none");
   });
 });
