@@ -3,6 +3,7 @@ import { useLoaderData } from "react-router-dom";
 
 import { readPolicyContext } from "../lib/proposalSubmission";
 
+import { fetchCurrentSession } from "../api/auth";
 import type { TripRecord } from "../api/trips";
 import {
   answerPlannerDecision,
@@ -1193,6 +1194,9 @@ function WorkspacePageContent({
   const [showWorkspaceDebugDetails, setShowWorkspaceDebugDetails] = useState(false);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [tripPrices, setTripPrices] = useState<TripPricesState | null>(null);
+  // Who is requesting approval, for the packet. Read from the session endpoint rather than
+  // the root route's loader, so the page does not depend on which router renders it.
+  const [requesterName, setRequesterName] = useState<string | null>(null);
   const [tripPricesError, setTripPricesError] = useState<string | null>(null);
   const [tripPricesBusy, setTripPricesBusy] = useState(false);
   const [budgetBusyLabel, setBudgetBusyLabel] = useState<string | null>(null);
@@ -1549,6 +1553,22 @@ function WorkspacePageContent({
       setBudgetBusyLabel(null);
     }
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCurrentSession()
+      .then((session) => {
+        if (!cancelled) {
+          setRequesterName(session.user.display_name);
+        }
+      })
+      .catch(() => {
+        // The packet falls back to the name on the entered prices, then "Not recorded".
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -2860,7 +2880,12 @@ function WorkspacePageContent({
             }
           />
           {showApprovalPacket && currentWorkspace.proposal_state ? (
-            <ApprovalPacket workspace={currentWorkspace} onPrint={() => window.print()} />
+            <ApprovalPacket
+              workspace={currentWorkspace}
+              prices={tripPrices}
+              requesterName={requesterName}
+              onPrint={() => window.print()}
+            />
           ) : null}
         </PolicyTabPanel>
       ) : null}
