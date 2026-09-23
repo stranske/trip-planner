@@ -1211,6 +1211,12 @@ export type TripPriceComponent = {
   /** Null when nobody has priced this component. Never 0 as a stand-in for absent. */
   typical_amount: number | null;
   note: string;
+  /** Lowest fare the traveller found for the same journey (flights row). */
+  lowest_amount?: number | null;
+  /** The traveller states they hold fare evidence to give the approver. */
+  evidence_attested?: boolean;
+  cabin_class?: string | null;
+  flight_hours?: number | null;
   price_source: { kind: string; attributed_to: string; captured_at: string } | null;
 };
 
@@ -1234,7 +1240,16 @@ export async function fetchTripPrices(tripId: string): Promise<TripPricesState> 
 
 export async function saveTripPrice(
   tripId: string,
-  payload: { component: string; amount: number | null; currency?: string; note?: string }
+  payload: {
+    component: string;
+    amount: number | null;
+    currency?: string;
+    note?: string;
+    lowest_amount?: number | null;
+    evidence_attested?: boolean;
+    cabin_class?: string | null;
+    flight_hours?: number | null;
+  }
 ): Promise<TripPricesState> {
   return fetchJson<TripPricesState>({
     path: `/api/workspace/${tripId}/prices`,

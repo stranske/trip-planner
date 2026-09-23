@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, UniqueConstraint, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from trip_planner.persistence.db import Base
@@ -46,6 +46,17 @@ class PersistedTripPrice(Base):
     #: Where they got it, in their own words: "United.com, 21 Sep" or "Concur quote".
     note: Mapped[str] = mapped_column(String(400), default="")
     captured_at: Mapped[str] = mapped_column(String(64))
+    #: The lowest fare the traveller found for the same journey, when they give one. Sent to
+    #: TPP as `lowest_fare`; its fare-comparison rule fails without it.
+    lowest_amount: Mapped[float | None] = mapped_column(Float(), nullable=True)
+    #: The traveller's statement that they hold fare evidence (e.g. a screenshot) to give the
+    #: approver. An attestation, not an attachment; sent as `fare_evidence_attached`.
+    evidence_attested: Mapped[bool] = mapped_column(Boolean(), default=False, server_default=false())
+    #: Cabin booked (economy, premium_economy, business, first), from the traveller's quote.
+    cabin_class: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: Longest flight's duration in hours, from the traveller's itinerary. Deliberately not the
+    #: planner's modelled travel time: it decides cabin entitlement, so it must be the real one.
+    flight_hours: Mapped[float | None] = mapped_column(Float(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow

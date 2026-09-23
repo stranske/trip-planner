@@ -52,6 +52,10 @@ def save_price(
             amount=payload.amount,
             currency=payload.currency,
             note=payload.note,
+            lowest_amount=payload.lowest_amount,
+            evidence_attested=payload.evidence_attested,
+            cabin_class=payload.cabin_class,
+            flight_hours=payload.flight_hours,
         )
     except TripPriceNotFoundError as error:
         raise public_http_error(

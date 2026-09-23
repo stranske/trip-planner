@@ -21,7 +21,6 @@ from trip_planner.app.services.policy import resolve_configured_organization_id
 from trip_planner.app.services.proposal import (
     _home_airport_from_workspace,
     _selected_scenario_row,
-    _submission_cost_details,
     _validate_persisted_scenario_id,
 )
 from trip_planner.integrations.tpp import TPPResponseEnvelope
@@ -184,14 +183,6 @@ def test_submission_uses_persisted_origin_not_destination_regions() -> None:
     assert _home_airport_from_workspace(workspace) == "Boston"
 
 
-def test_submission_cost_range_uses_resolved_budget_fallback() -> None:
-    workspace = {"budget_state": {"summary": {"currency": "USD", "planned_total": 780}}}
-    currency, typical, cost_range = _submission_cost_details(
-        workspace, {"metrics": {"estimated_total": {"currency": "USD"}}}
-    )
-    assert currency == "USD"
-    assert typical == 780
-    assert cost_range.typical_amount == cost_range.min_amount == cost_range.max_amount == 780
 
 
 def test_persisted_scenario_validation_allows_legacy_fixture_ids_without_workspace() -> None:

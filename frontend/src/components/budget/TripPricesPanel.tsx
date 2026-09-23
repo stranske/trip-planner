@@ -7,8 +7,30 @@ export type TripPricesPanelProps = {
   prices: TripPricesState | null;
   busy: boolean;
   errorMessage: string | null;
-  onSave: (component: string, amount: number | null, note: string) => void;
+  onSave: (
+    component: string,
+    amount: number | null,
+    note: string,
+    fareDetail?: FareDetail
+  ) => void;
 };
+
+export type FareDetail = {
+  lowestAmount: number | null;
+  evidenceAttested: boolean;
+  cabinClass: string | null;
+  flightHours: number | null;
+};
+
+const CABIN_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "economy", label: "Economy" },
+  { value: "premium_economy", label: "Premium economy" },
+  { value: "business", label: "Business" },
+  { value: "first", label: "First" },
+];
+
+/** The one component TPP's fare rules read. */
+const FARE_COMPONENT = "transport";
 
 function sourceLine(component: TripPriceComponent): string | null {
   if (component.price_source == null) {
@@ -21,6 +43,10 @@ function sourceLine(component: TripPriceComponent): string | null {
 export function TripPricesPanel({ prices, busy, errorMessage, onSave }: TripPricesPanelProps) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [lowestFare, setLowestFare] = useState("");
+  const [evidenceAttested, setEvidenceAttested] = useState(false);
+  const [cabinClass, setCabinClass] = useState("");
+  const [flightHours, setFlightHours] = useState("");
 
   // Re-seed the inputs whenever saved prices arrive, so the fields show what is stored
   // rather than whatever was last typed.
@@ -41,6 +67,11 @@ export function TripPricesPanel({ prices, busy, errorMessage, onSave }: TripPric
         prices.components.map((component) => [component.component, component.note])
       )
     );
+    const fare = prices.components.find((component) => component.component === FARE_COMPONENT);
+    setLowestFare(fare?.lowest_amount == null ? "" : String(fare.lowest_amount));
+    setEvidenceAttested(Boolean(fare?.evidence_attested));
+    setCabinClass(fare?.cabin_class ?? "");
+    setFlightHours(fare?.flight_hours == null ? "" : String(fare.flight_hours));
   }, [prices]);
 
   if (prices == null) {
@@ -133,10 +164,19 @@ export function TripPricesPanel({ prices, busy, errorMessage, onSave }: TripPric
                 disabled={busy}
                 onClick={() => {
                   const raw = (drafts[component.component] ?? "").trim();
+                  const lowestRaw = lowestFare.trim();
                   onSave(
                     component.component,
                     raw === "" ? null : Number(raw),
-                    notes[component.component] ?? ""
+                    notes[component.component] ?? "",
+                    component.component === FARE_COMPONENT
+                      ? {
+                          lowestAmount: lowestRaw === "" ? null : Number(lowestRaw),
+                          evidenceAttested,
+                          cabinClass: cabinClass === "" ? null : cabinClass,
+                          flightHours: flightHours.trim() === "" ? null : Number(flightHours),
+                        }
+                      : undefined
                   );
                 }}
               >
@@ -151,6 +191,66 @@ export function TripPricesPanel({ prices, busy, errorMessage, onSave }: TripPric
                 >
                   Remove
                 </button>
+              ) : null}
+              {component.component === FARE_COMPONENT ? (
+                <div className="trip-price-fare-detail">
+                  <label htmlFor="trip-price-lowest-fare">
+                    Lowest fare you found for the same journey
+                  </label>
+                  <input
+                    id="trip-price-lowest-fare"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="Optional"
+                    value={lowestFare}
+                    disabled={busy}
+                    onChange={(event) => setLowestFare(event.target.value)}
+                  />
+                  <label htmlFor="trip-price-cabin">Cabin booked</label>
+                  <select
+                    id="trip-price-cabin"
+                    value={cabinClass}
+                    disabled={busy}
+                    onChange={(event) => setCabinClass(event.target.value)}
+                  >
+                    <option value="">Not given</option>
+                    {CABIN_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <label htmlFor="trip-price-flight-hours">Longest flight, in hours</label>
+                  <input
+                    id="trip-price-flight-hours"
+                    type="number"
+                    min="0"
+                    max="30"
+                    step="0.25"
+                    inputMode="decimal"
+                    placeholder="From your itinerary"
+                    value={flightHours}
+                    disabled={busy}
+                    onChange={(event) => setFlightHours(event.target.value)}
+                  />
+                  <label className="trip-price-attest">
+                    <input
+                      type="checkbox"
+                      checked={evidenceAttested}
+                      disabled={busy}
+                      onChange={(event) => setEvidenceAttested(event.target.checked)}
+                    />
+                    I have a screenshot or other fare evidence to give my approver
+                  </label>
+                  <p className="field-hint">
+                    Travel policy compares your fare with the lowest available, checks the
+                    cabin against the flight time, and asks for evidence of the fare. Take all
+                    four from your airline quote; without them approval is blocked whatever the
+                    fare.
+                  </p>
+                </div>
               ) : null}
               <p className="field-hint" data-testid={`trip-price-source-${component.component}`}>
                 {attribution ?? "No source has priced this yet."}
