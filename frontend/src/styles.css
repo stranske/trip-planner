@@ -178,28 +178,77 @@ a {
 }
 
 @media print {
-  body * {
-    visibility: hidden;
+  /* Remove everything that is neither the packet nor one of its ancestors from LAYOUT, not
+     just from sight. `visibility: hidden` kept the whole workspace's height, so a one-page
+     packet printed as three pages with two blank (observed 2026-09-22). */
+  body :not(:has(.approval-packet)):not(.approval-packet):not(.approval-packet *) {
+    display: none !important;
   }
 
-  .approval-packet,
-  .approval-packet * {
-    visibility: visible;
+  /* The packet's ancestors stay, but contribute no spacing or chrome of their own. */
+  body :has(.approval-packet) {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: none !important;
+    min-height: 0 !important;
+  }
+
+  body {
+    background: #fff !important;
   }
 
   .approval-packet {
-    position: absolute;
-    inset: 0;
+    position: static;
     width: 100%;
     margin: 0;
     border: 0;
     box-shadow: none;
+    background: #fff;
   }
 
   .approval-packet .no-print,
   .no-print {
     display: none !important;
   }
+
+  .approval-packet-costs,
+  .approval-packet-signoff {
+    break-inside: avoid;
+  }
+}
+
+.approval-packet-costs {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0 1rem;
+}
+
+.approval-packet-costs th,
+.approval-packet-costs td {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  vertical-align: top;
+}
+
+.approval-packet-costs tfoot th,
+.approval-packet-costs tfoot td {
+  font-weight: 700;
+  border-bottom: 0;
+}
+
+.approval-packet-signoff dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem 2rem;
+}
+
+.approval-packet-signoff .signoff-line {
+  min-height: 1.6rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.45);
+  margin: 0.25rem 0 0;
 }
 
 .workspace-tabs button {

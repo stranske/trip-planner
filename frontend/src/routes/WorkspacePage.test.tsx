@@ -1750,17 +1750,22 @@ describe("WorkspacePage", () => {
     const packet = screen.getByTestId("approval-packet-document");
     expect(packet).toBeInTheDocument();
     const packetScope = within(packet);
-    expect(packetScope.getByText("2 pair")).toBeInTheDocument();
-    expect(packetScope.getByText(/Selected scenario total:/)).toBeInTheDocument();
-    expect(packetScope.getByText("non_compliant")).toBeInTheDocument();
-    expect(packetScope.getByText("daily_cap")).toBeInTheDocument();
-    expect(packetScope.getByText(/Daily cap exceeded/)).toBeInTheDocument();
-    expect(
-      packetScope.getByText((_, element) =>
-        element?.tagName === "LI" &&
-        (element.textContent?.includes("Conference Hotel from Marriott") ?? false)
-      )
-    ).toBeInTheDocument();
+    // The packet prints the party in words and the verdict as a sentence, not raw enums.
+    expect(packetScope.getByText("2 travellers")).toBeInTheDocument();
+    expect(packetScope.getByTestId("approval-packet-verdict")).toHaveTextContent(
+      "Blocked by travel policy"
+    );
+    // TPP's own reason and its rule id still reach the approver.
+    expect(packetScope.getByTestId("approval-packet-policy-reasons")).toHaveTextContent(
+      "Daily cap exceeded"
+    );
+    expect(packetScope.getByTestId("approval-packet-policy-reasons")).toHaveTextContent(
+      "daily_cap"
+    );
+    // Costs come only from prices the traveller entered; with none, the packet says so
+    // instead of itemising proposal comparables under a vendor nobody chose.
+    expect(packetScope.getByTestId("approval-packet-unpriced-notice")).toBeInTheDocument();
+    expect(packet.textContent).not.toMatch(/Compliance score/i);
   });
 
   it("persists planning mode selections through the workspace API", async () => {
