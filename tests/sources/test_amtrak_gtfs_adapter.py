@@ -12,12 +12,15 @@ from trip_planner.sources.snapshots import SourceQuery
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "gtfs"
 
 
-def _fixture_zip(tmp_path: Path, *, stop_times: str | None = None) -> Path:
+def _fixture_zip(tmp_path: Path, *, overrides: dict[str, str | None] | None = None) -> Path:
+    overrides = overrides or {}
     archive_path = tmp_path / "amtrak-nec-minimal.zip"
     with ZipFile(archive_path, "w", compression=ZIP_DEFLATED) as archive:
         for fixture_path in sorted(FIXTURE_ROOT.iterdir()):
-            if fixture_path.name == "stop_times.txt" and stop_times is not None:
-                archive.writestr(fixture_path.name, stop_times)
+            if fixture_path.name in overrides:
+                content = overrides[fixture_path.name]
+                if content is not None:
+                    archive.writestr(fixture_path.name, content)
             else:
                 archive.write(fixture_path, fixture_path.name)
     return archive_path
@@ -78,13 +81,157 @@ def test_parses_fixture_trips(tmp_path: Path) -> None:
 def test_corrupt_stop_times_rejected(tmp_path: Path) -> None:
     feed_path = _fixture_zip(
         tmp_path,
-        stop_times=(
-            "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
-            "NEC-171,07:00:00,07:00:00,UNKNOWN,1\n"
-        ),
+        overrides={
+            "stop_times.txt": (
+                "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+                "NEC-171,07:00:00,07:00:00,UNKNOWN,1\n"
+            )
+        },
     )
 
     with pytest.raises(ValueError, match="unknown stop_id 'UNKNOWN'"):
+        AmtrakGtfsAdapter(feed_path).fetch_snapshot(_query())
+
+
+def test_orders_stops_by_sequence(tmp_path: Path) -> None:
+    feed_path = _fixture_zip(
+        tmp_path,
+        overrides={
+            "stop_times.txt": (
+                "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+                "NEC-171,10:25:00,10:25:00,WAS,3\n"
+                "NEC-171,07:00:00,07:00:00,NYP,1\n"
+                "NEC-171,08:20:00,08:22:00,PHL,2\n"
+            )
+        },
+    )
+
+    stops = AmtrakGtfsAdapter(feed_path).fetch_snapshot(_query()).records[0].payload["stops"]
+
+    assert [stop["stop_id"] for stop in stops] == ["NYP", "PHL", "WAS"]
+
+
+@pytest.mark.parametrize(
+    ("table_name", "content", "message"),
+    [
+        ("stops.txt", None, "missing required table 'stops.txt'"),
+        (
+            "stops.txt",
+            "stop_id,stop_lat,stop_lon\nNYP,40.7506,-73.9935\n",
+            r"missing required columns: \['stop_name'\]",
+        ),
+        (
+            "stops.txt",
+            "stop_id,stop_name,stop_lat,stop_lon\nNYP,,40.7506,-73.9935\n",
+            r"empty required values: \['stop_name'\]",
+        ),
+        (
+            "stops.txt",
+            "stop_id,stop_name\nNYP,First\nNYP,Duplicate\n",
+            "duplicate stop_id 'NYP'",
+        ),
+        (
+            "routes.txt",
+            (
+                "route_id,route_short_name,route_long_name,route_type\n"
+                "NEC,NEC,Northeast Regional,2\nNEC,NEC,Duplicate,2\n"
+            ),
+            "duplicate route_id 'NEC'",
+        ),
+        (
+            "trips.txt",
+            (
+                "route_id,service_id,trip_id,trip_headsign\n"
+                "NEC,WEEKDAY,NEC-171,Washington\nNEC,WEEKDAY,NEC-171,Duplicate\n"
+            ),
+            "duplicate trip_id 'NEC-171'",
+        ),
+        (
+            "stop_times.txt",
+            (
+                "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+                "UNKNOWN,07:00:00,07:00:00,NYP,1\n"
+            ),
+            "unknown trip_id 'UNKNOWN'",
+        ),
+        (
+            "trips.txt",
+            ("route_id,service_id,trip_id,trip_headsign\n" "UNKNOWN,WEEKDAY,NEC-171,Washington\n"),
+            "unknown route_id 'UNKNOWN'",
+        ),
+        (
+            "stop_times.txt",
+            (
+                "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+                "NEC-171,07:00:00,07:00:00,NYP,abc\n"
+            ),
+            "non-integer stop_sequence 'abc'",
+        ),
+        (
+            "stop_times.txt",
+            (
+                "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+                "NEC-171,07:00:00,07:00:00,NYP,-1\n"
+            ),
+            "stop_sequence must be non-negative",
+        ),
+        (
+            "stop_times.txt",
+            (
+                "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+                "NEC-171,07:00:00,07:00:00,NYP,1\n"
+                "NEC-171,08:20:00,08:22:00,PHL,1\n"
+            ),
+            "duplicate stop_sequence values",
+        ),
+        (
+            "stop_times.txt",
+            (
+                "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+                "OTHER,07:00:00,07:00:00,NYP,1\n"
+            ),
+            "unknown trip_id 'OTHER'",
+        ),
+        (
+            "stop_times.txt",
+            (
+                "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+                "NEC-171,07:00:00,07:00:00,NYP,1,EXTRA\n"
+            ),
+            "more values than header columns",
+        ),
+    ],
+)
+def test_rejects_invalid_feed_tables(
+    table_name: str, content: str | None, message: str, tmp_path: Path
+) -> None:
+    feed_path = _fixture_zip(tmp_path, overrides={table_name: content})
+
+    with pytest.raises(ValueError, match=message):
+        AmtrakGtfsAdapter(feed_path).fetch_snapshot(_query())
+
+
+def test_rejects_trip_without_stop_times(tmp_path: Path) -> None:
+    feed_path = _fixture_zip(
+        tmp_path,
+        overrides={
+            "trips.txt": (
+                "route_id,service_id,trip_id,trip_headsign\n"
+                "NEC,WEEKDAY,NEC-171,Washington\n"
+                "NEC,WEEKDAY,NEC-172,New York\n"
+            )
+        },
+    )
+
+    with pytest.raises(ValueError, match="trip 'NEC-172' has no stop_times.txt rows"):
+        AmtrakGtfsAdapter(feed_path).fetch_snapshot(_query())
+
+
+def test_rejects_non_zip_feed(tmp_path: Path) -> None:
+    feed_path = tmp_path / "not-a-feed.zip"
+    feed_path.write_text("not a zip", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="not a readable ZIP archive"):
         AmtrakGtfsAdapter(feed_path).fetch_snapshot(_query())
 
 

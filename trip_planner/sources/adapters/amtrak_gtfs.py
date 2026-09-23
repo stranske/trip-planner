@@ -51,7 +51,17 @@ def _read_table(archive: ZipFile, table_name: str) -> list[dict[str, str]]:
             raise ValueError(
                 f"GTFS table {table_name!r} is missing required columns: {sorted(missing)!r}"
             )
-        rows = [{key: (value or "").strip() for key, value in row.items()} for row in reader]
+        rows: list[dict[str, str]] = []
+        try:
+            for row in reader:
+                if None in row:
+                    raise ValueError(
+                        f"GTFS table {table_name!r} row {reader.line_num} has more values "
+                        "than header columns"
+                    )
+                rows.append({key: (value or "").strip() for key, value in row.items()})
+        except csv.Error as exc:
+            raise ValueError(f"GTFS table {table_name!r} is not valid CSV: {exc}") from exc
 
     if not rows:
         raise ValueError(f"GTFS table {table_name!r} must contain at least one row")
