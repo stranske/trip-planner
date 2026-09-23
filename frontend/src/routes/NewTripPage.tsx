@@ -144,7 +144,7 @@ export function NewTripPage() {
         <p className="status-label">New trip</p>
         <h2>Set up your trip</h2>
         <p className="lede">
-          Tell the planner the essentials and it will assemble route and cost options you can compare.
+          Tell the planner the essentials and it will measure the route and travel time from your origin. You enter the prices you hold.
           You can change any of this later.
         </p>
 
@@ -223,8 +223,8 @@ export function NewTripPage() {
               />
             </label>
             <p className="field-hint">
-              Where the journey starts. The planner measures the route from here, so distance,
-              travel time and transport cost all depend on it.
+              Where the journey starts. The planner measures the route from here, so distance and
+              travel time depend on it.
             </p>
 
             <label>
@@ -253,7 +253,7 @@ export function NewTripPage() {
           <fieldset className="setup-group">
             <legend>When are you travelling?</legend>
             <p className="field-hint">
-              Dates drive cost estimates, and for business trips they decide which policy rates apply.
+              For business trips the dates decide which policy rates apply.
             </p>
 
             <label>
@@ -334,7 +334,7 @@ export function NewTripPage() {
                 onChange={(event) => setTravelerCount(event.target.value)}
               />
             </label>
-            <p className="field-hint">Used for per-person cost estimates and lodging options.</p>
+            <p className="field-hint">Tells the approver how many people are travelling.</p>
 
             <label>
               Anything the planner should know
@@ -358,10 +358,10 @@ export function NewTripPage() {
               </p>
             ) : (
               <p>
-                The planner will assemble route and cost options for you to compare.
+                The planner will measure the route options from your origin.
                 {isBusiness
-                  ? " You will then add a budget, check it against travel policy, and print an approval packet."
-                  : " You can then add a budget and keep notes as you decide."}
+                  ? " You will then enter the prices you hold, check the trip against travel policy, and print an approval packet."
+                  : " You can then enter the prices you hold and keep notes as you decide."}
               </p>
             )}
           </aside>

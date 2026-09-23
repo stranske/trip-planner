@@ -457,8 +457,6 @@ def _adjust_estimated_total(
     return adjusted
 
 
-
-
 def _build_runtime_scenario_search_for_trip(
     *,
     record: PersistedTrip,
@@ -480,18 +478,16 @@ def _build_runtime_scenario_search_for_trip(
         # to three by cloning the lead with fixed offsets (+45 / +90 minutes, +1 / +2
         # transfers, -0.08 / -0.14 score), so the "alternatives" were constant across every
         # trip. One real option is better than three where two are invented.
-        return (
-            _build_scenario_search(
-                trip_id=record.trip_id,
-                trip_mode=record.mode,
-                bundles=inventory_bundles,
-                trip_title=record.title,
-                primary_regions=tuple(record.primary_regions),
-                duration_days=record.duration_days,
-                traveler_party_kind=record.traveler_party_kind,
-                organization_comparable_requirements=organization_comparable_requirements,
-            ).to_dict()
-        )
+        return _build_scenario_search(
+            trip_id=record.trip_id,
+            trip_mode=record.mode,
+            bundles=inventory_bundles,
+            trip_title=record.title,
+            primary_regions=tuple(record.primary_regions),
+            duration_days=record.duration_days,
+            traveler_party_kind=record.traveler_party_kind,
+            organization_comparable_requirements=organization_comparable_requirements,
+        ).to_dict()
 
     if saved_scenarios:
         return _build_saved_scenario_runtime_search(
@@ -922,9 +918,7 @@ def _build_runtime_scenario_comparison(
     return {
         "trip_id": trip_id,
         "title": scenario_search.get("title") or "Workspace scenario comparison",
-        "summary": (
-            _comparison_summary(len(rows), trip_title)
-        ),
+        "summary": (_comparison_summary(len(rows), trip_title)),
         "comparison_axes": comparison_axes,
         "lead_scenario_id": lead["scenario_id"],
         "scenarios": rows,
@@ -1748,6 +1742,7 @@ def _build_persisted_trip_workspace(
         payload,
         trip_mode=record.mode,
         include_debug=context.include_debug,
+        entered_prices=entered_prices,
     )
     return payload
 
@@ -1949,10 +1944,16 @@ def _build_workspace_view_model(
     *,
     trip_mode: str | None = None,
     include_debug: bool = True,
+    entered_prices: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compatibility seam for callers that imported the original private mapper."""
 
-    return build_workspace_view_model(payload, trip_mode=trip_mode, include_debug=include_debug)
+    return build_workspace_view_model(
+        payload,
+        trip_mode=trip_mode,
+        include_debug=include_debug,
+        entered_prices=entered_prices,
+    )
 
 
 def _build_workspace_runtime_state(

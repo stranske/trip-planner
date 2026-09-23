@@ -1054,6 +1054,54 @@ describe("WorkspacePage", () => {
     });
   });
 
+  it("sends an unpriced trip's next step to the Budget tab (issue 1840)", async () => {
+    const unpriced: WorkspaceData = {
+      ...workspacePayload,
+      view_model: {
+        user_summary: {
+          trip_title: workspacePayload.trip_record.trip.title,
+          trip_mode: "leisure",
+          mode_label: "Leisure trip",
+          status: "ready",
+          headline: "Trip setup is saved. No prices have been entered yet.",
+          decided: [],
+          uncertain: [],
+        },
+        next_step: {
+          title: "Enter the prices you have",
+          summary: "The planner measures routes and travel time but does not quote prices.",
+          action_label: "Open Budget",
+          action_target: "budget",
+          blocked: false,
+        },
+        panel_visibility: {
+          show_budget_panel: true,
+          show_policy_posture: false,
+          show_proposal_panel: false,
+          show_approval_readiness_panel: false,
+        },
+        policy_presentation: {
+          active_policy_state: false,
+          posture_label: "Not applicable",
+          approval_status_label: "Not applicable",
+          next_step_label: "No policy action needed",
+          summary: "Policy approval is not part of this workspace yet.",
+        },
+        business_summary: null,
+        debug_state: { sections: {} },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(unpriced),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+    renderWorkspacePage();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Open Budget" }));
+    expect(screen.getByRole("tab", { name: "Budget" })).toHaveAttribute("aria-selected", "true");
+  });
+
   it("does not render raw runtime/provider/debug labels for default leisure workspaces", async () => {
     const leisureWorkspaceWithViewModel: WorkspaceData = {
       ...workspacePayload,

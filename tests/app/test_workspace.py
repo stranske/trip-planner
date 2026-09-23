@@ -2773,8 +2773,7 @@ def test_workspace_route_option_actions_update_comparison_and_ledger(
     if len(route_options) > 1:
         # An alternative can be promoted; the sole option already is the baseline.
         assert any(
-            action["action_type"] == "make_baseline"
-            for action in reopened_row["available_actions"]
+            action["action_type"] == "make_baseline" for action in reopened_row["available_actions"]
         )
     assert f"reopened:{rejected_id}" not in json.dumps(reopened_payload)
 
@@ -3737,11 +3736,12 @@ def test_workspace_view_model_builder_preserves_business_empty_proposal_status()
 
     view_model = workspace_service._build_workspace_view_model(payload)
 
-    assert view_model["business_summary"] == {
-        "approval_status": "not_ready",
-        "headline": "Approval is not ready yet.",
-        "blockers": [],
-    }
+    assert view_model["business_summary"]["approval_status"] == "not_ready"
+    assert view_model["business_summary"]["blockers"] == []
+    # The headline names the first missing step rather than stopping at "not ready" (#1840).
+    assert view_model["business_summary"]["headline"].startswith(
+        "Approval is not ready yet: this trip still needs a destination"
+    )
 
 
 def test_leisure_trip_still_reports_approval_not_required() -> None:

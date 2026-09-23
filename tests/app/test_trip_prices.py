@@ -54,9 +54,9 @@ def _create_trip(client: TestClient) -> str:
     )
     assert response.status_code == 201, response.text
     created = response.json()["trip"]
-    assert created["trip_frame"]["primary_regions"] == ["Chicago"], (
-        "the trip did not keep its destination, so this gate would be testing a blank trip"
-    )
+    assert created["trip_frame"]["primary_regions"] == [
+        "Chicago"
+    ], "the trip did not keep its destination, so this gate would be testing a blank trip"
     return str(created["trip_id"])
 
 
@@ -205,3 +205,22 @@ def test_another_users_trip_is_not_priceable(client: TestClient) -> None:
         json={"component": "transport", "amount": 486.0},
     )
     assert response.status_code == 404
+
+
+def test_the_workspace_header_advances_once_a_price_is_entered(client: TestClient) -> None:
+    """Issue 1840: after pricing a trip the header still said nothing had been planned."""
+
+    trip_id = _create_trip(client)
+    before = client.get(f"/api/workspace/{trip_id}").json()["view_model"]
+    assert before["next_step"]["title"] == "Enter the prices you have"
+
+    saved = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={"component": "transport", "amount": 486.0, "currency": "USD", "note": "United"},
+    )
+    assert saved.status_code == 200, saved.text
+
+    after = client.get(f"/api/workspace/{trip_id}").json()["view_model"]
+    assert after["next_step"]["title"] == "Submit for approval"
+    assert after["user_summary"]["headline"].startswith("Prices entered for 1 item(s).")
+    assert "Nothing has been planned" not in after["user_summary"]["headline"]

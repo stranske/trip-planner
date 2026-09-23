@@ -95,7 +95,7 @@ def test_leisure_trip_does_not_require_a_business_purpose() -> None:
     model = build_workspace_view_model(_payload(mode="leisure", **frame))
 
     assert model["user_summary"]["status"] == "ready"
-    assert "Nothing has been planned yet" in model["user_summary"]["headline"]
+    assert "No prices have been entered yet" in model["user_summary"]["headline"]
 
 
 def test_setup_complete_trip_does_not_claim_a_reviewable_plan() -> None:
@@ -106,9 +106,10 @@ def test_setup_complete_trip_does_not_claim_a_reviewable_plan() -> None:
 
     assert summary["status"] == "ready"
     assert "ready to review" not in summary["headline"]
-    assert summary["headline"] == "Trip setup is saved. Nothing has been planned yet."
-    next_step = build_workspace_view_model(_payload(**_complete_frame()))["next_step"]
-    assert "indicative only" in next_step["summary"]
+    assert summary["headline"] == "Trip setup is saved. No prices have been entered yet."
+    next_step = model["next_step"]
+    assert next_step["title"] == "Enter the prices you have"
+    assert next_step["action_target"] == "budget"
     # Auto-generated drafts and bundles are never reported as traveller decisions.
     assert summary["decided"] == []
 
@@ -117,3 +118,92 @@ def test_generated_artefacts_are_never_listed_as_decisions() -> None:
     for mode in ("business", "leisure"):
         model = build_workspace_view_model(_payload(mode=mode, **_complete_frame()))
         assert model["user_summary"]["decided"] == [], mode
+
+
+# --- Issue 1840: the header advances with what the traveller has done -----------------
+
+_PRICED = {"priced_component_count": 2, "unpriced_component_count": 2}
+
+
+def _submitted(summary: dict[str, Any]) -> dict[str, Any]:
+    payload = _payload(**_complete_frame())
+    payload["proposal_state"] = {"summary": summary}
+    return payload
+
+
+def test_priced_business_trip_is_told_to_submit_for_approval() -> None:
+    model = build_workspace_view_model(_payload(**_complete_frame()), entered_prices=_PRICED)
+
+    assert model["next_step"]["title"] == "Submit for approval"
+    assert model["next_step"]["action_target"] == "approval"
+    assert "Nothing has been planned" not in model["user_summary"]["headline"]
+    assert model["business_summary"]["headline"] == (
+        "Approval is not ready yet: the trip has not been submitted to the policy check."
+    )
+
+
+def test_blocked_submission_names_what_the_policy_flagged() -> None:
+    model = build_workspace_view_model(
+        _submitted(
+            {
+                "submission_outcome": "blocked_by_policy",
+                "submission_blocking_codes": ["fare_evidence", "fare_comparison"],
+                "follow_up": {
+                    "failure_reasons": [
+                        {
+                            "code": "fare_evidence",
+                            "message": "Screenshot or fare evidence must be attached.",
+                        }
+                    ]
+                },
+            }
+        ),
+        entered_prices=_PRICED,
+    )
+
+    step = model["next_step"]
+    assert step["title"] == "Fix what the policy flagged"
+    assert "Screenshot or fare evidence must be attached. (rule fare_evidence)" in step["summary"]
+    assert "fare_comparison" in step["summary"]
+    assert model["business_summary"]["approval_status"] == "needs_attention"
+    assert model["business_summary"]["blockers"][0].startswith("Screenshot or fare evidence")
+
+
+def test_compliant_trip_is_told_to_print_the_packet() -> None:
+    model = build_workspace_view_model(
+        _submitted({"submission_outcome": "succeeded", "evaluation_result_status": "compliant"}),
+        entered_prices=_PRICED,
+    )
+
+    assert model["user_summary"]["headline"] == "This trip passed the travel policy check."
+    assert model["next_step"]["title"] == "Print the approval packet"
+    assert model["business_summary"]["approval_status"] == "approved"
+
+
+def test_unreachable_policy_service_is_not_reported_as_a_verdict() -> None:
+    model = build_workspace_view_model(
+        _submitted({"submission_outcome": "failed"}), entered_prices=_PRICED
+    )
+
+    assert model["next_step"]["title"] == "Submit again"
+    assert "did not reach the policy service" in model["next_step"]["summary"]
+
+
+def test_unpriced_trip_explains_why_approval_is_not_ready() -> None:
+    model = build_workspace_view_model(_payload(**_complete_frame()), entered_prices=None)
+
+    assert model["business_summary"]["headline"] == (
+        "Approval is not ready yet: no prices have been entered."
+    )
+
+
+def test_workspace_payload_passes_prices_to_the_header() -> None:
+    """The seam the served payload uses must forward the price record, or none of the above
+    reaches a traveller."""
+
+    from trip_planner.app.services import workspace as workspace_service
+
+    model = workspace_service._build_workspace_view_model(
+        _payload(**_complete_frame()), trip_mode="business", entered_prices=_PRICED
+    )
+    assert model["next_step"]["title"] == "Submit for approval"

@@ -1940,6 +1940,10 @@ function WorkspacePageContent({
         setActiveTab("policy");
         workspaceTabRefs.current.policy?.focus();
         return;
+      case "budget":
+        setActiveTab("budget");
+        workspaceTabRefs.current.budget?.focus();
+        return;
       case "trip-setup":
       default:
         setActiveTab("plan");
