@@ -962,6 +962,12 @@ describe("WorkspacePage", () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole("tab", { name: "Budget" }));
     expect(screen.getByRole("heading", { name: "Budget vs actual" })).toBeInTheDocument();
+    // The optional tracker sits behind a disclosure, open only once the traveller uses it
+    // (issue 1843), so it is not read as a second trip total.
+    const tracker = screen.getByTestId("budget-tracking-disclosure");
+    const summary = workspacePayload.budget_state.summary;
+    expect(tracker.hasAttribute("open")).toBe(summary.has_budget_plan || summary.spend_event_count > 0);
+    expect(tracker).toHaveTextContent("Track your own budget and actual spend (optional)");
 
     await user.click(screen.getByRole("tab", { name: "Plan" }));
     expect(screen.queryByRole("heading", { name: "Budget vs actual" })).not.toBeInTheDocument();

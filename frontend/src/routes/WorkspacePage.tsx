@@ -2696,14 +2696,26 @@ function WorkspacePageContent({
             onSave={handleTripPriceSave}
           />
           {panelVisibility.showBudgetPanel ? (
-            <WorkspaceBudgetPanel
-              budgetState={currentWorkspace.budget_state}
-              tripMode={trip.mode}
-              busyLabel={budgetBusyLabel}
-              errorMessage={budgetError}
-              onSaveBudget={handleBudgetSave}
-              onRecordSpend={handleSpendRecord}
-            />
+            // One money panel leads: the prices the packet uses. The optional budget tracker
+            // sits behind a disclosure so the two are not read as rival totals (issue 1843).
+            <details
+              className="budget-tracking-disclosure"
+              data-testid="budget-tracking-disclosure"
+              open={
+                currentWorkspace.budget_state.summary.has_budget_plan ||
+                currentWorkspace.budget_state.summary.spend_event_count > 0
+              }
+            >
+              <summary>Track your own budget and actual spend (optional)</summary>
+              <WorkspaceBudgetPanel
+                budgetState={currentWorkspace.budget_state}
+                tripMode={trip.mode}
+                busyLabel={budgetBusyLabel}
+                errorMessage={budgetError}
+                onSaveBudget={handleBudgetSave}
+                onRecordSpend={handleSpendRecord}
+              />
+            </details>
           ) : (
             <section className={STATUS_CARD_CLASS}>
               <p className="status-label">Budget</p>
