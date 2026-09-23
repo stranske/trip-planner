@@ -17,6 +17,7 @@ import {
   submitPlannerOptionFeedback,
   submitRouteOptionAction,
   submitTripForApproval,
+  fetchWorkspace,
   syncWorkspacePolicy,
   updateNotebookItem,
   updateWorkspacePlanningMode,
@@ -42,6 +43,7 @@ vi.mock("../api/workspace", async () => {
     recordWorkspaceSpendEvent: vi.fn(),
     refreshWorkspaceProposalStatus: vi.fn(),
     submitTripForApproval: vi.fn(),
+    fetchWorkspace: vi.fn(),
     syncWorkspacePolicy: vi.fn(),
     createNotebookItem: vi.fn(),
     updateNotebookItem: vi.fn(),
@@ -69,6 +71,7 @@ const mockedSaveWorkspaceBudget = vi.mocked(saveWorkspaceBudget);
 const mockedRecordWorkspaceSpendEvent = vi.mocked(recordWorkspaceSpendEvent);
 const mockedRefreshWorkspaceProposalStatus = vi.mocked(refreshWorkspaceProposalStatus);
 const mockedSubmitTripForApproval = vi.mocked(submitTripForApproval);
+const mockedFetchWorkspace = vi.mocked(fetchWorkspace);
 const mockedSyncWorkspacePolicy = vi.mocked(syncWorkspacePolicy);
 const mockedCreateNotebookItem = vi.mocked(createNotebookItem);
 const mockedUpdateNotebookItem = vi.mocked(updateNotebookItem);
@@ -2939,6 +2942,85 @@ describe("WorkspacePage", () => {
       expect(screen.getByText(/Submitted for approval:/)).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Policy compliant" })).toBeInTheDocument();
     });
+  });
+
+  it("takes the server's readiness labels after submitting, without a reload", async () => {
+    // Observed on merged main: straight after a compliant submission the readiness rows kept
+    // the pre-submission view model ("Needs follow-up") beside "Policy compliant" until the
+    // page was reloaded. The page now merges a fresh view model after submitting.
+    const submittedProposalState = {
+      ...workspacePayload.proposal_state!,
+      submission_status: "succeeded",
+      evaluation_status: "succeeded",
+      summary: {
+        ...workspacePayload.proposal_state!.summary,
+        submission_status: "succeeded",
+        evaluation_result_status: "compliant",
+        approval_ready: true,
+      },
+    };
+    mockedSubmitTripForApproval.mockResolvedValue(submittedProposalState);
+    const viewModel = (approvalStatus: string, nextStep: string) => ({
+      user_summary: {
+        trip_title: tripComparisonPayload[1].title,
+        trip_mode: "business",
+        mode_label: "Business trip",
+        status: "ready",
+        headline: "Trip setup is saved.",
+        decided: [],
+        uncertain: [],
+      },
+      next_step: {
+        title: "Submit for approval",
+        summary: "Send the trip to the policy service.",
+        action_label: "Open policy",
+        action_target: "approval",
+        blocked: false,
+      },
+      panel_visibility: {
+        show_budget_panel: true,
+        show_policy_posture: true,
+        show_proposal_panel: true,
+        show_approval_readiness_panel: true,
+      },
+      policy_presentation: {
+        active_policy_state: true,
+        posture_label: "Approval-ready",
+        approval_status_label: approvalStatus,
+        next_step_label: nextStep,
+        summary: "Policy evaluation passed.",
+      },
+      business_summary: null,
+      debug_state: { sections: {} },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const basePayload = workspacePayload as any;
+    const staleWorkspace = {
+      ...basePayload,
+      trip_record: { ...workspacePayload.trip_record, trip: tripComparisonPayload[1] },
+      proposal_state: null,
+      view_model: viewModel("Needs follow-up", "Resolve policy follow-up"),
+    };
+    mockedFetchWorkspace.mockResolvedValue({
+      ...staleWorkspace,
+      proposal_state: submittedProposalState,
+      view_model: viewModel("Ready for approval", "Prepare approval packet"),
+    } as typeof workspacePayload);
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(staleWorkspace),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Submit for approval" }));
+
+    await waitFor(() => {
+      expect(mockedFetchWorkspace).toHaveBeenCalled();
+      expect(screen.getByTestId("approval-packet")).toHaveTextContent("Ready for approval");
+    });
+    expect(screen.getByTestId("approval-packet")).not.toHaveTextContent("Needs follow-up");
   });
 
   it("offers a direct path to submit for approval when none exists", async () => {
