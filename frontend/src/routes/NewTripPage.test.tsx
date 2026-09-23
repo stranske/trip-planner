@@ -276,6 +276,22 @@ describe("NewTripPage", () => {
     expect(screen.getByText(/print an approval packet/)).toBeInTheDocument();
   });
 
+  it("promises no cost estimate, because the planner produces none (issue 1840)", () => {
+    const { container } = renderPage();
+    fireEvent.click(screen.getByRole("radio", { name: /Business trip/ }));
+    fireEvent.change(screen.getByLabelText(/Travelling from/), { target: { value: "Seattle" } });
+    fireEvent.change(screen.getByLabelText(/Destinations/), { target: { value: "Chicago, IL" } });
+    fireEvent.change(screen.getByLabelText(/First day of travel/), { target: { value: "2026-10-12" } });
+    fireEvent.change(screen.getByLabelText(/Last day of travel/), { target: { value: "2026-10-15" } });
+    fireEvent.change(screen.getByLabelText(/Business purpose/), { target: { value: "Client review" } });
+
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/cost estimates?/i);
+    expect(text).not.toMatch(/route and cost options/i);
+    expect(text).not.toMatch(/transport cost/i);
+    expect(text).toMatch(/enter the prices you hold/i);
+  });
+
   it("asks a business traveller for the purpose an approver will read", () => {
     renderPage();
 

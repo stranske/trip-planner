@@ -2041,13 +2041,6 @@ a {
 }
 
 /* Generated route options are not researched estimates; say so prominently. */
-.placeholder-costs-notice {
-  border-left: 3px solid var(--color-rose);
-  padding-left: var(--space-3);
-  color: var(--color-ink);
-  font-weight: 600;
-}
-
 /* Trip cost entry: one row per component, collapsing to stacked fields on narrow screens. */
 .trip-price-list {
   display: grid;

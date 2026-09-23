@@ -68,11 +68,14 @@ def _workspace_approval_status(
     evaluation = str(
         summary.get("evaluation_result_status") or summary.get("submission_status") or ""
     ).lower()
-    if summary.get("approval_ready"):
+    if summary.get("approval_ready") or evaluation == "compliant":
         return "approved", "Your trip is ready for approval.", []
+    # The public payload carries the outcome, not the raw transport status (#1130 / #1152).
+    if str(summary.get("submission_outcome") or "") == "blocked_by_policy":
+        return "needs_attention", "The travel policy blocked this trip.", _blocking_reasons(summary)
     if evaluation in {"in_review", "pending", "submitted"}:
         return "in_review", "Your trip approval is in review.", []
-    if evaluation in {"failed", "rejected", "needs_attention"} or follow_up in {
+    if evaluation in {"failed", "rejected", "needs_attention", "non_compliant"} or follow_up in {
         "exception_required",
         "reoptimization_required",
         "remediation_required",
@@ -161,31 +164,137 @@ def _humanise(items: list[str]) -> str:
     return f"{', '.join(items[:-1])} and {items[-1]}"
 
 
-def _next_step(status: str, missing: list[str]) -> tuple[str, str, str, str, bool]:
+_Step = tuple[str, str, str, str, bool, str]
+
+
+def _priced_count(entered_prices: Any) -> int:
+    try:
+        return int(_dict(entered_prices).get("priced_component_count") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _proposal_summary(proposal_state: Any) -> dict[str, Any]:
+    return _dict(_dict(proposal_state).get("summary"))
+
+
+def _blocking_reasons(summary: dict[str, Any]) -> list[str]:
+    """TPP's own words for each blocking rule, falling back to the rule code."""
+
+    messages: dict[str, str] = {}
+    for reason in _dict(summary.get("follow_up")).get("failure_reasons") or []:
+        reason = _dict(reason)
+        if reason.get("code") and reason.get("message"):
+            messages[str(reason["code"])] = str(reason["message"])
+    codes = [str(code) for code in summary.get("submission_blocking_codes") or []] or list(messages)
+    return [f"{messages[code]} (rule {code})" if code in messages else code for code in codes]
+
+
+def _submitted_step(summary: dict[str, Any]) -> _Step | None:
+    """Where a trip stands once it has been sent to the travel policy service."""
+
+    verdict = str(summary.get("evaluation_result_status") or "").lower()
+    outcome = str(summary.get("submission_outcome") or "").lower()
+    if verdict == "compliant":
+        return (
+            "This trip passed the travel policy check.",
+            "Print the approval packet",
+            "Hand the packet to your approver. It carries the costs you entered, who entered "
+            "them, and the policy result.",
+            "Open the approval packet",
+            False,
+            "approval",
+        )
+    if outcome == "blocked_by_policy" or verdict == "non_compliant":
+        reasons = _blocking_reasons(summary)
+        detail = "; ".join(reasons) if reasons else "the policy service did not say which rules"
+        return (
+            "The travel policy blocked this trip.",
+            "Fix what the policy flagged",
+            f"Flagged: {detail}. Change the trip or its prices, then submit again.",
+            "Open the policy check",
+            False,
+            "approval",
+        )
+    if outcome == "failed":
+        return (
+            "The travel policy check could not be reached.",
+            "Submit again",
+            "Nothing was reviewed: the request did not reach the policy service.",
+            "Open the policy check",
+            False,
+            "approval",
+        )
+    if outcome not in {"", "not_submitted"}:
+        return (
+            "Submitted to the travel policy check.",
+            "Check the policy result",
+            "The policy service has the request. Refresh the policy check to read its result.",
+            "Open the policy check",
+            False,
+            "approval",
+        )
+    return None
+
+
+def _journey_step(*, mode: str, priced: int, proposal_state: Any) -> _Step:
+    """The next step once trip setup is complete, advancing with what the traveller did."""
+
+    if priced == 0:
+        return (
+            "Trip setup is saved. No prices have been entered yet.",
+            "Enter the prices you have",
+            "The planner measures routes and travel time but does not quote prices. Enter the "
+            "fares and rates you hold on the Budget tab; each is recorded as entered by you.",
+            "Open Budget",
+            False,
+            "budget",
+        )
+    if mode == "business":
+        submitted = _submitted_step(_proposal_summary(proposal_state))
+        if submitted is not None:
+            return submitted
+        return (
+            f"Prices entered for {priced} item(s). Not yet checked against travel policy.",
+            "Submit for approval",
+            "Send the trip and the prices you entered to the travel policy check.",
+            "Open the policy check",
+            False,
+            "approval",
+        )
+    return (
+        f"Prices entered for {priced} item(s).",
+        "Compare the route options",
+        "Compare shows the measured routes with the total you entered.",
+        "Open scenario comparison",
+        False,
+        "scenario-comparison",
+    )
+
+
+def _next_step(
+    status: str,
+    missing: list[str],
+    *,
+    mode: str = "leisure",
+    entered_prices: Any = None,
+    proposal_state: Any = None,
+) -> _Step:
     if missing:
         return (
             f"This trip still needs {_humanise(missing)}.",
             "Finish trip setup",
             (
-                "The planner cannot suggest routes or costs worth reviewing until it knows "
+                "The planner cannot measure routes or check policy until it knows "
                 f"{_humanise(missing)}."
             ),
             "Open trip setup",
             True,
+            "trip-setup",
         )
     if status == "ready":
-        # Everything available at this point is generated from flat constants, so the
-        # traveller is told what these options actually are rather than being told a
-        # plan is "ready to review".
-        return (
-            "Trip setup is saved. Nothing has been planned yet.",
-            "Look over the starting options",
-            (
-                "The planner has laid out a few rough route shapes to react to. They are "
-                "indicative only — not priced for your destination."
-            ),
-            "Open scenario comparison",
-            False,
+        return _journey_step(
+            mode=mode, priced=_priced_count(entered_prices), proposal_state=proposal_state
         )
     if status == "partial":
         return (
@@ -194,6 +303,7 @@ def _next_step(status: str, missing: list[str]) -> tuple[str, str, str, str, boo
             "Inventory is in place; resolve the open uncertainties to unlock scenario comparison.",
             "Continue planning",
             False,
+            "planner",
         )
     return (
         "Trip planning hasn't started yet.",
@@ -201,13 +311,38 @@ def _next_step(status: str, missing: list[str]) -> tuple[str, str, str, str, boo
         "Add the missing trip context to start assembling scenarios.",
         "Open trip setup",
         True,
+        "trip-setup",
     )
 
 
+def _not_ready_reason(*, missing: list[str], priced: int, proposal_state: Any) -> str:
+    """Why approval is not ready: the first step the traveller has not done."""
+
+    if missing:
+        return f"Approval is not ready yet: this trip still needs {_humanise(missing)}."
+    if priced == 0:
+        return "Approval is not ready yet: no prices have been entered."
+    if (
+        not _proposal_summary(proposal_state).get("submission_outcome")
+        or _proposal_summary(proposal_state).get("submission_outcome") == "not_submitted"
+    ):
+        return "Approval is not ready yet: the trip has not been submitted to the policy check."
+    return "Approval is not ready yet: the policy check has not returned a result."
+
+
 def build_workspace_view_model(
-    payload: dict[str, Any], *, trip_mode: str | None = None, include_debug: bool = True
+    payload: dict[str, Any],
+    *,
+    trip_mode: str | None = None,
+    include_debug: bool = True,
+    entered_prices: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Map internal workspace state into the stable product-facing model."""
+    """Map internal workspace state into the stable product-facing model.
+
+    `entered_prices` is the traveller's price record (`build_trip_prices_payload`). Without
+    it the header cannot tell an unpriced trip from a priced one, which is how it said
+    "Nothing has been planned yet" after a trip had been priced and submitted (issue 1840).
+    """
 
     trip_record = _dict(payload.get("trip_record"))
     trip = _dict(trip_record.get("trip"))
@@ -240,13 +375,14 @@ def build_workspace_view_model(
     elif status == "partial":
         uncertain.append("Scenario comparison is not yet ready.")
 
-    headline, next_title, next_summary, next_action, blocked = _next_step(status, missing_context)
-    next_target = (
-        "trip-setup"
-        if missing_context
-        else {"ready": "scenario-comparison", "partial": "planner"}.get(status, "trip-setup")
-    )
     proposal = payload.get("proposal_state")
+    headline, next_title, next_summary, next_action, blocked, next_target = _next_step(
+        status,
+        missing_context,
+        mode=mode,
+        entered_prices=entered_prices,
+        proposal_state=proposal,
+    )
     active = _workspace_policy_state_is_active(
         policy_state=payload.get("policy_state"), proposal_state=proposal
     )
@@ -256,6 +392,12 @@ def build_workspace_view_model(
         approval_status, approval_headline, blockers = _workspace_approval_status(
             _dict(proposal), trip_mode=mode
         )
+        if approval_status == "not_ready":
+            approval_headline = _not_ready_reason(
+                missing=missing_context,
+                priced=_priced_count(entered_prices),
+                proposal_state=proposal,
+            )
         business_summary = {
             "approval_status": approval_status,
             "headline": approval_headline,
