@@ -1,0 +1,45 @@
+{
+  "data": {
+    "id": "orq_fixture_chicago_new_york",
+    "live_mode": false,
+    "created_at": "2026-10-15T12:00:00Z",
+    "offers": [
+      {
+        "id": "off_fixture_ord_jfk",
+        "live_mode": false,
+        "total_amount": "218.40",
+        "total_currency": "USD",
+        "expires_at": "2026-10-15T12:30:00Z",
+        "owner": {
+          "id": "arl_fixture_duffel_airways",
+          "name": "Duffel Airways",
+          "iata_code": "ZZ"
+        },
+        "slices": [
+          {
+            "id": "sli_fixture_ord_jfk",
+            "origin": {
+              "iata_code": "ORD",
+              "name": "O'Hare International Airport"
+            },
+            "destination": {
+              "iata_code": "JFK",
+              "name": "John F. Kennedy International Airport"
+            },
+            "segments": [
+              {
+                "id": "seg_fixture_ord_jfk",
+                "departing_at": "2026-11-10T14:00:00Z",
+                "arriving_at": "2026-11-10T17:15:00Z",
+                "operating_carrier": {
+                  "name": "Duffel Airways",
+                  "iata_code": "ZZ"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
