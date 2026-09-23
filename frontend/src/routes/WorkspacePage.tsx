@@ -1819,10 +1819,24 @@ function WorkspacePageContent({
         nextProposalState,
         nextProposalState.follow_up
       );
+      // The readiness rows read the server's view model, which the submission changes. Take
+      // only that from a fresh read — the rest of the screen stays as the traveller has it —
+      // otherwise a passed trip read "Needs follow-up" beside "Policy compliant" until reload.
+      let refreshedViewModel: WorkspaceData["view_model"] | undefined;
+      try {
+        refreshedViewModel = (await fetchWorkspace(currentWorkspace.trip_record.trip.trip_id))
+          .view_model;
+      } catch {
+        refreshedViewModel = undefined;
+      }
+      if (refreshVersion !== proposalRefreshVersion.current) {
+        return;
+      }
       startTransition(() => {
         setCurrentWorkspace((current) => ({
           ...current,
           proposal_state: nextProposalState,
+          ...(refreshedViewModel !== undefined ? { view_model: refreshedViewModel } : {}),
         }));
       });
       setProposalStatusMessage(
@@ -1878,10 +1892,22 @@ function WorkspacePageContent({
         nextProposalState,
         nextProposalState.follow_up
       );
+      // As after a refresh: take the server's fresh view model, which the submission changes.
+      let submittedViewModel: WorkspaceData["view_model"] | undefined;
+      try {
+        submittedViewModel = (await fetchWorkspace(submissionWorkspace.trip_record.trip.trip_id))
+          .view_model;
+      } catch {
+        submittedViewModel = undefined;
+      }
+      if (refreshVersion !== proposalRefreshVersion.current) {
+        return;
+      }
       startTransition(() => {
         setCurrentWorkspace((current) => ({
           ...current,
           proposal_state: nextProposalState,
+          ...(submittedViewModel !== undefined ? { view_model: submittedViewModel } : {}),
         }));
       });
       setProposalStatusMessage(
