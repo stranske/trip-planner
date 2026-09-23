@@ -25,6 +25,8 @@ export type PolicyPanelView =
       /** TPP's own failure message per code, when the payload carries one. */
       issueMessages?: Record<string, string>;
       summary: string;
+      /** Submit the corrected trip again. Without it a blocked trip was a dead end. */
+      onResubmit?: () => void;
     }
   | {
       kind: "service-unavailable";
@@ -108,6 +110,7 @@ export function derivePolicyPanelView(
       issueCodes: blockingCodes.length > 0 ? blockingCodes : ["policy-review-required"],
       issueMessages: tppMessages,
       summary: "The travel policy service reviewed this trip and blocked it until the items below are resolved.",
+      onResubmit: handlers.onPrepare,
     };
   }
 
@@ -221,6 +224,17 @@ function renderPolicyState(view: PolicyPanelView, compact = false, busy = false)
               );
             })}
           </ul>
+          {view.onResubmit && !compact ? (
+            <>
+              <p className="field-hint">
+                Fix these on the Budget tab (the flight details come from your airline quote),
+                then submit the trip again.
+              </p>
+              <button type="button" onClick={view.onResubmit}>
+                Submit again
+              </button>
+            </>
+          ) : null}
         </section>
       );
     case "service-unavailable":

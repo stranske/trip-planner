@@ -1337,6 +1337,10 @@ function WorkspacePageContent({
     : null;
   const policyBlocked =
     currentWorkspace.proposal_state?.summary.submission_outcome === "blocked_by_policy";
+  // TPP reports "deferred" until a person approves, while its policy verdict is already final;
+  // so "compliant" here means the policy passed and the decision now rests with the approver.
+  const policyPassed =
+    currentWorkspace.proposal_state?.summary.evaluation_result_status === "compliant";
   const proposalLifecycle =
     currentWorkspace.proposal_state == null
       ? null
@@ -2715,21 +2719,29 @@ function WorkspacePageContent({
                       <dd>
                         {policyBlocked
                           ? "Blocked by policy"
-                          : currentWorkspace.view_model?.policy_presentation.approval_status_label ??
+                          : policyPassed
+                            ? "Policy passed — waiting for your approver"
+                            : currentWorkspace.view_model?.policy_presentation.approval_status_label ??
                             proposalLifecycle?.readinessLabel ??
                             "Waiting for policy review"}
                       </dd>
                     </div>
                     <div>
                       <dt>Request status</dt>
-                      <dd>{describeSubmissionOutcome(currentWorkspace.proposal_state.summary)}</dd>
+                      <dd>
+                        {policyPassed
+                          ? "Reviewed — policy passed"
+                          : describeSubmissionOutcome(currentWorkspace.proposal_state.summary)}
+                      </dd>
                     </div>
                     <div>
                       <dt>Next step</dt>
                       <dd>
                         {policyBlocked
                           ? "Resolve the policy items listed, then submit again"
-                          : currentWorkspace.view_model?.policy_presentation.next_step_label ??
+                          : policyPassed
+                            ? "Print the approval packet and send it to your approver"
+                            : currentWorkspace.view_model?.policy_presentation.next_step_label ??
                             formatFollowUpStatus(
                               renderableProposalFollowUp?.status ??
                                 currentWorkspace.proposal_state.summary.follow_up_status

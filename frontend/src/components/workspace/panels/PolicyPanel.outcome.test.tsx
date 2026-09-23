@@ -7,7 +7,7 @@
  * These tests use the summary shape that live service actually produced.
  */
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { WorkspaceData } from "../../../api/workspace";
@@ -53,6 +53,23 @@ describe("policy panel outcome", () => {
 
     expect(screen.queryByText("Policy service unavailable")).toBeNull();
     expect(screen.queryByRole("button", { name: "Retry policy check" })).toBeNull();
+  });
+
+  it("lets the traveller submit again after fixing a policy block", () => {
+    // After a block the panel offered nothing but Print: the copy said "submit again" and no
+    // control did. Resubmitting goes through the same handler as the first submission.
+    const onPrepare = vi.fn();
+    const view = derivePolicyPanelView(
+      workspaceWithSummary({
+        submission_outcome: "blocked_by_policy",
+        submission_blocking_codes: ["cabin_class"],
+      }),
+      { ...handlers, onPrepare }
+    );
+    render(<PolicyPanel view={view} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit again" }));
+    expect(onPrepare).toHaveBeenCalledOnce();
   });
 
   it("still reports a genuine transport failure as the service being unavailable", () => {
