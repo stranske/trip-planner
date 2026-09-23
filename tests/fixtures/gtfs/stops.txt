@@ -1,0 +1,4 @@
+stop_id,stop_name,stop_lat,stop_lon
+NYP,New York Penn Station,40.7506,-73.9935
+PHL,Philadelphia 30th Street Station,39.9556,-75.1810
+WAS,Washington Union Station,38.8971,-77.0064
