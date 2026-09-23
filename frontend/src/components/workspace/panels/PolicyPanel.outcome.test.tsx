@@ -113,6 +113,24 @@ describe("policy panel outcome", () => {
     expect(outage.kind).toBe("service-unavailable");
   });
 
+  it("offers Submit again in the layout the page actually uses after a submission", () => {
+    // After any submission the page passes lifecycle content, which puts the panel in compact
+    // mode. The first version of this control hid itself there, so on the real page a blocked
+    // traveller saw only Print. The test above rendered without lifecycle content and passed.
+    const onPrepare = vi.fn();
+    const view = derivePolicyPanelView(
+      workspaceWithSummary({
+        submission_outcome: "blocked_by_policy",
+        submission_blocking_codes: ["fare_evidence"],
+      }),
+      { ...handlers, onPrepare }
+    );
+    render(<PolicyPanel view={view} lifecycleContent={<p>Travel policy blocked this request</p>} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit again" }));
+    expect(onPrepare).toHaveBeenCalledOnce();
+  });
+
   it("shows an unknown rule code as-is rather than guessing what it means", () => {
     const view = derivePolicyPanelView(
       workspaceWithSummary({

@@ -224,13 +224,16 @@ function renderPolicyState(view: PolicyPanelView, compact = false, busy = false)
               );
             })}
           </ul>
-          {view.onResubmit && !compact ? (
+          {/* Shown in compact mode too. The panel goes compact whenever a submission exists,
+              which is exactly when a block can happen, so hiding the action there left a
+              blocked traveller with nothing to press but Print. */}
+          {view.onResubmit ? (
             <>
               <p className="field-hint">
                 Fix these on the Budget tab (the flight details come from your airline quote),
                 then submit the trip again.
               </p>
-              <button type="button" onClick={view.onResubmit}>
+              <button type="button" onClick={view.onResubmit} disabled={busy}>
                 Submit again
               </button>
             </>
