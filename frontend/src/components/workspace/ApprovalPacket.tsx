@@ -70,6 +70,20 @@ function describePolicyResult(workspace: WorkspaceData): PolicyResult {
   return { label: "Submitted; the policy review has not finished", reasons: [] };
 }
 
+/** The trip limit the travel policy enforces, when the synced policy publishes one. */
+function policyTripLimit(workspace: WorkspaceData): { amount: number; ruleId: string } | null {
+  const budgetRules = workspace.policy_state?.constraint_set?.budget_rules;
+  if (budgetRules == null || typeof budgetRules !== "object") {
+    return null;
+  }
+  const rules = budgetRules as { max_trip_total_usd?: unknown; rule_id?: unknown };
+  const amount = rules.max_trip_total_usd;
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+  return { amount, ruleId: typeof rules.rule_id === "string" ? rules.rule_id : "policy limit" };
+}
+
 function formatDate(value: string | null | undefined): string {
   if (!value) {
     return "Not set";
@@ -217,6 +231,23 @@ export function ApprovalPacket({
             </li>
           </ul>
         ) : null}
+        {(() => {
+          const limit = policyTripLimit(workspace);
+          if (limit == null) {
+            return null;
+          }
+          const limitMoney = { currency: "USD", typical_amount: limit.amount };
+          const under =
+            totalAmount != null && total?.currency === "USD" ? limit.amount - totalAmount : null;
+          return (
+            <p data-testid="approval-packet-policy-limit">
+              {`Travel policy limit ${formatMoney(limitMoney)} (rule ${limit.ruleId})`}
+              {under != null
+                ? `: this trip is ${formatMoney({ currency: "USD", typical_amount: Math.abs(under) })} ${under >= 0 ? "under" : "over"} it.`
+                : "."}
+            </p>
+          );
+        })()}
         <p data-testid="approval-packet-budget">
           {hasBudgetCap
             ? headroom != null

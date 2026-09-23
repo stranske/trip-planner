@@ -217,4 +217,23 @@ describe("ApprovalPacket", () => {
     expect(signoff).toHaveTextContent("Signature");
     expect(signoff).toHaveTextContent("Approved / Not approved");
   });
+
+  it("prints the travel policy's own trip limit with its rule, when the policy publishes one", () => {
+    // TPP enforces BUD-001 ($5,000) and, since TPP PR 1590, publishes it in the snapshot.
+    const withLimit = workspace();
+    withLimit.policy_state = {
+      organization_id: "tpp",
+      constraint_set: { policy_id: "p", budget_rules: { rule_id: "BUD-001", max_trip_total_usd: 5000 } },
+    };
+    render(<ApprovalPacket workspace={withLimit} prices={PRICED} onPrint={vi.fn()} />);
+
+    expect(screen.getByTestId("approval-packet-policy-limit")).toHaveTextContent(
+      "Travel policy limit $5,000 (rule BUD-001): this trip is $3,902 under it."
+    );
+  });
+
+  it("prints no policy limit when the policy publishes none", () => {
+    render(<ApprovalPacket workspace={workspace()} prices={PRICED} onPrint={vi.fn()} />);
+    expect(screen.queryByTestId("approval-packet-policy-limit")).toBeNull();
+  });
 });
