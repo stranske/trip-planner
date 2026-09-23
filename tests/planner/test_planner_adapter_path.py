@@ -278,4 +278,4 @@ def test_persisted_trip_workspace_inventory_contains_all_four_option_types(
     bundle = bundles[0]
     assert bundle.get("lodging_options"), "Production adapter must generate lodging options"
     assert bundle.get("transport_options"), "Production adapter must generate transport options"
-    assert bundle.get("activity_options"), "Production adapter must generate activity options"
+    assert bundle.get("activity_options") == [], "no activity is invented: the traveller entered none and no source supplied one"

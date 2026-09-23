@@ -457,144 +457,6 @@ def _adjust_estimated_total(
     return adjusted
 
 
-def _route_option_variant(
-    *,
-    base_scenario: dict[str, Any],
-    trip_id: str,
-    variant: str,
-    rank: int,
-    title: str,
-    headline: str,
-    tradeoff_summary: str,
-    score_delta: float,
-    travel_minutes_delta: int,
-    transfer_delta: int,
-    estimated_total_delta: float,
-    scenario_kind: str,
-) -> dict[str, Any]:
-    generated = deepcopy(base_scenario)
-    base_summary = dict(base_scenario.get("scenario_summary") or {})
-    base_route = list(base_summary.get("route_sequence") or [])
-    generated_id = f"scenario:{trip_id}:route-option:{variant}"
-    generated["scenario_id"] = generated_id
-    generated["title"] = title
-    generated["rank"] = rank
-    generated["source_result_id"] = (
-        f"{base_scenario.get('source_result_id', generated_id)}:{variant}"
-    )
-    generated["score"] = round(
-        max(0.05, min(0.98, float(base_scenario.get("score", 0.5)) + score_delta)), 2
-    )
-    generated["scenario_summary"] = {
-        **base_summary,
-        "headline": headline,
-        "scenario_kind": scenario_kind,
-        "recommended_for_selection": False,
-        "estimated_total": _adjust_estimated_total(
-            base_summary.get("estimated_total"),
-            delta=estimated_total_delta,
-        ),
-        "total_travel_minutes": max(
-            0,
-            int(base_summary.get("total_travel_minutes") or 0) + travel_minutes_delta,
-        ),
-        "total_transfer_count": max(
-            0,
-            int(base_summary.get("total_transfer_count") or 0) + transfer_delta,
-        ),
-        "route_sequence": _generated_route_sequence(base_route, variant=variant),
-        "notes": [
-            *list(base_summary.get("notes") or []),
-            "generated_route_option",
-        ],
-    }
-    generated["unresolved_tradeoffs"] = [
-        *list(base_scenario.get("unresolved_tradeoffs") or []),
-        {
-            "tradeoff_id": f"tradeoff:{trip_id}:route-option:{variant}",
-            "code": f"generated_{variant}_route",
-            "summary": tradeoff_summary,
-            "severity": "warning",
-            "blocking": False,
-            "related_ids": [str(base_scenario.get("scenario_id") or "")],
-            "notes": ["Generated as a rough comparison route until deeper planner research runs."],
-        },
-    ]
-    generated["notes"] = [
-        *list(base_scenario.get("notes") or []),
-        "Generated as a rough route option from the current workspace route shape.",
-    ]
-    return generated
-
-
-def _ensure_route_option_search_depth(
-    record: PersistedTrip,
-    scenario_search: dict[str, Any],
-) -> dict[str, Any]:
-    scenarios = list(scenario_search.get("scenarios") or [])
-    if len(scenarios) >= 3 or not scenarios:
-        return scenario_search
-
-    expanded = dict(scenario_search)
-    expanded_scenarios = [deepcopy(scenario) for scenario in scenarios]
-    base_scenario = scenarios[0]
-    next_rank = len(expanded_scenarios) + 1
-    if len(expanded_scenarios) < 3:
-        expanded_scenarios.append(
-            _route_option_variant(
-                base_scenario=base_scenario,
-                trip_id=record.trip_id,
-                variant="reverse",
-                rank=next_rank,
-                title="Reverse-order route option",
-                headline="Same anchors in a different order to test pacing and arrival flow.",
-                tradeoff_summary=(
-                    "Reversing the order may improve arrival rhythm, but the planner still "
-                    "needs to validate local transfer timing."
-                ),
-                score_delta=-0.08,
-                travel_minutes_delta=45,
-                transfer_delta=1,
-                estimated_total_delta=120.0,
-                scenario_kind="alternative",
-            )
-        )
-        next_rank += 1
-    if len(expanded_scenarios) < 3:
-        expanded_scenarios.append(
-            _route_option_variant(
-                base_scenario=base_scenario,
-                trip_id=record.trip_id,
-                variant="loop",
-                rank=next_rank,
-                title="Loop route option",
-                headline="Return through the starting anchor to preserve a fallback exit path.",
-                tradeoff_summary=(
-                    "The loop keeps a recovery path open but adds movement that may not be "
-                    "worth it for the final plan."
-                ),
-                score_delta=-0.14,
-                travel_minutes_delta=90,
-                transfer_delta=2,
-                estimated_total_delta=240.0,
-                scenario_kind="fallback",
-            )
-        )
-
-    expanded["scenarios"] = expanded_scenarios[:4]
-    expanded["explanation"] = [
-        *list(expanded.get("explanation") or []),
-        "Route option workbench generated rough alternatives so the traveler can compare more than one path.",
-    ]
-    expanded["source_refs"] = list(
-        dict.fromkeys(
-            [
-                *list(expanded.get("source_refs") or []),
-                f"route-options:{record.trip_id}",
-            ]
-        )
-    )
-    return expanded
 
 
 def _build_runtime_scenario_search_for_trip(
@@ -614,8 +476,11 @@ def _build_runtime_scenario_search_for_trip(
         return _empty_workspace_scenario_search()
 
     if inventory_bundles:
-        return _ensure_route_option_search_depth(
-            record,
+        # Only options the pipeline derived from this trip. The comparison used to be padded
+        # to three by cloning the lead with fixed offsets (+45 / +90 minutes, +1 / +2
+        # transfers, -0.08 / -0.14 score), so the "alternatives" were constant across every
+        # trip. One real option is better than three where two are invented.
+        return (
             _build_scenario_search(
                 trip_id=record.trip_id,
                 trip_mode=record.mode,
@@ -625,7 +490,7 @@ def _build_runtime_scenario_search_for_trip(
                 duration_days=record.duration_days,
                 traveler_party_kind=record.traveler_party_kind,
                 organization_comparable_requirements=organization_comparable_requirements,
-            ).to_dict(),
+            ).to_dict()
         )
 
     if saved_scenarios:
@@ -885,6 +750,17 @@ def _apply_entered_total(
     return dict(entered_total)
 
 
+def _comparison_summary(option_count: int, trip_title: str) -> str:
+    """Say how many options exist and, when there is one, why there are not more."""
+
+    if option_count == 1:
+        return (
+            f"One route option could be worked out for {trip_title}. Alternatives appear here "
+            "only when the planner can measure them for this trip, not as variations on this one."
+        )
+    return f"{option_count} route options to compare for {trip_title}."
+
+
 def _build_runtime_scenario_comparison(
     *,
     trip_id: str,
@@ -1047,7 +923,7 @@ def _build_runtime_scenario_comparison(
         "trip_id": trip_id,
         "title": scenario_search.get("title") or "Workspace scenario comparison",
         "summary": (
-            f"{len(rows)} runtime scenario(s) are available for side-by-side comparison in {trip_title}."
+            _comparison_summary(len(rows), trip_title)
         ),
         "comparison_axes": comparison_axes,
         "lead_scenario_id": lead["scenario_id"],

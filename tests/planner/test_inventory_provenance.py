@@ -169,7 +169,7 @@ def test_generated_bundles_contain_all_four_option_domains() -> None:
     assert bundle.destinations, "bundle must have at least one destination"
     assert bundle.lodging_options, "bundle must have at least one lodging option"
     assert bundle.transport_options, "bundle must have at least one transport option"
-    assert bundle.activity_options, "bundle must have at least one activity option"
+    assert bundle.activity_options == [], "no activity is invented: the traveller entered none and no source supplied one"
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +183,6 @@ def test_generated_bundle_has_deterministic_option_ids() -> None:
 
     assert bundle.lodging_options[0].option_id == f"lodging:{_TRIP_ID}:primary"
     assert bundle.transport_options[0].option_id == f"transport:{_TRIP_ID}:arrival"
-    assert bundle.activity_options[0].option_id == f"activity:{_TRIP_ID}:primary"
 
 
 def test_generated_bundle_has_provenance_source_refs() -> None:
@@ -195,7 +194,8 @@ def test_generated_bundle_has_provenance_source_refs() -> None:
     assert all(f"prov:{_TRIP_ID}:runtime" in ref for ref in source_refs)
     assert any(ref.endswith(":lodging") for ref in source_refs)
     assert any(ref.endswith(":transport") for ref in source_refs)
-    assert any(ref.endswith(":activity") for ref in source_refs)
+    # No activity is seeded, so none may be cited as a source.
+    assert not any(ref.endswith(":activity") for ref in source_refs)
 
 
 def test_generated_lodging_option_has_provenance_reference() -> None:
@@ -221,16 +221,14 @@ def test_generated_transport_option_has_provenance_reference() -> None:
     assert ref.source_id, "transport source_id must be non-empty"
 
 
-def test_generated_activity_option_has_provenance_reference() -> None:
-    """Each activity option must carry a ProvenanceReference linking back to the runtime adapter."""
-    activity = _generate_bundles()[0].activity_options[0]
-
-    assert activity.source_refs, "activity.source_refs must be non-empty"
-    ref = activity.source_refs[0]
-    assert ref.provenance_id == f"prov:{_TRIP_ID}:runtime:activity"
-    assert ref.contribution_kind == "inventory"
-    assert ref.source_id == "persisted-trip-runtime-source"
-    assert ref.source_id, "activity source_id must be non-empty"
+def test_the_adapter_does_not_invent_an_activity() -> None:
+    """The adapter used to add a "Client priority planning block" (business) or an
+    "anchor experience" (leisure) to every trip. The traveller entered neither, and the
+    invented meeting drove feasibility. Activities come from the traveller or a source."""
+    bundle = _generate_bundles()[0]
+    assert bundle.activity_options == []
+    names = [option.name for option in bundle.activity_options]
+    assert "Client priority planning block" not in names
 
 
 def test_generated_destination_has_source_ref_with_stable_source_id() -> None:
@@ -327,19 +325,14 @@ def test_stable_source_id_is_identical_across_repeated_runs() -> None:
     assert bundle_a.transport_options[0].source_refs[0].source_id == (
         bundle_b.transport_options[0].source_refs[0].source_id
     )
-    # Activity source IDs are identical across runs
-    assert bundle_a.activity_options[0].source_refs[0].source_id == (
-        bundle_b.activity_options[0].source_refs[0].source_id
-    )
+    # No activity is invented on either run.
+    assert bundle_a.activity_options == bundle_b.activity_options == []
     # Provenance IDs are also identical (full determinism check)
     assert bundle_a.lodging_options[0].source_refs[0].provenance_id == (
         bundle_b.lodging_options[0].source_refs[0].provenance_id
     )
     assert bundle_a.transport_options[0].source_refs[0].provenance_id == (
         bundle_b.transport_options[0].source_refs[0].provenance_id
-    )
-    assert bundle_a.activity_options[0].source_refs[0].provenance_id == (
-        bundle_b.activity_options[0].source_refs[0].provenance_id
     )
     # Destination source IDs are identical across runs
     for dest_a, dest_b in zip(bundle_a.destinations, bundle_b.destinations):
@@ -376,19 +369,12 @@ def test_generated_lodging_has_checkin_window_for_feasibility() -> None:
     ), "checkin_window must be a parseable time range (e.g. '15:00-22:00')"
 
 
-def test_generated_activity_has_typical_start_window_for_feasibility() -> None:
-    """Generated activity must carry a non-empty typical_start_window so feasibility can parse it.
-
-    Without typical_start_window, evaluate_bundle_feasibility adds it to missing_data_fields,
-    which prevents the bundle from being recommended_for_ranking.
-    """
-    activity = _generate_bundles()[0].activity_options[0]
-    assert (
-        activity.timing_summary.typical_start_window
-    ), "activity typical_start_window must be non-empty"
-    assert (
-        "-" in activity.timing_summary.typical_start_window
-    ), "typical_start_window must be a parseable time range (e.g. '09:00-18:00')"
+def test_feasibility_does_not_depend_on_an_invented_activity_window() -> None:
+    """The invented activity carried a "09:00-18:00" start window that feasibility then
+    enforced. With no activity there is no window to miss."""
+    bundle = _generate_bundles()[0]
+    assert all(option.timing_summary.typical_start_window for option in bundle.activity_options)
+    assert bundle.activity_options == []
 
 
 def test_generated_bundle_feasibility_has_no_missing_data_fields() -> None:

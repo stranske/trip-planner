@@ -72,7 +72,7 @@ def test_adapter_generated_bundles_include_all_four_option_types() -> None:
     assert bundle.destinations, "adapter bundle must include at least one destination"
     assert bundle.lodging_options, "adapter bundle must include lodging options"
     assert bundle.transport_options, "adapter bundle must include transport options"
-    assert bundle.activity_options, "adapter bundle must include activity options"
+    assert bundle.activity_options == [], "no activity is invented: the traveller entered none and no source supplied one"
 
 
 def test_adapter_generated_bundles_have_stable_option_ids() -> None:
@@ -81,7 +81,6 @@ def test_adapter_generated_bundles_have_stable_option_ids() -> None:
 
     assert bundle.lodging_options[0].option_id == f"lodging:{_TRIP_ID}:primary"
     assert bundle.transport_options[0].option_id == f"transport:{_TRIP_ID}:arrival"
-    assert bundle.activity_options[0].option_id == f"activity:{_TRIP_ID}:primary"
 
 
 def test_adapter_generated_bundles_carry_provenance_source_refs() -> None:
