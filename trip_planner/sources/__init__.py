@@ -1,6 +1,6 @@
 """Canonical source, adapter, and provenance contracts."""
 
-from .adapters import SourceAdapter
+from .adapters import DuffelFlightAdapter, SourceAdapter
 from .dedup import DeduplicationDecision
 from .models import QualityValueFitSummary, SourceRecord, SourceTrustSignals
 from .provenance import ProvenanceReference
@@ -30,6 +30,7 @@ __all__ = [
     "AdapterIssue",
     "AttributeConflict",
     "DeduplicationDecision",
+    "DuffelFlightAdapter",
     "EntityResolution",
     "MatchCandidate",
     "MergedEntityProvenance",
