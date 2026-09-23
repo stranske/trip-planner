@@ -1331,7 +1331,6 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
                 "trip_id": trip_id,
                 "traveler_name": "Proposal Owner",
                 "traveler_role": "employee",
-                "department": "policy-standard-2026-02",
                 "destination": "Chicago",
                 "origin_city": "ORD",
                 "destination_city": "Chicago",
@@ -1340,12 +1339,18 @@ def test_workspace_proposal_submission_and_evaluation_use_live_tpp_transport(
                 "purpose": "Use runtime TPP HTTP transport.",
                 "transportation_mode": "air",
                 "expected_costs": {"airfare": 620.0},
-                "funding_source": "policy-standard-2026-02",
                 "estimated_cost": 620.0,
                 "status": "submitted",
                 "expense_breakdown": {"airfare": 620.0},
                 "selected_fare": 620.0,
                 "flight_cost": 620.0,
+                # Nothing entered on this trip's Budget tab, so none of these is sent as a value.
+                # The policy id used to go out as `department` and `funding_source`.
+                "lowest_fare": None,
+                "fare_evidence_attached": None,
+                "cabin_class": None,
+                "flight_duration_hours": None,
+                "expenses": None,
                 "comparable_hotels": None,
                 "selected_providers": {"airfare": "United"},
                 "validation_results": [],
@@ -1781,6 +1786,139 @@ def test_workspace_proposal_refresh_polls_live_status_and_persists_evaluation(
         "https://tpp.example.test/api/planner/executions/exec-live-002/evaluation-result"
     )
 
+
+
+def _deferred_submission_and_poll() -> tuple[_FakeHTTPResponse, _FakeHTTPResponse]:
+    """Submission and a poll that both say "deferred": TPP's status stays deferred until a
+    person approves the trip, whatever the policy verdict."""
+
+    deferred = {
+        "transport_pattern": "deferred",
+        "execution_status": {
+            "state": "deferred",
+            "terminal": False,
+            "summary": "Proposal queued for evaluation.",
+            "poll_after_seconds": 30,
+            "external_status": "202 Accepted",
+            "updated_at": "2026-09-22T23:57:05Z",
+        },
+        "result_payload": {"execution_id": "exec-live-009", "queue_state": "waiting_for_policy_engine"},
+        "received_at": "2026-09-22T23:57:05Z",
+        "status_endpoint": "https://tpp.example.test/api/planner/proposals/p/executions/exec-live-009",
+    }
+    return _FakeHTTPResponse(200, dict(deferred)), _FakeHTTPResponse(200, dict(deferred))
+
+
+def _submit_deferred_trip(client: TestClient) -> str:
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Compliant but awaiting approval",
+            "summary": "A trip TPP has passed but no person has approved yet.",
+            "mode": "business",
+            "trip_frame": {
+                "start_date": "2026-10-05",
+                "end_date": "2026-10-07",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    trip_id = created.json()["trip"]["trip_id"]
+    fixture = _load_fixture("proposal_submit_deferred.json")
+    fixture["request"]["trip_id"] = trip_id
+    fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+    submitted = client.put(
+        f"/api/workspace/{trip_id}/proposal",
+        json={
+            "proposal": _proposal_payload(trip_id),
+            "request": fixture["request"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert submitted.status_code == 200, submitted.text
+    return str(trip_id)
+
+
+def test_refresh_reads_the_verdict_while_approval_is_still_pending(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The latch this closes, observed 2026-09-22 against a live TPP service.
+
+    TPP derives the execution status from the trip's APPROVAL state, so it reports
+    "deferred" until a person approves, while the policy verdict is already final at the
+    result endpoint. Refresh read the verdict only after "succeeded", and approval happens in
+    TPP's portal, which this workspace never reaches. A compliant trip therefore read
+    "Policy review is deferred" forever.
+    """
+
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    submission, poll = _deferred_submission_and_poll()
+    evaluation = _FakeHTTPResponse(
+        200,
+        {
+            "trip_id": "placeholder",
+            "proposal_id": "proposal:placeholder",
+            "proposal_version": "proposal-v3",
+            "execution_id": "exec-live-009",
+            "request_id": "ignored",
+            "correlation_id": {"value": "ignored", "issued_by": "tpp"},
+            "outcome": "compliant",
+            "result_endpoint": "GET /api/planner/executions/exec-live-009/evaluation-result",
+            "status_endpoint": "https://tpp.example.test/api/planner/proposals/p/executions/exec-live-009",
+            "policy_result": {"status": "pass", "issues": [], "policy_version": "policy-v1"},
+            "blocking_issues": [],
+            "preferred_alternatives": [],
+            "exception_requirements": [],
+            "reoptimization_guidance": [],
+            "generated_at": "2026-09-22T23:57:06Z",
+        },
+    )
+    captured: list[dict[str, object]] = []
+    _install_fake_http(monkeypatch, [submission, poll, evaluation], captured_requests=captured)
+    trip_id = _submit_deferred_trip(client)
+    evaluation._payload["trip_id"] = trip_id
+    evaluation._payload["proposal_id"] = f"proposal:{trip_id}"
+    evaluation.text = json.dumps(evaluation._payload)
+
+    refreshed = client.post(f"/api/workspace/{trip_id}/proposal/refresh")
+
+    assert refreshed.status_code == 200, refreshed.text
+    state = refreshed.json()["proposal_state"]
+    assert state["summary"]["evaluation_result_status"] == "compliant"
+    assert state["summary"]["approval_ready"] is True
+    assert captured[-1]["full_url"] == (
+        "https://tpp.example.test/api/planner/executions/exec-live-009/evaluation-result"
+    )
+
+
+def test_refresh_with_no_verdict_yet_keeps_waiting_without_recording_a_failure(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The inverse: while evaluation is genuinely still running, reading the result endpoint
+    early must not turn "not yet" into a failure the traveller is asked to fix."""
+
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example.test")
+    monkeypatch.setenv("TPP_ACCESS_TOKEN", "token-123")
+    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
+    submission, poll = _deferred_submission_and_poll()
+    not_ready = _FakeHTTPResponse(404, {"detail": "evaluation not ready"})
+    _install_fake_http(monkeypatch, [submission, poll, not_ready])
+    trip_id = _submit_deferred_trip(client)
+
+    refreshed = client.post(f"/api/workspace/{trip_id}/proposal/refresh")
+
+    assert refreshed.status_code == 200, refreshed.text
+    state = refreshed.json()["proposal_state"]
+    assert state["submission_status"] == "deferred"
+    assert state["summary"].get("evaluation_result_status") is None
+    assert state["summary"]["submission_outcome"] != "failed"
 
 def test_workspace_proposal_refresh_persists_failed_remote_status(
     client: TestClient,

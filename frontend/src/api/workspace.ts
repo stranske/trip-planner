@@ -762,6 +762,10 @@ export type WorkspaceData = {
     } | null;
     summary: {
       submission_status?: string;
+      /** blocked_by_policy | failed | not_submitted | an accepted state (PR #1835). */
+      submission_outcome?: string;
+      /** Rule codes TPP named when it refused the proposal. */
+      submission_blocking_codes?: string[];
       submission_summary?: string;
       submission_requires_polling?: boolean;
       evaluation_transport_status?: string;
@@ -773,6 +777,11 @@ export type WorkspaceData = {
       follow_up_status?: string;
       follow_up_title?: string;
       follow_up_summary?: string;
+      /** Public follow-up: carries TPP's own failure message for each rule code. */
+      follow_up?: {
+        failure_reasons?: Array<{ code: string; message: string; severity?: string }>;
+        guidance?: string[];
+      };
     };
   } | null;
   view_model: WorkspaceViewModel | null;
@@ -1202,6 +1211,12 @@ export type TripPriceComponent = {
   /** Null when nobody has priced this component. Never 0 as a stand-in for absent. */
   typical_amount: number | null;
   note: string;
+  /** Lowest fare the traveller found for the same journey (flights row). */
+  lowest_amount?: number | null;
+  /** The traveller states they hold fare evidence to give the approver. */
+  evidence_attested?: boolean;
+  cabin_class?: string | null;
+  flight_hours?: number | null;
   price_source: { kind: string; attributed_to: string; captured_at: string } | null;
 };
 
@@ -1225,7 +1240,16 @@ export async function fetchTripPrices(tripId: string): Promise<TripPricesState> 
 
 export async function saveTripPrice(
   tripId: string,
-  payload: { component: string; amount: number | null; currency?: string; note?: string }
+  payload: {
+    component: string;
+    amount: number | null;
+    currency?: string;
+    note?: string;
+    lowest_amount?: number | null;
+    evidence_attested?: boolean;
+    cabin_class?: string | null;
+    flight_hours?: number | null;
+  }
 ): Promise<TripPricesState> {
   return fetchJson<TripPricesState>({
     path: `/api/workspace/${tripId}/prices`,

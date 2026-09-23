@@ -13,6 +13,7 @@ invent something in their place.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from sqlalchemy import select
@@ -25,6 +26,9 @@ from trip_planner.pricing import SourcedPrice, UnsourcedPriceError, manual_overr
 
 #: The cost components a traveller can price by hand. Deliberately a short, flat list that
 #: matches how an approval packet is read, not the planner's internal option taxonomy.
+#: Cabin classes the traveller can choose, matching TPP's cabin rule vocabulary.
+CABIN_CLASSES: tuple[str, ...] = ("economy", "premium_economy", "business", "first")
+
 PRICE_COMPONENTS: tuple[str, ...] = (
     "transport",
     "lodging",
@@ -116,8 +120,16 @@ def save_trip_price(
     amount: float | None,
     currency: str = "USD",
     note: str = "",
+    lowest_amount: float | None = None,
+    evidence_attested: bool = False,
+    cabin_class: str | None = None,
+    flight_hours: float | None = None,
 ) -> list[PersistedTripPrice]:
     """Record, replace or clear one component's price. Returns every price on the trip.
+
+    `lowest_amount` is the lowest fare the traveller found for the same journey and
+    `evidence_attested` their statement that they hold fare evidence. Both are optional and
+    both are the traveller's own word; nothing here derives or defaults them.
 
     `amount=None` clears the component, which must stay possible: a traveller who realises
     a figure was wrong needs to be able to withdraw it, and leaving a stale number on an
@@ -155,6 +167,27 @@ def save_trip_price(
         )
     except (UnsourcedPriceError, TypeError, ValueError) as error:
         raise TripPriceInvalidError(str(error)) from error
+    if lowest_amount is not None:
+        try:
+            lowest = manual_override(
+                float(lowest_amount),
+                currency=price.currency,
+                entered_by=price.source.attributed_to,
+            ).amount
+        except (UnsourcedPriceError, TypeError, ValueError) as error:
+            raise TripPriceInvalidError(f"lowest fare: {error}") from error
+    else:
+        lowest = None
+    if cabin_class is not None and cabin_class not in CABIN_CLASSES:
+        raise TripPriceInvalidError(
+            f"{cabin_class!r} is not a cabin class. Expected one of: {', '.join(CABIN_CLASSES)}."
+        )
+    if flight_hours is not None:
+        hours = float(flight_hours)
+        if not math.isfinite(hours) or hours <= 0 or hours > 30:
+            raise TripPriceInvalidError("flight time must be between 0 and 30 hours")
+    else:
+        hours = None
 
     if existing is None:
         db_session.add(
@@ -168,6 +201,10 @@ def save_trip_price(
                 entered_by=price.source.attributed_to,
                 note=note.strip()[:400],
                 captured_at=price.source.captured_at,
+                lowest_amount=lowest,
+                evidence_attested=bool(evidence_attested),
+                cabin_class=cabin_class,
+                flight_hours=hours,
             )
         )
     else:
@@ -176,6 +213,10 @@ def save_trip_price(
         existing.entered_by = price.source.attributed_to
         existing.note = note.strip()[:400]
         existing.captured_at = price.source.captured_at
+        existing.lowest_amount = lowest
+        existing.evidence_attested = bool(evidence_attested)
+        existing.cabin_class = cabin_class
+        existing.flight_hours = hours
     db_session.commit()
     return read_trip_prices(db_session, user=user, trip_id=trip_id)
 
@@ -221,6 +262,12 @@ def build_trip_prices_payload(rows: list[PersistedTripPrice]) -> dict[str, Any]:
                 "currency": entered[component].currency if component in entered else "USD",
                 "typical_amount": entered[component].amount if component in entered else None,
                 "note": entered[component].note if component in entered else "",
+                "lowest_amount": entered[component].lowest_amount if component in entered else None,
+                "evidence_attested": (
+                    bool(entered[component].evidence_attested) if component in entered else False
+                ),
+                "cabin_class": entered[component].cabin_class if component in entered else None,
+                "flight_hours": entered[component].flight_hours if component in entered else None,
                 "price_source": (
                     _sourced(entered[component]).source.to_dict()
                     if component in entered

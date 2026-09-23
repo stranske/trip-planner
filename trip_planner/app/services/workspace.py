@@ -1862,6 +1862,15 @@ def _public_workspace_proposal_state(proposal_state: Any) -> dict[str, Any] | No
     summary = summary if isinstance(summary, dict) else {}
     public_summary_keys = {
         "submission_summary",
+        # The verdict itself — its outcome, the rule codes it names and its status — is what
+        # the traveller acts on and what the packet prints. These are enums and rule ids, not
+        # diagnostics. Without them every reload showed a reviewed trip as "not evaluated".
+        # Raw transport fields (`submission_status`, `evaluation_status`, execution ids) stay
+        # debug-only, as decided in #1130 / #1152: `submission_outcome` carries the part of
+        # them a traveller needs.
+        "submission_outcome",
+        "submission_blocking_codes",
+        "evaluation_result_status",
         "approval_ready",
         "comparable_count",
         "highlights",

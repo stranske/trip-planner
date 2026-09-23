@@ -44,7 +44,7 @@ import {
   type WorkspaceData,
 } from "../api/workspace";
 import { WorkspaceBudgetPanel } from "../components/budget/WorkspaceBudgetPanel";
-import { TripPricesPanel } from "../components/budget/TripPricesPanel";
+import { TripPricesPanel, type FareDetail } from "../components/budget/TripPricesPanel";
 import { TripMap } from "../components/maps/TripMap";
 import type { MapViewScope } from "../components/maps/mapSurface";
 import { PlanningModeSelector } from "../components/planner/PlanningModeSelector";
@@ -673,6 +673,31 @@ function formatFollowUpStatus(status: string | undefined): string {
   return status.replace(/_/g, " ");
 }
 
+/**
+ * The request's state in words a traveller can act on. The raw transport state is "failed"
+ * both when the service could not be reached and when it answered "no", so it is never shown
+ * on its own.
+ */
+function describeSubmissionOutcome(summary: {
+  submission_outcome?: string;
+  submission_status?: string;
+}): string {
+  switch (summary.submission_outcome) {
+    case "blocked_by_policy":
+      return "Reviewed — blocked by policy";
+    case "failed":
+      return "Could not reach the policy service";
+    case "not_submitted":
+      return "Not submitted yet";
+    case undefined:
+    case null:
+      break;
+    default:
+      return summary.submission_outcome.replace(/_/g, " ");
+  }
+  return summary.submission_status ? summary.submission_status.replace(/_/g, " ") : "Not submitted yet";
+}
+
 function isFailedLifecycleStatus(status: string | null | undefined): boolean {
   return status != null && ["failed", "error", "errored", "rejected", "invalid"].includes(status);
 }
@@ -727,6 +752,16 @@ function deriveProposalLifecyclePresentation(
         summary.follow_up_summary ??
         summary.submission_summary ??
         "Policy evaluation passed and the workspace is ready for approval handling.",
+    };
+  }
+
+  if (summary.submission_outcome === "blocked_by_policy") {
+    return {
+      state: "completed-with-follow-up",
+      readinessLabel: "Blocked by policy",
+      title: "Travel policy blocked this request",
+      summary:
+        "The policy service answered: this trip needs the items listed before it can be approved.",
     };
   }
 
@@ -1300,6 +1335,12 @@ function WorkspacePageContent({
   const renderableProposalFollowUp = hasRenderableFollowUp(proposalFollowUp)
     ? proposalFollowUp
     : null;
+  const policyBlocked =
+    currentWorkspace.proposal_state?.summary.submission_outcome === "blocked_by_policy";
+  // TPP reports "deferred" until a person approves, while its policy verdict is already final;
+  // so "compliant" here means the policy passed and the decision now rests with the approver.
+  const policyPassed =
+    currentWorkspace.proposal_state?.summary.evaluation_result_status === "compliant";
   const proposalLifecycle =
     currentWorkspace.proposal_state == null
       ? null
@@ -1529,11 +1570,28 @@ function WorkspacePageContent({
     };
   }, [trip.trip_id]);
 
-  async function handleTripPriceSave(component: string, amount: number | null, note: string) {
+  async function handleTripPriceSave(
+    component: string,
+    amount: number | null,
+    note: string,
+    fareDetail?: FareDetail
+  ) {
     setTripPricesError(null);
     setTripPricesBusy(true);
     try {
-      const next = await saveTripPrice(trip.trip_id, { component, amount, note });
+      const next = await saveTripPrice(trip.trip_id, {
+        component,
+        amount,
+        note,
+        ...(fareDetail
+          ? {
+              lowest_amount: fareDetail.lowestAmount,
+              evidence_attested: fareDetail.evidenceAttested,
+              cabin_class: fareDetail.cabinClass,
+              flight_hours: fareDetail.flightHours,
+            }
+          : {}),
+      });
       setTripPrices(next);
       // Re-read the workspace so the entered figure reaches Compare and the approval
       // packet in the same interaction, rather than after a reload the traveller has no
@@ -2676,23 +2734,31 @@ function WorkspacePageContent({
                     <div>
                       <dt>Approval readiness</dt>
                       <dd>
-                        {currentWorkspace.view_model?.policy_presentation.approval_status_label ??
-                          proposalLifecycle?.readinessLabel ??
-                          "Waiting for policy review"}
+                        {policyBlocked
+                          ? "Blocked by policy"
+                          : currentWorkspace.view_model?.policy_presentation.approval_status_label ??
+                            proposalLifecycle?.readinessLabel ??
+                            "Waiting for policy review"}
                       </dd>
                     </div>
                     <div>
-                      <dt>Packet status</dt>
-                      <dd>{currentWorkspace.proposal_state.summary.submission_status ?? "unknown"}</dd>
+                      <dt>Request status</dt>
+                      <dd>
+                        {policyPassed
+                          ? "Reviewed — policy passed"
+                          : describeSubmissionOutcome(currentWorkspace.proposal_state.summary)}
+                      </dd>
                     </div>
                     <div>
                       <dt>Next step</dt>
                       <dd>
-                        {currentWorkspace.view_model?.policy_presentation.next_step_label ??
-                          formatFollowUpStatus(
-                            renderableProposalFollowUp?.status ??
-                              currentWorkspace.proposal_state.summary.follow_up_status
-                          )}
+                        {policyBlocked
+                          ? "Resolve the policy items listed, then submit again"
+                          : currentWorkspace.view_model?.policy_presentation.next_step_label ??
+                            formatFollowUpStatus(
+                              renderableProposalFollowUp?.status ??
+                                currentWorkspace.proposal_state.summary.follow_up_status
+                            )}
                       </dd>
                     </div>
                   </dl>
