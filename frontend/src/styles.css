@@ -2028,3 +2028,17 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+.trip-price-fare-detail {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.35rem;
+  max-width: 34rem;
+}
+
+.trip-price-attest {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-weight: 400;
+}

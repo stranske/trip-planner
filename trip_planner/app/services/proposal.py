@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import math
 import os
 from datetime import UTC, datetime
 from typing import Any
@@ -12,6 +11,11 @@ from sqlalchemy.orm import Session
 
 from trip_planner._option_contracts import MoneyRange
 from trip_planner.app.services.auth import AuthenticatedUser
+from trip_planner.app.services.trip_prices import (
+    COMPONENT_LABELS,
+    read_trip_prices_for_owner,
+)
+from trip_planner.persistence.models.trip_price import PersistedTripPrice
 from trip_planner.business import (
     ExceptionRequest,
     PolicyEvaluationResult,
@@ -114,6 +118,25 @@ _TPP_EXPENSE_CATEGORY_MAP = {
 }
 
 
+#: How each traveller-priced component is filed with TPP. `transport` is labelled "Flights and
+#: ground travel" on the Budget tab, and TPP's fare rules read it as the airfare.
+_PRICE_COMPONENT_TPP_CATEGORY: dict[str, str] = {
+    "transport": "airfare",
+    "lodging": "lodging",
+    "activities": "meals",
+    "other": "other",
+}
+
+
+#: What `_home_airport_from_workspace` returns when the trip has no origin. The traveller
+#: context requires a non-empty value, so it exists; it must never reach TPP as a city.
+_NO_ORIGIN_PLACEHOLDER = "workspace"
+
+
+class WorkspaceProposalUnpricedError(ValueError):
+    """Raised when a trip is submitted with no price from any approved source."""
+
+
 def _tpp_expense_category(category: str) -> str:
     normalized = category.strip().lower().replace("-", "_")
     return _TPP_EXPENSE_CATEGORY_MAP.get(normalized, "other")
@@ -138,11 +161,64 @@ def _aggregate_tpp_costs(proposal: TripPlanProposal) -> dict[str, float]:
     return costs
 
 
+def _tpp_origin_city(record: PersistedTrip, home_airport: str | None) -> str | None:
+    """The trip's own origin, else the traveller's home airport — never the internal
+    placeholder, which was reaching TPP as the city of departure."""
+
+    if record.origin:
+        return record.origin
+    if home_airport and home_airport != _NO_ORIGIN_PLACEHOLDER:
+        return home_airport
+    return None
+
+
+def _traveller_supplied_policy_fields(
+    trip_prices: list[PersistedTripPrice] | None, *, departure_date: str
+) -> dict[str, Any]:
+    """What TPP's fare, cabin and expense rules read, exactly as the traveller entered it.
+
+    Each value is the traveller's own entry or it is absent: a rule that fails because
+    something was not supplied must keep failing, and must never be made to pass by a value
+    the software filled in.
+    """
+
+    rows = list(trip_prices or [])
+    transport = next((row for row in rows if row.component == "transport"), None)
+    expenses = [
+        {
+            "category": _PRICE_COMPONENT_TPP_CATEGORY.get(row.component, "other"),
+            "description": (
+                f"{row.component.replace('_', ' ')}: {row.note}" if row.note else row.component
+            ),
+            "vendor": row.note or None,
+            "amount": row.amount,
+            "expense_date": departure_date,
+        }
+        for row in rows
+    ]
+    if transport is None:
+        return {
+            "lowest_fare": None,
+            "fare_evidence_attached": None,
+            "cabin_class": None,
+            "flight_duration_hours": None,
+            "expenses": expenses or None,
+        }
+    return {
+        "lowest_fare": transport.lowest_amount,
+        "fare_evidence_attached": bool(transport.evidence_attested),
+        "cabin_class": transport.cabin_class,
+        "flight_duration_hours": transport.flight_hours,
+        "expenses": expenses or None,
+    }
+
+
 def _tpp_trip_plan_payload(
     record: PersistedTrip,
     *,
     user: AuthenticatedUser,
     proposal: TripPlanProposal,
+    trip_prices: list[PersistedTripPrice] | None = None,
 ) -> dict[str, Any]:
     primary_regions = [region for region in record.primary_regions if region]
     if not primary_regions:
@@ -162,32 +238,36 @@ def _tpp_trip_plan_payload(
     airfare_cost = costs.get("airfare")
     lodging_cost = costs.get("lodging")
     transportation_mode = "air" if airfare_cost is not None else "mixed"
+    departure_date = _required_tpp_trip_date(record.start_date, "start_date")
+    home_airport = proposal.traveler_context.home_airport
 
-    return {
+    payload: dict[str, Any] = {
         "trip_id": proposal.trip_id,
         "traveler_name": user.display_name,
         "traveler_role": proposal.traveler_context.employee_type,
-        "department": proposal.constraint_set_id,
         "destination": ", ".join(primary_regions),
-        "origin_city": proposal.traveler_context.home_airport,
+        "origin_city": _tpp_origin_city(record, home_airport),
         "destination_city": primary_regions[0],
-        "departure_date": _required_tpp_trip_date(record.start_date, "start_date"),
+        "departure_date": departure_date,
         "return_date": _required_tpp_trip_date(record.end_date, "end_date"),
         "purpose": record.summary or record.title,
         "transportation_mode": transportation_mode,
         "expected_costs": costs,
-        "funding_source": proposal.constraint_set_id,
         "estimated_cost": proposal.cost_summary.total_estimated_cost,
         "status": "submitted",
         "expense_breakdown": costs,
         "selected_fare": airfare_cost,
         "flight_cost": airfare_cost,
+        **_traveller_supplied_policy_fields(trip_prices, departure_date=departure_date),
         "comparable_hotels": comparable_hotels or ([lodging_cost] if lodging_cost else None),
         "selected_providers": selected_providers,
         "validation_results": [],
         "approval_history": [],
         "exception_requests": [],
     }
+    # `department` and `funding_source` were filled with the policy id. Nothing in the trip
+    # says what they are, so they are not sent until the traveller can supply them.
+    return payload
 
 
 class _PassiveTPPClient(BaseTPPIntegrationClient):
@@ -206,6 +286,7 @@ def _resolve_submission_response(
     trip_record: PersistedTrip,
     user: AuthenticatedUser,
     proposal: TripPlanProposal,
+    trip_prices: list[PersistedTripPrice] | None = None,
 ) -> TPPResponseEnvelope:
     if response_payload is not None:
         return TPPResponseEnvelope.from_dict(response_payload)
@@ -218,6 +299,7 @@ def _resolve_submission_response(
             trip_record,
             user=user,
             proposal=proposal,
+            trip_prices=trip_prices,
         )
     if live_payload != request.payload:
         live_request = TPPRequestEnvelope(
@@ -1129,13 +1211,6 @@ def _money_range_from_estimated(estimated: Any, fallback_currency: str) -> Money
     )
 
 
-def _trip_title_from_workspace(workspace: dict[str, Any], trip_id: str) -> str:
-    trip_record = workspace.get("trip_record")
-    if isinstance(trip_record, dict):
-        trip = trip_record.get("trip")
-        if isinstance(trip, dict) and trip.get("title"):
-            return str(trip["title"])
-    return trip_id
 
 
 def _home_airport_from_workspace(workspace: dict[str, Any]) -> str:
@@ -1146,35 +1221,9 @@ def _home_airport_from_workspace(workspace: dict[str, Any]) -> str:
             trip_frame = trip.get("trip_frame")
             if isinstance(trip_frame, dict) and trip_frame.get("origin"):
                 return str(trip_frame["origin"])
-    return "workspace"
+    return _NO_ORIGIN_PLACEHOLDER
 
 
-def _submission_cost_details(
-    workspace: dict[str, Any],
-    scenario_row: dict[str, Any],
-) -> tuple[str, float, MoneyRange]:
-    metrics = scenario_row.get("metrics")
-    estimated_total = metrics.get("estimated_total") if isinstance(metrics, dict) else None
-    budget_state = workspace.get("budget_state")
-    budget_summary = budget_state.get("summary") if isinstance(budget_state, dict) else {}
-    if not isinstance(budget_summary, dict):
-        budget_summary = {}
-
-    currency = str(budget_summary.get("currency") or "USD")
-    typical_amount = float(budget_summary.get("planned_total") or 0.0)
-    if isinstance(estimated_total, dict):
-        currency = str(estimated_total.get("currency") or currency)
-        if estimated_total.get("typical_amount") is not None:
-            typical_amount = float(estimated_total["typical_amount"])
-    if not math.isfinite(typical_amount):
-        raise ValueError("Proposal cost must be a finite number.")
-    cost_range = MoneyRange(
-        currency=currency,
-        typical_amount=typical_amount,
-        min_amount=typical_amount,
-        max_amount=typical_amount,
-    )
-    return currency, typical_amount, cost_range
 
 
 def _booking_channel_from_workspace(workspace: dict[str, Any]) -> str:
@@ -1189,11 +1238,6 @@ def _booking_channel_from_workspace(workspace: dict[str, Any]) -> str:
     return "workspace"
 
 
-def _justification_refs_from_scenario(scenario_row: dict[str, Any]) -> list[str]:
-    highlights = scenario_row.get("highlights")
-    if isinstance(highlights, list) and highlights:
-        return [str(item) for item in highlights if item]
-    return ["workspace-scenario"]
 
 
 def build_workspace_submission_proposal(
@@ -1202,8 +1246,13 @@ def build_workspace_submission_proposal(
     user: AuthenticatedUser,
     trip_id: str,
     scenario_id: str | None = None,
-) -> TripPlanProposal:
-    """Build a costed proposal from the persisted workspace, not a policy preview."""
+) -> tuple[TripPlanProposal, str]:
+    """Build a costed proposal from the persisted workspace, not a policy preview.
+
+    Returns the proposal and the id of the scenario it was built for. The scenario id is
+    returned explicitly because the selected options are now one per priced component and
+    no longer carry it.
+    """
 
     from trip_planner.app.services.workspace import get_workspace_payload
 
@@ -1217,23 +1266,73 @@ def build_workspace_submission_proposal(
         raise ValueError("No scenario is available for proposal submission.")
 
     resolved_scenario_id = str(scenario_row.get("scenario_id") or f"scenario:{trip_id}")
-    trip_title = _trip_title_from_workspace(workspace, trip_id)
-    scenario_label = str(scenario_row.get("title") or trip_title)
-    currency, typical_amount, cost_range = _submission_cost_details(workspace, scenario_row)
     booking_channel = _booking_channel_from_workspace(workspace)
-    justification_refs = _justification_refs_from_scenario(scenario_row)
 
-    selected_option = SelectedOptionSummary(
-        category="itinerary",
-        option_id=resolved_scenario_id,
-        label=scenario_label,
-        vendor=organization_id,
-        booking_channel=booking_channel,
-        estimated_cost=cost_range,
-        justification_refs=justification_refs,
-    )
-    summary_note = str(scenario_row.get("summary") or "Built from the selected workspace scenario.")
-    return TripPlanProposal(
+    # The proposal is priced line by line from what the traveller entered — the only
+    # approved price source today. The old path sent one lump "itinerary" line (filed with
+    # TPP as `other`, so no airfare ever reached its fare rules), attributed it to the policy
+    # engine as vendor, and fell back to the budget cap or 0.0 when nothing was priced.
+    price_rows = read_trip_prices_for_owner(db_session, user_id=user.user_id, trip_id=trip_id)
+    if not price_rows:
+        raise WorkspaceProposalUnpricedError(
+            "This trip has no price yet, so it cannot be submitted for approval. Enter the "
+            "amounts you hold on the Budget tab first."
+        )
+    currencies = {row.currency for row in price_rows}
+    if len(currencies) != 1:
+        raise WorkspaceProposalUnpricedError(
+            "The entered prices use more than one currency, so the trip has no single total. "
+            "Enter every amount in the same currency."
+        )
+    currency = currencies.pop()
+
+    def _money(amount: float) -> MoneyRange:
+        return MoneyRange(
+            currency=currency, typical_amount=amount, min_amount=amount, max_amount=amount
+        )
+
+    selected_options = [
+        SelectedOptionSummary(
+            category=_PRICE_COMPONENT_TPP_CATEGORY.get(row.component, "other"),
+            option_id=f"trip-price:{trip_id}:{row.component}",
+            label=COMPONENT_LABELS.get(row.component, row.component),
+            vendor=row.note or f"Entered by {row.entered_by}",
+            booking_channel=booking_channel,
+            estimated_cost=_money(row.amount),
+            justification_refs=[f"Entered by {row.entered_by} on {row.captured_at[:10]}"],
+        )
+        for row in price_rows
+    ]
+    category_estimates: dict[str, float] = {}
+    for row in price_rows:
+        category = _PRICE_COMPONENT_TPP_CATEGORY.get(row.component, "other")
+        category_estimates[category] = category_estimates.get(category, 0.0) + float(row.amount)
+    typical_amount = sum(category_estimates.values())
+    comparables = [
+        ComparableOption(
+            category=_PRICE_COMPONENT_TPP_CATEGORY.get(row.component, "other"),
+            label=COMPONENT_LABELS.get(row.component, row.component),
+            vendor=row.note or f"Entered by {row.entered_by}",
+            booking_channel=booking_channel,
+            estimated_cost=_money(row.amount),
+            notes=[f"Entered by {row.entered_by} on {row.captured_at[:10]}"],
+        )
+        for row in price_rows
+    ]
+    transport_row = next((row for row in price_rows if row.component == "transport"), None)
+    if transport_row is not None and transport_row.lowest_amount is not None:
+        comparables.append(
+            ComparableOption(
+                category="airfare",
+                label="Lowest available fare (for comparison)",
+                vendor=transport_row.note or f"Entered by {transport_row.entered_by}",
+                booking_channel=booking_channel,
+                estimated_cost=_money(transport_row.lowest_amount),
+                notes=[f"Entered by {transport_row.entered_by}"],
+            )
+        )
+    summary_note = "Priced from amounts the traveller entered on the Budget tab."
+    proposal = TripPlanProposal(
         proposal_id=f"proposal:{trip_id}",
         trip_id=trip_id,
         mode="business",
@@ -1244,26 +1343,18 @@ def build_workspace_submission_proposal(
             loyalty_programs=[],
             mobility_or_access_needs=[],
         ),
-        selected_options=[selected_option],
+        selected_options=selected_options,
         cost_summary=ProposalCostSummary(
             currency=currency,
             total_estimated_cost=typical_amount,
-            category_estimates={"itinerary": typical_amount} if typical_amount > 0 else {},
+            category_estimates=category_estimates,
             notes=[summary_note],
         ),
-        comparables=[
-            ComparableOption(
-                category="itinerary",
-                label=scenario_label,
-                vendor=organization_id,
-                booking_channel=booking_channel,
-                estimated_cost=cost_range,
-                notes=[str(scenario_row.get("comparison_note") or "Selected scenario")],
-            )
-        ],
+        comparables=comparables,
         approval_notes=["Submitted from the workspace Policy tab."],
         constraint_set_id=constraint_set_id,
     )
+    return proposal, resolved_scenario_id
 
 
 def get_workspace_proposal_payload(
@@ -1301,7 +1392,7 @@ def submit_workspace_proposal_for_trip(
 
     from trip_planner.app.services.policy import get_workspace_policy_payload
 
-    proposal = build_workspace_submission_proposal(
+    proposal, resolved_scenario_id = build_workspace_submission_proposal(
         db_session,
         user=user,
         trip_id=trip_id,
@@ -1336,7 +1427,7 @@ def submit_workspace_proposal_for_trip(
         request_payload=request_payload,
         response_payload=None,
         proposal_version=str(proposal_payload.get("proposal_version") or "v1"),
-        scenario_id=proposal.selected_options[0].option_id,
+        scenario_id=resolved_scenario_id,
     )
 
 
@@ -1375,6 +1466,9 @@ def save_workspace_proposal_submission(
             trip_record=trip_record,
             user=user,
             proposal=proposal,
+            trip_prices=read_trip_prices_for_owner(
+                db_session, user_id=user.user_id, trip_id=trip_id
+            ),
         )
     except TPPTransportError as error:
         if not _should_persist_stored_policy_fallback(error):
@@ -1743,7 +1837,42 @@ def refresh_workspace_proposal_status(
             "summary": dict(existing.summary),
         }
 
-    if polled_response.execution_status.state == "succeeded":
+    # TPP reports an execution as "deferred" until a person APPROVES the trip — its status is
+    # derived from the trip plan's approval state — while the policy verdict is available
+    # from the result endpoint as soon as evaluation finishes. Waiting for "succeeded" before
+    # reading the verdict latched a compliant trip at "deferred" forever, because approval
+    # happens in TPP's manager portal, which this workspace never reached. So the verdict is
+    # fetched for every non-terminal state too; if TPP has none yet, nothing is recorded.
+    polled_state = polled_response.execution_status.state
+    verdict_may_exist = polled_state in {"deferred", "running", "accepted"} and bool(
+        existing.execution_id
+    )
+    if verdict_may_exist:
+        early_request = _make_runtime_request(
+            operation="fetch_evaluation_result",
+            record=existing,
+            payload={
+                "proposal_version": existing.proposal_version,
+                "execution_id": existing.execution_id,
+            },
+        )
+        try:
+            return save_workspace_proposal_evaluation(
+                db_session,
+                user=user,
+                trip_id=trip_id,
+                request_payload=early_request.to_dict(),
+                response_payload=None,
+                proposal_version=existing.proposal_version,
+                scenario_id=existing.scenario_id,
+            )
+        except (EvaluationResultIngestionError, TPPTransportError, ValueError):
+            # No verdict yet is the normal answer while evaluation runs: keep the polled
+            # status, and do not record it as a failure.
+            db_session.rollback()
+            db_session.refresh(existing)
+
+    if polled_state == "succeeded":
         evaluation_request = _make_runtime_request(
             operation="fetch_evaluation_result",
             record=existing,
