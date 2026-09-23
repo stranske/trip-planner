@@ -679,7 +679,6 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         # say the option is not priced rather than showing a number nobody stands behind.
         lodging_total: float | None = None
         transport_total: float | None = None
-        activity_total: float | None = None
         baseline_signal = 0.82 if self.trip_mode == "business" else 0.79
         destination_geo = self._geo_payload(destination_name)
         gateway_geo = dict(destination_geo)
@@ -758,14 +757,12 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
 
         lodging_option_id = f"lodging:{self.trip_id}:primary"
         transport_option_id = f"transport:{self.trip_id}:arrival"
-        activity_option_id = f"activity:{self.trip_id}:primary"
-        option_ids = [lodging_option_id, transport_option_id, activity_option_id]
+        option_ids = [lodging_option_id, transport_option_id]
         source_refs = [
             f"{provenance_base}:destination:gateway",
             f"{provenance_base}:destination:primary",
             f"{provenance_base}:lodging",
             f"{provenance_base}:transport",
-            f"{provenance_base}:activity",
         ]
 
         return {
@@ -863,50 +860,13 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                     ],
                 }
             ],
-            "activity_options": [
-                {
-                    "option_id": activity_option_id,
-                    "name": (
-                        "Client priority planning block"
-                        if self.trip_mode == "business"
-                        else f"{destination_name} anchor experience"
-                    ),
-                    "activity_kind": "dining"
-                    if self.trip_mode == "business"
-                    else "museum",
-                    "destination_id": destination_id,
-                    "place_id": f"place:{self.trip_id}:primary-activity",
-                    "category": {
-                        "primary": "meeting"
-                        if self.trip_mode == "business"
-                        else "museum",
-                    },
-                    "timing_summary": {
-                        "duration_minutes": 120,
-                        "typical_start_window": "09:00-18:00",
-                    },
-                    "significance_summary": {
-                        "overall_signal": baseline_signal,
-                        "anchor_worthy": True,
-                    },
-                    "cost_summary": {
-                        "total": _unpriced_total(activity_total)
-                    },
-                    "fit_summary": {"overall_signal": baseline_signal},
-                    "feasibility": {
-                        "available": True,
-                        "availability_status": "available",
-                    },
-                    "source_refs": [
-                        _provenance_ref(
-                            provenance_id=f"{provenance_base}:activity",
-                            subject_kind="option",
-                            subject_id=activity_option_id,
-                            summary="Activity seed is aligned to persisted trip mode and traveler scope.",
-                        )
-                    ],
-                }
-            ],
+            # No activity is seeded. The adapter used to add a "Client priority planning
+            # block" meeting (business) or an "anchor experience" museum visit (leisure) to
+            # every trip; the traveller entered neither, and the invented meeting drove
+            # feasibility — marking Reykjavik "not recommended" because a meeting nobody
+            # scheduled could not be reached in its window. Activities come from the
+            # traveller or from a source.
+            "activity_options": [],
             "composition_summary": {
                 "sequence_index": 0,
                 "assembly_role": "persisted_trip_runtime",

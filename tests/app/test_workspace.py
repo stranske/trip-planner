@@ -666,7 +666,7 @@ def test_route_option_actions_create_durable_ledger_history(client: TestClient) 
     trip_id = created.json()["trip"]["trip_id"]
     response = client.get(f"/api/workspace/{trip_id}")
     assert response.status_code == 200
-    scenario_id = response.json()["route_comparison"]["scenarios"][1]["scenario_id"]
+    scenario_id = response.json()["route_comparison"]["scenarios"][0]["scenario_id"]
 
     updated = client.post(
         f"/api/workspace/{trip_id}/route-options/{scenario_id}/action",
@@ -790,7 +790,7 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface(
     )
     assert "provider" in payload["scenarios"][0]["map_diagnostics"]
     assert "provider" not in payload["scenarios"][0]["map_view"]
-    assert "runtime scenario" in payload["summary"].lower()
+    assert "route option" in payload["summary"].lower()
 
 
 def test_build_planner_option_set_returns_option_set_for_scenarios() -> None:
@@ -1275,7 +1275,7 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_pers
     assert payload["scenarios"][0]["option_count"] > 0
     assert payload["scenarios"][0]["route_sequence"]
     assert payload["source_refs"]
-    assert "runtime scenario" in payload["summary"].lower()
+    assert "route option" in payload["summary"].lower()
 
 
 def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_persisted_business_trip(
@@ -1313,7 +1313,7 @@ def test_workspace_scenario_comparison_endpoint_returns_runtime_surface_for_pers
     assert payload["scenarios"][0]["status"] in {"recommended", "fallback", "alternative"}
     assert payload["scenarios"][0]["route_sequence"]
     assert payload["source_refs"]
-    assert "runtime scenario" in payload["summary"].lower()
+    assert "route option" in payload["summary"].lower()
 
 
 def test_workspace_endpoint_returns_bounded_empty_runtime_state_when_trip_frame_is_sparse(
@@ -1388,7 +1388,7 @@ def test_workspace_endpoint_surfaces_partial_runtime_state_for_under_scoped_trip
     comparison_payload = comparison_response.json()
     assert len(comparison_payload["scenarios"]) == 2
     assert comparison_payload["lead_scenario_id"].startswith("saved-scenario:")
-    assert "runtime scenario" in comparison_payload["summary"].lower()
+    assert "route option" in comparison_payload["summary"].lower()
 
 
 def test_workspace_endpoint_returns_coherent_partial_response_when_trip_dates_are_missing(
@@ -2694,8 +2694,9 @@ def test_workspace_route_option_actions_update_comparison_and_ledger(
     initial_payload = initial.json()
     route_options = initial_payload["route_comparison"]["scenarios"]
     assert route_options
-    assert len(route_options) >= 2
-    assert len(route_options) <= 4
+    # Only options the pipeline derived. The comparison used to be padded to three with
+    # fixed-offset clones of the lead, which this test's ">= 2" was relying on.
+    assert 1 <= len(route_options) <= 4
     assert route_options[0]["state"] == "baseline"
     assert route_options[0]["purpose"]
     assert isinstance(route_options[0]["confidence"], float)
@@ -2765,10 +2766,16 @@ def test_workspace_route_option_actions_update_comparison_and_ledger(
         for item in reopened_payload["route_comparison"]["scenarios"]
         if item["route_option_id"] == rejected_id
     )
-    assert reopened_row["state"] in {"active", "fallback"}
-    assert any(
-        action["action_type"] == "make_baseline" for action in reopened_row["available_actions"]
-    )
+    # A reopened option rejoins the comparison. When it is the only option the pipeline
+    # derived, it is necessarily the baseline again; otherwise it returns as an alternative.
+    expected_states = {"baseline"} if len(route_options) == 1 else {"active", "fallback"}
+    assert reopened_row["state"] in expected_states
+    if len(route_options) > 1:
+        # An alternative can be promoted; the sole option already is the baseline.
+        assert any(
+            action["action_type"] == "make_baseline"
+            for action in reopened_row["available_actions"]
+        )
     assert f"reopened:{rejected_id}" not in json.dumps(reopened_payload)
 
     reloaded = client.get(f"/api/workspace/{trip_id}")
