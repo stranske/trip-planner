@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { useLoaderData } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -25,6 +25,7 @@ function renderHealthPage() {
 
 describe("HealthPage", () => {
   afterEach(() => {
+    cleanup();
     vi.clearAllMocks();
   });
 
@@ -49,6 +50,32 @@ describe("HealthPage", () => {
     expect(screen.getByText("ok")).toBeInTheDocument();
     expect(screen.getByText("local")).toBeInTheDocument();
     expect(screen.getByText("0.1.0")).toBeInTheDocument();
+  });
+
+  it("says the backend is degraded and why, when its database is not ready (issue 1851)", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      health: Promise.resolve({
+        service: "trip-planner-api",
+        status: "degraded",
+        environment: "production",
+        version: "0.1.0",
+        database: {
+          ready: false,
+          reason: "OperationalError: database initialisation failed",
+          checked_at: "2026-09-22T15:00:00+00:00",
+        },
+      }),
+    });
+
+    renderHealthPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("health-state")).toHaveTextContent("degraded");
+    });
+    expect(screen.getByTestId("health-database")).toHaveTextContent(
+      "Not ready: OperationalError: database initialisation failed"
+    );
+    expect(screen.getByTestId("health-database")).toHaveTextContent("Trips cannot be saved or loaded");
   });
 
   it("renders route-level loading and error treatment through the shared client seam", async () => {

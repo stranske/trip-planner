@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { TripPriceComponent, TripPricesState } from "../../api/workspace";
+import { formatInstantDate } from "../../lib/dates";
 import { formatMoney } from "../../lib/money";
 
 export type TripPricesPanelProps = {
@@ -36,7 +37,7 @@ function sourceLine(component: TripPriceComponent): string | null {
   if (component.price_source == null) {
     return null;
   }
-  const captured = component.price_source.captured_at.slice(0, 10);
+  const captured = formatInstantDate(component.price_source.captured_at);
   return `Entered by ${component.price_source.attributed_to} on ${captured}`;
 }
 
