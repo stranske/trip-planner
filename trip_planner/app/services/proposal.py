@@ -161,6 +161,58 @@ def _aggregate_tpp_costs(proposal: TripPlanProposal) -> dict[str, float]:
     return costs
 
 
+def _tpp_origin_city(record: PersistedTrip, home_airport: str | None) -> str | None:
+    """The trip's own origin, else the traveller's home airport — never the internal
+    placeholder, which was reaching TPP as the city of departure."""
+
+    if record.origin:
+        return record.origin
+    if home_airport and home_airport != _NO_ORIGIN_PLACEHOLDER:
+        return home_airport
+    return None
+
+
+def _traveller_supplied_policy_fields(
+    trip_prices: list[PersistedTripPrice] | None, *, departure_date: str
+) -> dict[str, Any]:
+    """What TPP's fare, cabin and expense rules read, exactly as the traveller entered it.
+
+    Each value is the traveller's own entry or it is absent: a rule that fails because
+    something was not supplied must keep failing, and must never be made to pass by a value
+    the software filled in.
+    """
+
+    rows = list(trip_prices or [])
+    transport = next((row for row in rows if row.component == "transport"), None)
+    expenses = [
+        {
+            "category": _PRICE_COMPONENT_TPP_CATEGORY.get(row.component, "other"),
+            "description": (
+                f"{row.component.replace('_', ' ')}: {row.note}" if row.note else row.component
+            ),
+            "vendor": row.note or None,
+            "amount": row.amount,
+            "expense_date": departure_date,
+        }
+        for row in rows
+    ]
+    if transport is None:
+        return {
+            "lowest_fare": None,
+            "fare_evidence_attached": None,
+            "cabin_class": None,
+            "flight_duration_hours": None,
+            "expenses": expenses or None,
+        }
+    return {
+        "lowest_fare": transport.lowest_amount,
+        "fare_evidence_attached": bool(transport.evidence_attested),
+        "cabin_class": transport.cabin_class,
+        "flight_duration_hours": transport.flight_hours,
+        "expenses": expenses or None,
+    }
+
+
 def _tpp_trip_plan_payload(
     record: PersistedTrip,
     *,
@@ -189,35 +241,12 @@ def _tpp_trip_plan_payload(
     departure_date = _required_tpp_trip_date(record.start_date, "start_date")
     home_airport = proposal.traveler_context.home_airport
 
-    # What TPP's fare and expense rules read. Each value is the traveller's own entry or it
-    # is omitted: a rule that fails because something was not supplied must keep failing,
-    # and must never be made to pass by a value the software filled in.
-    rows = list(trip_prices or [])
-    transport_row = next((row for row in rows if row.component == "transport"), None)
-    lowest_fare = transport_row.lowest_amount if transport_row is not None else None
-    expenses = [
-        {
-            "category": _PRICE_COMPONENT_TPP_CATEGORY.get(row.component, "other"),
-            "description": (
-                f"{row.component.replace('_', ' ')}: {row.note}" if row.note else row.component
-            ),
-            "vendor": row.note or None,
-            "amount": row.amount,
-            "expense_date": departure_date,
-        }
-        for row in rows
-    ]
-
     payload: dict[str, Any] = {
         "trip_id": proposal.trip_id,
         "traveler_name": user.display_name,
         "traveler_role": proposal.traveler_context.employee_type,
         "destination": ", ".join(primary_regions),
-        # The trip's own origin, else the traveller's home airport — but never the internal
-        # placeholder, which was reaching TPP as the city of departure.
-        "origin_city": record.origin or (
-            home_airport if home_airport and home_airport != _NO_ORIGIN_PLACEHOLDER else None
-        ),
+        "origin_city": _tpp_origin_city(record, home_airport),
         "destination_city": primary_regions[0],
         "departure_date": departure_date,
         "return_date": _required_tpp_trip_date(record.end_date, "end_date"),
@@ -229,13 +258,7 @@ def _tpp_trip_plan_payload(
         "expense_breakdown": costs,
         "selected_fare": airfare_cost,
         "flight_cost": airfare_cost,
-        "lowest_fare": lowest_fare,
-        "fare_evidence_attached": (
-            bool(transport_row.evidence_attested) if transport_row is not None else None
-        ),
-        "cabin_class": transport_row.cabin_class if transport_row is not None else None,
-        "flight_duration_hours": transport_row.flight_hours if transport_row is not None else None,
-        "expenses": expenses or None,
+        **_traveller_supplied_policy_fields(trip_prices, departure_date=departure_date),
         "comparable_hotels": comparable_hotels or ([lodging_cost] if lodging_cost else None),
         "selected_providers": selected_providers,
         "validation_results": [],
