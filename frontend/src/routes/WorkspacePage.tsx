@@ -2719,9 +2719,7 @@ function WorkspacePageContent({
                       <dd>
                         {policyBlocked
                           ? "Blocked by policy"
-                          : policyPassed
-                            ? "Policy passed — waiting for your approver"
-                            : currentWorkspace.view_model?.policy_presentation.approval_status_label ??
+                          : currentWorkspace.view_model?.policy_presentation.approval_status_label ??
                             proposalLifecycle?.readinessLabel ??
                             "Waiting for policy review"}
                       </dd>
@@ -2739,9 +2737,7 @@ function WorkspacePageContent({
                       <dd>
                         {policyBlocked
                           ? "Resolve the policy items listed, then submit again"
-                          : policyPassed
-                            ? "Print the approval packet and send it to your approver"
-                            : currentWorkspace.view_model?.policy_presentation.next_step_label ??
+                          : currentWorkspace.view_model?.policy_presentation.next_step_label ??
                             formatFollowUpStatus(
                               renderableProposalFollowUp?.status ??
                                 currentWorkspace.proposal_state.summary.follow_up_status
