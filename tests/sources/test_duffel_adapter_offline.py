@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import http.client
+import io
 import json
 from collections.abc import Callable
 from dataclasses import replace
+from email.message import Message
 from pathlib import Path
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request
 
 import pytest
@@ -112,6 +115,92 @@ def test_provider_failure_is_preserved_as_blocked_snapshot() -> None:
     assert snapshot.issues[0].retriable is True
     assert handoff.status == "blocked"
     assert handoff.blocked_issue_ids == ["duffel-ord-jfk-2026-11-10-duffel_unavailable"]
+
+
+@pytest.mark.parametrize(("status", "retriable"), [(429, True), (503, True), (422, False)])
+def test_http_error_is_preserved_as_blocked_snapshot(status: int, retriable: bool) -> None:
+    def failing(request: Request, _timeout: float) -> bytes:
+        raise HTTPError(request.full_url, status, "error", Message(), io.BytesIO(b"{}"))
+
+    snapshot = DuffelFlightAdapter(
+        api_token="duffel_test_example", transport=failing
+    ).fetch_snapshot(_query())
+
+    assert snapshot.snapshot_status == "failed"
+    assert snapshot.issues[0].code == "duffel_http_error"
+    assert snapshot.issues[0].provider_status == str(status)
+    assert snapshot.issues[0].retriable is retriable
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [ConnectionResetError("reset"), http.client.IncompleteRead(b"partial")],
+)
+def test_transport_failure_is_preserved_as_blocked_snapshot(failure: BaseException) -> None:
+    def failing(_request: Request, _timeout: float) -> bytes:
+        raise failure
+
+    snapshot = DuffelFlightAdapter(
+        api_token="duffel_test_example", transport=failing
+    ).fetch_snapshot(_query())
+
+    assert snapshot.snapshot_status == "failed"
+    assert snapshot.issues[0].code == "duffel_unavailable"
+    assert snapshot.issues[0].retriable is True
+
+
+@pytest.mark.parametrize("body", [b"not json", b"[]"])
+def test_invalid_live_body_is_preserved_as_blocked_snapshot(body: bytes) -> None:
+    snapshot = DuffelFlightAdapter(
+        api_token="duffel_test_example", transport=lambda _request, _timeout: body
+    ).fetch_snapshot(_query())
+
+    assert snapshot.snapshot_status == "failed"
+    assert snapshot.issues[0].code == "duffel_invalid_json"
+    assert snapshot.issues[0].stage == "decode"
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda payload: payload.pop("data"),
+        lambda payload: payload["data"].pop("offers"),
+        lambda payload: payload["data"].pop("id"),
+        lambda payload: payload["data"].__setitem__("live_mode", True),
+    ],
+)
+def test_invalid_live_schema_is_preserved_as_blocked_snapshot(
+    mutate: Callable[[dict[str, object]], object],
+) -> None:
+    payload = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    mutate(payload)
+
+    snapshot = DuffelFlightAdapter(
+        api_token="duffel_test_example",
+        transport=lambda _request, _timeout: json.dumps(payload).encode("utf-8"),
+    ).fetch_snapshot(_query())
+
+    assert snapshot.snapshot_status == "failed"
+    assert snapshot.issues[0].code == "duffel_invalid_response"
+    assert snapshot.issues[0].stage == "decode"
+    assert snapshot.issues[0].retriable is False
+
+
+def test_empty_offer_response_produces_ready_zero_record_handoff() -> None:
+    payload = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    payload["data"]["offers"] = []
+    snapshot = DuffelFlightAdapter(
+        api_token="duffel_test_example",
+        transport=lambda _request, _timeout: json.dumps(payload).encode("utf-8"),
+    ).fetch_snapshot(_query())
+
+    handoff = DuffelFlightAdapter(fixture_path=FIXTURE_PATH).build_handoff(snapshot)
+
+    assert snapshot.snapshot_status == "complete"
+    assert handoff.status == "ready"
+    assert handoff.record_count == 0
+    assert handoff.blocked_issue_ids == []
+    assert handoff.notes == ["Flight offers are ready for transport-option normalization."]
 
 
 @pytest.mark.parametrize(

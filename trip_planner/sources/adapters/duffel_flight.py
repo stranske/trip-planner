@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from trip_planner.sources.models import SourceRecord
@@ -183,7 +184,7 @@ class DuffelFlightAdapter(SourceAdapter):
                 provider_status=str(exc.code),
                 retriable=exc.code >= 500 or exc.code == 429,
             )
-        except (TimeoutError, URLError) as exc:
+        except (OSError, http.client.HTTPException) as exc:
             return None, self._provider_issue(
                 query,
                 code="duffel_unavailable",
@@ -200,6 +201,26 @@ class DuffelFlightAdapter(SourceAdapter):
                 retriable=False,
                 stage="decode",
             )
+
+    def _failed_snapshot(self, query: SourceQuery, issue: AdapterIssue) -> RawSnapshot:
+        """Return the canonical blocked snapshot for an API failure."""
+
+        return RawSnapshot(
+            snapshot_id=f"{query.query_id}-snapshot",
+            adapter_id=self.adapter_id,
+            source_id=self.source_record.source_id,
+            source_category=self.source_record.category,
+            entity_scope="transport",
+            option_kind="flight",
+            fetched_at=query.requested_at,
+            query=query,
+            issues=[issue],
+            transport="api",
+            snapshot_status="failed",
+            handoff_status="blocked",
+            payload_metadata={"mode": "test-api"},
+            notes=["Duffel request failed; no offer records were emitted."],
+        )
 
     def _provider_issue(
         self,
@@ -287,22 +308,7 @@ class DuffelFlightAdapter(SourceAdapter):
         if self.api_token is not None:
             payload, issue = self._fetch_live(query)
             if issue is not None:
-                return RawSnapshot(
-                    snapshot_id=f"{query.query_id}-snapshot",
-                    adapter_id=self.adapter_id,
-                    source_id=self.source_record.source_id,
-                    source_category=self.source_record.category,
-                    entity_scope="transport",
-                    option_kind="flight",
-                    fetched_at=query.requested_at,
-                    query=query,
-                    issues=[issue],
-                    transport="api",
-                    snapshot_status="failed",
-                    handoff_status="blocked",
-                    payload_metadata={"mode": "test-api"},
-                    notes=["Duffel request failed; no offer records were emitted."],
-                )
+                return self._failed_snapshot(query, issue)
             assert payload is not None
             locator_prefix = f"{self.api_base_url}/air/offers"
         else:
@@ -310,11 +316,26 @@ class DuffelFlightAdapter(SourceAdapter):
             assert self.fixture_path is not None
             locator_prefix = self.fixture_path.name
 
-        records, data = self._records_from_payload(payload, query, locator_prefix=locator_prefix)
-        request_id = _required_text(data, "id", "offer request")
-        live_mode = data.get("live_mode")
-        if live_mode is not False:
-            raise ValueError("Duffel response must come from test mode (live_mode=false)")
+        try:
+            records, data = self._records_from_payload(
+                payload, query, locator_prefix=locator_prefix
+            )
+            request_id = _required_text(data, "id", "offer request")
+            if data.get("live_mode") is not False:
+                raise ValueError("Duffel response must come from test mode (live_mode=false)")
+        except (TypeError, ValueError) as exc:
+            if mode != "api":
+                raise
+            return self._failed_snapshot(
+                query,
+                self._provider_issue(
+                    query,
+                    code="duffel_invalid_response",
+                    message=str(exc),
+                    retriable=False,
+                    stage="decode",
+                ),
+            )
 
         return RawSnapshot(
             snapshot_id=f"{query.query_id}-snapshot",
@@ -357,15 +378,22 @@ class DuffelFlightAdapter(SourceAdapter):
             )
             for record in snapshot.records
         ]
+        blocked = snapshot.snapshot_status == "failed"
         return NormalizationHandoff(
             handoff_id=f"{snapshot.snapshot_id}-handoff",
             snapshot_id=snapshot.snapshot_id,
             target_contract=_TARGET_CONTRACT,
             entity_scope=snapshot.entity_scope,
-            status="ready" if snapshot.records else "blocked",
+            status="blocked" if blocked else "ready",
             input_record_ids=[record.record_id for record in snapshot.records],
             blocked_issue_ids=[issue.issue_id for issue in snapshot.issues],
             provenance_refs=provenance_refs,
             record_count=len(snapshot.records),
-            notes=["Flight offers are ready for transport-option normalization."],
+            notes=[
+                (
+                    "Duffel request failed; normalization is blocked."
+                    if blocked
+                    else "Flight offers are ready for transport-option normalization."
+                )
+            ],
         )
