@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { WorkspaceData } from "../../../api/workspace";
+import { explainPolicyCode } from "../../../lib/policyCodes";
 
 export type PolicyPanelBlockingPrecondition = {
   message: string;
@@ -21,7 +22,11 @@ export type PolicyPanelView =
   | {
       kind: "non-compliant";
       issueCodes: string[];
+      /** TPP's own failure message per code, when the payload carries one. */
+      issueMessages?: Record<string, string>;
       summary: string;
+      /** Submit the corrected trip again. Without it a blocked trip was a dead end. */
+      onResubmit?: () => void;
     }
   | {
       kind: "service-unavailable";
@@ -88,7 +93,32 @@ export function derivePolicyPanelView(
   const submissionStatus = summary.submission_status ?? proposal.submission_status;
   const transportStatus = summary.evaluation_transport_status ?? proposal.evaluation_status;
 
-  if (isFailedTransportStatus(submissionStatus) || isFailedTransportStatus(transportStatus)) {
+  // TPP answers a non-compliant proposal with state "failed" too. That is a verdict, not an
+  // outage: the service answered and said which rules the trip breaks. Checking it first is
+  // what stops the traveller being told the service is down and offered a Retry that cannot
+  // change the answer.
+  const tppMessages = Object.fromEntries(
+    (summary.follow_up?.failure_reasons ?? [])
+      .filter((reason) => reason.code && reason.message)
+      .map((reason) => [reason.code, reason.message])
+  );
+
+  if (summary.submission_outcome === "blocked_by_policy") {
+    const blockingCodes = summary.submission_blocking_codes ?? Object.keys(tppMessages);
+    return {
+      kind: "non-compliant",
+      issueCodes: blockingCodes.length > 0 ? blockingCodes : ["policy-review-required"],
+      issueMessages: tppMessages,
+      summary: "The travel policy service reviewed this trip and blocked it until the items below are resolved.",
+      onResubmit: handlers.onPrepare,
+    };
+  }
+
+  if (
+    summary.submission_outcome === "failed" ||
+    isFailedTransportStatus(submissionStatus) ||
+    isFailedTransportStatus(transportStatus)
+  ) {
     return {
       kind: "service-unavailable",
       message:
@@ -182,11 +212,29 @@ function renderPolicyState(view: PolicyPanelView, compact = false, busy = false)
           <p className="status-label">Approval packet</p>
           <h2>Policy non-compliant</h2>
           {!compact ? <p className="muted-copy">{view.summary}</p> : null}
-          <ul data-testid="policy-issue-codes">
-            {view.issueCodes.map((code) => (
-              <li key={code}>{code}</li>
-            ))}
+          <ul data-testid="policy-issue-codes" className="policy-issue-list">
+            {view.issueCodes.map((code) => {
+              const explained = explainPolicyCode(code, view.issueMessages?.[code]);
+              return (
+                <li key={code}>
+                  <strong>{explained.meaning}</strong>
+                  {explained.whatToDo ? <span> {explained.whatToDo}</span> : null}
+                  <span className="muted-copy"> (rule {code})</span>
+                </li>
+              );
+            })}
           </ul>
+          {view.onResubmit && !compact ? (
+            <>
+              <p className="field-hint">
+                Fix these on the Budget tab (the flight details come from your airline quote),
+                then submit the trip again.
+              </p>
+              <button type="button" onClick={view.onResubmit}>
+                Submit again
+              </button>
+            </>
+          ) : null}
         </section>
       );
     case "service-unavailable":
