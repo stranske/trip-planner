@@ -44,7 +44,7 @@ import {
   type WorkspaceData,
 } from "../api/workspace";
 import { WorkspaceBudgetPanel } from "../components/budget/WorkspaceBudgetPanel";
-import { TripPricesPanel } from "../components/budget/TripPricesPanel";
+import { TripPricesPanel, type FareDetail } from "../components/budget/TripPricesPanel";
 import { TripMap } from "../components/maps/TripMap";
 import type { MapViewScope } from "../components/maps/mapSurface";
 import { PlanningModeSelector } from "../components/planner/PlanningModeSelector";
@@ -1529,11 +1529,28 @@ function WorkspacePageContent({
     };
   }, [trip.trip_id]);
 
-  async function handleTripPriceSave(component: string, amount: number | null, note: string) {
+  async function handleTripPriceSave(
+    component: string,
+    amount: number | null,
+    note: string,
+    fareDetail?: FareDetail
+  ) {
     setTripPricesError(null);
     setTripPricesBusy(true);
     try {
-      const next = await saveTripPrice(trip.trip_id, { component, amount, note });
+      const next = await saveTripPrice(trip.trip_id, {
+        component,
+        amount,
+        note,
+        ...(fareDetail
+          ? {
+              lowest_amount: fareDetail.lowestAmount,
+              evidence_attested: fareDetail.evidenceAttested,
+              cabin_class: fareDetail.cabinClass,
+              flight_hours: fareDetail.flightHours,
+            }
+          : {}),
+      });
       setTripPrices(next);
       // Re-read the workspace so the entered figure reaches Compare and the approval
       // packet in the same interaction, rather than after a reload the traveller has no

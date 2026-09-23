@@ -67,7 +67,12 @@ describe("TripPricesPanel", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]!);
 
     await waitFor(() => {
-      expect(onSave).toHaveBeenCalledWith("transport", 486, "United.com");
+      expect(onSave).toHaveBeenCalledWith("transport", 486, "United.com", {
+        lowestAmount: null,
+        evidenceAttested: false,
+        cabinClass: null,
+        flightHours: null,
+      });
     });
   });
 
@@ -104,7 +109,44 @@ describe("TripPricesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Update" }));
 
     await waitFor(() => {
-      expect(onSave).toHaveBeenCalledWith("transport", null, "United.com");
+      expect(onSave).toHaveBeenCalledWith("transport", null, "United.com", {
+        lowestAmount: null,
+        evidenceAttested: false,
+        cabinClass: null,
+        flightHours: null,
+      });
     });
+  });
+
+  it("sends the lowest fare and the evidence attestation with the flight price", async () => {
+    // TPP's fare rules fail when either is absent, so without these approval was blocked
+    // whatever the fare. Both are the traveller's own statement.
+    const onSave = vi.fn();
+    render(<TripPricesPanel prices={EMPTY} busy={false} errorMessage={null} onSave={onSave} />);
+
+    fireEvent.change(screen.getByLabelText("Flights and ground travel"), { target: { value: "486" } });
+    fireEvent.change(screen.getByLabelText("Lowest fare you found for the same journey"), {
+      target: { value: "470" },
+    });
+    fireEvent.click(
+      screen.getByLabelText("I have a screenshot or other fare evidence to give my approver")
+    );
+    fireEvent.change(screen.getByLabelText("Cabin booked"), { target: { value: "economy" } });
+    fireEvent.change(screen.getByLabelText("Longest flight, in hours"), { target: { value: "4.5" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]!);
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith("transport", 486, "", {
+        lowestAmount: 470,
+        evidenceAttested: true,
+        cabinClass: "economy",
+        flightHours: 4.5,
+      });
+    });
+  });
+
+  it("offers fare detail only on the flights row", () => {
+    render(<TripPricesPanel prices={EMPTY} busy={false} errorMessage={null} onSave={vi.fn()} />);
+    expect(screen.getAllByLabelText("Lowest fare you found for the same journey")).toHaveLength(1);
   });
 });

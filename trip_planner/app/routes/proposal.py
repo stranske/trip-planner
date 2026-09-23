@@ -17,6 +17,7 @@ from trip_planner.app.services.policy import WorkspacePolicyNotFoundError
 from trip_planner.app.services.proposal import (
     submit_workspace_proposal_for_trip,
     WorkspaceProposalNotFoundError,
+    WorkspaceProposalUnpricedError,
     WorkspacePolicyMissingForSubmissionError,
     get_workspace_proposal_payload,
     refresh_workspace_proposal_status,
@@ -272,6 +273,9 @@ def submit_workspace_proposal(
             status_code=400,
             message="Sync this trip's travel policy before submitting for approval.",
         ) from error
+    except WorkspaceProposalUnpricedError as error:
+        # Names what is missing and where to supply it; carries no user data.
+        raise public_http_error(error, status_code=422, message=str(error)) from error
     except ValueError as error:
         raise public_http_error(
             error, status_code=400, message="The workspace proposal request was invalid."
