@@ -1006,6 +1006,12 @@ describe("WorkspacePage", () => {
     await user.click(screen.getAllByRole("button", { name: "View route" })[0]!);
     expect(screen.getByRole("tab", { name: "Map" })).toHaveAttribute("aria-selected", "true");
 
+    expect(screen.getByTestId("timeline-departure-origin")).toHaveTextContent(
+      "Departure from Seattle"
+    );
+    const timeline = within(screen.getByRole("list", { name: "Trip timeline sequence" }));
+    expect(timeline.getByRole("heading", { name: "Chicago, IL gateway" })).toBeInTheDocument();
+    expect(timeline.getByRole("heading", { name: "Chicago, IL" })).toBeInTheDocument();
     const text = document.body.textContent ?? "";
     expect(text).not.toMatch(/Dest[- ]Gateway|dest-city|runtime bundle|persisted/i);
     const stops = screen.getAllByText(/^(Seattle|Chicago, IL)$/);

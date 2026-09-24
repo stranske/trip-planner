@@ -262,10 +262,44 @@ function namedRouteOrigin(routeStops: string[] | undefined, routeSequence: strin
   if (routeStops.length === routeSequence.length + 1) {
     return routeStops[0];
   }
-  if (routeStops.length === routeSequence.length) {
+  if (
+    routeStops.length > 1 &&
+    !placeLabelMatchesStop(routeStops[0], routeSequence[0]) &&
+    routeStops
+      .slice(1)
+      .some((label) => routeSequence.some((stop) => placeLabelMatchesStop(label, stop)))
+  ) {
     return routeStops[0];
   }
   return null;
+}
+
+const INTERNAL_STOP_PREFIXES = new Set(["dest"]);
+const INTERNAL_STOP_ROLES = new Set(["airport", "city", "gateway", "station", "terminal"]);
+
+function stopTokens(value: string): string[] {
+  return value.toLocaleLowerCase().split(/[^a-z0-9]+/g).filter(Boolean);
+}
+
+function placeLabelMatchesStop(label: string, stop: string | undefined): boolean {
+  if (!stop) {
+    return false;
+  }
+  const labelTokens = stopTokens(label);
+  const locationTokens = stopTokens(stop).filter(
+    (token) => !INTERNAL_STOP_PREFIXES.has(token) && !INTERNAL_STOP_ROLES.has(token)
+  );
+  return labelTokens.length > 0 && labelTokens.every((token) => locationTokens.includes(token));
+}
+
+function readableInternalStop(stop: string, destinationLabels: string[]): string {
+  const matchingDestination = destinationLabels.find((label) => placeLabelMatchesStop(label, stop));
+  const role = stopTokens(stop).find((token) => INTERNAL_STOP_ROLES.has(token));
+  if (matchingDestination) {
+    return role && role !== "city" ? `${matchingDestination} ${role}` : matchingDestination;
+  }
+  const readableTokens = stopTokens(stop).filter((token) => !INTERNAL_STOP_PREFIXES.has(token));
+  return titleCaseStop(readableTokens.join("-"));
 }
 
 function timelineStopLabels(
@@ -273,14 +307,24 @@ function timelineStopLabels(
   routeStops: string[] | undefined
 ): string[] {
   const origin = namedRouteOrigin(routeStops, routeSequence);
-  if (origin && routeStops) {
-    const destinationLabels = routeStops.slice(1);
-    return routeSequence.map((stop, index) => destinationLabels[index] ?? titleCaseStop(stop));
+  const destinationLabels = routeStops ? (origin ? routeStops.slice(1) : routeStops) : [];
+  const labelsByRouteIndex = new Map<number, string>();
+  let searchBefore = routeSequence.length;
+  for (let labelIndex = destinationLabels.length - 1; labelIndex >= 0; labelIndex -= 1) {
+    const label = destinationLabels[labelIndex];
+    for (let routeIndex = searchBefore - 1; routeIndex >= 0; routeIndex -= 1) {
+      if (placeLabelMatchesStop(label, routeSequence[routeIndex])) {
+        labelsByRouteIndex.set(routeIndex, label);
+        searchBefore = routeIndex;
+        break;
+      }
+    }
   }
-  if (routeStops?.length) {
-    return routeSequence.map((stop, index) => routeStops[index] ?? titleCaseStop(stop));
-  }
-  return routeSequence.map(titleCaseStop);
+
+  return routeSequence.map((stop, index) =>
+    labelsByRouteIndex.get(index) ??
+    (!origin && routeStops?.[index] ? routeStops[index] : readableInternalStop(stop, destinationLabels))
+  );
 }
 
 function titleCaseStop(stop: string): string {
