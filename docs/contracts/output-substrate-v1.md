@@ -1,0 +1,94 @@
+# Output substrate v1
+
+`output-substrate/v1` separates **regenerable view/data artifacts** from a
+**vendored static renderer** so published HTML does not fuse presentation with
+proprietary data. Validate against
+[output-substrate-v1.schema.json](schemas/output-substrate-v1.schema.json) with a
+Draft 2020-12 validator. `schema_version` is always `output-substrate/v1`.
+Unknown additive fields are allowed for v1 extensions.
+
+This contract generalizes the Pension-Data reference renderer without extracting
+`apps/web/` (B2-029). The embryonic workspace-bundle shape is declared in
+[`stranske/Pension-Data` `apps/contracts/runtime-contract.json`](https://github.com/stranske/Pension-Data/blob/main/apps/contracts/runtime-contract.json):
+required top-level fields `contractVersion`, `data_origin`, and `datasets`;
+allowed `data_origin` values `fixture`, `generated`, and `live`; dataset rows
+with recommended provenance fields. Pension-Data enforces those constraints in
+`tests/web/test_workspace_contract.py`.
+
+## Renderer profiles
+
+| `renderer_profile` | View bundle | Primary use |
+| --- | --- | --- |
+| `investment_review` | Workspace bundle (`workspace.json` pattern) | Pension fact review drilldowns, charts, and PWA shell |
+| `blackline_bundle` | Blackline / diff snapshot bundle | Consultant and legal YoY blacklines (Doc-Lineage lane) |
+| `mosaic_book` | Comms mosaic bundle | Manager-comms thesis monitor (`fund`, `periods`, `entries`, `themes`) |
+
+Profiles select renderer wiring and the expected view-bundle vocabulary. They do
+not change the wire shape of this document.
+
+## Required fields
+
+| Field | Requirement |
+| --- | --- |
+| `schema_version` | Must be the literal `output-substrate/v1`. |
+| `renderer_profile` | One of `investment_review`, `blackline_bundle`, `mosaic_book`. |
+| `workspace_bundle_ref` | Run-dir-relative POSIX pointer to the view bundle JSON (`path` required; `sha256` and `artifact_id` recommended). Rejects absolute paths, `..` traversal, backslashes, drive-letter roots (`C:`), and UNC paths (`//server/share`). |
+| `manifest_ref` | `artifact:manifest.json` or a run-dir-relative POSIX path to the [`artifact-manifest/v1`](schemas/artifact-manifest-v1.schema.json) manifest. Absolute paths, traversal, backslashes, drive roots, leading URI-style prefixes, and empty path segments are rejected. Colons in later path segments are allowed. Named artifacts live there, not inline. |
+| `manifest_csv_exports` | Array (possibly empty) of manifest-gated CSV export specs for Excel refresh. |
+
+Optional `link_profile` selects evidence-link resolution: `local-file` for
+synced-folder `file://` deep links (work-PC default) or `artifact-http` for
+Pension-Data-style `artifactBaseUrl` resolution.
+
+## Manifest CSV exports
+
+Each `manifest_csv_exports[]` entry names a generated CSV file, its encoding
+(`utf-8` or `utf-16-le`), and a nonempty `columns[]` list. Every column
+requires `name`, `type` (`string`, `number`, `boolean`, or `date`), and
+`source_path` (JSONPath or consumer-defined pointer into the workspace bundle).
+Producers regenerate CSV files when the workspace bundle changes; Excel workbooks
+refresh from the manifest-listed exports without embedding data in HTML.
+
+## Excel lane
+
+Work-PC Excel refresh uses the manifest-listed CSV exports instead of WASM or
+COM renderers. After a run publishes `output-substrate/v1`:
+
+1. Open the run directory (or synced SharePoint/OneDrive folder) on the work PC.
+2. Read `manifest_csv_exports[]` from the `output_substrate` artifact (or the
+   run's `artifact:manifest.json` entry that points to it).
+3. For each export entry, regenerate or copy `filename` using the declared
+   `encoding` (`utf-8` or `utf-16-le`) and the `columns[]` `source_path`
+   pointers against the workspace bundle at `workspace_bundle_ref.path`.
+4. In Excel, use **Data → Get Data → From File → From Text/CSV**, select the
+   manifest-listed file, confirm delimiter/encoding, and load to a worksheet.
+5. When the workspace bundle or manifest changes, repeat steps 2–4 so linked
+   workbooks refresh from the regenerated CSV files rather than stale HTML.
+
+## Manifest and delivery
+
+`artifact-manifest/v1` adds `output_substrate` to its `kind` enum. A run may
+publish this document as an artifact with `kind: "output_substrate"`. Existing
+kinds and path/hash rules are unchanged.
+
+The schema and this specification are distributed from the Workflows root via
+`.github/sync-manifest.yml` (`source_tree: root`), matching the existing backplane
+contract delivery.
+
+## Consumer validation
+
+Declare `output-substrate/v1` in an active consumer registry entry's `ingests`
+list and pass one document to `scripts/validate_run_contract.py`. The production
+validator enforces the schema, including POSIX path rules on
+`workspace_bundle_ref.path` and `manifest_csv_exports[].filename`.
+
+## Workflows source validation evidence
+
+The synthetic fixture `tests/fixtures/backplane/valid_output_substrate.json`
+and its test live in the
+[Workflows source repository](https://github.com/stranske/Workflows), not in
+consumer checkouts. From a Workflows checkout, run
+`python -m pytest tests/contracts/test_backplane_schemas.py::test_output_substrate_fixture_validates -q`.
+
+Deliberate break: remove `renderer_profile` from the fixture, rerun the named
+test, observe failure, restore the fixture, and observe success.

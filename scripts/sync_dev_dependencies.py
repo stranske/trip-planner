@@ -265,6 +265,19 @@ def sync_pyproject(
             # Need to add [project.optional-dependencies] section
             insert_pos = find_project_section_end(content)
             if insert_pos is None:
+                # A tool-only pyproject does not declare an installable project.
+                # Creating project.optional-dependencies would turn it into a
+                # package contract and can break consumers' editable CI install.
+                legacy_package_file = any(
+                    (pyproject_path.parent / name).exists() for name in ("setup.py", "setup.cfg")
+                )
+                if not legacy_package_file and not re.search(
+                    r"^\[(?:build-system|tool\.poetry)(?:\]|\.)",
+                    content,
+                    re.MULTILINE,
+                ):
+                    print("Skipping package dev section in tool-only pyproject.toml")
+                    return [], []
                 return [], ["Could not find [project] section to add optional-dependencies"]
 
             section_to_add = "\n[project.optional-dependencies]\n" + new_section + "\n"
@@ -364,7 +377,8 @@ def sync_lockfile(
         target_requirement = f"=={target_version}{match.group('marker') or ''}"
         if target_version and current_requirement != target_requirement:
             current_version = match.group("specifier") or "(unversioned)"
-            current_version = current_version.removeprefix("==")
+            if current_version.startswith("=="):
+                current_version = current_version[2:]
             changes.append(f"{lockfile_path.name}:{name}: {current_version} -> =={target_version}")
             if apply:
                 updated_lines.append(

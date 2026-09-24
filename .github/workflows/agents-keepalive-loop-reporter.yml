@@ -97,7 +97,7 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-actions: write
-          permission-contents: read
+          permission-contents: write
           permission-issues: write
           permission-pull-requests: read
 
@@ -120,7 +120,7 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-actions: write
-          permission-contents: read
+          permission-contents: write
           permission-issues: write
           permission-pull-requests: read
 
@@ -190,6 +190,7 @@ jobs:
 
             const inputs = {
               pr_number: prNumber,
+              head_sha: run.head_sha || '',
               action: 'run',
               reason: '',
               gate_conclusion: state.gate_conclusion || '',

@@ -155,18 +155,21 @@ function hasRateLimitHeaders(headers) {
   if (!headers || typeof headers !== 'object') {
     return false;
   }
-  const rateLimitKeys = [
-    'x-ratelimit-remaining',
-    'x-ratelimit-limit',
-    'x-ratelimit-used',
-    'x-ratelimit-reset',
-  ];
-  return rateLimitKeys.some((key) => Object.prototype.hasOwnProperty.call(headers, key));
+  const { remaining, limit } = extractRateLimitInfo(headers);
+  return remaining === 0 || (remaining !== null && remaining >= 0 && limit !== null && limit > 0);
 }
 
 function isRateLimitError(error) {
   if (!error) {
     return false;
+  }
+  const graphqlErrors = error.errors || error?.response?.data?.errors;
+  if (Array.isArray(graphqlErrors) && graphqlErrors.some((item) =>
+    item?.type === 'RATE_LIMIT' || item?.type === 'RATE_LIMITED'
+      || item?.code === 'graphql_rate_limit'
+      || item?.extensions?.code === 'graphql_rate_limit'
+  )) {
+    return true;
   }
   const status = error.status || error?.response?.status;
   if (status === 429) {
@@ -316,6 +319,7 @@ function resolveOctokitFactory({ github, getOctokit, Octokit }) {
  * @param {string[]} options.capabilities - Required token capabilities
  * @param {string} options.preferredType - Prefer APP or PAT
  * @param {string} options.task - Task name for specialization matching
+ * @param {string} options.preferredSource - Exact token source to prefer when eligible
  * @param {number} options.minRemaining - Minimum remaining calls needed
  * @param {Function} options.onTokenSwitch - Callback on token switch
  * @param {boolean} options.allowNonIdempotentRetries - Allow retries for non-idempotent methods
@@ -335,8 +339,10 @@ async function withRetry(fn, options = {}) {
     tokenSource = null,
     capabilities = [],
     preferredType = null,
+    preferredSource = null,
     task = null,
     minRemaining = 100,
+    rateResource = 'core',
     onTokenSwitch = null,
     allowNonIdempotentRetries = false,
   } = options;
@@ -357,8 +363,11 @@ async function withRetry(fn, options = {}) {
         core,
         capabilities,
         preferredType,
+        preferredSource,
+        excludeSources: currentTokenSource ? [currentTokenSource] : [],
         task,
         minRemaining,
+        rateResource,
       });
     } catch (error) {
       logWithCore(core, 'warning', `Token registry selection failed: ${error.message}`);
@@ -409,10 +418,10 @@ async function withRetry(fn, options = {}) {
         const info = extractRateLimitInfo(headers);
 
         if (hasRateLimitHeaders(headers) && typeof tokenRegistry.updateFromHeaders === 'function') {
-          tokenRegistry.updateFromHeaders(currentTokenSource, headers);
+          tokenRegistry.updateFromHeaders(currentTokenSource, headers, rateResource);
           logTokenUsage(core, currentTokenSource, info, 'response');
         } else if (typeof tokenRegistry.updateTokenUsage === 'function') {
-          tokenRegistry.updateTokenUsage(currentTokenSource, 1);
+          tokenRegistry.updateTokenUsage(currentTokenSource, 1, rateResource);
           logTokenUsage(core, currentTokenSource, null, 'response');
         }
       }
@@ -436,10 +445,10 @@ async function withRetry(fn, options = {}) {
       if (tokenRegistry && currentTokenSource) {
         const info = extractRateLimitInfo(headers);
         if (hasRateLimitHeaders(headers) && typeof tokenRegistry.updateFromHeaders === 'function') {
-          tokenRegistry.updateFromHeaders(currentTokenSource, headers);
+          tokenRegistry.updateFromHeaders(currentTokenSource, headers, rateResource);
           logTokenUsage(core, currentTokenSource, info, 'error');
         } else if (typeof tokenRegistry.updateTokenUsage === 'function') {
-          tokenRegistry.updateTokenUsage(currentTokenSource, 1);
+          tokenRegistry.updateTokenUsage(currentTokenSource, 1, rateResource);
           logTokenUsage(core, currentTokenSource, null, 'error');
         }
       }
@@ -654,8 +663,10 @@ async function createTokenAwareRetry(options = {}) {
     Octokit = null,
     capabilities = [],
     preferredType = null,
+    preferredSource = null,
     task = null,
     minRemaining = 100,
+    rateResource = 'core',
     githubToken = null,
   } = options;
 
@@ -705,8 +716,10 @@ async function createTokenAwareRetry(options = {}) {
         core,
         capabilities,
         preferredType,
+        preferredSource,
         task,
         minRemaining,
+        rateResource,
       });
       if (selection?.token) {
         currentGithub = octokitFactory(selection.token);
@@ -733,8 +746,10 @@ async function createTokenAwareRetry(options = {}) {
       getOctokit: octokitFactory,
       capabilities,
       preferredType,
+      preferredSource,
       task,
       minRemaining,
+      rateResource,
       tokenSource: currentTokenSource,
       onTokenSwitch,
       ...overrideOptions,
