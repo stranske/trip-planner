@@ -29,21 +29,29 @@ def _map_coordinate_for_route_index(index: int, route_length: int) -> dict[str, 
     }
 
 
+def _stop_description(index: int, stop_count: int) -> str:
+    if index == 0:
+        return "Where the journey starts."
+    if index == stop_count - 1:
+        return "Final destination."
+    return f"Stop {index + 1} of {stop_count}."
+
+
 def _build_runtime_map_place_markers(
     route_sequence: list[str],
     *,
     source_refs: list[str],
+    labels_are_names: bool = False,
 ) -> list[dict[str, Any]]:
     stop_count = len([stop for stop in route_sequence if stop])
     return [
         {
             "id": f"route-stop:{index + 1}",
             "source_id": stop,
-            "label": _humanize_route_stop(stop),
-            "description": (
-                f"Route stop {index + 1} of {stop_count}, sourced from the ranked scenario "
-                "route sequence."
-            ),
+            # Place names the traveller entered are shown as entered ("Chicago, IL"), not
+            # title-cased slugs ("Gateway Chicago Il").
+            "label": stop if labels_are_names else _humanize_route_stop(stop),
+            "description": _stop_description(index, stop_count),
             "source_refs": list(source_refs),
             "route_index": index,
             **_map_coordinate_for_route_index(index, len(route_sequence)),
@@ -111,7 +119,11 @@ def build_runtime_map_view_payload(
     scenario: dict[str, Any],
     summary: dict[str, Any],
     route_sequence: list[str],
+    route_stops: list[str] | None = None,
 ) -> dict[str, Any]:
+    """`route_stops`, when given, are the journey's place names, origin first; they are
+    drawn instead of the scenario's internal stop ids (issue 1844)."""
+
     confidence_level = "high" if summary.get("feasible", False) else "medium"
     route_warning = None if summary.get("feasible", False) else "Scenario feasibility needs review."
     source_refs = [
@@ -122,7 +134,11 @@ def build_runtime_map_view_payload(
         ]
         if ref
     ]
-    place_markers = _build_runtime_map_place_markers(route_sequence, source_refs=source_refs)
+    place_markers = _build_runtime_map_place_markers(
+        route_stops or route_sequence,
+        source_refs=source_refs,
+        labels_are_names=bool(route_stops),
+    )
     rough_route_geometry = _build_runtime_map_route_geometry(
         place_markers,
         route_warning=route_warning,

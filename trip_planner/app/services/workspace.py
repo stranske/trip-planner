@@ -286,6 +286,24 @@ def _estimated_total_delta(
     return round(float(scenario_amount) - float(lead_amount), 2)
 
 
+def _journey_stops(record: PersistedTrip) -> list[str]:
+    """Origin, then each destination, as the traveller entered them.
+
+    Empty without an origin: the measured route then runs within the destination, and a
+    single place name would draw a route with one point.
+    """
+
+    if not record.origin:
+        return []
+    return [stop for stop in [record.origin, *record.primary_regions] if stop]
+
+
+def _display_route_stops(scenario: dict[str, Any], route_stops: list[str] | None) -> list[str]:
+    if route_stops and is_runtime_measured_bundle(scenario.get("bundle_id")):
+        return list(route_stops)
+    return []
+
+
 def _transfers_measured(scenario: dict[str, Any]) -> bool:
     """Whether anything counted this scenario's connections.
 
@@ -315,9 +333,14 @@ def _comparison_highlights(
     *,
     scenario: dict[str, Any],
     lead: dict[str, Any],
+    route_stops: list[str] | None = None,
 ) -> list[str]:
     summary = scenario["scenario_summary"]
-    route_sequence = " -> ".join(summary.get("route_sequence") or []) or "route sequence pending"
+    route_sequence = (
+        " → ".join(_display_route_stops(scenario, route_stops))
+        or " -> ".join(summary.get("route_sequence") or [])
+        or "route sequence pending"
+    )
     highlights = [
         f"Route: {route_sequence}.",
         (
@@ -554,6 +577,7 @@ def _build_runtime_scenario_comparison(
     trip_mode: str = "leisure",
     duration_days: int | None = None,
     entered_total: dict[str, Any] | None = None,
+    route_stops: list[str] | None = None,
 ) -> dict[str, Any]:
     scenarios = list(scenario_search.get("scenarios", []))
     option_set_id = _bootstrap_option_set_id(trip_id)
@@ -656,7 +680,15 @@ def _build_runtime_scenario_comparison(
             "checkpoint_id": None,
             "budget_variant_id": None,
             "route_sequence": list(summary.get("route_sequence") or []),
-            "route_summary": " -> ".join(summary.get("route_sequence") or []) or "route pending",
+            # A measured route is shown as the traveller's journey, origin first; the route
+            # sequence holds internal stop ids ("dest-gateway-chicago-il") that the page
+            # used to title-case and print (issue 1844).
+            "route_stops": _display_route_stops(scenario, route_stops),
+            "route_summary": (
+                " → ".join(_display_route_stops(scenario, route_stops))
+                or " -> ".join(summary.get("route_sequence") or [])
+                or "route pending"
+            ),
             "recommended_for_selection": summary["recommended_for_selection"],
             "feasible": summary["feasible"],
             "metrics": {
@@ -677,13 +709,16 @@ def _build_runtime_scenario_comparison(
                 "transfers_delta": _transfers_delta(scenario, lead),
                 "estimated_total_delta": _estimated_total_delta(scenario, lead),
             },
-            "highlights": _comparison_highlights(scenario=scenario, lead=lead),
+            "highlights": _comparison_highlights(
+                scenario=scenario, lead=lead, route_stops=route_stops
+            ),
             "source_result_id": scenario["source_result_id"],
             "objective_refs": list(scenario.get("objective_refs") or []),
             "map_view": build_runtime_map_view_payload(
                 scenario=scenario,
                 summary=summary,
                 route_sequence=list(summary.get("route_sequence") or []),
+                route_stops=_display_route_stops(scenario, route_stops),
             ),
             "map_diagnostics": build_runtime_map_diagnostics_payload(
                 scenario=scenario,
@@ -1353,6 +1388,7 @@ def _build_persisted_trip_workspace(
         trip_mode=record.mode,
         duration_days=record.duration_days,
         entered_total=(entered_prices or {}).get("total"),
+        route_stops=_journey_stops(record),
     )
     ranking = build_scenario_ranking_payload(
         trip_id=record.trip_id,
@@ -1772,6 +1808,7 @@ def _build_runtime_scenario_comparison_payload(
             ),
         ),
         session=_serialize_session_record(session_record),
+        route_stops=_journey_stops(record),
     )
 
 

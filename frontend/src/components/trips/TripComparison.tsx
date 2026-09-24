@@ -48,9 +48,9 @@ export function TripComparison({
     return (
       <section className="status-card">
         <p className="status-label">Trip comparison</p>
-        <h2>Trip-to-trip comparison will appear as more persisted trips land</h2>
+        <h2>Compare with your other trips</h2>
         <p className="muted-copy">
-          The current workspace can already compare saved scenarios. Cross-trip comparison needs at least one more saved trip from the persisted trips API.
+          Create another trip and it can be compared with this one here.
         </p>
       </section>
     );
@@ -61,7 +61,7 @@ export function TripComparison({
       <p className="status-label">Trip comparison</p>
       <h2>Compare this workspace with other saved trips</h2>
       <p>
-        Cross-trip selection uses persisted trip records so travelers can evaluate whether the current workspace still fits the broader trip slate.
+        Pick another of your trips to see how this one compares.
       </p>
       <div className="map-scenario-toggle" aria-label="Trip comparison choices">
         {comparisonCandidates.map((trip) => (

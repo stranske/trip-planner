@@ -279,6 +279,8 @@ export type RuntimeScenarioComparison = {
     summary: string;
     comparison_note: string;
     option_count: number;
+    /** The journey as place names, origin first, when the route was measured (issue 1844). */
+    route_stops?: string[];
     route_sequence: string[];
     route_summary: string;
     recommended_for_selection: boolean;

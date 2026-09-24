@@ -109,10 +109,8 @@ export function ScenarioComparison({
     return (
       <section className="status-card">
         <p className="status-label">Scenario comparison</p>
-        <h2>Saved-scenario comparison is not ready</h2>
-        <p className="muted-copy">
-          Persisted workspace state exists, but runtime scenario rows have not been assembled yet.
-        </p>
+        <h2>Nothing to compare yet</h2>
+        <p className="muted-copy">No route has been measured for this trip yet.</p>
       </section>
     );
   }

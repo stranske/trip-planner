@@ -67,7 +67,7 @@ describe("ScenarioComparison", () => {
     );
 
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
-      "Saved-scenario comparison is not ready"
+      "Nothing to compare yet"
     );
   });
 

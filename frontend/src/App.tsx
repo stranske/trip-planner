@@ -84,7 +84,6 @@ export default function App() {
           )}
         </div>
         <nav aria-label="Primary">
-          <NavLink to="/health">Status</NavLink>
           {session ? (
             <>
               <NavLink to="/trips">Trips</NavLink>
@@ -104,6 +103,11 @@ export default function App() {
       <main>
         <Outlet />
       </main>
+      {/* The service health page is for whoever runs the app, not a traveller's task
+          (issue 1844), so it sits in the footer rather than the primary navigation. */}
+      <footer className="app-footer">
+        <NavLink to="/health">Service status</NavLink>
+      </footer>
     </div>
   );
 }

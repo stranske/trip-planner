@@ -248,6 +248,13 @@ function formatDateRange(startDate: string | null, endDate: string | null): stri
   return `${formatDate(startDate)} to ${formatDate(endDate)}`;
 }
 
+/** Place names for a route, origin first; internal stop ids only when nothing better exists. */
+function displayStops(scenario: { route_sequence: string[]; route_stops?: string[] }): string[] {
+  return scenario.route_stops && scenario.route_stops.length > 0
+    ? scenario.route_stops
+    : scenario.route_sequence.map(titleCaseStop);
+}
+
 function titleCaseStop(stop: string): string {
   return stop
     .split(/[-_]/g)
@@ -423,10 +430,11 @@ function routeSegmentFocusesFor(
     });
   }
 
-  return scenario.route_sequence.slice(0, -1).map((fromStop, index) => ({
+  const stops = displayStops(scenario);
+  return stops.slice(0, -1).map((fromStop, index) => ({
     id: fallbackSegmentId(scenario.scenario_id, scenario.route_sequence, index),
-    fromLabel: titleCaseStop(fromStop),
-    toLabel: titleCaseStop(scenario.route_sequence[index + 1]),
+    fromLabel: fromStop,
+    toLabel: stops[index + 1],
     fromIndex: index,
     toIndex: index + 1,
     durationMinutes:
@@ -1322,6 +1330,7 @@ function WorkspacePageContent({
     routeComparison.scenarios[0] ??
     null;
   const timelineRouteSequence =
+    (selectedRuntimeScenario?.route_stops?.length ? selectedRuntimeScenario.route_stops : null) ??
     selectedRuntimeScenario?.route_sequence ??
     activeScenario.scenario?.scenario_summary.route_sequence ??
     [];
@@ -1397,6 +1406,12 @@ function WorkspacePageContent({
         : null,
     };
   });
+  function handleViewRoute(scenarioId: string) {
+    handleScenarioSelection(scenarioId);
+    setActiveTab("map");
+    workspaceTabRefs.current.map?.focus();
+  }
+
   function handleScenarioSelection(scenarioId: string) {
     setSelectedScenarioId(scenarioId);
     setSelectedSegmentId(null);
@@ -1522,25 +1537,6 @@ function WorkspacePageContent({
     setPlannerConversationNotice("Draft added. Edit it if needed, then send it to the planner.");
     setPlannerConversationError(null);
     plannerConversationTextareaRef.current?.focus();
-  }
-
-  function handleSourceMixTargetChange(value: number) {
-    const boundedValue = Math.max(0, Math.min(1, value));
-    setSourceMixTarget(boundedValue);
-    setCurrentWorkspace((current) => ({
-      ...current,
-      runtime_state: {
-        ...current.runtime_state,
-        commerciality_preference: boundedValue,
-      },
-      inventory_summary: {
-        ...current.inventory_summary,
-        runtime_state: {
-          ...current.inventory_summary.runtime_state,
-          commerciality_preference: boundedValue,
-        },
-      },
-    }));
   }
 
   async function handleBudgetSave(payload: BudgetPlanUpsertPayload) {
@@ -2367,32 +2363,8 @@ function WorkspacePageContent({
           )}
         </section>
 
-        <section className={STATUS_CARD_CLASS}>
-          <p className="status-label">Source mix</p>
-          <h2>Commercial balance</h2>
-          <p>
-            Set the target mix for daily-menu re-ranking before asking the planner for a slate.
-          </p>
-          <label className="source-mix-control">
-            <span>
-              {Math.round((1 - sourceMixTarget) * 100)}% editorial /{" "}
-              {Math.round(sourceMixTarget * 100)}% commercial
-            </span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={sourceMixTarget}
-              aria-label="Commercial source mix target"
-              onChange={(event) => handleSourceMixTargetChange(Number(event.target.value))}
-            />
-          </label>
-          <p className="muted-copy">
-            The target is sent with planner turns as a calibrated menu tool call; source quality
-            scoring stays unchanged.
-          </p>
-        </section>
+        {/* The editorial/commercial "source mix" slider was removed (issue 1844): it was
+            not saved, and it tuned a daily-activity menu no traveller sees. */}
 
         <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Saved ideas</p>
@@ -2551,22 +2523,35 @@ function WorkspacePageContent({
               }
             />
 
-            <ScenarioComparison
-              comparison={routeComparison}
-              savedScenarios={currentWorkspace.saved_scenarios}
-              selectedScenarioId={selectedScenarioId}
-              onSelectScenario={handleScenarioSelection}
-            />
+            {/* One comparison leads: the route cards above. The detail table and the route
+                actions render the same options again, so they sit behind one disclosure,
+                open only when there is more than one route to weigh (issue 1844). */}
+            {routeComparison.scenarios.length > 0 ? (
+              <details
+                className="compare-detail-disclosure"
+                data-testid="compare-detail-disclosure"
+                open={routeComparison.scenarios.length > 1}
+              >
+                <summary>Compare in detail, and keep or reject a route</summary>
+                <ScenarioComparison
+                  comparison={routeComparison}
+                  savedScenarios={currentWorkspace.saved_scenarios}
+                  selectedScenarioId={selectedScenarioId}
+                  onSelectScenario={handleScenarioSelection}
+                />
 
-            <RouteOptionWorkbench
-              comparison={routeComparison}
-              selectedScenarioId={selectedScenarioId}
-              busyLabel={routeOptionBusyLabel}
-              successMessage={routeOptionSuccess}
-              errorMessage={routeOptionError}
-              onSelectScenario={handleScenarioSelection}
-              onRouteOptionAction={handleRouteOptionAction}
-            />
+                <RouteOptionWorkbench
+                  comparison={routeComparison}
+                  selectedScenarioId={selectedScenarioId}
+                  busyLabel={routeOptionBusyLabel}
+                  successMessage={routeOptionSuccess}
+                  errorMessage={routeOptionError}
+                  onSelectScenario={handleScenarioSelection}
+                  onViewRoute={handleViewRoute}
+                  onRouteOptionAction={handleRouteOptionAction}
+                />
+              </details>
+            ) : null}
 
             <TripComparison
               currentTrip={currentWorkspace.trip_record.trip}
