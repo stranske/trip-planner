@@ -573,6 +573,8 @@ export type PlannerSessionResponse = {
   }>;
   activity_log: ActivityLogEntry[];
   messages: PlannerMessage[];
+  /** How the planner answers: "model" (a language model) or "fallback" (offline, rules only). */
+  runtime?: { mode: string; summary?: string | null } | null;
 };
 
 export type WorkspaceUserSummary = {

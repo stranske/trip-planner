@@ -14,6 +14,7 @@ from typing import Any, Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from trip_planner.app.services import policy_codes
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.planner_memory import (
     build_planner_memory_payload,
@@ -54,6 +55,7 @@ from trip_planner.observability.langsmith_fleet import (
     build_planner_fleet_records,
     default_fleet_artifact_path,
 )
+from trip_planner.geo.resolver import country_code_for_name, resolve_place
 from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
     PersistedPlannerAction,
@@ -391,6 +393,14 @@ def _split_user_clauses(message: str) -> list[str]:
 
 
 def _extract_destination_mentions(message: str) -> list[str]:
+    """Capitalised phrases that name a real place.
+
+    Any capitalised word used to count, so "My approval was blocked ... What is the
+    lowest fare" was heard as "Destinations: My, What" (issue 1845). A mention now has
+    to name a real city or country; single letters never do ("I" matches an alternate
+    city name).
+    """
+
     mentions: list[str] = []
     for match in re.finditer(r"\b[A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*){0,3}\b", message):
         words = match.group(0).split()
@@ -406,7 +416,12 @@ def _extract_destination_mentions(message: str) -> list[str]:
             for word in words
         ):
             continue
-        mentions.append(" ".join(words))
+        mention = " ".join(words)
+        if len(mention) < 2 or (
+            resolve_place(mention) is None and country_code_for_name(mention) is None
+        ):
+            continue
+        mentions.append(mention)
     return _dedupe_preserve_order(mentions)
 
 
@@ -936,6 +951,40 @@ def _policy_preview_summary(scenarios: list[dict[str, Any]]) -> str | None:
     return None
 
 
+OFFLINE_NOTE = (
+    "The planner is offline: it answers from this trip's own data (costs you entered, "
+    "routes, the policy result, what to do next) and cannot answer other questions."
+)
+
+
+def _saved_verdict_line(trip_title: str, proposal_state: dict[str, Any] | None) -> str | None:
+    saved = policy_codes.saved_verdict(proposal_state)
+    if saved is None:
+        return None
+    if saved["verdict"] == "compliant":
+        return (
+            f"{trip_title} passed the travel policy check. Print the approval packet from the "
+            "Policy tab and give it to your approver."
+        )
+    if saved["outcome"] == "blocked_by_policy" or saved["verdict"] == "non_compliant":
+        reasons = [
+            policy_codes.explain(code, saved["messages"].get(code)) for code in saved["codes"]
+        ]
+        detail = " ".join(reasons) if reasons else "The policy service did not say which rules."
+        return f"The travel policy blocked {trip_title}. {detail}"
+    if saved["outcome"] == "failed":
+        return (
+            f"{trip_title} has not been reviewed: the last submission did not reach the policy "
+            "service. Submit it again from the Policy tab."
+        )
+    if saved["outcome"] not in {"", "not_submitted"}:
+        return (
+            f"{trip_title} has been submitted to the travel policy check. Refresh the Policy tab "
+            "to read the result."
+        )
+    return None
+
+
 def _fallback_content_from_metadata(
     *,
     trip_title: str,
@@ -943,6 +992,7 @@ def _fallback_content_from_metadata(
     metadata: dict[str, Any],
     planning_mode: str | None = None,
     scenarios: list[dict[str, Any]] | None = None,
+    proposal_state: dict[str, Any] | None = None,
 ) -> str:
     lowered = message.lower()
     scenario_rows = list(scenarios or [])
@@ -964,6 +1014,11 @@ def _fallback_content_from_metadata(
         )
 
     if _POLICY_QUESTION_PATTERN.search(lowered):
+        # The saved verdict answers before any preview: the planner used to say "No policy
+        # preview is available" two minutes after TPP had blocked the trip (issue 1845).
+        verdict_line = _saved_verdict_line(trip_title, proposal_state)
+        if verdict_line:
+            return verdict_line
         policy_line = _policy_preview_summary(scenario_rows)
         if policy_line:
             return f"You asked about policy or compliance for {trip_title}. {policy_line}"
@@ -1459,6 +1514,7 @@ class DeterministicPlannerConversationRunnable:
                 metadata=metadata,
                 planning_mode=request.session.selected_planning_mode,
                 scenarios=scenarios,
+                proposal_state=request.runtime_context.get("proposal_state") or None,
             )
         ]
         refs = [request.session.session_state_id]
@@ -1469,9 +1525,9 @@ class DeterministicPlannerConversationRunnable:
         if ledger_line:
             lines.append(ledger_line)
 
-        lines.append(
-            "Note: the planner is offline and cannot answer free-text questions with generative AI."
-        )
+        # The limit comes first, so a traveller reads it before the answer, not after a
+        # route listing (issue 1845).
+        lines.insert(0, OFFLINE_NOTE)
 
         deduped_refs = list(dict.fromkeys(refs))
         return PlannerConversationReply(

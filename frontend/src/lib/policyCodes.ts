@@ -6,6 +6,9 @@
  * file restates TPP rather than inventing a policy. The second says what the traveller can
  * do about it here. Codes this file does not know are shown as-is: an unexplained code is
  * better than a guessed explanation.
+ *
+ * The planner chat explains the same codes from trip_planner/app/services/policy_codes.py;
+ * tests/app/test_policy_code_parity.py fails if the two drift.
  */
 
 export type PolicyCodeExplanation = {
@@ -18,12 +21,12 @@ const EXPLANATIONS: Record<string, { meaning: string; whatToDo: string }> = {
   fare_comparison: {
     meaning: "Fare comparison requires selected and lowest fare data.",
     whatToDo:
-      "Your approver needs both the fare you chose and the lowest fare available for the same trip. Include both with the packet.",
+      "Enter the lowest fare you found for the same journey next to your flight price on the Budget tab, then submit again.",
   },
   fare_evidence: {
     meaning: "Screenshot or fare evidence must be attached to the request.",
     whatToDo:
-      "This planner cannot attach files yet. Keep a screenshot of the fare and send it to your approver with the packet.",
+      "Tick the fare-evidence box on the Budget tab once you hold a screenshot or quote, and give it to your approver with the packet.",
   },
   non_reimbursable: {
     meaning: "Expense details are required to check non-reimbursable items.",

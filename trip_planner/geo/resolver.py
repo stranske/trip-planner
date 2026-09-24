@@ -217,9 +217,7 @@ def _city_matches_name(city: dict[str, object], city_key: str) -> bool:
     return any(_normalise(name) == city_key for name in names if name)
 
 
-def _resolved_place_from_city(
-    destination: str, city: dict[str, object]
-) -> ResolvedPlace:
+def _resolved_place_from_city(destination: str, city: dict[str, object]) -> ResolvedPlace:
     return ResolvedPlace(
         query=destination,
         name=str(city.get("name") or destination),
@@ -248,9 +246,9 @@ def _qualified_city_index() -> dict[tuple[str, str, str], dict[str, object]]:
             normalised = _normalise(name)
             for key in ((normalised, country, ""), (normalised, country, admin)):
                 existing = index.get(key)
-                if existing is None or _coerce_int(
-                    city.get("population")
-                ) > _coerce_int(existing.get("population")):
+                if existing is None or _coerce_int(city.get("population")) > _coerce_int(
+                    existing.get("population")
+                ):
                     index[key] = city
     return index
 
@@ -261,9 +259,7 @@ def _resolve_with_qualifier(city: str, qualifier: str) -> ResolvedPlace | None:
         return None
 
     city_key = _normalise(city)
-    city_data = _qualified_city_index().get(
-        (city_key, country_filter, admin_filter or "")
-    )
+    city_data = _qualified_city_index().get((city_key, country_filter, admin_filter or ""))
     if city_data is None:
         return None
     return _resolved_place_from_city(f"{city}, {qualifier}", city_data)
@@ -297,9 +293,7 @@ def resolve_place(destination: str) -> ResolvedPlace | None:
     if not destination or not destination.strip():
         return None
 
-    parts = [
-        part.strip() for part in _QUALIFIER_SPLIT.split(destination) if part.strip()
-    ]
+    parts = [part.strip() for part in _QUALIFIER_SPLIT.split(destination) if part.strip()]
     if len(parts) >= 2:
         qualified = _resolve_with_qualifier(parts[0], parts[-1])
         if qualified is not None:
@@ -320,6 +314,14 @@ def resolve_place(destination: str) -> ResolvedPlace | None:
                 population=population,
             )
     return None
+
+
+def country_code_for_name(name: str) -> str | None:
+    """The two-letter code of a country named in full ("Sweden" -> "SE"), else None."""
+
+    if not name or not name.strip():
+        return None
+    return _country_name_index().get(_normalise(name))
 
 
 def distance_km(origin: ResolvedPlace, destination: ResolvedPlace) -> float:
