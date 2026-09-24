@@ -950,6 +950,14 @@ describe("WorkspacePage", () => {
     mockedSetNotebookFocus.mockReset();
   });
 
+  it("offers to edit the trip setup from the workspace header (issue 1841)", async () => {
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
+    renderWorkspacePage();
+
+    const link = await screen.findByRole("link", { name: "Edit trip setup" });
+    expect(link).toHaveAttribute("href", `/trips/${workspacePayload.trip_record.trip.trip_id}/edit`);
+  });
+
   it("does not render a panel from two tabs", async () => {
     mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
     renderWorkspacePage();

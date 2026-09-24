@@ -39,6 +39,7 @@ from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.scenario import PersistedSavedScenario
 from trip_planner.persistence.models.session import PersistedPlanningSessionState
 from trip_planner.persistence.models.trip import PersistedTrip
+from trip_planner.persistence.models.trip_price import PersistedTripPrice
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _TRIP_ID_PREFIX = "trip-"
@@ -194,9 +195,7 @@ def list_trips(db_session: Session, *, user: AuthenticatedUser) -> list[dict]:
     return [serialize_trip(record) for record in records]
 
 
-def get_trip(
-    db_session: Session, *, user: AuthenticatedUser, trip_id: str
-) -> dict | None:
+def get_trip(db_session: Session, *, user: AuthenticatedUser, trip_id: str) -> dict | None:
     record = db_session.scalar(
         select(PersistedTrip)
         .where(PersistedTrip.trip_id == trip_id)
@@ -205,6 +204,80 @@ def get_trip(
     if record is None:
         return None
     return serialize_trip(record)
+
+
+#: Changing any of these changes what the travel policy was asked about, so a verdict
+#: reached before the change no longer describes the trip. Title and traveller notes are
+#: not sent to the policy service.
+VERDICT_DETERMINANTS = (
+    "summary",
+    "origin",
+    "start_date",
+    "end_date",
+    "duration_days",
+    "primary_regions",
+    "traveler_party_kind",
+    "traveler_count",
+)
+
+
+#: Blank optional text is stored as NULL, as trip creation does.
+_NULLABLE_TEXT_FIELDS = ("origin", "start_date", "end_date")
+_TEXT_FIELDS = ("title", "summary", "traveler_notes", *_NULLABLE_TEXT_FIELDS)
+
+
+def _normalized_changes(changes: dict[str, object]) -> dict[str, object]:
+    normalized = dict(changes)
+    for field in _TEXT_FIELDS:
+        value = normalized.get(field)
+        if isinstance(value, str):
+            stripped = value.strip()
+            normalized[field] = stripped or (None if field in _NULLABLE_TEXT_FIELDS else "")
+    if "title" in normalized and not normalized["title"]:
+        raise _bad_request("Trip title is required.")
+    if "primary_regions" in normalized:
+        regions = normalized["primary_regions"]
+        normalized["primary_regions"] = _normalize_regions(
+            [str(region) for region in regions] if isinstance(regions, list) else []
+        )
+    return normalized
+
+
+def update_trip(
+    db_session: Session,
+    *,
+    user: AuthenticatedUser,
+    trip_id: str,
+    changes: dict[str, object],
+) -> tuple[dict, list[str]] | None:
+    """Apply the changed setup fields. Returns the trip and the determinants that changed.
+
+    When a determinant changes, the saved submission and verdict are deleted: a verdict
+    for Chicago must not print on the packet of a trip now going to Denver (issue 1841).
+    """
+
+    record = db_session.scalar(
+        select(PersistedTrip)
+        .where(PersistedTrip.trip_id == trip_id)
+        .where(PersistedTrip.user_id == user.user_id)
+    )
+    if record is None:
+        return None
+    changes = _normalized_changes(changes)
+
+    changed: list[str] = []
+    for field, value in changes.items():
+        if getattr(record, field) != value:
+            setattr(record, field, value)
+            changed.append(field)
+    determinants = [field for field in changed if field in VERDICT_DETERMINANTS]
+    if determinants:
+        db_session.execute(
+            delete(PersistedProposalState).where(PersistedProposalState.trip_id == trip_id)
+        )
+    db_session.commit()
+    db_session.refresh(record)
+    return serialize_trip(record), determinants
 
 
 def delete_trip(db_session: Session, *, user: AuthenticatedUser, trip_id: str) -> bool:
@@ -232,6 +305,8 @@ def delete_trip(db_session: Session, *, user: AuthenticatedUser, trip_id: str) -
         PersistedProposalState,
         PersistedSavedScenario,
         PersistedPlanningSessionState,
+        # Entered prices belong to the trip; they were left behind as orphans.
+        PersistedTripPrice,
     ):
         db_session.execute(delete(model).where(model.trip_id == trip_id))
 

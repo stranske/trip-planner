@@ -135,6 +135,27 @@ export async function createTrip(payload: CreateTripPayload): Promise<TripRecord
   return response.trip;
 }
 
+export type UpdateTripPayload = {
+  title?: string;
+  summary?: string;
+  trip_frame?: Partial<TripFrame>;
+};
+
+/** Change a trip's setup. `verdictCleared` is true when the edit removed a saved policy verdict. */
+export async function updateTrip(
+  tripId: string,
+  payload: UpdateTripPayload
+): Promise<{ trip: TripRecord; verdictCleared: boolean }> {
+  const response = await fetchJson<{ trip: TripRecord; verdict_cleared?: boolean }>({
+    path: `/api/trips/${tripId}`,
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return { trip: response.trip, verdictCleared: response.verdict_cleared === true };
+}
+
 export async function deleteTrip(tripId: string): Promise<void> {
   await fetchJson<unknown>({
     path: `/api/trips/${tripId}`,

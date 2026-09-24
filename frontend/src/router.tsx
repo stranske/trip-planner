@@ -16,6 +16,7 @@ import { fetchWorkspace } from "./api/workspace";
 import App, { InitialRouteFallback, RootErrorBoundary } from "./App";
 import { ApiClientError } from "./lib/api/errors";
 import { healthLoader, HealthPage } from "./routes/HealthPage";
+import { EditTripPage } from "./routes/EditTripPage";
 import { LoginPage } from "./routes/LoginPage";
 import { NewTripPage } from "./routes/NewTripPage";
 import { SignupPage } from "./routes/SignupPage";
@@ -121,6 +122,14 @@ export async function protectedTripDetailLoader({
   };
 }
 
+export async function protectedEditTripLoader({ params, request }: LoaderFunctionArgs) {
+  const { session } = await loadSession(request);
+  if (!session) {
+    redirectToLogin(request);
+  }
+  return { trip: fetchTrip(params.tripId ?? "") };
+}
+
 export async function protectedCreateTripLoader({ request }: LoaderFunctionArgs) {
   const { session } = await loadSession(request);
   if (!session) {
@@ -178,6 +187,11 @@ export const appRoutes: RouteObject[] = [
         path: "trips/new",
         element: <NewTripPage />,
         loader: protectedCreateTripLoader,
+      },
+      {
+        path: "trips/:tripId/edit",
+        element: <EditTripPage />,
+        loader: protectedEditTripLoader,
       },
       {
         path: "trips/:tripId",
