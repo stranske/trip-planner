@@ -248,6 +248,85 @@ function formatDateRange(startDate: string | null, endDate: string | null): stri
   return `${formatDate(startDate)} to ${formatDate(endDate)}`;
 }
 
+/** Place names for a route, origin first; internal stop ids only when nothing better exists. */
+function displayStops(scenario: { route_sequence: string[]; route_stops?: string[] }): string[] {
+  return scenario.route_stops && scenario.route_stops.length > 0
+    ? scenario.route_stops
+    : scenario.route_sequence.map(titleCaseStop);
+}
+
+function namedRouteOrigin(routeStops: string[] | undefined, routeSequence: string[]): string | null {
+  if (!routeStops?.length || /^dest[-_]/i.test(routeStops[0])) {
+    return null;
+  }
+  if (routeStops.length === routeSequence.length + 1) {
+    return routeStops[0];
+  }
+  if (
+    routeStops.length > 1 &&
+    !placeLabelMatchesStop(routeStops[0], routeSequence[0]) &&
+    routeStops
+      .slice(1)
+      .some((label) => routeSequence.some((stop) => placeLabelMatchesStop(label, stop)))
+  ) {
+    return routeStops[0];
+  }
+  return null;
+}
+
+const INTERNAL_STOP_PREFIXES = new Set(["dest"]);
+const INTERNAL_STOP_ROLES = new Set(["airport", "city", "gateway", "station", "terminal"]);
+
+function stopTokens(value: string): string[] {
+  return value.toLocaleLowerCase().split(/[^a-z0-9]+/g).filter(Boolean);
+}
+
+function placeLabelMatchesStop(label: string, stop: string | undefined): boolean {
+  if (!stop) {
+    return false;
+  }
+  const labelTokens = stopTokens(label);
+  const locationTokens = stopTokens(stop).filter(
+    (token) => !INTERNAL_STOP_PREFIXES.has(token) && !INTERNAL_STOP_ROLES.has(token)
+  );
+  return labelTokens.length > 0 && labelTokens.every((token) => locationTokens.includes(token));
+}
+
+function readableInternalStop(stop: string, destinationLabels: string[]): string {
+  const matchingDestination = destinationLabels.find((label) => placeLabelMatchesStop(label, stop));
+  const role = stopTokens(stop).find((token) => INTERNAL_STOP_ROLES.has(token));
+  if (matchingDestination) {
+    return role && role !== "city" ? `${matchingDestination} ${role}` : matchingDestination;
+  }
+  const readableTokens = stopTokens(stop).filter((token) => !INTERNAL_STOP_PREFIXES.has(token));
+  return titleCaseStop(readableTokens.join("-"));
+}
+
+function timelineStopLabels(
+  routeSequence: string[],
+  routeStops: string[] | undefined
+): string[] {
+  const origin = namedRouteOrigin(routeStops, routeSequence);
+  const destinationLabels = routeStops ? (origin ? routeStops.slice(1) : routeStops) : [];
+  const labelsByRouteIndex = new Map<number, string>();
+  let searchBefore = routeSequence.length;
+  for (let labelIndex = destinationLabels.length - 1; labelIndex >= 0; labelIndex -= 1) {
+    const label = destinationLabels[labelIndex];
+    for (let routeIndex = searchBefore - 1; routeIndex >= 0; routeIndex -= 1) {
+      if (placeLabelMatchesStop(label, routeSequence[routeIndex])) {
+        labelsByRouteIndex.set(routeIndex, label);
+        searchBefore = routeIndex;
+        break;
+      }
+    }
+  }
+
+  return routeSequence.map((stop, index) =>
+    labelsByRouteIndex.get(index) ??
+    (!origin && routeStops?.[index] ? routeStops[index] : readableInternalStop(stop, destinationLabels))
+  );
+}
+
 function titleCaseStop(stop: string): string {
   return stop
     .split(/[-_]/g)
@@ -357,7 +436,8 @@ function timelineWeightsFromSegments(
 function buildTimelineStops(
   routeSequence: string[],
   tripDuration: number | null,
-  routeSegments?: RouteGeometrySegment[] | null
+  routeSegments?: RouteGeometrySegment[] | null,
+  stopLabels?: string[]
 ): TimelineStop[] {
   if (tripDuration == null || tripDuration <= 0 || routeSequence.length === 0) {
     return [];
@@ -377,7 +457,7 @@ function buildTimelineStops(
 
     return {
       key: `${stop}-${index}`,
-      label: titleCaseStop(stop),
+      label: stopLabels?.[index] ?? titleCaseStop(stop),
       routeIndex: index,
       startDay,
       endDay,
@@ -423,10 +503,11 @@ function routeSegmentFocusesFor(
     });
   }
 
-  return scenario.route_sequence.slice(0, -1).map((fromStop, index) => ({
+  const stops = displayStops(scenario);
+  return stops.slice(0, -1).map((fromStop, index) => ({
     id: fallbackSegmentId(scenario.scenario_id, scenario.route_sequence, index),
-    fromLabel: titleCaseStop(fromStop),
-    toLabel: titleCaseStop(scenario.route_sequence[index + 1]),
+    fromLabel: fromStop,
+    toLabel: stops[index + 1],
     fromIndex: index,
     toIndex: index + 1,
     durationMinutes:
@@ -1325,10 +1406,15 @@ function WorkspacePageContent({
     selectedRuntimeScenario?.route_sequence ??
     activeScenario.scenario?.scenario_summary.route_sequence ??
     [];
+  const timelineDepartureOrigin = namedRouteOrigin(
+    selectedRuntimeScenario?.route_stops,
+    timelineRouteSequence
+  );
   const timelineStops = buildTimelineStops(
     timelineRouteSequence,
     trip.trip_frame.duration_days,
-    selectedRuntimeScenario?.map_view?.rough_route_geometry
+    selectedRuntimeScenario?.map_view?.rough_route_geometry,
+    timelineStopLabels(timelineRouteSequence, selectedRuntimeScenario?.route_stops)
   );
   const selectedRouteSegment = resolveRouteSegmentFocus(selectedRuntimeScenario, selectedSegmentId);
   const selectedTimelineNotes = timelineFocusNotes(
@@ -1397,6 +1483,12 @@ function WorkspacePageContent({
         : null,
     };
   });
+  function handleViewRoute(scenarioId: string) {
+    handleScenarioSelection(scenarioId);
+    setActiveTab("map");
+    workspaceTabRefs.current.map?.focus();
+  }
+
   function handleScenarioSelection(scenarioId: string) {
     setSelectedScenarioId(scenarioId);
     setSelectedSegmentId(null);
@@ -1522,25 +1614,6 @@ function WorkspacePageContent({
     setPlannerConversationNotice("Draft added. Edit it if needed, then send it to the planner.");
     setPlannerConversationError(null);
     plannerConversationTextareaRef.current?.focus();
-  }
-
-  function handleSourceMixTargetChange(value: number) {
-    const boundedValue = Math.max(0, Math.min(1, value));
-    setSourceMixTarget(boundedValue);
-    setCurrentWorkspace((current) => ({
-      ...current,
-      runtime_state: {
-        ...current.runtime_state,
-        commerciality_preference: boundedValue,
-      },
-      inventory_summary: {
-        ...current.inventory_summary,
-        runtime_state: {
-          ...current.inventory_summary.runtime_state,
-          commerciality_preference: boundedValue,
-        },
-      },
-    }));
   }
 
   async function handleBudgetSave(payload: BudgetPlanUpsertPayload) {
@@ -2367,32 +2440,8 @@ function WorkspacePageContent({
           )}
         </section>
 
-        <section className={STATUS_CARD_CLASS}>
-          <p className="status-label">Source mix</p>
-          <h2>Commercial balance</h2>
-          <p>
-            Set the target mix for daily-menu re-ranking before asking the planner for a slate.
-          </p>
-          <label className="source-mix-control">
-            <span>
-              {Math.round((1 - sourceMixTarget) * 100)}% editorial /{" "}
-              {Math.round(sourceMixTarget * 100)}% commercial
-            </span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={sourceMixTarget}
-              aria-label="Commercial source mix target"
-              onChange={(event) => handleSourceMixTargetChange(Number(event.target.value))}
-            />
-          </label>
-          <p className="muted-copy">
-            The target is sent with planner turns as a calibrated menu tool call; source quality
-            scoring stays unchanged.
-          </p>
-        </section>
+        {/* The editorial/commercial "source mix" slider was removed (issue 1844): it was
+            not saved, and it tuned a daily-activity menu no traveller sees. */}
 
         <section className={STATUS_CARD_CLASS}>
           <p className="status-label">Saved ideas</p>
@@ -2551,22 +2600,35 @@ function WorkspacePageContent({
               }
             />
 
-            <ScenarioComparison
-              comparison={routeComparison}
-              savedScenarios={currentWorkspace.saved_scenarios}
-              selectedScenarioId={selectedScenarioId}
-              onSelectScenario={handleScenarioSelection}
-            />
+            {/* One comparison leads: the route cards above. The detail table and the route
+                actions render the same options again, so they sit behind one disclosure,
+                open only when there is more than one route to weigh (issue 1844). */}
+            {routeComparison.scenarios.length > 0 ? (
+              <details
+                className="compare-detail-disclosure"
+                data-testid="compare-detail-disclosure"
+                open={routeComparison.scenarios.length > 1}
+              >
+                <summary>Compare in detail, and keep or reject a route</summary>
+                <ScenarioComparison
+                  comparison={routeComparison}
+                  savedScenarios={currentWorkspace.saved_scenarios}
+                  selectedScenarioId={selectedScenarioId}
+                  onSelectScenario={handleScenarioSelection}
+                />
 
-            <RouteOptionWorkbench
-              comparison={routeComparison}
-              selectedScenarioId={selectedScenarioId}
-              busyLabel={routeOptionBusyLabel}
-              successMessage={routeOptionSuccess}
-              errorMessage={routeOptionError}
-              onSelectScenario={handleScenarioSelection}
-              onRouteOptionAction={handleRouteOptionAction}
-            />
+                <RouteOptionWorkbench
+                  comparison={routeComparison}
+                  selectedScenarioId={selectedScenarioId}
+                  busyLabel={routeOptionBusyLabel}
+                  successMessage={routeOptionSuccess}
+                  errorMessage={routeOptionError}
+                  onSelectScenario={handleScenarioSelection}
+                  onViewRoute={handleViewRoute}
+                  onRouteOptionAction={handleRouteOptionAction}
+                />
+              </details>
+            ) : null}
 
             <TripComparison
               currentTrip={currentWorkspace.trip_record.trip}
@@ -2678,6 +2740,11 @@ function WorkspacePageContent({
                         <span key={note}>{note}</span>
                       ))}
                     </div>
+                  ) : null}
+                  {timelineDepartureOrigin ? (
+                    <p className="muted-copy" data-testid="timeline-departure-origin">
+                      Departure from {timelineDepartureOrigin}
+                    </p>
                   ) : null}
                   <ol className="timeline-list" aria-label="Trip timeline sequence">
                     {timelineStops.map((stop) => {

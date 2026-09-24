@@ -2717,7 +2717,7 @@ def test_workspace_route_option_actions_update_comparison_and_ledger(
         assert route_options[0]["open_question"] is None
     assert route_options[0]["available_action"] == route_options[0]["available_actions"][0]
     marker = route_options[0]["map_view"]["place_markers"][0]
-    assert marker["description"].startswith("Route stop 1")
+    assert marker["description"] == "First stop on this route."
     assert marker["source_refs"]
     segment = route_options[0]["map_view"]["rough_route_geometry"][0]
     assert segment["source_refs"] == marker["source_refs"]

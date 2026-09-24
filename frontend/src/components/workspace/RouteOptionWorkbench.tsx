@@ -157,6 +157,7 @@ export function RouteOptionWorkbench({
   successMessage,
   errorMessage,
   onSelectScenario,
+  onViewRoute,
   onRouteOptionAction,
 }: {
   comparison: RuntimeScenarioComparison;
@@ -165,6 +166,9 @@ export function RouteOptionWorkbench({
   successMessage?: string | null;
   errorMessage: string | null;
   onSelectScenario: (scenarioId: string) => void;
+  /** Show the route on the Map; "View route" used to change the selection and nothing
+      visible happened (issue 1844). */
+  onViewRoute?: (scenarioId: string) => void;
   onRouteOptionAction: (optionId: string, actionType: RouteOptionActionType) => void;
 }) {
   const scenarios = comparison.scenarios.slice(0, 4);
@@ -226,7 +230,7 @@ export function RouteOptionWorkbench({
                   className="map-toggle-chip"
                   title={`Show ${scenario.title} on the map and day plan.`}
                   aria-pressed={isSelected}
-                  onClick={() => onSelectScenario(scenario.scenario_id)}
+                  onClick={() => (onViewRoute ?? onSelectScenario)(scenario.scenario_id)}
                 >
                   View route
                 </button>

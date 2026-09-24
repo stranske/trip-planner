@@ -967,6 +967,57 @@ describe("WorkspacePage", () => {
     expect(screen.getByLabelText("Message the planner")).toBeInTheDocument();
   });
 
+  it("shows a measured route from where the traveller starts, in place names (issue 1844)", async () => {
+    const [first] = workspacePayload.route_comparison.scenarios;
+    const measured = {
+      ...first,
+      title: "Seattle → Chicago, IL",
+      route_sequence: ["dest-gateway-chicago-il", "dest-city-chicago-il"],
+      route_stops: ["Seattle", "Chicago, IL"],
+      route_summary: "Seattle → Chicago, IL",
+      map_view: undefined,
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        route_comparison: { ...workspacePayload.route_comparison, scenarios: [measured] },
+        runtime_scenario_comparison: {
+          ...workspacePayload.runtime_scenario_comparison,
+          lead_scenario_id: measured.scenario_id,
+          scenarios: [measured],
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+    renderWorkspacePage();
+
+    await selectWorkspaceTab("Compare");
+    // One comparison leads; the detail view sits closed with a single route.
+    expect(await screen.findByLabelText("Scenario review board")).toBeInTheDocument();
+    expect(screen.getByTestId("compare-detail-disclosure")).not.toHaveAttribute("open");
+
+    const user = userEvent.setup();
+    const detailDisclosure = screen.getByTestId("compare-detail-disclosure");
+    if (!detailDisclosure.hasAttribute("open")) {
+      await user.click(
+        screen.getByText("Compare in detail, and keep or reject a route")
+      );
+    }
+    await user.click(screen.getAllByRole("button", { name: "View route" })[0]!);
+    expect(screen.getByRole("tab", { name: "Map" })).toHaveAttribute("aria-selected", "true");
+
+    expect(screen.getByTestId("timeline-departure-origin")).toHaveTextContent(
+      "Departure from Seattle"
+    );
+    const timeline = within(screen.getByRole("list", { name: "Trip timeline sequence" }));
+    expect(timeline.getByRole("heading", { name: "Chicago, IL gateway" })).toBeInTheDocument();
+    expect(timeline.getByRole("heading", { name: "Chicago, IL" })).toBeInTheDocument();
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/Dest[- ]Gateway|dest-city|runtime bundle|persisted/i);
+    const stops = screen.getAllByText(/^(Seattle|Chicago, IL)$/);
+    expect(stops[0]).toHaveTextContent("Seattle");
+  });
+
   it("offers to edit the trip setup from the workspace header (issue 1841)", async () => {
     mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
     renderWorkspacePage();
@@ -2081,7 +2132,7 @@ describe("WorkspacePage", () => {
     expect(screen.getByLabelText("Message the planner")).toHaveValue("");
   });
 
-  it("posts the selected commercial source mix with planner turns", async () => {
+  it("sends the stored source mix with planner turns; there is no slider to change it (issue 1844)", async () => {
     const user = userEvent.setup();
     mockedUseLoaderData.mockReturnValue({
       workspace: Promise.resolve({
@@ -2099,12 +2150,8 @@ describe("WorkspacePage", () => {
 
     renderWorkspacePage();
 
-    const slider = await screen.findByLabelText("Commercial source mix target");
-    fireEvent.change(slider, { target: { value: "0.85" } });
-    await waitFor(() => {
-      expect(screen.getByText("15% editorial / 85% commercial")).toBeInTheDocument();
-    });
-    await user.type(screen.getByLabelText("Message the planner"), "Build a balanced day menu.");
+    await user.type(await screen.findByLabelText("Message the planner"), "Build a balanced day menu.");
+    expect(screen.queryByLabelText("Commercial source mix target")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Send message" }));
 
     await waitFor(() => {
@@ -2115,7 +2162,7 @@ describe("WorkspacePage", () => {
           {
             tool_name: "build_daily_menu",
             arguments: {
-              commercial_target: 0.85,
+              commercial_target: 0.25,
               time_budget_minutes: 360,
             },
           },

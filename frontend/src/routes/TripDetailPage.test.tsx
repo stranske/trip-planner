@@ -121,17 +121,26 @@ describe("TripDetailPage", () => {
       expect(screen.getByRole("heading", { name: "Kyoto Spring" })).toBeInTheDocument();
     });
 
-    expect(screen.getByText("trip-kyoto-123abc")).toBeInTheDocument();
     expect(screen.getByText("Window seat preferred")).toBeInTheDocument();
-    expect(screen.getByText("Kyoto baseline")).toBeInTheDocument();
-    expect(screen.getByText("session-state:kyoto-spring-abc123")).toBeInTheDocument();
-    expect(screen.getByText("activity-log:kyoto-spring")).toBeInTheDocument();
     expect(
-      screen.getByText("Saved the Kyoto baseline after the first planning pass.")
+      screen.getByText("Saved the Kyoto baseline after the first planning pass.", { exact: false })
     ).toBeInTheDocument();
+    // The way back into the trip (issue 1844).
+    expect(screen.getByRole("link", { name: "Open plan" })).toHaveAttribute(
+      "href",
+      "/workspace/trip-kyoto-123abc"
+    );
+    expect(screen.getByRole("link", { name: "Edit trip setup" })).toHaveAttribute(
+      "href",
+      "/trips/trip-kyoto-123abc/edit"
+    );
+    // Stored-record ids and raw timestamps are not a traveller's business.
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/session-state:|activity-log:|trip-kyoto-123abc|Persisted|T15:30:00Z/);
+    expect(text).toContain("April 20, 2026 to April 26, 2026");
   });
 
-  it("renders a defensive fallback when a saved scenario has no versions", async () => {
+  it("reads plainly for a trip nothing has happened on yet", async () => {
     mockedUseLoaderData.mockReturnValue({
       tripDetail: Promise.resolve({
         trip: {
@@ -185,12 +194,53 @@ describe("TripDetailPage", () => {
       expect(screen.getByRole("heading", { name: "Kyoto Spring" })).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Unavailable")).toBeInTheDocument();
-    expect(
-      screen.getByText("This saved scenario is missing version details.")
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("No planning session has been persisted for this trip yet.")
-    ).toBeInTheDocument();
+    expect(screen.getByText("Nothing has been planned on this trip yet.")).toBeInTheDocument();
+    expect(screen.getByTestId("trip-detail-journey")).toHaveTextContent("Kyoto");
+    expect(screen.getByText("1 (Just me)")).toBeInTheDocument();
+  });
+
+  it("shows a single trip date without a missing endpoint label", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      tripDetail: Promise.resolve({
+        trip: {
+          trip_id: "trip-open-end",
+          user_id: "user:test",
+          title: "Open end",
+          summary: "",
+          mode: "leisure",
+          status: "draft",
+          trip_frame: {
+            start_date: "2026-04-20",
+            end_date: null,
+            duration_days: null,
+            primary_regions: ["Kyoto"],
+            traveler_party: { kind: "solo", traveler_count: 1, notes: "" },
+          },
+          profile_refs: { leisure_profile_id: null, business_profile_id: null },
+          artifacts: {
+            objective_id: null,
+            option_set_ids: [],
+            itinerary_state_id: null,
+            budget_state_id: null,
+            policy_state_id: null,
+          },
+        },
+        scenarioHistory: { planning_sessions: [], saved_scenarios: [], planning_history: [] },
+      }),
+    });
+
+    render(
+      <TestMemoryRouter>
+        <TripDetailPage />
+      </TestMemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Starts April 20, 2026")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Starts April 20, 2026").closest("dd")).toBeTruthy();
+    expect(screen.getByText("Starts April 20, 2026").closest("dd")?.textContent).not.toMatch(
+      /Not set/
+    );
   });
 });

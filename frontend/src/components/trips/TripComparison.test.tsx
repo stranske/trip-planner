@@ -53,7 +53,7 @@ function buildTripRecord(
 }
 
 describe("TripComparison", () => {
-  it("renders the empty state when there are no other persisted trips", () => {
+  it("renders the empty state when there are no other trips", () => {
     render(
       <TripComparison
         currentTrip={currentTrip}
@@ -64,7 +64,7 @@ describe("TripComparison", () => {
     );
 
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
-      "Trip-to-trip comparison will appear as more persisted trips land"
+      "Compare with your other trips"
     );
   });
 

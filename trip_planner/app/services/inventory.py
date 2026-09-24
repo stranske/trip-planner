@@ -677,6 +677,25 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         destination_id = f"dest-city-{primary_slug}"
         destination_name = primary_region
         journey = self._journey_profile()
+        journey_title = " → ".join([stop for stop in [self.origin, *self.primary_regions] if stop])
+        if self.origin:
+            journey_summary = (
+                f"Measured from {self.origin}: about {journey.total_distance_km:,.0f} km and "
+                f"{journey.travel_minutes} minutes door to door. No provider has quoted a fare "
+                "or checked availability yet."
+            )
+        elif len(self.primary_regions) > 1:
+            journey_summary = (
+                f"Measured between {self.primary_regions[0]} and {self.primary_regions[-1]}: "
+                f"about {journey.total_distance_km:,.0f} km and {journey.travel_minutes} minutes "
+                "door to door. No provider has quoted a fare or checked availability yet. "
+                "Add where the journey starts to anchor the route at a home city."
+            )
+        else:
+            journey_summary = (
+                f"Travel time within {destination_name} only: add where the journey starts "
+                "to measure the trip."
+            )
         # No source, no price. This adapter measures distance and duration; it does not
         # quote fares or rates, so it emits no amounts. A provider adapter or a human
         # override supplies them (trip_planner.pricing), and until one does the surfaces
@@ -771,7 +790,9 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
 
         return {
             "bundle_id": f"bundle-{self.trip_id}{RUNTIME_BUNDLE_MARKER}1-1",
-            "title": f"{destination_name} runtime bundle",
+            # The journey as the traveller would say it, origin first (issue 1844). It
+            # used to read "Chicago, IL runtime bundle".
+            "title": journey_title,
             "bundle_context": "mixed",
             "destinations": [
                 {
@@ -894,22 +915,20 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                     "bundle.feasibility.internally_consistent",
                     "inventory.runtime_seed",
                 ],
-                "summary": "Runtime bundle assembled with satisfied feasibility constraints.",
+                "summary": "No blocking constraint found in the measured route.",
                 "notes": [],
             },
             "explanation": {
-                "headline": "Runtime inventory assembled from persisted trip context.",
+                "headline": journey_summary,
                 "strengths": [
-                    f"Derived from persisted destination scope ({destination_name}).",
-                    f"Traveler scope considered: {traveler_scope}.",
+                    f"Route measured to {destination_name} from real coordinates.",
+                    f"Travelling: {traveler_scope.replace(':', ', ')}.",
                 ],
                 "tradeoffs": [
-                    "This source-backed seed is a bounded baseline until provider ingest is connected."
+                    "No provider has quoted fares or checked availability for this route yet."
                 ],
             },
-            "summary": (
-                f"Runtime bundle synthesized for {destination_name} from persisted trip data."
-            ),
+            "summary": journey_summary,
             "notes": [
                 "Source-backed runtime bundle generated without fixture file fallback.",
                 f"Trip title hint: {self.trip_title or destination_name}.",
