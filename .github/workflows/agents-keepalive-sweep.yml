@@ -78,6 +78,7 @@ jobs:
             .github/scripts/error_classifier.js
             .github/scripts/github-api-with-retry.js
             .github/scripts/keepalive_challenge_due.js
+            .github/scripts/keepalive_authority_state.js
             .github/scripts/token_load_balancer.js
           sparse-checkout-cone-mode: false
 
@@ -103,6 +104,8 @@ jobs:
               selectDueAuthorityChallenge,
               signAuthorityChallengeClaim,
             } = require('./.github/scripts/keepalive_challenge_due.js');
+            const { readAuthorityState, requester } =
+              require('./.github/scripts/keepalive_authority_state.js');
             const { withRetry } = await createTokenAwareRetry({
               github,
               core,
@@ -152,6 +155,25 @@ jobs:
                     comments,
                     now: new Date(),
                   });
+                  if (dueChallenge) {
+                    try {
+                      const { state } = await readAuthorityState(
+                        requester(github), repository, pr.number,
+                      );
+                      if (state.status !== 'available' ||
+                          state.head_sha !== pr.head.sha ||
+                          state.generation !== dueChallenge.generation ||
+                          state.boundary_fingerprint !== dueChallenge.boundaryFingerprint ||
+                          state.due_at !== dueChallenge.dueAt ||
+                          state.expires_at !== dueChallenge.expiresAt ||
+                          Date.now() >= Date.parse(state.expires_at)) {
+                        dueChallenge = null;
+                      }
+                    } catch (error) {
+                      core.warning(`PR #${pr.number}: authority ledger unavailable: ${error.message}`);
+                      dueChallenge = null;
+                    }
+                  }
                 }
                 let authorityClaim = {};
                 if (dueChallenge) {
@@ -161,6 +183,10 @@ jobs:
                     repository,
                     prNumber: pr.number,
                     boundaryFingerprint: dueChallenge.boundaryFingerprint,
+                    generation: dueChallenge.generation,
+                    dueAt: dueChallenge.dueAt,
+                    expiresAt: dueChallenge.expiresAt,
+                    headSha: pr.head.sha,
                     nonce,
                     sweepRunId,
                     sweepRunAttempt,
@@ -180,6 +206,10 @@ jobs:
                     authorityClaim = {
                       authority_challenge_claim: JSON.stringify({
                         signature,
+                        generation: dueChallenge.generation,
+                        due_at: dueChallenge.dueAt,
+                        expires_at: dueChallenge.expiresAt,
+                        head_sha: pr.head.sha,
                         nonce,
                         sweep_run_id: sweepRunId,
                         sweep_run_attempt: sweepRunAttempt,
@@ -232,6 +262,7 @@ jobs:
             .github/scripts/error_classifier.js
             .github/scripts/github-api-with-retry.js
             .github/scripts/keepalive_challenge_due.js
+            .github/scripts/keepalive_authority_state.js
             .github/scripts/token_load_balancer.js
           sparse-checkout-cone-mode: false
 
@@ -254,6 +285,8 @@ jobs:
               selectDueAuthorityChallenge,
               signAuthorityChallengeClaim,
             } = require('./.github/scripts/keepalive_challenge_due.js');
+            const { readAuthorityState, requester } =
+              require('./.github/scripts/keepalive_authority_state.js');
             const { withRetry } = await createTokenAwareRetry({
               github,
               core,
@@ -306,6 +339,25 @@ jobs:
                     comments,
                     now: new Date(),
                   });
+                  if (dueChallenge) {
+                    try {
+                      const { state } = await readAuthorityState(
+                        requester(github), repository, pr.number,
+                      );
+                      if (state.status !== 'available' ||
+                          state.head_sha !== pr.head.sha ||
+                          state.generation !== dueChallenge.generation ||
+                          state.boundary_fingerprint !== dueChallenge.boundaryFingerprint ||
+                          state.due_at !== dueChallenge.dueAt ||
+                          state.expires_at !== dueChallenge.expiresAt ||
+                          Date.now() >= Date.parse(state.expires_at)) {
+                        dueChallenge = null;
+                      }
+                    } catch (error) {
+                      core.warning(`PR #${pr.number}: authority ledger unavailable: ${error.message}`);
+                      dueChallenge = null;
+                    }
+                  }
                 }
                 let authorityClaim = {};
                 if (dueChallenge) {
@@ -315,6 +367,10 @@ jobs:
                     repository,
                     prNumber: pr.number,
                     boundaryFingerprint: dueChallenge.boundaryFingerprint,
+                    generation: dueChallenge.generation,
+                    dueAt: dueChallenge.dueAt,
+                    expiresAt: dueChallenge.expiresAt,
+                    headSha: pr.head.sha,
                     nonce,
                     sweepRunId,
                     sweepRunAttempt,
@@ -334,6 +390,10 @@ jobs:
                     authorityClaim = {
                       authority_challenge_claim: JSON.stringify({
                         signature,
+                        generation: dueChallenge.generation,
+                        due_at: dueChallenge.dueAt,
+                        expires_at: dueChallenge.expiresAt,
+                        head_sha: pr.head.sha,
                         nonce,
                         sweep_run_id: sweepRunId,
                         sweep_run_attempt: sweepRunAttempt,
@@ -366,4 +426,47 @@ jobs:
                 `${eligible.length} agent PR(s) eligible, ${dispatched} re-evaluated, ` +
                 `${challenged} due authority claim(s) challenged (dry_run=${dryRun}).`,
               )
+              .write();
+
+  reclaim_stale_belt_claims:
+    name: Reclaim stale belt claims
+    if: github.event_name == 'schedule' || inputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout claim-reclaim helpers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions/setup-api-client
+            .github/scripts/belt_claim_reclaim.js
+            .github/scripts/error_classifier.js
+            .github/scripts/github-api-with-retry.js
+            .github/scripts/token_load_balancer.js
+          sparse-checkout-cone-mode: false
+
+      - name: Reclaim stale in-progress issues without PRs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const { createTokenAwareRetry } = require(
+              './.github/scripts/github-api-with-retry.js'
+            );
+            const { sweepClaims } = require('./.github/scripts/belt_claim_reclaim.js');
+            const { owner, repo } = context.repo;
+            const retry = await createTokenAwareRetry({
+              github,
+              core,
+              task: 'consumer-belt-claim-reclaim',
+            });
+            const result = await sweepClaims({ withRetry: retry.withRetry, owner, repo });
+            core.info(result.summary);
+            core.info(`Belt claims reclaimed: ${result.reclaimedCount}.`);
+            await core.summary
+              .addHeading('Belt claim reclaim')
+              .addRaw(`${result.summary}\nBelt claims reclaimed: ${result.reclaimedCount}.`)
               .write();

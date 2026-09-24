@@ -142,8 +142,15 @@ class GitHubApi:
             data = json.dumps(body).encode("utf-8")
             headers["Content-Type"] = "application/json"
 
+        url = f"{self.base_url}{path}"
+        if path == "/graphql":
+            # Actions exposes a distinct GraphQL endpoint. On GHES, the REST
+            # root ends in /api/v3 but GraphQL lives at /api/graphql.
+            url = os.environ.get("GITHUB_GRAPHQL_URL") or (
+                f"{self.base_url[:-3]}{path}" if self.base_url.endswith("/api/v3") else url
+            )
         request = urllib.request.Request(
-            f"{self.base_url}{path}",
+            url,
             data=data,
             headers=headers,
             method=method,
@@ -345,7 +352,8 @@ def _write_github_output(outputs: dict[str, str]) -> None:
     if not output_path:
         return
     with open(output_path, "a", encoding="utf-8") as handle:
-        handle.writelines(f"{key}={value}\n" for key, value in outputs.items())
+        for key, value in outputs.items():
+            handle.write(f"{key}={value}\n")
 
 
 def _compare_command(args: argparse.Namespace) -> int:
