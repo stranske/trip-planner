@@ -950,6 +950,23 @@ describe("WorkspacePage", () => {
     mockedSetNotebookFocus.mockReset();
   });
 
+  it("states the offline limit beside the planner composer (issue 1845)", async () => {
+    mockedFetchPlannerSession.mockResolvedValue({
+      ...plannerSessionPayload,
+      runtime: { mode: "fallback" },
+    });
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve(workspacePayload),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+    renderWorkspacePage();
+
+    expect(await screen.findByTestId("planner-offline-note")).toHaveTextContent(
+      "The planner is offline"
+    );
+    expect(screen.getByLabelText("Message the planner")).toBeInTheDocument();
+  });
+
   it("offers to edit the trip setup from the workspace header (issue 1841)", async () => {
     mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspacePayload) });
     renderWorkspacePage();

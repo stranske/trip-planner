@@ -2302,6 +2302,13 @@ function WorkspacePageContent({
                 </button>
               ))}
             </div>
+            {plannerSession?.runtime && plannerSession.runtime.mode !== "model" ? (
+              // Stated beside the composer, before a question is asked (issue 1845).
+              <p className="field-hint" data-testid="planner-offline-note">
+                The planner is offline: it answers from this trip&apos;s own data (costs you entered,
+                routes, the policy result, what to do next) and cannot answer other questions.
+              </p>
+            ) : null}
             <form className="planner-conversation-form" onSubmit={handlePlannerTurnSubmit}>
               <label>
                 Message the planner

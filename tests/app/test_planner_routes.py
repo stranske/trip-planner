@@ -1343,9 +1343,9 @@ def test_planner_resume_returns_prior_conversation_history(client: TestClient) -
     payload = resumed.json()
     assert payload["resumed_at"] is not None
     assert [message["role"] for message in payload["messages"]] == ["user", "planner"]
-    assert payload["messages"][1]["content"].startswith(
-        "Planner API kickoff has a useful starting point"
-    )
+    # The offline limit leads the reply (issue 1845); the answer follows it.
+    assert payload["messages"][1]["content"].startswith("The planner is offline:")
+    assert "Planner API kickoff has a useful starting point" in payload["messages"][1]["content"]
     assert payload["messages"][1]["turn_metadata"]["task_class"] == "first_turn_triage"
     assert payload["planner_memory"]["artifacts"][0]["title"] == "Planner checkpoint 1"
 
