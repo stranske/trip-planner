@@ -195,9 +195,9 @@ export function summarizeFeasibility(
   return `${bundleDestinations.length} destination anchors are backed by ${feasibilitySummary.assessment_count} feasibility assessment(s).`;
 }
 
-function describeStop(index: number, routeLength: number): string {
+function describeStop(index: number, routeLength: number, namedOrigin = true): string {
   if (index === 0) {
-    return "Where the journey starts.";
+    return namedOrigin ? "Where the journey starts." : "First stop on this route.";
   }
   if (index === routeLength - 1) {
     return "Final destination.";
@@ -313,7 +313,7 @@ function buildRouteStops(activeScenario: TripMapScenario): RouteStop[] {
       id: `${activeScenario.scenario_id}-${stop}-${index}`,
       sourceId: stop,
       label: named ? stop : humanizeStop(stop),
-      description: describeStop(index, stops.length),
+      description: describeStop(index, stops.length, named),
       sourceRefs: [],
       x: coordinate.x,
       y: coordinate.y,

@@ -80,9 +80,13 @@ function TripDetailContent({
           <div>
             <dt>Dates</dt>
             <dd>
-              {frame.start_date || frame.end_date
+              {frame.start_date && frame.end_date
                 ? `${formatCalendarDate(frame.start_date)} to ${formatCalendarDate(frame.end_date)}`
-                : "Not set"}
+                : frame.start_date
+                  ? `Starts ${formatCalendarDate(frame.start_date)}`
+                  : frame.end_date
+                    ? `Ends ${formatCalendarDate(frame.end_date)}`
+                    : "Not set"}
             </dd>
           </div>
           <div>

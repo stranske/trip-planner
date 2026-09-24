@@ -997,6 +997,12 @@ describe("WorkspacePage", () => {
     expect(screen.getByTestId("compare-detail-disclosure")).not.toHaveAttribute("open");
 
     const user = userEvent.setup();
+    const detailDisclosure = screen.getByTestId("compare-detail-disclosure");
+    if (!detailDisclosure.hasAttribute("open")) {
+      await user.click(
+        screen.getByText("Compare in detail, and keep or reject a route")
+      );
+    }
     await user.click(screen.getAllByRole("button", { name: "View route" })[0]!);
     expect(screen.getByRole("tab", { name: "Map" })).toHaveAttribute("aria-selected", "true");
 

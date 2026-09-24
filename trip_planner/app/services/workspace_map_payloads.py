@@ -29,9 +29,13 @@ def _map_coordinate_for_route_index(index: int, route_length: int) -> dict[str, 
     }
 
 
-def _stop_description(index: int, stop_count: int) -> str:
+def _stop_description(index: int, stop_count: int, *, labels_are_names: bool) -> str:
     if index == 0:
-        return "Where the journey starts."
+        return (
+            "Where the journey starts."
+            if labels_are_names
+            else "First stop on this route."
+        )
     if index == stop_count - 1:
         return "Final destination."
     return f"Stop {index + 1} of {stop_count}."
@@ -51,7 +55,7 @@ def _build_runtime_map_place_markers(
             # Place names the traveller entered are shown as entered ("Chicago, IL"), not
             # title-cased slugs ("Gateway Chicago Il").
             "label": stop if labels_are_names else _humanize_route_stop(stop),
-            "description": _stop_description(index, stop_count),
+            "description": _stop_description(index, stop_count, labels_are_names=labels_are_names),
             "source_refs": list(source_refs),
             "route_index": index,
             **_map_coordinate_for_route_index(index, len(route_sequence)),

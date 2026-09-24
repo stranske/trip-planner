@@ -84,3 +84,36 @@ def test_every_route_display_starts_where_the_traveller_does(workspace: dict[str
     markers = row["map_view"]["place_markers"]
     assert [marker["label"] for marker in markers] == ["Seattle", "Chicago, IL"]
     assert markers[0]["description"] == "Where the journey starts."
+
+
+def test_multi_region_routes_without_origin_describe_inter_region_travel(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'plain-multi.db'}")
+    reset_database_state()
+    ensure_database_ready()
+    with TestClient(create_app()) as client:
+        client.post(
+            "/api/auth/signup",
+            json={"email": "q@example.com", "password": "password123", "display_name": "Quinn"},
+        )
+        created = client.post(
+            "/api/trips",
+            json={
+                "title": "Two-city review",
+                "summary": "Chicago then New York.",
+                "mode": "business",
+                "trip_frame": {
+                    "start_date": "2026-11-01",
+                    "end_date": "2026-11-05",
+                    "duration_days": 5,
+                    "primary_regions": ["Chicago, IL", "New York, NY"],
+                },
+            },
+        )
+        workspace = client.get(f"/api/workspace/{created.json()['trip']['trip_id']}").json()
+    reset_database_state()
+
+    (row,) = workspace["runtime_scenario_comparison"]["scenarios"]
+    assert "Measured between Chicago, IL and New York, NY" in row["summary"]
+    assert "within Chicago, IL only" not in row["summary"]

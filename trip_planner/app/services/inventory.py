@@ -678,14 +678,24 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         destination_name = primary_region
         journey = self._journey_profile()
         journey_title = " → ".join([stop for stop in [self.origin, *self.primary_regions] if stop])
-        journey_summary = (
-            f"Measured from {self.origin}: about {journey.total_distance_km:,.0f} km and "
-            f"{journey.travel_minutes} minutes door to door. No provider has quoted a fare "
-            "or checked availability yet."
-            if self.origin
-            else f"Travel time within {destination_name} only: add where the journey starts "
-            "to measure the trip."
-        )
+        if self.origin:
+            journey_summary = (
+                f"Measured from {self.origin}: about {journey.total_distance_km:,.0f} km and "
+                f"{journey.travel_minutes} minutes door to door. No provider has quoted a fare "
+                "or checked availability yet."
+            )
+        elif len(self.primary_regions) > 1:
+            journey_summary = (
+                f"Measured between {self.primary_regions[0]} and {self.primary_regions[-1]}: "
+                f"about {journey.total_distance_km:,.0f} km and {journey.travel_minutes} minutes "
+                "door to door. No provider has quoted a fare or checked availability yet. "
+                "Add where the journey starts to anchor the route at a home city."
+            )
+        else:
+            journey_summary = (
+                f"Travel time within {destination_name} only: add where the journey starts "
+                "to measure the trip."
+            )
         # No source, no price. This adapter measures distance and duration; it does not
         # quote fares or rates, so it emits no amounts. A provider adapter or a human
         # override supplies them (trip_planner.pricing), and until one does the surfaces

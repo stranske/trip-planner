@@ -255,6 +255,34 @@ function displayStops(scenario: { route_sequence: string[]; route_stops?: string
     : scenario.route_sequence.map(titleCaseStop);
 }
 
+function namedRouteOrigin(routeStops: string[] | undefined, routeSequence: string[]): string | null {
+  if (!routeStops?.length || /^dest[-_]/i.test(routeStops[0])) {
+    return null;
+  }
+  if (routeStops.length === routeSequence.length + 1) {
+    return routeStops[0];
+  }
+  if (routeStops.length === routeSequence.length) {
+    return routeStops[0];
+  }
+  return null;
+}
+
+function timelineStopLabels(
+  routeSequence: string[],
+  routeStops: string[] | undefined
+): string[] {
+  const origin = namedRouteOrigin(routeStops, routeSequence);
+  if (origin && routeStops) {
+    const destinationLabels = routeStops.slice(1);
+    return routeSequence.map((stop, index) => destinationLabels[index] ?? titleCaseStop(stop));
+  }
+  if (routeStops?.length) {
+    return routeSequence.map((stop, index) => routeStops[index] ?? titleCaseStop(stop));
+  }
+  return routeSequence.map(titleCaseStop);
+}
+
 function titleCaseStop(stop: string): string {
   return stop
     .split(/[-_]/g)
@@ -364,7 +392,8 @@ function timelineWeightsFromSegments(
 function buildTimelineStops(
   routeSequence: string[],
   tripDuration: number | null,
-  routeSegments?: RouteGeometrySegment[] | null
+  routeSegments?: RouteGeometrySegment[] | null,
+  stopLabels?: string[]
 ): TimelineStop[] {
   if (tripDuration == null || tripDuration <= 0 || routeSequence.length === 0) {
     return [];
@@ -384,7 +413,7 @@ function buildTimelineStops(
 
     return {
       key: `${stop}-${index}`,
-      label: titleCaseStop(stop),
+      label: stopLabels?.[index] ?? titleCaseStop(stop),
       routeIndex: index,
       startDay,
       endDay,
@@ -1330,14 +1359,18 @@ function WorkspacePageContent({
     routeComparison.scenarios[0] ??
     null;
   const timelineRouteSequence =
-    (selectedRuntimeScenario?.route_stops?.length ? selectedRuntimeScenario.route_stops : null) ??
     selectedRuntimeScenario?.route_sequence ??
     activeScenario.scenario?.scenario_summary.route_sequence ??
     [];
+  const timelineDepartureOrigin = namedRouteOrigin(
+    selectedRuntimeScenario?.route_stops,
+    timelineRouteSequence
+  );
   const timelineStops = buildTimelineStops(
     timelineRouteSequence,
     trip.trip_frame.duration_days,
-    selectedRuntimeScenario?.map_view?.rough_route_geometry
+    selectedRuntimeScenario?.map_view?.rough_route_geometry,
+    timelineStopLabels(timelineRouteSequence, selectedRuntimeScenario?.route_stops)
   );
   const selectedRouteSegment = resolveRouteSegmentFocus(selectedRuntimeScenario, selectedSegmentId);
   const selectedTimelineNotes = timelineFocusNotes(
@@ -2663,6 +2696,11 @@ function WorkspacePageContent({
                         <span key={note}>{note}</span>
                       ))}
                     </div>
+                  ) : null}
+                  {timelineDepartureOrigin ? (
+                    <p className="muted-copy" data-testid="timeline-departure-origin">
+                      Departure from {timelineDepartureOrigin}
+                    </p>
                   ) : null}
                   <ol className="timeline-list" aria-label="Trip timeline sequence">
                     {timelineStops.map((stop) => {

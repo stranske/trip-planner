@@ -198,4 +198,49 @@ describe("TripDetailPage", () => {
     expect(screen.getByTestId("trip-detail-journey")).toHaveTextContent("Kyoto");
     expect(screen.getByText("1 (Just me)")).toBeInTheDocument();
   });
+
+  it("shows a single trip date without a missing endpoint label", async () => {
+    mockedUseLoaderData.mockReturnValue({
+      tripDetail: Promise.resolve({
+        trip: {
+          trip_id: "trip-open-end",
+          user_id: "user:test",
+          title: "Open end",
+          summary: "",
+          mode: "leisure",
+          status: "draft",
+          trip_frame: {
+            start_date: "2026-04-20",
+            end_date: null,
+            duration_days: null,
+            primary_regions: ["Kyoto"],
+            traveler_party: { kind: "solo", traveler_count: 1, notes: "" },
+          },
+          profile_refs: { leisure_profile_id: null, business_profile_id: null },
+          artifacts: {
+            objective_id: null,
+            option_set_ids: [],
+            itinerary_state_id: null,
+            budget_state_id: null,
+            policy_state_id: null,
+          },
+        },
+        scenarioHistory: { planning_sessions: [], saved_scenarios: [], planning_history: [] },
+      }),
+    });
+
+    render(
+      <TestMemoryRouter>
+        <TripDetailPage />
+      </TestMemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Starts April 20, 2026")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Starts April 20, 2026").closest("dd")).toBeTruthy();
+    expect(screen.getByText("Starts April 20, 2026").closest("dd")?.textContent).not.toMatch(
+      /Not set/
+    );
+  });
 });
