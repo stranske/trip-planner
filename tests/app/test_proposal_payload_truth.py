@@ -109,7 +109,9 @@ def _seed_policy(client: TestClient, trip_id: str) -> None:
 def _submit(client: TestClient, trip_id: str) -> Any:
     workspace = client.get(f"/api/workspace/{trip_id}").json()
     scenario_id = workspace["runtime_scenario_comparison"]["scenarios"][0]["scenario_id"]
-    return client.post(f"/api/workspace/{trip_id}/proposal/submit", json={"scenario_id": scenario_id})
+    return client.post(
+        f"/api/workspace/{trip_id}/proposal/submit", json={"scenario_id": scenario_id}
+    )
 
 
 def test_the_trip_plan_carries_what_tpp_rules_read(client: TestClient) -> None:
@@ -203,3 +205,36 @@ def test_a_missing_origin_is_sent_as_missing_not_as_a_placeholder(client: TestCl
     plan = _SENT[-1]
     assert plan["origin_city"] is None
     assert "workspace" not in {str(value) for value in plan.values()}
+
+
+def test_a_trip_the_planner_could_not_map_can_still_go_to_the_policy_check(
+    client: TestClient,
+) -> None:
+    """Issue 1827: with no measured route there is no scenario, but the prices are the
+    traveller's and so is the approval request. Nothing about the submission needs a route."""
+
+    response = client.post(
+        "/api/trips",
+        json={
+            "title": "Site visit",
+            "summary": "Supplier audit.",
+            "mode": "business",
+            "trip_frame": {
+                "origin": "Seattle",
+                "start_date": "2026-10-05",
+                "end_date": "2026-10-07",
+                "duration_days": 3,
+                "primary_regions": ["Zzqxwv Nonexistent Place"],
+            },
+        },
+    )
+    trip_id = str(response.json()["trip"]["trip_id"])
+    _seed_policy(client, trip_id)
+    client.put(f"/api/workspace/{trip_id}/prices", json={"component": "lodging", "amount": 400.0})
+    workspace = client.get(f"/api/workspace/{trip_id}").json()
+    assert workspace["runtime_scenario_comparison"]["scenarios"] == []
+
+    submitted = client.post(f"/api/workspace/{trip_id}/proposal/submit", json={})
+
+    assert submitted.status_code == 200, submitted.text
+    assert len(_SENT) == 1

@@ -273,7 +273,6 @@ def _journey_step(*, mode: str, priced: int, proposal_state: Any) -> _Step:
 
 
 def _next_step(
-    status: str,
     missing: list[str],
     *,
     mode: str = "leisure",
@@ -292,26 +291,12 @@ def _next_step(
             True,
             "trip-setup",
         )
-    if status == "ready":
-        return _journey_step(
-            mode=mode, priced=_priced_count(entered_prices), proposal_state=proposal_state
-        )
-    if status == "partial":
-        return (
-            "Your trip plan is partially assembled.",
-            "Continue planning",
-            "Inventory is in place; resolve the open uncertainties to unlock scenario comparison.",
-            "Continue planning",
-            False,
-            "planner",
-        )
-    return (
-        "Trip planning hasn't started yet.",
-        "Start planning",
-        "Add the missing trip context to start assembling scenarios.",
-        "Open trip setup",
-        True,
-        "trip-setup",
+    # Once setup is complete the journey is the same whether or not a route could be
+    # measured: prices come from the traveller, and so does the approval request. A trip
+    # to a place the planner cannot locate used to be told "Trip planning hasn't started
+    # yet" here (issue 1827).
+    return _journey_step(
+        mode=mode, priced=_priced_count(entered_prices), proposal_state=proposal_state
     )
 
 
@@ -371,13 +356,13 @@ def build_workspace_view_model(
     for item in missing_context:
         uncertain.append(f"Trip setup is missing {item}.")
     if status == "empty" and not missing_context:
-        uncertain.append("Trip context is not complete yet.")
+        # Setup is complete but nothing could be measured; say what stopped it.
+        uncertain.append(str(runtime.get("title") or "No route could be measured for this trip."))
     elif status == "partial":
         uncertain.append("Scenario comparison is not yet ready.")
 
     proposal = payload.get("proposal_state")
     headline, next_title, next_summary, next_action, blocked, next_target = _next_step(
-        status,
         missing_context,
         mode=mode,
         entered_prices=entered_prices,

@@ -1,5 +1,6 @@
 import type { RuntimeScenarioComparison, SavedScenarioRecord } from "../../api/workspace";
 import { formatMoney } from "../../lib/money";
+import { NOT_MEASURED, formatTransferDelta } from "../../lib/metrics";
 
 type ComparisonScenario = RuntimeScenarioComparison["scenarios"][number];
 
@@ -20,7 +21,7 @@ function formatMetricValue(
   }
 
   if (axisKey === "transfers") {
-    return `${scenario.metrics.transfers}`;
+    return scenario.metrics.transfers == null ? NOT_MEASURED : `${scenario.metrics.transfers}`;
   }
 
   return "Unavailable";
@@ -37,7 +38,7 @@ function formatScenarioDelta(
     return `${scenario.delta.travel_minutes_delta >= 0 ? "+" : ""}${scenario.delta.travel_minutes_delta} min`;
   }
   if (axisKey === "transfers") {
-    return `${scenario.delta.transfers_delta >= 0 ? "+" : ""}${scenario.delta.transfers_delta}`;
+    return formatTransferDelta(scenario.delta.transfers_delta);
   }
   if (axisKey === "estimated_total") {
     if (scenario.delta.estimated_total_delta == null) {

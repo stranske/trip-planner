@@ -75,6 +75,7 @@ import { NotebookPanel } from "./workspace/NotebookPanel";
 import { PlanPanel } from "./workspace/PlanPanel";
 import { PolicyPanel as PolicyTabPanel } from "./workspace/PolicyPanel";
 import { formatMoney } from "../lib/money";
+import { NOT_MEASURED, describeAvailability } from "../lib/metrics";
 
 type LoaderData = {
   workspace: Promise<WorkspaceData>;
@@ -629,11 +630,11 @@ function buildScenarioReviewMetrics(
     },
     {
       label: "Transfers",
-      value: `${scenario.metrics.transfers}`,
+      value: scenario.metrics.transfers == null ? NOT_MEASURED : `${scenario.metrics.transfers}`,
     },
     {
       label: "Feasibility",
-      value: scenario.feasible ? "Ready to review" : "Needs feasibility work",
+      value: describeAvailability(scenario),
     },
   ];
 
@@ -2522,7 +2523,10 @@ function WorkspacePageContent({
               emptyMessage={
                 currentWorkspace.runtime_state.status === "partial"
                   ? "Add a little more trip detail before route comparison can start."
-                  : "No route ideas are available yet, so there is nothing to compare."
+                  : // Say what stopped it, e.g. a destination the planner could not locate.
+                    (currentWorkspace.runtime_state.status === "empty" &&
+                      currentWorkspace.runtime_state.summary) ||
+                    "No route has been measured for this trip, so there is nothing to compare."
               }
             />
 

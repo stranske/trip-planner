@@ -28,6 +28,7 @@ from trip_planner.app.services.inventory import (
     _build_inventory_assembly_input,
     assemble_inventory_bundles_for_trip,
     build_inventory_summary_payload,
+    is_runtime_measured_bundle,
 )
 from trip_planner.app.services.planner_memory import build_planner_memory_payload
 from trip_planner.app.services.planner_runtime_config import get_planner_runtime_config
@@ -56,13 +57,9 @@ from trip_planner.app.services.workspace_planner_policy import (
     build_planner_policy_proposal_block,
 )
 from trip_planner.app.services.workspace_view_model import build_workspace_view_model
-from trip_planner.contracts import MoneyRange
 from trip_planner.contracts.trip import Trip
 from trip_planner.itinerary import (
-    ItineraryScenario,
     ScenarioSearchResult,
-    ScenarioSummary,
-    ScenarioTradeoff,
 )
 from trip_planner.options import InventoryBundle
 from trip_planner.persistence.models.activity import (
@@ -78,7 +75,6 @@ from trip_planner.persistence.models.scenario import (
 )
 from trip_planner.persistence.models.session import PersistedPlanningSessionState
 from trip_planner.persistence.models.trip import PersistedTrip
-from trip_planner.ranking import ExplanationRecord
 from trip_planner.state import (
     PLANNING_MODES,
     ActivityLogEvent,
@@ -159,10 +155,6 @@ ROUTE_OPTION_ACTIONS: tuple[str, ...] = (
     "reopen",
     "revise",
 )
-_BOOTSTRAP_SCENARIO_SCORE_BY_LABEL = {
-    "baseline": 0.82,
-    "fallback": 0.68,
-}
 
 
 class WorkspaceTripNotFoundError(ValueError):
@@ -192,200 +184,6 @@ def _canonicalize_saved_scenario_ids(
     session.current_saved_scenario_id = normalize(session.current_saved_scenario_id)
     for decision in session.pending_decisions:
         decision.related_saved_scenario_id = normalize(decision.related_saved_scenario_id)
-
-
-def _leisure_search_result(trip_id: str) -> ScenarioSearchResult:
-    return ScenarioSearchResult(
-        search_id="scenario-search:kyoto-spring",
-        trip_id=trip_id,
-        purpose="final_selection",
-        title="Kyoto leisure scenario comparison",
-        source_result_set_id="ranked-results:kyoto-spring",
-        scenarios=[
-            ItineraryScenario(
-                scenario_id=f"scenario:{trip_id}:1",
-                title="Kyoto base with Uji day trip",
-                rank=1,
-                bundle_id="bundle:urban-culture",
-                source_result_id=f"ranked-result:{trip_id}:1",
-                score=0.93,
-                scenario_summary=ScenarioSummary(
-                    headline="Balanced Kyoto culture baseline",
-                    scenario_kind="primary",
-                    feasible=True,
-                    recommended_for_selection=True,
-                    coherence_passed=True,
-                    estimated_total=MoneyRange(currency="USD", typical_amount=3400.0),
-                    total_travel_minutes=265,
-                    total_transfer_count=4,
-                    route_sequence=["kyoto", "uji", "kyoto"],
-                    notes=["baseline"],
-                ),
-                supporting_option_ids=["option:kyoto-central", "option:uji-daytrip"],
-                objective_refs=["objective:kyoto-spring"],
-                explanation_records=[
-                    ExplanationRecord(
-                        explanation_id=f"explanation:{trip_id}:1",
-                        target_kind="route",
-                        target_id=f"scenario:{trip_id}:1",
-                        headline="Best overall cultural balance",
-                        summary="The baseline preserves depth in Kyoto with one lighter excursion day.",
-                        factor_keys=["cultural_depth", "moderate_pace"],
-                        machine_context={"planner_mode": "leisure"},
-                        human_summary=[
-                            "Moderate travel friction with a clear cultural center of gravity."
-                        ],
-                        source_refs=["ranked-results:kyoto-spring"],
-                    )
-                ],
-                unresolved_tradeoffs=[
-                    ScenarioTradeoff(
-                        tradeoff_id=f"tradeoff:{trip_id}:1",
-                        code="limited_nightlife",
-                        summary="Evening variety is lower than the Osaka-heavy fallback.",
-                        severity="info",
-                    )
-                ],
-            ),
-            ItineraryScenario(
-                scenario_id=f"scenario:{trip_id}:2",
-                title="Kyoto plus Osaka fallback",
-                rank=2,
-                bundle_id="bundle:scenic-wanderer",
-                source_result_id=f"ranked-result:{trip_id}:2",
-                score=0.88,
-                scenario_summary=ScenarioSummary(
-                    headline="Higher-energy fallback with extra transfers",
-                    scenario_kind="alternative",
-                    feasible=True,
-                    recommended_for_selection=False,
-                    coherence_passed=True,
-                    estimated_total=MoneyRange(currency="USD", typical_amount=3250.0),
-                    total_travel_minutes=360,
-                    total_transfer_count=7,
-                    route_sequence=["kyoto", "osaka", "kyoto"],
-                    notes=["higher movement"],
-                ),
-                supporting_option_ids=["option:kyoto-central", "option:osaka-daytrip"],
-                objective_refs=["objective:kyoto-spring"],
-                explanation_records=[
-                    ExplanationRecord(
-                        explanation_id=f"explanation:{trip_id}:2",
-                        target_kind="route",
-                        target_id=f"scenario:{trip_id}:2",
-                        headline="Fallback with broader city coverage",
-                        summary="The fallback opens more nightlife at the cost of extra transfers.",
-                        factor_keys=["breadth", "transfer_cost"],
-                        machine_context={"planner_mode": "leisure"},
-                        human_summary=["Broader exploration, slightly more travel fatigue."],
-                        source_refs=["ranked-results:kyoto-spring"],
-                    )
-                ],
-            ),
-        ],
-        explanation=[
-            "Workspace timeline derives from the ordered scenario route sequence plus persisted trip dates."
-        ],
-        source_refs=["ranked-results:kyoto-spring", "objective:kyoto-spring"],
-    )
-
-
-def _business_search_result(trip_id: str) -> ScenarioSearchResult:
-    return ScenarioSearchResult(
-        search_id="scenario-search:client-summit",
-        trip_id=trip_id,
-        purpose="final_selection",
-        title="Client summit scenario comparison",
-        source_result_set_id="ranked-results:client-summit",
-        scenarios=[
-            ItineraryScenario(
-                scenario_id=f"scenario:{trip_id}:1",
-                title="Compliant first rail plan",
-                rank=1,
-                bundle_id="bundle:approved-business",
-                source_result_id=f"ranked-result:{trip_id}:1",
-                score=0.97,
-                scenario_summary=ScenarioSummary(
-                    headline="Primary path preserves compliant vendors and arrival buffers",
-                    scenario_kind="primary",
-                    feasible=True,
-                    recommended_for_selection=True,
-                    coherence_passed=True,
-                    estimated_total=MoneyRange(currency="USD", typical_amount=2280.0),
-                    total_travel_minutes=315,
-                    total_transfer_count=3,
-                    route_sequence=["home", "client-site", "conference-hotel"],
-                    notes=["compliant-first"],
-                ),
-                supporting_option_ids=[
-                    "option:approved-rail",
-                    "option:conference-hotel",
-                ],
-                objective_refs=["objective:client-summit"],
-                explanation_records=[
-                    ExplanationRecord(
-                        explanation_id=f"explanation:{trip_id}:1",
-                        target_kind="route",
-                        target_id=f"scenario:{trip_id}:1",
-                        headline="Best approval-ready route",
-                        summary="Keeps policy-safe vendors and preserves the buffer before the client visit.",
-                        factor_keys=["policy_alignment", "schedule_protection"],
-                        machine_context={"planner_mode": "business"},
-                        human_summary=["Approved route keeps arrival risk low."],
-                        source_refs=["ranked-results:client-summit"],
-                    )
-                ],
-            ),
-            ItineraryScenario(
-                scenario_id=f"scenario:{trip_id}:2",
-                title="Exception-nearest direct option",
-                rank=2,
-                bundle_id="bundle:exception-business",
-                source_result_id=f"ranked-result:{trip_id}:2",
-                score=0.89,
-                scenario_summary=ScenarioSummary(
-                    headline="Direct path reduces travel time but requires exception handling",
-                    scenario_kind="fallback",
-                    feasible=True,
-                    recommended_for_selection=False,
-                    coherence_passed=True,
-                    estimated_total=MoneyRange(currency="USD", typical_amount=2410.0),
-                    total_travel_minutes=255,
-                    total_transfer_count=2,
-                    route_sequence=["home", "client-site", "airport-hotel"],
-                    notes=["exception-nearest"],
-                ),
-                supporting_option_ids=["option:direct-flight", "option:airport-hotel"],
-                objective_refs=["objective:client-summit"],
-                explanation_records=[
-                    ExplanationRecord(
-                        explanation_id=f"explanation:{trip_id}:2",
-                        target_kind="route",
-                        target_id=f"scenario:{trip_id}:2",
-                        headline="Faster route with approval debt",
-                        summary="Shorter travel time comes with a policy exception path and higher approval burden.",
-                        factor_keys=["travel_time", "policy_exception"],
-                        machine_context={"planner_mode": "business"},
-                        human_summary=["Faster movement, weaker compliance posture."],
-                        source_refs=["ranked-results:client-summit"],
-                    )
-                ],
-                unresolved_tradeoffs=[
-                    ScenarioTradeoff(
-                        tradeoff_id=f"tradeoff:{trip_id}:2a",
-                        code="policy_exception_path",
-                        summary="Requires exception approval before booking.",
-                        severity="critical",
-                        blocking=True,
-                    )
-                ],
-            ),
-        ],
-        explanation=[
-            "Business timeline still derives from route order; approval posture is communicated via scenario tradeoffs."
-        ],
-        source_refs=["ranked-results:client-summit", "objective:client-summit"],
-    )
 
 
 def _policy_comparable_requirements(policy_context: dict[str, Any] | None) -> dict[str, int]:
@@ -424,39 +222,6 @@ def _build_scenario_search(
     )
 
 
-def _generated_route_sequence(route_sequence: list[str], *, variant: str) -> list[str]:
-    clean_sequence = [stop for stop in route_sequence if stop]
-    if not clean_sequence:
-        clean_sequence = ["first-base", "comparison-stop"]
-    if variant == "reverse":
-        return (
-            list(reversed(clean_sequence))
-            if len(clean_sequence) > 1
-            else [
-                clean_sequence[0],
-                "nearby-base",
-            ]
-        )
-    if len(clean_sequence) == 1:
-        return [clean_sequence[0], "nearby-base", clean_sequence[0]]
-    return [*clean_sequence, clean_sequence[0]]
-
-
-def _adjust_estimated_total(
-    estimated_total: dict[str, Any] | None,
-    *,
-    delta: float,
-) -> dict[str, Any] | None:
-    if not isinstance(estimated_total, dict):
-        return estimated_total
-    typical_amount = estimated_total.get("typical_amount")
-    if typical_amount is None:
-        return estimated_total
-    adjusted = dict(estimated_total)
-    adjusted["typical_amount"] = round(max(0.0, float(typical_amount) + delta), 2)
-    return adjusted
-
-
 def _build_runtime_scenario_search_for_trip(
     *,
     record: PersistedTrip,
@@ -465,12 +230,11 @@ def _build_runtime_scenario_search_for_trip(
     inventory_status: str = "ready",
     organization_comparable_requirements: dict[str, int] | None = None,
 ) -> dict[str, Any]:
+    # No inventory, no scenario. A trip whose destination could not be located used to be
+    # shown its saved baseline/fallback drafts with invented metrics (duration x 120 min,
+    # +45 min and 1 / 2 transfers for the "fallback"), so an unmeasured trip looked
+    # measured (issue 1827). The saved drafts stay on the trip; Compare says why it is empty.
     if inventory_status != "ready":
-        if saved_scenarios:
-            return _build_saved_scenario_runtime_search(
-                record,
-                saved_scenarios=saved_scenarios,
-            )
         return _empty_workspace_scenario_search()
 
     if inventory_bundles:
@@ -489,11 +253,6 @@ def _build_runtime_scenario_search_for_trip(
             organization_comparable_requirements=organization_comparable_requirements,
         ).to_dict()
 
-    if saved_scenarios:
-        return _build_saved_scenario_runtime_search(
-            record,
-            saved_scenarios=saved_scenarios,
-        )
     return _empty_workspace_scenario_search()
 
 
@@ -527,6 +286,31 @@ def _estimated_total_delta(
     return round(float(scenario_amount) - float(lead_amount), 2)
 
 
+def _transfers_measured(scenario: dict[str, Any]) -> bool:
+    """Whether anything counted this scenario's connections.
+
+    The distance-and-time adapter models one leg per hop and records zero changes on it,
+    so every trip read "0 transfers", Seattle to Reykjavik included, where no nonstop
+    exists (issue 1839). A count nobody measured is shown as not measured.
+    """
+
+    return not is_runtime_measured_bundle(scenario.get("bundle_id"))
+
+
+def _measured_transfers(scenario: dict[str, Any]) -> int | None:
+    if not _transfers_measured(scenario):
+        return None
+    return int(scenario["scenario_summary"]["total_transfer_count"])
+
+
+def _transfers_delta(scenario: dict[str, Any], lead: dict[str, Any]) -> int | None:
+    scenario_transfers = _measured_transfers(scenario)
+    lead_transfers = _measured_transfers(lead)
+    if scenario_transfers is None or lead_transfers is None:
+        return None
+    return scenario_transfers - lead_transfers
+
+
 def _comparison_highlights(
     *,
     scenario: dict[str, Any],
@@ -536,7 +320,12 @@ def _comparison_highlights(
     route_sequence = " -> ".join(summary.get("route_sequence") or []) or "route sequence pending"
     highlights = [
         f"Route: {route_sequence}.",
-        f"Travel {summary['total_travel_minutes']} minutes with {summary['total_transfer_count']} transfer(s).",
+        (
+            f"Travel {summary['total_travel_minutes']} minutes with "
+            f"{summary['total_transfer_count']} transfer(s)."
+            if _transfers_measured(scenario)
+            else f"Travel {summary['total_travel_minutes']} minutes; connections not measured."
+        ),
     ]
     if scenario["scenario_id"] == lead["scenario_id"]:
         highlights.append("Lead scenario for the current workspace comparison set.")
@@ -545,9 +334,7 @@ def _comparison_highlights(
         travel_delta = (
             summary["total_travel_minutes"] - lead["scenario_summary"]["total_travel_minutes"]
         )
-        transfers_delta = (
-            summary["total_transfer_count"] - lead["scenario_summary"]["total_transfer_count"]
-        )
+        transfers_delta = _transfers_delta(scenario, lead) or 0
         delta_parts = [f"Score {score_delta:+.2f} versus the lead scenario."]
         if travel_delta:
             delta_parts.append(f"Travel time {travel_delta:+d} minutes versus lead.")
@@ -674,7 +461,7 @@ def _route_option_unresolved_questions(*, scenario: dict[str, Any], state: str) 
     if not summary.get("route_sequence"):
         questions.append("Which stops should anchor this route?")
     if summary.get("estimated_total") is None:
-        questions.append("What rough cost range should this route assume?")
+        questions.append("No price entered yet: enter the amounts you hold on the Budget tab.")
     for tradeoff in scenario.get("unresolved_tradeoffs", [])[:2]:
         tradeoff_summary = tradeoff.get("summary")
         if isinstance(tradeoff_summary, str) and tradeoff_summary:
@@ -795,8 +582,7 @@ def _build_runtime_scenario_comparison(
             "trip_id": trip_id,
             "title": "Workspace scenario comparison",
             "summary": (
-                f"{trip_title} does not have runtime scenario comparison data yet. "
-                "Run ranking and route assembly before rendering comparison views."
+                f"No route has been measured for {trip_title}, so there is nothing to compare."
             ),
             "comparison_axes": comparison_axes,
             "lead_scenario_id": None,
@@ -876,19 +662,19 @@ def _build_runtime_scenario_comparison(
             "metrics": {
                 "score": scenario["score"],
                 "travel_minutes": summary["total_travel_minutes"],
-                "transfers": summary["total_transfer_count"],
+                "transfers": _measured_transfers(scenario),
                 "estimated_total": estimated_total,
             },
+            # No provider has been asked whether seats or rooms exist. Say so rather than
+            # labelling every option "Ready to review" (issue 1839).
+            "availability_checked": not is_runtime_measured_bundle(scenario.get("bundle_id")),
             "delta": {
                 "score_delta": round(float(scenario["score"]) - float(lead["score"]), 2),
                 "travel_minutes_delta": (
                     summary["total_travel_minutes"]
                     - lead["scenario_summary"]["total_travel_minutes"]
                 ),
-                "transfers_delta": (
-                    summary["total_transfer_count"]
-                    - lead["scenario_summary"]["total_transfer_count"]
-                ),
+                "transfers_delta": _transfers_delta(scenario, lead),
                 "estimated_total_delta": _estimated_total_delta(scenario, lead),
             },
             "highlights": _comparison_highlights(scenario=scenario, lead=lead),
@@ -1246,119 +1032,6 @@ def _ordered_saved_scenarios(
     saved_scenarios: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     return sorted(saved_scenarios, key=_saved_scenario_priority)
-
-
-def _bootstrap_route_sequence(record: PersistedTrip, *, label: str) -> list[str]:
-    primary_regions = [region for region in record.primary_regions if region]
-    if not primary_regions:
-        primary_regions = [record.title]
-    if label == "fallback":
-        return [*primary_regions, "comparison-pass"]
-    return primary_regions
-
-
-def _bootstrap_scenario_metrics(
-    record: PersistedTrip,
-    *,
-    label: str,
-) -> tuple[float, int, int, dict[str, Any]]:
-    duration_days = max(record.duration_days or 1, 1)
-    base_minutes = 90 if record.mode == "leisure" else 120
-    if label == "fallback":
-        travel_minutes = duration_days * (base_minutes + 45)
-        transfers = 2
-    else:
-        travel_minutes = duration_days * base_minutes
-        transfers = 1
-    return (
-        _BOOTSTRAP_SCENARIO_SCORE_BY_LABEL.get(label, 0.6),
-        travel_minutes,
-        transfers,
-        {
-            "currency": "USD",
-            "typical_amount": None,
-            "nightly_typical_amount": None,
-        },
-    )
-
-
-def _build_saved_scenario_runtime_search(
-    record: PersistedTrip,
-    *,
-    saved_scenarios: list[dict[str, Any]],
-) -> dict[str, Any]:
-    ordered = _ordered_saved_scenarios(saved_scenarios)
-    scenario_rows: list[dict[str, Any]] = []
-    source_refs = [f"session:{record.trip_id}"]
-    for index, saved_scenario in enumerate(ordered, start=1):
-        version = saved_scenario["versions"][0]
-        label = version["label"]
-        score, travel_minutes, transfers, estimated_total = _bootstrap_scenario_metrics(
-            record,
-            label=label,
-        )
-        route_sequence = _bootstrap_route_sequence(record, label=label)
-        source_refs.extend(
-            ref
-            for ref in (
-                version["snapshot_refs"].get("scenario_search_id"),
-                version["snapshot_refs"].get("session_state_id"),
-            )
-            if ref
-        )
-        scenario_rows.append(
-            {
-                "scenario_id": saved_scenario["saved_scenario_id"],
-                "label": label,
-                "title": version["title"],
-                "rank": index,
-                "bundle_id": None,
-                "source_result_id": version["version_id"],
-                "score": score,
-                "scenario_summary": {
-                    "headline": version["summary"],
-                    "scenario_kind": "fallback" if label == "fallback" else "primary",
-                    "feasible": True,
-                    "recommended_for_selection": label != "fallback",
-                    "coherence_passed": True,
-                    "estimated_total": estimated_total,
-                    "total_travel_minutes": travel_minutes,
-                    "total_transfer_count": transfers,
-                    "route_sequence": route_sequence,
-                    "notes": list(version.get("notes") or []),
-                },
-                "supporting_option_ids": list(version["snapshot_refs"].get("option_set_ids") or []),
-                "objective_refs": [
-                    ref for ref in [version["snapshot_refs"].get("objective_id")] if ref is not None
-                ],
-                "unresolved_tradeoffs": (
-                    [
-                        {
-                            "tradeoff_id": f"tradeoff:{record.trip_id}:workspace-bootstrap",
-                            "code": "broader_scope",
-                            "summary": "Fallback stays available until live ranking can compare a broader planning pass.",
-                            "severity": "info",
-                        }
-                    ]
-                    if label == "fallback"
-                    else []
-                ),
-            }
-        )
-
-    return {
-        "search_id": f"scenario-search:{record.trip_id}:workspace-bootstrap",
-        "trip_id": record.trip_id,
-        "purpose": "workspace_bootstrap",
-        "title": "Persisted workspace bootstrap comparison",
-        "source_result_set_id": f"workspace-bootstrap:{record.trip_id}",
-        "scenarios": scenario_rows,
-        "explanation": [
-            "Saved scenarios are bootstrapped from the persisted trip record until deeper planner ranking is available.",
-            "The workspace comparison surface can render immediately without falling back to seeded trip fixtures.",
-        ],
-        "source_refs": list(dict.fromkeys(source_refs)),
-    }
 
 
 def _serialize_activity_record(record: PersistedActivityLogEvent) -> dict[str, Any]:

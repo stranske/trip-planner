@@ -2693,10 +2693,62 @@ describe("WorkspacePage", () => {
 
     expect(screen.queryByLabelText("Scenario review board")).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        "No route ideas are available yet, so there is nothing to compare."
-      )
+      screen.getByText("No route has been measured for this trip, so there is nothing to compare.")
     ).toBeInTheDocument();
+  });
+
+  it("shows an unmeasured connection count and unchecked availability as such (issue 1839)", async () => {
+    const [first] = workspacePayload.route_comparison.scenarios;
+    const unmeasured = {
+      ...first,
+      availability_checked: false,
+      metrics: { ...first.metrics, transfers: null },
+      delta: { ...first.delta, transfers_delta: null },
+    };
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        route_comparison: { ...workspacePayload.route_comparison, scenarios: [unmeasured] },
+        runtime_scenario_comparison: {
+          ...workspacePayload.runtime_scenario_comparison,
+          scenarios: [unmeasured],
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+    await selectWorkspaceTab("Compare");
+
+    const board = await screen.findByLabelText("Scenario review board");
+    expect(board).toHaveTextContent("Not measured");
+    expect(board).toHaveTextContent("Availability not checked with a provider");
+    expect(board).not.toHaveTextContent("Ready to review");
+    expect(board.textContent ?? "").not.toMatch(/Transfers\s*null/);
+  });
+
+  it("says why Compare is empty when the destination could not be located (issue 1827)", async () => {
+    const summary =
+      "Without a location for Zzqxwv the planner cannot measure a route or travel time, so Compare has nothing to show.";
+    mockedUseLoaderData.mockReturnValue({
+      workspace: Promise.resolve({
+        ...workspacePayload,
+        runtime_state: { status: "empty", title: "The planner could not locate Zzqxwv", summary },
+        route_comparison: { ...workspacePayload.route_comparison, lead_scenario_id: null, scenarios: [] },
+        runtime_scenario_comparison: {
+          ...workspacePayload.runtime_scenario_comparison,
+          lead_scenario_id: null,
+          scenarios: [],
+        },
+      }),
+      trips: Promise.resolve(tripComparisonPayload),
+    });
+
+    renderWorkspacePage();
+    await selectWorkspaceTab("Compare");
+
+    expect(await screen.findByText(summary)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Scenario review board")).not.toBeInTheDocument();
   });
 
   it("shows created-trip metadata even when the workspace has no seeded scenario state yet", async () => {
