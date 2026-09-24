@@ -14,6 +14,8 @@ from trip_planner.persistence.db import get_session_factory, reset_database_stat
 from trip_planner.persistence.models.policy import PersistedPolicyState
 from trip_planner.persistence.models.trip import PersistedTrip
 
+from tests.app.saved_scenario_search_fixture import build_saved_scenario_search
+
 FIXTURE_POLICY = {
     "constraint_set": {
         "budget_rules": {"rule_id": "BUD-001", "max_trip_total_usd": 2300},
@@ -47,9 +49,7 @@ def test_exception_nearest_saved_scenario_surfaces_pol_exc_preview_violation(
         duration_days=1,
         primary_regions=["Chicago"],
     )
-    search = workspace_service._build_saved_scenario_runtime_search(
-        record, saved_scenarios=saved_scenarios
-    )
+    search = build_saved_scenario_search(record, saved_scenarios=saved_scenarios)
     exception_scenario = next(
         scenario
         for scenario in search["scenarios"]
@@ -74,9 +74,7 @@ def test_exception_nearest_saved_scenario_surfaces_pol_exc_preview_violation(
         # "we checked and it was fine" and "we could not check" must never read alike.
         def _breaches(preview: dict[str, Any]) -> list[str]:
             return [
-                str(item["rule_id"])
-                for item in preview["violations"]
-                if not item.get("incomplete")
+                str(item["rule_id"]) for item in preview["violations"] if not item.get("incomplete")
             ]
 
         def _uncheckable(preview: dict[str, Any]) -> list[str]:

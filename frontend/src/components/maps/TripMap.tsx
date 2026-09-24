@@ -8,6 +8,7 @@ import {
   type MapProviderLoadState,
   type MapViewScope,
 } from "./mapSurface";
+import { NOT_MEASURED, formatTransfers } from "../../lib/metrics";
 
 type InventoryBundle = WorkspaceData["inventory_summary"]["bundles"][number];
 type TripMapScenario = RuntimeScenarioComparison["scenarios"][number];
@@ -362,7 +363,7 @@ function ActiveTripMap({
             </div>
             <div>
               <dt>Transfers</dt>
-              <dd>{activeScenario.metrics.transfers}</dd>
+              <dd>{activeScenario.metrics.transfers ?? NOT_MEASURED}</dd>
             </div>
             <div>
               <dt>Options</dt>
@@ -465,7 +466,7 @@ function ActiveTripMap({
                     {scenario.recommended_for_selection ? "recommended" : scenario.status}
                   </p>
                   <h4>{scenario.title}</h4>
-                  <p>{scenario.metrics.travel_minutes} min · {scenario.metrics.transfers} transfers</p>
+                  <p>{scenario.metrics.travel_minutes} min · {formatTransfers(scenario.metrics.transfers)}</p>
                 </div>
               ))}
             </div>

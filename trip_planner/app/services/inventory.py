@@ -117,10 +117,32 @@ def _contract_transport_mode(leg_mode: str) -> str:
 
 
 def _option_transport_kind(leg_modes: Sequence[str]) -> str:
-    contract_modes = {_contract_transport_mode(mode) for mode in leg_modes}
-    if len(contract_modes) == 1:
-        return next(iter(contract_modes))
-    return "mixed"
+    """The option's kind is its main leg's mode.
+
+    A journey that flies to the first destination and drives to the second used to be
+    labelled "mixed", which the transport contract rejects, so every such trip answered
+    GET /workspace with a 500. Air legs are by construction longer than ground legs
+    (`AIR_THRESHOLD_KM`), so when any leg flies the main leg is a flight; each segment
+    still carries its own mode.
+    """
+
+    contract_modes = [_contract_transport_mode(mode) for mode in leg_modes]
+    if "flight" in contract_modes:
+        return "flight"
+    return contract_modes[0] if contract_modes else "rail"
+
+
+#: Marks a bundle this adapter assembled. It measures distance and travel time only: it
+#: does not count connections or check availability with any provider. The adapter writes
+#: it into the bundle id and the workspace reads it back (`is_runtime_measured_bundle`),
+#: so the two cannot drift.
+RUNTIME_BUNDLE_MARKER = "-runtime-"
+
+
+def is_runtime_measured_bundle(bundle_id: object) -> bool:
+    """True when a bundle came from the distance-and-time adapter, not a provider."""
+
+    return isinstance(bundle_id, str) and RUNTIME_BUNDLE_MARKER in bundle_id
 
 
 def _unpriced_total(amount: float | None) -> dict[str, Any]:
@@ -260,9 +282,7 @@ class PersistedTripInventoryContext:
     origin: str | None = None
 
     @classmethod
-    def from_persisted_trip(
-        cls, record: PersistedTrip
-    ) -> PersistedTripInventoryContext:
+    def from_persisted_trip(cls, record: PersistedTrip) -> PersistedTripInventoryContext:
         return cls(
             trip_id=record.trip_id,
             trip_mode=record.mode,
@@ -293,9 +313,7 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
     ) -> None:
         self.trip_id = trip_id
         self.trip_mode = trip_mode
-        self.primary_regions = tuple(
-            region.strip() for region in primary_regions if region.strip()
-        )
+        self.primary_regions = tuple(region.strip() for region in primary_regions if region.strip())
         self.duration_days = duration_days
         self.allow_fixture_fallback = allow_fixture_fallback
         self.adapter_id = "persisted-trip-fixture-inventory"
@@ -311,9 +329,7 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
                 freshness_confidence=0.7,
                 commerciality=_commerciality_for_category("commercial_inventory"),
                 operational_reliability=0.65,
-                notes=[
-                    "Fixture source freshness is pinned to the bundled fixture capture date."
-                ],
+                notes=["Fixture source freshness is pinned to the bundled fixture capture date."],
             ),
             quality_summary=QualityValueFitSummary(
                 quality_signal=0.68,
@@ -439,9 +455,7 @@ class PersistedTripInventoryFixtureAdapter(SourceAdapter):
                 "trip_id": self.trip_id,
                 "trip_mode": self.trip_mode,
                 "region_count": str(len(self.primary_regions)),
-                "duration_days": ""
-                if self.duration_days is None
-                else str(self.duration_days),
+                "duration_days": "" if self.duration_days is None else str(self.duration_days),
             },
         )
 
@@ -499,9 +513,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
     ) -> None:
         self.trip_id = trip_id
         self.trip_mode = trip_mode
-        self.primary_regions = tuple(
-            region.strip() for region in primary_regions if region.strip()
-        )
+        self.primary_regions = tuple(region.strip() for region in primary_regions if region.strip())
         self.origin = (origin or "").strip() or None
         self.start_date = (start_date or "").strip()
         self.end_date = (end_date or "").strip()
@@ -534,18 +546,14 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                 fit_signal=0.8 if primary_regions else 0.55,
                 confidence=0.76 if primary_regions else 0.5,
             ),
-            notes=[
-                "Derives normalized inventory seeds directly from persisted trip context."
-            ],
+            notes=["Derives normalized inventory seeds directly from persisted trip context."],
         )
         self.supported_entity_scopes = ("mixed",)
         self.supported_option_kinds = ("mixed", "lodging", "activity", "rail")
         self.capabilities = ("read_file", "supports_normalization_handoff")
 
     @classmethod
-    def from_persisted_trip(
-        cls, record: PersistedTrip
-    ) -> PersistedTripSourceInventoryAdapter:
+    def from_persisted_trip(cls, record: PersistedTrip) -> PersistedTripSourceInventoryAdapter:
         return cls(
             trip_id=record.trip_id,
             trip_mode=record.mode,
@@ -592,13 +600,9 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         for region in self.primary_regions:
             self._geo_payload(region)
 
-    def _trip_timestamp(
-        self, *, hour: int, minute: int = 0, add_minutes: int = 0
-    ) -> str:
+    def _trip_timestamp(self, *, hour: int, minute: int = 0, add_minutes: int = 0) -> str:
         trip_date = self.start_date or self.end_date or "1970-01-01"
-        base = datetime.fromisoformat(
-            f"{trip_date}T{hour:02d}:{minute:02d}:00"
-        ).replace(tzinfo=UTC)
+        base = datetime.fromisoformat(f"{trip_date}T{hour:02d}:{minute:02d}:00").replace(tzinfo=UTC)
         if add_minutes:
             base += timedelta(minutes=add_minutes)
         return base.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -766,7 +770,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
         ]
 
         return {
-            "bundle_id": f"bundle-{self.trip_id}-runtime-1-1",
+            "bundle_id": f"bundle-{self.trip_id}{RUNTIME_BUNDLE_MARKER}1-1",
             "title": f"{destination_name} runtime bundle",
             "bundle_context": "mixed",
             "destinations": [
@@ -837,9 +841,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                     "destination_id": destination_id,
                     "timing_summary": transport_timing,
                     "segments": transport_segments,
-                    "cost_summary": {
-                        "total": _unpriced_total(transport_total)
-                    },
+                    "cost_summary": {"total": _unpriced_total(transport_total)},
                     "fit_summary": {"overall_signal": baseline_signal},
                     "policy_summary": {
                         "business_approval_status": (
@@ -885,9 +887,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                 "status": "evaluated",
                 "overall_pass": True,
                 "hard_constraints_satisfied": True,
-                "policy_constraints_satisfied": True
-                if self.trip_mode == "business"
-                else None,
+                "policy_constraints_satisfied": True if self.trip_mode == "business" else None,
                 "blocking_constraint_ids": [],
                 "evaluated_constraint_ids": [
                     "bundle.feasibility.available",
@@ -960,16 +960,15 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                         severity="warning",
                         code="unsupported_inventory_destination",
                         message=(
-                            f"The planner has no coverage for {error.region}, so no route, "
-                            "timing or cost options can be assembled for it."
+                            f"The planner could not locate {error.region}, so it cannot "
+                            "measure a route or travel time to it. You can still enter the "
+                            "prices you hold and submit the trip for approval."
                         ),
                         details={
                             "trip_id": self.trip_id,
                             "trip_mode": self.trip_mode,
                             "region": error.region,
-                            "supported_destinations": ", ".join(
-                                supported_destinations()
-                            ),
+                            "supported_destinations": ", ".join(supported_destinations()),
                         },
                     )
                 )
@@ -1005,9 +1004,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
                 "trip_id": self.trip_id,
                 "trip_mode": self.trip_mode,
                 "region_count": str(len(self.primary_regions)),
-                "duration_days": ""
-                if self.duration_days is None
-                else str(self.duration_days),
+                "duration_days": "" if self.duration_days is None else str(self.duration_days),
             },
         )
 
@@ -1048,9 +1045,7 @@ class PersistedTripSourceInventoryAdapter(SourceAdapter):
 
 def _load_mixed_option_fixture(name: str) -> MixedOption:
     payload = json.loads(
-        resources.files(_BUNDLE_RESOURCE_PACKAGE)
-        .joinpath(name)
-        .read_text(encoding="utf-8")
+        resources.files(_BUNDLE_RESOURCE_PACKAGE).joinpath(name).read_text(encoding="utf-8")
     )
     return MixedOption.from_dict(payload)
 
@@ -1073,9 +1068,7 @@ def _build_inventory_assembly_input(
     allow_fixture_fallback: bool = True,
 ) -> InventoryAssemblyInput:
     if persisted_trip is not None:
-        persisted_context = PersistedTripInventoryContext.from_persisted_trip(
-            persisted_trip
-        )
+        persisted_context = PersistedTripInventoryContext.from_persisted_trip(persisted_trip)
         trip_id = persisted_context.trip_id
         trip_mode = persisted_context.trip_mode
         start_date = persisted_context.start_date
@@ -1127,9 +1120,7 @@ def _build_inventory_assembly_input(
         )
     else:
         if persisted_trip is not None:
-            adapter = PersistedTripSourceInventoryAdapter.from_persisted_trip(
-                persisted_trip
-            )
+            adapter = PersistedTripSourceInventoryAdapter.from_persisted_trip(persisted_trip)
         else:
             adapter = PersistedTripSourceInventoryAdapter(
                 trip_id=trip_id,
@@ -1153,9 +1144,7 @@ def _build_inventory_assembly_input(
         snapshot=snapshot,
         handoff=handoff,
         record_payloads=tuple(
-            record.payload
-            for record in snapshot.records
-            if isinstance(record.payload, dict)
+            record.payload for record in snapshot.records if isinstance(record.payload, dict)
         ),
         fixture_names=tuple(
             record.metadata["fixture_name"]
@@ -1176,9 +1165,7 @@ def assemble_inventory_bundles_for_trip(
 ) -> list[InventoryBundle]:
     if assembly_input is None:
         if trip_id is None or trip_mode is None:
-            msg = (
-                "trip_id and trip_mode are required when assembly_input is not provided"
-            )
+            msg = "trip_id and trip_mode are required when assembly_input is not provided"
             raise ValueError(msg)
         assembly_input = _build_inventory_assembly_input(
             trip_id=trip_id,
@@ -1294,12 +1281,12 @@ def build_inventory_summary_payload(
             region = str((issue.details or {}).get("region") or "this destination")
             runtime_state = {
                 "status": "empty",
-                "title": f"The planner does not cover {region} yet",
+                "title": f"The planner could not locate {region}",
                 "summary": (
-                    f"No route, timing or cost options can be produced for {region}. "
-                    "Example curated destinations with extra metadata: "
-                    + ", ".join(name.title() for name in curated_destination_examples())
-                    + ". Many additional cities resolve through the bundled GeoNames dataset."
+                    f"Without a location for {region} the planner cannot measure a route or "
+                    "travel time, so Compare has nothing to show. Check the spelling, or add "
+                    'the state or country (for example "Portland, OR"). You can still enter '
+                    "the prices you hold and submit the trip for approval."
                 ),
                 "issues": runtime_issues,
             }
@@ -1340,15 +1327,11 @@ def build_inventory_summary_payload(
                 "title": bundle.title,
                 "bundle_context": bundle.bundle_context,
                 "summary": bundle.summary or bundle.explanation.headline,
-                "destination_names": [
-                    destination.name for destination in bundle.destinations
-                ],
+                "destination_names": [destination.name for destination in bundle.destinations],
                 "option_count": len(bundle.option_ids),
                 "strengths": list(bundle.explanation.strengths[:2]),
                 "tradeoffs": list(bundle.explanation.tradeoffs[:2]),
-                "source_records": [
-                    record.to_dict() for record in bundle.source_records
-                ],
+                "source_records": [record.to_dict() for record in bundle.source_records],
             }
             for bundle in bundles
         ],
@@ -1401,7 +1384,5 @@ def get_inventory_payload(
         "trip_id": trip_id,
         "bundle_count": len(bundles),
         "bundles": [bundle.to_dict() for bundle in bundles],
-        "summary": build_inventory_summary_payload(
-            bundles, assembly_input=assembly_input
-        ),
+        "summary": build_inventory_summary_payload(bundles, assembly_input=assembly_input),
     }

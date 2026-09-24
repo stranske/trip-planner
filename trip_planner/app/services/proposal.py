@@ -609,9 +609,7 @@ def _derive_follow_up_state(
     return follow_up
 
 
-def _submission_outcome(
-    *, state: Any, queue_state: Any, error_category: Any
-) -> str:
+def _submission_outcome(*, state: Any, queue_state: Any, error_category: Any) -> str:
     """Tell a policy refusal apart from a transport failure.
 
     Both arrive as `state == "failed"`, and they mean opposite things. A transport
@@ -965,6 +963,16 @@ def _route_comparison(workspace: dict[str, Any]) -> dict[str, Any]:
     return comparison if isinstance(comparison, dict) else {}
 
 
+def _dict_value(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _trip_level_scenario_id(trip_id: str) -> str:
+    """The id a proposal carries when the planner measured no route for the trip."""
+
+    return f"scenario:{trip_id}"
+
+
 def _workspace_scenario_ids(workspace: dict[str, Any]) -> set[str]:
     ids: set[str] = set()
     comparison = _route_comparison(workspace)
@@ -976,6 +984,11 @@ def _workspace_scenario_ids(workspace: dict[str, Any]) -> set[str]:
         for row in scenarios:
             if isinstance(row, dict) and row.get("scenario_id"):
                 ids.add(str(row["scenario_id"]))
+    if not scenarios:
+        # No measured route: the proposal is for the trip itself (issue 1827).
+        trip_id = _dict_value(_dict_value(workspace.get("trip_record")).get("trip")).get("trip_id")
+        if trip_id:
+            ids.add(_trip_level_scenario_id(str(trip_id)))
 
     saved_scenarios = workspace.get("saved_scenarios")
     if isinstance(saved_scenarios, list):
@@ -1211,8 +1224,6 @@ def _money_range_from_estimated(estimated: Any, fallback_currency: str) -> Money
     )
 
 
-
-
 def _home_airport_from_workspace(workspace: dict[str, Any]) -> str:
     trip_record = workspace.get("trip_record")
     if isinstance(trip_record, dict):
@@ -1222,8 +1233,6 @@ def _home_airport_from_workspace(workspace: dict[str, Any]) -> str:
             if isinstance(trip_frame, dict) and trip_frame.get("origin"):
                 return str(trip_frame["origin"])
     return _NO_ORIGIN_PLACEHOLDER
-
-
 
 
 def _booking_channel_from_workspace(workspace: dict[str, Any]) -> str:
@@ -1236,8 +1245,6 @@ def _booking_channel_from_workspace(workspace: dict[str, Any]) -> str:
             if channels:
                 return channels[0]
     return "workspace"
-
-
 
 
 def build_workspace_submission_proposal(
@@ -1262,10 +1269,13 @@ def build_workspace_submission_proposal(
 
     organization_id, constraint_set_id = _policy_context_from_workspace(workspace)
     scenario_row = _selected_scenario_row(workspace, scenario_id)
-    if scenario_row is None:
-        raise ValueError("No scenario is available for proposal submission.")
-
-    resolved_scenario_id = str(scenario_row.get("scenario_id") or f"scenario:{trip_id}")
+    if scenario_row is None and scenario_id is not None:
+        raise ValueError("Selected scenario is not in this trip's workspace.")
+    # The proposal is priced from what the traveller entered, not from a route, so a trip
+    # the planner could not map (no scenario) can still go to the policy check (issue 1827).
+    resolved_scenario_id = str(
+        (scenario_row or {}).get("scenario_id") or _trip_level_scenario_id(trip_id)
+    )
     booking_channel = _booking_channel_from_workspace(workspace)
 
     # The proposal is priced line by line from what the traveller entered — the only

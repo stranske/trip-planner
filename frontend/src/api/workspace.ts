@@ -283,10 +283,13 @@ export type RuntimeScenarioComparison = {
     route_summary: string;
     recommended_for_selection: boolean;
     feasible: boolean;
+    /** False when no provider was asked whether seats or rooms exist (issue 1839). */
+    availability_checked?: boolean;
     metrics: {
       score: number;
       travel_minutes: number;
-      transfers: number;
+      /** Null when nothing counted the connections: shown as "Not measured". */
+      transfers: number | null;
       estimated_total: {
         currency: string;
         typical_amount: number | null;
@@ -296,7 +299,7 @@ export type RuntimeScenarioComparison = {
     delta: {
       score_delta: number;
       travel_minutes_delta: number;
-      transfers_delta: number;
+      transfers_delta: number | null;
       estimated_total_delta: number | null;
     };
     highlights: string[];

@@ -1340,12 +1340,11 @@ def test_workspace_endpoint_returns_bounded_empty_runtime_state_when_trip_frame_
     reloaded_payload = reloaded.json()
     assert initial_payload["runtime_state"]["status"] == "empty"
     assert initial_payload["inventory_summary"]["runtime_state"]["status"] == "empty"
-    assert len(initial_payload["scenario_search"]["scenarios"]) == 2
-    assert len(initial_payload["runtime_scenario_comparison"]["scenarios"]) == 2
-    assert (
-        initial_payload["scenario_search"]["scenarios"][0]["scenario_id"]
-        == reloaded_payload["scenario_search"]["scenarios"][0]["scenario_id"]
-    )
+    # No inventory, no scenario (issue 1827): a sparse trip used to be shown two saved
+    # drafts with invented timings. Compare is empty and says why.
+    assert initial_payload["scenario_search"]["scenarios"] == []
+    assert initial_payload["runtime_scenario_comparison"]["scenarios"] == []
+    assert reloaded_payload["scenario_search"]["scenarios"] == []
     assert (
         initial_payload["planner_panel_state"]["option_set"]["purpose"]
         == reloaded_payload["planner_panel_state"]["option_set"]["purpose"]
@@ -1379,16 +1378,18 @@ def test_workspace_endpoint_surfaces_partial_runtime_state_for_under_scoped_trip
     payload = response.json()
     assert payload["runtime_state"]["status"] == "partial"
     assert payload["inventory_summary"]["runtime_state"]["status"] == "partial"
-    assert len(payload["scenario_search"]["scenarios"]) == 2
-    assert len(payload["runtime_scenario_comparison"]["scenarios"]) == 2
+    # No inventory, no scenario (issue 1827): a sparse trip used to be shown two saved
+    # drafts with invented timings. Compare is empty and says why.
+    assert payload["scenario_search"]["scenarios"] == []
+    assert payload["runtime_scenario_comparison"]["scenarios"] == []
 
     comparison_response = client.get(f"/api/workspace/{trip_id}/scenarios/compare")
 
     assert comparison_response.status_code == 200
     comparison_payload = comparison_response.json()
-    assert len(comparison_payload["scenarios"]) == 2
-    assert comparison_payload["lead_scenario_id"].startswith("saved-scenario:")
-    assert "route option" in comparison_payload["summary"].lower()
+    assert comparison_payload["scenarios"] == []
+    assert comparison_payload["lead_scenario_id"] is None
+    assert "nothing to compare" in comparison_payload["summary"]
 
 
 def test_workspace_endpoint_returns_coherent_partial_response_when_trip_dates_are_missing(
@@ -1421,9 +1422,11 @@ def test_workspace_endpoint_returns_coherent_partial_response_when_trip_dates_ar
 
     assert inventory_summary["bundle_count"] == 0
     assert inventory_summary["bundles"] == []
-    assert payload["scenario_search"]["scenarios"]
-    assert payload["runtime_scenario_comparison"]["scenarios"]
-    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
+    # No inventory, no scenario (issue 1827): a sparse trip used to be shown two saved
+    # drafts with invented timings. Compare is empty and says why.
+    assert payload["scenario_search"]["scenarios"] == []
+    assert payload["runtime_scenario_comparison"]["scenarios"] == []
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] is None
     _assert_payload_avoids_fixture_or_default_inventory_data(payload)
 
 
@@ -1456,9 +1459,11 @@ def test_workspace_endpoint_returns_coherent_partial_response_when_destination_a
 
     assert inventory_summary["bundle_count"] == 0
     assert inventory_summary["bundles"] == []
-    assert payload["scenario_search"]["scenarios"]
-    assert payload["runtime_scenario_comparison"]["scenarios"]
-    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
+    # No inventory, no scenario (issue 1827): a sparse trip used to be shown two saved
+    # drafts with invented timings. Compare is empty and says why.
+    assert payload["scenario_search"]["scenarios"] == []
+    assert payload["runtime_scenario_comparison"]["scenarios"] == []
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] is None
     _assert_payload_avoids_fixture_or_default_inventory_data(payload)
 
 
@@ -1526,9 +1531,11 @@ def test_workspace_endpoint_returns_coherent_partial_response_for_missing_trip_i
 
     assert inventory_summary["bundle_count"] == 0
     assert inventory_summary["bundles"] == []
-    assert payload["scenario_search"]["scenarios"]
-    assert payload["runtime_scenario_comparison"]["scenarios"]
-    assert payload["runtime_scenario_comparison"]["lead_scenario_id"].startswith("saved-scenario:")
+    # No inventory, no scenario (issue 1827): a sparse trip used to be shown two saved
+    # drafts with invented timings. Compare is empty and says why.
+    assert payload["scenario_search"]["scenarios"] == []
+    assert payload["runtime_scenario_comparison"]["scenarios"] == []
+    assert payload["runtime_scenario_comparison"]["lead_scenario_id"] is None
     _assert_payload_avoids_fixture_or_default_inventory_data(payload)
 
 

@@ -24,9 +24,7 @@ def _summary(*regions: str) -> dict:
     """Assemble inventory exactly as the workspace does."""
     assembly = _build_inventory_assembly_input(
         trip_id="trip-"
-        + "-".join(
-            region.lower().replace(" ", "-").replace(",", "") for region in regions
-        ),
+        + "-".join(region.lower().replace(" ", "-").replace(",", "") for region in regions),
         trip_mode="business",
         primary_regions=list(regions),
         duration_days=4,
@@ -65,7 +63,9 @@ def test_uncovered_destination_produces_no_bundles_and_says_so() -> None:
     assert runtime["status"] == "empty"
     # And the limit is stated, naming the destination and what is covered.
     assert "Zzqxwv Nonexistent Place" in runtime["title"] + runtime["summary"]
-    assert "Chicago" in runtime["summary"]
+    # Says what to do next: fix the place name, or carry on with the prices you hold.
+    assert "Check the spelling" in runtime["summary"]
+    assert "enter the prices you hold" in runtime["summary"]
 
 
 def test_any_unsupported_primary_region_blocks_bundle_assembly() -> None:

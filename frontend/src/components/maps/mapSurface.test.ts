@@ -122,7 +122,7 @@ describe("mapSurface", () => {
     expect(model.scenarioFocusAreas).toEqual(["route_coherence", "weather_resilience"]);
     expect(model.scenarioAffordances).toEqual([
       "Recommended scenario",
-      "Feasibility-ready route",
+      "No blocking issue found",
       "2 mapped option marker(s)",
       "3 route stop(s)",
       "4 transfer checkpoint(s)",

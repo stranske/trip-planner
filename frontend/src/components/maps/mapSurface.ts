@@ -4,6 +4,7 @@ import type {
   WorkspaceData,
 } from "../../api/workspace";
 import { formatMoney } from "../../lib/money";
+import { describeAvailability } from "../../lib/metrics";
 
 type TripMapScenario = RuntimeScenarioComparison["scenarios"][number];
 type InventoryBundle = WorkspaceData["inventory_summary"]["bundles"][number];
@@ -257,7 +258,7 @@ function deriveRouteWarning(activeScenario: TripMapScenario, feasibilitySummary:
   if (feasibilitySummary.attention_bundle_count > 0) {
     return `${feasibilitySummary.attention_bundle_count} inventory bundle(s) need route attention.`;
   }
-  if (activeScenario.metrics.transfers >= 6) {
+  if ((activeScenario.metrics.transfers ?? 0) >= 6) {
     return "High transfer count; review travel burden before selecting this scenario.";
   }
   return null;
@@ -460,11 +461,11 @@ function buildScenarioAffordances({
 }): string[] {
   const affordances = [
     activeScenario.recommended_for_selection ? "Recommended scenario" : "Alternative scenario",
-    activeScenario.feasible ? "Feasibility-ready route" : "Feasibility warning",
+    describeAvailability(activeScenario),
     `${activeScenario.option_count} mapped option marker(s)`,
     `${activeScenario.route_sequence.length} route stop(s)`,
   ];
-  if (activeScenario.metrics.transfers > 0) {
+  if (activeScenario.metrics.transfers != null && activeScenario.metrics.transfers > 0) {
     affordances.push(`${activeScenario.metrics.transfers} transfer checkpoint(s)`);
   }
   if (routeState === "sparse") {

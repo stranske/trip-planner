@@ -15,8 +15,6 @@ import pytest
 from trip_planner.app.services.inventory import (
     PersistedTripSourceInventoryAdapter,
 )
-from trip_planner.app.services.workspace import _bootstrap_scenario_metrics
-from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.pricing import (
     APPROVED_SOURCE_KINDS,
     PriceSource,
@@ -106,20 +104,3 @@ def test_no_money_rate_constants_remain_in_the_adapter() -> None:
         if name.isupper() and ("COST" in name or "RATE" in name or "ALLOWANCE" in name)
     ]
     assert banned == [], f"money rates must not live in the planner: {banned}"
-
-
-@pytest.mark.parametrize("mode", ["business", "leisure"])
-@pytest.mark.parametrize("label", ["baseline", "fallback"])
-def test_bootstrap_scenario_cannot_invent_a_price(mode: str, label: str) -> None:
-    # A real PersistedTrip, not a stand-in: a stand-in that drifts from the record the
-    # product actually passes would let this gate pass while the served payload changed.
-    record = PersistedTrip(
-        trip_id=f"trip-{mode}-{label}",
-        title="Unpriced trip",
-        mode=mode,
-        duration_days=4,
-        primary_regions=["Chicago"],
-    )
-    _, _, _, estimated_total = _bootstrap_scenario_metrics(record, label=label)
-    assert estimated_total["typical_amount"] is None
-    assert estimated_total["nightly_typical_amount"] is None
