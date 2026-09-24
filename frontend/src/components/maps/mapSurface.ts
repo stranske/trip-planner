@@ -195,14 +195,14 @@ export function summarizeFeasibility(
   return `${bundleDestinations.length} destination anchors are backed by ${feasibilitySummary.assessment_count} feasibility assessment(s).`;
 }
 
-function describeStop(index: number, routeLength: number): string {
+function describeStop(index: number, routeLength: number, namedOrigin = true): string {
   if (index === 0) {
-    return "Current route origin for the workspace preview.";
+    return namedOrigin ? "Where the journey starts." : "First stop on this route.";
   }
   if (index === routeLength - 1) {
-    return "Current route destination anchor.";
+    return "Final destination.";
   }
-  return "Intermediate route checkpoint preserved in the active scenario.";
+  return `Stop ${index + 1} of ${routeLength}.`;
 }
 
 function coordinateForRouteIndex(index: number, routeLength: number): Pick<RouteStop, "x" | "y"> {
@@ -304,13 +304,16 @@ function buildRouteStops(activeScenario: TripMapScenario): RouteStop[] {
     }));
   }
 
-  return activeScenario.route_sequence.map((stop, index) => {
-    const coordinate = coordinateForRouteIndex(index, activeScenario.route_sequence.length);
+  // Place names the traveller entered, origin first, when the route was measured (issue 1844).
+  const named = activeScenario.route_stops && activeScenario.route_stops.length > 0;
+  const stops = named ? activeScenario.route_stops ?? [] : activeScenario.route_sequence;
+  return stops.map((stop, index) => {
+    const coordinate = coordinateForRouteIndex(index, stops.length);
     return {
       id: `${activeScenario.scenario_id}-${stop}-${index}`,
       sourceId: stop,
-      label: humanizeStop(stop),
-      description: describeStop(index, activeScenario.route_sequence.length),
+      label: named ? stop : humanizeStop(stop),
+      description: describeStop(index, stops.length, named),
       sourceRefs: [],
       x: coordinate.x,
       y: coordinate.y,

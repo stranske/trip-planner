@@ -917,7 +917,7 @@ def test_planner_turn_executes_provider_rich_read_only_tools(
     geometry_output = tool_outputs["read_route_geometry"]["output"]
     assert geometry_output["rough_route_geometry"]
     assert geometry_output["place_markers"]
-    assert geometry_output["place_markers"][0]["description"].startswith("Route stop 1")
+    assert geometry_output["place_markers"][0]["description"] == "First stop on this route."
     assert geometry_output["place_markers"][0]["source_refs"]
     first_segment = geometry_output["rough_route_geometry"][0]
     assert first_segment["duration_minutes"] is not None

@@ -2096,3 +2096,15 @@ a {
   align-items: flex-start;
   font-weight: 400;
 }
+
+.app-footer {
+  margin: var(--space-6) 0 var(--space-4);
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.compare-detail-disclosure > summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin: var(--space-4) 0 var(--space-2);
+}
