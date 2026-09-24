@@ -1,15 +1,22 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createTrip } from "../api/trips";
-import { NewTripPage, missingTripContext, travelDaysInclusive } from "./NewTripPage";
+import { createTrip, updateTrip } from "../api/trips";
+import {
+  NewTripPage,
+  VERDICT_CLEARED_NOTICE,
+  missingTripContext,
+  travelDaysInclusive,
+} from "./NewTripPage";
 import { TestMemoryRouter } from "../test/router";
 
 vi.mock("../api/trips", () => ({
   createTrip: vi.fn(),
+  updateTrip: vi.fn(),
 }));
 
 const mockedCreateTrip = vi.mocked(createTrip);
+const mockedUpdateTrip = vi.mocked(updateTrip);
 const mockedNavigate = vi.fn();
 
 vi.mock("react-router-dom", async () => {
@@ -313,3 +320,70 @@ describe("NewTripPage", () => {
     expect(mockedCreateTrip).not.toHaveBeenCalled();
   });
 });
+
+describe("NewTripPage editing an existing trip (issue 1841)", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  function existing() {
+    const trip = tripResponse();
+    return {
+      ...trip,
+      mode: "business",
+      summary: "Client review",
+      trip_frame: {
+        ...trip.trip_frame,
+        origin: "Seattle",
+        start_date: "2026-10-05",
+        end_date: "2026-10-07",
+        duration_days: 3,
+        primary_regions: ["Chicago, IL", "Milwaukee, WI"],
+      },
+    };
+  }
+
+  function renderEdit() {
+    return render(
+      <TestMemoryRouter>
+        <NewTripPage existingTrip={existing()} />
+      </TestMemoryRouter>
+    );
+  }
+
+  it("opens with the trip's saved setup", () => {
+    renderEdit();
+
+    expect(screen.getByRole("heading", { name: "Edit trip setup" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Trip name/)).toHaveValue("Kyoto Spring");
+    expect(screen.getByLabelText(/Travelling from/)).toHaveValue("Seattle");
+    expect(screen.getByLabelText(/Destinations/)).toHaveValue("Chicago, IL; Milwaukee, WI");
+    expect(screen.getByLabelText(/First day of travel/)).toHaveValue("2026-10-05");
+    // The type is fixed once created; the API refuses to change it.
+    expect(screen.getByRole("radio", { name: /Business trip/ })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /Business trip/ })).toBeDisabled();
+  });
+
+  it("saves the change and tells the traveller when it removed a policy result", async () => {
+    mockedUpdateTrip.mockResolvedValue({ trip: existing(), verdictCleared: true });
+    renderEdit();
+
+    fireEvent.change(screen.getByLabelText(/Destinations/), { target: { value: "Denver, CO" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(mockedUpdateTrip).toHaveBeenCalledWith(
+        "trip-kyoto-123abc",
+        expect.objectContaining({
+          trip_frame: expect.objectContaining({ primary_regions: ["Denver, CO"], origin: "Seattle" }),
+        })
+      );
+    });
+    expect(mockedCreateTrip).not.toHaveBeenCalled();
+    expect(mockedNavigate).toHaveBeenCalledWith("/workspace/trip-kyoto-123abc", {
+      state: { setupNotice: VERDICT_CLEARED_NOTICE },
+    });
+  });
+});
+

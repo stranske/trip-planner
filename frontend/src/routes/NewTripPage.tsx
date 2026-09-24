@@ -1,7 +1,7 @@
 import { FormEvent, startTransition, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { createTrip } from "../api/trips";
+import { createTrip, updateTrip, type TripRecord } from "../api/trips";
 import { getErrorMessage } from "../lib/api/errors";
 
 type TripMode = "business" | "leisure";
@@ -69,22 +69,42 @@ export function missingTripContext(values: {
   return missing;
 }
 
-export function NewTripPage() {
+/** Shown on the workspace after an edit removed a saved policy verdict. */
+export const VERDICT_CLEARED_NOTICE =
+  "Trip setup saved. The earlier travel policy result was removed because the trip changed; submit it again for a new result.";
+
+/**
+ * Trip setup. With `existingTrip` it edits that trip (issue 1841): setup always promised
+ * "You can change any of this later", and until now nothing could.
+ */
+export function NewTripPage({ existingTrip = null }: { existingTrip?: TripRecord | null } = {}) {
   const navigate = useNavigate();
+  const isEditing = existingTrip != null;
+  const existingFrame = existingTrip?.trip_frame;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [mode, setMode] = useState<TripMode | "">("");
-  const [title, setTitle] = useState("");
-  const [purpose, setPurpose] = useState("");
-  const [origin, setOrigin] = useState("");
-  const [destinations, setDestinations] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [durationOverride, setDurationOverride] = useState<string>("");
-  const [travelerKind, setTravelerKind] = useState("solo");
-  const [travelerCount, setTravelerCount] = useState("1");
-  const [travelerNotes, setTravelerNotes] = useState("");
+  const [mode, setMode] = useState<TripMode | "">(
+    existingTrip?.mode === "business" || existingTrip?.mode === "leisure" ? existingTrip.mode : ""
+  );
+  const [title, setTitle] = useState(existingTrip?.title ?? "");
+  const [purpose, setPurpose] = useState(existingTrip?.summary ?? "");
+  const [origin, setOrigin] = useState(existingFrame?.origin ?? "");
+  const [destinations, setDestinations] = useState((existingFrame?.primary_regions ?? []).join("; "));
+  const [startDate, setStartDate] = useState(existingFrame?.start_date ?? "");
+  const [endDate, setEndDate] = useState(existingFrame?.end_date ?? "");
+  const [durationOverride, setDurationOverride] = useState<string>(
+    existingFrame?.duration_days != null &&
+      existingFrame.duration_days !==
+        travelDaysInclusive(existingFrame.start_date ?? "", existingFrame.end_date ?? "")
+      ? String(existingFrame.duration_days)
+      : ""
+  );
+  const [travelerKind, setTravelerKind] = useState(existingFrame?.traveler_party.kind ?? "solo");
+  const [travelerCount, setTravelerCount] = useState(
+    String(existingFrame?.traveler_party.traveler_count ?? 1)
+  );
+  const [travelerNotes, setTravelerNotes] = useState(existingFrame?.traveler_party.notes ?? "");
 
   const derivedDuration = useMemo(() => travelDaysInclusive(startDate, endDate), [startDate, endDate]);
   const durationValue = durationOverride !== "" ? durationOverride : derivedDuration != null ? String(derivedDuration) : "";
@@ -110,29 +130,45 @@ export function NewTripPage() {
     setIsSubmitting(true);
     setErrorMessage(null);
 
+    const tripFrame = {
+      origin: origin.trim() || null,
+      start_date: startDate || null,
+      end_date: endDate || null,
+      duration_days: durationValue ? Number(durationValue) : null,
+      primary_regions: destinationList,
+      traveler_party: {
+        kind: travelerKind,
+        traveler_count: Number(travelerCount) || 1,
+        notes: travelerNotes.trim(),
+      },
+    };
     try {
+      if (existingTrip) {
+        const { verdictCleared } = await updateTrip(existingTrip.trip_id, {
+          title: title.trim(),
+          summary: purpose.trim(),
+          trip_frame: tripFrame,
+        });
+        startTransition(() => {
+          navigate(`/workspace/${existingTrip.trip_id}`, {
+            state: { setupNotice: verdictCleared ? VERDICT_CLEARED_NOTICE : "Trip setup saved." },
+          });
+        });
+        return;
+      }
       const trip = await createTrip({
         title: title.trim(),
         summary: purpose.trim(),
         mode: mode || "leisure",
-        trip_frame: {
-          origin: origin.trim() || null,
-          start_date: startDate || null,
-          end_date: endDate || null,
-          duration_days: durationValue ? Number(durationValue) : null,
-          primary_regions: destinationList,
-          traveler_party: {
-            kind: travelerKind,
-            traveler_count: Number(travelerCount) || 1,
-            notes: travelerNotes.trim(),
-          },
-        },
+        trip_frame: tripFrame,
       });
       startTransition(() => {
         navigate(`/workspace/${trip.trip_id}`);
       });
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, "Trip creation failed."));
+      setErrorMessage(
+        getErrorMessage(error, isEditing ? "Saving the trip setup failed." : "Trip creation failed.")
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -141,18 +177,21 @@ export function NewTripPage() {
   return (
     <section className="auth-layout">
       <article className="status-card auth-card setup-card">
-        <p className="status-label">New trip</p>
-        <h2>Set up your trip</h2>
+        <p className="status-label">{isEditing ? "Trip setup" : "New trip"}</p>
+        <h2>{isEditing ? "Edit trip setup" : "Set up your trip"}</h2>
         <p className="lede">
-          Tell the planner the essentials and it will measure the route and travel time from your origin. You enter the prices you hold.
-          You can change any of this later.
+          {isEditing
+            ? "Change anything below. The route is measured again from the new setup; your entered prices and notes stay. If the trip was already checked against travel policy, changing its purpose, origin, dates, destinations or travellers removes that result."
+            : "Tell the planner the essentials and it will measure the route and travel time from your origin. You enter the prices you hold. You can change any of this later."}
         </p>
 
         <form className="auth-form setup-form" onSubmit={handleSubmit}>
           <fieldset className="setup-group">
             <legend>What kind of trip is this?</legend>
             <p className="field-hint">
-              This decides whether the trip goes through travel policy and approval.
+              {isEditing
+                ? "The trip type cannot be changed after the trip is created."
+                : "This decides whether the trip goes through travel policy and approval."}
             </p>
             <div className="choice-grid" role="radiogroup" aria-label="Trip type">
               {MODE_CHOICES.map((choice) => (
@@ -166,6 +205,7 @@ export function NewTripPage() {
                     value={choice.value}
                     checked={mode === choice.value}
                     onChange={() => setMode(choice.value)}
+                    disabled={isEditing}
                     required
                   />
                   <span className="choice-title">{choice.label}</span>
@@ -373,7 +413,13 @@ export function NewTripPage() {
           ) : null}
 
           <button type="submit" disabled={isSubmitting || datesInvalid || tooManyDestinations}>
-            {isSubmitting ? "Creating trip..." : "Create trip"}
+            {isEditing
+              ? isSubmitting
+                ? "Saving..."
+                : "Save changes"
+              : isSubmitting
+                ? "Creating trip..."
+                : "Create trip"}
           </button>
         </form>
       </article>

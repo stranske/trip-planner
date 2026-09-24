@@ -1,5 +1,5 @@
 import { startTransition, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { useLoaderData } from "react-router-dom";
+import { Link, useLoaderData, useLocation, useNavigate } from "react-router-dom";
 
 import { readPolicyContext } from "../lib/proposalSubmission";
 
@@ -1167,6 +1167,9 @@ function WorkspacePageContent({
   workspace: WorkspaceData;
   trips: TripRecord[];
 }) {
+  const navigate = useNavigate();
+  // Set by the trip setup form after an edit, e.g. to say a policy verdict was removed.
+  const setupNotice = (useLocation().state as { setupNotice?: string } | null)?.setupNotice ?? null;
   const [currentWorkspace, setCurrentWorkspace] = useState(workspace);
   const [selectedScenarioId, setSelectedScenarioId] = useState(() =>
     resolveMapScenarioId(workspace)
@@ -1946,6 +1949,9 @@ function WorkspacePageContent({
         workspaceTabRefs.current.budget?.focus();
         return;
       case "trip-setup":
+        // Setup is incomplete: open the setup form itself, not a tab that cannot edit it.
+        navigate(`/trips/${trip.trip_id}/edit`);
+        return;
       default:
         setActiveTab("plan");
         workspaceTabRefs.current.plan?.focus();
@@ -2014,6 +2020,14 @@ function WorkspacePageContent({
         </p>
         <h1>{productView?.user_summary.trip_title ?? trip.title}</h1>
         <p>{productView?.user_summary.headline ?? trip.summary}</p>
+        <p className="workspace-hero-actions">
+          <Link to={`/trips/${trip.trip_id}/edit`}>Edit trip setup</Link>
+        </p>
+        {setupNotice ? (
+          <p className="planner-inline-notice" role="status" data-testid="setup-notice">
+            {setupNotice}
+          </p>
+        ) : null}
         {currentWorkspace.sample_data?.is_sample ? (
           <p className="muted-copy" role="status">
             {currentWorkspace.sample_data.label}: {currentWorkspace.sample_data.description}

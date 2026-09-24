@@ -9,76 +9,19 @@ These tests capture the trip plan exactly as it would go over the wire, by inter
 TPP client, and assert on that — not on an internal helper.
 """
 
-import json
-from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
-from trip_planner.app.main import create_app
-from trip_planner.integrations.tpp import client as tpp_client
-from trip_planner.integrations.tpp.contracts import TPPResponseEnvelope
-from trip_planner.persistence.db import ensure_database_ready, reset_database_state
+from tests.app.tpp_intercept import TPP_SENT, seed_policy
 
-_SENT: list[dict[str, Any]] = []
-
-
-def _blocked_response(request: Any) -> TPPResponseEnvelope:
-    return TPPResponseEnvelope.from_dict(
-        {
-            "operation": request.operation,
-            "request_id": request.request_id,
-            "correlation_id": request.correlation_id.to_dict(),
-            "transport_pattern": "sync",
-            "execution_status": {"state": "accepted", "terminal": False, "summary": "queued"},
-            "result_payload": {"execution_id": "exec-test", "queue_state": "queued"},
-        }
-    )
+_SENT = TPP_SENT
 
 
 @pytest.fixture
-def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    monkeypatch.setenv("TRIP_PLANNER_DATABASE_URL", f"sqlite:///{tmp_path / 'payload.db'}")
-    monkeypatch.setenv("TPP_BASE_URL", "http://tpp.invalid")
-    monkeypatch.setenv("TPP_ACCESS_TOKEN", "test-token-long-enough")
-    monkeypatch.setenv("TPP_ORGANIZATION_ID", "org-acme")
-    monkeypatch.setenv("TPP_OIDC_PROVIDER", "okta")
-
-    def capture(self: Any, request: Any) -> TPPResponseEnvelope:
-        if request.operation == "submit_proposal":
-            _SENT.append(dict(request.payload.get("trip_plan") or {}))
-        return _blocked_response(request)
-
-    monkeypatch.setattr(tpp_client.HTTPTPPIntegrationClient, "submit_proposal", capture)
-
-    import trip_planner.app.services.policy as policy_service
-
-    fixture = json.loads(
-        (
-            Path(__file__).resolve().parents[1]
-            / "fixtures/integrations/tpp/policy/standard_policy_sync.json"
-        ).read_text(encoding="utf-8")
-    )
-
-    def policy_response(request: Any, _response_payload: Any, *, trip_plan_payload: Any) -> Any:
-        response = fixture["response"].copy()
-        response["request_id"] = request.request_id
-        response["correlation_id"] = request.correlation_id.to_dict()
-        return TPPResponseEnvelope.from_dict(response)
-
-    monkeypatch.setattr(policy_service, "_resolve_policy_response", policy_response)
-    _SENT.clear()
-    reset_database_state()
-    ensure_database_ready()
-    with TestClient(create_app()) as test_client:
-        test_client.post(
-            "/api/auth/signup",
-            json={"email": "p@example.com", "password": "password123", "display_name": "Dana Chen"},
-        )
-        yield test_client
-    reset_database_state()
+def client(tpp_client: TestClient) -> TestClient:
+    return tpp_client
 
 
 def _business_trip(client: TestClient) -> str:
@@ -101,9 +44,7 @@ def _business_trip(client: TestClient) -> str:
     return str(response.json()["trip"]["trip_id"])
 
 
-def _seed_policy(client: TestClient, trip_id: str) -> None:
-    response = client.post(f"/api/workspace/{trip_id}/policy/sync", json={})
-    assert response.status_code == 200, response.text
+_seed_policy = seed_policy
 
 
 def _submit(client: TestClient, trip_id: str) -> Any:
