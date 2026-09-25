@@ -42,7 +42,7 @@ The next boundary after adapters lives in [source-ingestion.md](source-ingestion
 
 ## Offline ranking eval harness
 
-Adapter-backed inventory can be regression-tested without live provider calls by exercising the golden ranking scenarios under `tests/eval/`. The harness reuses the leisure ranking fixtures in `tests/fixtures/ranking/leisure/` and asserts stable rank order and scores.
+Fixture-built candidates can be regression-tested without live provider calls by exercising the golden ranking scenarios under `tests/eval/`. The harness reuses the leisure ranking fixtures in `tests/fixtures/ranking/leisure/` and asserts stable rank order and scores.
 
 Run the eval gate from the repository root:
 

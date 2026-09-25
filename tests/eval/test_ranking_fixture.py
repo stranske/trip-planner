@@ -45,6 +45,7 @@ def test_golden_scenario_scores() -> None:
     actual_order = sorted(actual_scores, key=lambda key: (-actual_scores[key], key))
 
     assert actual_order == expected_order
+    assert set(expected_scores) == set(expected_order)
     for candidate_id, expected_score in expected_scores.items():
         assert candidate_id in actual_scores
         assert abs(actual_scores[candidate_id] - expected_score) <= _SCORE_TOLERANCE
