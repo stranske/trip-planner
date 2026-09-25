@@ -1,0 +1,15 @@
+{
+  "id": "depth-oriented-urban-golden",
+  "summary": "Golden leisure trip scenario used by the offline ranking eval harness.",
+  "ranking_fixture": "depth_oriented_urban_trip.json",
+  "expected_rank_order": [
+    "candidate:bundle:urban-culture",
+    "candidate:bundle:quiet-recovery",
+    "candidate:bundle:scenic-wanderer"
+  ],
+  "expected_scores": {
+    "candidate:bundle:urban-culture": 1.0,
+    "candidate:bundle:quiet-recovery": 0.7856,
+    "candidate:bundle:scenic-wanderer": 0.6449
+  }
+}

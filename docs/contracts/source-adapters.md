@@ -39,3 +39,15 @@ The planner should not let lodging, transport, destination, or policy code bind 
 - downstream normalization portable across commercial, editorial, and managed-travel sources
 
 The next boundary after adapters lives in [source-ingestion.md](source-ingestion.md), where category-specific pipelines turn snapshots plus resolution records into normalized options.
+
+## Offline ranking eval harness
+
+Fixture-built candidates can be regression-tested without live provider calls by exercising the golden ranking scenarios under `tests/eval/`. The harness reuses the leisure ranking fixtures in `tests/fixtures/ranking/leisure/` and asserts stable rank order and scores.
+
+Run the eval gate from the repository root:
+
+```bash
+python3 -m pytest tests/eval/test_ranking_fixture.py::test_golden_scenario_scores -q
+```
+
+**Deliberate-break gate:** temporarily invert `LeisureRankingEngine.COMPONENT_WEIGHTS` values in `trip_planner/ranking/leisure.py` (for example swap `anchor_alignment` and `movement_friction_fit` weights), rerun the command above, confirm `test_golden_scenario_scores` fails, then revert the weights before committing.
