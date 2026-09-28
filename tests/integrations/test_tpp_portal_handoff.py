@@ -64,6 +64,40 @@ def test_portal_fields_map_truthful_facts_without_inventing_zip_or_airfare() -> 
     assert "TPP recalculates policy" in fields["notes"]
 
 
+def test_combined_transport_amount_is_not_mapped_as_airfare() -> None:
+    snapshot = _snapshot()
+    transport = snapshot["prices"][0]
+    transport.update(
+        {
+            "cabin_class": "economy",
+            "flight_hours": 2.5,
+            "lowest_amount": 350.0,
+            "evidence_attested": True,
+        }
+    )
+
+    fields = build_portal_fields(snapshot)
+
+    assert "selected_fare" not in fields
+    assert "flight_cost" not in fields
+    assert "flight_pref_outbound.roundtrip_cost" not in fields
+    assert fields["lowest_fare"] == "350.00"
+    assert fields["cabin_class"] == "economy"
+    assert fields["flight_duration_hours"] == "2.5"
+    assert fields["fare_evidence_attached"] == "true"
+
+
+def test_dedicated_flight_amount_is_mapped_as_airfare() -> None:
+    snapshot = _snapshot()
+    snapshot["prices"][0]["flight_amount"] = 280.0
+
+    fields = build_portal_fields(snapshot)
+
+    assert fields["selected_fare"] == "280.00"
+    assert fields["flight_cost"] == "280.00"
+    assert fields["flight_pref_outbound.roundtrip_cost"] == "280.00"
+
+
 def test_snapshot_hash_changes_when_a_price_changes() -> None:
     original = _snapshot()
     changed = _snapshot()

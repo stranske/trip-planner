@@ -97,14 +97,18 @@ def _flight_fields(transport: dict[str, Any] | None) -> dict[str, str]:
     if not transport or not (
         any(
             transport.get(key) is not None
-            for key in ("lowest_amount", "cabin_class", "flight_hours")
+            for key in ("flight_amount", "lowest_amount", "cabin_class", "flight_hours")
         )
         or transport.get("evidence_attested") is True
     ):
         return {}
 
     fields: dict[str, str] = {}
-    amount = _money(transport.get("amount"))
+    # ``transport.amount`` can combine flights, rail and car hire. It is not safe to
+    # present that aggregate as an airfare merely because flight details accompany it.
+    # A producer may populate ``flight_amount`` only when it owns a flight-specific
+    # figure; until then the portal asks the traveller to complete the airfare fields.
+    amount = _money(transport.get("flight_amount"))
     if amount:
         fields.update(
             {
