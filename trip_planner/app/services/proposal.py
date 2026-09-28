@@ -1580,6 +1580,9 @@ def save_workspace_proposal_submission(
         raise ValueError("proposal.trip_id must match the workspace trip.")
 
     request = TPPRequestEnvelope.from_dict(request_payload)
+    trip_prices = read_trip_prices_for_owner(
+        db_session, user_id=user.user_id, trip_id=trip_id
+    )
     try:
         response = _resolve_submission_response(
             request,
@@ -1588,9 +1591,7 @@ def save_workspace_proposal_submission(
             trip_record=trip_record,
             user=user,
             proposal=proposal,
-            trip_prices=read_trip_prices_for_owner(
-                db_session, user_id=user.user_id, trip_id=trip_id
-            ),
+            trip_prices=trip_prices,
         )
     except TPPTransportError as error:
         if not _should_persist_stored_policy_fallback(error):
@@ -1648,9 +1649,7 @@ def save_workspace_proposal_submission(
         record=record,
         trip_record=trip_record,
         user=user,
-        trip_prices=read_trip_prices_for_owner(
-            db_session, user_id=user.user_id, trip_id=trip_id
-        ),
+        trip_prices=trip_prices,
         status="awaiting_evaluation",
     )
 
