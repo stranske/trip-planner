@@ -31,6 +31,7 @@ RUNNER_JS = textwrap.dedent("""
 
     async function runCase({ headRepo, baseRepo, error, state }) {
       const failures = [];
+      const statusRequests = [];
       const warnings = [];
       const summaryWrites = [];
       const summaryRaw = [];
@@ -69,7 +70,10 @@ RUNNER_JS = textwrap.dedent("""
         github: {
           rest: {
             repos: {
-              createCommitStatus: async () => { if (error) throw error; },
+              createCommitStatus: async (request) => {
+                statusRequests.push(request);
+                if (error) throw error;
+              },
             },
           },
         },
@@ -84,7 +88,14 @@ RUNNER_JS = textwrap.dedent("""
           message: String(error.message),
         };
       }
-      return { failures, warnings, summaryWrites: summaryWrites.length, summaryRaw, threw };
+      return {
+        failures,
+        warnings,
+        summaryWrites: summaryWrites.length,
+        summaryRaw,
+        statusRequests,
+        threw,
+      };
     }
 
     const FORK = {
@@ -132,6 +143,21 @@ RUNNER_JS = textwrap.dedent("""
         fork_rate_limit: await runCase({
           ...FORK,
           state: 'success',
+          error: makeError(403, 'API rate limit exceeded'),
+        }),
+        fork_rate_limit_failure: await runCase({
+          ...FORK,
+          state: 'failure',
+          error: makeError(403, 'API rate limit exceeded'),
+        }),
+        fork_rate_limit_error: await runCase({
+          ...FORK,
+          state: 'error',
+          error: makeError(403, 'API rate limit exceeded'),
+        }),
+        fork_rate_limit_pending: await runCase({
+          ...FORK,
+          state: 'pending',
           error: makeError(403, 'API rate limit exceeded'),
         }),
         fork_rate_limit_response_message: await runCase({
@@ -266,6 +292,16 @@ def test_rate_limit_403_keeps_its_own_path(outcomes: dict[str, Any]) -> None:
         assert case["summaryWrites"] == 0
 
 
+@pytest.mark.parametrize("state", ["failure", "error", "pending"])
+def test_rate_limit_403_fails_closed_for_non_success_verdicts(
+    outcomes: dict[str, Any], state: str
+) -> None:
+    case = outcomes[f"fork_rate_limit_{state}"]
+    assert case["threw"] is None
+    assert len(case["failures"]) == 1
+    assert f"'{state}'" in case["failures"][0]
+
+
 def test_non_403_errors_still_fail_the_gate(outcomes: dict[str, Any]) -> None:
     assert outcomes["fork_server_error"]["threw"]["status"] == 500
 
@@ -277,3 +313,14 @@ def test_successful_status_write_is_silent(outcomes: dict[str, Any]) -> None:
     assert case["failures"] == []
     assert case["summaryWrites"] == 0
     assert case["summaryRaw"] == []
+    assert case["statusRequests"] == [
+        {
+            "owner": "stranske",
+            "repo": "trip-planner",
+            "sha": "headsha",
+            "state": "success",
+            "context": "Gate / gate",
+            "description": "all checks passed",
+            "target_url": "https://example.invalid/run",
+        }
+    ]

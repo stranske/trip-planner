@@ -323,6 +323,11 @@ jobs:
                 error?.status === 403 && isForkPullRequest && !hitRateLimit;
               if (hitRateLimit) {
                 core.warning('Rate limit prevented Gate from updating the commit status.');
+                if (state !== 'success') {
+                  core.setFailed(
+                    `Gate verdict for ${sha} is '${state}': ${description}`,
+                  );
+                }
               } else if (readOnlyForkToken) {
                 core.warning(
                   'Fork pull request from ' +
