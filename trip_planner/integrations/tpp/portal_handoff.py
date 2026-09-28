@@ -93,6 +93,40 @@ def _notes(snapshot: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _flight_fields(transport: dict[str, Any] | None) -> dict[str, str]:
+    if not transport or not (
+        any(
+            transport.get(key) is not None
+            for key in ("lowest_amount", "cabin_class", "flight_hours")
+        )
+        or transport.get("evidence_attested") is True
+    ):
+        return {}
+
+    fields: dict[str, str] = {}
+    amount = _money(transport.get("amount"))
+    if amount:
+        fields.update(
+            {
+                "flight_pref_outbound.roundtrip_cost": amount,
+                "selected_fare": amount,
+                "flight_cost": amount,
+            }
+        )
+    lowest = _money(transport.get("lowest_amount"))
+    if lowest:
+        fields.update({"lowest_cost_roundtrip": lowest, "lowest_fare": lowest})
+    if transport.get("cabin_class"):
+        fields["cabin_class"] = str(transport["cabin_class"])
+    if transport.get("flight_hours") is not None:
+        fields["flight_duration_hours"] = str(transport["flight_hours"])
+    if transport.get("evidence_attested") is not None:
+        fields["fare_evidence_attached"] = (
+            "true" if transport["evidence_attested"] else "false"
+        )
+    return fields
+
+
 def build_portal_fields(snapshot: dict[str, Any]) -> dict[str, str]:
     """Map only facts TPP's portal contract accepts, without inventing missing values."""
 
@@ -116,29 +150,6 @@ def build_portal_fields(snapshot: dict[str, Any]) -> dict[str, str]:
     )
     # The transport row may combine rail, car and flights. Populate airfare-only fields only
     # when the traveller supplied flight-specific facts.
-    if transport and (
-        any(
-            transport.get(key) is not None
-            for key in ("lowest_amount", "cabin_class", "flight_hours")
-        )
-        or transport.get("evidence_attested") is True
-    ):
-        amount = _money(transport.get("amount"))
-        if amount:
-            fields["flight_pref_outbound.roundtrip_cost"] = amount
-            fields["selected_fare"] = amount
-            fields["flight_cost"] = amount
-        lowest = _money(transport.get("lowest_amount"))
-        if lowest:
-            fields["lowest_cost_roundtrip"] = lowest
-            fields["lowest_fare"] = lowest
-        if transport.get("cabin_class"):
-            fields["cabin_class"] = str(transport["cabin_class"])
-        if transport.get("flight_hours") is not None:
-            fields["flight_duration_hours"] = str(transport["flight_hours"])
-        if transport.get("evidence_attested") is not None:
-            fields["fare_evidence_attached"] = (
-                "true" if transport["evidence_attested"] else "false"
-            )
+    fields.update(_flight_fields(transport))
 
     return {key: value for key, value in fields.items() if value != ""}
