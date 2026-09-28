@@ -83,6 +83,12 @@ jobs:
         working-directory: trip-planner
         run: npm --prefix frontend ci
 
+      - name: Verify TPP portal handoff contract
+        working-directory: trip-planner
+        env:
+          TPP_REPO_PATH: ../Travel-Plan-Permission
+        run: python -m pytest tests/integration/test_tpp_portal_contract.py -q
+
       - name: Run full-product-check against sibling TPP checkout
         working-directory: trip-planner
         env:
