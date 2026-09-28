@@ -240,6 +240,20 @@ def test_workspace_proposal_submission_and_evaluation_persist(
     assert stale.status_code == 409
     assert "Run the policy check again" in stale.json()["detail"]
 
+    refreshed_evaluation = client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation_fixture["request"],
+            "response": evaluation_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert refreshed_evaluation.status_code == 200
+    still_stale = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert still_stale.status_code == 409
+    assert "Run the policy check again" in still_stale.json()["detail"]
+
     reloaded = client.get(f"/api/workspace/{trip_id}/proposal")
     assert reloaded.status_code == 200
     reloaded_payload = reloaded.json()
@@ -248,7 +262,7 @@ def test_workspace_proposal_submission_and_evaluation_persist(
         reloaded_payload["proposal_state"]["evaluation"]["evaluation_result"]["evaluation_id"]
         == "eval-approved-001"
     )
-    assert reloaded_payload["proposal_state"]["portal_handoff"]["status"] == "prepared"
+    assert reloaded_payload["proposal_state"]["portal_handoff"]["status"] == "eligible"
     assert "source_snapshot" not in reloaded_payload["proposal_state"]["portal_handoff"]
 
 

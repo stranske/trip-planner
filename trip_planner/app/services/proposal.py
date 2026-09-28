@@ -852,6 +852,56 @@ def _bind_portal_handoff_snapshot(
     }
 
 
+def _bind_portal_handoff_evaluation_snapshot(
+    *,
+    record: PersistedProposalState,
+    trip_record: PersistedTrip,
+    user: AuthenticatedUser,
+    trip_prices: list[PersistedTripPrice],
+) -> None:
+    """Bind a verdict without rebasing it onto facts changed after submission."""
+
+    stored_snapshot = dict((record.portal_handoff or {}).get("source_snapshot") or {})
+    if not stored_snapshot:
+        stored_snapshot = _portal_handoff_snapshot(
+            record=record,
+            trip_record=trip_record,
+            user=user,
+            trip_prices=trip_prices,
+        )
+
+    evaluation_result = dict(record.evaluation_record.get("evaluation_result") or {})
+    failure_reasons = list(evaluation_result.get("failure_reasons") or [])
+    blocking_codes = sorted(
+        {
+            str(reason.get("code"))
+            for reason in failure_reasons
+            if isinstance(reason, dict) and reason.get("code")
+        }
+    )
+    snapshot = {
+        **stored_snapshot,
+        "proposal_id": record.proposal_id,
+        "proposal_version": record.proposal_version,
+        "scenario_id": record.scenario_id,
+        "execution_id": record.execution_id,
+        "verdict": {
+            "status": evaluation_result.get("status"),
+            "outcome": record.summary.get("submission_outcome"),
+            "blocking_codes": blocking_codes,
+        },
+    }
+    record.portal_handoff = {
+        "schema_version": PORTAL_HANDOFF_SCHEMA_VERSION,
+        "source_snapshot_hash": snapshot_hash(snapshot),
+        "source_snapshot": snapshot,
+        "prepared_at": None,
+        "status": "eligible",
+        "manager_submission_status": "unknown",
+        "manager_decision": None,
+    }
+
+
 def _serialize_proposal_state(record: PersistedProposalState) -> dict[str, Any]:
     follow_up = _resolved_follow_up_payload(record)
     return {
@@ -1772,14 +1822,13 @@ def save_workspace_proposal_evaluation(
         proposal_payload=dict(existing.proposal_payload),
         persisted_follow_up=dict(existing.summary.get("follow_up") or {}),
     )
-    _bind_portal_handoff_snapshot(
+    _bind_portal_handoff_evaluation_snapshot(
         record=existing,
         trip_record=trip_record,
         user=user,
         trip_prices=read_trip_prices_for_owner(
             db_session, user_id=user.user_id, trip_id=trip_id
         ),
-        status="eligible",
     )
 
     trip_record.updated_at = datetime.now(UTC)
