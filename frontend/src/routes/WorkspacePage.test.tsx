@@ -3117,7 +3117,7 @@ describe("WorkspacePage", () => {
 
     await waitFor(() => {
       expect(mockedSubmitTripForApproval).toHaveBeenCalledTimes(1);
-      expect(screen.getByText(/Submitted for approval:/)).toBeInTheDocument();
+      expect(screen.getByText(/Policy check completed:/)).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Policy compliant" })).toBeInTheDocument();
     });
   });
@@ -3243,7 +3243,7 @@ describe("WorkspacePage", () => {
         "scenario:trip-leisure-kyoto-draft:1"
       );
     });
-    expect(screen.getByText(/Submitted for approval:/)).toBeInTheDocument();
+    expect(screen.getByText(/Policy check completed:/)).toBeInTheDocument();
   });
 
   it("syncs the travel policy before submitting when the workspace has none", async () => {
