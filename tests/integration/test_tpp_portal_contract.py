@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 import re
 import sys
+from importlib import import_module
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,10 +18,9 @@ if not TPP_REPO_PATH:
 
 sys.path.insert(0, str(Path(TPP_REPO_PATH).resolve() / "src"))
 
-from travel_plan_permission.http_service import (  # noqa: E402
-    PlannerProposalStore,
-    create_app,
-)
+# TPP is an optional sibling checkout, not a trip-planner dependency. Resolve it
+# dynamically only after the explicit cross-repo path gate above.
+http_service: Any = import_module("travel_plan_permission.http_service")
 
 
 def test_trip_planner_handoff_reaches_tpp_manager_queue(
@@ -31,8 +32,8 @@ def test_trip_planner_handoff_reaches_tpp_manager_queue(
     monkeypatch.setenv("TPP_ACCESS_TOKEN", "dev-token")
     monkeypatch.setenv("TPP_HANDOFF_SIGNING_SECRET", "test-handoff-signing-secret")
 
-    store = PlannerProposalStore()
-    client = TestClient(create_app(store))
+    store = http_service.PlannerProposalStore()
+    client = TestClient(http_service.create_app(store))
     fields = build_portal_fields(
         {
             "trip_id": "trip-1842",
