@@ -5,28 +5,36 @@ from sqlalchemy.orm import Session
 
 from trip_planner.app.routes.errors import public_http_error
 from trip_planner.app.schemas.proposal import (
-    WorkspaceProposalSubmitRequest,
     WorkspaceProposalEvaluationRequest,
     WorkspaceProposalFollowUpRequest,
+    WorkspaceProposalHandoffRequest,
+    WorkspaceProposalHandoffResponse,
     WorkspaceProposalReoptimizeRequest,
     WorkspaceProposalResponse,
     WorkspaceProposalSubmissionRequest,
+    WorkspaceProposalSubmitRequest,
 )
 from trip_planner.app.services.auth import AuthenticatedUser, require_authenticated_user
 from trip_planner.app.services.policy import WorkspacePolicyNotFoundError
 from trip_planner.app.services.proposal import (
-    submit_workspace_proposal_for_trip,
+    WorkspacePolicyMissingForSubmissionError,
+    WorkspaceProposalHandoffNotReadyError,
+    WorkspaceProposalHandoffStaleError,
     WorkspaceProposalNotFoundError,
     WorkspaceProposalUnpricedError,
-    WorkspacePolicyMissingForSubmissionError,
     get_workspace_proposal_payload,
+    prepare_workspace_proposal_handoff,
     refresh_workspace_proposal_status,
     save_workspace_proposal_evaluation,
     save_workspace_proposal_follow_up,
     save_workspace_proposal_reoptimize,
     save_workspace_proposal_submission,
+    submit_workspace_proposal_for_trip,
 )
 from trip_planner.integrations.tpp import TPPTransportError
+from trip_planner.integrations.tpp.portal_handoff import (
+    TPPPortalHandoffConfigurationError,
+)
 from trip_planner.persistence.db import get_db_session
 
 router = APIRouter(tags=["proposal"])
@@ -60,6 +68,52 @@ def read_workspace_proposal(
             message="The requested workspace proposal was not found.",
         ) from error
     return WorkspaceProposalResponse.model_validate(payload)
+
+
+@router.post(
+    "/workspace/{trip_id}/proposal/handoff",
+    response_model=WorkspaceProposalHandoffResponse,
+)
+def prepare_workspace_proposal_portal_handoff(
+    trip_id: str,
+    _payload: WorkspaceProposalHandoffRequest,
+    user: AuthenticatedUser = Depends(require_authenticated_user),
+    db_session: Session = Depends(get_db_session),
+) -> WorkspaceProposalHandoffResponse:
+    try:
+        result = prepare_workspace_proposal_handoff(
+            db_session,
+            user=user,
+            trip_id=trip_id,
+        )
+    except WorkspaceProposalNotFoundError as error:
+        raise public_http_error(
+            error,
+            status_code=404,
+            message="The requested workspace proposal was not found.",
+        ) from error
+    except (WorkspaceProposalHandoffNotReadyError, WorkspaceProposalHandoffStaleError) as error:
+        raise public_http_error(
+            error,
+            status_code=409,
+            message=(
+                "The saved proposal is not ready for an approver portal handoff. "
+                "Run the policy check again."
+            ),
+        ) from error
+    except TPPPortalHandoffConfigurationError as error:
+        raise public_http_error(
+            error,
+            status_code=503,
+            message="The approver portal handoff is not configured.",
+        ) from error
+    except ValueError as error:
+        raise public_http_error(
+            error,
+            status_code=422,
+            message="The proposal cannot be handed to the approver portal yet.",
+        ) from error
+    return WorkspaceProposalHandoffResponse.model_validate(result)
 
 
 @router.put("/workspace/{trip_id}/proposal", response_model=WorkspaceProposalResponse)

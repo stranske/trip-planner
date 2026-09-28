@@ -139,7 +139,11 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     reset_database_state()
 
 
-def test_workspace_proposal_submission_and_evaluation_persist(client: TestClient) -> None:
+def test_workspace_proposal_submission_and_evaluation_persist(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://tpp.example")
     created = client.post(
         "/api/trips",
         json={
@@ -155,6 +159,16 @@ def test_workspace_proposal_submission_and_evaluation_persist(client: TestClient
         },
     )
     trip_id = created.json()["trip"]["trip_id"]
+    priced = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={
+            "component": "transport",
+            "amount": 620.0,
+            "currency": "USD",
+            "note": "United.com quote",
+        },
+    )
+    assert priced.status_code == 200
 
     submission_fixture = _load_fixture("proposal_submit_deferred.json")
     submission_fixture["request"]["trip_id"] = trip_id
@@ -203,6 +217,29 @@ def test_workspace_proposal_submission_and_evaluation_persist(client: TestClient
     assert evaluated_payload["proposal_state"]["summary"]["approval_ready"] is True
     assert evaluated_payload["proposal_state"]["follow_up"]["status"] == "resolved"
 
+    handoff = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert handoff.status_code == 200
+    assert handoff.json()["action_url"] == "https://tpp.example/portal/handoff"
+    assert handoff.json()["method"] == "POST"
+    assert handoff.json()["fields"]["traveler_name"] == "Proposal Owner"
+    assert "destination_zip" not in handoff.json()["fields"]
+    assert handoff.json()["handoff"]["status"] == "prepared"
+    assert handoff.json()["handoff"]["manager_submission_status"] == "unknown"
+
+    updated_price = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={
+            "component": "transport",
+            "amount": 625.0,
+            "currency": "USD",
+            "note": "United.com updated quote",
+        },
+    )
+    assert updated_price.status_code == 200
+    stale = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert stale.status_code == 409
+    assert "Run the policy check again" in stale.json()["detail"]
+
     reloaded = client.get(f"/api/workspace/{trip_id}/proposal")
     assert reloaded.status_code == 200
     reloaded_payload = reloaded.json()
@@ -211,6 +248,8 @@ def test_workspace_proposal_submission_and_evaluation_persist(client: TestClient
         reloaded_payload["proposal_state"]["evaluation"]["evaluation_result"]["evaluation_id"]
         == "eval-approved-001"
     )
+    assert reloaded_payload["proposal_state"]["portal_handoff"]["status"] == "prepared"
+    assert "source_snapshot" not in reloaded_payload["proposal_state"]["portal_handoff"]
 
 
 def test_client_supplied_response_cannot_set_approval_ready(

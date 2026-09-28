@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WorkspaceProposalSubmissionRequest(BaseModel):
@@ -75,3 +75,16 @@ class WorkspaceProposalReoptimizeRequest(BaseModel):
 class WorkspaceProposalResponse(BaseModel):
     proposal_state: dict[str, Any] | None = None
     summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkspaceProposalHandoffRequest(BaseModel):
+    """A JSON-only same-origin request; all handoff facts are resolved server-side."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class WorkspaceProposalHandoffResponse(BaseModel):
+    action_url: str
+    method: Literal["POST"] = "POST"
+    fields: dict[str, str]
+    handoff: dict[str, Any]
