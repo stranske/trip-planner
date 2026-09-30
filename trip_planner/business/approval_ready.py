@@ -77,7 +77,7 @@ class ApprovalReadyPackage:
     preferred_alternatives: list[PreferredAlternative] = field(default_factory=list)
     exception_guidance: list[str] = field(default_factory=list)
     requested_exception: ExceptionRequest | None = None
-    compliance_score: float = 1.0
+    compliance_score: float | None = None
 
     def __post_init__(self) -> None:
         require_non_empty(self.package_id, "package_id")
@@ -127,7 +127,8 @@ class ApprovalReadyPackage:
         require_strings(self.approval_notes, "approval_notes")
         require_strings(self.package_summary, "package_summary")
         require_strings(self.exception_guidance, "exception_guidance")
-        require_probability(self.compliance_score, "compliance_score")
+        if self.compliance_score is not None:
+            require_probability(self.compliance_score, "compliance_score")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -306,7 +307,11 @@ def _build_readiness_checks(
             notes=(
                 list(evaluation.notes)
                 if evaluation.notes
-                else [f"Compliance score {evaluation.compliance_score:.0%}"]
+                else (
+                    [f"Compliance score {evaluation.compliance_score:.0%}"]
+                    if evaluation.compliance_score is not None
+                    else [f"Policy status: {evaluation.status.replace('_', ' ')}"]
+                )
             ),
         ),
     ]

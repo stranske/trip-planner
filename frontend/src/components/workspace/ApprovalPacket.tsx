@@ -65,6 +65,9 @@ function describePolicyResult(workspace: WorkspaceData): PolicyResult {
   if (summary.submission_outcome === "blocked_by_policy" || verdictStatus === "non_compliant") {
     return { label: "Blocked by travel policy until the items below are resolved", reasons };
   }
+  if (verdictStatus === "exception_required") {
+    return { label: "Policy exception requires approval", reasons };
+  }
   if (summary.submission_outcome === "failed") {
     return { label: "Not reviewed — the policy service could not be reached", reasons: [] };
   }
@@ -278,4 +281,3 @@ export function ApprovalPacket({
     </section>
   );
 }
-

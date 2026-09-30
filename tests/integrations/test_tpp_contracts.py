@@ -13,6 +13,7 @@ from urllib import error as urllib_error
 import pytest
 from pytest_httpserver import HTTPServer
 
+from trip_planner.business import PolicyEvaluationResult
 from trip_planner.integrations.tpp import (
     BaseTPPIntegrationClient,
     HTTPTPPIntegrationClient,
@@ -87,6 +88,39 @@ def test_evaluation_failure_fixture_round_trip() -> None:
     assert response.error.retryable is True
     assert response.retry is not None
     assert response.retry.attempt == 1
+
+
+@pytest.mark.parametrize("outcome", ["compliant", "exception_required", "non_compliant"])
+def test_live_tpp_outcome_does_not_invent_compliance_score(
+    monkeypatch: pytest.MonkeyPatch, outcome: str
+) -> None:
+    request_payload = _load_fixture("evaluation_failure.json")["request"]
+    request_payload["payload"]["proposal_version"] = 1
+    request = TPPRequestEnvelope.from_dict(request_payload)
+    client = HTTPTPPIntegrationClient(
+        TPPRuntimeSettings(
+            base_url="https://tpp.example.test",
+            access_token="test-token",
+            oidc_provider="okta",
+        )
+    )
+    monkeypatch.setattr(
+        client,
+        "_request_json",
+        lambda **_kwargs: {
+            "outcome": outcome,
+            "proposal_id": request.proposal_id,
+            "execution_id": "exec-002",
+            "policy_result": {"status": outcome},
+        },
+    )
+
+    response = client._fetch_evaluation_result(request)
+    evaluation_payload = response.to_dict()["result_payload"]["evaluation_result"]
+
+    assert evaluation_payload["status"] == outcome
+    assert evaluation_payload["compliance_score"] is None
+    assert PolicyEvaluationResult.from_dict(evaluation_payload).compliance_score is None
 
 
 def test_request_rejects_non_mapping_payload() -> None:

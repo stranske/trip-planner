@@ -736,7 +736,7 @@ export type WorkspaceData = {
           related_category: string;
         }>;
         notes: string[];
-        compliance_score: number;
+        compliance_score: number | null;
       } | null;
     };
     follow_up: {

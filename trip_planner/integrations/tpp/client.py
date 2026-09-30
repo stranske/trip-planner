@@ -1069,9 +1069,8 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 f"Planner evaluation outcome: {outcome}.",
                 f"Underlying policy status: {str((payload.get('policy_result') or {}).get('status') or '').strip() or 'unknown'}.",
             ],
-            "compliance_score": (
-                1.0 if outcome == "compliant" else 0.45 if outcome == "exception_required" else 0.15
-            ),
+            # TPP reports a categorical outcome, not a numeric score.
+            "compliance_score": None,
         }
         return TPPResponseEnvelope.from_dict(
             {
