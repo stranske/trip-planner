@@ -205,6 +205,21 @@ describe("ApprovalPacket", () => {
     expect(screen.getByTestId("approval-packet-verdict")).toHaveTextContent("Passed the travel policy check");
   });
 
+  it("describes an exception as needing approval, not as unfinished review", () => {
+    render(
+      <ApprovalPacket
+        workspace={workspace({ summary: { evaluation_result_status: "exception_required" } })}
+        prices={PRICED}
+        onPrint={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("approval-packet-verdict")).toHaveTextContent(
+      "Policy exception requires approval"
+    );
+    expect(documentText()).not.toMatch(/review has not finished|compliance score|\d+%/i);
+  });
+
   it("says plainly when the trip has no price", () => {
     render(<ApprovalPacket workspace={workspace({ proposal: false })} prices={null} onPrint={vi.fn()} />);
 

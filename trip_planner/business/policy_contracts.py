@@ -347,7 +347,7 @@ class PolicyEvaluationResult:
     preferred_alternatives: list[PreferredAlternative] = field(default_factory=list)
     exception_guidance: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
-    compliance_score: float = 1.0
+    compliance_score: float | None = None
 
     def __post_init__(self) -> None:
         require_non_empty(self.evaluation_id, "evaluation_id")
@@ -362,7 +362,8 @@ class PolicyEvaluationResult:
             raise ValueError("preferred_alternatives must contain PreferredAlternative instances")
         require_strings(self.exception_guidance, "exception_guidance")
         require_strings(self.notes, "notes")
-        require_probability(self.compliance_score, "compliance_score")
+        if self.compliance_score is not None:
+            require_probability(self.compliance_score, "compliance_score")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -386,5 +387,5 @@ class PolicyEvaluationResult:
             ],
             exception_guidance=exception_guidance,
             notes=notes,
-            compliance_score=payload.get("compliance_score", 1.0),
+            compliance_score=payload.get("compliance_score"),
         )

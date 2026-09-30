@@ -465,7 +465,10 @@ def test_non_compliant_reoptimize_surfaces_plan_in_workspace_reload(
     assert reloaded_plan["candidate_categories"]
 
 
-def test_workspace_proposal_evaluation_derives_exception_follow_up(client: TestClient) -> None:
+@pytest.mark.parametrize("score", [0.68, None])
+def test_workspace_proposal_evaluation_derives_exception_follow_up(
+    client: TestClient, score: float | None
+) -> None:
     created = client.post(
         "/api/trips",
         json={
@@ -547,7 +550,9 @@ def test_workspace_proposal_evaluation_derives_exception_follow_up(client: TestC
     evaluation_fixture["response"]["result_payload"]["evaluation_result"]["notes"] = [
         "Proposal is exception-eligible if the fatigue-management rationale is approved."
     ]
-    evaluation_fixture["response"]["result_payload"]["evaluation_result"]["compliance_score"] = 0.68
+    evaluation_fixture["response"]["result_payload"]["evaluation_result"][
+        "compliance_score"
+    ] = score
 
     evaluated = client.put(
         f"/api/workspace/{trip_id}/proposal/evaluation",
@@ -573,6 +578,20 @@ def test_workspace_proposal_evaluation_derives_exception_follow_up(client: TestC
     assert payload["summary"]["evaluation_result_status"] == "exception_required"
     assert payload["summary"]["approval_ready"] is False
     assert payload["summary"]["follow_up_status"] == "exception_required"
+    assert payload["evaluation"]["evaluation_result"]["compliance_score"] == score
+
+    session = get_session_factory()()
+    try:
+        record = session.query(PersistedProposalState).filter_by(trip_id=trip_id).one()
+        assert record.evaluation_record["evaluation_result"]["compliance_score"] == score
+    finally:
+        session.close()
+
+    reloaded = client.get(f"/api/workspace/{trip_id}")
+    assert reloaded.status_code == 200
+    reloaded_state = reloaded.json()["proposal_state"]
+    assert reloaded_state["summary"]["evaluation_result_status"] == "exception_required"
+    assert reloaded_state["follow_up"]["status"] == "exception_required"
 
 
 def test_workspace_proposal_submission_clears_stale_evaluation_state(client: TestClient) -> None:

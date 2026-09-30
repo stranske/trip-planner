@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from trip_planner.business import (
     ApprovalReadyPackage,
     BusinessTravelProfile,
@@ -95,3 +97,35 @@ def test_empty_booking_channels_require_attention() -> None:
     booking_channels = readiness_checks["booking_channels"]
     assert booking_channels.status == "attention"
     assert booking_channels.notes == ["No booking channels documented"]
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_package_status"),
+    [
+        ("compliant", "approval_ready"),
+        ("exception_required", "exception_ready"),
+        ("non_compliant", "policy_revision_needed"),
+    ],
+)
+def test_unknown_tpp_score_preserves_categorical_readiness(
+    status: str, expected_package_status: str
+) -> None:
+    payload = _load_fixture("approval_ready_clean.json")
+    profile = BusinessTravelProfile.from_dict(payload["profile"])
+    proposal = TripPlanProposal.from_dict(payload["proposal"])
+    evaluation = PolicyEvaluationResult.from_dict(
+        {
+            **payload["evaluation_result"],
+            "status": status,
+            "notes": [],
+            "compliance_score": None,
+        }
+    )
+
+    package = build_approval_ready_package(profile, proposal, evaluation)
+
+    assert package.package_status == expected_package_status
+    assert package.compliance_score is None
+    assert package.to_dict()["compliance_score"] is None
+    posture = next(check for check in package.readiness_checks if check.key == "policy_posture")
+    assert posture.notes == [f"Policy status: {status.replace('_', ' ')}"]

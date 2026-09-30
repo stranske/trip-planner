@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from trip_planner.business import (
     JustificationRecord,
     PolicyConstraintSet,
@@ -122,6 +124,32 @@ def test_policy_evaluation_result_rejects_invalid_status() -> None:
         assert "status" in str(exc)
     else:
         raise AssertionError("PolicyEvaluationResult should reject unsupported statuses")
+
+
+@pytest.mark.parametrize("status", ["compliant", "exception_required", "non_compliant"])
+def test_missing_tpp_score_remains_unknown_after_round_trip(status: str) -> None:
+    payload = {
+        "evaluation_id": "eval-tpp",
+        "proposal_id": "proposal-tpp",
+        "status": status,
+    }
+    for score_payload in (payload, {**payload, "compliance_score": None}):
+        evaluation = PolicyEvaluationResult.from_dict(score_payload)
+        assert evaluation.compliance_score is None
+        assert evaluation.to_dict()["compliance_score"] is None
+
+
+def test_explicit_local_score_stays_numeric_and_is_validated() -> None:
+    payload = {
+        "evaluation_id": "eval-local",
+        "proposal_id": "proposal-local",
+        "status": "compliant",
+        "compliance_score": 0.82,
+    }
+    assert PolicyEvaluationResult.from_dict(payload).to_dict()["compliance_score"] == 0.82
+    for invalid in (-0.1, 1.1, float("nan")):
+        with pytest.raises(ValueError, match="compliance_score"):
+            PolicyEvaluationResult.from_dict({**payload, "compliance_score": invalid})
 
 
 def test_policy_evaluation_result_rejects_non_list_exception_guidance() -> None:
