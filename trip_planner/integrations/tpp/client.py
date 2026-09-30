@@ -1021,50 +1021,10 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
             "evaluation_id": str(payload.get("request_id") or request.request_id),
             "proposal_id": str(payload.get("proposal_id") or request.proposal_id or ""),
             "status": outcome,
-            "approval_requirements": [
-                {
-                    "role": str(item.get("required_role") or item.get("role") or "approver"),
-                    "reason": str(
-                        item.get("summary") or item.get("reason") or "Approval required."
-                    ),
-                    "mandatory": True,
-                }
-                for item in payload.get("exception_requirements") or []
-                if isinstance(item, dict)
-            ],
-            "failure_reasons": [
-                {
-                    "code": str(item.get("code") or "policy_blocker"),
-                    "message": str(item.get("summary") or item.get("message") or "Policy blocker."),
-                    "severity": "blocking",
-                    "related_category": str(item.get("category") or ""),
-                }
-                for item in payload.get("blocking_issues") or []
-                if isinstance(item, dict)
-            ],
-            "preferred_alternatives": [
-                {
-                    "category": str(item.get("category") or "policy"),
-                    "summary": str(item.get("summary") or "Preferred alternative available."),
-                    "rationale": str(
-                        item.get("rationale")
-                        or item.get("summary")
-                        or "Follow the suggested alternative."
-                    ),
-                    "comparable_ref": item.get("comparable_ref"),
-                }
-                for item in payload.get("preferred_alternatives") or []
-                if isinstance(item, dict)
-            ],
-            "exception_guidance": [
-                str(item.get("summary") or item.get("message") or "").strip()
-                for item in (
-                    list(payload.get("reoptimization_guidance") or [])
-                    + list(payload.get("exception_requirements") or [])
-                )
-                if isinstance(item, dict)
-                and str(item.get("summary") or item.get("message") or "").strip()
-            ],
+            "approval_requirements": _evaluation_approval_requirements(payload),
+            "failure_reasons": _evaluation_failure_reasons(payload),
+            "preferred_alternatives": _evaluation_preferred_alternatives(payload),
+            "exception_guidance": _evaluation_exception_guidance(payload),
             "notes": [
                 f"Planner evaluation outcome: {outcome}.",
                 f"Underlying policy status: {str((payload.get('policy_result') or {}).get('status') or '').strip() or 'unknown'}.",
@@ -1098,3 +1058,56 @@ class HTTPTPPIntegrationClient(BaseTPPIntegrationClient):
                 "status_endpoint": payload.get("status_endpoint"),
             }
         )
+
+
+def _evaluation_approval_requirements(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "role": str(item.get("required_role") or item.get("role") or "approver"),
+            "reason": str(item.get("summary") or item.get("reason") or "Approval required."),
+            "mandatory": True,
+        }
+        for item in payload.get("exception_requirements") or []
+        if isinstance(item, dict)
+    ]
+
+
+def _evaluation_failure_reasons(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "code": str(item.get("code") or "policy_blocker"),
+            "message": str(item.get("summary") or item.get("message") or "Policy blocker."),
+            "severity": "blocking",
+            "related_category": str(item.get("category") or ""),
+        }
+        for item in payload.get("blocking_issues") or []
+        if isinstance(item, dict)
+    ]
+
+
+def _evaluation_preferred_alternatives(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "category": str(item.get("category") or "policy"),
+            "summary": str(item.get("summary") or "Preferred alternative available."),
+            "rationale": str(
+                item.get("rationale")
+                or item.get("summary")
+                or "Follow the suggested alternative."
+            ),
+            "comparable_ref": item.get("comparable_ref"),
+        }
+        for item in payload.get("preferred_alternatives") or []
+        if isinstance(item, dict)
+    ]
+
+
+def _evaluation_exception_guidance(payload: dict[str, Any]) -> list[str]:
+    return [
+        str(item.get("summary") or item.get("message") or "").strip()
+        for item in (
+            list(payload.get("reoptimization_guidance") or [])
+            + list(payload.get("exception_requirements") or [])
+        )
+        if isinstance(item, dict) and str(item.get("summary") or item.get("message") or "").strip()
+    ]
