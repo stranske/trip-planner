@@ -775,6 +775,16 @@ function renderWorkspacePage() {
   );
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 async function selectWorkspaceTab(
   label: "Plan" | "Compare" | "Map" | "Budget" | "Notebook" | "Policy"
 ) {
@@ -951,20 +961,66 @@ describe("WorkspacePage", () => {
   });
 
   it("states the offline limit beside the planner composer (issue 1845)", async () => {
-    mockedFetchPlannerSession.mockResolvedValue({
-      ...plannerSessionPayload,
-      runtime: { mode: "fallback" },
-    });
+    const workspace = deferred<WorkspaceData>();
+    const trips = deferred<TripRecord[]>();
+    const plannerSession = deferred<PlannerSessionResponse>();
+    mockedFetchPlannerSession.mockReturnValue(plannerSession.promise);
     mockedUseLoaderData.mockReturnValue({
-      workspace: Promise.resolve(workspacePayload),
-      trips: Promise.resolve(tripComparisonPayload),
+      workspace: workspace.promise,
+      trips: trips.promise,
     });
     renderWorkspacePage();
+
+    expect(
+      screen.getByRole("heading", { name: "Opening your trip workspace" })
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      workspace.resolve(workspacePayload);
+      trips.resolve(tripComparisonPayload);
+    });
+
+    expect(await screen.findByLabelText("Message the planner")).toBeInTheDocument();
+    expect(screen.queryByTestId("planner-offline-note")).not.toBeInTheDocument();
+
+    await act(async () => {
+      plannerSession.resolve({
+        ...plannerSessionPayload,
+        runtime: { mode: "fallback" },
+      });
+    });
 
     expect(await screen.findByTestId("planner-offline-note")).toHaveTextContent(
       "The planner is offline"
     );
-    expect(screen.getByLabelText("Message the planner")).toBeInTheDocument();
+  });
+
+  it("keeps the offline note hidden when the planner model is available", async () => {
+    const workspace = deferred<WorkspaceData>();
+    const trips = deferred<TripRecord[]>();
+    const plannerSession = deferred<PlannerSessionResponse>();
+    mockedFetchPlannerSession.mockReturnValue(plannerSession.promise);
+    mockedUseLoaderData.mockReturnValue({
+      workspace: workspace.promise,
+      trips: trips.promise,
+    });
+    renderWorkspacePage();
+
+    await act(async () => {
+      workspace.resolve(workspacePayload);
+      trips.resolve(tripComparisonPayload);
+    });
+
+    expect(await screen.findByLabelText("Message the planner")).toBeInTheDocument();
+
+    await act(async () => {
+      plannerSession.resolve({
+        ...plannerSessionPayload,
+        runtime: { mode: "model" },
+      });
+    });
+
+    expect(screen.queryByTestId("planner-offline-note")).not.toBeInTheDocument();
   });
 
   it("shows a measured route from where the traveller starts, in place names (issue 1844)", async () => {
