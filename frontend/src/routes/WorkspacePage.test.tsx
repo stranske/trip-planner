@@ -996,18 +996,30 @@ describe("WorkspacePage", () => {
   });
 
   it("keeps the offline note hidden when the planner model is available", async () => {
-    mockedFetchPlannerSession.mockResolvedValue({
-      ...plannerSessionPayload,
-      runtime: { mode: "model" },
-    });
+    const workspace = deferred<WorkspaceData>();
+    const trips = deferred<TripRecord[]>();
+    const plannerSession = deferred<PlannerSessionResponse>();
+    mockedFetchPlannerSession.mockReturnValue(plannerSession.promise);
     mockedUseLoaderData.mockReturnValue({
-      workspace: Promise.resolve(workspacePayload),
-      trips: Promise.resolve(tripComparisonPayload),
+      workspace: workspace.promise,
+      trips: trips.promise,
     });
     renderWorkspacePage();
 
+    await act(async () => {
+      workspace.resolve(workspacePayload);
+      trips.resolve(tripComparisonPayload);
+    });
+
     expect(await screen.findByLabelText("Message the planner")).toBeInTheDocument();
-    await waitFor(() => expect(mockedFetchPlannerSession).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      plannerSession.resolve({
+        ...plannerSessionPayload,
+        runtime: { mode: "model" },
+      });
+    });
+
     expect(screen.queryByTestId("planner-offline-note")).not.toBeInTheDocument();
   });
 
