@@ -6,7 +6,7 @@ import json
 import math
 import re
 import secrets
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -48,6 +48,7 @@ from trip_planner.app.services.workspace import (
     _serialize_activity_record,
     _serialize_session_record,
 )
+from trip_planner.geo.resolver import country_code_for_name, resolve_place
 from trip_planner.observability.langsmith_fleet import (
     PlannerFleetContext,
     append_fleet_records,
@@ -55,7 +56,6 @@ from trip_planner.observability.langsmith_fleet import (
     build_planner_fleet_records,
     default_fleet_artifact_path,
 )
-from trip_planner.geo.resolver import country_code_for_name, resolve_place
 from trip_planner.persistence.models.activity import (
     PersistedActivityLogEvent,
     PersistedPlannerAction,
@@ -256,6 +256,20 @@ _DATE_MARKERS = (
     "days",
     "nights",
 )
+_MONTH_ABBREVIATIONS = (
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "sept",
+    "oct",
+    "nov",
+    "dec",
+)
 _CONSTRAINT_MARKERS = (
     "budget",
     "hotel",
@@ -378,7 +392,7 @@ def _looks_like_destination_token(token: str, index: int) -> bool:
     if not token[:1].isupper():
         return False
     lowered = token.lower()
-    if lowered in _DATE_MARKERS:
+    if lowered in _DATE_MARKERS or lowered in _MONTH_ABBREVIATIONS:
         return False
     return index > 0 or lowered not in _NON_DESTINATION_CAPITALIZED_TOKENS
 
@@ -408,7 +422,10 @@ def _extract_destination_mentions(message: str) -> list[str]:
             words = words[1:]
         if not words:
             continue
-        if any(word.lower() in _DATE_MARKERS for word in words):
+        if any(
+            word.lower() in _DATE_MARKERS or word.lower() in _MONTH_ABBREVIATIONS
+            for word in words
+        ):
             continue
         if any(
             word.lower()
@@ -433,9 +450,37 @@ def _extract_date_mentions(message: str) -> list[str]:
         if re.search(rf"\b{re.escape(marker)}\b", lowered)
         and marker not in {"days", "nights", "week"}
     ]
+    date_mentions.extend(
+        match.group(0).rstrip(".")
+        for match in re.finditer(
+            rf"\b(?:{'|'.join(_MONTH_ABBREVIATIONS)})(?:\.)?(?=\s|\d|$|[,;/:-])",
+            lowered,
+        )
+    )
     date_mentions.extend(re.findall(r"\b\d{4}-\d{2}-\d{2}\b", message))
     date_mentions.extend(re.findall(r"\b\d+\s+(?:days|nights|weeks)\b", lowered))
     return _dedupe_preserve_order(date_mentions)
+
+
+def _trip_frame_has_timing(trip_frame: Mapping[str, Any] | None) -> bool:
+    if not trip_frame:
+        return False
+    if str(trip_frame.get("start_date") or "").strip():
+        return True
+    if str(trip_frame.get("end_date") or "").strip():
+        return True
+    try:
+        return int(trip_frame.get("duration_days") or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _trip_frame_from_panel(panel: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    trip = panel.get("trip")
+    if not isinstance(trip, Mapping):
+        return None
+    trip_frame = trip.get("trip_frame")
+    return trip_frame if isinstance(trip_frame, Mapping) else None
 
 
 def _matching_clauses(message: str, markers: tuple[str, ...]) -> list[str]:
@@ -563,6 +608,7 @@ def _planner_turn_metadata(
     turn_index: int,
     planning_mode: str | None = None,
     intent_classifier: IntentClassifier | None = None,
+    trip_frame: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     lowered = message.lower()
     raw_tokens = [token.strip(".,!?;:()[]{}\"'") for token in message.split()]
@@ -570,7 +616,8 @@ def _planner_turn_metadata(
     destination_hits = sum(
         1 for index, token in enumerate(raw_tokens) if _looks_like_destination_token(token, index)
     )
-    date_hits = sum(1 for marker in _DATE_MARKERS if marker in tokens)
+    date_hits = len(_extract_date_mentions(message))
+    timing_known = date_hits > 0 or _trip_frame_has_timing(trip_frame)
     constraint_hits = sum(1 for marker in _CONSTRAINT_MARKERS if marker in lowered)
     synthesis_hits = sum(1 for marker in _SYNTHESIS_MARKERS if marker in lowered)
     question_hits = lowered.count("?")
@@ -594,7 +641,7 @@ def _planner_turn_metadata(
                 "items": _bounded_clarifying_items(
                     [
                         "Where are you considering going?",
-                        "When would you like to travel?",
+                        *([] if timing_known else ["When would you like to travel?"]),
                         "What would make this trip feel successful?",
                     ]
                 ),
@@ -661,7 +708,11 @@ def _planner_turn_metadata(
                 "title": "Targeted questions",
                 "items": _bounded_clarifying_items(
                     [
-                        "What dates or trip length should the planner assume?",
+                        *(
+                            []
+                            if timing_known
+                            else ["What dates or trip length should the planner assume?"]
+                        ),
                         "Which tradeoff matters most: budget, pace, lodging, route, or approvals?",
                     ]
                 ),
@@ -1504,6 +1555,7 @@ class DeterministicPlannerConversationRunnable:
             turn_index=len(request.runtime_context.get("recent_activity") or []),
             planning_mode=request.session.selected_planning_mode,
             intent_classifier=request.intent_classifier,
+            trip_frame=_trip_frame_from_panel(panel),
         )
         ledger_summary = (request.runtime_context.get("planning_ledger") or {}).get("summary") or {}
 
@@ -1672,6 +1724,7 @@ class ModelBackedPlannerConversationRunnable:
                 turn_index=len(request.runtime_context.get("recent_activity") or []),
                 planning_mode=request.session.selected_planning_mode,
                 intent_classifier=request.intent_classifier,
+                trip_frame=_trip_frame_from_panel(request.planner_panel_state),
             ),
         )
 
@@ -2093,6 +2146,9 @@ def _invoke_planner_runtime(runtime: _PlannerTurnRuntime) -> PlannerConversation
             turn_index=len(runtime.activity_log),
             planning_mode=runtime.session.selected_planning_mode,
             intent_classifier=runtime.intent_classifier,
+            trip_frame=_trip_frame_from_panel(
+                runtime.workspace_payload["planner_panel_state"]
+            ),
         ),
     )
     try:
@@ -2145,6 +2201,9 @@ def _invoke_planner_runtime(runtime: _PlannerTurnRuntime) -> PlannerConversation
                 turn_index=len(runtime.activity_log),
                 planning_mode=runtime.session.selected_planning_mode,
                 intent_classifier=runtime.intent_classifier,
+                trip_frame=_trip_frame_from_panel(
+                    runtime.workspace_payload["planner_panel_state"]
+                ),
             ),
         )
     return reply
