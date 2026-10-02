@@ -103,6 +103,29 @@ def test_fallback_replies_differ_for_materially_different_messages(client: TestC
     )
 
 
+def test_fallback_uses_saved_timing(client: TestClient) -> None:
+    trip_id = _create_business_trip(client)
+    response = client.post(
+        f"/api/planner/{trip_id}/turns",
+        json={"message": "We fly Seattle to Boston with a quiet hotel"},
+    )
+
+    assert response.status_code == 200, response.text
+    reply = response.json()["messages"][-1]
+    signals = reply["turn_metadata"]["debug_routing_details"]["signals"]
+    questions = [
+        item
+        for block in reply["structured_blocks"]
+        if block["kind"] == "question"
+        for item in block["items"]
+    ]
+    assert signals["date_hits"] == 0
+    assert not any(
+        "date" in question.lower() or "when" in question.lower()
+        for question in questions
+    )
+
+
 def test_fallback_one_word_cost_and_policy_intents_are_not_gibberish(client: TestClient) -> None:
     trip_id = _create_business_trip(client)
     cost_reply = _planner_reply(client, trip_id, "cost")

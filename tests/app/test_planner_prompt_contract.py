@@ -6,6 +6,8 @@ from typing import Any
 from trip_planner.app.services.planner import (
     _CLARIFYING_SKIP_AFFORDANCE,
     _PLANNER_SYSTEM_PROMPT,
+    _extract_date_mentions,
+    _extract_destination_mentions,
     _planner_response_structured_blocks,
     _planner_turn_metadata,
 )
@@ -23,12 +25,17 @@ class BaseTaskClassifier:
         )
 
 
-def _metadata_for(message: str) -> dict[str, Any]:
+def _metadata_for(
+    message: str,
+    *,
+    trip_frame: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     return _planner_turn_metadata(
         message=message,
         runtime_config=build_planner_runtime_config({}),
         turn_index=0,
         intent_classifier=BaseTaskClassifier(),
+        trip_frame=trip_frame,
     )
 
 
@@ -54,6 +61,70 @@ def test_first_turn_triage_question_cap() -> None:
         for block in question_blocks:
             assert len(block["items"]) <= 3
             assert _CLARIFYING_SKIP_AFFORDANCE in block["items"]
+
+
+def test_month_abbreviation_is_timing_not_destination() -> None:
+    message = "We fly Seattle to Boston on Nov 16 with a quiet hotel"
+
+    assert "nov" in _extract_date_mentions(message)
+    assert _extract_destination_mentions(message) == ["Seattle", "Boston"]
+
+    metadata = _metadata_for(message)
+    signals = metadata["debug_routing_details"]["signals"]
+    assert signals["date_hits"] == 1
+    assert metadata["plan_maturity"] == "coherent_plan"
+
+
+def test_persisted_trip_timing_suppresses_redundant_date_question() -> None:
+    metadata = _metadata_for(
+        "Plan a quiet Boston trip",
+        trip_frame={"start_date": "2026-11-16", "end_date": "2026-11-19"},
+    )
+    questions = [
+        item
+        for block in metadata["visible_response_blocks"]
+        if block["kind"] == "clarifying_questions"
+        for item in block["items"]
+    ]
+
+    assert not any(
+        "date" in question.lower() or "when" in question.lower()
+        for question in questions
+    )
+
+    duration_metadata = _metadata_for(
+        "Plan a quiet Boston trip",
+        trip_frame={"duration_days": 4},
+    )
+    duration_questions = [
+        item
+        for block in duration_metadata["visible_response_blocks"]
+        if block["kind"] == "clarifying_questions"
+        for item in block["items"]
+    ]
+    assert not any(
+        "date" in question.lower() or "when" in question.lower()
+        for question in duration_questions
+    )
+
+
+def test_undated_trip_without_saved_timing_still_asks_for_dates() -> None:
+    metadata = _metadata_for("Plan a quiet Boston trip")
+    questions = [
+        item
+        for block in metadata["visible_response_blocks"]
+        if block["kind"] == "clarifying_questions"
+        for item in block["items"]
+    ]
+
+    assert any("date" in question.lower() for question in questions)
+
+
+def test_standalone_duration_marker_remains_a_timing_signal() -> None:
+    metadata = _metadata_for("Plan a week in Boston with a quiet hotel")
+
+    assert metadata["debug_routing_details"]["signals"]["date_hits"] == 1
+    assert metadata["plan_maturity"] == "coherent_plan"
 
 
 def test_low_confidence_surfaces_uncertainty() -> None:
