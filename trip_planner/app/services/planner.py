@@ -448,7 +448,6 @@ def _extract_date_mentions(message: str) -> list[str]:
         marker
         for marker in _DATE_MARKERS
         if re.search(rf"\b{re.escape(marker)}\b", lowered)
-        and marker not in {"days", "nights", "week"}
     ]
     date_mentions.extend(
         match.group(0).rstrip(".")

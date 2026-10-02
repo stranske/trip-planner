@@ -93,6 +93,25 @@ def test_persisted_trip_timing_suppresses_redundant_date_question() -> None:
     )
 
 
+def test_undated_trip_without_saved_timing_still_asks_for_dates() -> None:
+    metadata = _metadata_for("Plan a quiet Boston trip")
+    questions = [
+        item
+        for block in metadata["visible_response_blocks"]
+        if block["kind"] == "clarifying_questions"
+        for item in block["items"]
+    ]
+
+    assert any("date" in question.lower() for question in questions)
+
+
+def test_standalone_duration_marker_remains_a_timing_signal() -> None:
+    metadata = _metadata_for("Plan a week in Boston with a quiet hotel")
+
+    assert metadata["debug_routing_details"]["signals"]["date_hits"] == 1
+    assert metadata["plan_maturity"] == "coherent_plan"
+
+
 def test_low_confidence_surfaces_uncertainty() -> None:
     blocks = _planner_response_structured_blocks(
         content="Compare these options next.",
