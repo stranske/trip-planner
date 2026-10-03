@@ -142,3 +142,52 @@ def test_fallback_portal_origin_enforces_https(monkeypatch) -> None:
         portal_action_url()
     monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example")
     assert portal_action_url() == "https://tpp.example/portal/handoff"
+
+
+@pytest.mark.parametrize("setting", ["TPP_PORTAL_BASE_URL", "TPP_BASE_URL"])
+@pytest.mark.parametrize("environment", [None, "local", "development", "dev", "test", "testing"])
+@pytest.mark.parametrize(
+    "hostname", ["tpp.example", "10.0.0.1", "192.168.1.1", "0.0.0.0", "localhost.example"]
+)
+def test_portal_action_url_rejects_remote_http_even_in_local_environments(
+    monkeypatch, setting, environment, hostname
+) -> None:
+    monkeypatch.delenv("TPP_PORTAL_BASE_URL", raising=False)
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    if environment is None:
+        monkeypatch.delenv("TRIP_PLANNER_ENV", raising=False)
+    else:
+        monkeypatch.setenv("TRIP_PLANNER_ENV", environment)
+    monkeypatch.setenv(setting, f"http://{hostname}:8000")
+
+    with pytest.raises(TPPPortalHandoffConfigurationError, match="HTTPS"):
+        portal_action_url()
+
+
+@pytest.mark.parametrize("setting", ["TPP_PORTAL_BASE_URL", "TPP_BASE_URL"])
+@pytest.mark.parametrize("environment", ["local", "test", "production"])
+@pytest.mark.parametrize("hostname", ["localhost", "127.0.0.1", "127.0.0.2", "[::1]"])
+def test_portal_action_url_only_allows_loopback_http_in_local_environments(
+    monkeypatch, setting, environment, hostname
+) -> None:
+    monkeypatch.delenv("TPP_PORTAL_BASE_URL", raising=False)
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    monkeypatch.setenv("TRIP_PLANNER_ENV", environment)
+    monkeypatch.setenv(setting, f"http://{hostname}:8000/")
+
+    if environment == "production":
+        with pytest.raises(TPPPortalHandoffConfigurationError, match="HTTPS"):
+            portal_action_url()
+    else:
+        assert portal_action_url() == f"http://{hostname}:8000/portal/handoff"
+
+
+@pytest.mark.parametrize("environment", [None, "local", "test", "production"])
+def test_portal_action_url_keeps_remote_https_available(monkeypatch, environment) -> None:
+    if environment is None:
+        monkeypatch.delenv("TRIP_PLANNER_ENV", raising=False)
+    else:
+        monkeypatch.setenv("TRIP_PLANNER_ENV", environment)
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://tpp.example")
+
+    assert portal_action_url() == "https://tpp.example/portal/handoff"

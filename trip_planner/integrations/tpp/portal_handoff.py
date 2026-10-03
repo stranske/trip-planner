@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from hashlib import sha256
+from ipaddress import ip_address
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -33,7 +34,13 @@ def portal_action_url() -> str:
     parsed = urlsplit(raw)
     environment = os.getenv("TRIP_PLANNER_ENV", "local").strip().lower()
     local_environment = environment in {"local", "development", "dev", "test", "testing"}
-    if parsed.scheme not in ({"http", "https"} if local_environment else {"https"}):
+    hostname = parsed.hostname or ""
+    try:
+        loopback = ip_address(hostname).is_loopback
+    except ValueError:
+        loopback = hostname.lower() == "localhost"
+    allow_http = local_environment and loopback
+    if parsed.scheme not in ({"http", "https"} if allow_http else {"https"}):
         raise TPPPortalHandoffConfigurationError(
             "Travel-Plan-Permission portal handoff requires an HTTPS origin."
         )
