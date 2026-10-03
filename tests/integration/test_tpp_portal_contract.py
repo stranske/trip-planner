@@ -14,7 +14,9 @@ from trip_planner.integrations.tpp.portal_handoff import build_portal_fields
 
 TPP_REPO_PATH = os.getenv("TPP_REPO_PATH")
 if not TPP_REPO_PATH:
-    pytest.skip("TPP_REPO_PATH is required for the cross-repo portal contract", allow_module_level=True)
+    pytest.skip(
+        "TPP_REPO_PATH is required for the cross-repo portal contract", allow_module_level=True
+    )
 
 sys.path.insert(0, str(Path(TPP_REPO_PATH).resolve() / "src"))
 
