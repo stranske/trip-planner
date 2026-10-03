@@ -769,13 +769,9 @@ def _reset_evaluation_state(record: PersistedProposalState) -> None:
     record.evaluation_record = {}
 
 
-def _portal_handoff_snapshot(
-    *,
-    record: PersistedProposalState,
-    trip_record: PersistedTrip,
-    user: AuthenticatedUser,
-    trip_prices: list[PersistedTripPrice],
-) -> dict[str, Any]:
+def _portal_handoff_verdict(record: PersistedProposalState) -> dict[str, Any]:
+    """Keep display metadata and the complete saved result in the hash input."""
+
     evaluation_result = dict(record.evaluation_record.get("evaluation_result") or {})
     failure_reasons = list(evaluation_result.get("failure_reasons") or [])
     blocking_codes = sorted(
@@ -786,6 +782,21 @@ def _portal_handoff_snapshot(
         }
     )
     return {
+        "status": evaluation_result.get("status"),
+        "outcome": record.summary.get("submission_outcome"),
+        "blocking_codes": blocking_codes,
+        "result": evaluation_result,
+    }
+
+
+def _portal_handoff_snapshot(
+    *,
+    record: PersistedProposalState,
+    trip_record: PersistedTrip,
+    user: AuthenticatedUser,
+    trip_prices: list[PersistedTripPrice],
+) -> dict[str, Any]:
+    return {
         "schema_version": PORTAL_HANDOFF_SCHEMA_VERSION,
         "trip_id": record.trip_id,
         "proposal_id": record.proposal_id,
@@ -793,13 +804,21 @@ def _portal_handoff_snapshot(
         "scenario_id": record.scenario_id,
         "execution_id": record.execution_id,
         "traveler_name": user.display_name,
+        "proposal": dict(record.proposal_payload),
         "trip": {
             "title": trip_record.title,
             "summary": trip_record.summary,
+            "mode": trip_record.mode,
             "origin": trip_record.origin,
             "primary_regions": list(trip_record.primary_regions),
             "start_date": trip_record.start_date,
             "end_date": trip_record.end_date,
+            "duration_days": trip_record.duration_days,
+            "traveler_party": {
+                "kind": trip_record.traveler_party_kind,
+                "traveler_count": trip_record.traveler_count,
+                "notes": trip_record.traveler_notes,
+            },
         },
         "prices": [
             {
@@ -819,11 +838,7 @@ def _portal_handoff_snapshot(
             }
             for price in trip_prices
         ],
-        "verdict": {
-            "status": evaluation_result.get("status"),
-            "outcome": record.summary.get("submission_outcome"),
-            "blocking_codes": blocking_codes,
-        },
+        "verdict": _portal_handoff_verdict(record),
     }
 
 
@@ -855,41 +870,22 @@ def _bind_portal_handoff_snapshot(
 def _bind_portal_handoff_evaluation_snapshot(
     *,
     record: PersistedProposalState,
-    trip_record: PersistedTrip,
-    user: AuthenticatedUser,
-    trip_prices: list[PersistedTripPrice],
 ) -> None:
     """Bind a verdict without rebasing it onto facts changed after submission."""
 
     stored_snapshot = dict((record.portal_handoff or {}).get("source_snapshot") or {})
     if not stored_snapshot:
-        stored_snapshot = _portal_handoff_snapshot(
-            record=record,
-            trip_record=trip_record,
-            user=user,
-            trip_prices=trip_prices,
-        )
-
-    evaluation_result = dict(record.evaluation_record.get("evaluation_result") or {})
-    failure_reasons = list(evaluation_result.get("failure_reasons") or [])
-    blocking_codes = sorted(
-        {
-            str(reason.get("code"))
-            for reason in failure_reasons
-            if isinstance(reason, dict) and reason.get("code")
-        }
-    )
+        # A legacy submission has no reliable record of the facts it evaluated.
+        # Fetching its verdict cannot authorize today's trip and prices.
+        record.portal_handoff = None
+        return
     snapshot = {
         **stored_snapshot,
         "proposal_id": record.proposal_id,
         "proposal_version": record.proposal_version,
         "scenario_id": record.scenario_id,
         "execution_id": record.execution_id,
-        "verdict": {
-            "status": evaluation_result.get("status"),
-            "outcome": record.summary.get("submission_outcome"),
-            "blocking_codes": blocking_codes,
-        },
+        "verdict": _portal_handoff_verdict(record),
     }
     record.portal_handoff = {
         "schema_version": PORTAL_HANDOFF_SCHEMA_VERSION,
@@ -1630,9 +1626,7 @@ def save_workspace_proposal_submission(
         raise ValueError("proposal.trip_id must match the workspace trip.")
 
     request = TPPRequestEnvelope.from_dict(request_payload)
-    trip_prices = read_trip_prices_for_owner(
-        db_session, user_id=user.user_id, trip_id=trip_id
-    )
+    trip_prices = read_trip_prices_for_owner(db_session, user_id=user.user_id, trip_id=trip_id)
     try:
         response = _resolve_submission_response(
             request,
@@ -1822,14 +1816,7 @@ def save_workspace_proposal_evaluation(
         proposal_payload=dict(existing.proposal_payload),
         persisted_follow_up=dict(existing.summary.get("follow_up") or {}),
     )
-    _bind_portal_handoff_evaluation_snapshot(
-        record=existing,
-        trip_record=trip_record,
-        user=user,
-        trip_prices=read_trip_prices_for_owner(
-            db_session, user_id=user.user_id, trip_id=trip_id
-        ),
-    )
+    _bind_portal_handoff_evaluation_snapshot(record=existing)
 
     trip_record.updated_at = datetime.now(UTC)
     db_session.commit()
@@ -1862,9 +1849,7 @@ def prepare_workspace_proposal_handoff(
         )
 
     stored = dict(record.portal_handoff or {})
-    if stored.get("status") not in {"eligible", "prepared"} or not stored.get(
-        "source_snapshot"
-    ):
+    if stored.get("status") not in {"eligible", "prepared"} or not stored.get("source_snapshot"):
         raise WorkspaceProposalHandoffNotReadyError(
             "Run the policy check again to bind this proposal to the portal handoff."
         )
@@ -1890,7 +1875,7 @@ def prepare_workspace_proposal_handoff(
     )
     if snapshot_hash(current_snapshot) != stored.get("source_snapshot_hash"):
         raise WorkspaceProposalHandoffStaleError(
-            "Trip facts or prices changed after the saved policy result. Run the policy check again."
+            "Trip facts, prices, or the saved policy result changed. Run the policy check again."
         )
 
     action_url = portal_action_url()
