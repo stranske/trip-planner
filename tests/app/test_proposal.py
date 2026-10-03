@@ -329,6 +329,59 @@ def checked_handoff(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> tupl
     return trip_id, submission, evaluation
 
 
+def test_prepared_handoff_persists_only_unknown_manager_state(
+    client: TestClient, checked_handoff: tuple[str, dict, dict]
+) -> None:
+    trip_id, _, _ = checked_handoff
+    prepared = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert prepared.status_code == 200
+    metadata = prepared.json()["handoff"]
+    assert metadata["status"] == "prepared"
+    assert metadata["prepared_at"] is not None
+    assert metadata["manager_submission_status"] == "unknown"
+    assert metadata["manager_decision"] is None
+    assert set(metadata) == {
+        "schema_version",
+        "source_snapshot_hash",
+        "prepared_at",
+        "status",
+        "manager_submission_status",
+        "manager_decision",
+    }
+
+    # Read the stored row through a new session: preparation records no receipt or decision.
+    with get_session_factory()() as session:
+        record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+        assert record is not None
+        stored = record.portal_handoff
+        assert stored is not None
+        assert stored["source_snapshot"]["traveler_name"] == "Proposal Owner"
+        assert {key: stored[key] for key in metadata} == metadata
+
+    for path in (f"/api/workspace/{trip_id}/proposal", f"/api/workspace/{trip_id}"):
+        reloaded = client.get(path)
+        assert reloaded.status_code == 200
+        assert reloaded.json()["proposal_state"]["portal_handoff"] == metadata
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"action_url": "https://caller.example/portal/handoff"},
+        {"fields": {"traveler_name": "Caller supplied traveler"}},
+        {"manager_submission_status": "sent", "manager_decision": "approved"},
+    ],
+)
+def test_handoff_rejects_caller_supplied_destination_fields_and_manager_state(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], payload: dict
+) -> None:
+    trip_id, _, _ = checked_handoff
+    before = client.get(f"/api/workspace/{trip_id}/proposal").json()
+    rejected = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json=payload)
+    assert rejected.status_code == 422
+    assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
+
+
 @pytest.mark.parametrize(
     ("model", "field", "value"),
     [

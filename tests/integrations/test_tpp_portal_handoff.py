@@ -115,3 +115,30 @@ def test_portal_action_url_accepts_origin_only_and_uses_fixed_path(monkeypatch) 
     monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://tpp.example/attacker-path")
     with pytest.raises(TPPPortalHandoffConfigurationError, match="origin only"):
         portal_action_url()
+
+
+@pytest.mark.parametrize("environment", ["production", "staging", "unknown"])
+def test_portal_action_url_rejects_http_outside_local_environments(
+    monkeypatch, environment
+) -> None:
+    monkeypatch.setenv("TRIP_PLANNER_ENV", environment)
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "http://tpp.example")
+    with pytest.raises(TPPPortalHandoffConfigurationError, match="HTTPS"):
+        portal_action_url()
+
+
+@pytest.mark.parametrize("environment", ["local", "development", "dev", "test", "testing"])
+def test_portal_action_url_allows_local_http(monkeypatch, environment) -> None:
+    monkeypatch.setenv("TRIP_PLANNER_ENV", environment)
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "http://127.0.0.1:8000/")
+    assert portal_action_url() == "http://127.0.0.1:8000/portal/handoff"
+
+
+def test_fallback_portal_origin_enforces_https(monkeypatch) -> None:
+    monkeypatch.delenv("TPP_PORTAL_BASE_URL", raising=False)
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_BASE_URL", "http://tpp.example")
+    with pytest.raises(TPPPortalHandoffConfigurationError, match="HTTPS"):
+        portal_action_url()
+    monkeypatch.setenv("TPP_BASE_URL", "https://tpp.example")
+    assert portal_action_url() == "https://tpp.example/portal/handoff"

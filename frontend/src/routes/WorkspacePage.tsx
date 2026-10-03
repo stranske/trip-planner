@@ -2964,9 +2964,23 @@ function WorkspacePageContent({
                     handoff does not submit it.
                   </p>
                   {currentWorkspace.proposal_state.portal_handoff?.status === "prepared" ? (
-                    <p className="muted-copy">
-                      Handoff prepared. Delivery and manager decision are not yet confirmed.
-                    </p>
+                    <div role="status" aria-label="Approver portal handoff status">
+                      <p className="muted-copy">Handoff prepared.</p>
+                      <dl className="workspace-meta">
+                        <div>
+                          <dt>Manager submission</dt>
+                          <dd>Unknown</dd>
+                        </div>
+                        <div>
+                          <dt>Manager decision</dt>
+                          <dd>Unknown</dd>
+                        </div>
+                      </dl>
+                      <p className="muted-copy">
+                        Travel-Plan-Permission does not provide a delivery receipt or manager
+                        decision for this browser handoff. Complete and submit the request there.
+                      </p>
+                    </div>
                   ) : null}
                   {!hasSavedVerdict ? (
                     <p className="muted-copy">A saved policy verdict is required before an approval packet can be printed.</p>
