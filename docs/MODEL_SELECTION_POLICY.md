@@ -3,20 +3,27 @@
 > **Status:** Authoritative for `config/model_registry.json` and
 > `config/llm_slots.json`
 > **Policy version:** `auxiliary-verifier-model-selection-v1`
-> **Reviewed:** 2026-07-10
-> **Next decision review:** 2026-08-30
+> **Policy text reviewed:** 2026-10-02. This does not refresh registry decisions.
+> **Registry deadlines:** use `config/model_registry.json` `review_by` fields;
+> the global, OpenAI, and GitHub Models dates are overdue. No replacement
+> deadline has been approved for those decisions.
 
 ## Decision Principle
 
 Provider positioning and list price are model facts, not workload-quality
-evidence. A model is eligible for approval only after it runs the same frozen,
-adjudicated verifier corpus as the current baseline.
+evidence. A model can be selected **provisionally** from a small paired comparison
+and human review. Statistical **approval** still requires the frozen,
+adjudicated verifier corpus and all approval-stage gates.
 
 Selection is constrained optimization, not a weighted score:
 
-1. Pass every quality and safety gate.
-2. Among passing models, minimize observed cost per accepted review.
-3. Use observed p95 latency as the final tie-breaker.
+1. For a provisional decision, reject observed false PASS, schema errors, and
+   candidates less accurate than the incumbent on the paired screen and API check.
+2. Among those candidates, compare cost per accepted review from measured tokens,
+   then review a reversible selection. A false PASS by the incumbent can justify
+   advancing a safer candidate even if it costs more.
+3. For statistical approval, pass every configured Wilson and paired quality gate;
+   among passing models, minimize observed cost per accepted review and then latency.
 
 This avoids arbitrary normalized quality, cost, and speed numbers. It also
 prevents an inexpensive model from offsetting an unacceptable false-PASS rate.
@@ -41,8 +48,114 @@ the runtime model. Other current bundled pins and an explicitly supplied
 
 ## Benchmark Protocol
 
+Run MAINT-78 `capture`, `screen`, and `confirm` from the matching
+`stranske/Workflows` checkout and its `maint-78-model-evaluation-pilot.yml`
+workflow. This policy is copied to consumers for guidance, but its
+`tools.create_model_eval_snapshot` helper, candidate inputs, and dispatch
+workflow are Workflows-owned and are not installed in consumer checkouts.
+
 The `verifier-balanced` policy is defined in
 `config/model_selection_policy.json`.
+
+### Fast provisional decision
+
+MAINT-78's automatic run is a no-spend plan. The existing 51 historical cases
+meet the candidate-stage count and category minima, but their labels reflect
+later issue disposition and the pilot supplied raw PR text rather than the
+production verifier's context and diff summary. The October 2 CLI diagnostic
+exposed this mismatch: GPT-6 Luna matched Terra's total score by rejecting
+every PASS example. That result does not justify a model change or a paid
+confirmation. A separate balanced eight-case set is now adjudicated against
+captured verifier inputs, so the plan can enable the fast screen. Its cases
+include retrospective captures and two marked controlled defects; neither
+kind grows the long-term statistical corpus.
+
+The next small screen requires independently adjudicated PASS and NON_PASS
+cases tied to captured production verifier inputs. The comparison artifact
+now includes the exact context, diff summary, and identity manifest.
+Capture them before any model verdict or later disposition comment can enter
+them; record their hashes and merge heads, and review each expected outcome
+against the acceptance criteria at that point. A controlled defect variant of
+a captured input may supply a NON_PASS case when natural failures are scarce;
+mark it `controlled_defect`, describe the mutation, and keep the original
+capture provenance. The screen report must identify such cases as synthetic
+evidence, and the final change needs monitoring on real verifier work. Use a
+balanced eight-case paired set once available; there is no need to wait for
+the statistical approval sample.
+
+To start immediately, manual MAINT-78 `capture` mode accepts up to eight
+merged `owner/repo#PR` targets and rebuilds context with the production context
+builder without calling a model. These artifacts are marked
+`retrospective`: issue bodies and CI history can differ from the original
+merge-time view. Review the captured text for leaked outcomes and adjudicate
+the *captured input* explicitly before using it. Prefer fresh comparison
+artifacts marked `production` as they become available; retain the capture
+kind in screen and confirmation reports. A provisional change based mainly
+on retrospective or controlled cases needs closer live monitoring.
+
+Download a completed comparison artifact and use
+`python -m tools.create_model_eval_snapshot ARTIFACT_DIR --case-id ID
+--expected-verdict PASS --category clean-pass --adjudication-evidence URL
+--adjudicated-by REVIEWER --adjudication-rationale TEXT --output case.json`
+to verify the captured hashes and prepare a case for review. For a controlled
+defect, supply both `--context-override` and `--diff-summary-override` plus
+`--mutation-note`; the tool preserves hashes of the original capture. Add
+reviewed cases to the separate `screen_cases` list, choose eight IDs in
+`screen_case_ids`, and set
+`screen_input_status` to `production_context_adjudicated`. The zero-spend plan
+then validates the selected set before enabling a manual screen.
+Screen cases, including controlled defects, never enter the statistical
+`cases` list or its Wilson denominator.
+The fast screen covers clean PASS, missing-acceptance, and follow-up-required
+examples that the supplied verifier context can show. The broader statistical
+corpus retains stale-verifier-claim and review-thread-debt categories, which
+depend on evidence outside a standalone verifier prompt.
+The manual `screen` compares the incumbent and up to three priced models
+through Codex subscription auth with no API-key calls. A finalist must have
+zero observed false PASS and schema errors, at least 50% PASS recall, no
+regression in either verdict class relative to the incumbent, and lower
+modeled cost per accepted review (or replace an incumbent with an observed
+false PASS). These are small-sample safeguards, not confidence claims.
+The CLI disables shell and web search, and any remaining tool event invalidates
+the screen. An invalid or inconclusive screen leaves the incumbent in place and
+never dispatches an API confirmation.
+
+### Decision horizon
+
+MAINT-78 should produce a useful **retain-or-advance** result within the model
+cycle. After a catalog, price, verifier prompt, or workload change, run the
+no-spend readiness plan promptly and screen the incumbent against relevant
+available candidates on the same eight reviewed inputs. If no candidate clears
+the screen, record `retain_incumbent_on_screen` with the observed failures and
+stop. If one does, run only the capped paired API confirmation and prepare a
+reversible provisional selection for human review. Do not wait for the
+30-day historical-case stability window, the 75-case approval floor, or the
+120-case best-case Wilson denominator before producing this decision. Those
+numbers govern separate statistical approval, not the current model choice.
+
+A separate manual `confirm` dispatch supplies that screen's run ID. The workflow
+refuses a stale or incomplete screen by checking input and verifier-harness
+fingerprints, plus the hash of each prompt rebuilt from its pinned snapshot
+**before** any API call. It also rejects unaligned inputs. It applies the configured provisional-stage thresholds at both
+stages. It compares only the incumbent and finalist
+on the same eight cases through the OpenAI API, disables SDK retries, and reserves
+at most $5 in worst-case standard-rate cost before each pair. The estimate uses
+measured API token counts but is not the provider invoice. If the paired result
+meets the same observed-case safeguards, it produces a provisional proposal for
+human review; it does not change `model_registry.json` itself. The owner may
+approve a reversible provisional registry PR and monitor live verifier outcomes,
+reverting on a false PASS or material quality regression. The small comparison
+does not establish a population false-PASS rate. An API-only model absent from
+the pinned CLI catalog (currently GPT-6.1 Sol) may be named explicitly in a
+manual `confirm` dispatch. It reuses the completed screen's eight paired cases,
+checks that the model is priced and actually absent from the catalog, and obeys
+the same $5/16-call cap. Its report labels the CLI-stage exception.
+
+This gives a usable decision during a model update cycle. The larger sample
+requirements below remain the bar for a statistical `approved` status, not a
+blocker to provisional selection.
+
+### Statistical approval
 
 Evaluate a case-level paired run with:
 
