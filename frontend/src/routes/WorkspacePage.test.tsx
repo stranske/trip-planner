@@ -3193,7 +3193,7 @@ describe("WorkspacePage", () => {
     expect(screen.queryByRole("button", { name: "Refresh live status" })).not.toBeInTheDocument();
   });
 
-  it("submits a business trip for approval and renders the verdict", async () => {
+  it("reports a completed policy check and keeps the verdict printable", async () => {
     const submittedProposalState = {
       ...workspacePayload.proposal_state!,
       submission_status: "succeeded",
@@ -3240,6 +3240,16 @@ describe("WorkspacePage", () => {
       expect(screen.getByText(/Policy check completed:/)).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Policy compliant" })).toBeInTheDocument();
     });
+    expect(screen.queryByText(/Submitted for approval:/)).toBeNull();
+    const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    try {
+      await user.click(screen.getByRole("button", { name: "Open approval packet from Policy tab" }));
+      const packet = screen.getByTestId("approval-packet-document");
+      await user.click(within(packet).getByRole("button", { name: "Print / Export" }));
+      expect(print).toHaveBeenCalledOnce();
+    } finally {
+      print.mockRestore();
+    }
   });
 
   it("takes the server's readiness labels after submitting, without a reload", async () => {
@@ -3363,7 +3373,8 @@ describe("WorkspacePage", () => {
         "scenario:trip-leisure-kyoto-draft:1"
       );
     });
-    expect(screen.getByText(/Policy check completed:/)).toBeInTheDocument();
+    expect(screen.getByText(/Policy check pending:/)).toBeInTheDocument();
+    expect(screen.queryByText(/Policy check completed:|Submitted for approval:/)).toBeNull();
   });
 
   it("syncs the travel policy before submitting when the workspace has none", async () => {
