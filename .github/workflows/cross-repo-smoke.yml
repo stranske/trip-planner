@@ -20,7 +20,7 @@ on:
         required: false
 
 env:
-  TPP_PINNED_REF: d7c5c310018f4242e33f7df3d06c0e76f7b79ee9
+  TPP_PINNED_REF: f2d5cfd4bd2ee31c5d632d502c8dae212f63a0a6
 
 jobs:
   cross-repo-full-product:
@@ -82,6 +82,12 @@ jobs:
       - name: Install trip-planner frontend dependencies
         working-directory: trip-planner
         run: npm --prefix frontend ci
+
+      - name: Verify TPP portal handoff contract
+        working-directory: trip-planner
+        env:
+          TPP_REPO_PATH: ../Travel-Plan-Permission
+        run: ../Travel-Plan-Permission/.venv/bin/python -m pytest tests/integration/test_tpp_portal_contract.py -q
 
       - name: Run full-product-check against sibling TPP checkout
         working-directory: trip-planner

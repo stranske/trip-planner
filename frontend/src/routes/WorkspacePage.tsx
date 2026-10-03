@@ -12,6 +12,7 @@ import {
   fetchPlannerSession,
   fetchTripPrices,
   fetchWorkspace,
+  prepareWorkspaceProposalHandoff,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
   syncWorkspacePolicy,
@@ -76,6 +77,7 @@ import { PlanPanel } from "./workspace/PlanPanel";
 import { PolicyPanel as PolicyTabPanel } from "./workspace/PolicyPanel";
 import { formatMoney } from "../lib/money";
 import { NOT_MEASURED, describeAvailability } from "../lib/metrics";
+import { submitTppPortalHandoff } from "../lib/tppPortalHandoff";
 
 type LoaderData = {
   workspace: Promise<WorkspaceData>;
@@ -1990,7 +1992,7 @@ function WorkspacePageContent({
       setProposalStatusMessage(
         nextLifecycle.state === "failed"
           ? `Submission completed with a policy failure: ${nextLifecycle.summary}`
-          : `Submitted for approval: ${nextLifecycle.summary}`
+          : `Policy check completed: ${nextLifecycle.summary}`
       );
     } catch (error) {
       if (refreshVersion === proposalRefreshVersion.current) {
@@ -2000,6 +2002,29 @@ function WorkspacePageContent({
       if (refreshVersion === proposalRefreshVersion.current) {
         setProposalBusyLabel(null);
       }
+    }
+  }
+
+  async function handlePortalHandoff() {
+    setProposalBusyLabel("Preparing approver portal handoff…");
+    setProposalError(null);
+    setProposalStatusMessage(null);
+    try {
+      const handoff = await prepareWorkspaceProposalHandoff(trip.trip_id);
+      setCurrentWorkspace((current) => ({
+        ...current,
+        proposal_state:
+          current.proposal_state == null
+            ? null
+            : { ...current.proposal_state, portal_handoff: handoff.handoff },
+      }));
+      submitTppPortalHandoff(handoff);
+    } catch (error) {
+      setProposalError(
+        error instanceof Error ? error.message : "Approver portal handoff failed."
+      );
+    } finally {
+      setProposalBusyLabel(null);
     }
   }
 
@@ -2926,6 +2951,23 @@ function WorkspacePageContent({
                   >
                     Print / Export approval packet
                   </button>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={!hasSavedVerdict || Boolean(proposalBusyLabel)}
+                    onClick={() => void handlePortalHandoff()}
+                  >
+                    Send to my approver
+                  </button>
+                  <p className="muted-copy">
+                    Continue in Travel-Plan-Permission to complete the request. Preparing this
+                    handoff does not submit it.
+                  </p>
+                  {currentWorkspace.proposal_state.portal_handoff?.status === "prepared" ? (
+                    <p className="muted-copy">
+                      Handoff prepared. Delivery and manager decision are not yet confirmed.
+                    </p>
+                  ) : null}
                   {!hasSavedVerdict ? (
                     <p className="muted-copy">A saved policy verdict is required before an approval packet can be printed.</p>
                   ) : null}
