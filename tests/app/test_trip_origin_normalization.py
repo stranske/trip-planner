@@ -5,9 +5,7 @@ from trip_planner.app.services.trips import _build_trip_record
 
 
 def test_whitespace_only_origin_is_normalized_to_none() -> None:
-    user = AuthenticatedUser(
-        user_id="user-1", email="u@example.com", display_name="User"
-    )
+    user = AuthenticatedUser(user_id="user-1", email="u@example.com", display_name="User")
     record = _build_trip_record(
         user=user,
         title="Trip",

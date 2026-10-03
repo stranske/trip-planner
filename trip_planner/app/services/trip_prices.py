@@ -269,9 +269,7 @@ def build_trip_prices_payload(rows: list[PersistedTripPrice]) -> dict[str, Any]:
                 "cabin_class": entered[component].cabin_class if component in entered else None,
                 "flight_hours": entered[component].flight_hours if component in entered else None,
                 "price_source": (
-                    _sourced(entered[component]).source.to_dict()
-                    if component in entered
-                    else None
+                    _sourced(entered[component]).source.to_dict() if component in entered else None
                 ),
             }
             for component in PRICE_COMPONENTS

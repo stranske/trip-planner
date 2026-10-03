@@ -125,9 +125,7 @@ def _flight_fields(transport: dict[str, Any] | None) -> dict[str, str]:
     if transport.get("flight_hours") is not None:
         fields["flight_duration_hours"] = str(transport["flight_hours"])
     if transport.get("evidence_attested") is not None:
-        fields["fare_evidence_attached"] = (
-            "true" if transport["evidence_attested"] else "false"
-        )
+        fields["fare_evidence_attached"] = "true" if transport["evidence_attested"] else "false"
     return fields
 
 
