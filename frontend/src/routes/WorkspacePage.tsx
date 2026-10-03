@@ -78,6 +78,7 @@ import { PolicyPanel as PolicyTabPanel } from "./workspace/PolicyPanel";
 import { formatMoney } from "../lib/money";
 import { NOT_MEASURED, describeAvailability } from "../lib/metrics";
 import { submitTppPortalHandoff } from "../lib/tppPortalHandoff";
+import { policyCheckStatusMessage } from "../lib/policyCheckStatus";
 
 type LoaderData = {
   workspace: Promise<WorkspaceData>;
@@ -1964,7 +1965,7 @@ function WorkspacePageContent({
         return;
       }
       if (nextProposalState == null) {
-        setProposalStatusMessage("Submission completed, but no approval packet was saved.");
+        setProposalStatusMessage("Policy check returned no saved result or approval packet.");
         return;
       }
       const nextLifecycle = deriveProposalLifecyclePresentation(
@@ -1989,11 +1990,7 @@ function WorkspacePageContent({
           ...(submittedViewModel !== undefined ? { view_model: submittedViewModel } : {}),
         }));
       });
-      setProposalStatusMessage(
-        nextLifecycle.state === "failed"
-          ? `Submission completed with a policy failure: ${nextLifecycle.summary}`
-          : `Policy check completed: ${nextLifecycle.summary}`
-      );
+      setProposalStatusMessage(policyCheckStatusMessage(nextLifecycle));
     } catch (error) {
       if (refreshVersion === proposalRefreshVersion.current) {
         setProposalError(error instanceof Error ? error.message : "Approval submission failed.");
