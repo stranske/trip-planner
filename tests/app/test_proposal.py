@@ -335,6 +335,7 @@ def test_prepared_handoff_persists_only_unknown_manager_state(
     trip_id, _, _ = checked_handoff
     prepared = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
     assert prepared.status_code == 200
+    assert prepared.headers["cache-control"] == "no-store"
     metadata = prepared.json()["handoff"]
     assert metadata["status"] == "prepared"
     assert metadata["prepared_at"] is not None
@@ -380,6 +381,100 @@ def test_handoff_rejects_caller_supplied_destination_fields_and_manager_state(
     rejected = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json=payload)
     assert rejected.status_code == 422
     assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
+
+
+def test_handoff_ignores_query_overrides_and_uses_saved_traveler(
+    client: TestClient, checked_handoff: tuple[str, dict, dict]
+) -> None:
+    trip_id, _, _ = checked_handoff
+    prepared = client.post(
+        f"/api/workspace/{trip_id}/proposal/handoff",
+        params={"action_url": "https://caller.example", "traveler_name": "Caller supplied name"},
+        json={},
+    )
+    assert prepared.status_code == 200
+    payload = prepared.json()
+    assert payload["action_url"] == "https://tpp.example/portal/handoff"
+    assert payload["fields"]["traveler_name"] == "Proposal Owner"
+    assert "source_snapshot" not in payload
+    assert "source_snapshot" not in payload["handoff"]
+
+
+@pytest.mark.parametrize(
+    ("media_type", "body"),
+    [
+        ("application/x-www-form-urlencoded", "traveler_name=Caller+supplied+name"),
+        ("application/x-www-form-urlencoded", "{}"),
+        ("text/plain", "{}"),
+    ],
+)
+def test_handoff_rejects_native_form_requests_to_planner(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], media_type: str, body: str
+) -> None:
+    trip_id, _, _ = checked_handoff
+    before = client.get(f"/api/workspace/{trip_id}/proposal").json()
+    rejected = client.post(
+        f"/api/workspace/{trip_id}/proposal/handoff",
+        content=body,
+        headers={"Content-Type": media_type},
+    )
+    assert rejected.status_code == 415
+    assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
+
+
+@pytest.mark.parametrize("other_account", [False, True], ids=["signed-out", "another-traveler"])
+def test_handoff_requires_the_saved_trip_owner(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], other_account: bool
+) -> None:
+    trip_id, _, _ = checked_handoff
+    before = client.get(f"/api/workspace/{trip_id}/proposal").json()["proposal_state"][
+        "portal_handoff"
+    ]
+    client.cookies.clear()
+    if other_account:
+        signup = client.post(
+            "/api/auth/signup",
+            json={"email": "other@example.com", "password": "password123", "display_name": "Other"},
+        )
+        assert signup.status_code == 201
+
+    rejected = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert rejected.status_code == (404 if other_account else 401)
+    with get_session_factory()() as session:
+        record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+        assert record is not None
+        assert {key: record.portal_handoff[key] for key in before} == before
+
+
+@pytest.mark.parametrize(
+    "origin", ["https://tpp.example:invalid", "https://[::1", "http://localhost"]
+)
+def test_handoff_bad_server_origin_returns_unavailable_without_changing_state(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], monkeypatch, origin: str
+) -> None:
+    trip_id, _, _ = checked_handoff
+    before = client.get(f"/api/workspace/{trip_id}/proposal").json()
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", origin)
+
+    rejected = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert rejected.status_code == 503
+    assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
+
+
+def test_handoff_requires_a_saved_policy_result(
+    client: TestClient, checked_handoff: tuple[str, dict, dict]
+) -> None:
+    trip_id, _, _ = checked_handoff
+    with get_session_factory()() as session:
+        record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+        assert record is not None
+        record.evaluation_record = {}
+        session.commit()
+
+    rejected = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert rejected.status_code == 409
+    assert "Run the policy check again" in rejected.json()["detail"]
 
 
 @pytest.mark.parametrize(

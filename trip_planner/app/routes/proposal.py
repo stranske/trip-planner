@@ -1,6 +1,6 @@
 import os
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from trip_planner.app.routes.errors import public_http_error
@@ -53,6 +53,13 @@ def _fixture_response_enabled() -> bool:
     )
 
 
+def _require_json_handoff(request: Request) -> None:
+    """Keep the preparation request separate from the outgoing native form POST."""
+    media_type = request.headers.get("content-type", "").split(";", maxsplit=1)[0].strip().lower()
+    if media_type != "application/json":
+        raise HTTPException(status_code=415, detail="Prepare the portal handoff using JSON.")
+
+
 @router.get("/workspace/{trip_id}/proposal", response_model=WorkspaceProposalResponse)
 def read_workspace_proposal(
     trip_id: str,
@@ -73,10 +80,12 @@ def read_workspace_proposal(
 @router.post(
     "/workspace/{trip_id}/proposal/handoff",
     response_model=WorkspaceProposalHandoffResponse,
+    dependencies=[Depends(_require_json_handoff)],
 )
 def prepare_workspace_proposal_portal_handoff(
     trip_id: str,
     _payload: WorkspaceProposalHandoffRequest,
+    response: Response,
     user: AuthenticatedUser = Depends(require_authenticated_user),
     db_session: Session = Depends(get_db_session),
 ) -> WorkspaceProposalHandoffResponse:
@@ -113,6 +122,8 @@ def prepare_workspace_proposal_portal_handoff(
             status_code=422,
             message="The proposal cannot be handed to the approver portal yet.",
         ) from error
+    # The short-lived form payload contains traveler facts and must not be cached.
+    response.headers["Cache-Control"] = "no-store"
     return WorkspaceProposalHandoffResponse.model_validate(result)
 
 

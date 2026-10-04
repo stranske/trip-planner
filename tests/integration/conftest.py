@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi import Response
 from sqlalchemy.orm import Session
 
 from trip_planner.app.routes.proposal import prepare_workspace_proposal_portal_handoff
@@ -136,7 +137,11 @@ def saved_portal_handoff(
                 scenario_id=None,
             )
             handoff = prepare_workspace_proposal_portal_handoff(
-                trip_id, WorkspaceProposalHandoffRequest(), user, session
+                trip_id=trip_id,
+                _payload=WorkspaceProposalHandoffRequest(),
+                response=Response(),
+                user=user,
+                db_session=session,
             ).model_dump()
             yield session, user, trip_id, handoff
     finally:
