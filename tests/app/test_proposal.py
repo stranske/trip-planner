@@ -443,6 +443,7 @@ def test_handoff_requires_the_saved_trip_owner(
     with get_session_factory()() as session:
         record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
         assert record is not None
+        assert record.portal_handoff is not None
         assert {key: record.portal_handoff[key] for key in before} == before
 
 
