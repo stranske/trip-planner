@@ -2090,9 +2090,16 @@ def refresh_workspace_proposal_status(
     # happens in TPP's manager portal, which this workspace never reached. So the verdict is
     # fetched for every non-terminal state too; if TPP has none yet, nothing is recorded.
     polled_state = polled_response.execution_status.state
-    verdict_may_exist = polled_state in {"deferred", "running", "accepted"} and bool(
-        existing.execution_id
+    # A policy refusal also has a completed verdict, even though TPP marks the
+    # submission execution as failed. Save that result for Print / Export and
+    # the portal handoff; a transport failure still cannot authorize either.
+    policy_refused = polled_state == "failed" and (
+        polled_response.result_payload.get("queue_state") == "blocked_by_policy"
+        or (polled_response.error is not None and polled_response.error.category == "policy")
     )
+    verdict_may_exist = (
+        polled_state in {"deferred", "running", "accepted"} or policy_refused
+    ) and bool(existing.execution_id)
     if verdict_may_exist:
         early_request = _make_runtime_request(
             operation="fetch_evaluation_result",
