@@ -463,6 +463,68 @@ def test_handoff_bad_server_origin_returns_unavailable_without_changing_state(
     assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
 
 
+def test_handoff_configuration_recovery_preserves_the_saved_verdict(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trip_id, _, _ = checked_handoff
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.delenv("TPP_PORTAL_BASE_URL", raising=False)
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    before = client.get(f"/api/workspace/{trip_id}/proposal").json()
+
+    unavailable = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert unavailable.status_code == 503
+    assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
+
+    # Deployment configuration can restore the handoff without changing checked facts.
+    monkeypatch.setenv("TPP_BASE_URL", "https://fallback-tpp.example")
+    prepared = client.post(
+        f"/api/workspace/{trip_id}/proposal/handoff",
+        params={"action_url": "https://caller.example", "traveler_name": "Caller name"},
+        json={},
+    )
+    assert prepared.status_code == 200
+    assert prepared.headers["cache-control"] == "no-store"
+    payload = prepared.json()
+    assert payload["action_url"] == "https://fallback-tpp.example/portal/handoff"
+    assert payload["method"] == "POST"
+    assert payload["fields"]["traveler_name"] == "Proposal Owner"
+    assert (
+        payload["handoff"]["source_snapshot_hash"]
+        == before["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
+    )
+    assert payload["handoff"]["manager_submission_status"] == "unknown"
+    assert payload["handoff"]["manager_decision"] is None
+
+
+def test_handoff_portal_origin_is_independent_of_policy_api_configuration(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trip_id, _, _ = checked_handoff
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_BASE_URL", "https://policy-api.example/api")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://traveler-portal.example:8443/")
+
+    prepared = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert prepared.status_code == 200
+    assert prepared.json()["action_url"] == "https://traveler-portal.example:8443/portal/handoff"
+    assert prepared.json()["fields"]["traveler_name"] == "Proposal Owner"
+
+
+def test_handoff_invalid_explicit_portal_origin_does_not_use_fallback(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trip_id, _, _ = checked_handoff
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_BASE_URL", "https://fallback-tpp.example")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "http://traveler-portal.example")
+    before = client.get(f"/api/workspace/{trip_id}/proposal").json()
+
+    unavailable = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert unavailable.status_code == 503
+    assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
+
+
 def test_handoff_requires_a_saved_policy_result(
     client: TestClient, checked_handoff: tuple[str, dict, dict]
 ) -> None:
