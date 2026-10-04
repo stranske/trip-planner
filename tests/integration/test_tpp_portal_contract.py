@@ -18,7 +18,8 @@ if not TPP_REPO_PATH:
         "TPP_REPO_PATH is required for the cross-repo portal contract", allow_module_level=True
     )
 
-sys.path.insert(0, str(Path(TPP_REPO_PATH).resolve() / "src"))
+TPP_SOURCE_PATH = Path(TPP_REPO_PATH).resolve() / "src"
+sys.path.insert(0, str(TPP_SOURCE_PATH))
 
 # TPP is an optional sibling checkout, not a trip-planner dependency. Resolve it
 # dynamically only after the explicit cross-repo path gate above.
@@ -30,9 +31,7 @@ def test_trip_planner_handoff_reaches_tpp_manager_queue(
     saved_portal_handoff,
 ) -> None:
     # An already-installed TPP package must not silently replace the pinned checkout.
-    assert (
-        Path(http_service.__file__).resolve().is_relative_to(Path(TPP_REPO_PATH).resolve() / "src")
-    )
+    assert Path(http_service.__file__).resolve().is_relative_to(TPP_SOURCE_PATH)
     monkeypatch.setenv("TPP_BASE_URL", "http://127.0.0.1:8000")
     monkeypatch.setenv("TPP_OIDC_PROVIDER", "google")
     monkeypatch.setenv("TPP_AUTH_MODE", "static-token")
