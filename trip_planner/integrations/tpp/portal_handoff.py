@@ -31,7 +31,21 @@ def portal_action_url() -> str:
         raise TPPPortalHandoffConfigurationError(
             "Travel-Plan-Permission portal handoff is not configured."
         )
-    parsed = urlsplit(raw)
+    # Browsers treat backslashes as URL separators and strip embedded whitespace.
+    # Reject those forms before parsing so the native form uses the same origin
+    # that the server validated, rather than a browser-normalized alternative.
+    if "\\" in raw or any(character.isspace() or ord(character) < 32 for character in raw):
+        raise TPPPortalHandoffConfigurationError(
+            "Travel-Plan-Permission portal handoff must be configured as an origin only."
+        )
+    try:
+        parsed = urlsplit(raw)
+        # Accessing port validates its syntax and range; urlsplit alone does not.
+        _ = parsed.port
+    except ValueError as error:
+        raise TPPPortalHandoffConfigurationError(
+            "Travel-Plan-Permission portal handoff must be configured as a valid origin."
+        ) from error
     environment = os.getenv("TRIP_PLANNER_ENV", "local").strip().lower()
     local_environment = environment in {"local", "development", "dev", "test", "testing"}
     hostname = parsed.hostname or ""

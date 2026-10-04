@@ -117,6 +117,28 @@ def test_portal_action_url_accepts_origin_only_and_uses_fixed_path(monkeypatch) 
         portal_action_url()
 
 
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://tpp.example:invalid",
+        "https://tpp.example:65536",
+        "https://[::1",
+        "https://tpp.example\\portal",
+        "https://tpp.example\n.attacker.example",
+        "https://tpp.example\t.attacker.example",
+        "https://tpp.example\x01.attacker.example",
+        "https://tpp .example",
+    ],
+)
+def test_portal_action_url_rejects_invalid_or_browser_normalized_origins(
+    monkeypatch, origin
+) -> None:
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", origin)
+
+    with pytest.raises(TPPPortalHandoffConfigurationError, match="origin"):
+        portal_action_url()
+
+
 @pytest.mark.parametrize("environment", ["production", "staging", "unknown"])
 def test_portal_action_url_rejects_http_outside_local_environments(
     monkeypatch, environment
