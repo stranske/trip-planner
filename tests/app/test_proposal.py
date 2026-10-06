@@ -448,7 +448,14 @@ def test_handoff_requires_the_saved_trip_owner(
 
 
 @pytest.mark.parametrize(
-    "origin", ["https://tpp.example:invalid", "https://[::1", "http://localhost"]
+    "origin",
+    [
+        "https://tpp.example:invalid",
+        "https://[::1",
+        "http://localhost",
+        "https://@tpp.example",
+        "https://:@tpp.example",
+    ],
 )
 def test_handoff_bad_server_origin_returns_unavailable_without_changing_state(
     client: TestClient, checked_handoff: tuple[str, dict, dict], monkeypatch, origin: str
