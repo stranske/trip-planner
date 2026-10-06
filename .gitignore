@@ -150,3 +150,6 @@ node_modules/
 # files have been committed twice by a broad `git add`, breaking CI collection both
 # times: pytest tries to import a module name containing spaces and parentheses.
 *conflicted copy*
+.pytest_cache/
+.ruff_cache/
+.coverage
