@@ -19,7 +19,7 @@ attrs==26.1.0
     # via
     #   jsonschema
     #   referencing
-black==26.5.1
+black==26.10.0
     # via trip-planner (pyproject.toml)
 certifi==2026.7.22
     # via
@@ -37,7 +37,7 @@ colorama==0.4.6 ; sys_platform == 'win32'
     #   click
     #   pytest
     #   tqdm
-coverage==7.16.1
+coverage==7.16.2
     # via pytest-cov
 distro==1.9.0
     # via
@@ -95,7 +95,7 @@ markupsafe==3.0.3
     # via
     #   mako
     #   werkzeug
-mypy==2.3.1
+mypy==2.4.0
     # via trip-planner (pyproject.toml)
 mypy-extensions==1.1.0
     # via
@@ -183,7 +183,7 @@ rpds-py==2026.6.3
     # via
     #   jsonschema
     #   referencing
-ruff==0.16.9
+ruff==0.16.10
     # via trip-planner (pyproject.toml)
 six==1.17.0
     # via python-dateutil
