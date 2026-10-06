@@ -172,3 +172,56 @@ def test_refresh_does_not_authorize_prices_changed_after_policy_submission(
     prepared = tpp_client.post(f"/api/workspace/{submitted_trip}/proposal/handoff", json={})
     assert prepared.status_code == 409
     assert "Run the policy check again" in prepared.json()["detail"]
+
+
+@pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
+def test_saved_verdict_handoff_does_not_call_the_policy_api(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+) -> None:
+    operations = _install_verdict_transport(monkeypatch, outcome)
+    refreshed = tpp_client.post(f"/api/workspace/{submitted_trip}/proposal/refresh")
+    assert refreshed.status_code == 200
+    before = refreshed.json()["proposal_state"]
+    assert before["summary"]["evaluation_result_status"] == outcome
+    bound_hash = before["portal_handoff"]["source_snapshot_hash"]
+
+    # Once a verdict is saved, only the browser contacts the portal. Preparation
+    # must not depend on the policy API being available or resubmit the proposal.
+    def unavailable(*args, **kwargs):
+        pytest.fail("Preparing a saved-verdict handoff called the policy API")
+
+    for operation in (
+        "fetch_policy_constraints",
+        "submit_proposal",
+        "poll_execution_status",
+        "fetch_evaluation_result",
+    ):
+        monkeypatch.setattr(HTTPTPPIntegrationClient, operation, unavailable)
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://traveler-portal.example:8443/")
+
+    for _ in range(2):
+        prepared = tpp_client.post(f"/api/workspace/{submitted_trip}/proposal/handoff", json={})
+        assert prepared.status_code == 200
+        assert prepared.headers["cache-control"] == "no-store"
+        payload = prepared.json()
+        assert payload["action_url"] == "https://traveler-portal.example:8443/portal/handoff"
+        assert payload["method"] == "POST"
+        assert payload["fields"]["traveler_name"] == "Dana Chen"
+        assert "USD 612.00" in payload["fields"]["notes"]
+        assert f"status={outcome}" in payload["fields"]["notes"]
+        assert payload["handoff"]["source_snapshot_hash"] == bound_hash
+        assert payload["handoff"]["status"] == "prepared"
+        assert payload["handoff"]["manager_submission_status"] == "unknown"
+        assert payload["handoff"]["manager_decision"] is None
+        assert "source_snapshot" not in payload["handoff"]
+
+    reloaded = tpp_client.get(f"/api/workspace/{submitted_trip}/proposal")
+    assert reloaded.status_code == 200
+    assert reloaded.json()["proposal_state"]["portal_handoff"] == payload["handoff"]
+    assert reloaded.json()["proposal_state"]["evaluation"] == before["evaluation"]
+    assert operations == ["poll_execution_status", "fetch_evaluation_result"]
