@@ -117,6 +117,14 @@ def test_portal_action_url_accepts_origin_only_and_uses_fixed_path(monkeypatch) 
         portal_action_url()
 
 
+@pytest.mark.parametrize("origin", ["https://@tpp.example", "https://:@tpp.example"])
+def test_portal_action_url_rejects_empty_userinfo(monkeypatch, origin) -> None:
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", origin)
+
+    with pytest.raises(TPPPortalHandoffConfigurationError, match="origin only"):
+        portal_action_url()
+
+
 @pytest.mark.parametrize(
     "origin",
     [

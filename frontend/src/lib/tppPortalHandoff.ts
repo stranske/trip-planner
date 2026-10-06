@@ -7,6 +7,8 @@ export function submitTppPortalHandoff(
 ): void {
   const form = documentRef.createElement("form");
   form.method = "POST";
+  form.enctype = "application/x-www-form-urlencoded";
+  form.acceptCharset = "UTF-8";
   form.action = handoff.action_url;
   form.hidden = true;
 
@@ -19,5 +21,12 @@ export function submitTppPortalHandoff(
   }
 
   documentRef.body.append(form);
-  form.submit();
+  try {
+    form.submit();
+  } catch (error) {
+    // Keep a successful form attached while the browser schedules navigation.
+    // Failed submissions must not leave traveler facts in the page.
+    form.remove();
+    throw error;
+  }
 }

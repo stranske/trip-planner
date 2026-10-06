@@ -60,8 +60,8 @@ def portal_action_url() -> str:
         )
     if (
         not parsed.hostname
-        or parsed.username
-        or parsed.password
+        or parsed.username is not None
+        or parsed.password is not None
         or parsed.query
         or parsed.fragment
         or parsed.path not in {"", "/"}
