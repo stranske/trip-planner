@@ -10,7 +10,7 @@
  * - Building and updating PR body with preamble and status blocks
  */
 
-const { visibleChecklistContent, stripPrTemplateControls } = require('./issue_scope_parser');
+const { PR_TEMPLATE_SKELETON_LINES, visibleChecklistContent, stripPrTemplateControls } = require('./issue_scope_parser');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -19,6 +19,8 @@ const { ensureRateLimitWrapped } = require('./github-rate-limited-wrapper.js');
 const { isRateLimitError: classifyRateLimitError } = require('./error_classifier');
 const {
   extractIssueNumbersFromText,
+  extractClosingIssueNumbersFromText,
+  extractIssueSourceFromPull,
   formatSourceContextForLog,
   normalizeSourceType,
   resolvePrSourceContext,
@@ -710,7 +712,7 @@ async function fetchConnectorCheckboxStates(github, owner, repo, prNumber, core)
  * when a PR is created via the API or UI for agent-managed branches.
  * 
  * @param {string} body - PR body that may contain template content
- * @returns {string} Body with template content stripped (everything before first marker)
+ * @returns {string} Body with only an unfilled template prefix stripped
  */
 function stripPrTemplateContent(body) {
   if (!body) return '';
@@ -729,14 +731,19 @@ function stripPrTemplateContent(body) {
     firstMarkerIndex = statusStart;
   }
   
-  // A checkbox-bearing prefix may be reviewer-added work, not a template.
-  // Preserve it with its context and continuation lines across regeneration.
+  // Remove only a positively identified empty template skeleton. Authored prose,
+  // filled Summary/Testing sections and reviewer work survive regardless of lists.
   if (firstMarkerIndex > 0) {
     const prefix = stripPrTemplateControls(body.slice(0, firstMarkerIndex));
-    if (/^\s*(?:[-*+]|\d+[.)])\s*\[[ xX]\]/m.test(visibleChecklistContent(prefix))) {
-      return prefix + body.slice(firstMarkerIndex);
-    }
-    return body.slice(firstMarkerIndex);
+    const visible = prefix.replace(/<!--[\s\S]*?-->/g, '');
+    const lines = visible.split('\n').map((line) => line.trim()).filter(Boolean);
+    const skeleton = stripPrTemplateControls(PR_TEMPLATE_SKELETON_LINES.join('\n'))
+      .split('\n').map((line) => line.trim()).filter(Boolean);
+    // A partial heading or a rearranged/repeated skeleton can be authored text.
+    // Require the entire template after removing its choice controls.
+    const isUnfilledTemplate = lines.length === skeleton.length &&
+      lines.every((line, index) => line === skeleton[index]);
+    return isUnfilledTemplate ? body.slice(firstMarkerIndex) : prefix + body.slice(firstMarkerIndex);
   }
   
   return body;
@@ -1154,13 +1161,21 @@ function resolveNonIssueWorkflowSourceContextForBodySync(pr = {}, issueNumber = 
   if (!explicitNonIssueSourceContext) {
     return null;
   }
-  const explicitIssueSyncNumbers = extractExplicitIssueSyncNumbers(pr);
+  const closingIntentNumbers = new Set();
+  for (const text of [pr.title, pr.body]) {
+    for (const number of extractClosingIssueNumbersFromText(text)) {
+      closingIntentNumbers.add(number);
+    }
+    for (const match of String(text || '').matchAll(/<!--\s*meta:issue:([0-9]+)\s*-->/gi)) {
+      closingIntentNumbers.add(Number.parseInt(match[1], 10));
+    }
+  }
   const targetIssueNumber = Number.parseInt(issueNumber, 10);
   if (
-    explicitIssueSyncNumbers.size > 0 &&
+    closingIntentNumbers.size > 0 &&
     (!Number.isFinite(targetIssueNumber) ||
       targetIssueNumber <= 0 ||
-      explicitIssueSyncNumbers.has(targetIssueNumber))
+      closingIntentNumbers.has(targetIssueNumber))
   ) {
     return null;
   }
@@ -1205,9 +1220,14 @@ function buildPreamble(sections) {
   
   // Add reference to source issue if available
   if (sections.issueNumber) {
-    lines.push(`<!-- meta:issue:${sections.issueNumber} -->`);
+    // Omitted provenance keeps the legacy helper API's closing behavior.
+    const relationOnly = ['mention', 'title'].includes(sections.via);
+    const marker = relationOnly ? 'meta:related-issue' : 'meta:issue';
+    lines.push(`<!-- ${marker}:${sections.issueNumber} -->`);
     lines.push(`> **Source:** Issue #${sections.issueNumber}`, '');
-    if (isCampaignIssue(sections.sourceIssue)) {
+    if (relationOnly) {
+      lines.push(`Related to #${sections.issueNumber}`, '');
+    } else if (isCampaignIssue(sections.sourceIssue)) {
       lines.push(`Related to campaign issue #${sections.issueNumber}`, '');
     } else {
       lines.push(`Closes #${sections.issueNumber}`, '');
@@ -1708,6 +1728,7 @@ async function run({github: rawGithub, context, core, inputs}) {
     ci,
     issueNumber,
     sourceIssue: issueResponse.data,
+    via: extractIssueSourceFromPull(pr).via,
   });
 
   const workflowRuns = await collectStatusWorkflowRuns({
