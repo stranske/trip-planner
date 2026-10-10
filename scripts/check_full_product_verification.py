@@ -111,8 +111,19 @@ def _assert_business_verification_outcomes(
         return
 
     live_status = live_details["evaluation_status"]
+    # TPP truthfully marks a policy-blocked proposal execution as failed. That
+    # expected negative journey is distinct from a failed status transport.
+    live_error = live_details.get("submission_error") or {}
+    expected_policy_block = (
+        expected_evaluation_status == "non_compliant"
+        and live_status == "non_compliant"
+        and live_details.get("evaluation_transport_status") == "succeeded"
+        and live_details.get("submission_outcome") == "blocked_by_policy"
+        and live_error.get("category") == "policy"
+        and live_error.get("code") == "proposal_blocked_by_policy"
+    )
     _require(
-        live_details["status_poll"] != "failed",
+        live_details["status_poll"] != "failed" or expected_policy_block,
         "live TPP proposal status poll reported failure",
         status_poll=live_details["status_poll"],
         trip_id=live_details.get("trip_id"),
@@ -738,6 +749,31 @@ def _run_live_tpp_journey(
                 trip_id=trip_id,
             )
 
+            # This is synthetic verifier input, entered through the same API as a
+            # traveler. Real TPP policy must see complete fare/cabin/expense facts;
+            # production must continue to reject missing traveler-supplied facts.
+            price_response = client.put(
+                f"/api/workspace/{trip_id}/prices",
+                json={
+                    "component": "transport",
+                    "amount": 620.0,
+                    "lowest_amount": (
+                        620.0 if expected_evaluation_status == "compliant" else 400.0
+                    ),
+                    "currency": "USD",
+                    "note": "Synthetic full-product verification fare evidence",
+                    "evidence_attested": True,
+                    "cabin_class": "economy",
+                    "flight_hours": 2.5,
+                },
+            )
+            _require(
+                price_response.status_code == 200,
+                "live TPP synthetic fare setup failed",
+                status=price_response.status_code,
+                body=price_response.text,
+                trip_id=trip_id,
+            )
             proposal = _proposal_payload(trip_id)
             submission_request = _prepared_submission_request(trip_id, proposal["proposal_id"])
             submission_response = client.put(
@@ -802,6 +838,9 @@ def _run_live_tpp_journey(
                 "proposal_id": proposal["proposal_id"],
                 "execution_id": payload["proposal_state"]["execution_id"],
                 "status_poll": status_response.json()["summary"]["submission_status"],
+                "submission_outcome": status_response.json()["summary"]["submission_outcome"],
+                "submission_error": status_response.json()["summary"]["submission_error"],
+                "evaluation_transport_status": payload["summary"]["evaluation_transport_status"],
                 "evaluation_status": payload["summary"]["evaluation_result_status"],
             }
 

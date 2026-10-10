@@ -470,3 +470,23 @@ def test_verifier_summary_marks_skipped_surfaces_as_uncovered(capsys) -> None:
     )
 
     assert "WARNING uncovered surface: planner-llm" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("error_category", ["policy", "transport"])
+def test_live_negative_journey_requires_completed_policy_refusal(error_category: str) -> None:
+    local = _business_details(evaluation_status="non_compliant")
+    live = _business_details(evaluation_status="non_compliant", status_poll="failed")
+    live.update(
+        submission_outcome="blocked_by_policy",
+        evaluation_transport_status="succeeded",
+        submission_error={"category": error_category, "code": "proposal_blocked_by_policy"},
+    )
+    if error_category == "policy":
+        verifier._assert_business_verification_outcomes(
+            local, expected_evaluation_status="non_compliant", live_details=live
+        )
+    else:
+        with pytest.raises(verifier.VerificationFailure, match="live TPP proposal status poll"):
+            verifier._assert_business_verification_outcomes(
+                local, expected_evaluation_status="non_compliant", live_details=live
+            )

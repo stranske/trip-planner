@@ -43,3 +43,21 @@ checks pass. Local Python is 3.12.2; the hosted workflow selects 3.14, so this
 is focused local validation, not hosted parity or full-product-check PASS.
 Raw install, failure, JUnit and mutation receipts are retained by the closer
 in round `20261010T1634Z`. Hosted checks and full #1842 acceptance remain required.
+
+## Live negative-policy journey recovery
+
+The first hosted rerun38069278349 passed the portal contract and exposed a later
+full-product assertion: real TPP marks a policy-blocked execution `failed` even
+when evaluation transport succeeds. The verifier now accepts that state only
+for the expected `non_compliant` result, completed evaluation transport,
+`blocked_by_policy` outcome and exact policy error category/code. Failed transport
+remains a failing gate. Synthetic fare input is entered through the prices API:
+selected620 versus lowest400 intentionally exercises fare refusal; compliant
+journeys use620 versus620. Cabin, evidence and expense facts are complete.
+
+Real pinned-app local product journeys exit0 with the expected policy refusal;
+frontend smoke is explicitly skipped locally for missing npm dependencies.
+Hosted CI must independently qualify its installed frontend.22 verifier tests
+pass, including rejection of failed transport; the expanded focused batch258
+tests passes. Ruff on the two older verifier files retains12+4 existing findings,
+with zero new findings against head48e0654. No whole-repository Ruff PASS claim.
