@@ -10,6 +10,8 @@ from trip_planner.app.main import create_app
 from trip_planner.integrations.tpp import client as tpp_client_module
 from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.proposal import PersistedProposalState
+from trip_planner.persistence.models.trip import PersistedTrip
+from trip_planner.persistence.models.trip_price import PersistedTripPrice
 
 
 def _fixture_path(*parts: str) -> Path:
@@ -139,7 +141,11 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     reset_database_state()
 
 
-def test_workspace_proposal_submission_and_evaluation_persist(client: TestClient) -> None:
+def test_workspace_proposal_submission_and_evaluation_persist(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://tpp.example")
     created = client.post(
         "/api/trips",
         json={
@@ -155,6 +161,16 @@ def test_workspace_proposal_submission_and_evaluation_persist(client: TestClient
         },
     )
     trip_id = created.json()["trip"]["trip_id"]
+    priced = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={
+            "component": "transport",
+            "amount": 620.0,
+            "currency": "USD",
+            "note": "United.com quote",
+        },
+    )
+    assert priced.status_code == 200
 
     submission_fixture = _load_fixture("proposal_submit_deferred.json")
     submission_fixture["request"]["trip_id"] = trip_id
@@ -203,6 +219,43 @@ def test_workspace_proposal_submission_and_evaluation_persist(client: TestClient
     assert evaluated_payload["proposal_state"]["summary"]["approval_ready"] is True
     assert evaluated_payload["proposal_state"]["follow_up"]["status"] == "resolved"
 
+    handoff = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert handoff.status_code == 200
+    assert handoff.json()["action_url"] == "https://tpp.example/portal/handoff"
+    assert handoff.json()["method"] == "POST"
+    assert handoff.json()["fields"]["traveler_name"] == "Proposal Owner"
+    assert "destination_zip" not in handoff.json()["fields"]
+    assert handoff.json()["handoff"]["status"] == "prepared"
+    assert handoff.json()["handoff"]["manager_submission_status"] == "unknown"
+
+    updated_price = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={
+            "component": "transport",
+            "amount": 625.0,
+            "currency": "USD",
+            "note": "United.com updated quote",
+        },
+    )
+    assert updated_price.status_code == 200
+    stale = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert stale.status_code == 409
+    assert "Run the policy check again" in stale.json()["detail"]
+
+    refreshed_evaluation = client.put(
+        f"/api/workspace/{trip_id}/proposal/evaluation",
+        json={
+            "request": evaluation_fixture["request"],
+            "response": evaluation_fixture["response"],
+            "proposal_version": "proposal-v3",
+            "scenario_id": "scenario-a",
+        },
+    )
+    assert refreshed_evaluation.status_code == 200
+    still_stale = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert still_stale.status_code == 409
+    assert "Run the policy check again" in still_stale.json()["detail"]
+
     reloaded = client.get(f"/api/workspace/{trip_id}/proposal")
     assert reloaded.status_code == 200
     reloaded_payload = reloaded.json()
@@ -211,6 +264,460 @@ def test_workspace_proposal_submission_and_evaluation_persist(client: TestClient
         reloaded_payload["proposal_state"]["evaluation"]["evaluation_result"]["evaluation_id"]
         == "eval-approved-001"
     )
+    assert reloaded_payload["proposal_state"]["portal_handoff"]["status"] == "eligible"
+    assert "source_snapshot" not in reloaded_payload["proposal_state"]["portal_handoff"]
+
+
+@pytest.fixture
+def checked_handoff(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> tuple[str, dict, dict]:
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://tpp.example")
+    created = client.post(
+        "/api/trips",
+        json={
+            "title": "Freshness-bound handoff",
+            "mode": "business",
+            "trip_frame": {
+                "origin": "ORD",
+                "start_date": "2026-05-04",
+                "end_date": "2026-05-06",
+                "duration_days": 3,
+                "primary_regions": ["Chicago"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+    assert (
+        client.put(
+            f"/api/workspace/{trip_id}/prices",
+            json={"component": "transport", "amount": 620.0, "note": "United.com quote"},
+        ).status_code
+        == 200
+    )
+
+    submission_fixture = _load_fixture("proposal_submit_deferred.json")
+    submission_fixture["request"]["trip_id"] = trip_id
+    submission_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    submission_fixture["request"]["payload"]["proposal_ref"] = f"proposal:{trip_id}"
+    submission = {
+        "proposal": _proposal_payload(trip_id),
+        "request": submission_fixture["request"],
+        "response": submission_fixture["response"],
+        "proposal_version": "proposal-v3",
+        "scenario_id": "scenario-a",
+    }
+    assert client.put(f"/api/workspace/{trip_id}/proposal", json=submission).status_code == 200
+
+    evaluation_fixture = _load_fixture("results", "approved_evaluation.json")
+    evaluation_fixture["request"]["trip_id"] = trip_id
+    evaluation_fixture["request"]["proposal_id"] = f"proposal:{trip_id}"
+    result = evaluation_fixture["response"]["result_payload"]
+    result["trip_id"] = trip_id
+    result["proposal_id"] = f"proposal:{trip_id}"
+    result["evaluation_result"]["proposal_id"] = f"proposal:{trip_id}"
+    evaluation = {
+        "request": evaluation_fixture["request"],
+        "response": evaluation_fixture["response"],
+        "proposal_version": "proposal-v3",
+        "scenario_id": "scenario-a",
+    }
+    assert (
+        client.put(f"/api/workspace/{trip_id}/proposal/evaluation", json=evaluation).status_code
+        == 200
+    )
+    assert client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={}).status_code == 200
+    return trip_id, submission, evaluation
+
+
+def test_prepared_handoff_persists_only_unknown_manager_state(
+    client: TestClient, checked_handoff: tuple[str, dict, dict]
+) -> None:
+    trip_id, _, _ = checked_handoff
+    prepared = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert prepared.status_code == 200
+    assert prepared.headers["cache-control"] == "no-store"
+    metadata = prepared.json()["handoff"]
+    assert metadata["status"] == "prepared"
+    assert metadata["prepared_at"] is not None
+    assert metadata["manager_submission_status"] == "unknown"
+    assert metadata["manager_decision"] is None
+    assert set(metadata) == {
+        "schema_version",
+        "source_snapshot_hash",
+        "prepared_at",
+        "status",
+        "manager_submission_status",
+        "manager_decision",
+    }
+
+    # Read the stored row through a new session: preparation records no receipt or decision.
+    with get_session_factory()() as session:
+        record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+        assert record is not None
+        stored = record.portal_handoff
+        assert stored is not None
+        assert stored["source_snapshot"]["traveler_name"] == "Proposal Owner"
+        assert {key: stored[key] for key in metadata} == metadata
+
+    for path in (f"/api/workspace/{trip_id}/proposal", f"/api/workspace/{trip_id}"):
+        reloaded = client.get(path)
+        assert reloaded.status_code == 200
+        assert reloaded.json()["proposal_state"]["portal_handoff"] == metadata
+
+
+def test_handoff_response_filters_internal_source_facts(
+    client: TestClient,
+    checked_handoff: tuple[str, dict, dict],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from trip_planner.app.routes import proposal as proposal_routes
+
+    trip_id, _, _ = checked_handoff
+    prepared = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert prepared.status_code == 200
+    public_payload = prepared.json()
+    with get_session_factory()() as session:
+        record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+        assert record is not None
+        internal_metadata = dict(record.portal_handoff or {})
+    assert "source_snapshot" in internal_metadata
+
+    # If a service returns persisted metadata directly, response serialization
+    # still must not disclose the proposal, full verdict or source price records.
+    monkeypatch.setattr(
+        proposal_routes,
+        "prepare_workspace_proposal_handoff",
+        lambda *args, **kwargs: {**public_payload, "handoff": internal_metadata},
+    )
+    response = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json() == public_payload
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"action_url": "https://caller.example/portal/handoff"},
+        {"fields": {"traveler_name": "Caller supplied traveler"}},
+        {"manager_submission_status": "sent", "manager_decision": "approved"},
+    ],
+)
+def test_handoff_rejects_caller_supplied_destination_fields_and_manager_state(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], payload: dict
+) -> None:
+    trip_id, _, _ = checked_handoff
+    before = client.get(f"/api/workspace/{trip_id}/proposal").json()
+    rejected = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json=payload)
+    assert rejected.status_code == 422
+    assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
+
+
+def test_handoff_ignores_query_overrides_and_uses_saved_traveler(
+    client: TestClient, checked_handoff: tuple[str, dict, dict]
+) -> None:
+    trip_id, _, _ = checked_handoff
+    prepared = client.post(
+        f"/api/workspace/{trip_id}/proposal/handoff",
+        params={"action_url": "https://caller.example", "traveler_name": "Caller supplied name"},
+        json={},
+    )
+    assert prepared.status_code == 200
+    payload = prepared.json()
+    assert payload["action_url"] == "https://tpp.example/portal/handoff"
+    assert payload["fields"]["traveler_name"] == "Proposal Owner"
+    assert "source_snapshot" not in payload
+    assert "source_snapshot" not in payload["handoff"]
+
+
+@pytest.mark.parametrize(
+    ("media_type", "body"),
+    [
+        ("application/x-www-form-urlencoded", "traveler_name=Caller+supplied+name"),
+        ("application/x-www-form-urlencoded", "{}"),
+        ("text/plain", "{}"),
+    ],
+)
+def test_handoff_rejects_native_form_requests_to_planner(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], media_type: str, body: str
+) -> None:
+    trip_id, _, _ = checked_handoff
+    before = client.get(f"/api/workspace/{trip_id}/proposal").json()
+    rejected = client.post(
+        f"/api/workspace/{trip_id}/proposal/handoff",
+        content=body,
+        headers={"Content-Type": media_type},
+    )
+    assert rejected.status_code == 415
+    assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
+
+
+@pytest.mark.parametrize("other_account", [False, True], ids=["signed-out", "another-traveler"])
+def test_handoff_requires_the_saved_trip_owner(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], other_account: bool
+) -> None:
+    trip_id, _, _ = checked_handoff
+    before = client.get(f"/api/workspace/{trip_id}/proposal").json()["proposal_state"][
+        "portal_handoff"
+    ]
+    client.cookies.clear()
+    if other_account:
+        signup = client.post(
+            "/api/auth/signup",
+            json={"email": "other@example.com", "password": "password123", "display_name": "Other"},
+        )
+        assert signup.status_code == 201
+
+    rejected = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert rejected.status_code == (404 if other_account else 401)
+    with get_session_factory()() as session:
+        record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+        assert record is not None
+        assert record.portal_handoff is not None
+        assert {key: record.portal_handoff[key] for key in before} == before
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://tpp.example:invalid",
+        "https://[::1",
+        "http://localhost",
+        "https://@tpp.example",
+        "https://:@tpp.example",
+        "https://tpp.example|other.example",
+        "https://tpp.example%2f.other.example",
+        "https://[::1%25eth0]",
+    ],
+)
+def test_handoff_bad_server_origin_returns_unavailable_without_changing_state(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], monkeypatch, origin: str
+) -> None:
+    trip_id, _, _ = checked_handoff
+    before = client.get(f"/api/workspace/{trip_id}/proposal").json()
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", origin)
+
+    rejected = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert rejected.status_code == 503
+    assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
+
+
+def test_handoff_configuration_recovery_preserves_the_saved_verdict(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trip_id, _, _ = checked_handoff
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.delenv("TPP_PORTAL_BASE_URL", raising=False)
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    before = client.get(f"/api/workspace/{trip_id}/proposal").json()
+
+    unavailable = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert unavailable.status_code == 503
+    assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
+
+    # Deployment configuration can restore the handoff without changing checked facts.
+    monkeypatch.setenv("TPP_BASE_URL", "https://fallback-tpp.example")
+    prepared = client.post(
+        f"/api/workspace/{trip_id}/proposal/handoff",
+        params={"action_url": "https://caller.example", "traveler_name": "Caller name"},
+        json={},
+    )
+    assert prepared.status_code == 200
+    assert prepared.headers["cache-control"] == "no-store"
+    payload = prepared.json()
+    assert payload["action_url"] == "https://fallback-tpp.example/portal/handoff"
+    assert payload["method"] == "POST"
+    assert payload["fields"]["traveler_name"] == "Proposal Owner"
+    assert (
+        payload["handoff"]["source_snapshot_hash"]
+        == before["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
+    )
+    assert payload["handoff"]["manager_submission_status"] == "unknown"
+    assert payload["handoff"]["manager_decision"] is None
+
+
+def test_handoff_portal_origin_is_independent_of_policy_api_configuration(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trip_id, _, _ = checked_handoff
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_BASE_URL", "https://policy-api.example/api")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://traveler-portal.example:8443/")
+
+    prepared = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert prepared.status_code == 200
+    assert prepared.json()["action_url"] == "https://traveler-portal.example:8443/portal/handoff"
+    assert prepared.json()["fields"]["traveler_name"] == "Proposal Owner"
+
+
+def test_handoff_invalid_explicit_portal_origin_does_not_use_fallback(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trip_id, _, _ = checked_handoff
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_BASE_URL", "https://fallback-tpp.example")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "http://traveler-portal.example")
+    before = client.get(f"/api/workspace/{trip_id}/proposal").json()
+
+    unavailable = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert unavailable.status_code == 503
+    assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
+
+
+def test_handoff_requires_a_saved_policy_result(
+    client: TestClient, checked_handoff: tuple[str, dict, dict]
+) -> None:
+    trip_id, _, _ = checked_handoff
+    with get_session_factory()() as session:
+        record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+        assert record is not None
+        record.evaluation_record = {}
+        session.commit()
+
+    rejected = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert rejected.status_code == 409
+    assert "Run the policy check again" in rejected.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("model", "field", "value"),
+    [
+        (PersistedTrip, "origin", "LAX"),
+        (PersistedTrip, "primary_regions", ["Denver"]),
+        (PersistedTrip, "start_date", "2026-05-03"),
+        (PersistedTrip, "duration_days", 4),
+        (PersistedTrip, "traveler_count", 2),
+        (PersistedTrip, "traveler_party_kind", "team"),
+        (PersistedTrip, "traveler_notes", "Requires accessible transport"),
+        (PersistedTripPrice, "amount", 625.0),
+        (PersistedTripPrice, "note", "Revised fare source"),
+        (PersistedTripPrice, "lowest_amount", 400.0),
+        (PersistedTripPrice, "evidence_attested", True),
+        (PersistedTripPrice, "cabin_class", "business"),
+        (PersistedTripPrice, "flight_hours", 8.0),
+    ],
+    ids=lambda value: value.__name__ if isinstance(value, type) else str(value),
+)
+def test_handoff_rejects_changed_saved_facts(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], model, field: str, value
+) -> None:
+    trip_id, _, evaluation = checked_handoff
+    # Exercise the hash independently of the trip edit route's verdict deletion.
+    with get_session_factory()() as session:
+        record_id = trip_id if model is PersistedTrip else f"trip-price:{trip_id}:transport"
+        record = session.get(model, record_id)
+        assert record is not None
+        setattr(record, field, value)
+        session.commit()
+
+    stale = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert stale.status_code == 409
+    assert "Run the policy check again" in stale.json()["detail"]
+
+    # Fetching the original execution's verdict must not rebind it to changed facts.
+    refreshed = client.put(f"/api/workspace/{trip_id}/proposal/evaluation", json=evaluation)
+    assert refreshed.status_code == 200
+    assert client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={}).status_code == 409
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("compliance_score", 0.5),
+        ("notes", ["Additional documentation required"]),
+        ("approval_requirements", [{"role": "director", "reason": "Review", "mandatory": True}]),
+    ],
+)
+def test_handoff_hash_binds_full_policy_result(
+    client: TestClient, checked_handoff: tuple[str, dict, dict], field: str, value
+) -> None:
+    trip_id, _, _ = checked_handoff
+    with get_session_factory()() as session:
+        record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+        assert record is not None
+        evaluation = dict(record.evaluation_record)
+        evaluation["evaluation_result"] = {**evaluation["evaluation_result"], field: value}
+        record.evaluation_record = evaluation
+        session.commit()
+
+    # Status and rule codes are unchanged; the full saved result has changed.
+    assert client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={}).status_code == 409
+
+
+def test_handoff_hash_binds_submitted_proposal(
+    client: TestClient, checked_handoff: tuple[str, dict, dict]
+) -> None:
+    trip_id, _, _ = checked_handoff
+    with get_session_factory()() as session:
+        record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+        assert record is not None
+        record.proposal_payload = {**record.proposal_payload, "approval_notes": ["Changed request"]}
+        session.commit()
+
+    assert client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={}).status_code == 409
+
+
+def test_legacy_verdict_requires_new_submission_to_bind_facts(
+    client: TestClient, checked_handoff: tuple[str, dict, dict]
+) -> None:
+    trip_id, submission, evaluation = checked_handoff
+    with get_session_factory()() as session:
+        record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+        assert record is not None
+        record.portal_handoff = None
+        session.commit()
+
+    refreshed = client.put(f"/api/workspace/{trip_id}/proposal/evaluation", json=evaluation)
+    assert refreshed.status_code == 200
+    assert refreshed.json()["proposal_state"]["portal_handoff"] is None
+    assert client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={}).status_code == 409
+
+    assert client.put(f"/api/workspace/{trip_id}/proposal", json=submission).status_code == 200
+    assert (
+        client.put(f"/api/workspace/{trip_id}/proposal/evaluation", json=evaluation).status_code
+        == 200
+    )
+    assert client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={}).status_code == 200
+
+
+def test_fresh_policy_check_restores_handoff_after_price_change(
+    client: TestClient, checked_handoff: tuple[str, dict, dict]
+) -> None:
+    trip_id, submission, evaluation = checked_handoff
+    original = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={}).json()
+    updated = client.put(
+        f"/api/workspace/{trip_id}/prices",
+        json={"component": "transport", "amount": 625.0, "note": "Revised quote"},
+    )
+    assert updated.status_code == 200
+    assert client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={}).status_code == 409
+
+    proposal = submission["proposal"]
+    proposal["selected_options"][0]["estimated_cost"]["typical_amount"] = 625.0
+    proposal["selected_options"][0]["estimated_cost"]["min_amount"] = 625.0
+    proposal["selected_options"][0]["estimated_cost"]["max_amount"] = 625.0
+    proposal["cost_summary"]["total_estimated_cost"] = 625.0
+    proposal["cost_summary"]["category_estimates"]["transport"] = 625.0
+    assert client.put(f"/api/workspace/{trip_id}/proposal", json=submission).status_code == 200
+    assert client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={}).status_code == 409
+    assert (
+        client.put(f"/api/workspace/{trip_id}/proposal/evaluation", json=evaluation).status_code
+        == 200
+    )
+    prepared = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert prepared.status_code == 200
+    metadata = prepared.json()["handoff"]
+    assert metadata["source_snapshot_hash"] != original["handoff"]["source_snapshot_hash"]
+    assert metadata["manager_submission_status"] == "unknown"
+    assert metadata["manager_decision"] is None
+    assert "source_snapshot" not in metadata
+    assert "USD 625.00" in prepared.json()["fields"]["notes"]
+    reloaded = client.get(f"/api/workspace/{trip_id}/proposal").json()
+    assert reloaded["proposal_state"]["portal_handoff"] == metadata
+    repeated = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={}).json()
+    assert repeated["handoff"]["source_snapshot_hash"] == metadata["source_snapshot_hash"]
 
 
 def test_client_supplied_response_cannot_set_approval_ready(
@@ -1806,7 +2313,6 @@ def test_workspace_proposal_refresh_polls_live_status_and_persists_evaluation(
     )
 
 
-
 def _deferred_submission_and_poll() -> tuple[_FakeHTTPResponse, _FakeHTTPResponse]:
     """Submission and a poll that both say "deferred": TPP's status stays deferred until a
     person approves the trip, whatever the policy verdict."""
@@ -1821,7 +2327,10 @@ def _deferred_submission_and_poll() -> tuple[_FakeHTTPResponse, _FakeHTTPRespons
             "external_status": "202 Accepted",
             "updated_at": "2026-09-22T23:57:05Z",
         },
-        "result_payload": {"execution_id": "exec-live-009", "queue_state": "waiting_for_policy_engine"},
+        "result_payload": {
+            "execution_id": "exec-live-009",
+            "queue_state": "waiting_for_policy_engine",
+        },
         "received_at": "2026-09-22T23:57:05Z",
         "status_endpoint": "https://tpp.example.test/api/planner/proposals/p/executions/exec-live-009",
     }
@@ -1938,6 +2447,7 @@ def test_refresh_with_no_verdict_yet_keeps_waiting_without_recording_a_failure(
     assert state["submission_status"] == "deferred"
     assert state["summary"].get("evaluation_result_status") is None
     assert state["summary"]["submission_outcome"] != "failed"
+
 
 def test_workspace_proposal_refresh_persists_failed_remote_status(
     client: TestClient,

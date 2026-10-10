@@ -80,7 +80,9 @@ def test_no_alternative_is_a_fixed_offset_of_the_lead(client: TestClient) -> Non
 
 
 def test_no_option_is_titled_as_a_generated_variant(client: TestClient) -> None:
-    titles = {row["title"] for row in _scenarios(client, origin="Seattle", destination="Chicago, IL")}
+    titles = {
+        row["title"] for row in _scenarios(client, origin="Seattle", destination="Chicago, IL")
+    }
     assert "Reverse-order route option" not in titles
     assert "Loop route option" not in titles
 

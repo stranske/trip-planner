@@ -790,6 +790,14 @@ export type WorkspaceData = {
         guidance?: string[];
       };
     };
+    portal_handoff?: {
+      schema_version?: string;
+      source_snapshot_hash?: string;
+      prepared_at?: string | null;
+      status?: "awaiting_evaluation" | "eligible" | "prepared";
+      manager_submission_status?: "unknown";
+      manager_decision?: null;
+    } | null;
   } | null;
   view_model: WorkspaceViewModel | null;
 };
@@ -881,6 +889,27 @@ export type WorkspaceProposalApiResponse = {
   proposal_state: WorkspaceData["proposal_state"];
   summary: NonNullable<WorkspaceData["proposal_state"]>["summary"] | Record<string, never>;
 };
+
+export type WorkspaceProposalHandoffResponse = {
+  action_url: string;
+  method: "POST";
+  fields: Record<string, string>;
+  handoff: NonNullable<WorkspaceData["proposal_state"]>["portal_handoff"];
+};
+
+export async function prepareWorkspaceProposalHandoff(
+  tripId: string
+): Promise<WorkspaceProposalHandoffResponse> {
+  return fetchJson<WorkspaceProposalHandoffResponse>({
+    path: `/api/workspace/${encodeURIComponent(tripId)}/proposal/handoff`,
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: "{}",
+  });
+}
 
 export async function submitWorkspaceProposal(
   tripId: string,

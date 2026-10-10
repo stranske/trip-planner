@@ -20,7 +20,7 @@ on:
         required: false
 
 env:
-  TPP_PINNED_REF: d7c5c310018f4242e33f7df3d06c0e76f7b79ee9
+  TPP_PINNED_REF: ac3bfb9f39e7a3144cbe19fd1894d333dfe93b75
 
 jobs:
   cross-repo-full-product:
@@ -70,18 +70,20 @@ jobs:
         working-directory: Travel-Plan-Permission
         run: |
           python -m venv .venv
-          if [ -f pyproject.toml ]; then
-            .venv/bin/python -m pip install -e ".[dev]" || .venv/bin/python -m pip install -e .
-          elif [ -f setup.py ]; then
-            .venv/bin/python -m pip install -e .
-          else
-            echo "No installable Python project layout in TPP checkout" >&2
-            exit 1
-          fi
+          # Contract tests import both applications in this interpreter.
+          # Resolve both runtime and dev dependency sets together; fail closed.
+          .venv/bin/python -m pip install -e ".[dev]" -e "../trip-planner[dev]"
+          .venv/bin/python -m pip check
 
       - name: Install trip-planner frontend dependencies
         working-directory: trip-planner
         run: npm --prefix frontend ci
+
+      - name: Verify TPP portal handoff contract
+        working-directory: trip-planner
+        env:
+          TPP_REPO_PATH: ../Travel-Plan-Permission
+        run: ../Travel-Plan-Permission/.venv/bin/python -m pytest tests/integration/test_tpp_portal_contract.py -q
 
       - name: Run full-product-check against sibling TPP checkout
         working-directory: trip-planner

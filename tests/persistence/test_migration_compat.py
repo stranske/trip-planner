@@ -5,7 +5,6 @@ from sqlalchemy import create_engine, inspect, text
 from trip_planner.persistence.db import ensure_database_ready, reset_database_state
 
 
-
 def _expected_migration_head() -> str:
     """The single head of the migration chain, read from the scripts themselves."""
 
@@ -86,9 +85,10 @@ def test_current_migrations_repair_database_stamped_at_previous_20260510_02(
         # Derive the expected head rather than pinning a literal. A hardcoded revision
         # means every future migration fails this test for the wrong reason, which trains
         # people to edit the assertion instead of reading it.
-        assert connection.execute(
-            text("SELECT version_num FROM alembic_version")
-        ).scalar_one() == _expected_migration_head()
+        assert (
+            connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+            == _expected_migration_head()
+        )
         assert (
             connection.execute(
                 text(

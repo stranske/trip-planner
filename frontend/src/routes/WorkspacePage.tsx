@@ -12,6 +12,7 @@ import {
   fetchPlannerSession,
   fetchTripPrices,
   fetchWorkspace,
+  prepareWorkspaceProposalHandoff,
   recordWorkspaceSpendEvent,
   refreshWorkspaceProposalStatus,
   syncWorkspacePolicy,
@@ -76,6 +77,8 @@ import { PlanPanel } from "./workspace/PlanPanel";
 import { PolicyPanel as PolicyTabPanel } from "./workspace/PolicyPanel";
 import { formatMoney } from "../lib/money";
 import { NOT_MEASURED, describeAvailability } from "../lib/metrics";
+import { submitTppPortalHandoff } from "../lib/tppPortalHandoff";
+import { policyCheckStatusMessage } from "../lib/policyCheckStatus";
 
 type LoaderData = {
   workspace: Promise<WorkspaceData>;
@@ -1962,7 +1965,7 @@ function WorkspacePageContent({
         return;
       }
       if (nextProposalState == null) {
-        setProposalStatusMessage("Submission completed, but no approval packet was saved.");
+        setProposalStatusMessage("Policy check returned no saved result or approval packet.");
         return;
       }
       const nextLifecycle = deriveProposalLifecyclePresentation(
@@ -1987,11 +1990,7 @@ function WorkspacePageContent({
           ...(submittedViewModel !== undefined ? { view_model: submittedViewModel } : {}),
         }));
       });
-      setProposalStatusMessage(
-        nextLifecycle.state === "failed"
-          ? `Submission completed with a policy failure: ${nextLifecycle.summary}`
-          : `Submitted for approval: ${nextLifecycle.summary}`
-      );
+      setProposalStatusMessage(policyCheckStatusMessage(nextLifecycle));
     } catch (error) {
       if (refreshVersion === proposalRefreshVersion.current) {
         setProposalError(error instanceof Error ? error.message : "Approval submission failed.");
@@ -2000,6 +1999,29 @@ function WorkspacePageContent({
       if (refreshVersion === proposalRefreshVersion.current) {
         setProposalBusyLabel(null);
       }
+    }
+  }
+
+  async function handlePortalHandoff() {
+    setProposalBusyLabel("Preparing approver portal handoff…");
+    setProposalError(null);
+    setProposalStatusMessage(null);
+    try {
+      const handoff = await prepareWorkspaceProposalHandoff(trip.trip_id);
+      setCurrentWorkspace((current) => ({
+        ...current,
+        proposal_state:
+          current.proposal_state == null
+            ? null
+            : { ...current.proposal_state, portal_handoff: handoff.handoff },
+      }));
+      submitTppPortalHandoff(handoff);
+    } catch (error) {
+      setProposalError(
+        error instanceof Error ? error.message : "Approver portal handoff failed."
+      );
+    } finally {
+      setProposalBusyLabel(null);
     }
   }
 
@@ -2926,6 +2948,37 @@ function WorkspacePageContent({
                   >
                     Print / Export approval packet
                   </button>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={!hasSavedVerdict || Boolean(proposalBusyLabel)}
+                    onClick={() => void handlePortalHandoff()}
+                  >
+                    Send to my approver
+                  </button>
+                  <p className="muted-copy">
+                    Continue in Travel-Plan-Permission to complete the request. Preparing this
+                    handoff does not submit it.
+                  </p>
+                  {currentWorkspace.proposal_state.portal_handoff?.status === "prepared" ? (
+                    <div role="status" aria-label="Approver portal handoff status">
+                      <p className="muted-copy">Handoff prepared.</p>
+                      <dl className="workspace-meta">
+                        <div>
+                          <dt>Manager submission</dt>
+                          <dd>Unknown</dd>
+                        </div>
+                        <div>
+                          <dt>Manager decision</dt>
+                          <dd>Unknown</dd>
+                        </div>
+                      </dl>
+                      <p className="muted-copy">
+                        Travel-Plan-Permission does not provide a delivery receipt or manager
+                        decision for this browser handoff. Complete and submit the request there.
+                      </p>
+                    </div>
+                  ) : null}
                   {!hasSavedVerdict ? (
                     <p className="muted-copy">A saved policy verdict is required before an approval packet can be printed.</p>
                   ) : null}

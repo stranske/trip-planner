@@ -72,7 +72,9 @@ def test_adapter_generated_bundles_include_all_four_option_types() -> None:
     assert bundle.destinations, "adapter bundle must include at least one destination"
     assert bundle.lodging_options, "adapter bundle must include lodging options"
     assert bundle.transport_options, "adapter bundle must include transport options"
-    assert bundle.activity_options == [], "no activity is invented: the traveller entered none and no source supplied one"
+    assert (
+        bundle.activity_options == []
+    ), "no activity is invented: the traveller entered none and no source supplied one"
 
 
 def test_adapter_generated_bundles_have_stable_option_ids() -> None:

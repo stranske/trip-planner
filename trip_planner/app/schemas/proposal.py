@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WorkspaceProposalSubmissionRequest(BaseModel):
@@ -75,3 +75,29 @@ class WorkspaceProposalReoptimizeRequest(BaseModel):
 class WorkspaceProposalResponse(BaseModel):
     proposal_state: dict[str, Any] | None = None
     summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkspaceProposalHandoffRequest(BaseModel):
+    """A JSON-only same-origin request; all handoff facts are resolved server-side."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class WorkspaceProposalHandoffMetadata(BaseModel):
+    """Public preparation metadata; bound source facts stay in server storage."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    schema_version: Literal["tpp-portal-handoff/v1"]
+    source_snapshot_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    prepared_at: str
+    status: Literal["prepared"]
+    manager_submission_status: Literal["unknown"]
+    manager_decision: None = None
+
+
+class WorkspaceProposalHandoffResponse(BaseModel):
+    action_url: str
+    method: Literal["POST"] = "POST"
+    fields: dict[str, str]
+    handoff: WorkspaceProposalHandoffMetadata

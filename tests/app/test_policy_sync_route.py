@@ -183,8 +183,6 @@ def test_submission_uses_persisted_origin_not_destination_regions() -> None:
     assert _home_airport_from_workspace(workspace) == "Boston"
 
 
-
-
 def test_persisted_scenario_validation_allows_legacy_fixture_ids_without_workspace() -> None:
     assert _validate_persisted_scenario_id({}, "scenario-a") == "scenario-a"
 

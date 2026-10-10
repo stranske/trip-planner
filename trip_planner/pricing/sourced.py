@@ -92,7 +92,12 @@ def _now() -> str:
 
 
 def provider_quote(
-    amount: float, *, currency: str = "USD", provider: str, source_id: str, captured_at: str | None = None
+    amount: float,
+    *,
+    currency: str = "USD",
+    provider: str,
+    source_id: str,
+    captured_at: str | None = None,
 ) -> SourcedPrice:
     """A price a provider actually quoted."""
 

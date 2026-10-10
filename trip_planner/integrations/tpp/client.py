@@ -1091,9 +1091,7 @@ def _evaluation_preferred_alternatives(payload: dict[str, Any]) -> list[dict[str
             "category": str(item.get("category") or "policy"),
             "summary": str(item.get("summary") or "Preferred alternative available."),
             "rationale": str(
-                item.get("rationale")
-                or item.get("summary")
-                or "Follow the suggested alternative."
+                item.get("rationale") or item.get("summary") or "Follow the suggested alternative."
             ),
             "comparable_ref": item.get("comparable_ref"),
         }
