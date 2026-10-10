@@ -88,8 +88,7 @@ def test_persisted_trip_timing_suppresses_redundant_date_question() -> None:
     ]
 
     assert not any(
-        "date" in question.lower() or "when" in question.lower()
-        for question in questions
+        "date" in question.lower() or "when" in question.lower() for question in questions
     )
 
     duration_metadata = _metadata_for(
@@ -103,8 +102,7 @@ def test_persisted_trip_timing_suppresses_redundant_date_question() -> None:
         for item in block["items"]
     ]
     assert not any(
-        "date" in question.lower() or "when" in question.lower()
-        for question in duration_questions
+        "date" in question.lower() or "when" in question.lower() for question in duration_questions
     )
 
 

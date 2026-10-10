@@ -11,15 +11,16 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.integration.portal_contract_checkout import resolve_portal_contract_checkout
 from trip_planner.app.services.proposal import get_workspace_proposal_payload
 
-TPP_REPO_PATH = os.getenv("TPP_REPO_PATH")
-if not TPP_REPO_PATH:
+TPP_REPO_PATH = resolve_portal_contract_checkout(os.environ)
+if TPP_REPO_PATH is None:
     pytest.skip(
         "TPP_REPO_PATH is required for the cross-repo portal contract", allow_module_level=True
     )
 
-TPP_SOURCE_PATH = Path(TPP_REPO_PATH).resolve() / "src"
+TPP_SOURCE_PATH = TPP_REPO_PATH / "src"
 sys.path.insert(0, str(TPP_SOURCE_PATH))
 
 # TPP is an optional sibling checkout, not a trip-planner dependency. Resolve it
