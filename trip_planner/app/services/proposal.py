@@ -6,10 +6,12 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trip_planner._option_contracts import MoneyRange
+from trip_planner.app.schemas.proposal import WorkspaceProposalHandoffResponse
 from trip_planner.app.services.auth import AuthenticatedUser
 from trip_planner.app.services.trip_prices import (
     COMPONENT_LABELS,
@@ -1889,16 +1891,25 @@ def prepare_workspace_proposal_handoff(
         "manager_submission_status": "unknown",
         "manager_decision": None,
     }
+    # Validate the complete public form before persisting preparation. The route's
+    # response validation happens after this commit and cannot undo an invalid form.
+    try:
+        result = WorkspaceProposalHandoffResponse.model_validate(
+            {
+                "action_url": action_url,
+                "method": "POST",
+                "fields": fields,
+                "handoff": _public_portal_handoff(handoff),
+            }
+        ).model_dump()
+    except ValidationError:
+        # Pydantic errors include input values; keep traveler facts out of logs.
+        raise ValueError("The prepared portal form is invalid.") from None
     record.portal_handoff = handoff
     trip_record.updated_at = datetime.now(UTC)
     db_session.commit()
     db_session.refresh(record)
-    return {
-        "action_url": action_url,
-        "method": "POST",
-        "fields": fields,
-        "handoff": _public_portal_handoff(handoff),
-    }
+    return result
 
 
 def save_workspace_proposal_follow_up(

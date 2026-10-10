@@ -159,12 +159,15 @@ def test_policy_tab_verdict_controls_browser_handoff(
 
 @pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
 @pytest.mark.parametrize("already_prepared", [False, True])
+@pytest.mark.parametrize("mapping_failure", ["raised", "missing_fields", "invalid_field_value"])
 def test_failed_form_preparation_preserves_saved_state_and_can_be_retried(
     tpp_client: TestClient,
     submitted_trip: str,
     monkeypatch: pytest.MonkeyPatch,
     outcome: str,
     already_prepared: bool,
+    mapping_failure: str,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     operations = _install_verdict_transport(monkeypatch, outcome)
     refreshed = tpp_client.post(f"/api/workspace/{submitted_trip}/proposal/refresh")
@@ -175,14 +178,20 @@ def test_failed_form_preparation_preserves_saved_state_and_can_be_retried(
     before = tpp_client.get(f"/api/workspace/{submitted_trip}/proposal").json()
 
     def cannot_build_fields(snapshot):
-        raise ValueError("Portal form mapping failed")
+        if mapping_failure == "raised":
+            raise ValueError("Portal form mapping failed")
+        if mapping_failure == "missing_fields":
+            return None
+        return {"traveler_name": ["Private traveler fact"]}
 
-    with monkeypatch.context() as mapping_failure:
-        mapping_failure.setattr(
+    with monkeypatch.context() as failed_mapping:
+        failed_mapping.setattr(
             "trip_planner.app.services.proposal.build_portal_fields", cannot_build_fields
         )
         failed = tpp_client.post(path, json={})
     assert failed.status_code == 422
+    assert "Private traveler fact" not in failed.text
+    assert "Private traveler fact" not in caplog.text
     assert tpp_client.get(f"/api/workspace/{submitted_trip}/proposal").json() == before
 
     # The same saved verdict remains usable once form generation recovers.
