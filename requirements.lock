@@ -133,6 +133,7 @@ psycopg-binary==3.3.4 ; implementation_name != 'pypy'
     # via psycopg
 pydantic==2.13.4
     # via
+    #   trip-planner (pyproject.toml)
     #   fastapi
     #   langchain-core
     #   langsmith
