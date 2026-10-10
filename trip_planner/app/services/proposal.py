@@ -1879,6 +1879,9 @@ def prepare_workspace_proposal_handoff(
         )
 
     action_url = portal_action_url()
+    # Preparation is complete only once the outgoing form can be built. A mapping
+    # failure must leave the saved verdict and any prior handoff state unchanged.
+    fields = build_portal_fields(current_snapshot)
     handoff = {
         **stored,
         "status": "prepared",
@@ -1893,7 +1896,7 @@ def prepare_workspace_proposal_handoff(
     return {
         "action_url": action_url,
         "method": "POST",
-        "fields": build_portal_fields(current_snapshot),
+        "fields": fields,
         "handoff": _public_portal_handoff(handoff),
     }
 

@@ -157,6 +157,51 @@ def test_policy_tab_verdict_controls_browser_handoff(
     assert reloaded.json()["proposal_state"]["portal_handoff"] == metadata
 
 
+@pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
+@pytest.mark.parametrize("already_prepared", [False, True])
+def test_failed_form_preparation_preserves_saved_state_and_can_be_retried(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+    already_prepared: bool,
+) -> None:
+    operations = _install_verdict_transport(monkeypatch, outcome)
+    refreshed = tpp_client.post(f"/api/workspace/{submitted_trip}/proposal/refresh")
+    assert refreshed.status_code == 200
+    path = f"/api/workspace/{submitted_trip}/proposal/handoff"
+    if already_prepared:
+        assert tpp_client.post(path, json={}).status_code == 200
+    before = tpp_client.get(f"/api/workspace/{submitted_trip}/proposal").json()
+
+    def cannot_build_fields(snapshot):
+        raise ValueError("Portal form mapping failed")
+
+    with monkeypatch.context() as mapping_failure:
+        mapping_failure.setattr(
+            "trip_planner.app.services.proposal.build_portal_fields", cannot_build_fields
+        )
+        failed = tpp_client.post(path, json={})
+    assert failed.status_code == 422
+    assert tpp_client.get(f"/api/workspace/{submitted_trip}/proposal").json() == before
+
+    # The same saved verdict remains usable once form generation recovers.
+    retried = tpp_client.post(path, json={})
+    assert retried.status_code == 200
+    payload = retried.json()
+    assert payload["action_url"] == "https://tpp.example/portal/handoff"
+    assert payload["fields"]["traveler_name"] == "Dana Chen"
+    assert f"status={outcome}" in payload["fields"]["notes"]
+    assert payload["handoff"]["status"] == "prepared"
+    assert payload["handoff"]["manager_submission_status"] == "unknown"
+    assert payload["handoff"]["manager_decision"] is None
+    assert (
+        payload["handoff"]["source_snapshot_hash"]
+        == before["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
+    )
+    assert operations == ["poll_execution_status", "fetch_evaluation_result"]
+
+
 def test_refresh_does_not_authorize_prices_changed_after_policy_submission(
     tpp_client: TestClient, submitted_trip: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
