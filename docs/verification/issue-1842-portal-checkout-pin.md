@@ -67,3 +67,32 @@ Frontend tests could not start because the installed tree lacks Vitest. The loca
 pinned TPP checkout is absent, so this iteration cannot rerun the real portal
 contract; the hosted evidence above predates this gate change. Both checks remain
 required on the new revision.
+
+## Follow-up: reject changed producer source at the pinned revision
+
+The checkout gate now rejects staged or unstaged source changes and added modules
+under `src`, even when `HEAD` still matches the requested producer pin. Unpinned
+local development and unrelated untracked check artifacts remain supported.
+Four new regressions failed on the prior gate; all 19 checkout cases and the
+combined 137 checkout/handoff cases pass after the change, using `-m "not slow"`.
+The existing focused proposal/handoff batch also passed 225 cases before this change.
+
+Live producer discovery found receipt PR 1659 merged at
+`3010e3e39eb0ae039a1e648f957d8e87441d8e2a`. The earlier producer-pending note
+above is historical. Its contract requires complete portal answers and an
+individually authenticated owner; this consumer currently has partial prefill
+answers and its own account-session identity. Consumer identity/snapshot binding,
+workspace status return, and a real two-app check at the accepted producer revision
+remain incomplete. This iteration does not claim those acceptance criteria.
+
+The reconciled PR body is saved at `/tmp/trip-planner-1872-reconciled-body.md`;
+the connector rejected its update because approval is required and this run's
+approval policy is `never`. Updating the hosted producer pin requires the owning
+high-privilege lane because workflow files are protected in this run.
+
+The repository-wide Black check passed (478 files unchanged), as did changed-file
+Ruff and whitespace checks. Staging failed because `.git` is read-only, so no
+commit was created. The scoped patch is saved at
+`/tmp/trip-planner-1872-source-pin.patch`. The connector also rejected the
+`needs-human` label and blocker comment under the same approval restriction.
+The PR was verified open and ready for review at `bf78a971`.

@@ -123,3 +123,60 @@ def test_contract_rejects_a_source_directory_inside_another_checkout(
     source.touch()
     with pytest.raises(pytest.UsageError, match="root of the pinned Git checkout"):
         resolve_portal_contract_checkout({"TPP_REPO_PATH": str(nested), "TPP_PINNED_REF": revision})
+
+
+@pytest.mark.parametrize("staged", [False, True])
+def test_pinned_contract_rejects_modified_producer_source(
+    producer_checkout: tuple[Path, str], staged: bool
+) -> None:
+    checkout, revision = producer_checkout
+    source = checkout / "src" / "travel_plan_permission" / "http_service.py"
+    source.write_text('"""Unaccepted local portal implementation."""\n')
+    if staged:
+        _git(checkout, "add", "src")
+
+    assert _git(checkout, "rev-parse", "HEAD") == revision
+    with pytest.raises(pytest.UsageError, match="unmodified producer source"):
+        resolve_portal_contract_checkout(
+            {"TPP_REPO_PATH": str(checkout), "TPP_PINNED_REF": revision}
+        )
+
+
+@pytest.mark.parametrize("staged", [False, True])
+def test_pinned_contract_rejects_added_producer_modules(
+    producer_checkout: tuple[Path, str], staged: bool
+) -> None:
+    checkout, revision = producer_checkout
+    source = checkout / "src" / "travel_plan_permission" / "portal_receipts.py"
+    source.write_text('"""Unaccepted receipt implementation."""\n')
+    if staged:
+        _git(checkout, "add", "src")
+
+    with pytest.raises(pytest.UsageError, match="unmodified producer source"):
+        resolve_portal_contract_checkout(
+            {"TPP_REPO_PATH": str(checkout), "TPP_PINNED_REF": revision}
+        )
+
+
+def test_unpinned_local_contract_accepts_modified_source(
+    producer_checkout: tuple[Path, str],
+) -> None:
+    checkout, _ = producer_checkout
+    source = checkout / "src" / "travel_plan_permission" / "http_service.py"
+    source.write_text('"""Local portal under development."""\n')
+
+    assert resolve_portal_contract_checkout({"TPP_REPO_PATH": str(checkout)}) == checkout
+
+
+def test_pinned_contract_allows_untracked_local_check_artifacts(
+    producer_checkout: tuple[Path, str],
+) -> None:
+    checkout, revision = producer_checkout
+    (checkout / "junit.xml").write_text("<testsuites/>\n")
+
+    assert (
+        resolve_portal_contract_checkout(
+            {"TPP_REPO_PATH": str(checkout), "TPP_PINNED_REF": revision}
+        )
+        == checkout
+    )

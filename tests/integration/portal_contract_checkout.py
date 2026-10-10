@@ -44,6 +44,22 @@ def resolve_portal_contract_checkout(environment: Mapping[str, str]) -> Path | N
             text=True,
             timeout=10,
         ).stdout.strip()
+        source_changes = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(checkout),
+                "status",
+                "--porcelain",
+                "--untracked-files=all",
+                "--",
+                "src",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip()
     except (OSError, subprocess.SubprocessError) as error:
         raise pytest.UsageError("Cannot verify the pinned TPP checkout revision.") from error
     if Path(root).resolve() != checkout:
@@ -52,4 +68,6 @@ def resolve_portal_contract_checkout(environment: Mapping[str, str]) -> Path | N
         raise pytest.UsageError(
             f"TPP checkout revision {resolved_ref} does not match TPP_PINNED_REF {pinned_ref}."
         )
+    if source_changes:
+        raise pytest.UsageError("The pinned TPP checkout must contain unmodified producer source.")
     return checkout
