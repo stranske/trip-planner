@@ -2,6 +2,7 @@
 
 from trip_planner.app.services.proposal import get_workspace_proposal_payload
 from trip_planner.persistence.models.proposal import PersistedProposalState
+from trip_planner.persistence.models.trip import PersistedTrip
 
 
 def test_saved_verdict_produces_portal_form_and_private_snapshot(saved_portal_handoff) -> None:
@@ -12,8 +13,10 @@ def test_saved_verdict_produces_portal_form_and_private_snapshot(saved_portal_ha
     assert fields["traveler_name"] == "Morgan Planner"
     assert fields["business_purpose"] == "Meet the client team"
     assert fields["city_state"] == "Washington, DC"
-    assert fields["depart_date"] == "2026-10-12"
-    assert fields["return_date"] == "2026-10-14"
+    trip = session.get(PersistedTrip, trip_id)
+    assert trip is not None
+    assert fields["depart_date"] == trip.start_date
+    assert fields["return_date"] == trip.end_date
     assert "destination_zip" not in fields
     assert "selected_fare" not in fields
     assert "USD 430.00" in fields["notes"]

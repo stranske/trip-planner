@@ -20,7 +20,7 @@ on:
         required: false
 
 env:
-  TPP_PINNED_REF: f2d5cfd4bd2ee31c5d632d502c8dae212f63a0a6
+  TPP_PINNED_REF: ac3bfb9f39e7a3144cbe19fd1894d333dfe93b75
 
 jobs:
   cross-repo-full-product:
@@ -70,14 +70,10 @@ jobs:
         working-directory: Travel-Plan-Permission
         run: |
           python -m venv .venv
-          if [ -f pyproject.toml ]; then
-            .venv/bin/python -m pip install -e ".[dev]" || .venv/bin/python -m pip install -e .
-          elif [ -f setup.py ]; then
-            .venv/bin/python -m pip install -e .
-          else
-            echo "No installable Python project layout in TPP checkout" >&2
-            exit 1
-          fi
+          # Contract tests import both applications in this interpreter.
+          # Resolve both runtime and dev dependency sets together; fail closed.
+          .venv/bin/python -m pip install -e ".[dev]" -e "../trip-planner[dev]"
+          .venv/bin/python -m pip check
 
       - name: Install trip-planner frontend dependencies
         working-directory: trip-planner

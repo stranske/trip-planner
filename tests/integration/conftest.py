@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +54,7 @@ def saved_portal_handoff(
                 )
             )
             session.commit()
+            departure = datetime.now(UTC).date() + timedelta(days=60)
             trip = create_trip(
                 session,
                 user=user,
@@ -61,8 +63,8 @@ def saved_portal_handoff(
                 mode="business",
                 origin="ORD",
                 primary_regions=["Washington, DC"],
-                start_date="2026-10-12",
-                end_date="2026-10-14",
+                start_date=departure.isoformat(),
+                end_date=(departure + timedelta(days=2)).isoformat(),
                 duration_days=3,
                 traveler_kind="solo",
                 traveler_count=1,
