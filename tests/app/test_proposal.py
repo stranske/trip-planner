@@ -365,6 +365,37 @@ def test_prepared_handoff_persists_only_unknown_manager_state(
         assert reloaded.json()["proposal_state"]["portal_handoff"] == metadata
 
 
+def test_handoff_response_filters_internal_source_facts(
+    client: TestClient,
+    checked_handoff: tuple[str, dict, dict],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from trip_planner.app.routes import proposal as proposal_routes
+
+    trip_id, _, _ = checked_handoff
+    prepared = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+    assert prepared.status_code == 200
+    public_payload = prepared.json()
+    with get_session_factory()() as session:
+        record = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+        assert record is not None
+        internal_metadata = dict(record.portal_handoff or {})
+    assert "source_snapshot" in internal_metadata
+
+    # If a service returns persisted metadata directly, response serialization
+    # still must not disclose the proposal, full verdict or source price records.
+    monkeypatch.setattr(
+        proposal_routes,
+        "prepare_workspace_proposal_handoff",
+        lambda *args, **kwargs: {**public_payload, "handoff": internal_metadata},
+    )
+    response = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json() == public_payload
+
+
 @pytest.mark.parametrize(
     "payload",
     [
