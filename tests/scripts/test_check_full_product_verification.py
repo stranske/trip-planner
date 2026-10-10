@@ -369,7 +369,7 @@ def test_resolve_tpp_interpreter_fails_fast_when_no_venv_or_uv(monkeypatch, tmp_
 
 def _business_details(
     *, evaluation_status: str = "compliant", status_poll: str = "deferred"
-) -> dict[str, str]:
+) -> dict[str, object]:
     return {
         "trip_id": "trip-business",
         "proposal_id": "proposal:trip-business",
