@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import re
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -22,7 +23,7 @@ WORKFLOW_PATH = (
 GATE_WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2] / ".github" / "workflows" / "pr-00-gate.yml"
 )
-CI_GUIDE_PATH = Path(__file__).resolve().parents[2] / "docs" / "CI_SYSTEM_GUIDE.md"
+CI_GUIDE_PATH = Path(__file__).resolve().parents[2] / "docs" / "CROSS_REPO_SMOKE.md"
 MAKEFILE_PATH = Path(__file__).resolve().parents[2] / "Makefile"
 
 
@@ -99,10 +100,42 @@ def test_workflow_uses_stable_setup_action_tags(workflow: dict) -> None:
     job = workflow["jobs"]["cross-repo-full-product"]
     uses_values = [str(step.get("uses", "")) for step in job["steps"]]
 
-    assert "actions/setup-python@v5" in uses_values
-    assert "actions/setup-node@v4" in uses_values
-    assert "actions/setup-python@v6" not in uses_values
+    assert "actions/setup-python@v6" in uses_values
+    assert "actions/setup-node@v7" in uses_values
+    assert "actions/setup-python@v5" not in uses_values
     assert "actions/setup-node@v6" not in uses_values
+
+
+def test_portal_contract_installs_both_projects_in_its_interpreter(workflow: dict) -> None:
+    steps = workflow["jobs"]["cross-repo-full-product"]["steps"]
+    contract = next(step for step in steps if step["name"] == "Verify TPP portal handoff contract")
+    install = next(
+        step for step in steps if step["name"] == "Install Travel-Plan-Permission dependencies"
+    )
+    test_python = shlex.split(contract["run"])[0]
+    # Resolve the executable relative to each step's working directory: a pip
+    # install in setup-python does not populate TPP's private test interpreter.
+    test_python = (Path(contract["working-directory"]) / test_python).as_posix()
+    commands = [
+        shlex.split(line)
+        for line in install["run"].splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    pip_installs = [cmd for cmd in commands if cmd[1:5] == ["-m", "pip", "install", "-e"]]
+    assert pip_installs, "contract environment needs an explicit project dependency install"
+    command = pip_installs[0]
+    install_python = (Path(install["working-directory"]) / command[0]).as_posix()
+    # pathlib does not collapse '..'; compare canonical lexical workspace paths.
+    assert (Path("/workspace") / test_python).resolve() == (
+        Path("/workspace") / install_python
+    ).resolve()
+    assert ".[dev]" in command, "TPP runtime and test dependencies are required"
+    assert (
+        "../trip-planner[dev]" in command
+    ), "planner runtime and test dependencies must reach TPP Python"
+    assert "||" not in command, "failed complete installation must not fall back to runtime-only"
+    assert [command[0], "-m", "pip", "check"] in commands
+    assert steps.index(install) < steps.index(contract)
 
 
 def test_workflow_runs_full_product_check_with_repo_path(workflow: dict) -> None:
@@ -171,6 +204,7 @@ def test_workflow_passes_actionlint() -> None:
         [_ACTIONLINT_CMD, str(WORKFLOW_PATH)],
         capture_output=True,
         text=True,
+        check=False,
     )
     assert (
         result.returncode == 0

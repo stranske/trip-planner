@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+from datetime import date, timedelta
 from importlib import import_module
 from pathlib import Path
 from typing import Any
@@ -58,7 +59,20 @@ def test_trip_planner_handoff_reaches_tpp_manager_queue(
     assert not store.portal_drafts_by_id
     assert not store.list_manager_reviews()
 
-    completed_fields = {**fields, "destination_zip": "20001"}
+    # Supply the traveler-owned facts required by the real producer policy.
+    # A saved planner evaluation cannot waive TPP's fresh submission checks.
+    completed_fields = {
+        **fields,
+        "destination_zip": "20001",
+        "booking_date": (
+            date.fromisoformat(fields["depart_date"]) - timedelta(days=30)
+        ).isoformat(),
+        "selected_fare": "430.00",
+        "lowest_fare": "430.00",
+        "fare_evidence_attached": "true",
+        "cabin_class": "economy",
+        "flight_duration_hours": "2.5",
+    }
     completed = client.post(
         "/portal/handoff/draft",
         data=completed_fields,
