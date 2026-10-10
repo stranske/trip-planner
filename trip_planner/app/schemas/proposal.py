@@ -83,8 +83,21 @@ class WorkspaceProposalHandoffRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class WorkspaceProposalHandoffMetadata(BaseModel):
+    """Public preparation metadata; bound source facts stay in server storage."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    schema_version: Literal["tpp-portal-handoff/v1"]
+    source_snapshot_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    prepared_at: str
+    status: Literal["prepared"]
+    manager_submission_status: Literal["unknown"]
+    manager_decision: None = None
+
+
 class WorkspaceProposalHandoffResponse(BaseModel):
     action_url: str
     method: Literal["POST"] = "POST"
     fields: dict[str, str]
-    handoff: dict[str, Any]
+    handoff: WorkspaceProposalHandoffMetadata
