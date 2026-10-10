@@ -11,7 +11,10 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.integration.portal_contract_checkout import resolve_portal_contract_checkout
+from tests.integration.portal_contract_checkout import (
+    resolve_portal_contract_checkout,
+    verify_portal_contract_imports,
+)
 from trip_planner.app.services.proposal import get_workspace_proposal_payload
 
 TPP_REPO_PATH = resolve_portal_contract_checkout(os.environ)
@@ -21,11 +24,13 @@ if TPP_REPO_PATH is None:
     )
 
 TPP_SOURCE_PATH = TPP_REPO_PATH / "src"
+verify_portal_contract_imports(TPP_REPO_PATH)
 sys.path.insert(0, str(TPP_SOURCE_PATH))
 
 # TPP is an optional sibling checkout, not a trip-planner dependency. Resolve it
 # dynamically only after the explicit cross-repo path gate above.
 http_service: Any = import_module("travel_plan_permission.http_service")
+verify_portal_contract_imports(TPP_REPO_PATH)
 
 
 def test_trip_planner_handoff_reaches_tpp_manager_queue(
@@ -98,6 +103,8 @@ def test_trip_planner_handoff_reaches_tpp_manager_queue(
     assert review is not None
 
     queue = client.get("/portal/manager/reviews", headers=auth_header)
+    # Imports made lazily while handling portal requests must use the same pin.
+    verify_portal_contract_imports(TPP_SOURCE_PATH.parent)
     assert queue.status_code == 200
     assert review.trip_plan.traveler_name in queue.text
     assert "pending_manager_review" in queue.text

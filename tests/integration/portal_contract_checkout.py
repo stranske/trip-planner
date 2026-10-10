@@ -4,10 +4,35 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
+
+
+def verify_portal_contract_imports(checkout: Path) -> None:
+    """Reject cached or newly loaded TPP dependencies from another source tree.
+
+    Adding the checkout to sys.path does not replace modules already in
+    sys.modules. Check the entire producer namespace before and after importing
+    its app, including package search paths used to resolve later dependencies.
+    """
+
+    source = (checkout / "src").resolve()
+    for name, module in sys.modules.copy().items():
+        if module is None or not (
+            name == "travel_plan_permission" or name.startswith("travel_plan_permission.")
+        ):
+            continue
+        paths = list(getattr(module, "__path__", ()))
+        filename = getattr(module, "__file__", None)
+        if filename is not None:
+            paths.append(filename)
+        if not paths:
+            raise pytest.UsageError(f"Cannot verify pinned TPP module {name} source.")
+        if any(not Path(path).resolve().is_relative_to(source) for path in paths):
+            raise pytest.UsageError(f"Module {name} was loaded outside the pinned TPP checkout.")
 
 
 def resolve_portal_contract_checkout(environment: Mapping[str, str]) -> Path | None:
