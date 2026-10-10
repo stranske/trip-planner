@@ -180,3 +180,58 @@ def test_pinned_contract_allows_untracked_local_check_artifacts(
         )
         == checkout
     )
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "src/travel_plan_permission/local_policy.py",
+        "src/travel_plan_permission/policy.json",
+        "src/travel_plan_permission/local_policy.pyc",
+        "src/travel_plan_permission/local_policy.so",
+        "src/travel_plan_permission/__pycache__/local_policy.py",
+    ],
+)
+def test_pinned_contract_rejects_ignored_producer_sources(
+    producer_checkout: tuple[Path, str], relative_path: str
+) -> None:
+    checkout, revision = producer_checkout
+    # Local excludes can hide runtime inputs even when HEAD and git status
+    # appear to match the accepted producer revision.
+    (checkout / ".git" / "info" / "exclude").write_text(f"/{relative_path}\n")
+    source = checkout / relative_path
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("Unaccepted producer input\n")
+    assert not _git(checkout, "status", "--porcelain", "--untracked-files=all", "--", "src")
+
+    with pytest.raises(pytest.UsageError, match="ignored producer source"):
+        resolve_portal_contract_checkout(
+            {"TPP_REPO_PATH": str(checkout), "TPP_PINNED_REF": revision}
+        )
+
+
+def test_pinned_contract_allows_ignored_interpreter_caches(
+    producer_checkout: tuple[Path, str],
+) -> None:
+    checkout, revision = producer_checkout
+    (checkout / ".git" / "info" / "exclude").write_text("__pycache__/\n")
+    cache = checkout / "src" / "travel_plan_permission" / "__pycache__"
+    cache.mkdir()
+    (cache / "http_service.cpython-314.pyc").write_bytes(b"generated interpreter cache")
+
+    assert (
+        resolve_portal_contract_checkout(
+            {"TPP_REPO_PATH": str(checkout), "TPP_PINNED_REF": revision}
+        )
+        == checkout
+    )
+
+
+def test_unpinned_local_contract_accepts_ignored_source(
+    producer_checkout: tuple[Path, str],
+) -> None:
+    checkout, _ = producer_checkout
+    (checkout / ".git" / "info" / "exclude").write_text("local_policy.py\n")
+    (checkout / "src" / "travel_plan_permission" / "local_policy.py").touch()
+
+    assert resolve_portal_contract_checkout({"TPP_REPO_PATH": str(checkout)}) == checkout

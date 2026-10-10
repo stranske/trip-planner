@@ -85,6 +85,24 @@ def resolve_portal_contract_checkout(environment: Mapping[str, str]) -> Path | N
             text=True,
             timeout=10,
         ).stdout.strip()
+        ignored_sources = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(checkout),
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "-z",
+                "--",
+                "src",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout
     except (OSError, subprocess.SubprocessError) as error:
         raise pytest.UsageError("Cannot verify the pinned TPP checkout revision.") from error
     if Path(root).resolve() != checkout:
@@ -95,4 +113,16 @@ def resolve_portal_contract_checkout(environment: Mapping[str, str]) -> Path | N
         )
     if source_changes:
         raise pytest.UsageError("The pinned TPP checkout must contain unmodified producer source.")
+    # Git status omits ignored files, but Python can import ignored modules and
+    # the producer can read ignored policy resources. Those files are not part
+    # of the accepted revision. Only ordinary interpreter caches may coexist
+    # with a pinned source tree; standalone bytecode is also importable source.
+    for filename in ignored_sources.split("\0"):
+        if not filename:
+            continue
+        path = Path(filename)
+        if "__pycache__" not in path.parts or path.suffix != ".pyc":
+            raise pytest.UsageError(
+                "The pinned TPP checkout must not contain ignored producer source."
+            )
     return checkout
