@@ -486,6 +486,9 @@ def test_handoff_requires_the_saved_trip_owner(
         "http://localhost",
         "https://@tpp.example",
         "https://:@tpp.example",
+        "https://tpp.example|other.example",
+        "https://tpp.example%2f.other.example",
+        "https://[::1%25eth0]",
     ],
 )
 def test_handoff_bad_server_origin_returns_unavailable_without_changing_state(

@@ -136,6 +136,12 @@ def test_portal_action_url_rejects_empty_userinfo(monkeypatch, origin) -> None:
         "https://tpp.example\t.attacker.example",
         "https://tpp.example\x01.attacker.example",
         "https://tpp .example",
+        "https://tpp.example|other.example",
+        "https://tpp.example^other.example",
+        "https://<tpp.example>",
+        "https://tpp.example%2f.other.example",
+        "https://tpp%2eexample",
+        "https://[::1%25eth0]",
     ],
 )
 def test_portal_action_url_rejects_invalid_or_browser_normalized_origins(

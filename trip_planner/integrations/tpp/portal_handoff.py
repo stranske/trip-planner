@@ -49,6 +49,14 @@ def portal_action_url() -> str:
     environment = os.getenv("TRIP_PLANNER_ENV", "local").strip().lower()
     local_environment = environment in {"local", "development", "dev", "test", "testing"}
     hostname = parsed.hostname or ""
+    # urlsplit accepts hosts that native browser forms cannot use. In particular,
+    # browsers decode percent escapes in hosts, while Python leaves them intact.
+    # Refuse those ambiguous origins (including IPv6 zone identifiers) rather than
+    # persisting a prepared handoff with an unusable or reinterpreted destination.
+    if any(character in hostname for character in "%<>^|"):
+        raise TPPPortalHandoffConfigurationError(
+            "Travel-Plan-Permission portal handoff must be configured as a valid origin."
+        )
     try:
         loopback = ip_address(hostname).is_loopback
     except ValueError:
