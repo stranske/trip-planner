@@ -489,6 +489,7 @@ def test_handoff_requires_the_saved_trip_owner(
         "https://tpp.example|other.example",
         "https://tpp.example%2f.other.example",
         "https://[::1%25eth0]",
+        "https://tpp.example\x7f",
     ],
 )
 def test_handoff_bad_server_origin_returns_unavailable_without_changing_state(
@@ -504,13 +505,19 @@ def test_handoff_bad_server_origin_returns_unavailable_without_changing_state(
     assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
 
 
+@pytest.mark.parametrize("invalid_origin", [None, "https://tpp.example\x7f"])
 def test_handoff_configuration_recovery_preserves_the_saved_verdict(
-    client: TestClient, checked_handoff: tuple[str, dict, dict], monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
+    checked_handoff: tuple[str, dict, dict],
+    monkeypatch: pytest.MonkeyPatch,
+    invalid_origin: str | None,
 ) -> None:
     trip_id, _, _ = checked_handoff
     monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
     monkeypatch.delenv("TPP_PORTAL_BASE_URL", raising=False)
     monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    if invalid_origin is not None:
+        monkeypatch.setenv("TPP_BASE_URL", invalid_origin)
     before = client.get(f"/api/workspace/{trip_id}/proposal").json()
 
     unavailable = client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})

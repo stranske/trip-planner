@@ -32,9 +32,12 @@ def portal_action_url() -> str:
             "Travel-Plan-Permission portal handoff is not configured."
         )
     # Browsers treat backslashes as URL separators and strip embedded whitespace.
-    # Reject those forms before parsing so the native form uses the same origin
-    # that the server validated, rather than a browser-normalized alternative.
-    if "\\" in raw or any(character.isspace() or ord(character) < 32 for character in raw):
+    # Reject those forms and DEL before parsing: urlsplit accepts DEL in hosts,
+    # but the browser rejects it. The native form must receive a usable origin
+    # matching the one validated here.
+    if "\\" in raw or any(
+        character.isspace() or ord(character) < 32 or ord(character) == 127 for character in raw
+    ):
         raise TPPPortalHandoffConfigurationError(
             "Travel-Plan-Permission portal handoff must be configured as an origin only."
         )
