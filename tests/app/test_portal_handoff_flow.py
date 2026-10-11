@@ -157,6 +157,78 @@ def test_policy_tab_verdict_controls_browser_handoff(
     assert reloaded.json()["proposal_state"]["portal_handoff"] == metadata
 
 
+@pytest.mark.parametrize(
+    ("previous_outcome", "new_outcome"),
+    [("compliant", "non_compliant"), ("non_compliant", "compliant")],
+)
+def test_new_policy_check_requires_its_own_verdict_before_preparing_another_form(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    previous_outcome: str,
+    new_outcome: str,
+) -> None:
+    previous_operations = _install_verdict_transport(monkeypatch, previous_outcome)
+    proposal_path = f"/api/workspace/{submitted_trip}/proposal"
+    assert tpp_client.post(f"{proposal_path}/refresh").status_code == 200
+    previous_form = tpp_client.post(f"{proposal_path}/handoff", json={})
+    assert previous_form.status_code == 200
+    previous_hash = previous_form.json()["handoff"]["source_snapshot_hash"]
+
+    # Model a separate producer execution even when the traveler checks unchanged facts.
+    submit = HTTPTPPIntegrationClient.submit_proposal
+
+    def submit_again(self, request):
+        response = submit(self, request).to_dict()
+        response["result_payload"]["execution_id"] = "exec-recheck"
+        return TPPResponseEnvelope.from_dict(response)
+
+    monkeypatch.setattr(HTTPTPPIntegrationClient, "submit_proposal", submit_again)
+    submitted = tpp_client.post(f"{proposal_path}/submit", json={})
+    assert submitted.status_code == 200
+    pending = submitted.json()
+    assert pending["proposal_state"]["execution_id"] == "exec-recheck"
+    assert pending["proposal_state"]["evaluation"] == {}
+    assert pending["proposal_state"]["summary"]["evaluation_result_status"] is None
+    metadata = pending["proposal_state"]["portal_handoff"]
+    assert metadata["status"] == "awaiting_evaluation"
+    assert metadata["prepared_at"] is None
+    assert metadata["manager_submission_status"] == "unknown"
+    assert metadata["manager_decision"] is None
+
+    # The previous saved verdict and preparation cannot authorize the new execution.
+    refused = tpp_client.post(f"{proposal_path}/handoff", json={})
+    assert refused.status_code == 409
+    assert "Run the policy check again" in refused.json()["detail"]
+    assert tpp_client.get(proposal_path).json() == pending
+
+    new_operations = _install_verdict_transport(monkeypatch, new_outcome)
+    refreshed = tpp_client.post(f"{proposal_path}/refresh")
+    assert refreshed.status_code == 200
+    assert refreshed.json()["proposal_state"]["summary"]["evaluation_result_status"] == new_outcome
+    prepared = tpp_client.post(f"{proposal_path}/handoff", json={})
+    assert prepared.status_code == 200
+    payload = prepared.json()
+    assert payload["action_url"] == "https://tpp.example/portal/handoff"
+    assert payload["method"] == "POST"
+    assert f"status={new_outcome};" in payload["fields"]["notes"]
+    assert f"status={previous_outcome};" not in payload["fields"]["notes"]
+    assert "execution=exec-recheck." in payload["fields"]["notes"]
+    assert payload["handoff"]["source_snapshot_hash"] != previous_hash
+    assert payload["handoff"]["status"] == "prepared"
+    assert payload["handoff"]["manager_submission_status"] == "unknown"
+    assert payload["handoff"]["manager_decision"] is None
+    assert (
+        tpp_client.get(proposal_path).json()["proposal_state"]["portal_handoff"]
+        == payload["handoff"]
+    )
+    assert (
+        previous_operations
+        == new_operations
+        == ["poll_execution_status", "fetch_evaluation_result"]
+    )
+
+
 @pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
 @pytest.mark.parametrize("already_prepared", [False, True])
 @pytest.mark.parametrize(
