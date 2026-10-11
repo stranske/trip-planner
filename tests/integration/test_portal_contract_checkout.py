@@ -158,6 +158,23 @@ def test_pinned_contract_rejects_added_producer_modules(
         )
 
 
+@pytest.mark.parametrize("index_flag", ["--assume-unchanged", "--skip-worktree"])
+def test_pinned_contract_rejects_hidden_tracked_source_changes(
+    producer_checkout: tuple[Path, str], index_flag: str
+) -> None:
+    checkout, revision = producer_checkout
+    relative_source = "src/travel_plan_permission/http_service.py"
+    _git(checkout, "update-index", index_flag, relative_source)
+    (checkout / relative_source).write_text('"""Unaccepted hidden portal implementation."""\n')
+
+    assert _git(checkout, "rev-parse", "HEAD") == revision
+    assert not _git(checkout, "status", "--porcelain", "--untracked-files=all", "--", "src")
+    with pytest.raises(pytest.UsageError, match="must not hide tracked producer source"):
+        resolve_portal_contract_checkout(
+            {"TPP_REPO_PATH": str(checkout), "TPP_PINNED_REF": revision}
+        )
+
+
 def test_unpinned_local_contract_accepts_modified_source(
     producer_checkout: tuple[Path, str],
 ) -> None:

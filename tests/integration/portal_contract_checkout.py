@@ -85,6 +85,13 @@ def resolve_portal_contract_checkout(environment: Mapping[str, str]) -> Path | N
             text=True,
             timeout=10,
         ).stdout.strip()
+        tracked_sources = subprocess.run(
+            ["git", "-C", str(checkout), "ls-files", "-v", "-z", "--", "src"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout
         ignored_sources = subprocess.run(
             [
                 "git",
@@ -113,6 +120,13 @@ def resolve_portal_contract_checkout(environment: Mapping[str, str]) -> Path | N
         )
     if source_changes:
         raise pytest.UsageError("The pinned TPP checkout must contain unmodified producer source.")
+    # Git status trusts assume-unchanged and skip-worktree entries even when
+    # their files differ from HEAD. Refuse those flags before importing source
+    # so a matching commit cannot conceal an unaccepted portal implementation.
+    if any(
+        entry and (entry[0].islower() or entry[0] == "S") for entry in tracked_sources.split("\0")
+    ):
+        raise pytest.UsageError("The pinned TPP checkout must not hide tracked producer source.")
     # Git status omits ignored files, but Python can import ignored modules and
     # the producer can read ignored policy resources. Those files are not part
     # of the accepted revision. Only ordinary interpreter caches may coexist
