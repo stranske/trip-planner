@@ -10,6 +10,8 @@ export function submitTppPortalHandoff(
   form.enctype = "application/x-www-form-urlencoded";
   form.acceptCharset = "UTF-8";
   form.action = handoff.action_url;
+  // Keep the handoff in this tab even when the page defines a default base target.
+  form.target = "_self";
   form.hidden = true;
 
   for (const [name, value] of Object.entries(handoff.fields)) {
