@@ -667,6 +667,7 @@ def test_changed_verdict_refresh_requires_new_handoff_preparation(
 
 
 @pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
+@pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry-handoff"])
 @pytest.mark.parametrize(
     "caller_payload",
     [
@@ -681,13 +682,12 @@ def test_production_handoff_rejects_overrides_without_mutating_the_saved_verdict
     submitted_trip: str,
     monkeypatch: pytest.MonkeyPatch,
     outcome: str,
+    already_prepared: bool,
     caller_payload: dict,
 ) -> None:
     operations = _install_verdict_transport(monkeypatch, outcome)
     refreshed = tpp_client.post(f"/api/workspace/{submitted_trip}/proposal/refresh")
     assert refreshed.status_code == 200
-    before = refreshed.json()
-    assert before["proposal_state"]["portal_handoff"]["status"] == "eligible"
     monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
     monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://traveler-portal.example")
 
@@ -703,6 +703,16 @@ def test_production_handoff_rejects_overrides_without_mutating_the_saved_verdict
         monkeypatch.setattr(HTTPTPPIntegrationClient, operation, unavailable)
 
     path = f"/api/workspace/{submitted_trip}/proposal/handoff"
+    original_form = None
+    if already_prepared:
+        original = tpp_client.post(path, json={})
+        assert original.status_code == 200
+        original_form = original.json()
+    before = tpp_client.get(f"/api/workspace/{submitted_trip}/proposal").json()
+    assert before["proposal_state"]["portal_handoff"]["status"] == (
+        "prepared" if already_prepared else "eligible"
+    )
+
     rejected = tpp_client.post(path, json=caller_payload)
     assert rejected.status_code == 422
     assert all(error["type"] == "extra_forbidden" for error in rejected.json()["detail"])
@@ -725,6 +735,12 @@ def test_production_handoff_rejects_overrides_without_mutating_the_saved_verdict
         payload["handoff"]["source_snapshot_hash"]
         == before["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
     )
+    if original_form is not None:
+        # A rejected retry cannot replace the saved form facts or preparation time.
+        assert payload == original_form
+    reloaded = tpp_client.get(f"/api/workspace/{submitted_trip}/proposal").json()
+    assert reloaded["proposal_state"]["portal_handoff"] == payload["handoff"]
+    assert reloaded["proposal_state"]["evaluation"] == before["proposal_state"]["evaluation"]
     assert operations == ["poll_execution_status", "fetch_evaluation_result"]
 
 
