@@ -9,6 +9,7 @@ import pytest
 from trip_planner.integrations.tpp.client import TPPContractError
 from trip_planner.integrations.tpp.portal_receipt import (
     PortalReceiptBinding,
+    validate_portal_preparation,
     validate_portal_receipt,
 )
 
@@ -44,6 +45,60 @@ def _receipt(binding: PortalReceiptBinding, state: str = "prepared") -> dict[str
     if state == "decision_recorded":
         payload.update(decision="approved", decision_at="2026-10-10T12:20:00Z")
     return payload
+
+
+@pytest.mark.parametrize("state", ["prepared", "submitted", "pending_review", "decision_recorded"])
+def test_preparation_establishes_producer_binding_and_preserves_retry_evidence(binding, state):
+    payload = _receipt(binding, state)
+    prepared = validate_portal_preparation(
+        payload, handoff_id=binding.handoff_id, snapshot_version=binding.snapshot_version
+    )
+    assert prepared.model_dump(mode="json") == payload
+    retained_binding = PortalReceiptBinding.model_validate(
+        {key: getattr(prepared, key) for key in PortalReceiptBinding.model_fields}
+    )
+
+    # The producer owns the draft and normalized digest; later reads must agree
+    # with the metadata learned from this authenticated preparation response.
+    assert validate_portal_receipt(payload, binding=retained_binding, previous=prepared) == prepared
+    changed = {**payload, "draft_id": "another-draft"}
+    with pytest.raises(TPPContractError, match="does not match the prepared snapshot"):
+        validate_portal_receipt(changed, binding=retained_binding, previous=prepared)
+
+
+@pytest.mark.parametrize("key", ["handoff_id", "snapshot_version"])
+def test_preparation_rejects_correlation_not_selected_by_the_server(binding, key):
+    payload = _receipt(binding)
+    payload[key] = "unrequested-snapshot"
+    with pytest.raises(TPPContractError, match="does not match the requested snapshot") as rejected:
+        validate_portal_preparation(
+            payload, handoff_id=binding.handoff_id, snapshot_version=binding.snapshot_version
+        )
+    assert "unrequested-snapshot" not in str(rejected.value)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"snapshot_sha256": "invalid"},
+        {"draft_id": ""},
+        {"state": "approved"},
+        {"request_id": "invented-request"},
+        {"decision": "approved"},
+        {"observed_at": "2026-10-10T11:00:00Z"},
+        {"answers": {"traveler_name": "Private traveler fact"}},
+    ],
+)
+def test_preparation_rejects_malformed_or_invented_evidence_without_exposing_payload(
+    binding, change
+):
+    payload = {**_receipt(binding), **change}
+    with pytest.raises(TPPContractError, match="Malformed TPP portal receipt contract") as rejected:
+        validate_portal_preparation(
+            payload, handoff_id=binding.handoff_id, snapshot_version=binding.snapshot_version
+        )
+    assert str(rejected.value) == "Malformed TPP portal receipt contract."
+    assert rejected.value.__suppress_context__
 
 
 @pytest.mark.parametrize("state", ["prepared", "submitted", "pending_review", "decision_recorded"])

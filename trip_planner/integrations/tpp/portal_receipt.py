@@ -108,6 +108,37 @@ def _validate_observation_history(receipt: TPPPortalReceipt, previous: TPPPortal
         raise TPPContractError("TPP portal receipt conflicts with the previous observation.")
 
 
+def validate_portal_preparation(
+    payload: Any,
+    *,
+    handoff_id: str,
+    snapshot_version: str,
+) -> TPPPortalReceipt:
+    """Establish producer correlation from the owner's initial preparation response.
+
+    The caller retains its server-selected retry key and version before the
+    authenticated request. Only TPP knows the resulting draft ID and normalized
+    answer digest; retain those from this validated response for later reads.
+    A retry may already contain authoritative submission or decision evidence.
+    Once the binding is saved, use receipt validation to enforce that binding
+    and the previous observation on subsequent retries and reads.
+    """
+
+    receipt = _parse_portal_receipt(payload)
+    if receipt.handoff_id != handoff_id or receipt.snapshot_version != snapshot_version:
+        raise TPPContractError("TPP portal preparation does not match the requested snapshot.")
+    return receipt
+
+
+def _parse_portal_receipt(payload: Any) -> TPPPortalReceipt:
+    try:
+        return TPPPortalReceipt.model_validate(payload)
+    except ValidationError:
+        # Validation errors can include raw response data. Do not propagate that
+        # data across the public/logging boundary, even on malformed responses.
+        raise TPPContractError("Malformed TPP portal receipt contract.") from None
+
+
 def validate_portal_receipt(
     payload: Any,
     *,
@@ -122,12 +153,7 @@ def validate_portal_receipt(
     cannot overwrite newer evidence. This function grants no read/write authority.
     """
 
-    try:
-        receipt = TPPPortalReceipt.model_validate(payload)
-    except ValidationError:
-        # Validation errors can include raw response data. Do not propagate that
-        # data across the public/logging boundary, even on malformed responses.
-        raise TPPContractError("Malformed TPP portal receipt contract.") from None
+    receipt = _parse_portal_receipt(payload)
     if any(
         getattr(receipt, key) != getattr(binding, key)
         for key in ("handoff_id", "snapshot_version", "snapshot_sha256", "draft_id")
