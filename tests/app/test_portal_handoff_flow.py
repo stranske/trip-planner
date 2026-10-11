@@ -343,6 +343,122 @@ def test_production_handoff_rejects_overrides_without_mutating_the_saved_verdict
     assert operations == ["poll_execution_status", "fetch_evaluation_result"]
 
 
+def test_production_handoff_uses_requested_trip_not_travelers_latest_policy_check(
+    tpp_client: TestClient, submitted_trip: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first_operations = _install_verdict_transport(monkeypatch, "compliant")
+    assert tpp_client.post(f"/api/workspace/{submitted_trip}/proposal/refresh").status_code == 200
+    first_before = tpp_client.get(f"/api/workspace/{submitted_trip}/proposal").json()
+
+    created = tpp_client.post(
+        "/api/trips",
+        json={
+            "title": "Boston planning visit",
+            "summary": "Review the Boston team's annual plan",
+            "mode": "business",
+            "trip_frame": {
+                "origin": "Portland",
+                "start_date": "2027-02-08",
+                "end_date": "2027-02-10",
+                "duration_days": 3,
+                "primary_regions": ["Boston"],
+            },
+        },
+    )
+    assert created.status_code == 201
+    second_trip = created.json()["trip"]["trip_id"]
+    seed_policy(tpp_client, second_trip)
+    assert (
+        tpp_client.put(
+            f"/api/workspace/{second_trip}/prices",
+            json={"component": "lodging", "amount": 825.0, "note": "Boston hotel quote"},
+        ).status_code
+        == 200
+    )
+    assert (
+        tpp_client.post(f"/api/workspace/{second_trip}/proposal/submit", json={}).status_code == 200
+    )
+    second_before = tpp_client.get(f"/api/workspace/{second_trip}/proposal").json()
+
+    # Another trip's saved verdict cannot authorize this still-pending proposal.
+    assert (
+        tpp_client.post(f"/api/workspace/{second_trip}/proposal/handoff", json={}).status_code
+        == 409
+    )
+    assert tpp_client.get(f"/api/workspace/{second_trip}/proposal").json() == second_before
+    assert tpp_client.get(f"/api/workspace/{submitted_trip}/proposal").json() == first_before
+
+    second_operations = _install_verdict_transport(monkeypatch, "non_compliant")
+    assert tpp_client.post(f"/api/workspace/{second_trip}/proposal/refresh").status_code == 200
+    second_before = tpp_client.get(f"/api/workspace/{second_trip}/proposal").json()
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+
+    def unavailable(*args, **kwargs):
+        pytest.fail("Preparing either trip must use its own saved verdict without contacting TPP")
+
+    for operation in (
+        "fetch_policy_constraints",
+        "submit_proposal",
+        "poll_execution_status",
+        "fetch_evaluation_result",
+    ):
+        monkeypatch.setattr(HTTPTPPIntegrationClient, operation, unavailable)
+
+    prepared_forms = []
+    for trip_id, city, purpose, price, outcome, before in (
+        (
+            submitted_trip,
+            "Chicago",
+            "Review the client's quarterly plan",
+            "USD 612.00",
+            "compliant",
+            first_before,
+        ),
+        (
+            second_trip,
+            "Boston",
+            "Review the Boston team's annual plan",
+            "USD 825.00",
+            "non_compliant",
+            second_before,
+        ),
+    ):
+        other_trip = second_trip if trip_id == submitted_trip else submitted_trip
+        other_saved = tpp_client.get(f"/api/workspace/{other_trip}/proposal").json()
+        response = tpp_client.post(f"/api/workspace/{trip_id}/proposal/handoff", json={})
+        assert response.status_code == 200
+        payload = response.json()
+        prepared_forms.append(payload)
+        assert payload["action_url"] == "https://tpp.example/portal/handoff"
+        assert payload["method"] == "POST"
+        assert payload["fields"]["city_state"] == city
+        assert payload["fields"]["business_purpose"] == purpose
+        assert price in payload["fields"]["notes"]
+        assert f"trip={trip_id};" in payload["fields"]["notes"]
+        assert f"trip={other_trip};" not in payload["fields"]["notes"]
+        assert f"status={outcome};" in payload["fields"]["notes"]
+        assert (
+            payload["handoff"]["source_snapshot_hash"]
+            == before["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
+        )
+        assert payload["handoff"]["manager_submission_status"] == "unknown"
+        assert payload["handoff"]["manager_decision"] is None
+        assert "source_snapshot" not in payload["handoff"]
+        reloaded = tpp_client.get(f"/api/workspace/{trip_id}/proposal").json()
+        assert reloaded["proposal_state"]["portal_handoff"] == payload["handoff"]
+        assert reloaded["proposal_state"]["evaluation"] == before["proposal_state"]["evaluation"]
+        assert tpp_client.get(f"/api/workspace/{other_trip}/proposal").json() == other_saved
+
+    assert prepared_forms[0]["handoff"]["source_snapshot_hash"] != (
+        prepared_forms[1]["handoff"]["source_snapshot_hash"]
+    )
+    assert (
+        first_operations
+        == second_operations
+        == ["poll_execution_status", "fetch_evaluation_result"]
+    )
+
+
 @pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
 @pytest.mark.parametrize(
     "origin",
