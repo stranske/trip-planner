@@ -863,8 +863,13 @@ def test_production_handoff_uses_requested_trip_not_travelers_latest_policy_chec
 @pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
 @pytest.mark.parametrize(
     "origin",
-    [None, "http://traveler-portal.example", "https://traveler-portal.example/unaccepted-path"],
-    ids=["not-configured", "insecure-origin", "not-an-origin"],
+    [
+        None,
+        "http://traveler-portal.example",
+        "https://traveler-portal.example/unaccepted-path",
+        "https://[v1.portal]",
+    ],
+    ids=["not-configured", "insecure-origin", "not-an-origin", "browser-unsupported-ipvfuture"],
 )
 def test_first_production_handoff_recovers_from_configuration_failure(
     tpp_client: TestClient,

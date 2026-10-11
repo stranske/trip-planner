@@ -79,11 +79,14 @@ def portal_action_url() -> str:
     try:
         loopback = ip_address(hostname).is_loopback
     except ValueError:
+        # urlsplit accepts RFC IPvFuture bracketed hosts, but browser HTTPS
+        # forms support only IPv6 literals in brackets. Refuse the unsupported
+        # authority before a prepared handoff can be saved.
         # Browsers interpret a host ending in a decimal/hexadecimal number as
         # IPv4. urlsplit instead accepts it as a hostname, including invalid
         # addresses and shorthand such as 127.1. Require canonical IP spelling
         # so the native form cannot reject or reinterpret the configured origin.
-        if _has_numeric_last_label(hostname):
+        if "[" in parsed.netloc or _has_numeric_last_label(hostname):
             raise TPPPortalHandoffConfigurationError(
                 "Travel-Plan-Permission portal handoff must be configured as a valid origin."
             ) from None
