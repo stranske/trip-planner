@@ -872,10 +872,12 @@ def _bind_portal_handoff_snapshot(
 def _bind_portal_handoff_evaluation_snapshot(
     *,
     record: PersistedProposalState,
+    current_snapshot: dict[str, Any],
 ) -> None:
     """Bind a verdict without rebasing it onto facts changed after submission."""
 
-    stored_snapshot = dict((record.portal_handoff or {}).get("source_snapshot") or {})
+    stored_handoff = record.portal_handoff or {}
+    stored_snapshot = dict(stored_handoff.get("source_snapshot") or {})
     if not stored_snapshot:
         # A legacy submission has no reliable record of the facts it evaluated.
         # Fetching its verdict cannot authorize today's trip and prices.
@@ -889,12 +891,21 @@ def _bind_portal_handoff_evaluation_snapshot(
         "execution_id": record.execution_id,
         "verdict": _portal_handoff_verdict(record),
     }
+    bound_hash = snapshot_hash(snapshot)
+    # Refreshing the same verdict must retain the preparation history. Changed
+    # verdicts or current trip facts still require a newly prepared form, without
+    # rebasing the evaluated snapshot onto facts edited after submission.
+    still_prepared = (
+        stored_handoff.get("status") == "prepared"
+        and bound_hash == stored_handoff.get("source_snapshot_hash")
+        and bound_hash == snapshot_hash(current_snapshot)
+    )
     record.portal_handoff = {
         "schema_version": PORTAL_HANDOFF_SCHEMA_VERSION,
-        "source_snapshot_hash": snapshot_hash(snapshot),
+        "source_snapshot_hash": bound_hash,
         "source_snapshot": snapshot,
-        "prepared_at": None,
-        "status": "eligible",
+        "prepared_at": stored_handoff.get("prepared_at") if still_prepared else None,
+        "status": "prepared" if still_prepared else "eligible",
         "manager_submission_status": "unknown",
         "manager_decision": None,
     }
@@ -1818,7 +1829,17 @@ def save_workspace_proposal_evaluation(
         proposal_payload=dict(existing.proposal_payload),
         persisted_follow_up=dict(existing.summary.get("follow_up") or {}),
     )
-    _bind_portal_handoff_evaluation_snapshot(record=existing)
+    _bind_portal_handoff_evaluation_snapshot(
+        record=existing,
+        current_snapshot=_portal_handoff_snapshot(
+            record=existing,
+            trip_record=trip_record,
+            user=user,
+            trip_prices=read_trip_prices_for_owner(
+                db_session, user_id=user.user_id, trip_id=trip_id
+            ),
+        ),
+    )
 
     trip_record.updated_at = datetime.now(UTC)
     db_session.commit()

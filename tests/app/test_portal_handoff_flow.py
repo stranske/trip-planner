@@ -282,6 +282,81 @@ def test_saved_verdict_handoff_does_not_call_the_policy_api(
 
 
 @pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
+def test_unchanged_verdict_refresh_preserves_prepared_handoff(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+) -> None:
+    operations = _install_verdict_transport(monkeypatch, outcome)
+    refresh_path = f"/api/workspace/{submitted_trip}/proposal/refresh"
+    assert tpp_client.post(refresh_path).status_code == 200
+    prepared = tpp_client.post(f"/api/workspace/{submitted_trip}/proposal/handoff", json={})
+    assert prepared.status_code == 200
+    metadata = prepared.json()["handoff"]
+
+    for _ in range(2):
+        refreshed = tpp_client.post(refresh_path)
+        assert refreshed.status_code == 200
+        assert refreshed.json()["proposal_state"]["portal_handoff"] == metadata
+        reloaded = tpp_client.get(f"/api/workspace/{submitted_trip}/proposal")
+        assert reloaded.status_code == 200
+        assert reloaded.json()["proposal_state"]["portal_handoff"] == metadata
+
+    assert metadata["status"] == "prepared"
+    assert metadata["prepared_at"] is not None
+    assert metadata["manager_submission_status"] == "unknown"
+    assert metadata["manager_decision"] is None
+    assert "source_snapshot" not in metadata
+    assert operations == ["poll_execution_status", "fetch_evaluation_result"] * 3
+
+
+@pytest.mark.parametrize(
+    ("old_outcome", "new_outcome"),
+    [("compliant", "non_compliant"), ("non_compliant", "compliant")],
+)
+def test_changed_verdict_refresh_requires_new_handoff_preparation(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    old_outcome: str,
+    new_outcome: str,
+) -> None:
+    _install_verdict_transport(monkeypatch, old_outcome)
+    refresh_path = f"/api/workspace/{submitted_trip}/proposal/refresh"
+    handoff_path = f"/api/workspace/{submitted_trip}/proposal/handoff"
+    assert tpp_client.post(refresh_path).status_code == 200
+    prepared = tpp_client.post(handoff_path, json={})
+    assert prepared.status_code == 200
+    old_metadata = prepared.json()["handoff"]
+
+    operations = _install_verdict_transport(monkeypatch, new_outcome)
+    refreshed = tpp_client.post(refresh_path)
+    assert refreshed.status_code == 200
+    metadata = refreshed.json()["proposal_state"]["portal_handoff"]
+    assert metadata["status"] == "eligible"
+    assert metadata["prepared_at"] is None
+    assert metadata["source_snapshot_hash"] != old_metadata["source_snapshot_hash"]
+    assert metadata["manager_submission_status"] == "unknown"
+    assert metadata["manager_decision"] is None
+    assert "source_snapshot" not in metadata
+    assert (
+        tpp_client.get(f"/api/workspace/{submitted_trip}/proposal").json()["proposal_state"][
+            "portal_handoff"
+        ]
+        == metadata
+    )
+
+    prepared_again = tpp_client.post(handoff_path, json={})
+    assert prepared_again.status_code == 200
+    payload = prepared_again.json()
+    assert payload["handoff"]["status"] == "prepared"
+    assert payload["handoff"]["source_snapshot_hash"] == metadata["source_snapshot_hash"]
+    assert f"status={new_outcome};" in payload["fields"]["notes"]
+    assert operations == ["poll_execution_status", "fetch_evaluation_result"]
+
+
+@pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
 @pytest.mark.parametrize(
     "caller_payload",
     [
