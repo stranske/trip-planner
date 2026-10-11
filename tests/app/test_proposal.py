@@ -489,6 +489,10 @@ def test_handoff_requires_the_saved_trip_owner(
         "https://tpp.example|other.example",
         "https://tpp.example%2f.other.example",
         "https://[::1%25eth0]",
+        "https://[::1].example",
+        "https://[::1]portal:8443",
+        "http://[::1]portal:8000",
+        "https://[2001:db8::1].example:8443",
         "https://tpp.example\x7f",
         "https://999.999.999.999",
         "https://tpp.123",
@@ -511,7 +515,14 @@ def test_handoff_bad_server_origin_returns_unavailable_without_changing_state(
 
 @pytest.mark.parametrize(
     "invalid_origin",
-    [None, "https://tpp.example\x7f", "https://999.999.999.999", "https://127.1"],
+    [
+        None,
+        "https://tpp.example\x7f",
+        "https://999.999.999.999",
+        "https://127.1",
+        "https://[::1].example",
+        "https://[2001:db8::1].example:8443",
+    ],
 )
 def test_handoff_configuration_recovery_preserves_the_saved_verdict(
     client: TestClient,

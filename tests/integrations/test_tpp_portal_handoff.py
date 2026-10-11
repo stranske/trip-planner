@@ -216,6 +216,36 @@ def test_portal_action_url_accepts_ascii_punycode_host(monkeypatch) -> None:
 
 
 @pytest.mark.parametrize("setting", ["TPP_PORTAL_BASE_URL", "TPP_BASE_URL"])
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://[::1].example",
+        "https://[::1]portal:8443",
+        "http://[::1]portal:8000",
+        "https://[2001:db8::1].example:8443",
+    ],
+)
+def test_portal_action_url_rejects_text_after_bracketed_ipv6_host(
+    monkeypatch, setting, origin
+) -> None:
+    monkeypatch.delenv("TPP_PORTAL_BASE_URL", raising=False)
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "test")
+    monkeypatch.setenv(setting, origin)
+
+    with pytest.raises(TPPPortalHandoffConfigurationError, match="valid origin"):
+        portal_action_url()
+
+
+@pytest.mark.parametrize("origin", ["https://[2001:db8::1]", "https://[::1]:8443"])
+def test_portal_action_url_preserves_valid_bracketed_ipv6_origin(monkeypatch, origin) -> None:
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", origin)
+
+    assert portal_action_url() == f"{origin}/portal/handoff"
+
+
+@pytest.mark.parametrize("setting", ["TPP_PORTAL_BASE_URL", "TPP_BASE_URL"])
 @pytest.mark.parametrize("environment", ["local", "test", "production"])
 @pytest.mark.parametrize(
     "origin", ["https://tpp\x7f.example", "https://tpp.example\x7f", "https://tpp.example/\x7f"]
