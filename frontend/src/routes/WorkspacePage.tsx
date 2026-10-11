@@ -1309,9 +1309,25 @@ function WorkspacePageContent({
   });
   const plannerSessionLoadVersion = useRef(0);
   const proposalRefreshVersion = useRef(0);
+  const portalHandoffAttempt = useRef<{ cancelled: boolean } | null>(null);
   const plannerConversationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const previousWorkspaceRef = useRef(workspace);
   const isCompactLayout = useCompactWorkspaceLayout();
+  useEffect(() => {
+    // A delayed response belongs to the workspace that requested it. Leaving or
+    // reloading that workspace must not navigate the browser to its old form.
+    if (portalHandoffAttempt.current !== null) {
+      portalHandoffAttempt.current.cancelled = true;
+      portalHandoffAttempt.current = null;
+      setProposalBusyLabel(null);
+    }
+    return () => {
+      if (portalHandoffAttempt.current !== null) {
+        portalHandoffAttempt.current.cancelled = true;
+      }
+    };
+  }, [workspace]);
+
   useEffect(() => {
     const previousWorkspace = previousWorkspaceRef.current;
     previousWorkspaceRef.current = workspace;
@@ -2003,11 +2019,19 @@ function WorkspacePageContent({
   }
 
   async function handlePortalHandoff() {
+    if (portalHandoffAttempt.current !== null) {
+      portalHandoffAttempt.current.cancelled = true;
+    }
+    const attempt = { cancelled: false };
+    portalHandoffAttempt.current = attempt;
     setProposalBusyLabel("Preparing approver portal handoff…");
     setProposalError(null);
     setProposalStatusMessage(null);
     try {
       const handoff = await prepareWorkspaceProposalHandoff(trip.trip_id);
+      if (attempt.cancelled) {
+        return;
+      }
       setCurrentWorkspace((current) => ({
         ...current,
         proposal_state:
@@ -2017,11 +2041,18 @@ function WorkspacePageContent({
       }));
       submitTppPortalHandoff(handoff);
     } catch (error) {
-      setProposalError(
-        error instanceof Error ? error.message : "Approver portal handoff failed."
-      );
+      if (!attempt.cancelled) {
+        setProposalError(
+          error instanceof Error ? error.message : "Approver portal handoff failed."
+        );
+      }
     } finally {
-      setProposalBusyLabel(null);
+      if (portalHandoffAttempt.current === attempt) {
+        portalHandoffAttempt.current = null;
+        if (!attempt.cancelled) {
+          setProposalBusyLabel(null);
+        }
+      }
     }
   }
 

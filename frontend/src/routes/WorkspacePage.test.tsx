@@ -25,6 +25,7 @@ import {
   type PlanningLedgerEntry,
   type PlannerSessionResponse,
   type WorkspaceData,
+  type WorkspaceProposalHandoffResponse,
 } from "../api/workspace";
 import { TestMemoryRouter } from "../test/router";
 import type { TripRecord } from "../api/trips";
@@ -959,6 +960,8 @@ describe("WorkspacePage", () => {
     mockedUpdateWorkspacePlanningMode.mockReset();
     mockedSaveWorkspaceBudget.mockReset();
     mockedRecordWorkspaceSpendEvent.mockReset();
+    mockedPrepareWorkspaceProposalHandoff.mockReset();
+    mockedSubmitTppPortalHandoff.mockReset();
     mockedRefreshWorkspaceProposalStatus.mockReset();
     mockedSubmitTripForApproval.mockReset();
     mockedCreateNotebookItem.mockReset();
@@ -3117,6 +3120,95 @@ describe("WorkspacePage", () => {
     assertUnknownManagerState();
     expect(mockedPrepareWorkspaceProposalHandoff).toHaveBeenCalledTimes(1);
   });
+
+  it("does not post a delayed handoff after leaving the workspace", async () => {
+    const pending = deferred<WorkspaceProposalHandoffResponse>();
+    const workspace: WorkspaceData = {
+      ...workspacePayload,
+      proposal_state: {
+        ...workspacePayload.proposal_state!,
+        summary: { ...workspacePayload.proposal_state!.summary, has_saved_verdict: true },
+      },
+    };
+    mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspace) });
+    mockedPrepareWorkspaceProposalHandoff.mockReturnValue(pending.promise);
+    const page = renderWorkspacePage();
+    await selectWorkspaceTab("Policy");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Send to my approver" }));
+    expect(mockedPrepareWorkspaceProposalHandoff).toHaveBeenCalledOnce();
+
+    page.unmount();
+    await act(async () => {
+      pending.resolve({
+        action_url: "https://tpp.example/portal/handoff",
+        method: "POST",
+        fields: { traveler_name: "Morgan Planner" },
+        handoff: { status: "prepared", manager_submission_status: "unknown", manager_decision: null },
+      });
+    });
+
+    expect(mockedSubmitTppPortalHandoff).not.toHaveBeenCalled();
+  });
+
+  it.each(["resolved", "rejected"])(
+    "ignores a %s handoff response after the workspace reloads and allows a fresh attempt",
+    async (outcome) => {
+      const pending = deferred<WorkspaceProposalHandoffResponse>();
+      const workspace: WorkspaceData = {
+        ...workspacePayload,
+        proposal_state: {
+          ...workspacePayload.proposal_state!,
+          summary: { ...workspacePayload.proposal_state!.summary, has_saved_verdict: true },
+          portal_handoff: { status: "eligible" },
+        },
+      };
+      const handoff: WorkspaceProposalHandoffResponse = {
+        action_url: "https://tpp.example/portal/handoff",
+        method: "POST",
+        fields: { traveler_name: "Morgan Planner" },
+        handoff: { status: "prepared", manager_submission_status: "unknown", manager_decision: null },
+      };
+      mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve(workspace) });
+      mockedPrepareWorkspaceProposalHandoff.mockReturnValueOnce(pending.promise);
+      const page = renderWorkspacePage();
+      await selectWorkspaceTab("Policy");
+      const user = userEvent.setup();
+      await user.click(screen.getByRole("button", { name: "Send to my approver" }));
+      expect(screen.getByRole("button", { name: "Send to my approver" })).toBeDisabled();
+
+      mockedUseLoaderData.mockReturnValue({ workspace: Promise.resolve({ ...workspace }) });
+      page.rerender(
+        <TestMemoryRouter>
+          <WorkspacePage />
+        </TestMemoryRouter>
+      );
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Send to my approver" })).toBeEnabled();
+      });
+      const fresh = deferred<WorkspaceProposalHandoffResponse>();
+      mockedPrepareWorkspaceProposalHandoff.mockReturnValueOnce(fresh.promise);
+      await user.click(screen.getByRole("button", { name: "Send to my approver" }));
+      expect(mockedPrepareWorkspaceProposalHandoff).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        if (outcome === "resolved") {
+          pending.resolve(handoff);
+        } else {
+          pending.reject(new Error("Old workspace preparation failed"));
+        }
+      });
+      expect(mockedSubmitTppPortalHandoff).not.toHaveBeenCalled();
+      expect(screen.queryByRole("status", { name: "Approver portal handoff status" })).toBeNull();
+      expect(screen.queryByText("Old workspace preparation failed")).toBeNull();
+      expect(screen.getByRole("button", { name: "Send to my approver" })).toBeDisabled();
+
+      await act(async () => {
+        fresh.resolve(handoff);
+      });
+      expect(mockedSubmitTppPortalHandoff).toHaveBeenCalledOnce();
+      expect(mockedSubmitTppPortalHandoff).toHaveBeenCalledWith(handoff);
+      expect(screen.getByRole("status", { name: "Approver portal handoff status" })).toBeInTheDocument();
+    }
+  );
 
   it("does not claim policy compliance on a sanitized proposal state without a saved verdict", async () => {
     mockedUseLoaderData.mockReturnValue({
