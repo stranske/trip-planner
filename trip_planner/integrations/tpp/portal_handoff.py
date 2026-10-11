@@ -7,7 +7,7 @@ import os
 from hashlib import sha256
 from ipaddress import ip_address
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 PORTAL_HANDOFF_SCHEMA_VERSION = "tpp-portal-handoff/v1"
 
@@ -31,34 +31,9 @@ def _has_numeric_last_label(hostname: str) -> bool:
     )
 
 
-def portal_action_url() -> str:
-    """Resolve a fixed TPP portal action without accepting a caller-selected URL."""
+def _portal_host_is_loopback(parsed: SplitResult) -> bool:
+    """Validate browser-compatible host spelling before classifying loopback."""
 
-    raw = (os.getenv("TPP_PORTAL_BASE_URL") or os.getenv("TPP_BASE_URL") or "").strip()
-    if not raw:
-        raise TPPPortalHandoffConfigurationError(
-            "Travel-Plan-Permission portal handoff is not configured."
-        )
-    # Browsers treat backslashes as URL separators and strip embedded whitespace.
-    # Reject those forms and DEL before parsing: urlsplit accepts DEL in hosts,
-    # but the browser rejects it. The native form must receive a usable origin
-    # matching the one validated here.
-    if "\\" in raw or any(
-        character.isspace() or ord(character) < 32 or ord(character) == 127 for character in raw
-    ):
-        raise TPPPortalHandoffConfigurationError(
-            "Travel-Plan-Permission portal handoff must be configured as an origin only."
-        )
-    try:
-        parsed = urlsplit(raw)
-        # Accessing port validates its syntax and range; urlsplit alone does not.
-        _ = parsed.port
-    except ValueError as error:
-        raise TPPPortalHandoffConfigurationError(
-            "Travel-Plan-Permission portal handoff must be configured as a valid origin."
-        ) from error
-    environment = os.getenv("TRIP_PLANNER_ENV", "local").strip().lower()
-    local_environment = environment in {"local", "development", "dev", "test", "testing"}
     hostname = parsed.hostname or ""
     # Native forms apply Unicode host normalization that urlsplit does not.
     # Require the configured ASCII spelling (Punycode for international domains)
@@ -91,6 +66,38 @@ def portal_action_url() -> str:
                 "Travel-Plan-Permission portal handoff must be configured as a valid origin."
             ) from None
         loopback = hostname.lower() == "localhost"
+    return loopback
+
+
+def portal_action_url() -> str:
+    """Resolve a fixed TPP portal action without accepting a caller-selected URL."""
+
+    raw = (os.getenv("TPP_PORTAL_BASE_URL") or os.getenv("TPP_BASE_URL") or "").strip()
+    if not raw:
+        raise TPPPortalHandoffConfigurationError(
+            "Travel-Plan-Permission portal handoff is not configured."
+        )
+    # Browsers treat backslashes as URL separators and strip embedded whitespace.
+    # Reject those forms and DEL before parsing: urlsplit accepts DEL in hosts,
+    # but the browser rejects it. The native form must receive a usable origin
+    # matching the one validated here.
+    if "\\" in raw or any(
+        character.isspace() or ord(character) < 32 or ord(character) == 127 for character in raw
+    ):
+        raise TPPPortalHandoffConfigurationError(
+            "Travel-Plan-Permission portal handoff must be configured as an origin only."
+        )
+    try:
+        parsed = urlsplit(raw)
+        # Accessing port validates its syntax and range; urlsplit alone does not.
+        _ = parsed.port
+    except ValueError as error:
+        raise TPPPortalHandoffConfigurationError(
+            "Travel-Plan-Permission portal handoff must be configured as a valid origin."
+        ) from error
+    environment = os.getenv("TRIP_PLANNER_ENV", "local").strip().lower()
+    local_environment = environment in {"local", "development", "dev", "test", "testing"}
+    loopback = _portal_host_is_loopback(parsed)
     allow_http = local_environment and loopback
     if parsed.scheme not in ({"http", "https"} if allow_http else {"https"}):
         raise TPPPortalHandoffConfigurationError(
