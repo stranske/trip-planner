@@ -277,8 +277,38 @@ def test_changed_price_set_cannot_prepare_a_form_from_the_original_verdict(
 
 
 @pytest.mark.parametrize("already_prepared", [False, True])
-def test_empty_form_preserves_saved_handoff_and_allows_retry(
-    saved_portal_handoff, monkeypatch: pytest.MonkeyPatch, already_prepared: bool
+@pytest.mark.parametrize(
+    "invalid_fields",
+    [
+        {},
+        {"source_snapshot": "Private saved quote"},
+        {"return_url": "https://another.example/receive"},
+        {"destination_zip": "Private saved quote"},
+        {"manager_decision": "approved"},
+        {"submit": "Private saved quote"},
+        {"notes": {"quote": "Private saved quote"}},
+        {"traveler_name": None},
+        {"selected_fare": 430.0},
+        {"fare_evidence_attached": True},
+    ],
+    ids=[
+        "empty-form",
+        "private-snapshot",
+        "caller-redirect",
+        "traveler-completed-field",
+        "invented-decision",
+        "native-submit-shadow",
+        "nested-notes",
+        "missing-traveler",
+        "numeric-fare",
+        "boolean-evidence",
+    ],
+)
+def test_invalid_form_preserves_saved_handoff_and_allows_retry(
+    saved_portal_handoff,
+    monkeypatch: pytest.MonkeyPatch,
+    already_prepared: bool,
+    invalid_fields: dict,
 ) -> None:
     session, user, trip_id, handoff = saved_portal_handoff
     stored = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
@@ -296,9 +326,14 @@ def test_empty_form_preserves_saved_handoff_and_allows_retry(
     assert trip is not None
     updated_at = trip.updated_at
 
+    # An empty form and a valid prefill with an unexpected field must both fail
+    # before preparation is committed. This exercises the saved-verdict route,
+    # rather than only validating a response model without persistence.
+    generated_fields = {**handoff["fields"], **invalid_fields} if invalid_fields else {}
     with monkeypatch.context() as failed_mapping:
         failed_mapping.setattr(
-            "trip_planner.app.services.proposal.build_portal_fields", lambda snapshot: {}
+            "trip_planner.app.services.proposal.build_portal_fields",
+            lambda snapshot: generated_fields,
         )
         with pytest.raises(HTTPException) as rejected:
             prepare_workspace_proposal_portal_handoff(
@@ -310,6 +345,9 @@ def test_empty_form_preserves_saved_handoff_and_allows_retry(
             )
 
     assert rejected.value.status_code == 422
+    assert "Private saved quote" not in str(rejected.value.detail)
+    assert "Morgan Planner" not in str(rejected.value.detail)
+    assert "another.example" not in str(rejected.value.detail)
     session.expire_all()
     assert stored.portal_handoff == before
     assert stored.evaluation_record == verdict
