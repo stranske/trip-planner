@@ -490,6 +490,10 @@ def test_handoff_requires_the_saved_trip_owner(
         "https://tpp.example%2f.other.example",
         "https://[::1%25eth0]",
         "https://tpp.example\x7f",
+        "https://999.999.999.999",
+        "https://tpp.123",
+        "https://127.1",
+        "https://0x7f000001",
     ],
 )
 def test_handoff_bad_server_origin_returns_unavailable_without_changing_state(
@@ -505,7 +509,10 @@ def test_handoff_bad_server_origin_returns_unavailable_without_changing_state(
     assert client.get(f"/api/workspace/{trip_id}/proposal").json() == before
 
 
-@pytest.mark.parametrize("invalid_origin", [None, "https://tpp.example\x7f"])
+@pytest.mark.parametrize(
+    "invalid_origin",
+    [None, "https://tpp.example\x7f", "https://999.999.999.999", "https://127.1"],
+)
 def test_handoff_configuration_recovery_preserves_the_saved_verdict(
     client: TestClient,
     checked_handoff: tuple[str, dict, dict],

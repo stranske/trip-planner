@@ -156,6 +156,41 @@ def test_portal_action_url_rejects_invalid_or_browser_normalized_origins(
 @pytest.mark.parametrize("setting", ["TPP_PORTAL_BASE_URL", "TPP_BASE_URL"])
 @pytest.mark.parametrize("environment", ["local", "test", "production"])
 @pytest.mark.parametrize(
+    "hostname",
+    [
+        "999.999.999.999",
+        "tpp.123",
+        "tpp.0x123",
+        "127.1",
+        "2130706433",
+        "0x7f000001",
+        "0177.0.0.1",
+        "127.0.0.1.",
+    ],
+)
+def test_portal_action_url_rejects_noncanonical_browser_ipv4_hosts(
+    monkeypatch, setting, environment, hostname
+) -> None:
+    monkeypatch.delenv("TPP_PORTAL_BASE_URL", raising=False)
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    monkeypatch.setenv("TRIP_PLANNER_ENV", environment)
+    monkeypatch.setenv(setting, f"https://{hostname}:8443")
+
+    with pytest.raises(TPPPortalHandoffConfigurationError, match="valid origin"):
+        portal_action_url()
+
+
+@pytest.mark.parametrize("hostname", ["127.0.0.1", "192.168.1.1", "tpp123.example"])
+def test_portal_action_url_preserves_unambiguous_https_hosts(monkeypatch, hostname) -> None:
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", f"https://{hostname}:8443")
+
+    assert portal_action_url() == f"https://{hostname}:8443/portal/handoff"
+
+
+@pytest.mark.parametrize("setting", ["TPP_PORTAL_BASE_URL", "TPP_BASE_URL"])
+@pytest.mark.parametrize("environment", ["local", "test", "production"])
+@pytest.mark.parametrize(
     "origin", ["https://tpp\x7f.example", "https://tpp.example\x7f", "https://tpp.example/\x7f"]
 )
 def test_portal_action_url_rejects_del_in_either_configured_origin(

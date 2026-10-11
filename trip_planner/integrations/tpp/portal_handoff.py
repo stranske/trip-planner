@@ -23,6 +23,14 @@ def snapshot_hash(snapshot: dict[str, Any]) -> str:
     return f"sha256:{sha256(encoded.encode('utf-8')).hexdigest()}"
 
 
+def _has_numeric_last_label(hostname: str) -> bool:
+    last_label = hostname.rstrip(".").rsplit(".", maxsplit=1)[-1].lower()
+    return last_label.isdecimal() or (
+        last_label.startswith("0x")
+        and all(character in "0123456789abcdef" for character in last_label[2:])
+    )
+
+
 def portal_action_url() -> str:
     """Resolve a fixed TPP portal action without accepting a caller-selected URL."""
 
@@ -63,6 +71,14 @@ def portal_action_url() -> str:
     try:
         loopback = ip_address(hostname).is_loopback
     except ValueError:
+        # Browsers interpret a host ending in a decimal/hexadecimal number as
+        # IPv4. urlsplit instead accepts it as a hostname, including invalid
+        # addresses and shorthand such as 127.1. Require canonical IP spelling
+        # so the native form cannot reject or reinterpret the configured origin.
+        if _has_numeric_last_label(hostname):
+            raise TPPPortalHandoffConfigurationError(
+                "Travel-Plan-Permission portal handoff must be configured as a valid origin."
+            ) from None
         loopback = hostname.lower() == "localhost"
     allow_http = local_environment and loopback
     if parsed.scheme not in ({"http", "https"} if allow_http else {"https"}):
