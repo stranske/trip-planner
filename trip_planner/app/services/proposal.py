@@ -1905,10 +1905,13 @@ def prepare_workspace_proposal_handoff(
     # Preparation is complete only once the outgoing form can be built. A mapping
     # failure must leave the saved verdict and any prior handoff state unchanged.
     fields = build_portal_fields(current_snapshot)
+    # Retrying the same bound snapshot regenerates the form without rewriting
+    # its preparation history. A changed saved verdict clears this timestamp.
+    prepared_at = stored.get("prepared_at") if stored.get("status") == "prepared" else None
     handoff = {
         **stored,
         "status": "prepared",
-        "prepared_at": _now_iso(),
+        "prepared_at": prepared_at or _now_iso(),
         "manager_submission_status": "unknown",
         "manager_decision": None,
     }

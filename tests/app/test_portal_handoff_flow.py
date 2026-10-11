@@ -481,6 +481,54 @@ def test_unchanged_verdict_refresh_preserves_prepared_handoff(
     assert operations == ["poll_execution_status", "fetch_evaluation_result"] * 3
 
 
+@pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
+def test_handoff_retries_preserve_preparation_time_until_the_saved_verdict_changes(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+) -> None:
+    _install_verdict_transport(monkeypatch, outcome)
+    path = f"/api/workspace/{submitted_trip}/proposal"
+    assert tpp_client.post(f"{path}/refresh").status_code == 200
+    first_time = "2026-10-11T15:00:00+00:00"
+    later_time = "2026-10-11T16:00:00+00:00"
+
+    with monkeypatch.context() as clock:
+        clock.setattr("trip_planner.app.services.proposal._now_iso", lambda: first_time)
+        prepared = tpp_client.post(f"{path}/handoff", json={})
+    assert prepared.status_code == 200
+    first_form = prepared.json()
+    assert first_form["handoff"]["prepared_at"] == first_time
+
+    # A delayed retry regenerates the form but retains the original history.
+    with monkeypatch.context() as clock:
+        clock.setattr("trip_planner.app.services.proposal._now_iso", lambda: later_time)
+        retried = tpp_client.post(f"{path}/handoff", json={})
+    assert retried.status_code == 200
+    assert retried.json() == first_form
+    for read_path in (path, f"/api/workspace/{submitted_trip}"):
+        reloaded = tpp_client.get(read_path)
+        assert reloaded.status_code == 200
+        assert reloaded.json()["proposal_state"]["portal_handoff"] == first_form["handoff"]
+
+    # A genuinely different saved result starts a new preparation history.
+    new_outcome = "non_compliant" if outcome == "compliant" else "compliant"
+    _install_verdict_transport(monkeypatch, new_outcome)
+    refreshed = tpp_client.post(f"{path}/refresh")
+    assert refreshed.status_code == 200
+    assert refreshed.json()["proposal_state"]["portal_handoff"]["prepared_at"] is None
+    with monkeypatch.context() as clock:
+        clock.setattr("trip_planner.app.services.proposal._now_iso", lambda: later_time)
+        fresh = tpp_client.post(f"{path}/handoff", json={})
+    assert fresh.status_code == 200
+    metadata = fresh.json()["handoff"]
+    assert metadata["prepared_at"] == later_time
+    assert metadata["source_snapshot_hash"] != first_form["handoff"]["source_snapshot_hash"]
+    assert metadata["manager_submission_status"] == "unknown"
+    assert metadata["manager_decision"] is None
+
+
 @pytest.mark.parametrize(
     ("old_outcome", "new_outcome"),
     [("compliant", "non_compliant"), ("non_compliant", "compliant")],
