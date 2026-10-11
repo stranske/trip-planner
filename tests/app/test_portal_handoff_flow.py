@@ -341,3 +341,70 @@ def test_production_handoff_rejects_overrides_without_mutating_the_saved_verdict
         == before["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
     )
     assert operations == ["poll_execution_status", "fetch_evaluation_result"]
+
+
+@pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
+@pytest.mark.parametrize(
+    "origin",
+    [None, "http://traveler-portal.example", "https://traveler-portal.example/unaccepted-path"],
+    ids=["not-configured", "insecure-origin", "not-an-origin"],
+)
+def test_first_production_handoff_recovers_from_configuration_failure(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+    origin: str | None,
+) -> None:
+    operations = _install_verdict_transport(monkeypatch, outcome)
+    refreshed = tpp_client.post(f"/api/workspace/{submitted_trip}/proposal/refresh")
+    assert refreshed.status_code == 200
+    before = refreshed.json()
+    metadata = before["proposal_state"]["portal_handoff"]
+    assert metadata["status"] == "eligible"
+    assert metadata["prepared_at"] is None
+
+    # Preparation must use the saved result even when the policy API is unavailable.
+    def unavailable(*args, **kwargs):
+        pytest.fail("Configuration recovery must not repeat the saved policy check")
+
+    for operation in (
+        "fetch_policy_constraints",
+        "submit_proposal",
+        "poll_execution_status",
+        "fetch_evaluation_result",
+    ):
+        monkeypatch.setattr(HTTPTPPIntegrationClient, operation, unavailable)
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    monkeypatch.delenv("TPP_PORTAL_BASE_URL", raising=False)
+    if origin is not None:
+        monkeypatch.setenv("TPP_PORTAL_BASE_URL", origin)
+
+    path = f"/api/workspace/{submitted_trip}/proposal/handoff"
+    failed = tpp_client.post(path, json={})
+    assert failed.status_code == 503
+    assert failed.json()["detail"].startswith("The approver portal handoff is not configured.")
+    assert tpp_client.get(f"/api/workspace/{submitted_trip}/proposal").json() == before
+
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://traveler-portal.example:8443/")
+    retried = tpp_client.post(path, json={})
+    assert retried.status_code == 200
+    assert retried.headers["cache-control"] == "no-store"
+    payload = retried.json()
+    assert payload["action_url"] == "https://traveler-portal.example:8443/portal/handoff"
+    assert payload["method"] == "POST"
+    assert payload["fields"]["traveler_name"] == "Dana Chen"
+    assert "USD 612.00" in payload["fields"]["notes"]
+    assert f"status={outcome}" in payload["fields"]["notes"]
+    assert payload["handoff"]["source_snapshot_hash"] == metadata["source_snapshot_hash"]
+    assert payload["handoff"]["status"] == "prepared"
+    assert payload["handoff"]["prepared_at"] is not None
+    assert payload["handoff"]["manager_submission_status"] == "unknown"
+    assert payload["handoff"]["manager_decision"] is None
+    assert "source_snapshot" not in payload["handoff"]
+
+    reloaded = tpp_client.get(f"/api/workspace/{submitted_trip}/proposal").json()
+    assert reloaded["proposal_state"]["portal_handoff"] == payload["handoff"]
+    assert reloaded["proposal_state"]["evaluation"] == before["proposal_state"]["evaluation"]
+    assert operations == ["poll_execution_status", "fetch_evaluation_result"]
