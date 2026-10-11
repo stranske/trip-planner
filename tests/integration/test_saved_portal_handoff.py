@@ -1,6 +1,7 @@
 """Verify the planner half of the portal contract without the optional sibling."""
 
 from copy import deepcopy
+from dataclasses import replace
 
 import pytest
 from fastapi import HTTPException, Response
@@ -138,6 +139,70 @@ def test_saved_flight_facts_prefill_the_form_without_inventing_airfare(
         ]
         == saved_metadata
     )
+
+
+@pytest.mark.parametrize("already_prepared", [False, True])
+def test_another_traveler_cannot_prepare_the_owners_saved_handoff(
+    saved_portal_handoff, monkeypatch: pytest.MonkeyPatch, already_prepared: bool
+) -> None:
+    session, user, trip_id, original_form = saved_portal_handoff
+    stored = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+    assert stored is not None
+    if not already_prepared:
+        stored.portal_handoff = {
+            **stored.portal_handoff,
+            "status": "eligible",
+            "prepared_at": None,
+        }
+        session.commit()
+    before = deepcopy(stored.portal_handoff)
+    verdict = deepcopy(stored.evaluation_record)
+    trip = session.get(PersistedTrip, trip_id)
+    assert trip is not None
+    updated_at = trip.updated_at
+    other_traveler = replace(user, user_id="another-portal-owner")
+
+    def unexpected_mapping(snapshot):
+        pytest.fail("Another traveler must be rejected before form fields are generated")
+
+    with monkeypatch.context() as guarded:
+        guarded.setattr(
+            "trip_planner.app.services.proposal.build_portal_fields", unexpected_mapping
+        )
+        failures = []
+        # A real trip owned by someone else must be indistinguishable from a
+        # missing trip to the caller, and must not change its saved preparation.
+        for requested_trip in (trip_id, "missing-portal-trip"):
+            with pytest.raises(HTTPException) as denied:
+                prepare_workspace_proposal_portal_handoff(
+                    trip_id=requested_trip,
+                    _payload=WorkspaceProposalHandoffRequest(),
+                    response=Response(),
+                    user=other_traveler,
+                    db_session=session,
+                )
+            assert denied.value.status_code == 404
+            assert requested_trip not in denied.value.detail
+            failures.append(denied.value.detail.split(" Reference ID:", maxsplit=1)[0])
+        assert failures[0] == failures[1]
+
+    session.expire_all()
+    assert stored.portal_handoff == before
+    assert stored.evaluation_record == verdict
+    assert trip.updated_at == updated_at
+    owner_form = prepare_workspace_proposal_portal_handoff(
+        trip_id=trip_id,
+        _payload=WorkspaceProposalHandoffRequest(),
+        response=Response(),
+        user=user,
+        db_session=session,
+    ).model_dump()
+    assert owner_form["fields"] == original_form["fields"]
+    assert owner_form["handoff"]["source_snapshot_hash"] == before["source_snapshot_hash"]
+    assert owner_form["handoff"]["manager_submission_status"] == "unknown"
+    assert owner_form["handoff"]["manager_decision"] is None
+    if already_prepared:
+        assert owner_form == original_form
 
 
 @pytest.mark.parametrize("already_prepared", [False, True])

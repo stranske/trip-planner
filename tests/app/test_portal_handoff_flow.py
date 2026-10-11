@@ -1,10 +1,13 @@
 """Exercise handoff preparation through the Policy tab's submit/refresh routes."""
 
 import json
+from copy import deepcopy
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from tests.app.tpp_intercept import seed_policy
 from trip_planner.app.main import create_app
@@ -12,6 +15,9 @@ from trip_planner.integrations.tpp.client import HTTPTPPIntegrationClient
 from trip_planner.integrations.tpp.contracts import TPPResponseEnvelope
 from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.account import UserAccount
+from trip_planner.persistence.models.proposal import PersistedProposalState
+from trip_planner.persistence.models.session import AuthSession
+from trip_planner.persistence.models.trip import PersistedTrip
 
 
 @pytest.fixture
@@ -158,6 +164,91 @@ def test_policy_tab_verdict_controls_browser_handoff(
     assert "source_snapshot" not in metadata
     reloaded = tpp_client.get(f"/api/workspace/{submitted_trip}/proposal")
     assert reloaded.json()["proposal_state"]["portal_handoff"] == metadata
+
+
+@pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
+@pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry-handoff"])
+@pytest.mark.parametrize("session_state", ["missing", "expired", "revoked"])
+def test_returning_traveler_must_have_a_live_session_before_preparing_handoff(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+    already_prepared: bool,
+    session_state: str,
+) -> None:
+    operations = _install_verdict_transport(monkeypatch, outcome)
+    path = f"/api/workspace/{submitted_trip}/proposal"
+    assert tpp_client.post(f"{path}/refresh").status_code == 200
+    if already_prepared:
+        assert tpp_client.post(f"{path}/handoff", json={}).status_code == 200
+    before = tpp_client.get(path).json()
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+
+    with get_session_factory()() as session:
+        record = session.scalar(
+            select(PersistedProposalState).where(PersistedProposalState.trip_id == submitted_trip)
+        )
+        assert record is not None
+        trip = session.get(PersistedTrip, submitted_trip)
+        assert trip is not None
+        saved_handoff = deepcopy(record.portal_handoff)
+        saved_verdict = deepcopy(record.evaluation_record)
+        updated_at = trip.updated_at
+        owner_session = session.scalar(
+            select(AuthSession).where(AuthSession.user_id == record.user_id)
+        )
+        assert owner_session is not None
+        expires_at = owner_session.expires_at
+        revoked_at = owner_session.revoked_at
+        if session_state == "expired":
+            owner_session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        elif session_state == "revoked":
+            owner_session.revoked_at = datetime.now(UTC)
+        session.commit()
+
+        def unexpected_mapping(snapshot):
+            pytest.fail("An unauthenticated browser must not generate traveler form fields")
+
+        cookies = None if session_state == "missing" else tpp_client.cookies
+        try:
+            with monkeypatch.context() as guarded:
+                guarded.setattr(
+                    "trip_planner.app.services.proposal.build_portal_fields", unexpected_mapping
+                )
+                with TestClient(create_app(), cookies=cookies) as returning_browser:
+                    denied = returning_browser.post(f"{path}/handoff", json={})
+                    assert denied.status_code == 401
+                    assert set(denied.json()) == {"detail"}
+                    assert "Dana Chen" not in denied.text
+                    assert "source_snapshot" not in denied.text
+                    assert returning_browser.get(path).status_code == 401
+            session.expire_all()
+            assert record.portal_handoff == saved_handoff
+            assert record.evaluation_record == saved_verdict
+            assert trip.updated_at == updated_at
+        finally:
+            owner_session.expires_at = expires_at
+            owner_session.revoked_at = revoked_at
+            session.commit()
+
+    # Restoring the owner's authenticated session permits the same saved verdict
+    # to be used, without a new policy check or an invented delivery observation.
+    assert tpp_client.get(path).json() == before
+    retried = tpp_client.post(f"{path}/handoff", json={})
+    assert retried.status_code == 200
+    form = retried.json()
+    assert retried.headers["cache-control"] == "no-store"
+    assert form["action_url"] == "https://tpp.example/portal/handoff"
+    assert form["fields"]["traveler_name"] == "Dana Chen"
+    assert form["handoff"]["source_snapshot_hash"] == (
+        before["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
+    )
+    assert form["handoff"]["manager_submission_status"] == "unknown"
+    assert form["handoff"]["manager_decision"] is None
+    if already_prepared:
+        assert form["handoff"] == before["proposal_state"]["portal_handoff"]
+    assert operations == ["poll_execution_status", "fetch_evaluation_result"]
 
 
 @pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
