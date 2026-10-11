@@ -159,7 +159,9 @@ def test_policy_tab_verdict_controls_browser_handoff(
 
 @pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
 @pytest.mark.parametrize("already_prepared", [False, True])
-@pytest.mark.parametrize("mapping_failure", ["raised", "missing_fields", "invalid_field_value"])
+@pytest.mark.parametrize(
+    "mapping_failure", ["raised", "missing_fields", "empty_fields", "invalid_field_value"]
+)
 def test_failed_form_preparation_preserves_saved_state_and_can_be_retried(
     tpp_client: TestClient,
     submitted_trip: str,
@@ -182,6 +184,8 @@ def test_failed_form_preparation_preserves_saved_state_and_can_be_retried(
             raise ValueError("Portal form mapping failed")
         if mapping_failure == "missing_fields":
             return None
+        if mapping_failure == "empty_fields":
+            return {}
         return {"traveler_name": ["Private traveler fact"]}
 
     with monkeypatch.context() as failed_mapping:

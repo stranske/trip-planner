@@ -99,5 +99,5 @@ class WorkspaceProposalHandoffMetadata(BaseModel):
 class WorkspaceProposalHandoffResponse(BaseModel):
     action_url: str
     method: Literal["POST"] = "POST"
-    fields: dict[str, str]
+    fields: dict[str, str] = Field(min_length=1)
     handoff: WorkspaceProposalHandoffMetadata

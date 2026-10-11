@@ -6,6 +6,27 @@ from pydantic import ValidationError
 from trip_planner.app.schemas.proposal import WorkspaceProposalHandoffResponse
 
 
+def test_handoff_response_rejects_empty_native_form() -> None:
+    with pytest.raises(ValidationError) as rejected:
+        WorkspaceProposalHandoffResponse.model_validate(
+            {
+                "action_url": "https://tpp.example/portal/handoff",
+                "method": "POST",
+                "fields": {},
+                "handoff": {
+                    "schema_version": "tpp-portal-handoff/v1",
+                    "source_snapshot_hash": f"sha256:{'a' * 64}",
+                    "prepared_at": "2026-10-10T12:00:00Z",
+                    "status": "prepared",
+                    "manager_submission_status": "unknown",
+                    "manager_decision": None,
+                },
+            }
+        )
+
+    assert rejected.value.errors()[0]["loc"] == ("fields",)
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
