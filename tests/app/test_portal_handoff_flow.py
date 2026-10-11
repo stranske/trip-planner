@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 from tests.app.tpp_intercept import seed_policy
 from trip_planner.integrations.tpp.client import HTTPTPPIntegrationClient
 from trip_planner.integrations.tpp.contracts import TPPResponseEnvelope
+from trip_planner.persistence.db import get_session_factory
+from trip_planner.persistence.models.account import UserAccount
 
 
 @pytest.fixture
@@ -155,6 +157,78 @@ def test_policy_tab_verdict_controls_browser_handoff(
     assert "source_snapshot" not in metadata
     reloaded = tpp_client.get(f"/api/workspace/{submitted_trip}/proposal")
     assert reloaded.json()["proposal_state"]["portal_handoff"] == metadata
+
+
+@pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
+def test_saved_text_reaches_server_owned_form_without_url_encoding_or_html_escaping(
+    tpp_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+) -> None:
+    monkeypatch.delenv("TRIP_PLANNER_ALLOW_FIXTURE_TPP_RESPONSES", raising=False)
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://tpp.example")
+    traveler = "Dana José 陳"
+    purpose = 'Review R&D = Q4 + forecasts <with "client">'
+    destination = "Montréal & Québec"
+    note = 'Hôtel quote: taxes + fees = $612.00 & breakfast\nReference <Q4> "confirmed"'
+    with get_session_factory()() as session:
+        account = session.query(UserAccount).filter_by(email="p@example.com").one()
+        account.display_name = traveler
+        session.commit()
+
+    created = tpp_client.post(
+        "/api/trips",
+        json={
+            "title": "Québec client visit",
+            "summary": purpose,
+            "mode": "business",
+            "trip_frame": {
+                "origin": "Seattle",
+                "start_date": "2027-01-05",
+                "end_date": "2027-01-07",
+                "duration_days": 3,
+                "primary_regions": [destination],
+            },
+        },
+    )
+    assert created.status_code == 201
+    trip_id = created.json()["trip"]["trip_id"]
+    seed_policy(tpp_client, trip_id)
+    assert (
+        tpp_client.put(
+            f"/api/workspace/{trip_id}/prices",
+            json={"component": "lodging", "amount": 612.0, "note": note},
+        ).status_code
+        == 200
+    )
+    path = f"/api/workspace/{trip_id}/proposal"
+    assert tpp_client.post(f"{path}/submit", json={}).status_code == 200
+    _install_verdict_transport(monkeypatch, outcome)
+    assert tpp_client.post(f"{path}/refresh").status_code == 200
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+
+    forms = []
+    for _ in range(2):
+        response = tpp_client.post(f"{path}/handoff", json={})
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store"
+        form = response.json()
+        assert form["action_url"] == "https://tpp.example/portal/handoff"
+        assert form["method"] == "POST"
+        assert form["fields"]["traveler_name"] == traveler
+        assert form["fields"]["business_purpose"] == purpose
+        assert form["fields"]["city_state"] == destination
+        assert note in form["fields"]["notes"]
+        assert f"status={outcome}" in form["fields"]["notes"]
+        assert "source_snapshot" not in form["handoff"]
+        assert form["handoff"]["manager_submission_status"] == "unknown"
+        assert form["handoff"]["manager_decision"] is None
+        assert tpp_client.get(path).json()["proposal_state"]["portal_handoff"] == form["handoff"]
+        forms.append(form)
+    assert forms[0]["fields"] == forms[1]["fields"]
+    assert forms[0]["handoff"]["source_snapshot_hash"] == (
+        forms[1]["handoff"]["source_snapshot_hash"]
+    )
 
 
 @pytest.mark.parametrize(
