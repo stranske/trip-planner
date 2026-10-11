@@ -91,11 +91,35 @@ class TPPPortalReceipt(PortalReceiptBinding):
         return self
 
 
-def validate_portal_receipt(payload: Any, *, binding: PortalReceiptBinding) -> TPPPortalReceipt:
+def _validate_observation_history(receipt: TPPPortalReceipt, previous: TPPPortalReceipt) -> None:
+    """Keep fixed preparation/submission evidence while accepting later decisions."""
+
+    persisted_fields = ("prepared_at", "request_id", "execution_id", "review_id", "submitted_at")
+    changed_evidence = any(
+        getattr(previous, key) is not None and getattr(receipt, key) != getattr(previous, key)
+        for key in persisted_fields
+    )
+    changed_decision = previous.decision_at is not None and (
+        receipt.decision_at is None
+        or receipt.decision_at < previous.decision_at
+        or (receipt.decision_at == previous.decision_at and receipt.decision != previous.decision)
+    )
+    if receipt.observed_at < previous.observed_at or changed_evidence or changed_decision:
+        raise TPPContractError("TPP portal receipt conflicts with the previous observation.")
+
+
+def validate_portal_receipt(
+    payload: Any,
+    *,
+    binding: PortalReceiptBinding,
+    previous: TPPPortalReceipt | None = None,
+) -> TPPPortalReceipt:
     """Reject malformed or mismatched observations without exposing response contents.
 
     A caller must handle failed/unavailable reads separately; they never produce
-    a successful observation here. This function grants no read/write authority.
+    a successful observation here. Retain the last validated owner-authenticated
+    receipt as ``previous`` when polling the same preparation, so stale responses
+    cannot overwrite newer evidence. This function grants no read/write authority.
     """
 
     try:
@@ -109,4 +133,9 @@ def validate_portal_receipt(payload: Any, *, binding: PortalReceiptBinding) -> T
         for key in ("handoff_id", "snapshot_version", "snapshot_sha256", "draft_id")
     ):
         raise TPPContractError("TPP portal receipt does not match the prepared snapshot.")
+    if previous is not None:
+        # Recheck both the contract and binding: model_copy can bypass Pydantic
+        # validation, and history from another handoff cannot establish freshness.
+        validated_previous = validate_portal_receipt(previous.model_dump(), binding=binding)
+        _validate_observation_history(receipt, validated_previous)
     return receipt

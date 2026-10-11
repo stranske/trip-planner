@@ -158,3 +158,106 @@ def test_omitted_contract_fields_do_not_default_to_a_successful_observation(bind
     payload.pop(key)
     with pytest.raises(TPPContractError, match="Malformed TPP portal receipt"):
         validate_portal_receipt(payload, binding=binding)
+
+
+@pytest.mark.parametrize("state", ["prepared", "submitted", "pending_review", "decision_recorded"])
+def test_newer_observation_preserves_preparation_and_persisted_evidence(binding, state) -> None:
+    previous = validate_portal_receipt(_receipt(binding), binding=binding)
+    payload = _receipt(binding, state)
+    payload["observed_at"] = "2026-10-10T12:31:00Z"
+
+    current = validate_portal_receipt(payload, binding=binding, previous=previous)
+
+    assert current.model_dump(mode="json") == payload
+    assert previous.state == "prepared"
+    assert previous.request_id is None
+
+
+def test_successive_observations_follow_actual_submission_and_review_evidence(binding) -> None:
+    previous = None
+    for minute, state in enumerate(
+        ("prepared", "submitted", "pending_review", "decision_recorded"), start=30
+    ):
+        payload = _receipt(binding, state)
+        payload["observed_at"] = f"2026-10-10T12:{minute}:00Z"
+        current = validate_portal_receipt(payload, binding=binding, previous=previous)
+        assert current.model_dump(mode="json") == payload
+        previous = current
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("observed_at", "2026-10-10T12:29:00Z"),
+        ("prepared_at", "2026-10-10T12:01:00Z"),
+        ("request_id", "replacement-request"),
+        ("execution_id", "replacement-execution"),
+        ("review_id", "replacement-review"),
+        ("submitted_at", "2026-10-10T12:11:00Z"),
+        ("decision_at", "2026-10-10T12:19:00Z"),
+        ("decision", "rejected"),
+    ],
+)
+def test_observation_cannot_rewrite_or_predate_recorded_evidence(binding, key, value) -> None:
+    original = _receipt(binding, "decision_recorded")
+    previous = validate_portal_receipt(original, binding=binding)
+    payload = {**original, "observed_at": "2026-10-10T12:31:00Z", key: value}
+
+    with pytest.raises(TPPContractError, match="conflicts with the previous observation"):
+        validate_portal_receipt(payload, binding=binding, previous=previous)
+
+    assert previous.model_dump(mode="json") == original
+
+
+@pytest.mark.parametrize("state", ["prepared", "submitted", "pending_review"])
+def test_observation_cannot_discard_recorded_submission_or_decision(binding, state) -> None:
+    previous = validate_portal_receipt(_receipt(binding, "decision_recorded"), binding=binding)
+    payload = _receipt(binding, state)
+    payload["observed_at"] = "2026-10-10T12:31:00Z"
+
+    with pytest.raises(TPPContractError, match="conflicts with the previous observation"):
+        validate_portal_receipt(payload, binding=binding, previous=previous)
+
+
+def test_actual_later_manager_decision_is_not_frozen_by_an_earlier_observation(binding) -> None:
+    payload = _receipt(binding, "decision_recorded")
+    payload["decision"] = "changes_requested"
+    previous = validate_portal_receipt(payload, binding=binding)
+    payload.update(
+        decision="approved",
+        decision_at="2026-10-10T12:25:00Z",
+        observed_at="2026-10-10T12:31:00Z",
+    )
+
+    current = validate_portal_receipt(payload, binding=binding, previous=previous)
+
+    assert current.decision == "approved"
+    assert previous.decision == "changes_requested"
+
+
+def test_previous_observation_must_belong_to_the_current_binding(binding) -> None:
+    other = binding.model_copy(update={"handoff_id": "another-handoff"})
+    previous = validate_portal_receipt(_receipt(other), binding=other)
+
+    with pytest.raises(TPPContractError, match="does not match the prepared snapshot"):
+        validate_portal_receipt(_receipt(binding), binding=binding, previous=previous)
+
+
+def test_invalid_previous_evidence_cannot_bypass_validation_via_model_copy(binding) -> None:
+    previous = validate_portal_receipt(_receipt(binding), binding=binding)
+    previous = previous.model_copy(update={"decision": "approved"})
+
+    with pytest.raises(TPPContractError, match="Malformed TPP portal receipt"):
+        validate_portal_receipt(_receipt(binding), binding=binding, previous=previous)
+
+
+def test_identical_observation_can_be_replayed_without_mutating_the_previous_receipt(
+    binding,
+) -> None:
+    payload = _receipt(binding, "decision_recorded")
+    previous = validate_portal_receipt(payload, binding=binding)
+
+    current = validate_portal_receipt(payload, binding=binding, previous=previous)
+
+    assert current == previous
+    assert current is not previous
