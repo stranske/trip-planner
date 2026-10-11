@@ -8,6 +8,7 @@ from fastapi import HTTPException, Response
 from trip_planner.app.routes.proposal import prepare_workspace_proposal_portal_handoff
 from trip_planner.app.schemas.proposal import WorkspaceProposalHandoffRequest
 from trip_planner.app.services.proposal import get_workspace_proposal_payload
+from trip_planner.app.services.trip_prices import save_trip_price
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
 from trip_planner.persistence.models.trip_price import PersistedTripPrice
@@ -45,6 +46,98 @@ def test_saved_verdict_produces_portal_form_and_private_snapshot(saved_portal_ha
     session.expire_all()
     reloaded = get_workspace_proposal_payload(session, user=user, trip_id=trip_id)
     assert reloaded["proposal_state"]["portal_handoff"] == metadata
+
+
+@pytest.mark.parametrize(
+    "saved_portal_handoff",
+    [
+        {
+            "lowest_amount": 350.0,
+            "cabin_class": "business",
+            "flight_hours": 8.5,
+            "evidence_attested": True,
+        },
+        {
+            "lowest_amount": 0.0,
+            "cabin_class": "economy",
+            "flight_hours": 1.0,
+            "evidence_attested": False,
+        },
+    ],
+    indirect=True,
+    ids=["attested-business-quote", "unattested-zero-lowest-fare"],
+)
+def test_saved_flight_facts_prefill_the_form_without_inventing_airfare(
+    saved_portal_handoff, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session, user, trip_id, first_form = saved_portal_handoff
+    price = session.get(PersistedTripPrice, f"trip-price:{trip_id}:transport")
+    assert price is not None
+    expected_flight_fields = {
+        "lowest_cost_roundtrip": f"{price.lowest_amount:.2f}",
+        "lowest_fare": f"{price.lowest_amount:.2f}",
+        "cabin_class": price.cabin_class,
+        "flight_duration_hours": str(price.flight_hours),
+        "fare_evidence_attached": "true" if price.evidence_attested else "false",
+    }
+    saved_metadata = deepcopy(first_form["handoff"])
+    session.expire_all()
+
+    # Once checked and saved, preparing the browser body needs no new policy call.
+    def unexpected_policy_call(*args, **kwargs):
+        pytest.fail("Preparing the form must use the saved verdict and price facts")
+
+    monkeypatch.setattr(
+        "trip_planner.app.services.proposal.HTTPTPPIntegrationClient",
+        unexpected_policy_call,
+    )
+    response = Response()
+    form = prepare_workspace_proposal_portal_handoff(
+        trip_id=trip_id,
+        _payload=WorkspaceProposalHandoffRequest(),
+        response=response,
+        user=user,
+        db_session=session,
+    ).model_dump()
+
+    assert form["action_url"] == "https://tpp.example/portal/handoff"
+    assert form["method"] == "POST"
+    assert response.headers["cache-control"] == "no-store"
+    assert form["fields"].items() >= expected_flight_fields.items()
+    # The persisted transport amount can include ground travel, so it is not airfare.
+    assert {"selected_fare", "flight_cost", "flight_pref_outbound.roundtrip_cost"}.isdisjoint(
+        form["fields"]
+    )
+    assert "USD 430.00" in form["fields"]["notes"]
+    assert form["handoff"] == saved_metadata
+    assert form == first_form
+    assert "source_snapshot" not in form["handoff"]
+
+    # Withdrawing those facts invalidates the saved form rather than reusing its prefill.
+    save_trip_price(
+        session,
+        user=user,
+        trip_id=trip_id,
+        component="transport",
+        amount=430.0,
+        note="United.com quote",
+    )
+    with pytest.raises(HTTPException) as rejected:
+        prepare_workspace_proposal_portal_handoff(
+            trip_id=trip_id,
+            _payload=WorkspaceProposalHandoffRequest(),
+            response=Response(),
+            user=user,
+            db_session=session,
+        )
+    assert rejected.value.status_code == 409
+    session.expire_all()
+    assert (
+        get_workspace_proposal_payload(session, user=user, trip_id=trip_id)["proposal_state"][
+            "portal_handoff"
+        ]
+        == saved_metadata
+    )
 
 
 @pytest.mark.parametrize("already_prepared", [False, True])

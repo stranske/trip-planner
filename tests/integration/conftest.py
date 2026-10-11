@@ -31,12 +31,13 @@ from trip_planner.persistence.models.account import UserAccount
 
 @pytest.fixture
 def saved_portal_handoff(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
 ) -> Iterator[tuple[Session, AuthenticatedUser, str, dict[str, Any]]]:
     """Prepare the production route's form from a persisted trip, price and verdict.
 
     Only the policy evaluation uses the existing serialized TPP fixtures; the
     browser portal contract must still run against the real sibling application.
+    Indirect parameters supply flight quote details saved before the policy check.
     """
     monkeypatch.setenv("TRIP_PLANNER_ENV", "test")
     monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://tpp.example")
@@ -79,6 +80,7 @@ def saved_portal_handoff(
                 component="transport",
                 amount=430.0,
                 note="United.com quote",
+                **getattr(request, "param", {}),
             )
             fixtures = Path(__file__).resolve().parents[1] / "fixtures" / "integrations" / "tpp"
             submission = json.loads((fixtures / "proposal_submit_deferred.json").read_text())
