@@ -7,9 +7,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tests.app.tpp_intercept import seed_policy
+from trip_planner.app.main import create_app
 from trip_planner.integrations.tpp.client import HTTPTPPIntegrationClient
 from trip_planner.integrations.tpp.contracts import TPPResponseEnvelope
-from trip_planner.persistence.db import get_session_factory
+from trip_planner.persistence.db import get_session_factory, reset_database_state
 from trip_planner.persistence.models.account import UserAccount
 
 
@@ -816,4 +817,71 @@ def test_first_production_handoff_recovers_from_configuration_failure(
     reloaded = tpp_client.get(f"/api/workspace/{submitted_trip}/proposal").json()
     assert reloaded["proposal_state"]["portal_handoff"] == payload["handoff"]
     assert reloaded["proposal_state"]["evaluation"] == before["proposal_state"]["evaluation"]
+    assert operations == ["poll_execution_status", "fetch_evaluation_result"]
+
+
+@pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
+@pytest.mark.parametrize("already_prepared", [False, True], ids=["first-handoff", "retry-handoff"])
+def test_saved_verdict_handoff_survives_application_and_database_cache_restart(
+    tpp_client: TestClient,
+    submitted_trip: str,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+    already_prepared: bool,
+) -> None:
+    operations = _install_verdict_transport(monkeypatch, outcome)
+    proposal_path = f"/api/workspace/{submitted_trip}/proposal"
+    assert tpp_client.post(f"{proposal_path}/refresh").status_code == 200
+    previous_form = None
+    if already_prepared:
+        prepared = tpp_client.post(f"{proposal_path}/handoff", json={})
+        assert prepared.status_code == 200
+        previous_form = prepared.json()
+    before = tpp_client.get(proposal_path).json()
+
+    def unavailable(*args, **kwargs):
+        pytest.fail("A restarted planner must prepare the form from its persisted verdict")
+
+    for operation in (
+        "fetch_policy_constraints",
+        "submit_proposal",
+        "poll_execution_status",
+        "fetch_evaluation_result",
+    ):
+        monkeypatch.setattr(HTTPTPPIntegrationClient, operation, unavailable)
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.setenv("TPP_PORTAL_BASE_URL", "https://traveler-portal.example:8443")
+    reset_database_state()
+
+    # A fresh app and engine must recover the authenticated owner and saved facts
+    # from the database, with no policy-service transport available.
+    with TestClient(create_app(), cookies=tpp_client.cookies) as restarted:
+        assert restarted.get(proposal_path).json() == before
+        prepared = restarted.post(
+            f"{proposal_path}/handoff",
+            params={"action_url": "https://caller.example", "traveler_name": "Caller name"},
+            json={},
+        )
+        assert prepared.status_code == 200
+        assert prepared.headers["cache-control"] == "no-store"
+        payload = prepared.json()
+        assert payload["action_url"] == "https://traveler-portal.example:8443/portal/handoff"
+        assert payload["method"] == "POST"
+        assert payload["fields"]["traveler_name"] == "Dana Chen"
+        assert payload["fields"]["business_purpose"] == "Review the client's quarterly plan"
+        assert "USD 612.00" in payload["fields"]["notes"]
+        assert f"status={outcome}" in payload["fields"]["notes"]
+        metadata = payload["handoff"]
+        assert (
+            metadata["source_snapshot_hash"]
+            == before["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
+        )
+        assert metadata["status"] == "prepared"
+        assert metadata["manager_submission_status"] == "unknown"
+        assert metadata["manager_decision"] is None
+        assert "source_snapshot" not in metadata
+        if previous_form is not None:
+            assert payload["fields"] == previous_form["fields"]
+            assert metadata == previous_form["handoff"]
+        assert restarted.get(proposal_path).json()["proposal_state"]["portal_handoff"] == metadata
     assert operations == ["poll_execution_status", "fetch_evaluation_result"]
