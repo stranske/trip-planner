@@ -60,6 +60,14 @@ def portal_action_url() -> str:
     environment = os.getenv("TRIP_PLANNER_ENV", "local").strip().lower()
     local_environment = environment in {"local", "development", "dev", "test", "testing"}
     hostname = parsed.hostname or ""
+    # Native forms apply Unicode host normalization that urlsplit does not.
+    # Require the configured ASCII spelling (Punycode for international domains)
+    # before validating numeric labels and persisting a prepared destination.
+    if not hostname.isascii():
+        raise TPPPortalHandoffConfigurationError(
+            "Travel-Plan-Permission portal handoff requires an ASCII hostname; "
+            "use Punycode for international domains."
+        )
     # urlsplit accepts hosts that native browser forms cannot use. In particular,
     # browsers decode percent escapes in hosts, while Python leaves them intact.
     # Refuse those ambiguous origins (including IPv6 zone identifiers) rather than

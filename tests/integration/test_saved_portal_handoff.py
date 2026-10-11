@@ -106,3 +106,73 @@ def test_empty_form_preserves_saved_handoff_and_allows_retry(
         ]
         == retried["handoff"]
     )
+
+
+@pytest.mark.parametrize("already_prepared", [False, True])
+@pytest.mark.parametrize("setting", ["TPP_PORTAL_BASE_URL", "TPP_BASE_URL"])
+@pytest.mark.parametrize("hostname", ["tpp。123", "１２７．１", "tpp.example\u200b"])
+def test_unicode_origin_preserves_saved_verdict_until_ascii_configuration_retry(
+    saved_portal_handoff,
+    monkeypatch: pytest.MonkeyPatch,
+    already_prepared: bool,
+    setting: str,
+    hostname: str,
+) -> None:
+    session, user, trip_id, handoff = saved_portal_handoff
+    stored = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+    assert stored is not None
+    if not already_prepared:
+        stored.portal_handoff = {
+            **stored.portal_handoff,
+            "status": "eligible",
+            "prepared_at": None,
+        }
+        session.commit()
+    before = deepcopy(get_workspace_proposal_payload(session, user=user, trip_id=trip_id))
+    trip = session.get(PersistedTrip, trip_id)
+    assert trip is not None
+    updated_at = trip.updated_at
+    monkeypatch.setenv("TRIP_PLANNER_ENV", "production")
+    monkeypatch.delenv("TPP_PORTAL_BASE_URL", raising=False)
+    monkeypatch.delenv("TPP_BASE_URL", raising=False)
+    monkeypatch.setenv(setting, f"https://{hostname}")
+
+    with pytest.raises(HTTPException) as rejected:
+        prepare_workspace_proposal_portal_handoff(
+            trip_id=trip_id,
+            _payload=WorkspaceProposalHandoffRequest(),
+            response=Response(),
+            user=user,
+            db_session=session,
+        )
+
+    assert rejected.value.status_code == 503
+    session.expire_all()
+    assert get_workspace_proposal_payload(session, user=user, trip_id=trip_id) == before
+    assert trip.updated_at == updated_at
+
+    monkeypatch.setenv(setting, "https://xn--bcher-kva.example:8443")
+    response = Response()
+    retried = prepare_workspace_proposal_portal_handoff(
+        trip_id=trip_id,
+        _payload=WorkspaceProposalHandoffRequest(),
+        response=response,
+        user=user,
+        db_session=session,
+    ).model_dump()
+    assert retried["action_url"] == "https://xn--bcher-kva.example:8443/portal/handoff"
+    assert retried["fields"] == handoff["fields"]
+    assert retried["method"] == "POST"
+    assert response.headers["cache-control"] == "no-store"
+    assert retried["handoff"]["status"] == "prepared"
+    assert retried["handoff"]["source_snapshot_hash"] == handoff["handoff"]["source_snapshot_hash"]
+    assert retried["handoff"]["manager_submission_status"] == "unknown"
+    assert retried["handoff"]["manager_decision"] is None
+    assert "source_snapshot" not in retried["handoff"]
+    session.expire_all()
+    assert (
+        get_workspace_proposal_payload(session, user=user, trip_id=trip_id)["proposal_state"][
+            "portal_handoff"
+        ]
+        == retried["handoff"]
+    )
