@@ -99,5 +99,26 @@ class WorkspaceProposalHandoffMetadata(BaseModel):
 class WorkspaceProposalHandoffResponse(BaseModel):
     action_url: str
     method: Literal["POST"] = "POST"
-    fields: dict[str, str] = Field(min_length=1)
+    # Only server-owned prefill facts may leave in the native form. In particular,
+    # internal snapshots and traveler-completed portal fields are not this contract.
+    fields: dict[
+        Literal[
+            "traveler_name",
+            "business_purpose",
+            "city_state",
+            "depart_date",
+            "return_date",
+            "notes",
+            "departure_city_airport",
+            "flight_pref_outbound.roundtrip_cost",
+            "selected_fare",
+            "flight_cost",
+            "lowest_cost_roundtrip",
+            "lowest_fare",
+            "cabin_class",
+            "flight_duration_hours",
+            "fare_evidence_attached",
+        ],
+        str,
+    ] = Field(min_length=1)
     handoff: WorkspaceProposalHandoffMetadata

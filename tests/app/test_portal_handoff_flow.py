@@ -160,7 +160,15 @@ def test_policy_tab_verdict_controls_browser_handoff(
 @pytest.mark.parametrize("outcome", ["compliant", "non_compliant"])
 @pytest.mark.parametrize("already_prepared", [False, True])
 @pytest.mark.parametrize(
-    "mapping_failure", ["raised", "missing_fields", "empty_fields", "invalid_field_value"]
+    "mapping_failure",
+    [
+        "raised",
+        "missing_fields",
+        "empty_fields",
+        "invalid_field_value",
+        "private_snapshot",
+        "unsupported_field",
+    ],
 )
 def test_failed_form_preparation_preserves_saved_state_and_can_be_retried(
     tpp_client: TestClient,
@@ -186,6 +194,18 @@ def test_failed_form_preparation_preserves_saved_state_and_can_be_retried(
             return None
         if mapping_failure == "empty_fields":
             return {}
+        if mapping_failure == "private_snapshot":
+            return {
+                "traveler_name": snapshot["traveler_name"],
+                "source_snapshot": json.dumps(
+                    {**snapshot, "internal_note": "Private traveler fact"}
+                ),
+            }
+        if mapping_failure == "unsupported_field":
+            return {
+                "traveler_name": snapshot["traveler_name"],
+                "return_url": "https://caller.example/Private traveler fact",
+            }
         return {"traveler_name": ["Private traveler fact"]}
 
     with monkeypatch.context() as failed_mapping:
