@@ -10,6 +10,7 @@ from trip_planner.app.schemas.proposal import WorkspaceProposalHandoffRequest
 from trip_planner.app.services.proposal import get_workspace_proposal_payload
 from trip_planner.persistence.models.proposal import PersistedProposalState
 from trip_planner.persistence.models.trip import PersistedTrip
+from trip_planner.persistence.models.trip_price import PersistedTripPrice
 
 
 def test_saved_verdict_produces_portal_form_and_private_snapshot(saved_portal_handoff) -> None:
@@ -44,6 +45,77 @@ def test_saved_verdict_produces_portal_form_and_private_snapshot(saved_portal_ha
     session.expire_all()
     reloaded = get_workspace_proposal_payload(session, user=user, trip_id=trip_id)
     assert reloaded["proposal_state"]["portal_handoff"] == metadata
+
+
+@pytest.mark.parametrize("already_prepared", [False, True])
+@pytest.mark.parametrize("price_change", ["added", "removed"])
+def test_changed_price_set_cannot_prepare_a_form_from_the_original_verdict(
+    saved_portal_handoff,
+    monkeypatch: pytest.MonkeyPatch,
+    already_prepared: bool,
+    price_change: str,
+) -> None:
+    session, user, trip_id, _ = saved_portal_handoff
+    stored = session.get(PersistedProposalState, f"proposal-state:{trip_id}")
+    assert stored is not None
+    if not already_prepared:
+        stored.portal_handoff = {
+            **stored.portal_handoff,
+            "status": "eligible",
+            "prepared_at": None,
+        }
+    price = session.get(PersistedTripPrice, f"trip-price:{trip_id}:transport")
+    assert price is not None
+    if price_change == "added":
+        session.add(
+            PersistedTripPrice(
+                trip_price_id=f"trip-price:{trip_id}:lodging",
+                trip_id=trip_id,
+                user_id=user.user_id,
+                component="lodging",
+                amount=250.0,
+                currency=price.currency,
+                entered_by=price.entered_by,
+                captured_at=price.captured_at,
+                note="New hotel quote after the policy check",
+            )
+        )
+    else:
+        session.delete(price)
+    session.commit()
+    before = deepcopy(stored.portal_handoff)
+    verdict = deepcopy(stored.evaluation_record)
+    trip = session.get(PersistedTrip, trip_id)
+    assert trip is not None
+    updated_at = trip.updated_at
+
+    def unexpected_mapping(snapshot):
+        pytest.fail("Changed price sets must be rejected before preparing traveler form fields")
+
+    monkeypatch.setattr(
+        "trip_planner.app.services.proposal.build_portal_fields", unexpected_mapping
+    )
+    with pytest.raises(HTTPException) as rejected:
+        prepare_workspace_proposal_portal_handoff(
+            trip_id=trip_id,
+            _payload=WorkspaceProposalHandoffRequest(),
+            response=Response(),
+            user=user,
+            db_session=session,
+        )
+
+    # Removing the final sourced price is unpriced; adding one makes the verdict stale.
+    assert rejected.value.status_code == (409 if price_change == "added" else 422)
+    session.expire_all()
+    assert stored.portal_handoff == before
+    assert stored.evaluation_record == verdict
+    assert trip.updated_at == updated_at
+    reloaded = get_workspace_proposal_payload(session, user=user, trip_id=trip_id)
+    assert (
+        reloaded["proposal_state"]["portal_handoff"]["source_snapshot_hash"]
+        == before["source_snapshot_hash"]
+    )
+    assert "source_snapshot" not in reloaded["proposal_state"]["portal_handoff"]
 
 
 @pytest.mark.parametrize("already_prepared", [False, True])
