@@ -42,6 +42,10 @@ class PortalReceiptBinding(BaseModel):
 class TPPPortalReceipt(PortalReceiptBinding):
     """The portal-receipt/v1 metadata emitted by the accepted TPP producer."""
 
+    # Parsed transport models can contain unvalidated model_copy/model_construct
+    # values. Recheck their fields before treating them as persisted evidence.
+    model_config = ConfigDict(revalidate_instances="always")
+
     contract_version: Literal["portal-receipt/v1"]
     state: Literal["prepared", "submitted", "pending_review", "decision_recorded"]
     prepared_at: AwareDatetime

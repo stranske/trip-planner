@@ -9,6 +9,7 @@ import pytest
 from trip_planner.integrations.tpp.client import TPPContractError
 from trip_planner.integrations.tpp.portal_receipt import (
     PortalReceiptBinding,
+    TPPPortalReceipt,
     validate_portal_preparation,
     validate_portal_receipt,
 )
@@ -99,6 +100,54 @@ def test_preparation_rejects_malformed_or_invented_evidence_without_exposing_pay
         )
     assert str(rejected.value) == "Malformed TPP portal receipt contract."
     assert rejected.value.__suppress_context__
+
+
+@pytest.mark.parametrize("operation", ["preparation", "receipt"])
+@pytest.mark.parametrize(
+    ("state", "updates"),
+    [
+        ("prepared", {"observed_at": "invalid-time"}),
+        ("prepared", {"snapshot_sha256": "invalid-digest"}),
+        ("submitted", {"request_id": 42}),
+        ("decision_recorded", {"decision": "sent"}),
+        ("decision_recorded", {"state": "approved"}),
+    ],
+)
+def test_model_instance_cannot_bypass_receipt_evidence_validation(
+    binding, operation, state, updates
+):
+    original = _receipt(binding, state)
+    parsed = TPPPortalReceipt.model_validate(original)
+    # model_copy deliberately bypasses field and model validation. The trusted
+    # transport may return a parsed model, so the boundary must recheck it just
+    # as strictly as a decoded JSON response before establishing evidence.
+    unvalidated = parsed.model_copy(update=updates)
+
+    with pytest.raises(TPPContractError, match="Malformed TPP portal receipt contract") as rejected:
+        if operation == "preparation":
+            validate_portal_preparation(
+                unvalidated,
+                handoff_id=binding.handoff_id,
+                snapshot_version=binding.snapshot_version,
+            )
+        else:
+            validate_portal_receipt(unvalidated, binding=binding)
+
+    assert str(rejected.value) == "Malformed TPP portal receipt contract."
+    assert rejected.value.__suppress_context__
+    assert parsed.model_dump(mode="json") == original
+
+
+@pytest.mark.parametrize("state", ["prepared", "submitted", "pending_review", "decision_recorded"])
+def test_valid_model_instance_retains_evidence_after_revalidation(binding, state):
+    payload = _receipt(binding, state)
+    parsed = TPPPortalReceipt.model_validate(payload)
+    preparation = validate_portal_preparation(
+        parsed, handoff_id=binding.handoff_id, snapshot_version=binding.snapshot_version
+    )
+    receipt = validate_portal_receipt(parsed, binding=binding, previous=preparation)
+    assert receipt.model_dump(mode="json") == payload
+    assert parsed.model_dump(mode="json") == payload
 
 
 @pytest.mark.parametrize("state", ["prepared", "submitted", "pending_review", "decision_recorded"])
